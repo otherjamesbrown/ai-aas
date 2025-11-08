@@ -1,0 +1,18 @@
+name: CI Remote Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: Target service
+        required: false
+        default: "all"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Service: ${{ inputs.service }}"
+      - run: echo "Ref: ${{ github.ref }}"
+
