@@ -25,34 +25,41 @@ fi
 
 echo "Dispatching workflow ${WORKFLOW} for ref ${REF} (service=${SERVICE})"
 
-RUN_OUTPUT=$(mktemp)
+START_EPOCH=$(date +%s)
+
+# Dispatch the workflow (gh prints minimal output on success)
 if ! gh workflow run "${WORKFLOW}" \
   --ref "${REF}" \
   --raw-field service="${SERVICE}" \
-  --raw-field notes="${NOTES}" > "${RUN_OUTPUT}"; then
-  cat "${RUN_OUTPUT}" >&2
-  rm -f "${RUN_OUTPUT}"
+  --raw-field notes="${NOTES}"; then
+  echo "Failed to dispatch workflow ${WORKFLOW}" >&2
   exit 1
 fi
 
-RUN_URL=$(grep -Eo "https://github.com/[^\s]+" "${RUN_OUTPUT}" | head -n 1 || true)
-rm -f "${RUN_OUTPUT}"
+# Poll for the newly created workflow_dispatch run on the specified branch
+RUN_ID=""
+for i in $(seq 1 20); do
+  RUN_ID=$(gh run list \
+    --workflow "${WORKFLOW}" \
+    --branch "${REF}" \
+    --event workflow_dispatch \
+    --limit 5 \
+    --json databaseId,createdAt \
+    --jq 'map(select((.createdAt|fromdateiso8601) >= '"${START_EPOCH}"')) | first | .databaseId' 2>/dev/null || true)
+  if [[ -n "${RUN_ID}" && "${RUN_ID}" != "null" ]]; then
+    break
+  fi
+  sleep 3
+done
 
-sleep 3
-
-RUN_ID=$(gh run list --workflow "${WORKFLOW}" --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
-
-if [[ -z "${RUN_URL}" || -z "${RUN_ID}" ]]; then
-  RUN_URL=$(gh run view "${RUN_ID}" --json url --jq '.url' 2>/dev/null || true)
+if [[ -z "${RUN_ID}" || "${RUN_ID}" == "null" ]]; then
+  echo "Unable to determine newly created workflow run ID. Check gh run list manually." >&2
+  exit 1
 fi
 
+RUN_URL=$(gh run view "${RUN_ID}" --json url --jq '.url' 2>/dev/null || true)
 if [[ -n "${RUN_URL}" ]]; then
   echo "Workflow queued: ${RUN_URL}"
-fi
-
-if [[ -z "${RUN_ID}" ]]; then
-  echo "Unable to determine workflow run ID. Check gh run list manually." >&2
-  exit 1
 fi
 
 if [[ "${CI_REMOTE_WAIT:-true}" != "true" ]]; then
