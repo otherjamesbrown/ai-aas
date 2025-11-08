@@ -35,7 +35,7 @@ jobs:
     strategy:
       matrix:
         service: ${{ fromJSON(needs.setup.outputs.services) }}
-    uses: ./.github/workflows/reusable/build.yml
+    uses: ./.github/workflows/reusable-build.yml
     with:
       service: ${{ matrix.service }}
       target: build
@@ -47,7 +47,7 @@ jobs:
     strategy:
       matrix:
         service: ${{ fromJSON(needs.setup.outputs.services) }}
-    uses: ./.github/workflows/reusable/build.yml
+    uses: ./.github/workflows/reusable-build.yml
     with:
       service: ${{ matrix.service }}
       target: test
