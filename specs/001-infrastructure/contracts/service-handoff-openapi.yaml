@@ -1,0 +1,223 @@
+openapi: 3.0.3
+info:
+  title: Infrastructure Environment Handoff API
+  version: 0.1.0
+  description: >
+    API exposing environment metadata, credential packages, and deployment steps
+    for application teams consuming platform infrastructure.
+servers:
+  - url: https://platform.ai-aas.dev
+    description: Production control plane (read-only)
+  - url: https://platform-staging.ai-aas.dev
+    description: Staging control plane for validation
+paths:
+  /v1/environments:
+    get:
+      summary: List available environments
+      tags: [Environments]
+      operationId: listEnvironments
+      responses:
+        '200':
+          description: Environments returned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EnvironmentSummary'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+  /v1/environments/{environment}/handoff:
+    get:
+      summary: Retrieve handoff package for an environment
+      tags: [Environments]
+      operationId: getEnvironmentHandoff
+      parameters:
+        - name: environment
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [development, staging, production, system]
+        - name: role
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [app-team, platform-engineer, read-only]
+            default: app-team
+      responses:
+        '200':
+          description: Handoff package generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoffPackage'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '423':
+          description: Environment temporarily locked for maintenance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+components:
+  schemas:
+    EnvironmentSummary:
+      type: object
+      required: [name, status, ingressBaseDomain, lastUpdatedAt]
+      properties:
+        name:
+          type: string
+          example: staging
+        status:
+          type: string
+          enum: [provisioning, ready, degraded, recovering, retired]
+        ingressBaseDomain:
+          type: string
+          example: staging.ai-aas.dev
+        lastUpdatedAt:
+          type: string
+          format: date-time
+        nodePools:
+          type: array
+          items:
+            $ref: '#/components/schemas/NodePool'
+    NodePool:
+      type: object
+      required: [type, count, maxCount]
+      properties:
+        type:
+          type: string
+          example: g6-standard-8
+        count:
+          type: integer
+          minimum: 1
+        maxCount:
+          type: integer
+          minimum: 1
+        gpu:
+          type: boolean
+          default: false
+    HandoffPackage:
+      type: object
+      required:
+        - environment
+        - role
+        - expiresAt
+        - kubeconfigUrl
+        - rbacUrl
+        - observabilityLinks
+        - deploymentGuide
+      properties:
+        environment:
+          type: string
+          example: production
+        role:
+          type: string
+          example: app-team
+        expiresAt:
+          type: string
+          format: date-time
+        kubeconfigUrl:
+          type: string
+          format: uri
+        rbacUrl:
+          type: string
+          format: uri
+        observabilityLinks:
+          type: array
+          items:
+            type: object
+            required: [type, url, description]
+            properties:
+              type:
+                type: string
+                example: grafana-dashboard
+              url:
+                type: string
+                format: uri
+              description:
+                type: string
+        deploymentGuide:
+          type: object
+          required: [steps]
+          properties:
+            steps:
+              type: array
+              items:
+                type: object
+                required: [order, name, command]
+                properties:
+                  order:
+                    type: integer
+                  name:
+                    type: string
+                  command:
+                    type: string
+                  notes:
+                    type: string
+        sampleServiceStatus:
+          type: object
+          properties:
+            lastDeployedAt:
+              type: string
+              format: date-time
+            url:
+              type: string
+              format: uri
+            health:
+              type: string
+              enum: [healthy, warning, failing]
+    Error:
+      type: object
+      required: [type, title, detail]
+      properties:
+        type:
+          type: string
+          example: https://platform.ai-aas.dev/errors/environment-locked
+        title:
+          type: string
+          example: Environment locked
+        detail:
+          type: string
+        status:
+          type: integer
+          example: 423
+        requestId:
+          type: string
+    UnauthorizedError:
+      allOf:
+        - $ref: '#/components/schemas/Error'
+      example:
+        type: https://platform.ai-aas.dev/errors/unauthorized
+        title: Unauthorized
+        detail: Token missing required scopes
+        status: 401
+    NotFoundError:
+      allOf:
+        - $ref: '#/components/schemas/Error'
+      example:
+        type: https://platform.ai-aas.dev/errors/not-found
+        title: Environment not found
+        detail: Requested environment does not exist or is retired
+        status: 404
+  responses:
+    UnauthorizedError:
+      description: Authentication failed or missing
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UnauthorizedError'
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/NotFoundError'
+
