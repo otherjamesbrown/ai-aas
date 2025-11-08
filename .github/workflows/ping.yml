@@ -1,0 +1,9 @@
+name: Ping
+on:
+  workflow_dispatch:
+jobs:
+  echo:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "ping from ${{ github.ref }}"
+
