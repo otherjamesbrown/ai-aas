@@ -39,7 +39,7 @@ jobs:
     with:
       service: ${{ matrix.service }}
       target: build
-      go-version: ${{ env.GO_VERSION }}
+      go-version: "1.21.x"
 
   test:
     name: Test
@@ -51,7 +51,7 @@ jobs:
     with:
       service: ${{ matrix.service }}
       target: test
-      go-version: ${{ env.GO_VERSION }}
+      go-version: "1.21.x"
 
   lint:
     name: Lint
