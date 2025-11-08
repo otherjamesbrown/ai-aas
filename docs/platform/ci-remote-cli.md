@@ -43,5 +43,13 @@ The command prints:
 | `GH_API_TOKEN` | Use a specific PAT instead of the authenticated CLI session. |
 | `CI_REMOTE_WAIT` | Set to `false` to dispatch and exit immediately without waiting. |
 
-For more troubleshooting tips, see `docs/troubleshooting/ci.md`.
+## Troubleshooting
+
+If `workflow_dispatch` doesn't create runs:
+1. Ensure the workflow exists on the `main` branch
+2. Check for workflow syntax errors in GitHub Actions UI
+3. See `docs/troubleshooting/ci-remote-dispatch.md` for detailed resolution
+4. Review `docs/platform/github-actions-guide.md` for common pitfalls
+
+For other CI issues, see `docs/troubleshooting/ci.md`.
 
