@@ -43,7 +43,9 @@ jobs:
 
   test:
     name: Test
-    needs: build
+    needs:
+      - setup
+      - build
     strategy:
       matrix:
         service: ${{ fromJSON(needs.setup.outputs.services) }}
