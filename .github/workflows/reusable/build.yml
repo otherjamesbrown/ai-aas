@@ -1,0 +1,37 @@
+name: Service Runner
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: Service name or 'all'
+        required: true
+        type: string
+      target:
+        description: Make target to execute
+        required: true
+        type: string
+      go-version:
+        description: Go version constraint
+        required: false
+        type: string
+        default: "1.21.x"
+      ref:
+        description: Git ref to checkout
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.ref }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ inputs.go-version }}
+      - name: Execute make ${{ inputs.target }}
+        run: make ${{ inputs.target }} SERVICE=${{ inputs.service }}
+

@@ -1,0 +1,32 @@
+# Exclude VCS and local configuration
+.git
+.gitignore
+.cursor/
+.idea/
+.vscode/
+.DS_Store
+
+# Build artifacts
+dist/
+build/
+bin/
+out/
+coverage/
+
+# Dependencies
+node_modules/
+vendor/
+
+# Environment and secrets
+.env
+.env.*
+
+# Metrics artifacts
+scripts/metrics/output/
+
+# Tests and specs not required inside runtime image
+specs/
+tests/
+docs/
+memory/
+

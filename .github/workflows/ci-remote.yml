@@ -1,0 +1,179 @@
+name: CI Remote
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: Target service (default all)
+        required: false
+        default: "all"
+      ref:
+        description: Git ref to run against (use 'current' for the triggering branch)
+        required: false
+        default: "current"
+      notes:
+        description: Additional notes for audit trail
+        required: false
+        default: ""
+
+env:
+  GO_VERSION: "1.21.x"
+
+jobs:
+  dispatch-info:
+    name: Dispatch Info
+    runs-on: ubuntu-latest
+    outputs:
+      service: ${{ steps.collect.outputs.service }}
+      ref: ${{ steps.collect.outputs.ref }}
+      notes: ${{ steps.collect.outputs.notes }}
+    steps:
+      - id: collect
+        run: |
+          SERVICE="${{ inputs.service }}"
+          if [ -z "$SERVICE" ]; then
+            SERVICE="all"
+          fi
+          REF_INPUT="${{ inputs.ref }}"
+          if [ -z "$REF_INPUT" ] || [ "$REF_INPUT" = "current" ]; then
+            REF_VALUE="${GITHUB_REF}"
+          else
+            REF_VALUE="$REF_INPUT"
+          fi
+          echo "service=$SERVICE" >> "$GITHUB_OUTPUT"
+          echo "ref=$REF_VALUE" >> "$GITHUB_OUTPUT"
+          echo "notes=${{ inputs.notes }}" >> "$GITHUB_OUTPUT"
+          echo "Remote CI requested for ${SERVICE} on ${REF_VALUE}"
+
+  build:
+    name: Build
+    needs: dispatch-info
+    uses: ./.github/workflows/reusable/build.yml
+    with:
+      service: ${{ needs.dispatch-info.outputs.service }}
+      target: build
+      go-version: ${{ env.GO_VERSION }}
+      ref: ${{ needs.dispatch-info.outputs.ref }}
+
+  test:
+    name: Test
+    needs: build
+    uses: ./.github/workflows/reusable/build.yml
+    with:
+      service: ${{ needs.dispatch-info.outputs.service }}
+      target: test
+      go-version: ${{ env.GO_VERSION }}
+      ref: ${{ needs.dispatch-info.outputs.ref }}
+
+  lint:
+    name: Lint
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.dispatch-info.outputs.ref }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
+            sh -s -- -b "$(go env GOPATH)"/bin v1.55.2
+      - name: Run golangci-lint
+        run: make lint SERVICE=${{ needs.dispatch-info.outputs.service }}
+
+  metrics:
+    name: Metrics Upload
+    needs: lint
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.dispatch-info.outputs.ref }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Install tooling
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
+            sh -s -- -b "$(go env GOPATH)"/bin v1.55.2
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.19.0
+      - name: Run make check with metrics
+        run: make check METRICS=true SERVICE=${{ needs.dispatch-info.outputs.service }}
+      - name: Upload metrics artifact (dry run)
+        env:
+          METRICS_BUCKET: ai-aas-build-metrics
+        run: |
+          FILE=$(ls -t scripts/metrics/output/*.json | head -n 1)
+          echo "Uploading $FILE"
+          ./scripts/metrics/upload.sh --dry-run "$FILE"
+      - name: Archive metrics artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: metrics-json
+          path: scripts/metrics/output/*.json
+
+  notify:
+    name: Notify
+    needs:
+      - dispatch-info
+      - metrics
+    runs-on: ubuntu-latest
+    outputs:
+      run_url: ${{ steps.meta.outputs.run_url }}
+      status: ${{ steps.meta.outputs.status }}
+    steps:
+      - id: meta
+        run: |
+          echo "run_url=https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
+          echo "status=${{ needs.metrics.result }}" >> "$GITHUB_OUTPUT"
+      - name: Comment on PR (if available)
+        uses: actions/github-script@v7
+        env:
+          RUN_URL: ${{ steps.meta.outputs.run_url }}
+          SERVICE: ${{ needs.dispatch-info.outputs.service }}
+          STATUS: ${{ needs.metrics.result }}
+          NOTES: ${{ needs.dispatch-info.outputs.notes }}
+          TARGET_REF: ${{ needs.dispatch-info.outputs.ref }}
+        with:
+          script: |
+            const runUrl = process.env.RUN_URL;
+            const service = process.env.SERVICE;
+            const status = (process.env.STATUS || '').toUpperCase();
+            const notes = process.env.NOTES || '';
+            const targetRef = process.env.TARGET_REF || '';
+            const {owner, repo} = context.repo;
+            if (!targetRef.startsWith('refs/heads/')) {
+              core.info(`Target ref ${targetRef} is not a branch. Skipping PR comment.`);
+              return;
+            }
+            const branch = targetRef.replace('refs/heads/', '');
+            const prs = await github.rest.pulls.list({
+              owner,
+              repo,
+              head: `${owner}:${branch}`,
+              state: 'open',
+              per_page: 1
+            });
+            if (!prs.data.length) {
+              core.info(`No open PR found for branch ${branch}`);
+              return;
+            }
+            const commentLines = [
+              `🚀 Remote CI completed for **${service}**`,
+              ``,
+              `- Status: **${status || 'UNKNOWN'}**`,
+              `- Workflow: [Run Log](${runUrl})`
+            ];
+            if (notes) {
+              commentLines.push(`- Notes: ${notes}`);
+            }
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: prs.data[0].number,
+              body: commentLines.join('\n')
+            });
+

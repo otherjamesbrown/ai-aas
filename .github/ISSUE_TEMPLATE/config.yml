@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Internal Platform Support
+    url: https://github.com/otherjamesbrown/ai-aas/discussions
+    about: Questions or discussions that are not actionable issues.
+  - name: Incident Response
+    url: mailto:platform-oncall@example.com
+    about: Report production incidents or security concerns.
+

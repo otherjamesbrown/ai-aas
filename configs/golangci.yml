@@ -1,0 +1,43 @@
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+  go: "1.21"
+
+output:
+  formats:
+    - format: colored-line-number
+
+linters-settings:
+  gofmt:
+    simplify: true
+  goimports:
+    local-prefixes: github.com/otherjamesbrown/ai-aas
+  revive:
+    severity: warning
+    rules:
+      - name: indent-error-flow
+      - name: early-return
+      - name: exported
+  staticcheck:
+    checks: ["all"]
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - gofmt
+    - goimports
+    - gosimple
+    - govet
+    - ineffassign
+    - revive
+    - staticcheck
+    - typecheck
+    - unused
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
