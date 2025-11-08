@@ -10,12 +10,12 @@
 - Workflows:
   - `.github/workflows/ci.yml`
   - `.github/workflows/ci-remote.yml` (the one we dispatch)
-  - `.github/workflows/reusable/build.yml`
+  - `.github/workflows/reusable-build.yml`
 
 ## Authentication & Permissions
 - `gh auth status`: logged in; token scopes include `repo`, `workflow` (and others).
 - Repo Settings → Actions → General:
-  - Workflow permissions changed from “Read repository contents and packages” to “Read and write permissions”.
+  - Workflow permissions changed from "Read repository contents and packages" to "Read and write permissions".
   - Actions enabled (able to run `push` workflows).
 
 ## Reproduction (CLI)
@@ -23,7 +23,6 @@
 ```
 # Dispatch (feature branch), various forms tried:
 gh workflow run ci-remote.yml --ref 000-project-setup \
-  -f ref=000-project-setup \
   -f service=world-service \
   -f notes="smoke test"
 
@@ -42,9 +41,9 @@ gh run list --workflow="ci-remote.yml"
 ```
 
 ## Reproduction (UI)
-- Actions → “CI Remote” → “Run workflow”
+- Actions → "CI Remote" → "Run workflow"
   - Branch: `000-project-setup`
-  - Inputs: `service=world-service`, `notes="smoke test"`, `ref=000-project-setup` (also tried “current”)
+  - Inputs: `service=world-service`, `notes="smoke test"`, `ref=000-project-setup` (also tried "current")
 - Result: UI confirms, but no new `workflow_dispatch` run appears.
 
 ## Verification Checks
@@ -63,13 +62,13 @@ gh api repos/otherjamesbrown/ai-aas/actions/workflows/ci-remote.yml
 ```
 
 ## Observations
-- `gh workflow run` prints success: “✓ Created workflow_dispatch event for ci-remote.yml at 000-project-setup”
+- `gh workflow run` prints success: "✓ Created workflow_dispatch event for ci-remote.yml at 000-project-setup"
 - Listing `workflow_dispatch` runs on the feature branch returns nothing, repeatedly.
 - Listing recent runs shows only prior `push` events (on both `main` and `000-project-setup`).
 
-## What’s Been Tried
+## What's Been Tried
 - Ensured scripts executable; replaced `readarray`; corrected `gh workflow run` flags (avoid mixing `--json` and `--field`), added polling for run ID.
-- Switched the repo’s workflow permissions to Read & Write.
+- Switched the repo's workflow permissions to Read & Write.
 - UI manual dispatch with explicit branch/ref and inputs.
 
 ## Hypotheses
@@ -82,7 +81,7 @@ gh api repos/otherjamesbrown/ai-aas/actions/workflows/ci-remote.yml
    - Repo Settings → Actions → General:
      - Allow all actions and reusable workflows.
      - Workflow permissions: Read and write (done).
-     - Disable “Require approval for all outside collaborators” temporarily.
+     - Disable "Require approval for all outside collaborators" temporarily.
      - Check any branch/tag restrictions for workflows.
    - If applicable, org-level policies that restrict non-default branch runs.
 
@@ -102,7 +101,7 @@ gh api repos/otherjamesbrown/ai-aas/actions/workflows/ci-remote.yml
      gh workflow run ping.yml --ref 000-project-setup
      gh run list --workflow ping.yml --event workflow_dispatch --branch 000-project-setup -L 1
      ```
-   - If this fails to create a run, it’s definitely policy/permissions.
+   - If this fails to create a run, it's definitely policy/permissions.
 
 3. Try default branch:
    ```
@@ -110,7 +109,7 @@ gh api repos/otherjamesbrown/ai-aas/actions/workflows/ci-remote.yml
      -f ref=main -f service=world-service -f notes="test on main"
    gh run list --workflow ci-remote.yml --event workflow_dispatch --branch main -L 1
    ```
-   - If `main` succeeds but the feature branch doesn’t, policy is branch-scoped—adjust settings or dispatch on `main`.
+   - If `main` succeeds but the feature branch doesn't, policy is branch-scoped—adjust settings or dispatch on `main`.
 
 4. Extend CLI polling (if needed):
    - Sometimes the run manifests after several seconds. Poll `gh run list` for `workflow_dispatch` on the branch for ~1–2 minutes.
@@ -118,5 +117,41 @@ gh api repos/otherjamesbrown/ai-aas/actions/workflows/ci-remote.yml
 5. Review audit logs (if available) for denied dispatch events.
 
 ## Goal
-Enable `workflow_dispatch` of `.github/workflows/ci-remote.yml` on branch `000-project-setup` so `make ci-remote SERVICE=world-service` works reliably.*** End Patch*** }】 ваканс ***!
+Enable `workflow_dispatch` of `.github/workflows/ci-remote.yml` on branch `000-project-setup` so `make ci-remote SERVICE=world-service` works reliably.
 
+---
+
+## ✅ RESOLUTION
+
+### Root Causes Identified
+
+**1. Invalid Reusable Workflow Path**
+- GitHub Actions requires reusable workflows to be at the top level of `.github/workflows/`
+- Our workflow was at `.github/workflows/reusable/build.yml` (subdirectory)
+- Error: `invalid value workflow reference: workflows must be defined at the top level`
+- **Fix**: Moved to `.github/workflows/reusable-build.yml`
+
+**2. Invalid env Context in Reusable Workflow Calls**
+- The `env` context is not available when passing parameters to reusable workflows
+- Used `${{ env.GO_VERSION }}` in `with:` parameters for reusable workflow calls
+- Error: `Unrecognized named-value: 'env'`
+- **Fix**: Replaced with hardcoded value `"1.21.x"` in workflow call parameters
+
+### Files Modified
+- `.github/workflows/ci-remote.yml` - Fixed path and env references
+- `.github/workflows/ci.yml` - Fixed path and env references  
+- `.github/workflows/reusable/build.yml` → `.github/workflows/reusable-build.yml` (moved)
+- `scripts/ci/trigger-remote.sh` - Improved polling logic
+
+### Verification
+```bash
+# Test workflow_dispatch on feature branch
+gh workflow run ci-remote.yml --ref 000-project-setup \
+  -f service=world-service \
+  -f notes="Testing after fixes"
+
+# Or use make command
+make ci-remote SERVICE=world-service
+```
+
+**Result**: ✅ workflow_dispatch now successfully creates runs on feature branches!
