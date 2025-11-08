@@ -7,10 +7,6 @@ on:
         description: Target service (default all)
         required: false
         default: "all"
-      ref:
-        description: Git ref to run against (use 'current' for the triggering branch)
-        required: false
-        default: "current"
       notes:
         description: Additional notes for audit trail
         required: false
@@ -25,7 +21,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       service: ${{ steps.collect.outputs.service }}
-      ref: ${{ steps.collect.outputs.ref }}
       notes: ${{ steps.collect.outputs.notes }}
     steps:
       - id: collect
@@ -34,16 +29,9 @@ jobs:
           if [ -z "$SERVICE" ]; then
             SERVICE="all"
           fi
-          REF_INPUT="${{ inputs.ref }}"
-          if [ -z "$REF_INPUT" ] || [ "$REF_INPUT" = "current" ]; then
-            REF_VALUE="${GITHUB_REF}"
-          else
-            REF_VALUE="$REF_INPUT"
-          fi
           echo "service=$SERVICE" >> "$GITHUB_OUTPUT"
-          echo "ref=$REF_VALUE" >> "$GITHUB_OUTPUT"
           echo "notes=${{ inputs.notes }}" >> "$GITHUB_OUTPUT"
-          echo "Remote CI requested for ${SERVICE} on ${REF_VALUE}"
+          echo "Remote CI requested for ${SERVICE} on ${GITHUB_REF}"
 
   build:
     name: Build
@@ -53,7 +41,6 @@ jobs:
       service: ${{ needs.dispatch-info.outputs.service }}
       target: build
       go-version: ${{ env.GO_VERSION }}
-      ref: ${{ needs.dispatch-info.outputs.ref }}
 
   test:
     name: Test
@@ -63,7 +50,6 @@ jobs:
       service: ${{ needs.dispatch-info.outputs.service }}
       target: test
       go-version: ${{ env.GO_VERSION }}
-      ref: ${{ needs.dispatch-info.outputs.ref }}
 
   lint:
     name: Lint
@@ -71,8 +57,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.dispatch-info.outputs.ref }}
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
@@ -90,8 +74,6 @@ jobs:
     if: ${{ always() }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.dispatch-info.outputs.ref }}
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
@@ -136,14 +118,13 @@ jobs:
           SERVICE: ${{ needs.dispatch-info.outputs.service }}
           STATUS: ${{ needs.metrics.result }}
           NOTES: ${{ needs.dispatch-info.outputs.notes }}
-          TARGET_REF: ${{ needs.dispatch-info.outputs.ref }}
         with:
           script: |
             const runUrl = process.env.RUN_URL;
             const service = process.env.SERVICE;
             const status = (process.env.STATUS || '').toUpperCase();
             const notes = process.env.NOTES || '';
-            const targetRef = process.env.TARGET_REF || '';
+            const targetRef = context.ref;
             const {owner, repo} = context.repo;
             if (!targetRef.startsWith('refs/heads/')) {
               core.info(`Target ref ${targetRef} is not a branch. Skipping PR comment.`);
