@@ -36,7 +36,7 @@ jobs:
   build:
     name: Build
     needs: dispatch-info
-    uses: ./.github/workflows/reusable/build.yml
+    uses: ./.github/workflows/reusable-build.yml
     with:
       service: ${{ needs.dispatch-info.outputs.service }}
       target: build
@@ -45,7 +45,7 @@ jobs:
   test:
     name: Test
     needs: build
-    uses: ./.github/workflows/reusable/build.yml
+    uses: ./.github/workflows/reusable-build.yml
     with:
       service: ${{ needs.dispatch-info.outputs.service }}
       target: test
