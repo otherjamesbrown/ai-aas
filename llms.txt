@@ -4,6 +4,16 @@
 
 This file highlights the most relevant specifications, plans, and external references so agents can reason about the project without crawling the entire repository.
 
+## ⚠️ Critical GitHub Actions Guidelines
+
+**MUST FOLLOW** when working with workflows:
+- Reusable workflows MUST be at `.github/workflows/` top level (no subdirectories)
+- Never use `${{ env.VAR }}` in reusable workflow call parameters (use hardcoded values)
+- Always declare job dependencies in `needs:` if accessing outputs
+- Scripts must be executable: `chmod +x` before committing
+- Workflows must exist on `main` before `workflow_dispatch` works on feature branches
+- See `docs/platform/github-actions-guide.md` for complete guide
+
 ## Core Specs
 
 - [000 Project Setup Spec](./specs/000-project-setup/spec.md): Repository structure, automation requirements, remote CI workflow (`make ci-remote`).
