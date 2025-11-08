@@ -43,12 +43,21 @@ Use the pull request template under `.github/PULL_REQUEST_TEMPLATE.md`.
 
 - Go code must pass `gofmt`, `golangci-lint`, and `gosec`.
 - All production code must include robust comments:
-  - Provide package/type/function doc comments that follow the language’s docstring conventions (`// Foo ...` for Go, `/** ... */` for TypeScript, etc.).
-  - Add explanatory comments for non-obvious control flow, data transformations, and cross-service interactions—include the “why”, not just the “what”.
+  - Provide package/type/function doc comments that follow the language's docstring conventions (`// Foo ...` for Go, `/** ... */` for TypeScript, etc.).
+  - Add explanatory comments for non-obvious control flow, data transformations, and cross-service interactions—include the "why", not just the "what".
   - Link to relevant specs, tickets, or runbooks when implementing guardrails, feature flags, or operational workarounds.
   - Remove stale comments as behavior changes; reviewers should block merges when comment coverage or accuracy falls short.
 - Scripts should use `set -euo pipefail` and include usage documentation.
+- Scripts must be executable: `chmod +x script.sh` before committing.
 - Documentation should prefer Markdown with task IDs where applicable.
+
+### GitHub Actions Workflows
+
+- Reusable workflows MUST be at `.github/workflows/` top level (no subdirectories).
+- Never use `${{ env.VAR }}` in reusable workflow call parameters; use hardcoded values.
+- Declare all job dependencies in `needs:` list if accessing outputs.
+- Test workflows exist on `main` before using `workflow_dispatch` on feature branches.
+- See `docs/platform/github-actions-guide.md` for complete guidelines.
 
 ## 5. Release Process
 
