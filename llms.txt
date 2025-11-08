@@ -1,0 +1,27 @@
+# AI-AAS Platform
+
+> Spec-driven repository for an inference-as-a-service platform built on Akamai Linode infrastructure with Go-based microservices, GitHub Actions automation, and declarative GitOps workflows.
+
+This file highlights the most relevant specifications, plans, and external references so agents can reason about the project without crawling the entire repository.
+
+## Core Specs
+
+- [000 Project Setup Spec](./specs/000-project-setup/spec.md): Repository structure, automation requirements, remote CI workflow (`make ci-remote`).
+- [000 Plan](./specs/000-project-setup/plan.md): Tooling choices (Go 1.21, GNU Make 4.x, GitHub Actions, Linode S3-compatible storage) and structure decisions.
+- [000 Quickstart](./specs/000-project-setup/quickstart.md): Onboarding steps, remote CI usage, metrics workflow, Linode API pointers.
+- [Remote CI Runbook](./docs/runbooks/ci-remote.md): Step-by-step guide for `make ci-remote`, expected SLA, troubleshooting.
+- [Service Automation Guide](./docs/services/customizing.md): Shared Make template hooks, flags, and customization patterns.
+- Sample services: `hello-service` (CLI greeting) and `world-service` (HTTP JSON endpoint) demonstrate build/test/check workflows.
+- [Constitution](./memory/constitution.md): Non-negotiable architecture principles (API-first, LKE Kubernetes, GitOps, security gates).
+
+## External References
+
+- [Linode Kubernetes Engine API](https://techdocs.akamai.com/linode-api/reference/post-lke-cluster): Cluster provisioning for platform environments.
+- [Linode Instance API](https://techdocs.akamai.com/linode-api/reference/post-linode-instance): VM provisioning standards.
+- [Linode Object Storage API](https://techdocs.akamai.com/linode-api/reference/post-object-storage-bucket): Metrics bucket creation and lifecycle rules.
+- [llms.txt Specification](https://llmstxt.org/): Format guidelines followed by this file.
+
+## Optional
+
+- [Linode API Overview](https://techdocs.akamai.com/linode-api/reference/api): Unified reference for all Akamai Linode endpoints.
+

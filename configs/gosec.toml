@@ -1,0 +1,20 @@
+# gosec configuration for AI-AAS services.
+
+[Metadata]
+Severity = "medium"
+Confidence = "high"
+
+[Rules]
+G303 = "medium"  # file permission setting
+G304 = "medium"  # file path provided as taint input
+G401 = "medium"  # weak cryptographic primitives
+G404 = "medium"  # weak random number generator
+
+[Global]
+ExcludeDir = ["vendor", "scripts"]
+Exclude = ["testdata/*"]
+
+[Formatting]
+Colored = true
+Summary = true
+

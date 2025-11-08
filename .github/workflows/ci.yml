@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+env:
+  GO_VERSION: "1.21.x"
+
+jobs:
+  setup:
+    name: Setup & Discover Services
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.discover.outputs.services }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: discover
+        run: |
+          SERVICES=$(find services -mindepth 1 -maxdepth 1 -type d ! -name '_template' -print0 | \
+            xargs -0 -I{} basename {} | jq -R . | jq -s .)
+          if [ "$SERVICES" = "[]" ]; then
+            SERVICES='["all"]'
+          fi
+          echo "Detected services: $SERVICES"
+          echo "services=$SERVICES" >> "$GITHUB_OUTPUT"
+      - name: Show Make help
+        run: make help
+
+  build:
+    name: Build
+    needs: setup
+    strategy:
+      matrix:
+        service: ${{ fromJSON(needs.setup.outputs.services) }}
+    uses: ./.github/workflows/reusable/build.yml
+    with:
+      service: ${{ matrix.service }}
+      target: build
+      go-version: ${{ env.GO_VERSION }}
+
+  test:
+    name: Test
+    needs: build
+    strategy:
+      matrix:
+        service: ${{ fromJSON(needs.setup.outputs.services) }}
+    uses: ./.github/workflows/reusable/build.yml
+    with:
+      service: ${{ matrix.service }}
+      target: test
+      go-version: ${{ env.GO_VERSION }}
+
+  lint:
+    name: Lint
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
+            sh -s -- -b "$(go env GOPATH)"/bin v1.55.2
+      - name: Run golangci-lint
+        run: make lint
+
+  metrics-upload:
+    name: Metrics Upload
+    needs:
+      - lint
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Install tooling
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
+            sh -s -- -b "$(go env GOPATH)"/bin v1.55.2
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.19.0
+      - name: Run make check with metrics
+        run: make check METRICS=true
+      - name: Upload metrics artifact (dry run)
+        env:
+          METRICS_BUCKET: ai-aas-build-metrics
+        run: |
+          FILE=$(ls -t scripts/metrics/output/*.json | head -n 1)
+          echo "Uploading $FILE"
+          ./scripts/metrics/upload.sh --dry-run "$FILE"
+      - name: Archive metrics artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: metrics-json
+          path: scripts/metrics/output/*.json
+
