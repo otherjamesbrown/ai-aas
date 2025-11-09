@@ -4,6 +4,7 @@ metadata:
   name: default-deny
   namespace: development
   labels:
+    app.kubernetes.io/managed-by: argocd
     environment: development
 spec:
   podSelector: {}
@@ -11,11 +12,6 @@ spec:
     - Ingress
     - Egress
   ingress:
-      - from:
-              - ipBlock:
-            cidr: 0.0.0.0/0
-          egress:
-    - to:
-              - ipBlock:
-            cidr: 0.0.0.0/0
-      
+    - {}
+  egress:
+    - {}

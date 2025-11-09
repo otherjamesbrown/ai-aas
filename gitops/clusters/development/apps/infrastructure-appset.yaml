@@ -7,12 +7,15 @@ spec:
   generators:
     - list:
         elements:
-          - name: observability
-            path: charts/observability-stack
           - name: network
-            path: charts/network-policies
+            namespace: network
+            path: gitops/clusters/development/apps/network
+          - name: observability
+            namespace: observability
+            path: gitops/clusters/development/apps/observability
           - name: secrets
-            path: charts/sealed-secrets
+            namespace: secrets
+            path: gitops/clusters/development/apps/secrets
   template:
     metadata:
       name: '{{name}}-development'
@@ -23,10 +26,12 @@ spec:
       source:
         repoURL: https://github.com/otherjamesbrown/ai-aas
         targetRevision: main
-        path: 'infra/helm/{{path}}'
+        path: '{{path}}'
+        directory:
+          recurse: true
       destination:
         server: https://kubernetes.default.svc
-        namespace: '{{name}}'
+        namespace: '{{namespace}}'
       syncPolicy:
         automated:
           prune: true
