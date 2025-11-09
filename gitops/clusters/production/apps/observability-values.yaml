@@ -1,0 +1,21 @@
+global:
+  environment: production
+
+prometheus:
+  prometheusSpec:
+    retention: "30d"
+    scrapeInterval: "30s"
+
+alertmanager:
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      receiver: default
+    receivers:
+      - name: default
+        slack_configs:
+          - channel: "#platform-infra"
+            send_resolved: true
+            title: "[production] {{ .CommonAnnotations.summary }}"
+            text: "{{ .CommonAnnotations.description }}"

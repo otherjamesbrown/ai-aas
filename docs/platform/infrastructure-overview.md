@@ -79,6 +79,7 @@ Keep this document updated alongside infrastructure changes to ensure context fo
 
 - **Development**: LKE cluster `531921`, kubeconfig context `lke531921-ctx`. GitHub secrets: `DEV_KUBECONFIG_B64`, `DEV_KUBE_CONTEXT`.
 - **Production**: LKE cluster `531922`, kubeconfig context `lke531922-ctx`. GitHub secrets: `PROD_KUBECONFIG_B64`, `PROD_KUBE_CONTEXT`.
+- **Staging/System**: Defined in Terraform for future rollout; keep configuration in sync but defer `terraform apply` until post-launch objectives require additional environments.
 - Kubeconfigs are stored in 1Password and replicated into GitHub Actions secrets for automation (availability probes, scripted applies).
 
 ## 10. Generated Artifacts

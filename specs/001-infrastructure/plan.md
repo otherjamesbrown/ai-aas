@@ -7,7 +7,7 @@
 
 ## Summary
 
-Provision four isolated Kubernetes environments (development, staging, production, system operations) on Akamai Linode using fully declarative Terraform and Helm pipelines. Deliver baseline networking, secrets, and observability scaffolding so application teams can deploy services with secure defaults, documented access, and GitOps-driven change management. Automation runs through GitHub Actions with validated rollback procedures, drift detection, and environment dashboards. Regional deployment defaults to Paris (`fr-par`) but can be overridden per environment via Terraform variables (`default_region`, `region_overrides`).
+Provision four isolated Kubernetes environments (development, staging, production, system operations) on Akamai Linode using fully declarative Terraform and Helm pipelines. Deliver baseline networking, secrets, and observability scaffolding so application teams can deploy services with secure defaults, documented access, and GitOps-driven change management. Automation runs through GitHub Actions with validated rollback procedures, drift detection, and environment dashboards. Regional deployment defaults to Paris (`fr-par`) but can be overridden per environment via Terraform variables (`default_region`, `region_overrides`). Development and production are prioritized for the initial rollout; staging and system environments remain defined but will be provisioned once the platform is live.
 
 ## Technical Context
 
