@@ -75,12 +75,19 @@ Keep this document updated alongside infrastructure changes to ensure context fo
 - Performance harness `tests/infra/perf/capacity_test.go` deploys placeholder workloads to verify scheduling and HPA thresholds.  
 - Record results and tuning notes in this guide after each significant scaling event.
 
-## 9. Generated Artifacts
+## 9. Cluster Inventory
 
+- **Development**: LKE cluster `531921`, kubeconfig context `lke531921-ctx`. GitHub secrets: `DEV_KUBECONFIG_B64`, `DEV_KUBE_CONTEXT`.
+- **Production**: LKE cluster `531922`, kubeconfig context `lke531922-ctx`. GitHub secrets: `PROD_KUBECONFIG_B64`, `PROD_KUBE_CONTEXT`.
+- Kubeconfigs are stored in 1Password and replicated into GitHub Actions secrets for automation (availability probes, scripted applies).
+
+## 10. Generated Artifacts
+
+- Terraform renders manifests into `infra/generated/<environment>/` for GitOps promotion.
 - Running Terraform per environment writes manifests and values into `infra/terraform/environments/<env>/.generated/`:
   - Network policies and firewall specs (`network/`).
   - Sealed secrets bootstrap manifests (`secrets/`).
   - Observability values overlays (`observability/`).
   - ArgoCD ApplicationSet manifests (`argo/`).
-- These files should be reviewed and promoted into GitOps repositories as part of the provisioning workflow.
+- Copy the contents into `infra/generated/<environment>/` (already committed) and promote those files into the GitOps repository that ArgoCD watches.
 

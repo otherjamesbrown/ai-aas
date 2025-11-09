@@ -108,6 +108,7 @@ kubectl --context dev-platform -n env-development get pods
 - Grafana dashboards: `https://grafana.dev.ai-aas.dev/d/<environment>-overview`.
 - Alertmanager routes to `#platform-infra` Slack channel; acknowledge within 5 minutes per SC-006.
 - Loki queries preconfigured under `observability-links.json`.
+- GitHub Actions secrets `DEV_KUBECONFIG_B64` / `DEV_KUBE_CONTEXT` (development) and `PROD_KUBECONFIG_B64` / `PROD_KUBE_CONTEXT` (production) provide kubeconfigs for workflows such as `infra-availability.yml`. Rotate secrets whenever kubeconfigs change.
 
 ## 7. Rollback Procedure
 
