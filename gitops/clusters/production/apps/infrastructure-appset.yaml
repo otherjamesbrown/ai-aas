@@ -25,7 +25,7 @@ spec:
       project: platform-production
       source:
         repoURL: https://github.com/otherjamesbrown/ai-aas
-        targetRevision: main
+        targetRevision: 001-infrastructure
         path: '{{path}}'
         directory:
           recurse: true
