@@ -17,7 +17,7 @@ locals {
   environment_defaults = {
     development = {
       region      = local.environment_regions.development
-      k8s_version = "1.29"
+      k8s_version = "1.34"
       node_pools = [
         {
           type  = "g6-standard-4"
@@ -54,7 +54,7 @@ locals {
 
     staging = {
       region      = local.environment_regions.staging
-      k8s_version = "1.29"
+      k8s_version = "1.34"
       node_pools = [
         {
           type  = "g6-standard-6"
@@ -91,7 +91,7 @@ locals {
 
     production = {
       region      = local.environment_regions.production
-      k8s_version = "1.29"
+      k8s_version = "1.34"
       node_pools = [
         {
           type  = "g6-standard-8"
@@ -140,7 +140,7 @@ locals {
 
     system = {
       region      = local.environment_regions.system
-      k8s_version = "1.29"
+      k8s_version = "1.34"
       node_pools = [
         {
           type  = "g6-standard-6"

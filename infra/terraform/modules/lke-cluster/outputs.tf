@@ -13,13 +13,3 @@ output "status" {
   description = "Cluster status"
 }
 
-output "kubeconfig_raw" {
-  value       = data.linode_lke_cluster_kubeconfig.this.kubeconfig
-  description = "Base64 encoded kubeconfig"
-  sensitive   = true
-}
-
-output "dashboard_url" {
-  value       = data.linode_lke_cluster_dashboard.this.url
-  description = "Dashboard URL"
-}

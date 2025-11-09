@@ -34,6 +34,7 @@ This file highlights the most relevant specifications, plans, and external refer
 - [Linode Kubernetes Engine API](https://techdocs.akamai.com/linode-api/reference/post-lke-cluster): Cluster provisioning for platform environments.
 - [Linode Instance API](https://techdocs.akamai.com/linode-api/reference/post-linode-instance): VM provisioning standards.
 - [Linode Object Storage API](https://techdocs.akamai.com/linode-api/reference/post-object-storage-bucket): Metrics bucket creation and lifecycle rules.
+- [Linode CLI LKE Commands](https://techdocs.akamai.com/cloud-computing/docs/lke-commands): Reference for managing clusters via `linode-cli`.
 - [Terraform Linode Provider](https://registry.terraform.io/providers/linode/linode/latest/docs): Resource definitions for clusters, node pools, networking, and buckets.
 - [ArgoCD Documentation](https://argo-cd.readthedocs.io/en/stable/): GitOps controller used for Helm/app reconciliation.
 - [Bitnami Sealed Secrets](https://github.com/bitnami-labs/sealed-secrets): Secret encryption workflow for environment bundles.

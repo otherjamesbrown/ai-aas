@@ -28,11 +28,5 @@ variable "node_pools" {
       min = number
       max = number
     })
-    labels = optional(map(string), {})
-    taints = optional(list(object({
-      key    = string
-      value  = string
-      effect = string
-    })), [])
   }))
 }
