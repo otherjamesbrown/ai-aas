@@ -64,14 +64,23 @@ helm repo update >/dev/null
 echo "Installing/Updating ArgoCD Helm release..."
 helm "${HELM_ARGS[@]}"
 
-echo "Waiting for ArgoCD pods to become Ready..."
 KUBECTL_ARGS=(-n argocd)
 if [[ -n "$KUBE_CONTEXT" ]]; then
   KUBECTL_ARGS+=(--context "$KUBE_CONTEXT")
 fi
-kubectl "${KUBECTL_ARGS[@]}" rollout status deploy/argocd-application-controller --timeout=180s
+
+echo "Ensuring redis secret exists..."
+if ! kubectl "${KUBECTL_ARGS[@]}" get secret argocd-redis >/dev/null 2>&1; then
+  RAND_PASS=$(openssl rand -base64 32)
+  kubectl "${KUBECTL_ARGS[@]}" create secret generic argocd-redis --from-literal=auth="${RAND_PASS}" >/dev/null
+fi
+
+echo "Waiting for ArgoCD pods to become Ready..."
+kubectl "${KUBECTL_ARGS[@]}" rollout status statefulset/argocd-application-controller --timeout=180s
+kubectl "${KUBECTL_ARGS[@]}" rollout status statefulset/argocd-application-controller --timeout=180s
 kubectl "${KUBECTL_ARGS[@]}" rollout status deploy/argocd-repo-server --timeout=180s
 kubectl "${KUBECTL_ARGS[@]}" rollout status deploy/argocd-server --timeout=180s
+kubectl "${KUBECTL_ARGS[@]}" rollout status deploy/argocd-dex-server --timeout=180s
 
 PROJECT_DIR="$CLUSTER_DIR/projects"
 APPS_DIR="$CLUSTER_DIR/apps"

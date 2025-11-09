@@ -17,7 +17,7 @@ kubeconfig context and secrets.
 
 1. **Authenticate to the cluster**
    ```bash
-   export KUBECONFIG=~/kubeconfigs/development.yaml
+   export KUBECONFIG=~/kubeconfigs/kubeconfig-development.yaml
    kubectl config use-context lke531921-ctx
    ```
 
@@ -55,6 +55,7 @@ kubeconfig context and secrets.
 
 7. **Repeat for production**
    ```bash
+   export KUBECONFIG=~/kubeconfigs/kubeconfig-production.yaml
    ./scripts/gitops/bootstrap_argocd.sh production lke531922-ctx
    ```
 
@@ -65,6 +66,8 @@ kubeconfig context and secrets.
   egress is permitted.
 - Application stuck progressing: inspect events via `kubectl -n argocd get events`
   and check ArgoCD logs (`kubectl -n argocd logs deploy/argocd-application-controller`).
+- Redis secret missing: rerun the bootstrap script; it auto-creates `argocd-redis`
+  if absent. Delete failing pods after secret creation (`kubectl -n argocd delete pod <pod>`).
 
 ## Post-Bootstrap Tasks
 - Configure SSO or external auth for ArgoCD server.

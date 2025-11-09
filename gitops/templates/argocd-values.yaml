@@ -5,14 +5,16 @@ global:
 configs:
   params:
     server.insecure: true
-  secret:
-    createSecret: false
 
 server:
   service:
     type: ClusterIP
     port: 8080
   ingress:
+    enabled: false
+
+redis:
+  auth:
     enabled: false
 
 controller:

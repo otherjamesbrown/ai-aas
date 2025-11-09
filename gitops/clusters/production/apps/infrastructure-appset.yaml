@@ -15,18 +15,18 @@ spec:
             path: charts/sealed-secrets
   template:
     metadata:
-      name: {{name}}-production
+      name: '{{name}}-production'
       labels:
         environment: production
     spec:
-      project: platform
+      project: platform-production
       source:
         repoURL: https://github.com/otherjamesbrown/ai-aas
         targetRevision: main
-        path: infra/helm/{{path}}
+        path: 'infra/helm/{{path}}'
       destination:
         server: https://kubernetes.default.svc
-        namespace: {{name}}
+        namespace: '{{name}}'
       syncPolicy:
         automated:
           prune: true
