@@ -92,3 +92,10 @@ Keep this document updated alongside infrastructure changes to ensure context fo
   - ArgoCD ApplicationSet manifests (`argo/`).
 - Copy the contents into `infra/generated/<environment>/` (already committed) and promote those files into the GitOps repository that ArgoCD watches.
 
+## 11. GitOps & ArgoCD
+
+- GitOps repository structure resides under `gitops/`.
+- Bootstrap ArgoCD per cluster with `./scripts/gitops/bootstrap_argocd.sh <environment> <kube-context>`.
+- Register this repository using `argocd repo add` and sync `platform-<env>-infrastructure` applications after each promotion.
+- Customize `gitops/templates/argocd-values.yaml` (ingress, service type, RBAC) and rerun the bootstrap script to apply changes.
+

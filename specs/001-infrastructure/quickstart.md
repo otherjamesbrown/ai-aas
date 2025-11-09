@@ -110,7 +110,25 @@ kubectl --context dev-platform -n env-development get pods
 - Loki queries preconfigured under `observability-links.json`.
 - GitHub Actions secrets `DEV_KUBECONFIG_B64` / `DEV_KUBE_CONTEXT` (development) and `PROD_KUBECONFIG_B64` / `PROD_KUBE_CONTEXT` (production) provide kubeconfigs for workflows such as `infra-availability.yml`. Rotate secrets whenever kubeconfigs change.
 
-## 7. Rollback Procedure
+## 7. GitOps & ArgoCD
+
+1. Bootstrap ArgoCD in each cluster:
+   ```bash
+   ./scripts/gitops/bootstrap_argocd.sh development lke531921-ctx
+   ./scripts/gitops/bootstrap_argocd.sh production lke531922-ctx
+   ```
+2. Login and register the repository:
+   ```bash
+   argocd login localhost:8080 --username admin --password <password> --insecure
+   argocd repo add https://github.com/otherjamesbrown/ai-aas.git --username <user> --password <token>
+   ```
+3. Sync infrastructure apps:
+   ```bash
+   argocd app sync platform-development-infrastructure
+   argocd app sync platform-production-infrastructure
+   ```
+
+## 8. Rollback Procedure
 
 1. Fetch latest state snapshot:
    ```bash
@@ -127,7 +145,7 @@ kubectl --context dev-platform -n env-development get pods
    ```
 4. Record outcome in `docs/runbooks/infrastructure-rollback.md`.
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 | Scenario | Resolution |
 |----------|------------|
