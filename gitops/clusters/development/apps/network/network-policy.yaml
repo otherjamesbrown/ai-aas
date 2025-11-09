@@ -2,7 +2,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: default-deny
-  namespace: development
+  namespace: network
   labels:
     app.kubernetes.io/managed-by: argocd
     environment: development
