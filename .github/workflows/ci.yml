@@ -20,7 +20,7 @@ jobs:
       - id: discover
         run: |
           SERVICES=$(find services -mindepth 1 -maxdepth 1 -type d ! -name '_template' -print0 | \
-            xargs -0 -I{} basename {} | jq -R . | jq -s .)
+            xargs -0 -I{} basename {} | jq -R . | jq -cs .)
           if [ "$SERVICES" = "[]" ]; then
             SERVICES='["all"]'
           fi
@@ -43,7 +43,9 @@ jobs:
 
   test:
     name: Test
-    needs: build
+    needs:
+      - setup
+      - build
     strategy:
       matrix:
         service: ${{ fromJSON(needs.setup.outputs.services) }}
