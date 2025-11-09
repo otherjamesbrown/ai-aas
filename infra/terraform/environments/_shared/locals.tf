@@ -95,10 +95,10 @@ locals {
       node_pools = [
         {
           type  = "g6-standard-8"
-          count = 6
+          count = 3
           autoscaler = {
-            min = 6
-            max = 12
+            min = 3
+            max = 6
           }
           labels = {
             role = "general"
@@ -107,10 +107,10 @@ locals {
         },
         {
           type  = "g6-highmem-16"
-          count = 2
+          count = 1
           autoscaler = {
-            min = 2
-            max = 4
+            min = 1
+            max = 2
           }
           labels = {
             role = "highmem"
