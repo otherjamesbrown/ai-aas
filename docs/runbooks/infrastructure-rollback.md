@@ -72,6 +72,10 @@
   ./scripts/infra/drift-detect.sh --env production --force
   ```
 - Rotate any secrets touched during rollback.
+- Capture a fresh state snapshot:
+  ```bash
+  ./scripts/infra/state-backup.sh --env production
+  ```
 - Schedule root-cause postmortem.
 - Update `docs/runbooks/infrastructure-troubleshooting.md` if new failure mode discovered.
 - Close incident after verification period (minimum 1 hour monitoring).

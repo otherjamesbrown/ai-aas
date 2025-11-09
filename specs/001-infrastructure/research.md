@@ -8,7 +8,7 @@
 
 | Topic | Decision | Rationale | Alternatives Considered |
 |-------|----------|-----------|--------------------------|
-| Cloud provider surface | Standardize on Akamai Linode Kubernetes Engine (LKE) with multi-node pools in `us-east` | Aligns with existing Linode contracts, integrates with current automation, meets cost/SLA targets | AWS EKS (higher cost, larger blast radius), GKE (locks us into GCP billing) |
+| Cloud provider surface | Standardize on Akamai Linode Kubernetes Engine (LKE) with multi-node pools in `fr-par` (configurable) | Aligns with target EU region while remaining configurable per environment, integrates with current automation, meets cost/SLA targets | AWS EKS (higher cost, larger blast radius), GKE (locks us into GCP billing) |
 | Terraform state backend | Use Linode Object Storage bucket `infra-state` with Dynamo-like locking via `terraform-plugin-lock` wrapper | Keeps state off local machines, supports versioned backups, avoids external dependencies | Local state (unsafe), AWS S3 + Dynamo (introduces AWS dependency), Consul (ops overhead) |
 | Secrets management & sync | Authoritative store in Linode Secret Manager; sync to Kubernetes via Sealed Secrets and CSI driver | Centralized auditing, encrypted at rest, integrates with Kubernetes and GitOps | HashiCorp Vault (heavier ops), SOPS with Git-committed secrets (risk of plaintext mishaps) |
 | Observability baseline | Deploy kube-prometheus-stack + Loki + Tempo via Helm, aggregated through Grafana per environment | Satisfies constitution observability gate, provides metrics/logs/traces, widely adopted charts | Self-managed Prometheus deployment (more toil), Datadog (additional licensing) |

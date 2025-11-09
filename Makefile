@@ -158,4 +158,20 @@ version: ## Display pinned tool versions
 	@printf "act: %s\n" "$(ACT_VERSION)"
 	@printf "aws-cli: %s\n" "$(AWS_CLI_VERSION)"
 	@printf "minio-client: %s\n" "$(MINIO_CLIENT_VERSION)"
+	@printf "terraform: %s\n" "$(TERRAFORM_VERSION)"
+	@printf "helm: %s\n" "$(HELM_VERSION)"
+	@printf "tfsec: %s\n" "$(TFSEC_VERSION)"
+	@printf "tflint: %s\n" "$(TFLINT_VERSION)"
+	@printf "terratest: %s\n" "$(TERRATEST_VERSION)"
+
+INFRA_TERRAFORM_MAKE := $(ROOT_DIR)/infra/terraform/Makefile
+
+.PHONY: infra-init infra-fmt infra-validate infra-plan infra-apply infra-destroy infra-drift infra-state-pull
+infra-%: ## Run Terraform $* target (ENV=<environment>)
+	@$(MAKE) --no-print-directory -f $(INFRA_TERRAFORM_MAKE) $* \
+		ENV="$(ENV)" \
+		PLAN_ARGS="$(PLAN_ARGS)" \
+		APPLY_ARGS="$(APPLY_ARGS)" \
+		DESTROY_ARGS="$(DESTROY_ARGS)" \
+		DRIFT_ARGS="$(DRIFT_ARGS)"
 

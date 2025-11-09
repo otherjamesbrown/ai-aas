@@ -14,7 +14,7 @@ This document enumerates the Terraform modules that compose the infrastructure p
 |----------|-------|
 | **Versioning** | Tag `modules/lke-cluster/v0.1.0` (bump minor for new optional features, major for breaking changes) |
 | **Providers** | `linode`, `kubernetes` |
-| **Inputs** | `cluster_label` (string, required); `region` (string, default `us-east`); `k8s_version` (string, default `1.29`); `node_pools` (list(object{ type, count, max_count, labels, taints })) |
+| **Inputs** | `cluster_label` (string, required); `region` (string, default `fr-par`); `k8s_version` (string, default `1.29`); `node_pools` (list(object{ type, count, max_count, labels, taints })) |
 | **Outputs** | `cluster_id` (string); `kubeconfig` (sensitive string); `api_endpoints` (list of strings) |
 | **Validation Rules** | At least one node pool with count ≥ 3; GPU pool allowed only when `enable_gpu` flag true |
 

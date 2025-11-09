@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: ${namespace}
+  labels:
+    environment: ${environment}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+  %{ if length(ingress_whitelist) > 0 ~}
+    - from:
+      %{ for cidr in ingress_whitelist ~}
+        - ipBlock:
+            cidr: ${cidr}
+      %{ endfor ~}
+  %{ else ~}
+    - {}
+  %{ endif ~}
+  egress:
+    - to:
+      %{ for cidr in allowed_egress ~}
+        - ipBlock:
+            cidr: ${cidr}
+      %{ endfor ~}

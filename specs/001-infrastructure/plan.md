@@ -7,7 +7,7 @@
 
 ## Summary
 
-Provision four isolated Kubernetes environments (development, staging, production, system operations) on Akamai Linode using fully declarative Terraform and Helm pipelines. Deliver baseline networking, secrets, and observability scaffolding so application teams can deploy services with secure defaults, documented access, and GitOps-driven change management. Automation runs through GitHub Actions with validated rollback procedures, drift detection, and environment dashboards.
+Provision four isolated Kubernetes environments (development, staging, production, system operations) on Akamai Linode using fully declarative Terraform and Helm pipelines. Deliver baseline networking, secrets, and observability scaffolding so application teams can deploy services with secure defaults, documented access, and GitOps-driven change management. Automation runs through GitHub Actions with validated rollback procedures, drift detection, and environment dashboards. Regional deployment defaults to Paris (`fr-par`) but can be overridden per environment via Terraform variables (`default_region`, `region_overrides`).
 
 ## Technical Context
 
@@ -15,7 +15,7 @@ Provision four isolated Kubernetes environments (development, staging, productio
 **Primary Dependencies**: `linode/linode` Terraform provider, `hashicorp/kubernetes` provider, Helm charts (Ingress Nginx, cert-manager, Prometheus stack), Sealed Secrets controller, ArgoCD CLI  
 **Storage**: Kubernetes etcd (managed by LKE), Linode Object Storage for state backups and Terraform remote state (`s3` backend), PostgreSQL/Redis endpoints provisioned separately but referenced for network policies  
 **Testing**: Terratest suites invoking Terraform modules, `kubectl`/`helm` smoke tests via GitHub Actions, integration checks for sample service deployment using KinD plus Linode API stubs, policy checks via `tflint`, `tfsec`, `conftest`, and Kubernetes conformance tests (`sonobuoy` targeted)  
-**Target Platform**: Akamai Linode Kubernetes Engine (LKE) clusters in `us-east`, GitHub Actions runners (ubuntu-latest) for automation, local developer workstations (macOS/Linux) with Linode CLI for spot testing  
+**Target Platform**: Akamai Linode Kubernetes Engine (LKE) clusters in `fr-par` by default (override via Terraform `default_region`/`region_overrides`), GitHub Actions runners (ubuntu-latest) for automation, local developer workstations (macOS/Linux) with Linode CLI for spot testing  
 **Project Type**: Multi-environment infrastructure-as-code stack with supporting runbooks and automation scripts  
 **Performance Goals**: Full four-environment provisioning ≤45 minutes; incremental apply ≤10 minutes; sample service deployment ≤15 minutes post-provisioning; alert propagation ≤5 minutes; rollback ≤15 minutes  
 **Constraints**: GitOps-only changes to production; no plaintext secrets in Terraform state; zero-trust network policies enforced by default; observability stack must publish metrics/logs/traces tagged per environment; automation must be idempotent and auditable  

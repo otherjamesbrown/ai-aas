@@ -13,7 +13,7 @@
    - Export variables (consider `direnv`):
      ```bash
      export LINODE_TOKEN=lnsk_...
-     export LINODE_DEFAULT_REGION=us-east
+   export LINODE_DEFAULT_REGION=fr-par
      ```
 2. **Tooling**
    ```bash
@@ -22,6 +22,7 @@
      && npm install -g @redocly/cli
    ```
    - Alternatively, run `make infra-tools` (to be added in implementation) to install pinned versions from `configs/tool-versions.mk`.
+   - Deployment defaults to the Linode Paris region (`fr-par`). Override per environment by editing `infra/terraform/environments/_shared/variables.tf` (`default_region`/`region_overrides`).
 3. **GitHub Actions secrets**
    - Store `LINODE_TOKEN`, `LINODE_OBJECT_STORAGE_ACCESS_KEY`, `LINODE_OBJECT_STORAGE_SECRET_KEY`, and `SLACK_WEBHOOK_URL` in repository secrets.
    - Configure environment protection rules for `production` requiring manual approval.
@@ -100,6 +101,7 @@ kubectl --context dev-platform -n env-development get pods
   kubectl --context dev-platform -n monitoring port-forward svc/kube-prometheus-stack-prometheus 9090:9090
   open http://localhost:9090/graph
   ```
+- Review generated artifacts under `infra/terraform/environments/<env>/.generated/` (network policies, secrets manifests, observability values, ApplicationSet manifests) and commit or promote via GitOps workflows.
 
 ## 6. Observability & Alerts
 
@@ -111,7 +113,7 @@ kubectl --context dev-platform -n env-development get pods
 
 1. Fetch latest state snapshot:
    ```bash
-   make -C infra/terraform state-pull ENV=development > snapshots/dev-$(date +%Y%m%d%H%M).tfstate
+   ./scripts/infra/state-backup.sh --env development
    ```
 2. Execute rollback script:
    ```bash

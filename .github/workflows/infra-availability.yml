@@ -1,0 +1,32 @@
+name: Infrastructure Availability Probe
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      DEV_KUBECONFIG_B64: ${{ secrets.DEV_KUBECONFIG_B64 }}
+      KUBE_CONTEXT: ${{ secrets.DEV_KUBE_CONTEXT }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.21.6
+
+      - name: Write kubeconfig from secret
+        run: |
+          if [ -z "$DEV_KUBECONFIG_B64" ]; then
+            echo "DEV_KUBECONFIG_B64 secret not set" >&2
+            exit 1
+          fi
+          echo "$DEV_KUBECONFIG_B64" | base64 -d > kubeconfig
+
+      - name: Run availability probe
+        run: go run ./tests/infra/synthetics --kubeconfig "$(pwd)/kubeconfig" --context "$KUBE_CONTEXT"

@@ -68,7 +68,7 @@ Alert definitions codified in `infra/helm/charts/observability-stack/templates/a
    ```bash
    go test ./tests/infra/synthetics -run TestControlPlaneAvailability -env development
    ```
-   - Same probe runs hourly via `.github/workflows/infra-availability.yml`, raising Slack alerts if control plane availability drops below 99.5%.
+   - Same probe runs hourly via `.github/workflows/infra-availability.yml` (requires `DEV_KUBECONFIG_B64` + `DEV_KUBE_CONTEXT` secrets), raising Slack alerts if control plane availability drops below 99.5%.
 
 4. Dashboard snapshots exported weekly via GitHub Actions job `observability-backup`.
 

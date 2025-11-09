@@ -1,0 +1,7 @@
+severity_overrides:
+  - rule: aws-*       # placeholder to illustrate structure; adjust when rules exist
+    severity: MEDIUM
+  - rule: general-secrets-sensitive-in-variable
+    severity: HIGH
+exclude:
+  - example-rule-id

@@ -20,7 +20,7 @@ Automation requires API access to Akamai Linode services:
 
 ```bash
 export LINODE_TOKEN=<token>
-export LINODE_DEFAULT_REGION=us-east
+export LINODE_DEFAULT_REGION=fr-par
 ```
 
 Store tokens in `.envrc`, `.bash_profile`, or your preferred secret manager. Do **not** commit tokens to Git.

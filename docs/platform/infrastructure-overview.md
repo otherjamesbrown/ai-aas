@@ -6,7 +6,7 @@
 
 ## 1. High-Level Architecture
 
-- **Provider**: Akamai Linode Kubernetes Engine (LKE) in `us-east`.
+- **Provider**: Akamai Linode Kubernetes Engine (LKE) in `fr-par` (configurable via `default_region` / `region_overrides` in Terraform).
 - **Environments**: `development`, `staging`, `production`, `system` share a single control plane with dedicated namespaces and resource quotas.
 - **Node Pools**:
   - Baseline: `g6-standard-8` (3–6 nodes per environment, autoscaling to 10).
@@ -74,4 +74,13 @@ Keep this document updated alongside infrastructure changes to ensure context fo
 - Terraform module `infra/terraform/modules/lke-cluster/quotas.tf` defines per-environment quotas supporting 30 services.  
 - Performance harness `tests/infra/perf/capacity_test.go` deploys placeholder workloads to verify scheduling and HPA thresholds.  
 - Record results and tuning notes in this guide after each significant scaling event.
+
+## 9. Generated Artifacts
+
+- Running Terraform per environment writes manifests and values into `infra/terraform/environments/<env>/.generated/`:
+  - Network policies and firewall specs (`network/`).
+  - Sealed secrets bootstrap manifests (`secrets/`).
+  - Observability values overlays (`observability/`).
+  - ArgoCD ApplicationSet manifests (`argo/`).
+- These files should be reviewed and promoted into GitOps repositories as part of the provisioning workflow.
 
