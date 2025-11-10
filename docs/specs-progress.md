@@ -3,7 +3,7 @@
 | Spec | Spec Ready | Plan | Tasks | Analyze Clear | llms.txt Updated | Notes |
 |------|------------|------|-------|----------------|------------------|-------|
 | 000-project-setup | ✅ | ✅ | ✅ | ✅ | ✅ | Baseline reference implementation |
-| 001-infrastructure | ✅ | ✅ | ✅ | ✅ | ☐ | Plan, research, data model, quickstart, contracts, tasks, and cross-artifact review completed |
+| 001-infrastructure | ✅ | ✅ | ✅ | ✅ | ✅ | Plan, research, data model, quickstart, contracts, tasks, and cross-artifact review completed |
 | 002-local-dev-environment | ☐ | ☐ | ☐ | ☐ | ☐ | |
 | 003-database-schemas | ☐ | ☐ | ☐ | ☐ | ☐ | |
 | 004-shared-libraries | ☐ | ☐ | ☐ | ☐ | ☐ | |
