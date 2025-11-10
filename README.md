@@ -64,6 +64,13 @@ Consult `specs/000-project-setup/quickstart.md` for prerequisite tooling, remote
 - Reference `CONTRIBUTING.md` for coding standards and code review expectations.
 - Open issues using repository templates under `.github/ISSUE_TEMPLATE/`.
 
+### Branching Strategy
+
+- `main` is the long-lived integration branch; all feature work must merge back into `main`.
+- Create feature branches per spec or workstream using the numeric prefix convention (e.g., `002-local-dev-environment-plan`).
+- Branch directly from `main`. If temporarily stacking work atop another in-flight branch, plan to rebase onto `main` before opening the final PR.
+- Keep branches focused on a single spec or deliverable to simplify review and history.
+
 ---
 
 ## Resources
