@@ -24,7 +24,7 @@ fi
 "$ROOT_DIR/scripts/db/apply.sh" --status --component "$COMPONENT" --env "$ENV_FILE"
 
 if command -v psql >/dev/null 2>&1; then
-  echo "[INFO] Running schema diff check via psql"
+  echo "[INFO] Capturing schema snapshot via psql (diff comparison not yet automated)"
   TMP_FILE="$(mktemp)"
   trap 'rm -f "$TMP_FILE"' EXIT
   PSQL_URL=$(awk -F= '/^DB_URL=/{print $2}' "$ENV_FILE")

@@ -30,7 +30,9 @@ entities:
         retention_days: 0
       - name: email
         classification: restricted
-        encryption_required: true
+        encryption_required: false
+        hash_required: true
+        protection_notes: Deterministic HMAC-SHA256 using MIGRATION_EMAIL_HASH_KEY
         retention_days: 30
       - name: role
         classification: internal
@@ -85,7 +87,7 @@ entities:
 policies:
   - name: encryption
     description: >-
-      Restricted fields must be hashed or encrypted using platform-approved algorithms before persistence.
+      Restricted fields must use platform-approved protection (deterministic HMAC hashing or symmetric encryption) before persistence.
   - name: retention
     description: >-
       Records exceeding their retention_days must be anonymized or purged by automated lifecycle jobs.

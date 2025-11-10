@@ -1,3 +1,8 @@
+WITH bounds AS (
+    SELECT
+        '{{START_WINDOW}}'::timestamptz AS start_window,
+        '{{END_WINDOW}}'::timestamptz AS end_window
+)
 INSERT INTO analytics_hourly_rollups (
     bucket_start,
     organization_id,
@@ -17,8 +22,8 @@ SELECT
     SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS error_count,
     SUM(cost_usd) AS cost_total,
     NOW() AS updated_at
-FROM usage_events
-WHERE occurred_at >= $1 AND occurred_at < $2
+FROM usage_events, bounds
+WHERE occurred_at >= bounds.start_window AND occurred_at < bounds.end_window
 GROUP BY 1, 2, 3
 ON CONFLICT (bucket_start, organization_id, model_id)
 DO UPDATE SET

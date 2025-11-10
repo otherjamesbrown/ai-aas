@@ -106,7 +106,7 @@ RETURNING organization_id`
 
 func upsertUser(ctx context.Context, tx *sql.Tx, orgID uuid.UUID) (uuid.UUID, error) {
 	email := "owner@example.com"
-	encrypted := encryptEmail(email)
+	obfuscated := obfuscateEmail(email)
 	emailHash := hashEmail(email)
 
 	const stmt = `
@@ -120,7 +120,7 @@ RETURNING user_id`
 	var userID uuid.UUID
 	err := tx.QueryRowContext(ctx, stmt,
 		orgID,
-		encrypted,
+		obfuscated,
 		emailHash,
 		"owner",
 		"active",
@@ -200,7 +200,7 @@ VALUES ($1, $2, $3, $4, $5)`
 	return err
 }
 
-func encryptEmail(email string) string {
+func obfuscateEmail(email string) string {
 	hash := hashEmail(email)
 	return "enc:" + hash
 }

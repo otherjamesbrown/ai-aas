@@ -159,8 +159,8 @@ db-docs-validate: ## Validate schema documentation consistency with live databas
 	@./scripts/db/docgen.sh validate
 
 .PHONY: analytics-rollup-run
-analytics-rollup-run: ## Execute hourly analytics rollup (requires migrate.env or DB_URL)
-	@./scripts/analytics/run-hourly.sh
+analytics-rollup-run: ## Execute analytics rollup (PERIOD=hourly|daily, requires migrate.env or DB_URL)
+	@./scripts/analytics/run-hourly.sh $(if $(PERIOD),--period $(PERIOD),)
 
 .PHONY: analytics-verify
 analytics-verify: ## Run analytics reconciliation tests (requires migrate.env or DB_URL)

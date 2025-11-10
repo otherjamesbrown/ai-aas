@@ -4,12 +4,13 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}" )/.." && pwd)/.."
 ENV_FILE="${MIGRATION_ENV_FILE:-$ROOT_DIR/migrate.env}"
 ADAPTER="${ANALYTICS_ADAPTER:-default}"
+PERIOD="hourly"
 
 usage() {
   cat <<USAGE
-Usage: $(basename "$0") [--env <env-file>] [--adapter <name>]
+Usage: $(basename "$0") [--env <env-file>] [--adapter <name>] [--period <hourly|daily>]
 
-Executes the hourly rollup transform using DSNs from the specified environment file.
+Executes the analytics rollup transform using DSNs from the specified environment file.
 USAGE
 }
 
@@ -23,6 +24,15 @@ while (($# > 0)); do
     --adapter)
       [[ $# -lt 2 ]] && { echo "--adapter requires a value" >&2; exit 1; }
       ADAPTER="$2"
+      shift 2
+      ;;
+    --period)
+      [[ $# -lt 2 ]] && { echo "--period requires a value" >&2; exit 1; }
+      PERIOD=$(echo "$2" | tr '[:upper:]' '[:lower:]')
+      if [[ "$PERIOD" != "hourly" && "$PERIOD" != "daily" ]]; then
+        echo "[ERROR] --period must be hourly or daily" >&2
+        exit 1
+      fi
       shift 2
       ;;
     --help|-h)
@@ -51,54 +61,48 @@ if [[ -z "$DB_DSN" ]]; then
   echo "[ERROR] DB_URL must be set in $ENV_FILE" >&2
   exit 1
 fi
-
 python_bin=${PYTHON:-python3}
+if ! command -v "$python_bin" >/dev/null 2>&1; then
+  if [[ -z "${ROLLUP_START:-}" || -z "${ROLLUP_END:-}" ]]; then
+    echo "[ERROR] $python_bin not found; set ROLLUP_START and ROLLUP_END or install python3" >&2
+    exit 1
+  fi
+fi
 
-if [[ -z "${ROLLUP_START:-}" ]]; then
-  START_WINDOW=$($python_bin - <<'PY'
+if [[ -z "${ROLLUP_START:-}" || -z "${ROLLUP_END:-}" ]]; then
+  START_WINDOW=$("$python_bin" - <<PY
 import datetime
+period = "${PERIOD}"
 now = datetime.datetime.utcnow()
-start = (now - datetime.timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+if period == "daily":
+    end = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start = end - datetime.timedelta(days=1)
+else:
+    end = now.replace(minute=0, second=0, microsecond=0)
+    start = end - datetime.timedelta(hours=1)
 print(start.isoformat() + 'Z')
 PY
 )
-else
-  START_WINDOW="$ROLLUP_START"
-fi
-
-if [[ -z "${ROLLUP_END:-}" ]]; then
-  END_WINDOW=$($python_bin - <<'PY'
+  END_WINDOW=$("$python_bin" - <<PY
 import datetime
+period = "${PERIOD}"
 now = datetime.datetime.utcnow()
-end = now.replace(minute=0, second=0, microsecond=0)
+if period == "daily":
+    end = now.replace(hour=0, minute=0, second=0, microsecond=0)
+else:
+    end = now.replace(minute=0, second=0, microsecond=0)
 print(end.isoformat() + 'Z')
 PY
 )
 else
+  START_WINDOW="$ROLLUP_START"
   END_WINDOW="$ROLLUP_END"
 fi
 
-TMP_SQL=$(mktemp)
-trap 'rm -f "$TMP_SQL"' EXIT
-cat > "$TMP_SQL" <<SQL
-INSERT INTO analytics_hourly_rollups (bucket_start, organization_id, model_id, request_count, tokens_total, error_count, cost_total, updated_at)
-SELECT date_trunc('hour', occurred_at) AS bucket_start,
-       organization_id,
-       model_id,
-       COUNT(*) AS request_count,
-       SUM(tokens_consumed) AS tokens_total,
-       SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS error_count,
-       SUM(cost_usd) AS cost_total,
-       NOW() AS updated_at
-FROM usage_events
-WHERE occurred_at >= '$START_WINDOW'::timestamptz AND occurred_at < '$END_WINDOW'::timestamptz
-GROUP BY 1,2,3
-ON CONFLICT (bucket_start, organization_id, model_id)
-DO UPDATE SET request_count = EXCLUDED.request_count,
-              tokens_total  = EXCLUDED.tokens_total,
-              error_count   = EXCLUDED.error_count,
-              cost_total    = EXCLUDED.cost_total,
-              updated_at    = NOW();
-SQL
+SQL_FILE="$ROOT_DIR/analytics/transforms/${PERIOD}_rollup.sql"
+if [[ ! -f "$SQL_FILE" ]]; then
+  echo "[ERROR] SQL transform not found for period $PERIOD at $SQL_FILE" >&2
+  exit 1
+fi
 
-( cd "$ROOT_DIR/db/tools/sqlrunner" && GOWORK=off DB_URL="$DB_DSN" go run . --file "$TMP_SQL" )
+( cd "$ROOT_DIR/db/tools/sqlrunner" && GOWORK=off DB_URL="$DB_DSN" go run . --file "$SQL_FILE" --param START_WINDOW="$START_WINDOW" --param END_WINDOW="$END_WINDOW" )
