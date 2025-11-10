@@ -128,7 +128,7 @@
 **Purpose**: Finalize documentation, automation, and repository wiring after user stories are complete.
 
 - [ ] T035 Update `docs/specs/002-local-dev-environment/quickstart.md` with TTL automation, secrets rotation, and lifecycle troubleshooting guidance
-- [ ] T036 [P] Add `.github/workflows/dev-environment-ci.yml` running Go fmt/test, Terraform fmt/validate, and shell lint for `scripts/dev/*`
+- [ ] T036 [P] Add `.github/workflows/dev-environment-ci.yml` running Go fmt/test, Terraform fmt/validate, shell lint for `scripts/dev/*`, and invoking `scripts/dev/measure_remote_startup.sh` + `scripts/dev/measure_local_startup.sh`
 - [ ] T037 Add `scripts/dev/validate_quickstart.sh` to automate remote/local smoke checks referenced by documentation
 - [ ] T038 Update `llms.txt` with links to the spec, plan, quickstart, contracts, and CI workflow for discoverability
 
@@ -190,7 +190,7 @@
 2. Add US2 → local stack parity (developers iterate without cloud dependencies).
 3. Layer US3 → sample service connectivity to ensure real-world flows.
 4. Add US4 → lifecycle convenience and resilience.
-5. Apply Polish tasks for CI, docs, and discovery.
+5. Apply Polish tasks for CI, docs, and discovery (consider adding a follow-up `make dev-metrics` helper to call measurement scripts locally if teams request it).
 
 ### Parallel Team Strategy
 - Developer A: Focus on Terraform modules and remote scripts (US1).

@@ -84,4 +84,4 @@ docs/
     └── data-classification.md    # Data classification and retention guidelines for dev environments
 ```
 
-**Structure Decision**: Extend existing monorepo tooling with dedicated `cmd/` binaries and `scripts/dev/` helpers to preserve Make-based UX. Terraform module lives alongside infrastructure code for reuse. Docker Compose definitions reside under `.dev/compose/`
+**Structure Decision**: Extend existing monorepo tooling with dedicated `cmd/` binaries and `scripts/dev/` helpers to preserve Make-based UX. Terraform module lives alongside infrastructure code for reuse. Docker Compose definitions reside under `.dev/compose/` to keep mode-specific overrides organized while sharing core service definitions. CI workflow validates commands without deploying real workspaces by using `terraform plan` and mocked Vault responses. New measurement scripts report remote/local startup timing directly into the CI workflow, and data-classification guidance under `docs/platform/data-classification.md` informs both provisioning defaults and security reviews.
