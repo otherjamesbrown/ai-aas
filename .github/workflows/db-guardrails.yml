@@ -59,6 +59,7 @@ jobs:
           cat > migrate.env <<'ENV'
           DB_URL=postgres://postgres:postgres@localhost:5432/ai_aas?sslmode=disable
           ANALYTICS_URL=postgres://postgres:postgres@localhost:5432/ai_aas_analytics?sslmode=disable
+          MIGRATION_EMAIL_HASH_KEY=ci-guardrail-email-hmac
           MIGRATION_COMPONENT=operational
           MIGRATION_REQUIRE_CONFIRMATION=0
           ENV
@@ -69,6 +70,14 @@ jobs:
       - name: Apply migrations
         run: |
           scripts/db/apply.sh --env migrate.env --component operational --yes
+        env:
+          MIGRATION_APPROVED_BY: ci-guardrail
+
+      - name: Apply analytics migrations
+        run: |
+          scripts/db/apply.sh --env migrate.env --component analytics --yes
+        env:
+          MIGRATION_APPROVED_BY: ci-guardrail
 
       - name: Seed databases
         run: |
@@ -88,6 +97,15 @@ jobs:
 
       - name: Migration status
         run: scripts/db/status.sh --env migrate.env --component operational
+
+      - name: Execute hourly rollup
+        run: MIGRATION_ENV_FILE=migrate.env scripts/analytics/run-hourly.sh --period hourly
+
+      - name: Execute daily rollup
+        run: MIGRATION_ENV_FILE=migrate.env scripts/analytics/run-hourly.sh --period daily
+
+      - name: Verify analytics reconciliation
+        run: MIGRATION_ENV_FILE=migrate.env scripts/analytics/verify.sh
 
       - name: Show audit log snapshot
         if: always()

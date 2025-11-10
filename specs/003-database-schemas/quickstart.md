@@ -37,6 +37,7 @@
    export ANALYTICS_URL=postgres://analytics:analytics@localhost:6432/ai_aas_warehouse?sslmode=disable
    export OTEL_EXPORTER_OTLP_ENDPOINT=https://otel.dev.ai-aas.internal
    export OTEL_EXPORTER_OTLP_HEADERS="x-api-key=$(cat ~/.config/ai-aas/otel.token)"
+   export MIGRATION_EMAIL_HASH_KEY=$(cat ~/.config/ai-aas/migration-email-hmac.key)
    ```
 2. Run migrations including telemetry (use `--yes` to skip confirmation prompts in non-production environments):
    ```bash
@@ -81,13 +82,17 @@
 ## 5. Run Analytics Rollups
 1. Execute hourly rollup transform locally:
    ```bash
-   make analytics-rollup-run GRANULARITY=hour
+   scripts/analytics/run-hourly.sh --period hourly
    ```
-2. Confirm reconciliation results:
+2. Execute daily rollup (regenerates the last 24h window):
+   ```bash
+   scripts/analytics/run-hourly.sh --period daily
+   ```
+3. Confirm reconciliation results:
    ```bash
    make analytics-verify
    ```
-3. Choose adapter (local vs warehouse):
+4. Choose adapter (local vs warehouse):
    ```bash
    export ANALYTICS_ADAPTER=default   # or warehouse
    cat analytics/transforms/config.yml

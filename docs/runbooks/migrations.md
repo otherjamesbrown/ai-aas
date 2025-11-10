@@ -6,7 +6,7 @@ Provide a repeatable, auditable procedure for applying and rolling back schema c
 ## Prerequisites
 - Repository cloned and up to date with the desired migration version.
 - `go`, `golang-migrate`, and `psql` installed (see `specs/003-database-schemas/quickstart.md`).
-- Environment file (`migrate.env`) populated with `DB_URL`, `ANALYTICS_URL`, OTEL headers, and component selector.
+- Environment file (`migrate.env`) populated with `DB_URL`, `ANALYTICS_URL`, OTEL headers, `MIGRATION_EMAIL_HASH_KEY`, and component selector.
 - Appropriate credentials to access the target database.
 - Approval from a second reviewer for production changes (see Dual Approval below).
 

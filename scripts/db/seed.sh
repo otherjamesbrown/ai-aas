@@ -68,7 +68,10 @@ set +a
 
 case "$COMPONENT" in
   operational)
-    exec env GOWORK=off go run "$ROOT_DIR/db/seeds/operational"
+    (
+      cd "$ROOT_DIR/db/seeds/operational"
+      exec env GOWORK=off go run .
+    )
     ;;
   analytics)
     if [[ -z "${ANALYTICS_URL:-}" ]]; then

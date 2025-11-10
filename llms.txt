@@ -25,6 +25,15 @@ This file highlights the most relevant specifications, plans, and external refer
 - [001 Contracts](./specs/001-infrastructure/contracts/): Access package schema, Terraform module interface, environment handoff OpenAPI.
 - [001 Tasks](./specs/001-infrastructure/tasks.md): Executable backlog covering provisioning pipelines, observability baselines, security guardrails, and rollback drills.
 - [001 Research & Data Model](./specs/001-infrastructure/research.md), (./specs/001-infrastructure/data-model.md): Provider selections, secrets strategy, entity relationships, environment lifecycle.
+- [003 Database Schemas Spec](./specs/003-database-schemas/spec.md): Operational + analytics schema scope, guardrails, keyed hashing (HMAC) requirements, telemetry, dual-approval workflows.
+- [003 Plan](./specs/003-database-schemas/plan.md): Toolchain decisions (`golang-migrate`, OTEL hooks, remote DB strategy), repo layout (`db/`, `analytics/`, `scripts/`), constitution mapping.
+- [003 Tasks](./specs/003-database-schemas/tasks.md): Dependency-ordered backlog across setup, guardrails, user stories, polish; includes analytics + CI follow-up work.
+- [003 Quickstart](./specs/003-database-schemas/quickstart.md): Remote DB bootstrap, migration/seeding scripts, rollup execution (`make analytics-rollup-run`, `make analytics-verify`), apply→rollback drills.
+- [003 Research & Data Model](./specs/003-database-schemas/research.md), (./specs/003-database-schemas/data-model.md): Migration tool evaluation, entity catalog (organizations, usage events, rollups, audit log).
+- [003 Contracts](./specs/003-database-schemas/contracts/schema-management.yaml): Schema management API surface for automation.
+- [DB Migrations Runbook](./docs/runbooks/migrations.md): Operational playbook for approvals, telemetry, smoke tests, remote DB usage.
+- [Analytics Transforms](./analytics/transforms/): Hourly + daily rollup SQL, adapter config for default vs warehouse targets.
+- [Analytics Tests](./analytics/tests/): Reconciliation checks ensuring rollups match raw usage (hourly + daily, configurable test window).
 - [Remote CI Runbook](./docs/runbooks/ci-remote.md): Step-by-step guide for `make ci-remote`, expected SLA, troubleshooting.
 - [Service Automation Guide](./docs/services/customizing.md): Shared Make template hooks, flags, and customization patterns.
 - Sample services: `hello-service` (CLI greeting) and `world-service` (HTTP JSON endpoint) demonstrate build/test/check workflows.

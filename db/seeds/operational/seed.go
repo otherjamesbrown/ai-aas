@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -9,6 +10,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,6 +23,10 @@ func main() {
 	if dsn == "" {
 		dsn = "postgres://postgres:postgres@localhost:5432/ai_aas?sslmode=disable"
 		log.Printf("DB_URL not provided, defaulting to %s", dsn)
+	}
+
+	if _, err := emailHashKey(); err != nil {
+		log.Fatalf("email hash key: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -200,6 +206,36 @@ func encryptEmail(email string) string {
 }
 
 func hashEmail(email string) string {
-	sum := sha256.Sum256([]byte(strings.ToLower(email)))
-	return hex.EncodeToString(sum[:])
+	key, err := emailHashKey()
+	if err != nil {
+		log.Fatalf("email hash key: %v", err)
+	}
+
+	mac := hmac.New(sha256.New, key)
+	if _, err := mac.Write([]byte(strings.ToLower(email))); err != nil {
+		log.Fatalf("hash email write: %v", err)
+	}
+	sum := mac.Sum(nil)
+	return hex.EncodeToString(sum)
+}
+
+var (
+	emailHashKeyOnce sync.Once
+	emailHashKeyVal  []byte
+	emailHashKeyErr  error
+)
+
+func emailHashKey() ([]byte, error) {
+	emailHashKeyOnce.Do(func() {
+		key := strings.TrimSpace(os.Getenv("MIGRATION_EMAIL_HASH_KEY"))
+		if key == "" {
+			key = strings.TrimSpace(os.Getenv("EMAIL_HASH_KEY"))
+		}
+		if key == "" {
+			emailHashKeyErr = fmt.Errorf("MIGRATION_EMAIL_HASH_KEY (or EMAIL_HASH_KEY) must be set")
+			return
+		}
+		emailHashKeyVal = []byte(key)
+	})
+	return emailHashKeyVal, emailHashKeyErr
 }

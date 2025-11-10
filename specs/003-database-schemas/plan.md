@@ -24,7 +24,7 @@ Deliver a platform-wide data foundation that standardizes operational and analyt
 **Target Platform**: Platform-managed Kubernetes workloads with managed DB endpoints; developer laptops (macOS/Linux/WSL2) running containerized DBs; CI runners executing migrations in Docker  
 **Project Type**: Backend data platform feature spanning shared infrastructure and tooling repositories  
 **Performance Goals**: Operational queries P95 < 200 ms; analytics rollups complete within 5 minutes/hour; migration apply/rollback cycle within 10-minute maintenance window  
-**Constraints**: Zero data loss on rollback; telemetry emitted for every migration; change sets idempotent; seed scripts must be rerunnable; encryption enforced for classified fields  
+**Constraints**: Zero data loss on rollback; telemetry emitted for every migration; change sets idempotent; seed scripts must be rerunnable; encryption enforced for classified fields; deterministic hashes use an environment-supplied HMAC key (`MIGRATION_EMAIL_HASH_KEY`)  
 **Scale/Scope**: 10M organizations, 1B usage events, weekly change windows, support for 10–20 services consuming shared schema
 
 ## Constitution Check
