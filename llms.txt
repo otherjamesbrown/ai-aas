@@ -23,6 +23,7 @@ This file highlights the most relevant specifications, plans, and external refer
 - [001 Plan](./specs/001-infrastructure/plan.md): Terraform/Helm architecture, GitOps flow, directory layout, and constitution compliance for infrastructure.
 - [001 Quickstart](./specs/001-infrastructure/quickstart.md): Terraform/Helm bootstrap, secrets sync, sample service validation, rollback procedures.
 - [001 Contracts](./specs/001-infrastructure/contracts/): Access package schema, Terraform module interface, environment handoff OpenAPI.
+- [001 Tasks](./specs/001-infrastructure/tasks.md): Executable backlog covering provisioning pipelines, observability baselines, security guardrails, and rollback drills.
 - [001 Research & Data Model](./specs/001-infrastructure/research.md), (./specs/001-infrastructure/data-model.md): Provider selections, secrets strategy, entity relationships, environment lifecycle.
 - [Remote CI Runbook](./docs/runbooks/ci-remote.md): Step-by-step guide for `make ci-remote`, expected SLA, troubleshooting.
 - [Service Automation Guide](./docs/services/customizing.md): Shared Make template hooks, flags, and customization patterns.
