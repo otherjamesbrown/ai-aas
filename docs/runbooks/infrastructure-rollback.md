@@ -16,7 +16,7 @@
 ## 2. Prerequisites
 
 - Confirm incident ticket open (e.g., `INC-2025-1108-01`).
-- Ensure `LINODE_TOKEN` and Terraform backend credentials available in GitHub Actions secrets.
+- Ensure `LINODE_TOKEN` and Terraform backend credentials are available (`LINODE_OBJECT_STORAGE_ACCESS_KEY` / `LINODE_OBJECT_STORAGE_SECRET_KEY` → exported as `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` before running Terraform CLI).
 - Obtain latest successful state snapshot:
   ```bash
   make -C infra/terraform state-pull ENV=production > /tmp/prod-before-rollback.tfstate
@@ -33,7 +33,7 @@
 
 2. **Identify Change Set**
    - Pull PR or commit causing issue.
-   - Inspect Terraform plan output stored in Object Storage (`terraform-plans/<env>/<timestamp>.json`).
+   - Inspect Terraform plan output stored in Object Storage (`linode-cli obj ls --cluster fr-par-1 ai-aas/terraform/plans/<env>/`).
 
 3. **Execute Rollback**
    ```bash

@@ -54,7 +54,7 @@
 
 ## 6. Compliance & Auditing
 
-- Terraform state stored in Linode Object Storage bucket `infra-state` with versioning.
+- Terraform state stored in Linode Object Storage bucket `ai-aas` (path `terraform/environments/<env>/terraform.tfstate`). Export `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` from the `.env` entries (`LINODE_OBJECT_STORAGE_ACCESS_KEY`, `LINODE_OBJECT_STORAGE_SECRET_KEY`) before running Terraform so the backend is accessible.
 - Drift detection job (`scripts/infra/drift-detect.sh`) runs hourly; severity `major` opens incident automatically.
 - ArgoCD application events forward to Loki (label `argo_app`).
 - Quarterly controls: secrets rotation check, rollback drill (SC-007), alert simulation.

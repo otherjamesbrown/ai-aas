@@ -14,7 +14,7 @@
 | `IngressLatencyHigh` | Load balancer saturation, pod scaling issues | `kubectl top pods -n ingress-nginx`; `kubectl describe hpa sample-service -n env-<env>` | Scale node pool (`make -C infra/terraform apply ENV=<env> VAR=pool_size++`), check autoscaler logs | Platform on-call |
 | `SecretsRotationDue` | Missed scheduled rotation | `./scripts/infra/secrets/status.sh --env <env>` | Run `rotate.sh`, verify sync, update ticket | Security if rotation fails |
 | `DriftDetectedMajor` | Manual change or failed apply | `./scripts/infra/drift-detect.sh --env <env> --details` | Execute rollback runbook, reapply desired state | Immediate PagerDuty |
-| `NodePoolCapacityLow` | Autoscaler pinned at max nodes | `linode-cli lke pools-view <cluster>`; `kubectl get nodes` | Increase node pool max, plan scaling in Terraform, notify capacity planning | Platform manager |
+| `NodePoolCapacityLow` | Autoscaler pinned at max nodes | `linode-cli lke pools-list <cluster>`; `kubectl get nodes` | Increase node pool max, plan scaling in Terraform, notify capacity planning | Platform manager |
 | Pod CrashLoop | Misconfigured secrets or image pull errors | `kubectl describe pod <pod>`; `kubectl logs <pod>` | Fix secret/config, redeploy; ensure registry access | App owner if service-specific |
 | Terraform lock persists | Previous run interrupted | `terraform force-unlock <lock-id>` or `make -C infra/terraform force-unlock` | Clear lock, rerun plan/apply | N/A |
 | ArgoCD authentication failure | Token expired or RBAC drift | `argocd account get-user-info`; `kubectl describe sa argocd-server` | Refresh token, reapply ArgoCD RBAC manifest | Platform security |
