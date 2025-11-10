@@ -2,8 +2,6 @@ module github.com/otherjamesbrown/ai-aas/db/tools/migrate
 
 go 1.23.0
 
-toolchain go1.24.2
-
 require (
 	github.com/jackc/pgx/v5 v5.7.6
 	go.opentelemetry.io/otel v1.24.0
