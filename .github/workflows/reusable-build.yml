@@ -15,7 +15,7 @@ on:
         description: Go version constraint
         required: false
         type: string
-        default: "1.21.x"
+        default: "1.24.2"
       ref:
         description: Git ref to checkout
         required: false
