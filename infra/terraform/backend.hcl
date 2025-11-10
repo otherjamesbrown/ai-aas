@@ -1,5 +1,4 @@
 bucket                      = "ai-aas"
-key                         = "terraform/environments/production/terraform.tfstate"
 region                      = "fr-par-1"
 skip_credentials_validation = true
 skip_region_validation      = true
