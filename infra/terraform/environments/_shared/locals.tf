@@ -106,7 +106,7 @@ locals {
           taints = []
         },
         {
-          type  = "g6-highmem-16"
+          type  = "g7-highmem-16"
           count = 1
           autoscaler = {
             min = 1
