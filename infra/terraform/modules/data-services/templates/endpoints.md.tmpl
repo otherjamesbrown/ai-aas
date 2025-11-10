@@ -1,0 +1,7 @@
+# Shared Data Services – ${environment}
+
+| Service | Protocol | Host | Port |
+|---------|----------|------|------|
+%{ for name, svc in endpoints }
+| ${name} | ${svc.protocol} | ${svc.host} | ${svc.port} |
+%{ endfor }

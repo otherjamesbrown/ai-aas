@@ -20,7 +20,22 @@
   - Demonstrated to users independently
 -->
 
-### User Story 1 - Spin up local platform in minutes (Priority: P1)
+### User Story 1 - Secure cloud workspace available (Priority: P1)
+
+Developers with restricted or low-resource laptops can launch a secure, cloud-hosted development workspace in Linode that mirrors the local stack.
+
+**Why this priority**: Without this path, security policies can fully block development work for part of the team.
+
+**Independent Test**: Can be tested by provisioning the documented Linode workspace, connecting through the approved remote tooling, and verifying the stack reaches healthy status.
+
+**Acceptance Scenarios**:
+
+1. **Given** a provisioned Linode workspace, **When** the developer runs the remote one-step startup, **Then** the same core dependencies (data store, cache, messaging, mock inference) start and remain healthy.  
+2. **Given** corporate security constraints, **When** the developer connects via the documented secure tunnel, **Then** they can interact with the workspace without breaching policy and with audit logging enabled.
+
+---
+
+### User Story 2 - Spin up local platform in minutes (Priority: P2)
 
 A developer can start a local stack that mimics production behaviors and is ready for services to connect.
 
@@ -35,7 +50,7 @@ A developer can start a local stack that mimics production behaviors and is read
 
 ---
 
-### User Story 2 - Services connect to local dependencies (Priority: P2)
+### User Story 3 - Services connect to local dependencies (Priority: P3)
 
 A developer can point a service to the local stack using example configuration and perform end-to-end happy-path calls.
 
@@ -49,7 +64,7 @@ A developer can point a service to the local stack using example configuration a
 
 ---
 
-### User Story 3 - Simple lifecycle management (Priority: P3)
+### User Story 4 - Simple lifecycle management (Priority: P4)
 
 A developer can reset, stop, and view logs for the local stack using a small set of memorable commands.
 
@@ -66,12 +81,24 @@ A developer can reset, stop, and view logs for the local stack using a small set
 
 [Add more user stories as needed, each with an assigned priority]
 
+## Default Workflow: Linode Secure Workspace
+
+1. **Provision**: Run the provided IaC template (Terraform module + Linode StackScript) to create an ephemeral development VM inside the approved Akamai Linode account. Provisioning must auto-attach security groups, private networking, and logging agents.  
+2. **Access**: Authenticate with corporate SSO, then connect via the documented secure tunnel (`linode ssh bastion --workspace <name>`). The tunnel enforces MFA, session recording, and automatic timeouts.  
+3. **Bootstrap**: Execute the remote bootstrap command (`make remote-up`) that installs prerequisites, pulls container images, and starts core dependencies as systemd services.  
+4. **Verify**: Run the status command (`make remote-status`) to confirm data store, cache, messaging, and mock inference are healthy.  
+5. **Develop**: Use `make remote-shell` (for interactive shells) or `devcontainer open` (for VS Code / cursor remote attachment) to iterate. Service configs pull from the shared `.env.linode` file.  
+6. **Teardown**: When finished, execute `make remote-destroy` to terminate the workspace or let the 24-hour TTL automation clean it up.
+
+> **Fallback**: Only if a developer’s laptop meets the documented prerequisites and security policy allows, they may instead follow the local workflow described in the quick start guide. Both paths share the same commands (`make up`, `make status`, etc.) to keep parity.
+
 ### Edge Cases
 
 - Port conflicts from other local services.  
 - Missing prerequisites or insufficient resources (CPU/RAM/disk).  
 - Stale volumes or cached state causing inconsistent behavior.  
-- Network restrictions preventing local components from communicating.
+- Network restrictions preventing local components from communicating.  
+- Corporate-managed devices blocking hypervisors, container runtimes, or outbound ports required for the local stack (must default to the Linode workspace guide).
 
 ## Requirements *(mandatory)*
 
@@ -82,12 +109,14 @@ A developer can reset, stop, and view logs for the local stack using a small set
 
 ### Functional Requirements
 
-- **FR-001**: Provide a one-step startup that launches local equivalents of core dependencies (data store, cache, messaging, mock inference).  
-- **FR-002**: Provide a status command to confirm all components are healthy.  
-- **FR-003**: Provide an example environment file with connection settings that services can use out of the box.  
-- **FR-004**: Provide lifecycle commands to stop, reset (including data), and view logs.  
-- **FR-005**: Provide a quick start guide with copy-paste commands covering startup, verification, and teardown.  
-- **FR-006**: Provide a mock inference endpoint that mirrors the shape of production responses for happy-path testing.
+- **FR-001**: Provide a one-step startup command (`make remote-up`) that launches the core dependencies (data store, cache, messaging, mock inference) inside the Linode workspace.  
+- **FR-002**: Provide automation (Terraform module + StackScript) for provisioning and destroying the Linode workspace with required security controls and a 24-hour TTL.  
+- **FR-003**: Provide a status command (`make remote-status`) that confirms all remote components are healthy and emits machine-readable output.  
+- **FR-004**: Provide an example environment file (`.env.linode`) with connection settings and secrets injection guidance for services running against the workspace.  
+- **FR-005**: Provide lifecycle commands (`make remote-stop`, `make remote-reset`, `make remote-logs`) to manage the remote stack, mirroring local command names.  
+- **FR-006**: Provide a mock inference endpoint that mirrors the shape of production responses for happy-path testing in both remote and local modes.  
+- **FR-007**: Provide a quick start playbook that defaults to the Linode workflow while documenting the local fallback path, including prerequisites and decision criteria.  
+- **FR-008**: Provide parity commands for local development (`make up`, `make status`, etc.) so that scripts and documentation stay consistent across modes.
 
 ## Success Criteria *(mandatory)*
 
@@ -98,7 +127,9 @@ A developer can reset, stop, and view logs for the local stack using a small set
 
 ### Measurable Outcomes
 
-- **SC-001**: Local stack startup to “healthy” status completes in under 5 minutes on a standard laptop.  
-- **SC-002**: Example environment file enables a service to connect to all dependencies and complete a sample request without edits.  
-- **SC-003**: Reset and restart cycle (stop → reset → start) completes in under 3 minutes and returns the stack to a healthy state.  
-- **SC-004**: Mock inference returns a valid response format for at least one sample request and is reachable from a service running locally.
+- **SC-001**: Running `make remote-up` on a freshly provisioned Linode workspace reaches “healthy” status in under 5 minutes.  
+- **SC-002**: Provisioning the Linode workspace through the documented workflow completes in under 10 minutes and yields an environment where `make remote-status` reports all components healthy.  
+- **SC-003**: Example environment files (`.env.linode`, `.env.local`) enable a service to connect to all dependencies and complete a sample request without edits.  
+- **SC-004**: Remote lifecycle commands (`make remote-stop`, `make remote-reset`) complete within 3 minutes and return the workspace to a healthy state.  
+- **SC-005**: Mock inference returns a valid response format for at least one sample request and is reachable from services in both remote and local modes.  
+- **SC-006**: Local stack startup to “healthy” status completes in under 5 minutes on a standard laptop that meets prerequisites.

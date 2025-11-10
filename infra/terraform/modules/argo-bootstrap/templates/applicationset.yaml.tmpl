@@ -1,0 +1,33 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: ${environment}-infrastructure
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - name: observability
+            path: charts/observability-stack
+          - name: network
+            path: charts/network-policies
+          - name: secrets
+            path: charts/sealed-secrets
+  template:
+    metadata:
+      name: {{name}}-${environment}
+      labels:
+        environment: ${environment}
+    spec:
+      project: platform
+      source:
+        repoURL: ${repo_url}
+        targetRevision: ${revision}
+        path: ${path}/{{path}}
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: {{name}}
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true

@@ -4,4 +4,7 @@ use (
 	./services/_template
 	./services/hello-service
 	./services/world-service
+	./tests/infra/terratest
+	./tests/infra/perf
+	./tests/infra/synthetics
 )

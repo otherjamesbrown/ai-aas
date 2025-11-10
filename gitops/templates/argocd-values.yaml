@@ -1,0 +1,25 @@
+global:
+  image:
+    tag: v2.11.0
+
+configs:
+  params:
+    server.insecure: true
+
+server:
+  service:
+    type: ClusterIP
+    port: 8080
+  ingress:
+    enabled: false
+
+redis:
+  auth:
+    enabled: false
+
+controller:
+  metrics:
+    enabled: true
+repoServer:
+  metrics:
+    enabled: true

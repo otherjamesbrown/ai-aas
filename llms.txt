@@ -19,6 +19,11 @@ This file highlights the most relevant specifications, plans, and external refer
 - [000 Project Setup Spec](./specs/000-project-setup/spec.md): Repository structure, automation requirements, remote CI workflow (`make ci-remote`).
 - [000 Plan](./specs/000-project-setup/plan.md): Tooling choices (Go 1.21, GNU Make 4.x, GitHub Actions, Linode S3-compatible storage) and structure decisions.
 - [000 Quickstart](./specs/000-project-setup/quickstart.md): Onboarding steps, remote CI usage, metrics workflow, Linode API pointers.
+- [001 Infrastructure Spec](./specs/001-infrastructure/spec.md): Multi-environment LKE provisioning, security baseline, observability, and rollback requirements.
+- [001 Plan](./specs/001-infrastructure/plan.md): Terraform/Helm architecture, GitOps flow, directory layout, and constitution compliance for infrastructure.
+- [001 Quickstart](./specs/001-infrastructure/quickstart.md): Terraform/Helm bootstrap, secrets sync, sample service validation, rollback procedures.
+- [001 Contracts](./specs/001-infrastructure/contracts/): Access package schema, Terraform module interface, environment handoff OpenAPI.
+- [001 Research & Data Model](./specs/001-infrastructure/research.md), (./specs/001-infrastructure/data-model.md): Provider selections, secrets strategy, entity relationships, environment lifecycle.
 - [Remote CI Runbook](./docs/runbooks/ci-remote.md): Step-by-step guide for `make ci-remote`, expected SLA, troubleshooting.
 - [Service Automation Guide](./docs/services/customizing.md): Shared Make template hooks, flags, and customization patterns.
 - Sample services: `hello-service` (CLI greeting) and `world-service` (HTTP JSON endpoint) demonstrate build/test/check workflows.
@@ -29,6 +34,11 @@ This file highlights the most relevant specifications, plans, and external refer
 - [Linode Kubernetes Engine API](https://techdocs.akamai.com/linode-api/reference/post-lke-cluster): Cluster provisioning for platform environments.
 - [Linode Instance API](https://techdocs.akamai.com/linode-api/reference/post-linode-instance): VM provisioning standards.
 - [Linode Object Storage API](https://techdocs.akamai.com/linode-api/reference/post-object-storage-bucket): Metrics bucket creation and lifecycle rules.
+- [Linode CLI LKE Commands](https://techdocs.akamai.com/cloud-computing/docs/lke-commands): Reference for managing clusters via `linode-cli`.
+- [Terraform Linode Provider](https://registry.terraform.io/providers/linode/linode/latest/docs): Resource definitions for clusters, node pools, networking, and buckets.
+- [ArgoCD Documentation](https://argo-cd.readthedocs.io/en/stable/): GitOps controller used for Helm/app reconciliation.
+- [Bitnami Sealed Secrets](https://github.com/bitnami-labs/sealed-secrets): Secret encryption workflow for environment bundles.
+- [kube-prometheus-stack](https://artifacthub.io/packages/helm/prometheus-community/kube-prometheus-stack): Metrics/logs/traces baseline deployed per environment.
 - [llms.txt Specification](https://llmstxt.org/): Format guidelines followed by this file.
 
 ## Optional

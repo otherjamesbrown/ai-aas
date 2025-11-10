@@ -16,7 +16,7 @@ Provision baseline infrastructure components required by project automation usin
    ```bash
    curl -H "Authorization: Bearer $LINODE_TOKEN" \
      -H "Content-Type: application/json" \
-     -d '{"label":"ai-aas-dev","region":"us-east","k8s_version":"1.32"}' \
+  -d '{"label":"ai-aas-dev","region":"fr-par","k8s_version":"1.32"}' \
      https://api.linode.com/v4/lke/clusters
    ```
 2. **Provision Supporting Linodes** (if needed for bastion/utility nodes). See [Linode Instance API](https://techdocs.akamai.com/linode-api/reference/post-linode-instance).
@@ -24,7 +24,7 @@ Provision baseline infrastructure components required by project automation usin
    ```bash
    curl -H "Authorization: Bearer $LINODE_TOKEN" \
      -H "Content-Type: application/json" \
-     -d '{"label":"ai-aas-build-metrics","cluster":"us-southeast-1"}' \
+  -d '{"label":"ai-aas-build-metrics","cluster":"fr-par-1"}' \
      https://api.linode.com/v4/object-storage/buckets
    ```
 4. Configure bucket lifecycle policy per `docs/metrics/policy.md`.

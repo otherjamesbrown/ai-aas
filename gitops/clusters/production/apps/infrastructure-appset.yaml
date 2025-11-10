@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: production-infrastructure
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - name: network
+            namespace: network
+            path: gitops/clusters/production/apps/network
+          - name: observability
+            namespace: observability
+            path: gitops/clusters/production/apps/observability
+          - name: secrets
+            namespace: secrets
+            path: gitops/clusters/production/apps/secrets
+  template:
+    metadata:
+      name: '{{name}}-production'
+      labels:
+        environment: production
+    spec:
+      project: platform-production
+      source:
+        repoURL: https://github.com/otherjamesbrown/ai-aas
+        targetRevision: 001-infrastructure
+        path: '{{path}}'
+        directory:
+          recurse: true
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true

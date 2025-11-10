@@ -1,0 +1,48 @@
+name: Infrastructure Terraform
+
+on:
+  pull_request:
+    paths:
+      - 'infra/**'
+      - '.github/workflows/infra-terraform.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      LINODE_TOKEN: ${{ secrets.LINODE_TOKEN }}
+      TERRAFORM_VERSION: "1.6.6"
+      GO_VERSION: "1.21.6"
+      TFLINT_VERSION: "0.50.0"
+      TFSEC_VERSION: "1.28.1"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Set up TFLint
+        uses: terraform-linters/setup-tflint@v3
+        with:
+          tflint_version: ${{ env.TFLINT_VERSION }}
+
+      - name: Set up tfsec
+        uses: aquasecurity/setup-tfsec@v1
+        with:
+          version: ${{ env.TFSEC_VERSION }}
+
+      - name: Validate Terraform configuration
+        run: ./scripts/infra/validate.sh --env development
+
+      - name: Terraform plan (development)
+        if: env.LINODE_TOKEN != ''
+        run: ./scripts/infra/plan.sh --env development --plan-arg "-input=false"
