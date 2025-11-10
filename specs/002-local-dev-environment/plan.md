@@ -7,7 +7,7 @@
 
 ## Summary
 
-Deliver a reproducible developer environment that defaults to secure, remote Linode workspaces while preserving local parity. Terraform + StackScript provision an ephemeral VM, bootstrap Docker Compose dependencies (PostgreSQL, Redis, NATS, MinIO, mock inference), and install observability agents. Make-based lifecycle commands remain identical across remote and local workflows, backed by Go utilities for secrets synchronization (Vault AppRole) and health status reporting. Documentation, contracts, and automation ensure developers can hydrate secrets, start stacks, view logs, and recover reliably with auditable traces.
+Deliver a reproducible developer environment that defaults to secure, remote Linode workspaces while preserving local parity. Terraform + StackScript provision an ephemeral VM, bootstrap Docker Compose dependencies (PostgreSQL, Redis, NATS, MinIO, mock inference), and install observability agents. Make-based lifecycle commands remain identical across remote and local workflows, backed by Go utilities for secrets synchronization (Vault AppRole) and health status reporting. Documentation and automation include data-classification/retention guardrails plus telemetry scripts that measure remote/local startup performance so requirements stay verifiable end to end.
 
 ## Technical Context
 
@@ -54,9 +54,11 @@ infra/terraform/
 
 scripts/
 └── dev/
-    ├── remote_provision.sh       # wraps terraform apply/destroy
-    ├── remote_lifecycle.sh       # ssh/systemd helpers (up/status/reset/logs)
-    └── status_transform.py       # optional jq helpers for CLI output (if needed)
+    ├── remote_provision.sh            # wraps terraform apply/destroy
+    ├── remote_lifecycle.sh            # ssh/systemd helpers (up/status/reset/logs)
+    ├── status_transform.py            # optional jq helpers for CLI output (if needed)
+    ├── measure_remote_startup.sh      # CI helper verifying remote startup + status latency SLAs
+    └── measure_local_startup.sh       # CI helper verifying local startup + status latency SLAs
 
 cmd/
 ├── dev-status/                   # Go module emitting component health JSON
@@ -76,10 +78,10 @@ configs/
 
 .github/workflows/
 └── dev-environment-ci.yml        # CI smoke tests for plan/commands (new)
+
+docs/
+└── platform/
+    └── data-classification.md    # Data classification and retention guidelines for dev environments
 ```
 
-**Structure Decision**: Extend existing monorepo tooling with dedicated `cmd/` binaries and `scripts/dev/` helpers to preserve Make-based UX. Terraform module lives alongside infrastructure code for reuse. Docker Compose definitions reside under `.dev/compose/` to keep mode-specific overrides organized while sharing core service definitions. CI workflow validates commands without deploying real workspaces by using `terraform plan` and mocked Vault responses.
-
-## Complexity Tracking
-
-No constitution violations identified. Chosen components (Terraform module, Go binaries, Docker Compose) align with existing tooling patterns and keep complexity incremental.
+**Structure Decision**: Extend existing monorepo tooling with dedicated `cmd/` binaries and `scripts/dev/` helpers to preserve Make-based UX. Terraform module lives alongside infrastructure code for reuse. Docker Compose definitions reside under `.dev/compose/`

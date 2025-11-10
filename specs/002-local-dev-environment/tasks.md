@@ -60,6 +60,10 @@
 - [ ] T019 [P] [US1] Add Go unit tests in `cmd/dev-status/main_test.go` with mocked endpoints for success/failure cases
 - [ ] T020 [US1] Expose remote command targets in `Makefile` (`remote-provision`, `remote-up`, `remote-status`, `remote-secrets`) tied to scripts/dev helpers
 - [ ] T021 [US1] Add Vector agent configuration at `scripts/dev/vector-agent.toml` and reference it from the StackScript
+- [ ] T039 [US1] Instrument remote startup/status timing in `cmd/dev-status/main.go` and emit metrics compatible with CI latency checks
+- [ ] T040 [P] [US1] Add `scripts/dev/measure_remote_startup.sh` to assert `make remote-up` < 5 minutes and `make remote-status --json` < 10 seconds (wired into CI)
+- [ ] T041 [US1] Document data classification & retention policies in `docs/platform/data-classification.md`, covering operational vs analytics artifacts for dev environments
+- [ ] T042 [US1] Enforce 90-day remote access log retention and classification tags in `scripts/dev/remote_lifecycle.sh` and `scripts/dev/vector-agent.toml`
 
 **Checkpoint**: Remote workspace flow is operational end-to-end and independently testable.
 
@@ -78,6 +82,8 @@
 - [ ] T024 [US2] Wire local command targets into `Makefile` (`up`, `status`, `logs`, `stop`, `reset`) referencing `scripts/dev/local_lifecycle.sh`
 - [ ] T025 [P] [US2] Extend `cmd/dev-status/main.go` to support local mode, reading `.specify/local/ports.yaml` and Compose health endpoints
 - [ ] T026 [US2] Add sample data seeding in `dev/data/seed.sql` and invoke it from `scripts/dev/local_lifecycle.sh` on fresh resets
+- [ ] T043 [US2] Capture local startup/status telemetry in `cmd/dev-status/main.go` for parity with remote metrics
+- [ ] T044 [P] [US2] Add `scripts/dev/measure_local_startup.sh` verifying `make up` < 5 minutes and `make status --json` < 10 seconds (hooked into CI)
 
 **Checkpoint**: Local stack parity is achieved and independently testable.
 
@@ -196,10 +202,10 @@
 
 ## Summary Metrics
 
-- **Total tasks**: 38
+- **Total tasks**: 44
 - **Tasks per user story**:
-  - US1: 14 tasks
-  - US2: 5 tasks
+  - US1: 20 tasks
+  - US2: 7 tasks
   - US3: 4 tasks
   - US4: 4 tasks
 - **Parallel opportunities**: Identified across all stories (see Parallel Execution Examples)
