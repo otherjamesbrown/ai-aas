@@ -60,7 +60,7 @@
   - `path_remote`: `.env.linode`
   - `path_local`: `.env.local`
   - `generated_at`: timestamp
-  - `source`: string (Vault namespace + role)
+  - `source`: string (GitHub repository environment + secret prefix)
   - `masked_fields`: list of keys that must never print in logs (e.g., `POSTGRES_PASSWORD`)
 - **relationships**:
   - Produced by **SecretsSyncCommand**
@@ -70,10 +70,10 @@
   - Values expire within 24 hours for remote usage
 
 ### SecretsSyncCommand
-- **description**: Automation that hydrates secrets bundle from Vault using short-lived tokens.
+- **description**: Automation that hydrates secrets bundle from GitHub repository environment secrets using `gh api`.
 - **fields**:
   - `binary`: path (`cmd/secrets-sync`)
-  - `inputs`: Vault address, AppRole ID, Secret ID, workspace/local mode
+  - `inputs`: GitHub owner/repo, environment name, personal access token with `actions:read`, workspace/local mode
   - `outputs`: `.env.linode`, `.env.local`
   - `audit_id`: correlation ID logged to observability stream
 - **relationships**:

@@ -44,6 +44,7 @@ make doctor  # validates terraform, linode-cli, docker, kubectl, etc.
    - Automatic tags: `env:dev`, `owner:<initials>`, `ttl:24h`
 3. Hydrate environment secrets:
    ```bash
+   gh auth login --scopes "repo, read:actions"
    make secrets-sync WORKSPACE=<your-initials>-dev
    ```
    - Generates `.env.linode` and `.env.local` (gitignored) with masked credentials

@@ -194,7 +194,7 @@ A developer can reset, stop, and view logs for the local stack using a small set
 
 - Corporate SSO provider supports MFA and integrates with Linode access controls.  
 - Terraform and StackScript execution permissions exist for the engineering team within the Akamai Linode account.  
-- Developers have access to a managed secret store (e.g., 1Password, Vault) for hydrated environment files.  
+- Developers have read access (via GitHub CLI PAT with `actions:read`) to the repository environment secrets used for dev workspace/bootstrap.  
 - Standard developer laptops meet minimum hardware requirements (8 vCPU, 16 GB RAM, 100 GB free disk).  
 - Developers can install required tooling locally unless corporate policy forbids it—in which case remote workspace is the default.  
 - Network latency between developer and Linode region is suitable for interactive development (<120 ms).  

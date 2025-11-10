@@ -8,7 +8,7 @@
 | Command | Inputs | Outputs | Guarantees |
 |---------|--------|---------|------------|
 | `make remote-provision` | `WORKSPACE` (kebab-case), `REGION`, optional `TTL_HOURS` | Terraform plan/apply output, workspace ID on stdout, audit log ID | Idempotent; creates/updates Terraform workspace resources only; fails safe on quota errors |
-| `make secrets-sync` | `MODE` (`remote`\|`local`), optional `WORKSPACE` | `.env.linode` and/or `.env.local` written with 0600 perms; masked summary | No secret printed to stdout/stderr; exits non-zero if `.gitignore` missing entries |
+| `make secrets-sync` | `MODE` (`remote`\|`local`), optional `WORKSPACE`, optional `ENVIRONMENT` override | `.env.linode` and/or `.env.local` written with 0600 perms; masked summary | Requires authenticated GitHub CLI (`gh auth login --scopes "repo, read:actions"`); exits non-zero if `.gitignore` missing entries or secrets unavailable |
 | `make remote-up` | `WORKSPACE` | Streams bootstrap logs, returns 0 when Docker Compose stack healthy | Restarts systemd units if already running; ensures compose file hash applied |
 | `make remote-status --json` | `WORKSPACE`, optional `--component` filter | JSON payload with per-component health, latency, message | Returns exit 1 when any component unhealthy; emits log event with correlation ID |
 | `make remote-reset` | `WORKSPACE`, optional `--preserve-volumes` | Confirmation prompt; resets volumes unless preserved; status JSON post-reset | Blocks until health restored or timeout (default 180s); cleanup actions logged |
@@ -64,8 +64,8 @@
 }
 ```
 
-- Vault path: `kv/data/dev-workspaces/<workspace>` (remote) and `kv/data/local-stack/default` (local).  
-- AppRole tokens must have TTL ≤ 24h and renewable.  
+- GitHub environment: `dev-workspaces` (remote) and `local-stack` (local); secrets follow `POSTGRES_HOST`, `POSTGRES_PASSWORD`, etc. naming.  
+- Personal Access Token used for `gh api` must carry `actions:read` scope and be stored locally via `gh auth login`.  
 - Command exits with code `42` when `.gitignore` missing required entries (treat as actionable error).
 
 ## Health Status Contract (`cmd/dev-status` output)
@@ -114,7 +114,7 @@
 
 | Code | Scenario | Remediation |
 |------|----------|-------------|
-| `31` | Vault authentication failure | Re-run `make secrets-sync` after renewing AppRole secret ID |
+| `31` | GitHub secret fetch failure (`gh api` non-200) | Re-run `make secrets-sync` after verifying PAT scopes or environment secret names |
 | `32` | Health probe timeout | Inspect component logs; re-run `make remote-status --diagnose` |
 | `33` | Port conflict detected locally | Review `make status --diagnose` output; update `.specify/local/ports.yaml` |
 | `41` | Terraform apply partial failure | Run `make remote-provision --plan` to inspect drift, then retry |

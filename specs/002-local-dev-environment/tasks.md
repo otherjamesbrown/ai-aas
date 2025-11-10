@@ -54,8 +54,8 @@
 - [ ] T013 [US1] Wire development environment to the new module in `infra/terraform/environments/development/main.tf`
 - [ ] T014 [US1] Implement remote provisioning wrapper in `scripts/dev/remote_provision.sh` (terraform init/plan/apply/destroy + audit logging)
 - [ ] T015 [US1] Implement initial remote lifecycle operations (`remote-up`, `remote-status`) in `scripts/dev/remote_lifecycle.sh` using SSH + systemd
-- [ ] T016 [US1] Implement Vault-backed secrets hydration in `cmd/secrets-sync/main.go` writing `.env.linode` & `.env.local` with masking
-- [ ] T017 [P] [US1] Add Go unit tests in `cmd/secrets-sync/main_test.go` covering AppRole auth, `.gitignore` enforcement, and masking
+- [ ] T016 [US1] Implement GitHub-secrets-backed hydration in `cmd/secrets-sync/main.go` using `gh api` to read repository environment secrets and write `.env.linode` & `.env.local` with masking
+- [ ] T017 [P] [US1] Add Go unit tests in `cmd/secrets-sync/main_test.go` covering PAT scope validation, `.gitignore` enforcement, and masking
 - [ ] T018 [US1] Implement dependency health probe in `cmd/dev-status/main.go` (remote mode, JSON output, latency metrics)
 - [ ] T019 [P] [US1] Add Go unit tests in `cmd/dev-status/main_test.go` with mocked endpoints for success/failure cases
 - [ ] T020 [US1] Expose remote command targets in `Makefile` (`remote-provision`, `remote-up`, `remote-status`, `remote-secrets`) tied to scripts/dev helpers
