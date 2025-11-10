@@ -1,0 +1,94 @@
+# Data classification map for database schemas & migrations
+# Fields marked as "restricted" require encryption/hash-at-rest and strict retention policies.
+
+entities:
+  - name: Organization
+    retention_days: 0
+    fields:
+      - name: organization_id
+        classification: internal
+        encryption_required: false
+        retention_days: 0
+      - name: display_name
+        classification: confidential
+        encryption_required: false
+        retention_days: 0
+      - name: plan_tier
+        classification: internal
+        encryption_required: false
+        retention_days: 0
+      - name: budget_limit_tokens
+        classification: internal
+        encryption_required: false
+        retention_days: 0
+  - name: User
+    retention_days: 30
+    fields:
+      - name: user_id
+        classification: internal
+        encryption_required: false
+        retention_days: 0
+      - name: email
+        classification: restricted
+        encryption_required: true
+        retention_days: 30
+      - name: role
+        classification: internal
+        encryption_required: false
+        retention_days: 0
+  - name: APIKey
+    retention_days: 0
+    fields:
+      - name: api_key_id
+        classification: internal
+        encryption_required: false
+        retention_days: 0
+      - name: hashed_secret
+        classification: restricted
+        encryption_required: true
+        retention_days: 0
+      - name: scopes
+        classification: confidential
+        encryption_required: false
+        retention_days: 0
+  - name: UsageEvent
+    retention_days: 730
+    fields:
+      - name: event_id
+        classification: internal
+        encryption_required: false
+        retention_days: 730
+      - name: tokens_consumed
+        classification: internal
+        encryption_required: false
+        retention_days: 730
+      - name: cost_usd
+        classification: confidential
+        encryption_required: false
+        retention_days: 730
+      - name: status
+        classification: internal
+        encryption_required: false
+        retention_days: 730
+  - name: AuditLogEntry
+    retention_days: 1825
+    fields:
+      - name: metadata
+        classification: confidential
+        encryption_required: false
+        retention_days: 1825
+      - name: actor_id
+        classification: restricted
+        encryption_required: true
+        retention_days: 1825
+
+policies:
+  - name: encryption
+    description: >-
+      Restricted fields must be hashed or encrypted using platform-approved algorithms before persistence.
+  - name: retention
+    description: >-
+      Records exceeding their retention_days must be anonymized or purged by automated lifecycle jobs.
+  - name: audit
+    description: >-
+      Changes to schemas or privileged data require audit log entries with actor, action, timestamp, and payload checksum.

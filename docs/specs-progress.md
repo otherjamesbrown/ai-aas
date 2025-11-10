@@ -4,8 +4,13 @@
 |------|------------|------|-------|----------------|------------------|-------|
 | 000-project-setup | ✅ | ✅ | ✅ | ✅ | ✅ | Baseline reference implementation |
 | 001-infrastructure | ✅ | ✅ | ✅ | ✅ | ✅ | Plan, research, data model, quickstart, contracts, tasks, and cross-artifact review completed |
+<<<<<<< HEAD
 | 002-local-dev-environment | ✅ | ✅ | ☐ | ☐ | ☐ | Plan, research, data model, contracts, quickstart delivered |
-| 003-database-schemas | ☐ | ☐ | ☐ | ☐ | ☐ | |
+| 003-database-schemas | ✅ | ✅ | ✅ | ✅ | ☐ | Guardrails, analytics rollups, docs completed (llms.txt pending) |
+=======
+| 002-local-dev-environment | ☐ | ☐ | ☐ | ☐ | ☐ | |
+| 003-database-schemas | ✅ | ✅ | ✅ | ✅ | ☐ | Guardrails, analytics rollups, docs completed (llms.txt pending) |
+>>>>>>> 88eeb04 (feat: finalize db guardrails and analytics rollups)
 | 004-shared-libraries | ☐ | ☐ | ☐ | ☐ | ☐ | |
 | 005-user-org-service | ☐ | ☐ | ☐ | ☐ | ☐ | |
 | 006-api-router-service | ☐ | ☐ | ☐ | ☐ | ☐ | |

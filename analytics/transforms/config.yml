@@ -1,0 +1,13 @@
+adapters:
+  default:
+    operational_dsn: ${DB_URL}
+    analytics_dsn: ${ANALYTICS_URL}
+    concurrency: 1
+  warehouse:
+    type: postgres
+    operational_dsn: ${DB_URL}
+    analytics_dsn: ${ANALYTICS_URL}
+    concurrency: 4
+    notes: >-
+      Adjust credentials to target the managed analytics warehouse. This adapter is
+      used in CI and production rollup jobs.

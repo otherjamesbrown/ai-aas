@@ -1,0 +1,95 @@
+name: DB Guardrails
+
+on:
+  pull_request:
+    paths:
+      - 'db/**'
+      - 'scripts/db/**'
+      - 'configs/migrate.yaml'
+      - 'configs/migrate.example.env'
+      - '.github/workflows/db-guardrails.yml'
+      - 'docs/runbooks/migrations.md'
+      - 'specs/003-database-schemas/**'
+
+jobs:
+  guardrails:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ai_aas
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      GO111MODULE: on
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.2'
+
+      - name: Wait for Postgres
+        run: |
+          for i in {1..10}; do
+            if pg_isready -h localhost -U postgres; then
+              break
+            fi
+            sleep 5
+          done
+
+      - name: Prepare databases
+        run: |
+          psql postgresql://postgres:postgres@localhost:5432/postgres -c "CREATE DATABASE ai_aas;" || true
+          psql postgresql://postgres:postgres@localhost:5432/postgres -c "CREATE DATABASE ai_aas_analytics;" || true
+
+      - name: Create migrate env
+        run: |
+          cat > migrate.env <<'ENV'
+          DB_URL=postgres://postgres:postgres@localhost:5432/ai_aas?sslmode=disable
+          ANALYTICS_URL=postgres://postgres:postgres@localhost:5432/ai_aas_analytics?sslmode=disable
+          MIGRATION_COMPONENT=operational
+          MIGRATION_REQUIRE_CONFIRMATION=0
+          ENV
+
+      - name: Run migration lint
+        run: GOWORK=off go run ./db/tools/lint
+
+      - name: Apply migrations
+        run: |
+          scripts/db/apply.sh --env migrate.env --component operational --yes
+
+      - name: Seed databases
+        run: |
+          scripts/db/seed.sh --env migrate.env --component operational
+          scripts/db/seed.sh --env migrate.env --component analytics
+
+      - name: Measure migration window
+        run: |
+          LATEST=$(ls db/migrations/operational/*.up.sql | sort | tail -1)
+          VERSION=$(basename "$LATEST" | sed 's/.up.sql$//')
+          scripts/db/measure-window.sh --env migrate.env --component operational --version "$VERSION" --rollback
+        env:
+          MIGRATION_ACTOR: ci-guardrail
+
+      - name: Run rollback downtime test
+        run: MIGRATION_ENV_FILE=migrate.env MIGRATION_TEST_VERSION=$(ls db/migrations/operational/*.up.sql | sort | tail -1 | xargs -n1 basename | sed 's/.up.sql$//') go test ./tests/infra/perf -run TestRollbackDowntimeUnderOneMinute -count=1
+
+      - name: Migration status
+        run: scripts/db/status.sh --env migrate.env --component operational
+
+      - name: Show audit log snapshot
+        if: always()
+        run: |
+          psql postgresql://postgres:postgres@localhost:5432/ai_aas -c "SELECT actor_type, actor_id, action, target, occurred_at FROM audit_log_entries ORDER BY occurred_at DESC LIMIT 10;"

@@ -1,0 +1,69 @@
+@startuml
+' ERD scaffold for Database Schemas & Migrations feature.
+' Generated diagrams should be exported during documentation generation.
+
+!define RECTANGLE class
+skinparam backgroundColor #ffffff
+skinparam class {
+  BackgroundColor<<Fact>> #f5f7ff
+  BackgroundColor<<Dimension>> #f1fff5
+  BorderColor #1f2933
+}
+
+RECTANGLE Organization {
+  +organization_id : UUID
+  +slug : text
+  +display_name : text
+  +plan_tier : enum
+  +budget_limit_tokens : bigint
+  +status : enum
+}
+
+RECTANGLE User {
+  +user_id : UUID
+  +organization_id : UUID
+  +email_hash : text
+  +role : enum
+  +status : enum
+}
+
+RECTANGLE APIKey {
+  +api_key_id : UUID
+  +organization_id : UUID
+  +hashed_secret : bytea
+  +status : enum
+}
+
+RECTANGLE ModelRegistryEntry {
+  +model_id : UUID
+  +organization_id : UUID?
+  +model_name : text
+  +revision : int
+  +deployment_target : enum
+}
+
+RECTANGLE UsageEvent <<Fact>> {
+  +event_id : UUID
+  +occurred_at : timestamptz
+  +tokens_consumed : bigint
+  +latency_ms : int
+  +status : enum
+  +cost_usd : numeric
+}
+
+RECTANGLE AuditLogEntry {
+  +audit_id : UUID
+  +actor_type : enum
+  +actor_id : text
+  +action : text
+  +target : text
+}
+
+Organization ||--o{ User
+Organization ||--o{ APIKey
+Organization ||--o{ ModelRegistryEntry
+Organization ||--o{ UsageEvent
+APIKey ||--o{ UsageEvent
+ModelRegistryEntry ||--o{ UsageEvent
+AuditLogEntry }o--|| Organization : "target"
+@enduml
