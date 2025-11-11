@@ -2,13 +2,12 @@ package hooks
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"os"
 	"strings"
 	"time"
-
-	"github.com/jackc/pgx/v5"
 )
 
 const (
@@ -51,17 +50,17 @@ func RunPreChecks(ctx context.Context, input PreCheckInput) (PreCheckResult, err
 	connCtx, cancel := context.WithTimeout(ctx, connectionTimeout)
 	defer cancel()
 
-	conn, err := pgx.Connect(connCtx, dsn)
+	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return PreCheckResult{}, fmt.Errorf("pre-check connect: %w", err)
 	}
-	defer conn.Close(ctx)
+	defer db.Close()
 
-	if err := conn.Ping(connCtx); err != nil {
+	if err := db.PingContext(connCtx); err != nil {
 		return PreCheckResult{}, fmt.Errorf("pre-check ping: %w", err)
 	}
 
-	rows, err := conn.Query(ctx, `
+	rows, err := db.QueryContext(ctx, `
 SELECT pid, state, query,
        EXTRACT(EPOCH FROM (now() - query_start))::bigint AS age_seconds
 FROM pg_stat_activity
@@ -89,7 +88,7 @@ ORDER BY query_start`)
 	}
 	for _, table := range rowCountTables(input.Component) {
 		var count int64
-		if err := conn.QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM %s", table)).Scan(&count); err != nil {
+		if err := db.QueryRowContext(ctx, fmt.Sprintf("SELECT COUNT(*) FROM %s", table)).Scan(&count); err != nil {
 			log.Printf("[WARN] unable to count rows for %s: %v", table, err)
 			continue
 		}
@@ -112,15 +111,19 @@ func RunPostChecks(ctx context.Context, input PostCheckInput) error {
 		return err
 	}
 
-	conn, err := pgx.Connect(ctx, dsn)
+	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return fmt.Errorf("post-check connect: %w", err)
 	}
-	defer conn.Close(ctx)
+	defer db.Close()
+
+	if err := db.PingContext(ctx); err != nil {
+		return fmt.Errorf("post-check ping: %w", err)
+	}
 
 	for _, table := range rowCountTables(input.Component) {
 		var count int64
-		if err := conn.QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM %s", table)).Scan(&count); err != nil {
+		if err := db.QueryRowContext(ctx, fmt.Sprintf("SELECT COUNT(*) FROM %s", table)).Scan(&count); err != nil {
 			log.Printf("[WARN] unable to count rows for %s after migration: %v", table, err)
 			continue
 		}
@@ -132,6 +135,11 @@ func RunPostChecks(ctx context.Context, input PostCheckInput) error {
 	}
 
 	return nil
+}
+
+// DSNForComponent returns the connection string for the supplied component.
+func DSNForComponent(component string) (string, error) {
+	return dsnForComponent(component)
 }
 
 func dsnForComponent(component string) (string, error) {

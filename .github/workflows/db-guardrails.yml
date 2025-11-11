@@ -52,17 +52,17 @@ jobs:
       - name: Prepare databases
         run: |
           psql postgresql://postgres:postgres@localhost:5432/postgres -c "CREATE DATABASE ai_aas;" || true
-          psql postgresql://postgres:postgres@localhost:5432/postgres -c "CREATE DATABASE ai_aas_analytics;" || true
 
       - name: Create migrate env
         run: |
-          cat > migrate.env <<'ENV'
-          DB_URL=postgres://postgres:postgres@localhost:5432/ai_aas?sslmode=disable
-          ANALYTICS_URL=postgres://postgres:postgres@localhost:5432/ai_aas_analytics?sslmode=disable
-          MIGRATION_EMAIL_HASH_KEY=ci-guardrail-email-hmac
-          MIGRATION_COMPONENT=operational
-          MIGRATION_REQUIRE_CONFIRMATION=0
-          ENV
+          DB_DSN="postgres://postgres:postgres@localhost:5432/ai_aas?sslmode=disable"
+          cat > migrate.env <<ENV
+DB_URL=$DB_DSN
+ANALYTICS_URL=$DB_DSN
+MIGRATION_EMAIL_HASH_KEY=ci-guardrail-email-hmac
+MIGRATION_COMPONENT=operational
+MIGRATION_REQUIRE_CONFIRMATION=0
+ENV
 
       - name: Run migration lint
         run: |

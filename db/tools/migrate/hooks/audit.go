@@ -2,13 +2,12 @@ package hooks
 
 import (
     "context"
+    "database/sql"
     "encoding/json"
     "fmt"
     "log"
     "os"
     "time"
-
-    "github.com/jackc/pgx/v5"
 )
 
 // AuditLogInput captures metadata needed to record an audit trail entry.
@@ -32,11 +31,15 @@ func RecordAuditLog(ctx context.Context, input AuditLogInput) error {
         return err
     }
 
-    conn, err := pgx.Connect(ctx, dsn)
+    db, err := sql.Open("pgx", dsn)
     if err != nil {
         return fmt.Errorf("audit connect: %w", err)
     }
-    defer conn.Close(ctx)
+    defer db.Close()
+
+    if err := db.PingContext(ctx); err != nil {
+        return fmt.Errorf("audit ping: %w", err)
+    }
 
     metadata := map[string]any{
         "duration_ms":    input.Duration.Milliseconds(),
@@ -60,7 +63,7 @@ func RecordAuditLog(ctx context.Context, input AuditLogInput) error {
     action := fmt.Sprintf("migration_%s", input.Direction)
     target := fmt.Sprintf("%s/%s", input.Component, defaultValue(input.TargetVersion, "latest"))
 
-    _, err = conn.Exec(ctx, `
+    _, err = db.ExecContext(ctx, `
 INSERT INTO audit_log_entries (actor_type, actor_id, action, target, metadata)
 VALUES ($1, $2, $3, $4, $5)
 `,

@@ -68,6 +68,10 @@ set +a
 
 case "$COMPONENT" in
   operational)
+    if [[ -z "${MIGRATION_EMAIL_HASH_KEY:-${EMAIL_HASH_KEY:-}}" ]]; then
+      echo "[ERROR] MIGRATION_EMAIL_HASH_KEY (or EMAIL_HASH_KEY) must be set to seed operational data" >&2
+      exit 1
+    fi
     (
       cd "$ROOT_DIR/db/seeds/operational"
       exec env GOWORK=off go run .

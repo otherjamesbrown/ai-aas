@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.."
 ENV_FILE="${MIGRATION_ENV_FILE:-$ROOT_DIR/migrate.env}"
+MIGRATIONS_ROOT="${MIGRATIONS_ROOT:-$ROOT_DIR/db/migrations}"
 COMPONENT="${MIGRATION_COMPONENT:-operational}"
 TARGET_VERSION=""
 STATUS_ONLY=0
@@ -80,6 +81,11 @@ set -a
 source "$ENV_FILE"
 set +a
 
+if [[ ! -d "$MIGRATIONS_ROOT/$COMPONENT" ]]; then
+  echo "[ERROR] Migrations directory not found for component '$COMPONENT' (expected $MIGRATIONS_ROOT/$COMPONENT)" >&2
+  exit 1
+fi
+
 CMD=(go run . -component "$COMPONENT")
 
 if [[ $STATUS_ONLY -eq 1 ]]; then
@@ -109,4 +115,4 @@ else
   fi
 fi
 
-( cd "$ROOT_DIR/db/tools/migrate" && GOWORK=off MIGRATION_APPROVED_BY="$APPROVED_BY" "${CMD[@]}" )
+( cd "$ROOT_DIR/db/tools/migrate" && GOWORK=off MIGRATIONS_ROOT="$MIGRATIONS_ROOT" MIGRATION_APPROVED_BY="$APPROVED_BY" "${CMD[@]}" )
