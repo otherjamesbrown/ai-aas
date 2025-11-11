@@ -104,13 +104,26 @@ func RunNamingLint(basePath string) ([]string, error) {
 func validateClassification(path string) ([]string, error) {
 	var issues []string
 
-	content, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			issues = append(issues, fmt.Sprintf("classification file missing: %s", path))
-			return issues, nil
+	candidates := []string{
+		path,
+		filepath.Join("..", "..", "..", path),
+	}
+
+	var content []byte
+	var err error
+	for _, candidate := range candidates {
+		content, err = os.ReadFile(candidate)
+		if err == nil {
+			path = candidate
+			break
 		}
-		return nil, fmt.Errorf("read %s: %w", path, err)
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("read %s: %w", candidate, err)
+		}
+	}
+	if err != nil {
+		issues = append(issues, fmt.Sprintf("classification file missing: %s", path))
+		return issues, nil
 	}
 
 	var cfg classificationConfig

@@ -65,7 +65,9 @@ jobs:
           ENV
 
       - name: Run migration lint
-        run: GOWORK=off go run ./db/tools/lint
+        run: |
+          cd db/tools/lint
+          GOWORK=off go run .
 
       - name: Apply migrations
         run: |
