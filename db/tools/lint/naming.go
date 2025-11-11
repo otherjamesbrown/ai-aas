@@ -24,6 +24,7 @@ type classificationConfig struct {
 			Name               string `yaml:"name"`
 			Classification     string `yaml:"classification"`
 			EncryptionRequired bool   `yaml:"encryption_required"`
+			HashRequired       bool   `yaml:"hash_required"`
 		} `yaml:"fields"`
 	} `yaml:"entities"`
 }
@@ -119,8 +120,9 @@ func validateClassification(path string) ([]string, error) {
 
 	for _, entity := range cfg.Entities {
 		for _, field := range entity.Fields {
-			if strings.EqualFold(field.Classification, "restricted") && !field.EncryptionRequired {
-				issues = append(issues, fmt.Sprintf("classification: %s.%s marked restricted but encryption_required=false", entity.Name, field.Name))
+			if strings.EqualFold(field.Classification, "restricted") &&
+				!(field.EncryptionRequired || field.HashRequired) {
+				issues = append(issues, fmt.Sprintf("classification: %s.%s marked restricted but missing encryption or hash requirement", entity.Name, field.Name))
 			}
 		}
 	}
