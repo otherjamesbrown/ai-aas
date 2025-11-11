@@ -79,6 +79,16 @@ jobs:
           cache: 'npm'
           cache-dependency-path: samples/service-template/ts/package-lock.json
 
+      - name: TypeScript shared install
+        if: matrix.sample == 'ts'
+        run: npm ci
+        working-directory: shared/ts
+
+      - name: TypeScript shared build
+        if: matrix.sample == 'ts'
+        run: npm run build
+        working-directory: shared/ts
+
       - name: Go sample service tests
         if: matrix.sample == 'go'
         run: go test ./...
@@ -118,6 +128,14 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: tests/ts/perf/package-lock.json
+
+      - name: TypeScript shared install
+        run: npm ci
+        working-directory: shared/ts
+
+      - name: TypeScript shared build
+        run: npm run build
+        working-directory: shared/ts
 
       - name: Go benchmarks
         shell: bash
