@@ -6,7 +6,11 @@ Provide a repeatable, auditable procedure for applying and rolling back schema c
 ## Prerequisites
 - Repository cloned and up to date with the desired migration version.
 - `go`, `golang-migrate`, and `psql` installed (see `specs/003-database-schemas/quickstart.md`).
-- Environment file (`migrate.env`) populated with `DB_URL`, `ANALYTICS_URL`, OTEL headers, `MIGRATION_EMAIL_HASH_KEY`, and component selector.
+- Environment file (`migrate.env`) populated with **the same DSN** for both `DB_URL` and `ANALYTICS_URL` unless you knowingly share schemas. Guardrail automation seeds analytics data directly from operational tables (`organizations`, `users`, `api_keys`, `model_registry_entries`, `usage_events`, `audit_log_entries`); if these live in different clusters, mirror the operational schema into analytics before running guardrails.
+- Required automation variables exported in every environment that invokes `scripts/db/*`:
+  - `MIGRATION_APPROVED_BY` (non-empty unless explicitly using `--dry-run`)
+  - `MIGRATION_EMAIL_HASH_KEY` (or `EMAIL_HASH_KEY`) for deterministic seeding
+  - `MIGRATIONS_ROOT` (defaults to `db/migrations` but must exist in CI containers)
 - Appropriate credentials to access the target database.
 - Approval from a second reviewer for production changes (see Dual Approval below).
 
@@ -35,6 +39,7 @@ Provide a repeatable, auditable procedure for applying and rolling back schema c
    scripts/db/apply.sh --component analytics --env migrate.env --yes
    ```
    The CLI emits structured logs (`migration_start`, `migration_finish`) and OTEL spans for dashboards. Run `make db-migrate-status` to verify applied versions.
+   - Guardrails CI validates the resolved directory via `migrations_dir` / `migrations_discovered` log lines; do not change the working directory layout without updating `MIGRATIONS_ROOT`.
 
 5. **Post Checks**
    - Review OTEL dashboards for duration, error rate, and row counts.
