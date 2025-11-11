@@ -1,0 +1,129 @@
+openapi: 3.1.0
+info:
+  title: Analytics Events Contract
+  version: 0.1.0
+  description: |
+    Defines the REST validation surface and schema for analytics usage events
+    emitted by the API Router and consumed by the Analytics Service via RabbitMQ.
+servers:
+  - url: https://api.ai-aas.local
+    description: Development cluster
+  - url: https://api.ai-aas.prod
+    description: Production cluster
+tags:
+  - name: Events
+paths:
+  /analytics/v1/events/validate:
+    post:
+      summary: Validate an analytics usage event payload
+      tags: [Events]
+      operationId: validateAnalyticsEvent
+      description: |
+        Allows producers to validate an event payload against the contract before publishing
+        to the `analytics.usage.v1` RabbitMQ stream. Intended for CI/CD smoke tests.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyticsUsageEvent'
+      responses:
+        '204':
+          description: Event is valid
+        '400':
+          description: Payload failed validation
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Authentication failed
+        '429':
+          description: Validation rate limit exceeded
+components:
+  schemas:
+    AnalyticsUsageEvent:
+      type: object
+      required:
+        - eventId
+        - orgId
+        - modelId
+        - occurredAt
+        - status
+        - latencyMs
+        - inputTokens
+        - outputTokens
+        - costEstimateCents
+      properties:
+        eventId:
+          type: string
+          format: uuid
+          description: Unique identifier per inference request used for deduplication.
+        orgId:
+          type: string
+          format: uuid
+          description: Tenant identifier matching the user-org service.
+        actorId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Optional user-level identifier reserved for future drilldowns.
+        modelId:
+          type: string
+          format: uuid
+          description: Identifier of the model or endpoint invoked.
+        clientId:
+          type: string
+          description: ID of the calling client (API key, application name, etc.).
+        occurredAt:
+          type: string
+          format: date-time
+          description: ISO-8601 timestamp when the inference completed.
+        latencyMs:
+          type: integer
+          minimum: 0
+          description: Total end-to-end latency in milliseconds.
+        status:
+          type: string
+          enum: [success, error, timeout, throttled]
+          description: Outcome classification for the inference call.
+        errorCode:
+          type: string
+          nullable: true
+          description: Optional error code when status is not `success`.
+        inputTokens:
+          type: integer
+          minimum: 0
+        outputTokens:
+          type: integer
+          minimum: 0
+        costEstimateCents:
+          type: integer
+          minimum: 0
+          description: Cost estimate in cents.
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: Arbitrary contextual fields (region, guardrail version, etc.).
+    ProblemDetails:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+        errors:
+          type: array
+          items:
+            type: string
+

@@ -1,0 +1,91 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://schemas.ai-aas.dev/usage-record.schema.json
+
+title: UsageRecord
+description: Structured event emitted by the API Router Service for billing and analytics.
+type: object
+required:
+  - record_id
+  - request_id
+  - organization_id
+  - api_key_id
+  - model
+  - backend_id
+  - tokens_input
+  - tokens_output
+  - latency_ms
+  - cost_usd
+  - limit_state
+  - decision_reason
+  - timestamp
+properties:
+  record_id:
+    type: string
+    format: uuid
+  request_id:
+    type: string
+    format: uuid
+  organization_id:
+    type: string
+    format: uuid
+  api_key_id:
+    type: string
+    format: uuid
+  model:
+    type: string
+  backend_id:
+    type: string
+  tokens_input:
+    type: integer
+    minimum: 0
+  tokens_output:
+    type: integer
+    minimum: 0
+  latency_ms:
+    type: integer
+    minimum: 0
+  cost_usd:
+    type: number
+    minimum: 0
+  limit_state:
+    type: string
+    enum:
+      - WITHIN_LIMIT
+      - RATE_LIMITED
+      - BUDGET_EXCEEDED
+  decision_reason:
+    type: string
+    enum:
+      - PRIMARY
+      - FAILOVER
+      - OVERRIDE
+      - RATE_LIMIT
+  budget_snapshot:
+    type: object
+    additionalProperties: false
+    required:
+      - period
+      - tokens_remaining
+      - currency_remaining
+    properties:
+      period:
+        type: string
+        enum: [DAILY, MONTHLY]
+      tokens_remaining:
+        type: integer
+      currency_remaining:
+        type: number
+  retry_count:
+    type: integer
+    minimum: 0
+  trace_id:
+    type: string
+  span_id:
+    type: string
+  metadata:
+    type: object
+    additionalProperties:
+      type: string
+  timestamp:
+    type: string
+    format: date-time

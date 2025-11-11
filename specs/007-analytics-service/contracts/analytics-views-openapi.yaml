@@ -1,0 +1,292 @@
+openapi: 3.1.0
+info:
+  title: Analytics Views API
+  version: 0.1.0
+  description: REST endpoints that power analytics dashboards for usage, reliability, and freshness.
+servers:
+  - url: https://api.ai-aas.local
+    description: Development
+  - url: https://api.ai-aas.prod
+    description: Production
+security:
+  - bearerAuth: []
+  - apiKeyAuth: []
+tags:
+  - name: Usage
+  - name: Reliability
+  - name: Freshness
+paths:
+  /analytics/v1/orgs/{orgId}/usage:
+    get:
+      summary: Retrieve aggregated usage and spend metrics
+      tags: [Usage]
+      operationId: getOrgUsage
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/Start'
+        - $ref: '#/components/parameters/End'
+        - $ref: '#/components/parameters/Granularity'
+        - name: modelId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter to a single model; omit for all models.
+      responses:
+        '200':
+          description: Usage series
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageSeriesResponse'
+        '400':
+          description: Invalid range or parameters
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden for org scope
+  /analytics/v1/orgs/{orgId}/reliability:
+    get:
+      summary: Retrieve error and latency metrics
+      tags: [Reliability]
+      operationId: getOrgReliability
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/Start'
+        - $ref: '#/components/parameters/End'
+        - $ref: '#/components/parameters/Granularity'
+        - name: modelId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: percentile
+          in: query
+          schema:
+            type: string
+            enum: [p50, p95, p99]
+          description: Optional latency percentile to highlight.
+      responses:
+        '200':
+          description: Reliability series
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReliabilitySeriesResponse'
+        '400':
+          description: Invalid parameters
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /analytics/v1/orgs/{orgId}/freshness:
+    get:
+      summary: Fetch freshness indicator for dashboards
+      tags: [Freshness]
+      operationId: getOrgFreshness
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: modelId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Optional model scope. Returns overall freshest status when omitted.
+      responses:
+        '200':
+          description: Freshness snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FreshnessResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  parameters:
+    OrgId:
+      name: orgId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Start:
+      name: start
+      in: query
+      required: true
+      schema:
+        type: string
+        format: date-time
+    End:
+      name: end
+      in: query
+      required: true
+      schema:
+        type: string
+        format: date-time
+    Granularity:
+      name: granularity
+      in: query
+      schema:
+        type: string
+        enum: [hour, day]
+        default: day
+      description: Aggregation grain for the response.
+  schemas:
+    UsageSeriesResponse:
+      type: object
+      required: [orgId, granularity, series, totals, freshness]
+      properties:
+        orgId:
+          type: string
+          format: uuid
+        granularity:
+          type: string
+          enum: [hour, day]
+        series:
+          type: array
+          items:
+            $ref: '#/components/schemas/UsagePoint'
+        totals:
+          $ref: '#/components/schemas/UsageTotals'
+        freshness:
+          $ref: '#/components/schemas/FreshnessIndicator'
+    UsagePoint:
+      type: object
+      required: [bucketStart, invocations, costEstimateCents]
+      properties:
+        bucketStart:
+          type: string
+          format: date-time
+        modelId:
+          type: string
+          format: uuid
+        invocations:
+          type: integer
+          minimum: 0
+        inputTokens:
+          type: integer
+          minimum: 0
+        outputTokens:
+          type: integer
+          minimum: 0
+        costEstimateCents:
+          type: integer
+          minimum: 0
+    UsageTotals:
+      type: object
+      required: [invocations, costEstimateCents]
+      properties:
+        invocations:
+          type: integer
+        costEstimateCents:
+          type: integer
+          minimum: 0
+        inputTokens:
+          type: integer
+        outputTokens:
+          type: integer
+    ReliabilitySeriesResponse:
+      type: object
+      required: [orgId, granularity, series]
+      properties:
+        orgId:
+          type: string
+        granularity:
+          type: string
+        series:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReliabilityPoint'
+    ReliabilityPoint:
+      type: object
+      required: [bucketStart, errorRate, latencyMs]
+      properties:
+        bucketStart:
+          type: string
+          format: date-time
+        modelId:
+          type: string
+          format: uuid
+        errorRate:
+          type: number
+          minimum: 0
+          maximum: 1
+        latencyMs:
+          type: object
+          required: [p50, p95, p99]
+          properties:
+            p50:
+              type: integer
+            p95:
+              type: integer
+            p99:
+              type: integer
+    FreshnessResponse:
+      type: object
+      required: [orgId, entries, status]
+      properties:
+        orgId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [fresh, stale, delayed]
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/FreshnessIndicator'
+    FreshnessIndicator:
+      type: object
+      required: [modelId, lastEventAt, lastRollupAt, lagSeconds, status]
+      properties:
+        modelId:
+          type: string
+          format: uuid
+        lastEventAt:
+          type: string
+          format: date-time
+        lastRollupAt:
+          type: string
+          format: date-time
+        lagSeconds:
+          type: integer
+        status:
+          type: string
+          enum: [fresh, stale, delayed]
+    ProblemDetails:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+
