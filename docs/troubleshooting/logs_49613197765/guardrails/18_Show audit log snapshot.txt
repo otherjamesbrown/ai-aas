@@ -1,0 +1,10 @@
+﻿2025-11-11T10:50:23.7860813Z ##[group]Run psql ***localhost:5432/ai_aas -c "SELECT actor_type, actor_id, action, target, occurred_at FROM audit_log_entries ORDER BY occurred_at DESC LIMIT 10;"
+2025-11-11T10:50:23.7861989Z [36;1mpsql ***localhost:5432/ai_aas -c "SELECT actor_type, actor_id, action, target, occurred_at FROM audit_log_entries ORDER BY occurred_at DESC LIMIT 10;"[0m
+2025-11-11T10:50:23.7894304Z shell: /usr/bin/bash -e {0}
+2025-11-11T10:50:23.7894524Z env:
+2025-11-11T10:50:23.7894684Z   GO111MODULE: on
+2025-11-11T10:50:23.7894855Z ##[endgroup]
+2025-11-11T10:50:23.8322147Z ERROR:  relation "audit_log_entries" does not exist
+2025-11-11T10:50:23.8322899Z LINE 1: ..._type, actor_id, action, target, occurred_at FROM audit_log_...
+2025-11-11T10:50:23.8324170Z                                                              ^
+2025-11-11T10:50:23.8335495Z ##[error]Process completed with exit code 1.

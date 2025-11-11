@@ -254,11 +254,13 @@ func applyMigrations(ctx context.Context, opts migrateOptions) error {
 	if err != nil {
 		return err
 	}
+	log.Printf("migrations_dir component=%s path=%s", opts.Component, migrationsPath)
 
 	migrations, err := discoverMigrations(migrationsPath)
 	if err != nil {
 		return err
 	}
+	log.Printf("migrations_discovered component=%s count=%d", opts.Component, len(migrations))
 
 	if len(migrations) == 0 {
 		log.Printf("[INFO] no migration files discovered for component=%s", opts.Component)

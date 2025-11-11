@@ -1,0 +1,118 @@
+﻿2025-11-11T10:50:24.0085906Z Print service container logs: 3410cfa7f011416f9a9f8356834fb1e8_postgres15alpine_e805af
+2025-11-11T10:50:24.0090115Z ##[command]/usr/bin/docker logs --details 7551f3b7260003179604f331bd3dc3f366b62b6ac8f1e48415260a668d402d58
+2025-11-11T10:50:24.0213995Z  The files belonging to this database system will be owned by user "postgres".
+2025-11-11T10:50:24.0217731Z  sh: locale: not found
+2025-11-11T10:50:24.0218079Z  This user must also own the server process.
+2025-11-11T10:50:24.0218487Z  2025-11-11 10:49:32.090 UTC [35] WARNING:  no usable system locales were found
+2025-11-11T10:50:24.0218902Z  initdb: warning: enabling "trust" authentication for local connections
+2025-11-11T10:50:24.0219513Z  initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+2025-11-11T10:50:24.0220238Z  2025-11-11 10:49:32.870 UTC [1] LOG:  starting PostgreSQL 15.14 on x86_64-pc-linux-musl, compiled by gcc (Alpine 14.2.0) 14.2.0, 64-bit
+2025-11-11T10:50:24.0221080Z  2025-11-11 10:49:32.870 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+2025-11-11T10:50:24.0221475Z  2025-11-11 10:49:32.871 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+2025-11-11T10:50:24.0221903Z  2025-11-11 10:49:32.872 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2025-11-11T10:50:24.0222358Z  2025-11-11 10:49:32.874 UTC [57] LOG:  database system was shut down at 2025-11-11 10:49:32 UTC
+2025-11-11T10:50:24.0222775Z  2025-11-11 10:49:32.878 UTC [1] LOG:  database system is ready to accept connections
+2025-11-11T10:50:24.0223151Z  2025-11-11 10:49:56.543 UTC [76] ERROR:  database "ai_aas" already exists
+2025-11-11T10:50:24.0223499Z  2025-11-11 10:49:56.543 UTC [76] STATEMENT:  CREATE DATABASE ai_aas;
+2025-11-11T10:50:24.0223897Z  2025-11-11 10:50:18.465 UTC [93] ERROR:  relation "organizations" does not exist at character 22
+2025-11-11T10:50:24.0224309Z  2025-11-11 10:50:18.465 UTC [93] STATEMENT:  SELECT COUNT(*) FROM organizations
+2025-11-11T10:50:24.0224711Z  2025-11-11 10:50:18.465 UTC [93] ERROR:  relation "users" does not exist at character 22
+2025-11-11T10:50:24.0225089Z  2025-11-11 10:50:18.465 UTC [93] STATEMENT:  SELECT COUNT(*) FROM users
+2025-11-11T10:50:24.0225466Z  2025-11-11 10:50:18.465 UTC [93] ERROR:  relation "api_keys" does not exist at character 22
+2025-11-11T10:50:24.0225857Z  2025-11-11 10:50:18.465 UTC [93] STATEMENT:  SELECT COUNT(*) FROM api_keys
+2025-11-11T10:50:24.0226279Z  2025-11-11 10:50:18.466 UTC [93] ERROR:  relation "model_registry_entries" does not exist at character 22
+2025-11-11T10:50:24.0226730Z  2025-11-11 10:50:18.466 UTC [93] STATEMENT:  SELECT COUNT(*) FROM model_registry_entries
+2025-11-11T10:50:24.0227154Z  2025-11-11 10:50:18.466 UTC [93] ERROR:  relation "usage_events" does not exist at character 22
+2025-11-11T10:50:24.0227558Z  2025-11-11 10:50:18.466 UTC [93] STATEMENT:  SELECT COUNT(*) FROM usage_events
+2025-11-11T10:50:24.0228011Z  2025-11-11 10:50:18.466 UTC [93] ERROR:  relation "audit_log_entries" does not exist at character 22
+2025-11-11T10:50:24.0229672Z  2025-11-11 10:50:18.466 UTC [93] STATEMENT:  SELECT COUNT(*) FROM audit_log_entries
+2025-11-11T10:50:24.0230401Z  2025-11-11 10:50:18.571 UTC [94] ERROR:  relation "organizations" does not exist at character 22
+2025-11-11T10:50:24.0231255Z  2025-11-11 10:50:18.571 UTC [94] STATEMENT:  SELECT COUNT(*) FROM organizations
+2025-11-11T10:50:24.0231762Z  2025-11-11 10:50:18.572 UTC [94] ERROR:  relation "users" does not exist at character 22
+2025-11-11T10:50:24.0232151Z  2025-11-11 10:50:18.572 UTC [94] STATEMENT:  SELECT COUNT(*) FROM users
+2025-11-11T10:50:24.0232547Z  2025-11-11 10:50:18.572 UTC [94] ERROR:  relation "api_keys" does not exist at character 22
+2025-11-11T10:50:24.0232946Z  2025-11-11 10:50:18.572 UTC [94] STATEMENT:  SELECT COUNT(*) FROM api_keys
+2025-11-11T10:50:24.0233376Z  2025-11-11 10:50:18.572 UTC [94] ERROR:  relation "model_registry_entries" does not exist at character 22
+2025-11-11T10:50:24.0233850Z  2025-11-11 10:50:18.572 UTC [94] STATEMENT:  SELECT COUNT(*) FROM model_registry_entries
+2025-11-11T10:50:24.0234595Z  2025-11-11 10:50:18.573 UTC [94] ERROR:  relation "usage_events" does not exist at character 22
+2025-11-11T10:50:24.0235014Z  2025-11-11 10:50:18.573 UTC [94] STATEMENT:  SELECT COUNT(*) FROM usage_events
+2025-11-11T10:50:24.0235446Z  2025-11-11 10:50:18.573 UTC [94] ERROR:  relation "audit_log_entries" does not exist at character 22
+2025-11-11T10:50:24.0235885Z  2025-11-11 10:50:18.573 UTC [94] STATEMENT:  SELECT COUNT(*) FROM audit_log_entries
+2025-11-11T10:50:24.0236314Z  2025-11-11 10:50:18.577 UTC [95] ERROR:  relation "audit_log_entries" does not exist at character 14
+2025-11-11T10:50:24.0236684Z  2025-11-11 10:50:18.577 UTC [95] STATEMENT:  
+2025-11-11T10:50:24.0237042Z  	INSERT INTO audit_log_entries (actor_type, actor_id, action, target, metadata)
+2025-11-11T10:50:24.0237390Z  	VALUES ($1, $2, $3, $4, $5)
+2025-11-11T10:50:24.0237593Z  	
+2025-11-11T10:50:24.0237867Z  2025-11-11 10:50:18.776 UTC [96] ERROR:  relation "usage_events" does not exist at character 22
+2025-11-11T10:50:24.0238299Z  2025-11-11 10:50:18.776 UTC [96] STATEMENT:  SELECT COUNT(*) FROM usage_events
+2025-11-11T10:50:24.0238723Z  2025-11-11 10:50:18.881 UTC [97] ERROR:  relation "usage_events" does not exist at character 22
+2025-11-11T10:50:24.0239140Z  2025-11-11 10:50:18.881 UTC [97] STATEMENT:  SELECT COUNT(*) FROM usage_events
+2025-11-11T10:50:24.0239575Z  2025-11-11 10:50:18.885 UTC [98] ERROR:  relation "audit_log_entries" does not exist at character 14
+2025-11-11T10:50:24.0239953Z  2025-11-11 10:50:18.885 UTC [98] STATEMENT:  
+2025-11-11T10:50:24.0240302Z  	INSERT INTO audit_log_entries (actor_type, actor_id, action, target, metadata)
+2025-11-11T10:50:24.0240871Z  	VALUES ($1, $2, $3, $4, $5)
+2025-11-11T10:50:24.0241073Z  	
+2025-11-11T10:50:24.0241353Z  2025-11-11 10:50:23.766 UTC [105] ERROR:  relation "organizations" does not exist at character 14
+2025-11-11T10:50:24.0241727Z  2025-11-11 10:50:23.766 UTC [105] STATEMENT:  
+2025-11-11T10:50:24.0242127Z  	INSERT INTO organizations (slug, display_name, plan_tier, budget_limit_tokens, status)
+2025-11-11T10:50:24.0242505Z  	VALUES ($1, $2, $3, $4, $5)
+2025-11-11T10:50:24.0242721Z  	ON CONFLICT (slug) DO UPDATE
+2025-11-11T10:50:24.0242953Z  	SET display_name = EXCLUDED.display_name,
+2025-11-11T10:50:24.0243215Z  	    plan_tier = EXCLUDED.plan_tier,
+2025-11-11T10:50:24.0243490Z  	    budget_limit_tokens = EXCLUDED.budget_limit_tokens,
+2025-11-11T10:50:24.0243760Z  	    status = EXCLUDED.status
+2025-11-11T10:50:24.0243992Z  	RETURNING organization_id
+2025-11-11T10:50:24.0244343Z  2025-11-11 10:50:23.831 UTC [106] ERROR:  relation "audit_log_entries" does not exist at character 63
+2025-11-11T10:50:24.0244996Z  2025-11-11 10:50:23.831 UTC [106] STATEMENT:  SELECT actor_type, actor_id, action, target, occurred_at FROM audit_log_entries ORDER BY occurred_at DESC LIMIT 10;
+2025-11-11T10:50:24.0245509Z  
+2025-11-11T10:50:24.0245755Z  The database cluster will be initialized with locale "en_US.utf8".
+2025-11-11T10:50:24.0246319Z  The default database encoding has accordingly been set to "UTF8".
+2025-11-11T10:50:24.0246698Z  The default text search configuration will be set to "english".
+2025-11-11T10:50:24.0246990Z  
+2025-11-11T10:50:24.0247160Z  Data page checksums are disabled.
+2025-11-11T10:50:24.0247379Z  
+2025-11-11T10:50:24.0247632Z  fixing permissions on existing directory /var/lib/postgresql/data ... ok
+2025-11-11T10:50:24.0247979Z  creating subdirectories ... ok
+2025-11-11T10:50:24.0248254Z  selecting dynamic shared memory implementation ... posix
+2025-11-11T10:50:24.0248555Z  selecting default max_connections ... 100
+2025-11-11T10:50:24.0248813Z  selecting default shared_buffers ... 128MB
+2025-11-11T10:50:24.0249054Z  selecting default time zone ... UTC
+2025-11-11T10:50:24.0249291Z  creating configuration files ... ok
+2025-11-11T10:50:24.0249525Z  running bootstrap script ... ok
+2025-11-11T10:50:24.0249776Z  performing post-bootstrap initialization ... ok
+2025-11-11T10:50:24.0250047Z  syncing data to disk ... ok
+2025-11-11T10:50:24.0250438Z  
+2025-11-11T10:50:24.0250764Z  
+2025-11-11T10:50:24.0250966Z  Success. You can now start the database server using:
+2025-11-11T10:50:24.0251215Z  
+2025-11-11T10:50:24.0251412Z      pg_ctl -D /var/lib/postgresql/data -l logfile start
+2025-11-11T10:50:24.0251656Z  
+2025-11-11T10:50:24.0252113Z  waiting for server to start....2025-11-11 10:49:32.604 UTC [41] LOG:  starting PostgreSQL 15.14 on x86_64-pc-linux-musl, compiled by gcc (Alpine 14.2.0) 14.2.0, 64-bit
+2025-11-11T10:50:24.0252777Z  2025-11-11 10:49:32.605 UTC [41] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2025-11-11T10:50:24.0253248Z  2025-11-11 10:49:32.608 UTC [44] LOG:  database system was shut down at 2025-11-11 10:49:32 UTC
+2025-11-11T10:50:24.0253671Z  2025-11-11 10:49:32.612 UTC [41] LOG:  database system is ready to accept connections
+2025-11-11T10:50:24.0253979Z   done
+2025-11-11T10:50:24.0254131Z  server started
+2025-11-11T10:50:24.0254304Z  CREATE DATABASE
+2025-11-11T10:50:24.0254490Z  
+2025-11-11T10:50:24.0254629Z  
+2025-11-11T10:50:24.0254912Z  /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+2025-11-11T10:50:24.0255253Z  
+2025-11-11T10:50:24.0255546Z  waiting for server to shut down...2025-11-11 10:49:32.750 UTC [41] LOG:  received fast shutdown request
+2025-11-11T10:50:24.0255989Z  .2025-11-11 10:49:32.751 UTC [41] LOG:  aborting any active transactions
+2025-11-11T10:50:24.0256462Z  2025-11-11 10:49:32.754 UTC [41] LOG:  background worker "logical replication launcher" (PID 47) exited with exit code 1
+2025-11-11T10:50:24.0256910Z  2025-11-11 10:49:32.754 UTC [42] LOG:  shutting down
+2025-11-11T10:50:24.0257233Z  2025-11-11 10:49:32.755 UTC [42] LOG:  checkpoint starting: shutdown immediate
+2025-11-11T10:50:24.0258027Z  2025-11-11 10:49:32.771 UTC [42] LOG:  checkpoint complete: wrote 921 buffers (5.6%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.013 s, sync=0.002 s, total=0.017 s; sync files=301, longest=0.001 s, average=0.001 s; distance=4238 kB, estimate=4238 kB
+2025-11-11T10:50:24.0258820Z  2025-11-11 10:49:32.778 UTC [41] LOG:  database system is shut down
+2025-11-11T10:50:24.0259088Z   done
+2025-11-11T10:50:24.0259241Z  server stopped
+2025-11-11T10:50:24.0259406Z  
+2025-11-11T10:50:24.0259603Z  PostgreSQL init process complete; ready for start up.
+2025-11-11T10:50:24.0259868Z  
+2025-11-11T10:50:24.0265201Z Stop and remove container: 3410cfa7f011416f9a9f8356834fb1e8_postgres15alpine_e805af
+2025-11-11T10:50:24.0270372Z ##[command]/usr/bin/docker rm --force 7551f3b7260003179604f331bd3dc3f366b62b6ac8f1e48415260a668d402d58
+2025-11-11T10:50:25.0514290Z 7551f3b7260003179604f331bd3dc3f366b62b6ac8f1e48415260a668d402d58
+2025-11-11T10:50:25.0544675Z Remove container network: github_network_70bdf0f7eed54bc180086a068ef7d081
+2025-11-11T10:50:25.0549115Z ##[command]/usr/bin/docker network rm github_network_70bdf0f7eed54bc180086a068ef7d081
+2025-11-11T10:50:25.1946976Z github_network_70bdf0f7eed54bc180086a068ef7d081

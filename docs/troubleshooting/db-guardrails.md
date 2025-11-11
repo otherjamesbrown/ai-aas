@@ -26,6 +26,8 @@ email hash key: MIGRATION_EMAIL_HASH_KEY (or EMAIL_HASH_KEY) must be set
 [ERROR] MIGRATION_APPROVED_BY must be set (dual approval required)
 ```
 
+- Latest re-run (`actions/runs/19258963128`) still shows no `migration_applied` entries and operational seeding aborts with `ERROR: relation "organizations" does not exist`; raw logs live in `docs/troubleshooting/logs_49613197765/guardrails/`.
+
 ## Root Causes
 1. **Incorrect migration directory lookup**  
    The custom migrate CLI resolved paths relative to `db/tools/migrate`, producing `db/tools/migrations/...`, but the actual SQL lives under `db/migrations/...`. As a result, migrations were never applied and tables were missing for seeding.
@@ -45,6 +47,7 @@ email hash key: MIGRATION_EMAIL_HASH_KEY (or EMAIL_HASH_KEY) must be set
   - `seed.sh` fails fast when `MIGRATION_EMAIL_HASH_KEY` (or `EMAIL_HASH_KEY`) is missing.
 - Updated the `DB Guardrails` workflow so both operational and analytics runs point to the same Postgres database.  
   The analytics seed queries operational tables (`organizations`, `api_keys`, etc.), so using a single DSN avoids `relation ... does not exist` errors on CI (`/.github/workflows/db-guardrails.yml`).
+- Added debug logging in `db/tools/migrate` to print the resolved migrations directory and discovered file count for each component to aid CI diagnostics.
 - Reran seeds with the necessary environment:
 
 ```
