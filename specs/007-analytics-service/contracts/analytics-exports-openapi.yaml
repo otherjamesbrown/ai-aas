@@ -1,0 +1,247 @@
+openapi: 3.1.0
+info:
+  title: Analytics Export API
+  version: 0.1.0
+  description: Manage cost and usage export jobs for finance stakeholders.
+servers:
+  - url: https://api.ai-aas.local
+    description: Development
+  - url: https://api.ai-aas.prod
+    description: Production
+security:
+  - bearerAuth: []
+  - apiKeyAuth: []
+tags:
+  - name: Exports
+paths:
+  /analytics/v1/orgs/{orgId}/exports:
+    post:
+      summary: Create a new export job
+      tags: [Exports]
+      operationId: createExportJob
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExportRequest'
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '202':
+          description: Export job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJob'
+        '400':
+          description: Invalid request payload
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden for org scope
+    get:
+      summary: List export jobs for an organization
+      tags: [Exports]
+      operationId: listExportJobs
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, running, succeeded, failed, expired]
+      responses:
+        '200':
+          description: Export jobs
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ExportJob'
+  /analytics/v1/orgs/{orgId}/exports/{jobId}:
+    get:
+      summary: Retrieve export job status and delivery URL
+      tags: [Exports]
+      operationId: getExportJob
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Export job details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJob'
+        '404':
+          description: Job not found or expired
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /analytics/v1/orgs/{orgId}/exports/{jobId}/download:
+    get:
+      summary: Retrieve the signed URL for a completed export
+      tags: [Exports]
+      operationId: getExportDownloadUrl
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '302':
+          description: Redirects to signed S3/MinIO URL
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+        '404':
+          description: Job not ready or does not exist
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  parameters:
+    OrgId:
+      name: orgId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    CreateExportRequest:
+      type: object
+      required: [timeRange]
+      properties:
+        timeRange:
+          type: object
+          required: [start, end]
+          properties:
+            start:
+              type: string
+              format: date-time
+            end:
+              type: string
+              format: date-time
+          description: Export window (max 31 days).
+        granularity:
+          type: string
+          enum: [hourly, daily, monthly]
+          default: daily
+        models:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Optional model filters.
+        delivery:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [s3]
+              default: s3
+            bucket:
+              type: string
+              description: Optional override bucket; default per org config.
+    ExportJob:
+      type: object
+      required:
+        - jobId
+        - orgId
+        - status
+        - granularity
+        - timeRange
+        - createdAt
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        orgId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, running, succeeded, failed, expired]
+        granularity:
+          type: string
+          enum: [hourly, daily, monthly]
+        timeRange:
+          type: object
+          required: [start, end]
+          properties:
+            start:
+              type: string
+              format: date-time
+            end:
+              type: string
+              format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        outputUri:
+          type: string
+          format: uri
+          nullable: true
+        checksum:
+          type: string
+          description: SHA-256 checksum of CSV contents.
+          nullable: true
+        rowCount:
+          type: integer
+          nullable: true
+        initiatedBy:
+          type: string
+          format: uuid
+          description: User or system ID requesting the export.
+        error:
+          type: string
+          nullable: true
+    ProblemDetails:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+

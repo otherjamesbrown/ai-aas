@@ -1,0 +1,549 @@
+openapi: 3.1.0
+info:
+  title: Web Portal Management API
+  version: 0.1.0
+  description: >
+    Aggregated REST endpoints consumed by the Web Portal for organization administration,
+    budget management, API key lifecycle, usage insights, and support impersonation flows.
+servers:
+  - url: https://api.ai-aas.internal
+    description: Production
+  - url: https://staging.api.ai-aas.internal
+    description: Staging
+security:
+  - oauth2: [portal.read, portal.write]
+paths:
+  /v1/portal/organization:
+    get:
+      summary: Fetch organization profile
+      operationId: getOrganizationProfile
+      responses:
+        '200':
+          description: Organization profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationProfile'
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+    patch:
+      summary: Update organization profile
+      operationId: updateOrganizationProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationProfileUpdate'
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationProfile'
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+  /v1/portal/members:
+    get:
+      summary: List organization members
+      operationId: listMembers
+      parameters:
+        - in: query
+          name: status
+          description: Filter by invite status
+          schema:
+            type: string
+            enum: [pending, accepted, revoked, expired]
+        - in: query
+          name: page
+          schema:
+            type: string
+            description: Cursor for pagination
+      responses:
+        '200':
+          description: Member list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberList'
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+    post:
+      summary: Invite a member
+      operationId: inviteMember
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberInviteRequest'
+      responses:
+        '202':
+          description: Invitation accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberInviteResponse'
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+  /v1/portal/members/{memberId}:
+    patch:
+      summary: Update member role or status
+      operationId: updateMember
+      parameters:
+        - $ref: '#/components/parameters/memberId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberUpdateRequest'
+      responses:
+        '200':
+          description: Updated member
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+  /v1/portal/budget:
+    get:
+      summary: Retrieve budget policy
+      operationId: getBudgetPolicy
+      responses:
+        '200':
+          description: Budget policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetPolicy'
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+    put:
+      summary: Replace budget policy
+      operationId: upsertBudgetPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BudgetPolicyUpdate'
+      responses:
+        '200':
+          description: Updated policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetPolicy'
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+  /v1/portal/api-keys:
+    get:
+      summary: List API keys
+      operationId: listApiKeys
+      responses:
+        '200':
+          description: API key collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyList'
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+    post:
+      summary: Create a new API key
+      operationId: createApiKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiKeyCreateRequest'
+      responses:
+        '201':
+          description: Created API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyCreateResponse'
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+  /v1/portal/api-keys/{keyId}:
+    post:
+      summary: Rotate an API key
+      operationId: rotateApiKey
+      parameters:
+        - $ref: '#/components/parameters/keyId'
+      responses:
+        '200':
+          description: Rotated API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyCreateResponse'
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+    delete:
+      summary: Revoke an API key
+      operationId: revokeApiKey
+      parameters:
+        - $ref: '#/components/parameters/keyId'
+      responses:
+        '204':
+          description: Revoked
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+  /v1/portal/usage:
+    get:
+      summary: Retrieve usage metrics for selected window
+      operationId: getUsageReport
+      parameters:
+        - in: query
+          name: range
+          required: true
+          schema:
+            type: string
+            enum: [last_24h, last_7d, last_30d, custom]
+        - in: query
+          name: model
+          schema:
+            type: string
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Usage report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageReport'
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+  /v1/portal/support/impersonations:
+    post:
+      summary: Request time-bound impersonation access
+      operationId: createImpersonationSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImpersonationRequest'
+      responses:
+        '201':
+          description: Impersonation session granted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpersonationSession'
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+  /v1/portal/support/impersonations/{sessionId}:
+    delete:
+      summary: Revoke impersonation session
+      operationId: revokeImpersonationSession
+      parameters:
+        - $ref: '#/components/parameters/sessionId'
+      responses:
+        '204':
+          description: Session revoked
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+
+components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://login.ai-aas.internal/oauth2/authorize
+          tokenUrl: https://login.ai-aas.internal/oauth2/token
+          scopes:
+            portal.read: Read access to portal resources
+            portal.write: Write access to portal resources
+            portal.support: Support impersonation operations
+  parameters:
+    memberId:
+      name: memberId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    keyId:
+      name: keyId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    sessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    UnauthorizedError:
+      description: Authentication required
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    ForbiddenError:
+      description: Insufficient permissions
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    ValidationError:
+      description: Request failed validation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ValidationProblemDetail'
+    ConflictError:
+      description: Conflict with current resource state
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+  schemas:
+    ProblemDetail:
+      type: object
+      required: [type, title, status]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string, format: uri }
+        correlation_id: { type: string, format: uuid }
+    ValidationProblemDetail:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetail'
+        - type: object
+          properties:
+            errors:
+              type: array
+              items:
+                type: object
+                properties:
+                  field: { type: string }
+                  message: { type: string }
+    OrganizationProfile:
+      type: object
+      required: [org_id, name, status, updated_at]
+      properties:
+        org_id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        status: { type: string, enum: [active, suspended, trial] }
+        billing_contact:
+          type: object
+          required: [email]
+          properties:
+            name: { type: string }
+            email: { type: string, format: email }
+            phone: { type: string, nullable: true }
+        address:
+          type: object
+          nullable: true
+          properties:
+            street1: { type: string }
+            street2: { type: string, nullable: true }
+            locality: { type: string }
+            region: { type: string }
+            postal_code: { type: string }
+            country: { type: string, minLength: 2, maxLength: 2 }
+        policy_flags:
+          type: array
+          items: { type: string }
+        updated_at: { type: string, format: date-time }
+    OrganizationProfileUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        billing_contact:
+          $ref: '#/components/schemas/OrganizationProfile/properties/billing_contact'
+        address:
+          $ref: '#/components/schemas/OrganizationProfile/properties/address'
+        policy_flags:
+          $ref: '#/components/schemas/OrganizationProfile/properties/policy_flags'
+      additionalProperties: false
+    Member:
+      type: object
+      required: [member_id, email, role, invite_status]
+      properties:
+        member_id: { type: string, format: uuid }
+        identity_id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        role: { type: string }
+        invite_status: { type: string, enum: [pending, accepted, revoked, expired] }
+        mfa_required: { type: boolean }
+        last_active_at: { type: string, format: date-time, nullable: true }
+        scopes:
+          type: array
+          items: { type: string }
+    MemberList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Member'
+        next_page:
+          type: string
+          nullable: true
+    MemberInviteRequest:
+      type: object
+      required: [email, role]
+      properties:
+        email: { type: string, format: email }
+        role: { type: string }
+        scopes:
+          type: array
+          items: { type: string }
+        message: { type: string, nullable: true }
+    MemberInviteResponse:
+      type: object
+      required: [member_id, invite_status]
+      properties:
+        member_id: { type: string, format: uuid }
+        invite_status: { type: string, enum: [pending] }
+    MemberUpdateRequest:
+      type: object
+      properties:
+        role: { type: string }
+        invite_status: { type: string, enum: [revoked] }
+        mfa_required: { type: boolean }
+      additionalProperties: false
+    BudgetPolicy:
+      type: object
+      required: [policy_id, monthly_limit_cents, currency, enforcement_mode]
+      properties:
+        policy_id: { type: string, format: uuid }
+        monthly_limit_cents: { type: integer, minimum: 0 }
+        alert_thresholds:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+            maximum: 100
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        enforcement_mode: { type: string, enum: [monitor, warn, block] }
+        alert_recipients:
+          type: array
+          items: { type: string, format: email }
+        effective_at: { type: string, format: date-time }
+    BudgetPolicyUpdate:
+      allOf:
+        - $ref: '#/components/schemas/BudgetPolicy'
+      required: [monthly_limit_cents, currency, enforcement_mode]
+    ApiKey:
+      type: object
+      required: [key_id, display_name, scopes, status, created_at]
+      properties:
+        key_id: { type: string, format: uuid }
+        display_name: { type: string, minLength: 1, maxLength: 64 }
+        scopes:
+          type: array
+          items: { type: string }
+        status: { type: string, enum: [active, revoked, rotated] }
+        created_at: { type: string, format: date-time }
+        rotated_at: { type: string, format: date-time, nullable: true }
+        expires_at: { type: string, format: date-time, nullable: true }
+        fingerprint: { type: string }
+    ApiKeyList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiKey'
+    ApiKeyCreateRequest:
+      type: object
+      required: [display_name, scopes]
+      properties:
+        display_name: { type: string }
+        scopes:
+          type: array
+          minItems: 1
+          items: { type: string }
+        expires_at: { type: string, format: date-time, nullable: true }
+    ApiKeyCreateResponse:
+      type: object
+      required: [api_key, metadata]
+      properties:
+        api_key: { type: string, description: "Full key shown once" }
+        metadata:
+          $ref: '#/components/schemas/ApiKey'
+    UsageReport:
+      type: object
+      required: [time_range, generated_at, totals, breakdowns]
+      properties:
+        time_range: { type: string }
+        generated_at: { type: string, format: date-time }
+        source: { type: string, enum: [billing-api, cache, degraded] }
+        totals:
+          type: object
+          required: [requests, tokens, cost_cents]
+          properties:
+            requests: { type: integer, minimum: 0 }
+            tokens: { type: integer, minimum: 0 }
+            cost_cents: { type: integer, minimum: 0 }
+        breakdowns:
+          type: array
+          items:
+            type: object
+            required: [window_start, window_end, model, operation, requests, tokens, cost_cents]
+            properties:
+              window_start: { type: string, format: date-time }
+              window_end: { type: string, format: date-time }
+              model: { type: string }
+              operation: { type: string }
+              requests: { type: integer }
+              tokens: { type: integer }
+              cost_cents: { type: integer }
+              confidence: { type: string, enum: [estimated, finalized] }
+    ImpersonationRequest:
+      type: object
+      required: [organization_id, reason, consent_token, ttl_minutes]
+      properties:
+        organization_id: { type: string, format: uuid }
+        reason: { type: string, minLength: 10, maxLength: 500 }
+        consent_token: { type: string }
+        ttl_minutes: { type: integer, minimum: 5, maximum: 120 }
+    ImpersonationSession:
+      type: object
+      required: [session_id, organization_id, support_user_id, expires_at, scope]
+      properties:
+        session_id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        support_user_id: { type: string, format: uuid }
+        requested_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        scope: { type: string, enum: [read-only] }
+        consent_token: { type: string }
+

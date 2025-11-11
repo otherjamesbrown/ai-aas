@@ -1,85 +1,104 @@
-# Implementation Plan: API Router Service
+# Implementation Plan: [FEATURE]
 
-**Branch**: `006-api-router-service` | **Date**: 2025-11-11 | **Spec**: `/specs/006-api-router-service/spec.md`  
-**Input**: Feature specification from `/specs/006-api-router-service/spec.md`
+**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
+**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
 
-**Note**: Generated via `/speckit.plan` and enriched with research in `/specs/006-api-router-service/research.md`.
+**Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/commands/plan.md` for the execution workflow.
 
 ## Summary
 
-Deliver a resilient inference ingress that authenticates API requests, enforces organization spend controls, routes traffic intelligently across model backends, and emits near-real-time usage telemetry. The router will reuse shared authentication, configuration, observability, and limiter libraries, expose admin controls for routing overrides, and integrate with the existing usage analytics pipeline to keep finance dashboards current.
+[Extract from feature spec: primary requirement + technical approach from research]
 
 ## Technical Context
 
-**Language/Version**: Go 1.21, GNU Make 4.x, Protocol Buffers v3.23  
-**Primary Dependencies**: Shared service framework (`004-shared-libraries`), `go-redis/v9` (rate limiter), `grpc-go`, `chi` HTTP router, OpenTelemetry SDK/collector, `sarama` Kafka client, `zap` logging  
-**Storage**: Redis Cluster (Elasticache) for limiter state, Kafka topic `usage.records.v1` for telemetry egress, Config Service watch cache persisted to local disk (BoltDB), no direct relational storage  
-**Testing**: `go test ./...`, contract tests via `buf` + golden fixtures, integration tests with docker-compose harness for Redis/Kafka, load tests using `vegeta`  
-**Target Platform**: Kubernetes (staging + production clusters), GitHub Actions CI, developer laptops (macOS/Linux, WSL2)  
-**Project Type**: Backend service exposing REST + gRPC endpoints with shared admin CLI support  
-**Performance Goals**: ≤150 ms router overhead, ≤400 ms p95 latency, 1k RPS sustained with linear horizontal scale, telemetry export lag ≤60 s  
-**Constraints**: Enforce budget/quota atomically, preserve idempotency across retries, Zero Trust mutual TLS for admin APIs, configuration propagation ≤30 s, failover to secondary backends ≤30 s  
-**Scale/Scope**: Supports 200+ organizations, 10 concurrent model backends, burst handling up to 2k RPS, 24-hour buffered telemetry retention
+<!--
+  ACTION REQUIRED: Replace the content in this section with the technical details
+  for the project. The structure here is presented in advisory capacity to guide
+  the iteration process.
+-->
+
+**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
+**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]  
+**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]  
+**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  
+**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
+**Project Type**: [single/web/mobile - determines source structure]  
+**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]  
+**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]  
+**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- Constitution v1.4.0 gates satisfied:
-  - **API-First**: External inference, status, and admin surfaces documented in OpenAPI; internal gRPC contracts versioned.  
-  - **Security**: API key + HMAC validation, mutual TLS admin channel, encrypted secrets, and audited config updates meet Zero Trust guardrails.  
-  - **Observability**: RED metrics, traces, structured logs, and Kafka usage exports deliver mandatory signals; dashboards/runbooks scheduled in deliverables.  
-  - **Reliability/Resilience**: Automated failover, backpressure, limiter safeguards, and blue/green deployment path uphold resilience gate.  
-  - **Testing**: Unit, contract, integration, and chaos drills planned; idempotency + limiter correctness covered by load tests.  
-  - **Performance**: Latency and throughput targets align with success criteria; benchmarking and regression alerts defined.  
-No waivers required; any future change raising new components must revisit gates.
+[Gates determined based on constitution file]
 
 ## Project Structure
 
 ### Documentation (this feature)
 
 ```text
-specs/006-api-router-service/
-├── spec.md
-├── plan.md               # this file
-├── research.md           # Phase 0 output
-├── data-model.md         # Phase 1 output
-├── quickstart.md         # Phase 1 output
-├── contracts/            # OpenAPI + event contracts
-│   ├── api-router.openapi.yaml
-│   └── usage-record.schema.yaml
-└── tasks.md              # curated + speckit.tasks overlay
+specs/[###-feature]/
+├── plan.md              # This file (/speckit.plan command output)
+├── research.md          # Phase 0 output (/speckit.plan command)
+├── data-model.md        # Phase 1 output (/speckit.plan command)
+├── quickstart.md        # Phase 1 output (/speckit.plan command)
+├── contracts/           # Phase 1 output (/speckit.plan command)
+└── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
 ```
 
 ### Source Code (repository root)
+<!--
+  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
+  for this feature. Delete unused options and expand the chosen structure with
+  real paths (e.g., apps/admin, packages/something). The delivered plan must
+  not include Option labels.
+-->
 
 ```text
-services/api-router-service/
-├── cmd/router/                 # main binary wiring HTTP+gRPC servers
-├── internal/
-│   ├── auth/                   # API key + HMAC validation adapters
-│   ├── limiter/                # Redis-backed rate/budget enforcement
-│   ├── routing/                # policy evaluation, backend selection, failover
-│   ├── usage/                  # accounting pipeline, Kafka producer
-│   ├── admin/                  # config overrides, diagnostics handlers
-│   └── telemetry/              # RED metrics, tracing, logging glue
-├── pkg/contracts/              # generated protobuf + OpenAPI artifacts
-├── configs/
-│   ├── router.sample.yaml      # bootstrap configuration
-│   └── policies.sample.yaml    # routing policy examples
-├── deployments/
-│   └── helm/api-router-service/  # chart + values for staging/prod
-├── scripts/
-│   ├── smoke.sh                # post-deploy smoke tests
-│   └── loadtest.sh             # vegeta harness for latency/limiter checks
-└── test/
-    ├── integration/            # docker-compose harness (Redis, Kafka, mock backends)
-    ├── contract/               # OpenAPI + protobuf golden tests
-    └── chaos/                  # failover + limiter race drills
+# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
+src/
+├── models/
+├── services/
+├── cli/
+└── lib/
+
+tests/
+├── contract/
+├── integration/
+└── unit/
+
+# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
+backend/
+├── src/
+│   ├── models/
+│   ├── services/
+│   └── api/
+└── tests/
+
+frontend/
+├── src/
+│   ├── components/
+│   ├── pages/
+│   └── services/
+└── tests/
+
+# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
+api/
+└── [same as backend above]
+
+ios/ or android/
+└── [platform-specific structure: feature modules, UI flows, platform tests]
 ```
 
-**Structure Decision**: Service lives under `services/api-router-service` to align with existing monorepo pattern; shared libraries remain in `libs/`. Generated contracts stored in `pkg/contracts` to keep clients in sync. Deployment assets co-locate with service for GitOps. Tests follow `internal` component boundaries to keep ownership clear and accelerate targeted runs.
+**Structure Decision**: [Document the selected structure and reference the real
+directories captured above]
 
 ## Complexity Tracking
 
-No constitution violations introduced. Planned components (Redis limiter, Kafka exporter, Config Service integration) reuse existing platform capabilities and avoid bespoke infrastructure.
+> **Fill ONLY if Constitution Check has violations that must be justified**
+
+| Violation | Why Needed | Simpler Alternative Rejected Because |
+|-----------|------------|-------------------------------------|
+| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
+| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
