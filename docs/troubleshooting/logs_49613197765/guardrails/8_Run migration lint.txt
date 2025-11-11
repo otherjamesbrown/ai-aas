@@ -1,0 +1,8 @@
+﻿2025-11-11T10:49:56.6343510Z ##[group]Run cd db/tools/lint
+2025-11-11T10:49:56.6343762Z [36;1mcd db/tools/lint[0m
+2025-11-11T10:49:56.6343964Z [36;1mGOWORK=off go run .[0m
+2025-11-11T10:49:56.6375741Z shell: /usr/bin/bash -e {0}
+2025-11-11T10:49:56.6375965Z env:
+2025-11-11T10:49:56.6376126Z   GO111MODULE: on
+2025-11-11T10:49:56.6376301Z ##[endgroup]
+2025-11-11T10:49:56.6481015Z go: downloading gopkg.in/yaml.v3 v3.0.1

@@ -21,6 +21,12 @@ make help
 
 Consult `specs/000-project-setup/quickstart.md` for prerequisite tooling, remote CI instructions, and troubleshooting guidance.
 
+### Database Schemas & Migrations
+
+- Review `specs/003-database-schemas/quickstart.md` before running migration tooling.
+- Copy `configs/migrate.example.env` to `migrate.env` (or set environment variables in CI) and update connection strings, telemetry headers, and component selector.
+- Migration scripts expect `db/` and `analytics/` directories provisioned via `/speckit.tasks` Phase 1; see `make db-migrate-status` for validation commands.
+
 ---
 
 ## Repository Layout

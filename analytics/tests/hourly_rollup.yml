@@ -1,0 +1,35 @@
+version: 1
+checks:
+  - name: request_count_matches_usage
+    description: Ensure hourly rollup matches usage_events counts.
+    sql: |
+      WITH rollup AS (
+        SELECT bucket_start, organization_id, model_id, request_count
+        FROM analytics_hourly_rollups
+      ),
+      usage AS (
+        SELECT date_trunc('hour', occurred_at) AS bucket_start,
+               organization_id,
+               model_id,
+               COUNT(*) AS request_count
+        FROM usage_events
+        GROUP BY 1,2,3
+      )
+      SELECT usage.bucket_start,
+             usage.organization_id,
+             usage.model_id,
+             usage.request_count AS usage_count,
+             COALESCE(rollup.request_count, 0) AS rollup_count
+      FROM usage
+      LEFT JOIN rollup
+        ON usage.bucket_start = rollup.bucket_start
+       AND usage.organization_id = rollup.organization_id
+       AND (usage.model_id IS NOT DISTINCT FROM rollup.model_id)
+      WHERE COALESCE(rollup.request_count, 0) <> usage.request_count;
+    expect: empty
+  - name: error_rate_consistency
+    sql: |
+      SELECT bucket_start, organization_id, model_id
+      FROM analytics_hourly_rollups
+      WHERE error_count > request_count;
+    expect: empty
