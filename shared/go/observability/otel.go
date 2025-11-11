@@ -2,6 +2,7 @@ package observability
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 )
 
@@ -28,7 +30,8 @@ type Config struct {
 
 // Provider wraps the tracer provider and exposes Shutdown.
 type Provider struct {
-	tp *sdktrace.TracerProvider
+	tp       *sdktrace.TracerProvider
+	fallback bool
 }
 
 // Shutdown flushes telemetry exporters.
@@ -39,12 +42,54 @@ func (p *Provider) Shutdown(ctx context.Context) error {
 	return p.tp.Shutdown(ctx)
 }
 
+// Fallback reports whether the provider is operating in a degraded mode.
+func (p *Provider) Fallback() bool {
+	if p == nil {
+		return false
+	}
+	return p.fallback
+}
+
 // Init configures OpenTelemetry exporters and global providers.
 func Init(ctx context.Context, cfg Config) (*Provider, error) {
 	if cfg.Endpoint == "" {
 		return nil, fmt.Errorf("telemetry endpoint required")
 	}
 
+	provider, err := initWithConfig(ctx, cfg)
+	if err == nil {
+		return provider, nil
+	}
+
+	recordExporterFailure(cfg.ServiceName, cfg.Protocol)
+	otel.Handle(fmt.Errorf("telemetry init failed for %s exporter: %w", cfg.Protocol, err))
+
+	// Attempt HTTP fallback when gRPC fails.
+	if cfg.Protocol == "grpc" {
+		httpCfg := cfg
+		httpCfg.Protocol = "http"
+		if httpProvider, httpErr := initWithConfig(ctx, httpCfg); httpErr == nil {
+			return httpProvider, nil
+		} else {
+			recordExporterFailure(cfg.ServiceName, "http")
+			err = errors.Join(err, httpErr)
+			otel.Handle(fmt.Errorf("telemetry http fallback failed: %w", httpErr))
+		}
+	}
+
+	return degradedProvider(cfg.ServiceName), nil
+}
+
+// MustInit panics if Init returns an error.
+func MustInit(ctx context.Context, cfg Config) *Provider {
+	provider, err := Init(ctx, cfg)
+	if err != nil {
+		panic(err)
+	}
+	return provider
+}
+
+func initWithConfig(ctx context.Context, cfg Config) (*Provider, error) {
 	client, err := buildClient(ctx, cfg)
 	if err != nil {
 		return nil, err
@@ -79,13 +124,14 @@ func Init(ctx context.Context, cfg Config) (*Provider, error) {
 	return &Provider{tp: tp}, nil
 }
 
-// MustInit panics if Init returns an error.
-func MustInit(ctx context.Context, cfg Config) *Provider {
-	provider, err := Init(ctx, cfg)
-	if err != nil {
-		panic(err)
-	}
-	return provider
+func degradedProvider(serviceName string) *Provider {
+	recordExporterFailure(serviceName, "degraded")
+	otel.SetTracerProvider(trace.NewNoopTracerProvider())
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	))
+	return &Provider{fallback: true}
 }
 
 func buildClient(ctx context.Context, cfg Config) (otlptrace.Client, error) {
@@ -114,11 +160,10 @@ func buildClient(ctx context.Context, cfg Config) (otlptrace.Client, error) {
 				MaxInterval:     5 * time.Second,
 				MaxElapsedTime:  0,
 			}),
+			otlptracegrpc.WithDialOption(grpc.WithBlock()),
 		}
 		if cfg.Insecure {
 			opts = append(opts, otlptracegrpc.WithInsecure())
-		} else {
-			opts = append(opts, otlptracegrpc.WithDialOption(grpc.WithBlock()))
 		}
 		if len(cfg.Headers) > 0 {
 			opts = append(opts, otlptracegrpc.WithHeaders(cfg.Headers))

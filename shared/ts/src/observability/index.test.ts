@@ -32,22 +32,29 @@ vi.mock('@opentelemetry/sdk-node', () => ({
       this.config = config;
     }
     async start() {
-      nodeSdkStart(this.config);
+      return nodeSdkStart(this.config);
     }
     async shutdown() {
-      nodeSdkShutdown();
+      return nodeSdkShutdown();
     }
   },
 }));
 
 let startTelemetry: typeof import('./index').startTelemetry;
+let resetTelemetryMetrics: typeof import('./index').resetTelemetryMetrics;
+let telemetryExporterFailureCount: typeof import('./index').telemetryExporterFailureCount;
 
 beforeAll(async () => {
-  ({ startTelemetry } = await import('./index'));
+  ({
+    startTelemetry,
+    resetTelemetryMetrics,
+    telemetryExporterFailureCount,
+  } = await import('./index'));
 });
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetTelemetryMetrics();
 });
 
 describe('startTelemetry', () => {
@@ -87,6 +94,26 @@ describe('startTelemetry', () => {
     expect(callArgs?.metadata?.get('x-team')).toEqual(['observability']);
     expect(httpExporterMock).not.toHaveBeenCalled();
     await telemetry.shutdown();
+  });
+
+  it('falls back to degraded telemetry when exporters fail', async () => {
+    nodeSdkStart.mockRejectedValueOnce(new Error('boom grpc'));
+    nodeSdkStart.mockRejectedValueOnce(new Error('boom http'));
+
+    const telemetry = await startTelemetry({
+      serviceName: 'shared',
+      endpoint: 'collector:4317',
+      protocol: 'grpc',
+      headers: {},
+      insecure: true,
+    });
+
+    expect(typeof telemetry.shutdown).toBe('function');
+    await telemetry.shutdown();
+
+    await expect(telemetryExporterFailureCount('shared', 'grpc')).resolves.toBeGreaterThan(0);
+    await expect(telemetryExporterFailureCount('shared', 'http')).resolves.toBeGreaterThan(0);
+    await expect(telemetryExporterFailureCount('shared', 'degraded')).resolves.toBeGreaterThan(0);
   });
 });
 

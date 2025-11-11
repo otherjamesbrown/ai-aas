@@ -1,0 +1,11 @@
+{
+  "extends": "../../../shared/ts/tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "types": ["vitest/globals"],
+    "noEmit": true
+  },
+  "include": ["src"]
+}
+

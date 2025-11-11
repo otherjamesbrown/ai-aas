@@ -43,4 +43,5 @@ app.addHook('preHandler', createAuthMiddleware(policy));
 - Contract tests: `tests/go/contract`, `tests/ts/contract`
 - Integration tests: `tests/go/integration`, `tests/ts/integration`
 - Sample services: `samples/service-template/go`, `samples/service-template/ts`
+- Performance benchmarks: `tests/go/perf`, `tests/ts/perf` (see `docs/perf/shared-libraries.md`)
 

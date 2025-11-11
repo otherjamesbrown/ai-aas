@@ -41,6 +41,7 @@ jobs:
             tests/ts/unit/package-lock.json
             tests/ts/integration/package-lock.json
             tests/ts/contract/package-lock.json
+            tests/ts/perf/package-lock.json
 
       - name: Shared upgrade verification
         run: ./scripts/shared/upgrade-verify.sh
@@ -78,6 +79,16 @@ jobs:
           cache: 'npm'
           cache-dependency-path: samples/service-template/ts/package-lock.json
 
+      - name: TypeScript shared install
+        if: matrix.sample == 'ts'
+        run: npm ci
+        working-directory: shared/ts
+
+      - name: TypeScript shared build
+        if: matrix.sample == 'ts'
+        run: npm run build
+        working-directory: shared/ts
+
       - name: Go sample service tests
         if: matrix.sample == 'go'
         run: go test ./...
@@ -97,4 +108,53 @@ jobs:
         if: matrix.sample == 'ts'
         run: npm test
         working-directory: samples/service-template/ts
+
+  benchmarks:
+    name: Shared Library Benchmarks
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: tests/ts/perf/package-lock.json
+
+      - name: TypeScript shared install
+        run: npm ci
+        working-directory: shared/ts
+
+      - name: TypeScript shared build
+        run: npm run build
+        working-directory: shared/ts
+
+      - name: Go benchmarks
+        shell: bash
+        run: |
+          go test ./tests/go/perf/... -bench=. -benchmem | tee tests/go/perf/go-benchmarks.txt
+
+      - name: Install TypeScript perf deps
+        run: npm ci
+        working-directory: tests/ts/perf
+
+      - name: TypeScript benchmarks
+        run: npm run bench:ci
+        working-directory: tests/ts/perf
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: shared-library-benchmarks
+          path: |
+            tests/go/perf/go-benchmarks.txt
+            tests/ts/perf/benchmarks.json
 

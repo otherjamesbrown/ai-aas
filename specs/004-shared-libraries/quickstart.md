@@ -1,7 +1,7 @@
 # Quickstart: Shared Libraries & Conventions
 
 ## Prerequisites
-- macOS 14+/Linux with Git, Go 1.21+, Node.js 20 LTS, and Docker (for optional collectors).
+- macOS 14+/Linux with Git, Go 1.23+, Node.js 20 LTS, and Docker (for optional collectors).
 - Access to internal package registries (`GOPRIVATE=github.com/ai-aas/*`, `npm config set @ai-aas:registry`).
 - Credentials for Vault or secrets provider (if using secure config backends).
 - Kubectl context pointed at development cluster plus telemetry collector endpoint.
@@ -24,14 +24,14 @@
 ## 2. Install Shared Libraries
 ### Go Service
 ```bash
-go get github.com/ai-aas/shared-go/config@v0.1.0
-go get github.com/ai-aas/shared-go/dataaccess@v0.1.0
-go get github.com/ai-aas/shared-go/observability@v0.1.0
-go get github.com/ai-aas/shared-go/errors@v0.1.0
+go get github.com/ai-aas/shared-go/config@v0.2.0
+go get github.com/ai-aas/shared-go/dataaccess@v0.2.0
+go get github.com/ai-aas/shared-go/observability@v0.2.0
+go get github.com/ai-aas/shared-go/errors@v0.2.0
 ```
 ### TypeScript Service
 ```bash
-npm install @ai-aas/shared@0.1.0
+npm install @ai-aas/shared@0.2.0
 ```
 
 ## 3. Wire Configuration
@@ -41,6 +41,10 @@ npm install @ai-aas/shared@0.1.0
    - `OTEL_EXPORTER_OTLP_ENDPOINT`
    - `VAULT_ADDR` (if using secrets backend)
 3. For secure deployment, configure Vault paths via `CONFIG_VAULT_PATH`.
+4. Generate a local sample env for reference:
+   ```bash
+   samples/service-template/scripts/env.sh > .env.local
+   ```
 
 ## 4. Integrate Data Access Helpers
 1. Import shared helpers:
@@ -77,7 +81,7 @@ npm install @ai-aas/shared@0.1.0
    ```
 3. Run the collector locally for end-to-end testing:
    ```bash
-   docker compose -f samples/service-template/otel/docker-compose.yml up
+   docker compose -f samples/service-template/otel/docker-compose.yml up -d
    ```
 
 ## 6. Enable Authorization Middleware
@@ -103,23 +107,28 @@ npm install @ai-aas/shared@0.1.0
 
 ## 8. Run Tests & Lints
 ```bash
-make test-shared          # Go + TS unit tests
-make contract-tests       # Contract compatibility suites
-make sample-e2e           # End-to-end tests against service template
+./scripts/shared/upgrade-verify.sh   # Go/TS checks, sample services, integration+contract suites
+make test-shared                     # Go + TS unit tests
+make contract-tests                  # Contract compatibility suites
+make sample-e2e                      # End-to-end tests against service template
+go test ./tests/go/perf/... -bench=. -benchmem   # Go shared-library performance baselines
+npm run bench --prefix tests/ts/perf              # TypeScript shared-library performance baselines
 ```
 
 ## 9. Upgrade Workflow
 1. Review `docs/upgrades/shared-libraries.md` checklist.
 2. Execute compatibility smoke tests:
    ```bash
-   make upgrade-verify OLD_VERSION=0.1.0 NEW_VERSION=0.2.0
+   ./scripts/shared/upgrade-verify.sh
    ```
-3. Monitor `alerts/shared-libraries.yaml` for triggered warnings post-upgrade.
+3. Monitor `dashboards/alerts/shared-libraries.yaml` for triggered warnings post-upgrade.
 
 ## Troubleshooting
 - **Telemetry missing**: Verify OTEL endpoint reachable and `OTEL_EXPORTER_OTLP_HEADERS` configured for auth tokens.
 - **Policy load failure**: Ensure bundle version exists in `policies/bundles/index.json`; run `make policies-sync` to refresh.
 - **Config validation errors**: Run `make config-dump` to inspect resolved configuration and validate against schema.
+- **Benchmark regression**: Compare `tests/go/perf` results to the established baselines (context middleware ~1.5µs, telemetry init ~33µs, config load ~0.2µs on Apple M1 Max). Significant deltas warrant profiling before shipping.
+- **TypeScript benchmark regression**: `tests/ts/perf` benchmarks expect request context hook ≈0.4µs, telemetry init+shutdown ≈1.5µs, and config load ≈2.0µs on Apple M1 Max. If numbers skew materially higher, inspect recent changes to middleware or telemetry startup.
 
 ## Next Steps
 - Customize dashboards per service KPIs.
