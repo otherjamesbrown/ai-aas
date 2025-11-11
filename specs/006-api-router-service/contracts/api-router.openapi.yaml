@@ -1,0 +1,298 @@
+openapi: 3.0.3
+info:
+  title: API Router Service
+  version: 1.0.0
+  description: >-
+    Public and admin interfaces for the API Router Service that routes inference
+    requests, enforces budgets/quotas, and exposes health/diagnostics endpoints.
+servers:
+  - url: https://router.api.ai-aas.dev
+    description: Staging
+  - url: https://router.api.ai-aas.prod
+    description: Production
+security:
+  - ApiKeyAuth: []
+paths:
+  /v1/inference:
+    post:
+      summary: Route an inference request to the configured backend
+      operationId: routeInference
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InferenceRequest'
+      responses:
+        '200':
+          description: Inference completed successfully
+          headers:
+            X-Routing-Backend:
+              description: Identifier of the backend that fulfilled the request
+              schema:
+                type: string
+            X-Routing-Decision:
+              description: Reason code (PRIMARY, FAILOVER, OVERRIDE)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InferenceResponse'
+        '401':
+          description: Authentication failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '402':
+          description: Budget or quota exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitErrorResponse'
+        '429':
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitErrorResponse'
+        '503':
+          description: Router or backend unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/status/healthz:
+    get:
+      summary: Liveness probe
+      operationId: getHealth
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+        '503':
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+  /v1/status/readyz:
+    get:
+      summary: Readiness probe
+      operationId: getReadiness
+      security: []
+      responses:
+        '200':
+          description: Service is ready to accept traffic
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessStatus'
+        '503':
+          description: Service is not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessStatus'
+  /v1/audit/requests/{requestId}:
+    get:
+      summary: Retrieve audit metadata for a specific request
+      operationId: getAuditByRequest
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Audit metadata located
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditRecord'
+        '404':
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  schemas:
+    InferenceRequest:
+      type: object
+      required:
+        - request_id
+        - model
+        - payload
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: Idempotency token supplied by the client
+        model:
+          type: string
+          description: Requested model alias defined in routing policies
+        parameters:
+          type: object
+          additionalProperties: true
+          description: Model-specific inference parameters
+        payload:
+          type: string
+          description: Base64 encoded payload or raw text per content_type
+        content_type:
+          type: string
+          enum: [text/plain, application/json]
+          default: text/plain
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: Optional client metadata tags
+        hmac_signature:
+          type: string
+          description: Optional hex-encoded HMAC signature of the payload
+    InferenceResponse:
+      type: object
+      required:
+        - request_id
+        - output
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        output:
+          type: object
+          description: Model-specific response body
+          additionalProperties: true
+        usage:
+          $ref: '#/components/schemas/UsageSummary'
+        trace_id:
+          type: string
+        span_id:
+          type: string
+    UsageSummary:
+      type: object
+      required:
+        - tokens_input
+        - tokens_output
+      properties:
+        tokens_input:
+          type: integer
+        tokens_output:
+          type: integer
+        latency_ms:
+          type: integer
+        cost_usd:
+          type: number
+          format: float
+        limit_state:
+          type: string
+          enum: [WITHIN_LIMIT, RATE_LIMITED, BUDGET_EXCEEDED]
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - code
+      properties:
+        error:
+          type: string
+          description: Human-readable description
+        code:
+          type: string
+          description: Machine readable code (e.g., AUTH_INVALID)
+        trace_id:
+          type: string
+          description: Correlated trace identifier
+    LimitErrorResponse:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            retry_after_seconds:
+              type: integer
+              description: Minimum wait time before retrying
+            limit_context:
+              type: object
+              additionalProperties: true
+    HealthStatus:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        version:
+          type: string
+        checks:
+          type: array
+          items:
+            $ref: '#/components/schemas/CheckResult'
+    ReadinessStatus:
+      allOf:
+        - $ref: '#/components/schemas/HealthStatus'
+        - type: object
+          properties:
+            ready_backends:
+              type: integer
+            degraded_backends:
+              type: integer
+    CheckResult:
+      type: object
+      required:
+        - name
+        - status
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+          enum: [pass, warn, fail]
+        details:
+          type: string
+        observed_at:
+          type: string
+          format: date-time
+    AuditRecord:
+      type: object
+      required:
+        - request_id
+        - organization_id
+        - api_key_id
+        - action
+        - timestamp
+      properties:
+        request_id:
+          type: string
+        organization_id:
+          type: string
+        api_key_id:
+          type: string
+        action:
+          type: string
+          enum: [REQUEST_ALLOWED, REQUEST_DENIED, POLICY_UPDATE, LIMIT_RESET]
+        decision_reason:
+          type: string
+        limit_state:
+          type: string
+        routing_backend_id:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        timestamp:
+          type: string
+          format: date-time
