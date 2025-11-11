@@ -87,7 +87,7 @@ Stored in Redis; updated atomically per request.
 - **api_key_id** (UUID).  
 - **model** (string).  
 - **backend_id** (UUID).  
-- **tokens_input** / **tokens_output** (int).  
+- **tokens_input**, **tokens_output** (int).  
 - **latency_ms** (int).  
 - **cost_usd** (decimal).  
 - **limit_state** (enum: WITHIN_LIMIT, RATE_LIMITED, BUDGET_EXCEEDED).  

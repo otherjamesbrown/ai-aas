@@ -190,8 +190,8 @@ components:
           type: integer
           minimum: 0
         costEstimateCents:
-          type: number
-          format: decimal
+          type: integer
+          minimum: 0
     UsageTotals:
       type: object
       required: [invocations, costEstimateCents]
@@ -199,8 +199,8 @@ components:
         invocations:
           type: integer
         costEstimateCents:
-          type: number
-          format: decimal
+          type: integer
+          minimum: 0
         inputTokens:
           type: integer
         outputTokens:

@@ -98,9 +98,9 @@ components:
           type: integer
           minimum: 0
         costEstimateCents:
-          type: number
-          format: decimal
-          description: Cost estimate rounded to four decimal places.
+          type: integer
+          minimum: 0
+          description: Cost estimate in cents.
         metadata:
           type: object
           additionalProperties:

@@ -32,7 +32,7 @@
 ## 2. One-Time Setup
 
 ```bash
-git clone git@github.com:otherjamesbrown/ai-aas.git
+git clone git@github.com:<organization>/ai-aas.git
 cd ai-aas
 pnpm install --filter @ai-aas/portal...    # installs portal + shared/ts deps
 pnpm run -r build --filter @ai-aas/shared  # ensure shared design system is built

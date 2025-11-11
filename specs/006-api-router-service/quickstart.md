@@ -11,7 +11,7 @@
 ## Bootstrap
 
 ```bash
-cd /Users/james/Documents/GitHub/ai-aas
+cd /path/to/your/ai-aas
 make services/api-router-service/bootstrap
 ```
 

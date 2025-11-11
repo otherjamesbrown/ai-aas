@@ -31,7 +31,7 @@
 ## 2. One-time Setup
 
 ```bash
-git clone git@github.com:otherjamesbrown/ai-aas.git
+git clone git@github.com:<organization>/ai-aas.git
 cd ai-aas
 SPECIFY_FEATURE=007-analytics-service make analytics-bootstrap
 ```
