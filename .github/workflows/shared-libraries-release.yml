@@ -64,7 +64,7 @@ jobs:
         id: capture_ts_artifact
         run: |
           TS_TARBALL=$(ls release-artifacts/*.tgz)
-          echo "ts_tarball=${TS_TARBALL}" >> "$GITHUB_OUTPUT"
+          echo "ts_tarball=shared/${TS_TARBALL}" >> "$GITHUB_OUTPUT"
           echo "ts_tarball_name=$(basename "${TS_TARBALL}")" >> "$GITHUB_OUTPUT"
         working-directory: shared
 
