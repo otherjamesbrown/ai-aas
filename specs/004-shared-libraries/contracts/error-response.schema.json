@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ai-aas.dev/schemas/shared/error-response.json",
+  "title": "Shared Error Response",
+  "type": "object",
+  "required": [
+    "error",
+    "code",
+    "request_id",
+    "trace_id",
+    "timestamp"
+  ],
+  "properties": {
+    "error": {
+      "type": "string",
+      "description": "Human-readable error message safe for clients."
+    },
+    "code": {
+      "type": "string",
+      "description": "Stable machine-readable error code (e.g., AUTH_ROLE_DENIED)."
+    },
+    "detail": {
+      "type": "string",
+      "description": "Optional field providing additional context (not sensitive)."
+    },
+    "request_id": {
+      "type": "string",
+      "description": "Correlates error to inbound request."
+    },
+    "trace_id": {
+      "type": "string",
+      "description": "Tracing identifier for distributed tracing systems."
+    },
+    "actor": {
+      "type": "object",
+      "description": "Authenticated actor metadata captured by auth middleware.",
+      "required": ["subject", "roles"],
+      "properties": {
+        "subject": { "type": "string" },
+        "roles": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        }
+      }
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 timestamp when the error was generated."
+    }
+  },
+  "additionalProperties": false
+}
+

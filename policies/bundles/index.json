@@ -1,0 +1,19 @@
+{
+  "bundles": [
+    {
+      "id": "service-template",
+      "description": "Baseline policy bundle for the shared libraries sample service.",
+      "repo": "oci://registry.ai-aas.dev/policies/service-template",
+      "version": "0.0.0",
+      "targets": [
+        "go",
+        "typescript"
+      ]
+    }
+  ],
+  "metadata": {
+    "generated_for": "004-shared-libraries",
+    "last_updated": "2025-11-11T00:00:00Z"
+  }
+}
+

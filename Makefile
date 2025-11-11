@@ -7,6 +7,12 @@ SERVICE ?= all
 NAME ?=
 RUN_ID ?= $(shell date +%s)
 
+SHARED_GO_DIR := $(ROOT_DIR)/shared/go
+SHARED_TS_DIR := $(ROOT_DIR)/shared/ts
+SHARED_TS_NODE_MODULES := $(SHARED_TS_DIR)/node_modules
+SHARED_TS_TEST_DIR := $(ROOT_DIR)/tests/ts/unit
+SHARED_TS_TEST_NODE_MODULES := $(SHARED_TS_TEST_DIR)/node_modules
+
 include configs/tool-versions.mk
 
 export GOTOOLCHAIN := $(GO_TOOLCHAIN)
@@ -48,6 +54,64 @@ define RUN_SERVICE_TARGET
 		$(MAKE) --no-print-directory -C services/$(SERVICE) $1; \
 	fi
 endef
+
+.PHONY: shared-go-build
+shared-go-build: ## Build shared Go libraries
+	@echo ">> Building shared Go libraries"
+	@cd $(SHARED_GO_DIR) && go build ./...
+
+.PHONY: shared-go-test
+shared-go-test: ## Run Go unit tests for shared libraries
+	@echo ">> Testing shared Go libraries"
+	@cd $(SHARED_GO_DIR) && go test ./...
+
+.PHONY: shared-go-lint
+shared-go-lint: ## Run go vet for shared libraries
+	@echo ">> Vetting shared Go libraries"
+	@cd $(SHARED_GO_DIR) && go vet ./...
+
+.PHONY: shared-go-check
+shared-go-check: shared-go-build shared-go-test shared-go-lint ## Run build/test/vet for shared Go libraries
+
+$(SHARED_TS_NODE_MODULES):
+	@echo ">> Installing dependencies for shared TypeScript libraries"
+	@cd $(SHARED_TS_DIR) && npm install
+
+$(SHARED_TS_TEST_NODE_MODULES):
+	@echo ">> Installing dependencies for shared TypeScript unit tests"
+	@cd $(SHARED_TS_TEST_DIR) && npm install
+
+.PHONY: shared-ts-install
+shared-ts-install: $(SHARED_TS_NODE_MODULES) $(SHARED_TS_TEST_NODE_MODULES) ## Install dependencies for shared TypeScript libraries and tests
+
+.PHONY: shared-ts-build
+shared-ts-build: shared-ts-install ## Build shared TypeScript libraries
+	@echo ">> Building shared TypeScript libraries"
+	@cd $(SHARED_TS_DIR) && npm run build
+
+.PHONY: shared-ts-test
+shared-ts-test: shared-ts-install ## Run TypeScript unit tests for shared libraries
+	@echo ">> Running shared TypeScript unit tests"
+	@cd $(SHARED_TS_DIR) && npm run test
+	@cd $(SHARED_TS_TEST_DIR) && npm run test
+
+.PHONY: shared-ts-lint
+shared-ts-lint: shared-ts-install ## Run ESLint against shared TypeScript sources
+	@echo ">> Linting shared TypeScript libraries"
+	@cd $(SHARED_TS_DIR) && npm run lint
+	@cd $(SHARED_TS_TEST_DIR) && npm run lint
+
+.PHONY: shared-ts-check
+shared-ts-check: shared-ts-build shared-ts-test shared-ts-lint ## Run build/test/lint for shared TypeScript libraries
+
+.PHONY: shared-build
+shared-build: shared-go-build shared-ts-build ## Build all shared libraries
+
+.PHONY: shared-test
+shared-test: shared-go-test shared-ts-test ## Test all shared libraries
+
+.PHONY: shared-check
+shared-check: shared-go-check shared-ts-check ## Run checks for shared Go and TypeScript libraries
 
 .PHONY: build
 build: ## Build Go services (SERVICE=all|<name>)
@@ -103,6 +167,10 @@ check: ## Run format, lint, security, and tests (SERVICE=all|<name>, METRICS=tru
 		if ! $(MAKE) --no-print-directory -C services/$(SERVICE) check; then \
 			status=failure; \
 		fi; \
+	fi; \
+	echo ">> Running shared library checks"; \
+	if ! $(MAKE) --no-print-directory shared-check; then \
+		status=failure; \
 	fi; \
 	if [ "$(METRICS)" = "true" ]; then \
 		echo "Collecting metrics with run id $(RUN_ID) (status=$$status)"; \

@@ -12,6 +12,11 @@ if ! command -v act >/dev/null 2>&1; then
   exit 1
 fi
 
+if [[ "${RUN_SHARED_CHECK:-false}" == "true" ]]; then
+  echo "Running shared library checks via 'make shared-check' before executing workflow"
+  make shared-check
+fi
+
 WORKFLOW_FILE="${WORKFLOW_FILE:-.github/workflows/${WORKFLOW}.yml}"
 IMAGE="${ACT_IMAGE:-ghcr.io/catthehacker/ubuntu:act-latest}"
 CONTAINER_ARCH="${ACT_ARCH:-linux/amd64}"

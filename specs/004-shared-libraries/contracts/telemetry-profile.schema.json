@@ -1,0 +1,119 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ai-aas.dev/schemas/shared/telemetry-profile.json",
+  "title": "Telemetry Configuration Profile",
+  "type": "object",
+  "required": [
+    "service_name",
+    "otel_exporter",
+    "log",
+    "metrics",
+    "tracing"
+  ],
+  "properties": {
+    "service_name": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$",
+      "description": "Kubernetes-friendly identifier used for telemetry namespaces."
+    },
+    "otel_exporter": {
+      "type": "object",
+      "required": ["endpoint", "protocol"],
+      "properties": {
+        "endpoint": {
+          "type": "string",
+          "format": "uri",
+          "description": "OTLP endpoint (grpc or http/protobuf)."
+        },
+        "protocol": {
+          "type": "string",
+          "enum": ["grpc", "http/protobuf"]
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Optional auth headers for exporter."
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 5000,
+          "default": 2000
+        }
+      }
+    },
+    "log": {
+      "type": "object",
+      "required": ["level", "required_fields"],
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["debug", "info", "warn", "error"]
+        },
+        "required_fields": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 3,
+          "description": "Fields enforced by middleware (e.g., request_id, trace_id, actor.subject)."
+        },
+        "sampling_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 1
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "required": ["histograms"],
+      "properties": {
+        "histograms": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "buckets"],
+            "properties": {
+              "name": { "type": "string" },
+              "buckets": {
+                "type": "array",
+                "items": { "type": "number" },
+                "minItems": 3
+              }
+            }
+          }
+        },
+        "resource_attributes": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "tracing": {
+      "type": "object",
+      "required": ["sampler"],
+      "properties": {
+        "sampler": {
+          "type": "string",
+          "enum": ["always_on", "always_off", "ratio"]
+        },
+        "sampler_arg": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.1
+        },
+        "propagators": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["tracecontext", "baggage", "b3", "jaeger"]
+          },
+          "default": ["tracecontext", "baggage"]
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}
+

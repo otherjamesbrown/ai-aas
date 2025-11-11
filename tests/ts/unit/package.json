@@ -1,0 +1,23 @@
+{
+  "name": "@ai-aas/shared-tests",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint --ext .ts src",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ai-aas/shared": "file:../../../shared/ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "@typescript-eslint/eslint-plugin": "^6.16.0",
+    "@typescript-eslint/parser": "^6.16.0",
+    "eslint": "^8.57.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.2.0"
+  }
+}
+
