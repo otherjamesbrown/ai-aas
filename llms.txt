@@ -32,6 +32,11 @@ This file highlights the most relevant specifications, plans, and external refer
 - [003 Research & Data Model](./specs/003-database-schemas/research.md), (./specs/003-database-schemas/data-model.md): Migration tool evaluation, entity catalog (organizations, usage events, rollups, audit log).
 - [003 Contracts](./specs/003-database-schemas/contracts/schema-management.yaml): Schema management API surface for automation.
 - [DB Migrations Runbook](./docs/runbooks/migrations.md): Operational playbook for approvals, telemetry, smoke tests, remote DB usage.
+- [Shared Libraries Quickstart](./specs/004-shared-libraries/quickstart.md): Integration flow for Go/TS consumers, verification scripts, performance benchmark commands.
+- [Shared Libraries Tasks](./specs/004-shared-libraries/tasks.md): Phase backlog covering setup through pilot adoption.
+- [Shared Libraries Runbook](./docs/runbooks/shared-libraries.md): Telemetry/health troubleshooting, version skew guidance, pilot follow-ups.
+- [Shared Libraries Performance Benchmarks](./docs/perf/shared-libraries.md): Baselines and CI artifact references.
+- [Shared Libraries Pilot Plan](./docs/adoption/pilot-plan.md) & [Results](./docs/adoption/pilot-results.md): Phase 7 adoption strategy and measurement template.
 - [Analytics Transforms](./analytics/transforms/): Hourly + daily rollup SQL, adapter config for default vs warehouse targets.
 - [Analytics Tests](./analytics/tests/): Reconciliation checks ensuring rollups match raw usage (hourly + daily, configurable test window).
 - [Remote CI Runbook](./docs/runbooks/ci-remote.md): Step-by-step guide for `make ci-remote`, expected SLA, troubleshooting.

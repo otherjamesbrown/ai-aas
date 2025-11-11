@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 func TestInitValidation(t *testing.T) {
@@ -12,13 +14,35 @@ func TestInitValidation(t *testing.T) {
 	}
 }
 
-func TestBuildClientUnsupported(t *testing.T) {
-	if _, err := Init(context.Background(), Config{
+func TestInitUnsupportedProtocolFallsBack(t *testing.T) {
+	TelemetryExporterFailures().Reset()
+
+	provider, err := Init(context.Background(), Config{
 		ServiceName: "svc",
 		Endpoint:    "collector:4317",
 		Protocol:    "ws",
-	}); err == nil {
-		t.Fatalf("expected unsupported protocol error")
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !provider.Fallback() {
+		t.Fatalf("expected fallback provider")
+	}
+
+	wsMetric, err := TelemetryExporterFailures().GetMetricWithLabelValues("svc", "ws")
+	if err != nil {
+		t.Fatalf("expected ws metric: %v", err)
+	}
+	if v := testutil.ToFloat64(wsMetric); v < 1 {
+		t.Fatalf("expected ws failure count >= 1, got %f", v)
+	}
+
+	degradedMetric, err := TelemetryExporterFailures().GetMetricWithLabelValues("svc", "degraded")
+	if err != nil {
+		t.Fatalf("expected degraded metric: %v", err)
+	}
+	if v := testutil.ToFloat64(degradedMetric); v < 1 {
+		t.Fatalf("expected degraded failure count >= 1, got %f", v)
 	}
 }
 

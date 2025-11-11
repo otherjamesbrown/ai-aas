@@ -102,13 +102,13 @@
 
 **Purpose**: Final refinements, performance validation, and operational readiness.
 
-- [ ] T037 [P] Finalize Grafana dashboards and alert templates in `dashboards/grafana/shared-libraries.json` and `dashboards/alerts/shared-libraries.yaml`
-- [ ] T038 Harden telemetry fallback logic and add chaos tests in `tests/go/integration/telemetry_failover_test.go` and `tests/ts/integration/telemetry-failover.spec.ts`
-- [ ] T039 [P] Produce troubleshooting and runbook docs in `docs/runbooks/shared-libraries.md`
-- [ ] T040 Conduct quickstart validation dry-run and capture findings in `specs/004-shared-libraries/quickstart.md`
-- [ ] T041 [P] Implement Go performance benchmark suite ensuring ≤5% overhead in `tests/go/perf/middleware_bench_test.go`
-- [ ] T042 [P] Implement TypeScript performance benchmark suite ensuring ≤5% overhead in `tests/ts/perf/middleware.bench.spec.ts`
-- [ ] T043 Integrate benchmark gating into CI and publish results in `docs/perf/shared-libraries.md`
+- [x] T037 [P] Finalize Grafana dashboards and alert templates in `dashboards/grafana/shared-libraries.json` and `dashboards/alerts/shared-libraries.yaml`
+- [x] T038 Harden telemetry fallback logic and add chaos tests in `tests/go/integration/telemetry_failover_test.go` and `tests/ts/integration/telemetry-failover.spec.ts`
+- [x] T039 [P] Produce troubleshooting and runbook docs in `docs/runbooks/shared-libraries.md`
+- [x] T040 Conduct quickstart validation dry-run and capture findings in `specs/004-shared-libraries/quickstart.md`
+- [x] T041 [P] Implement Go performance benchmark suite ensuring ≤5% overhead in `tests/go/perf/middleware_bench_test.go`
+- [x] T042 [P] Implement TypeScript performance benchmark suite ensuring ≤5% overhead in `tests/ts/perf/middleware.bench.spec.ts`
+- [x] T043 Integrate benchmark gating into CI and publish results in `docs/perf/shared-libraries.md`
 
 ---
 
@@ -116,9 +116,9 @@
 
 **Purpose**: Validate real-service adoption and quantify boilerplate reduction per success criteria.
 
-- [ ] T044 Coordinate pilot adoption with two existing services and capture implementation plan in `docs/adoption/pilot-plan.md`
+- [x] T044 Coordinate pilot adoption with two existing services and capture implementation plan in `docs/adoption/pilot-plan.md`
 - [ ] T045 [P] Measure and document boilerplate reduction (≥30%) across pilots in `docs/adoption/pilot-results.md`
-- [ ] T046 [P] Update `llms.txt` and `docs/runbooks/shared-libraries.md` with pilot lessons and version skew mitigation guidance
+- [x] T046 [P] Update `llms.txt` and `docs/runbooks/shared-libraries.md` with pilot lessons and version skew mitigation guidance
 
 ---
 

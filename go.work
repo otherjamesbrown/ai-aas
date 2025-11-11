@@ -10,6 +10,7 @@ use (
 	./tests/go/unit
 	./tests/go/integration
 	./tests/go/contract
+	./tests/go/perf
 	./samples/service-template/go
 	./shared/go
 	./db/tools/migrate

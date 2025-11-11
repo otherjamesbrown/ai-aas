@@ -7,12 +7,19 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   test: {
     include: ['src/**/*.spec.ts'],
-    environment: 'node'
+    environment: 'node',
   },
   resolve: {
-    alias: {
-      '@ai-aas/shared': path.resolve(rootDir, '../../shared/ts/src')
-    }
-  }
+    alias: [
+      {
+        find: '@ai-aas/shared/observability',
+        replacement: path.resolve(rootDir, '../../shared/ts/src/observability/index.ts'),
+      },
+      {
+        find: '@ai-aas/shared',
+        replacement: path.resolve(rootDir, '../../shared/ts/src'),
+      },
+    ],
+  },
 });
 

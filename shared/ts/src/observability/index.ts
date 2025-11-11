@@ -7,24 +7,47 @@ import { NodeSDK } from '@opentelemetry/sdk-node';
 import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions';
 
 import type { TelemetryConfig } from '../config';
+import { incrementTelemetryExporterFailure } from './metrics';
 
 diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
+
+const EXPORTER_TIMEOUT_MS = 1_000;
+
+const fallbackTelemetry: Telemetry = {
+  async shutdown() {
+    // no-op when telemetry exporters are unavailable.
+  },
+};
 
 export interface Telemetry {
   shutdown(): Promise<void>;
 }
 
 export async function startTelemetry(config: TelemetryConfig & { serviceName: string; environment?: string }): Promise<Telemetry> {
+  if (config.protocol !== 'grpc' && config.protocol !== 'http') {
+    incrementTelemetryExporterFailure(config.serviceName, config.protocol);
+    incrementTelemetryExporterFailure(config.serviceName, 'degraded');
+    return fallbackTelemetry;
+  }
+  return startTelemetryInternal(config, true);
+}
+
+async function startTelemetryInternal(
+  config: TelemetryConfig & { serviceName: string; environment?: string },
+  allowHttpFallback: boolean,
+): Promise<Telemetry> {
   const exporter =
     config.protocol === 'http'
       ? new OTLPHttpExporter({
           url: buildHttpUrl(config),
           headers: config.headers,
+          timeoutMillis: EXPORTER_TIMEOUT_MS,
         })
       : new OTLPGrpcExporter({
           url: config.endpoint,
           metadata: buildMetadata(config.headers),
           credentials: config.insecure ? credentials.createInsecure() : credentials.createSsl(),
+          timeoutMillis: EXPORTER_TIMEOUT_MS,
         });
 
   const sdk = new NodeSDK({
@@ -35,13 +58,29 @@ export async function startTelemetry(config: TelemetryConfig & { serviceName: st
     }),
   });
 
-  await sdk.start();
+  try {
+    await sdk.start();
+    return {
+      shutdown: async () => {
+        await sdk.shutdown();
+      },
+    };
+  } catch (error) {
+    diag.error('Failed to start telemetry exporter', error as Error);
+    incrementTelemetryExporterFailure(config.serviceName, config.protocol);
+    await sdk.shutdown().catch(() => undefined);
 
-  return {
-    shutdown: async () => {
-      await sdk.shutdown();
-    },
-  };
+    if (config.protocol === 'grpc' && allowHttpFallback) {
+      const httpConfig = {
+        ...config,
+        protocol: 'http' as const,
+      };
+      return startTelemetryInternal(httpConfig, false);
+    }
+
+    incrementTelemetryExporterFailure(config.serviceName, 'degraded');
+    return fallbackTelemetry;
+  }
 }
 
 function buildMetadata(headers: Record<string, string>): Metadata | undefined {
@@ -63,4 +102,10 @@ function buildHttpUrl(config: TelemetryConfig): string {
   const base = `${scheme}://${config.endpoint}`.replace(/\/+$/, '');
   return `${base}/v1/traces`;
 }
+
+export {
+  telemetryExporterFailures,
+  resetTelemetryMetrics,
+  telemetryExporterFailureCount,
+} from './metrics';
 
