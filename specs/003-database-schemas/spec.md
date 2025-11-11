@@ -107,7 +107,7 @@ Analytics consumers can query usage trends efficiently using a time-based model 
 - **FR-003**: Provide a development seed data set enabling login, budgets, a sample model, and basic analytics.
 - **FR-004**: Provide time-based storage and rollups for usage analytics supporting trend queries and dashboards.
 - **FR-005**: Provide naming conventions and soft-delete patterns where applicable for safer evolution.
-- **FR-006**: Provide guidance to keep sensitive values hashed or encrypted and never stored in plaintext.
+- **FR-006**: Provide guidance to keep sensitive values hashed or encrypted (e.g., HMAC-SHA256 with an environment-supplied key) and never stored in plaintext.
 - **FR-007**: Provide performance-oriented indexing and partitioning guidance for common access paths (e.g., by time, organization, and model).
 - **FR-008**: Provide schema documentation artifacts (entity dictionary, ERD, change log) generated or updated with each migration batch.
 - **FR-009**: Provide migration guardrails including pre/post checks, dry-run capability, and automated verification scripts for critical tables.
@@ -126,7 +126,7 @@ Analytics consumers can query usage trends efficiently using a time-based model 
 - **NFR-006**: Seed data scripts can be safely rerun without creating duplicates or conflicting identifiers.
 
 **Security & Compliance**
-- **NFR-007**: All sensitive columns (API secrets, user identifiers) are stored hashed or encrypted in accordance with data classification.
+- **NFR-007**: All sensitive columns (API secrets, user identifiers) are stored hashed or encrypted using keyed primitives (e.g., HMAC-SHA256 with `EMAIL_HASH_KEY`) in accordance with data classification.
 - **NFR-008**: Audit tables capture actor, action, timestamp, and context for all schema changes and privileged data updates.
 - **NFR-009**: Data retention policies enforce purge or anonymization of PII within 30 days of request, including analytics rollups.
 

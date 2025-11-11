@@ -1,0 +1,563 @@
+﻿2025-11-11T10:49:23.6616605Z Current runner version: '2.329.0'
+2025-11-11T10:49:23.6640217Z ##[group]Runner Image Provisioner
+2025-11-11T10:49:23.6641314Z Hosted Compute Agent
+2025-11-11T10:49:23.6641996Z Version: 20251016.436
+2025-11-11T10:49:23.6642559Z Commit: 8ab8ac8bfd662a3739dab9fe09456aba92132568
+2025-11-11T10:49:23.6643258Z Build Date: 2025-10-15T20:44:12Z
+2025-11-11T10:49:23.6643928Z ##[endgroup]
+2025-11-11T10:49:23.6644406Z ##[group]Operating System
+2025-11-11T10:49:23.6644963Z Ubuntu
+2025-11-11T10:49:23.6645502Z 24.04.3
+2025-11-11T10:49:23.6645957Z LTS
+2025-11-11T10:49:23.6646424Z ##[endgroup]
+2025-11-11T10:49:23.6646996Z ##[group]Runner Image
+2025-11-11T10:49:23.6647572Z Image: ubuntu-24.04
+2025-11-11T10:49:23.6648072Z Version: 20251102.99.1
+2025-11-11T10:49:23.6649125Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20251102.99/images/ubuntu/Ubuntu2404-Readme.md
+2025-11-11T10:49:23.6650832Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20251102.99
+2025-11-11T10:49:23.6651875Z ##[endgroup]
+2025-11-11T10:49:23.6654327Z ##[group]GITHUB_TOKEN Permissions
+2025-11-11T10:49:23.6656531Z Actions: write
+2025-11-11T10:49:23.6657094Z Attestations: write
+2025-11-11T10:49:23.6657611Z Checks: write
+2025-11-11T10:49:23.6658148Z Contents: write
+2025-11-11T10:49:23.6658629Z Deployments: write
+2025-11-11T10:49:23.6659126Z Discussions: write
+2025-11-11T10:49:23.6659652Z Issues: write
+2025-11-11T10:49:23.6660104Z Metadata: read
+2025-11-11T10:49:23.6660985Z Models: read
+2025-11-11T10:49:23.6661444Z Packages: write
+2025-11-11T10:49:23.6662036Z Pages: write
+2025-11-11T10:49:23.6662487Z PullRequests: write
+2025-11-11T10:49:23.6662996Z RepositoryProjects: write
+2025-11-11T10:49:23.6663591Z SecurityEvents: write
+2025-11-11T10:49:23.6664236Z Statuses: write
+2025-11-11T10:49:23.6664711Z ##[endgroup]
+2025-11-11T10:49:23.6666856Z Secret source: Actions
+2025-11-11T10:49:23.6667552Z Prepare workflow directory
+2025-11-11T10:49:23.7102173Z Prepare all required actions
+2025-11-11T10:49:23.7139117Z Getting action download info
+2025-11-11T10:49:24.0738548Z Download action repository 'actions/checkout@v4' (SHA:08eba0b27e820071cde6df949e0beb9ba4906955)
+2025-11-11T10:49:24.1668348Z Download action repository 'actions/setup-go@v5' (SHA:d35c59abb061a4a6fb18e82ac0862c26744d6ab5)
+2025-11-11T10:49:25.0035923Z Complete job name: guardrails
+2025-11-11T10:49:25.0566062Z ##[group]Checking docker version
+2025-11-11T10:49:25.0578728Z ##[command]/usr/bin/docker version --format '{{.Server.APIVersion}}'
+2025-11-11T10:49:25.8990227Z '1.48'
+2025-11-11T10:49:25.9003737Z Docker daemon API version: '1.48'
+2025-11-11T10:49:25.9005081Z ##[command]/usr/bin/docker version --format '{{.Client.APIVersion}}'
+2025-11-11T10:49:25.9219558Z '1.48'
+2025-11-11T10:49:25.9235255Z Docker client API version: '1.48'
+2025-11-11T10:49:25.9240378Z ##[endgroup]
+2025-11-11T10:49:25.9244213Z ##[group]Clean up resources from previous jobs
+2025-11-11T10:49:25.9249803Z ##[command]/usr/bin/docker ps --all --quiet --no-trunc --filter "label=bef57b"
+2025-11-11T10:49:25.9389328Z ##[command]/usr/bin/docker network prune --force --filter "label=bef57b"
+2025-11-11T10:49:25.9518895Z ##[endgroup]
+2025-11-11T10:49:25.9520008Z ##[group]Create local container network
+2025-11-11T10:49:25.9531534Z ##[command]/usr/bin/docker network create --label bef57b github_network_70bdf0f7eed54bc180086a068ef7d081
+2025-11-11T10:49:26.0062778Z 48afb51885682f34fb670747cbd1331fed7b8b3cba12a56cab87804a70d2eb70
+2025-11-11T10:49:26.0089730Z ##[endgroup]
+2025-11-11T10:49:26.0116721Z ##[group]Starting postgres service container
+2025-11-11T10:49:26.0136831Z ##[command]/usr/bin/docker pull postgres:15-alpine
+2025-11-11T10:49:26.7427483Z 15-alpine: Pulling from library/postgres
+2025-11-11T10:49:26.9348867Z 2d35ebdb57d9: Pulling fs layer
+2025-11-11T10:49:26.9349460Z d7cf304fb91a: Pulling fs layer
+2025-11-11T10:49:26.9349934Z 01a8e1e8a6d3: Pulling fs layer
+2025-11-11T10:49:26.9350400Z c8d6a201b2ea: Pulling fs layer
+2025-11-11T10:49:26.9351178Z 665050181beb: Pulling fs layer
+2025-11-11T10:49:26.9352141Z e7d8b5a29e19: Pulling fs layer
+2025-11-11T10:49:26.9352568Z b7a5b6d84454: Pulling fs layer
+2025-11-11T10:49:26.9353036Z 8e7af31e0abd: Pulling fs layer
+2025-11-11T10:49:26.9353402Z 0a297d5cb757: Pulling fs layer
+2025-11-11T10:49:26.9353700Z 78753f2bcd40: Pulling fs layer
+2025-11-11T10:49:26.9353988Z 9229d0c336e2: Pulling fs layer
+2025-11-11T10:49:26.9354242Z c8d6a201b2ea: Waiting
+2025-11-11T10:49:26.9354471Z 665050181beb: Waiting
+2025-11-11T10:49:26.9354713Z e7d8b5a29e19: Waiting
+2025-11-11T10:49:26.9355017Z b7a5b6d84454: Waiting
+2025-11-11T10:49:26.9355252Z 8e7af31e0abd: Waiting
+2025-11-11T10:49:26.9355476Z 0a297d5cb757: Waiting
+2025-11-11T10:49:26.9355684Z 9229d0c336e2: Waiting
+2025-11-11T10:49:26.9355897Z 78753f2bcd40: Waiting
+2025-11-11T10:49:27.2649973Z 01a8e1e8a6d3: Verifying Checksum
+2025-11-11T10:49:27.2650968Z 01a8e1e8a6d3: Download complete
+2025-11-11T10:49:27.2709890Z d7cf304fb91a: Verifying Checksum
+2025-11-11T10:49:27.2711129Z d7cf304fb91a: Download complete
+2025-11-11T10:49:27.3146395Z 2d35ebdb57d9: Verifying Checksum
+2025-11-11T10:49:27.3153158Z 2d35ebdb57d9: Download complete
+2025-11-11T10:49:27.4466903Z 2d35ebdb57d9: Pull complete
+2025-11-11T10:49:27.4705908Z d7cf304fb91a: Pull complete
+2025-11-11T10:49:27.5068150Z 01a8e1e8a6d3: Pull complete
+2025-11-11T10:49:27.5221725Z 665050181beb: Verifying Checksum
+2025-11-11T10:49:27.5227832Z 665050181beb: Download complete
+2025-11-11T10:49:27.5229692Z c8d6a201b2ea: Verifying Checksum
+2025-11-11T10:49:27.5230135Z c8d6a201b2ea: Download complete
+2025-11-11T10:49:27.5337996Z c8d6a201b2ea: Pull complete
+2025-11-11T10:49:27.5549954Z 665050181beb: Pull complete
+2025-11-11T10:49:27.7669320Z b7a5b6d84454: Verifying Checksum
+2025-11-11T10:49:27.7669843Z b7a5b6d84454: Download complete
+2025-11-11T10:49:27.7787409Z 8e7af31e0abd: Download complete
+2025-11-11T10:49:28.0137393Z 0a297d5cb757: Verifying Checksum
+2025-11-11T10:49:28.0138648Z 0a297d5cb757: Download complete
+2025-11-11T10:49:28.0220020Z 78753f2bcd40: Verifying Checksum
+2025-11-11T10:49:28.0220489Z 78753f2bcd40: Download complete
+2025-11-11T10:49:28.2672872Z 9229d0c336e2: Verifying Checksum
+2025-11-11T10:49:28.2673417Z 9229d0c336e2: Download complete
+2025-11-11T10:49:28.4426833Z e7d8b5a29e19: Verifying Checksum
+2025-11-11T10:49:28.4427346Z e7d8b5a29e19: Download complete
+2025-11-11T10:49:30.8130968Z e7d8b5a29e19: Pull complete
+2025-11-11T10:49:30.8253229Z b7a5b6d84454: Pull complete
+2025-11-11T10:49:30.8383080Z 8e7af31e0abd: Pull complete
+2025-11-11T10:49:30.8488885Z 0a297d5cb757: Pull complete
+2025-11-11T10:49:30.8604045Z 78753f2bcd40: Pull complete
+2025-11-11T10:49:30.8708966Z 9229d0c336e2: Pull complete
+2025-11-11T10:49:30.8750465Z Digest: sha256:64583b3cb4f2010277bdd9749456de78e5c36f8956466ba14b0b96922e510950
+2025-11-11T10:49:30.8769130Z Status: Downloaded newer image for postgres:15-alpine
+2025-11-11T10:49:30.8819168Z docker.io/library/postgres:15-alpine
+2025-11-11T10:49:30.8882961Z ##[command]/usr/bin/docker create --name 3410cfa7f011416f9a9f8356834fb1e8_postgres15alpine_e805af --label bef57b --network github_network_70bdf0f7eed54bc180086a068ef7d081 --network-alias postgres -p 5432:5432 --health-cmd "pg_isready -U postgres" --health-interval 10s --health-timeout 5s --health-retries 5 -e "POSTGRES_USER=postgres" -e "POSTGRES_PASSWORD=postgres" -e "POSTGRES_DB=ai_aas" -e GITHUB_ACTIONS=true -e CI=true postgres:15-alpine
+2025-11-11T10:49:30.9183840Z 7551f3b7260003179604f331bd3dc3f366b62b6ac8f1e48415260a668d402d58
+2025-11-11T10:49:30.9207460Z ##[command]/usr/bin/docker start 7551f3b7260003179604f331bd3dc3f366b62b6ac8f1e48415260a668d402d58
+2025-11-11T10:49:31.6291129Z 7551f3b7260003179604f331bd3dc3f366b62b6ac8f1e48415260a668d402d58
+2025-11-11T10:49:31.6315126Z ##[command]/usr/bin/docker ps --all --filter id=7551f3b7260003179604f331bd3dc3f366b62b6ac8f1e48415260a668d402d58 --filter status=running --no-trunc --format "{{.ID}} {{.Status}}"
+2025-11-11T10:49:31.6446365Z 7551f3b7260003179604f331bd3dc3f366b62b6ac8f1e48415260a668d402d58 Up Less than a second (health: starting)
+2025-11-11T10:49:31.6469906Z ##[command]/usr/bin/docker port 7551f3b7260003179604f331bd3dc3f366b62b6ac8f1e48415260a668d402d58
+2025-11-11T10:49:31.6601392Z 5432/tcp -> 0.0.0.0:5432
+2025-11-11T10:49:31.6601783Z 5432/tcp -> [::]:5432
+2025-11-11T10:49:31.6659122Z ##[endgroup]
+2025-11-11T10:49:31.6668104Z ##[group]Waiting for all services to be ready
+2025-11-11T10:49:31.6681911Z ##[command]/usr/bin/docker inspect --format="{{if .Config.Healthcheck}}{{print .State.Health.Status}}{{end}}" 7551f3b7260003179604f331bd3dc3f366b62b6ac8f1e48415260a668d402d58
+2025-11-11T10:49:31.6859615Z starting
+2025-11-11T10:49:31.6884828Z postgres service is starting, waiting 2 seconds before checking again.
+2025-11-11T10:49:33.6889620Z ##[command]/usr/bin/docker inspect --format="{{if .Config.Healthcheck}}{{print .State.Health.Status}}{{end}}" 7551f3b7260003179604f331bd3dc3f366b62b6ac8f1e48415260a668d402d58
+2025-11-11T10:49:33.7016022Z starting
+2025-11-11T10:49:33.7028826Z postgres service is starting, waiting 3 seconds before checking again.
+2025-11-11T10:49:37.3771593Z ##[command]/usr/bin/docker inspect --format="{{if .Config.Healthcheck}}{{print .State.Health.Status}}{{end}}" 7551f3b7260003179604f331bd3dc3f366b62b6ac8f1e48415260a668d402d58
+2025-11-11T10:49:37.3893684Z starting
+2025-11-11T10:49:37.3909538Z postgres service is starting, waiting 9 seconds before checking again.
+2025-11-11T10:49:46.5431560Z ##[command]/usr/bin/docker inspect --format="{{if .Config.Healthcheck}}{{print .State.Health.Status}}{{end}}" 7551f3b7260003179604f331bd3dc3f366b62b6ac8f1e48415260a668d402d58
+2025-11-11T10:49:46.5551840Z healthy
+2025-11-11T10:49:46.5567500Z postgres service is healthy.
+2025-11-11T10:49:46.5568215Z ##[endgroup]
+2025-11-11T10:49:46.5816490Z ##[group]Run actions/checkout@v4
+2025-11-11T10:49:46.5817017Z with:
+2025-11-11T10:49:46.5817223Z   repository: otherjamesbrown/ai-aas
+2025-11-11T10:49:46.5817609Z   token: ***
+2025-11-11T10:49:46.5817781Z   ssh-strict: true
+2025-11-11T10:49:46.5817958Z   ssh-user: git
+2025-11-11T10:49:46.5818148Z   persist-credentials: true
+2025-11-11T10:49:46.5818368Z   clean: true
+2025-11-11T10:49:46.5818549Z   sparse-checkout-cone-mode: true
+2025-11-11T10:49:46.5818780Z   fetch-depth: 1
+2025-11-11T10:49:46.5818946Z   fetch-tags: false
+2025-11-11T10:49:46.5819126Z   show-progress: true
+2025-11-11T10:49:46.5819305Z   lfs: false
+2025-11-11T10:49:46.5819458Z   submodules: false
+2025-11-11T10:49:46.5819638Z   set-safe-directory: true
+2025-11-11T10:49:46.5819996Z env:
+2025-11-11T10:49:46.5820154Z   GO111MODULE: on
+2025-11-11T10:49:46.5820321Z ##[endgroup]
+2025-11-11T10:49:46.6883247Z Syncing repository: otherjamesbrown/ai-aas
+2025-11-11T10:49:46.6884501Z ##[group]Getting Git version info
+2025-11-11T10:49:46.6884900Z Working directory is '/home/runner/work/ai-aas/ai-aas'
+2025-11-11T10:49:46.6885399Z [command]/usr/bin/git version
+2025-11-11T10:49:46.6949480Z git version 2.51.2
+2025-11-11T10:49:46.6976244Z ##[endgroup]
+2025-11-11T10:49:46.6991489Z Temporarily overriding HOME='/home/runner/work/_temp/f23e14bd-c3f0-43a6-b91f-05627c632d37' before making global git config changes
+2025-11-11T10:49:46.6992757Z Adding repository directory to the temporary git global config as a safe directory
+2025-11-11T10:49:46.6997691Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/ai-aas/ai-aas
+2025-11-11T10:49:46.7033990Z Deleting the contents of '/home/runner/work/ai-aas/ai-aas'
+2025-11-11T10:49:46.7037580Z ##[group]Initializing the repository
+2025-11-11T10:49:46.7042011Z [command]/usr/bin/git init /home/runner/work/ai-aas/ai-aas
+2025-11-11T10:49:46.7144457Z hint: Using 'master' as the name for the initial branch. This default branch name
+2025-11-11T10:49:46.7145335Z hint: is subject to change. To configure the initial branch name to use in all
+2025-11-11T10:49:46.7146040Z hint: of your new repositories, which will suppress this warning, call:
+2025-11-11T10:49:46.7146380Z hint:
+2025-11-11T10:49:46.7146645Z hint: 	git config --global init.defaultBranch <name>
+2025-11-11T10:49:46.7146918Z hint:
+2025-11-11T10:49:46.7147179Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2025-11-11T10:49:46.7148377Z hint: 'development'. The just-created branch can be renamed via this command:
+2025-11-11T10:49:46.7148850Z hint:
+2025-11-11T10:49:46.7149044Z hint: 	git branch -m <name>
+2025-11-11T10:49:46.7149246Z hint:
+2025-11-11T10:49:46.7149689Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2025-11-11T10:49:46.7150756Z Initialized empty Git repository in /home/runner/work/ai-aas/ai-aas/.git/
+2025-11-11T10:49:46.7160814Z [command]/usr/bin/git remote add origin https://github.com/otherjamesbrown/ai-aas
+2025-11-11T10:49:46.7192768Z ##[endgroup]
+2025-11-11T10:49:46.7193378Z ##[group]Disabling automatic garbage collection
+2025-11-11T10:49:46.7197754Z [command]/usr/bin/git config --local gc.auto 0
+2025-11-11T10:49:46.7225242Z ##[endgroup]
+2025-11-11T10:49:46.7225819Z ##[group]Setting up auth
+2025-11-11T10:49:46.7233056Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-11-11T10:49:46.7263590Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-11-11T10:49:46.7587515Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-11-11T10:49:46.7616531Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-11-11T10:49:46.7838761Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2025-11-11T10:49:46.7880493Z ##[endgroup]
+2025-11-11T10:49:46.7881336Z ##[group]Fetching the repository
+2025-11-11T10:49:46.7890106Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +8bcc82af099509110c7a3003b512980a3a56a73c:refs/remotes/pull/5/merge
+2025-11-11T10:49:47.3128410Z From https://github.com/otherjamesbrown/ai-aas
+2025-11-11T10:49:47.3129246Z  * [new ref]         8bcc82af099509110c7a3003b512980a3a56a73c -> pull/5/merge
+2025-11-11T10:49:47.3166562Z ##[endgroup]
+2025-11-11T10:49:47.3167133Z ##[group]Determining the checkout info
+2025-11-11T10:49:47.3169219Z ##[endgroup]
+2025-11-11T10:49:47.3175033Z [command]/usr/bin/git sparse-checkout disable
+2025-11-11T10:49:47.3216410Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2025-11-11T10:49:47.3245528Z ##[group]Checking out the ref
+2025-11-11T10:49:47.3249916Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/5/merge
+2025-11-11T10:49:47.3472091Z Note: switching to 'refs/remotes/pull/5/merge'.
+2025-11-11T10:49:47.3472909Z 
+2025-11-11T10:49:47.3473394Z You are in 'detached HEAD' state. You can look around, make experimental
+2025-11-11T10:49:47.3475287Z changes and commit them, and you can discard any commits you make in this
+2025-11-11T10:49:47.3476156Z state without impacting any branches by switching back to a branch.
+2025-11-11T10:49:47.3476642Z 
+2025-11-11T10:49:47.3477111Z If you want to create a new branch to retain commits you create, you may
+2025-11-11T10:49:47.3477793Z do so (now or later) by using -c with the switch command. Example:
+2025-11-11T10:49:47.3478192Z 
+2025-11-11T10:49:47.3478375Z   git switch -c <new-branch-name>
+2025-11-11T10:49:47.3478640Z 
+2025-11-11T10:49:47.3478792Z Or undo this operation with:
+2025-11-11T10:49:47.3479048Z 
+2025-11-11T10:49:47.3479171Z   git switch -
+2025-11-11T10:49:47.3479366Z 
+2025-11-11T10:49:47.3479710Z Turn off this advice by setting config variable advice.detachedHead to false
+2025-11-11T10:49:47.3480183Z 
+2025-11-11T10:49:47.3481193Z HEAD is now at 8bcc82a Merge 7b27f49a8c7f6e2b0e87c7797c217204afa0abad into 39433bd02c3b26a68618819a46f5c9c23712294a
+2025-11-11T10:49:47.3482494Z ##[endgroup]
+2025-11-11T10:49:47.3517435Z [command]/usr/bin/git log -1 --format=%H
+2025-11-11T10:49:47.3539856Z 8bcc82af099509110c7a3003b512980a3a56a73c
+2025-11-11T10:49:47.3733331Z ##[group]Run actions/setup-go@v5
+2025-11-11T10:49:47.3733583Z with:
+2025-11-11T10:49:47.3733748Z   go-version: 1.24.2
+2025-11-11T10:49:47.3733939Z   check-latest: false
+2025-11-11T10:49:47.3734238Z   token: ***
+2025-11-11T10:49:47.3734395Z   cache: true
+2025-11-11T10:49:47.3734569Z env:
+2025-11-11T10:49:47.3734717Z   GO111MODULE: on
+2025-11-11T10:49:47.3734886Z ##[endgroup]
+2025-11-11T10:49:47.5320010Z Setup go version spec 1.24.2
+2025-11-11T10:49:47.5410245Z Attempting to download 1.24.2...
+2025-11-11T10:49:48.2999159Z matching 1.24.2...
+2025-11-11T10:49:48.3048127Z Acquiring 1.24.2 from https://github.com/actions/go-versions/releases/download/1.24.2-14210955142/go-1.24.2-linux-x64.tar.gz
+2025-11-11T10:49:49.1137396Z Extracting Go...
+2025-11-11T10:49:49.1235777Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/1eccee52-534d-4126-8cf3-24db8efaa57e -f /home/runner/work/_temp/1c2af0b6-6829-43fc-952f-de735166ae60
+2025-11-11T10:49:50.8989842Z Successfully extracted go to /home/runner/work/_temp/1eccee52-534d-4126-8cf3-24db8efaa57e
+2025-11-11T10:49:50.8990513Z Adding to the cache ...
+2025-11-11T10:49:55.7460390Z Successfully cached go to /opt/hostedtoolcache/go/1.24.2/x64
+2025-11-11T10:49:55.7462706Z Added go to the path
+2025-11-11T10:49:55.7465491Z Successfully set up Go version 1.24.2
+2025-11-11T10:49:55.7833293Z [command]/opt/hostedtoolcache/go/1.24.2/x64/bin/go env GOMODCACHE
+2025-11-11T10:49:55.7861958Z [command]/opt/hostedtoolcache/go/1.24.2/x64/bin/go env GOCACHE
+2025-11-11T10:49:55.7895991Z /home/runner/go/pkg/mod
+2025-11-11T10:49:55.7909093Z /home/runner/.cache/go-build
+2025-11-11T10:49:55.7937501Z ##[warning]Restore cache failed: Dependencies file is not found in /home/runner/work/ai-aas/ai-aas. Supported file pattern: go.sum
+2025-11-11T10:49:55.7961727Z go version go1.24.2 linux/amd64
+2025-11-11T10:49:55.7961950Z 
+2025-11-11T10:49:55.7962228Z ##[group]go env
+2025-11-11T10:49:56.3026699Z AR='ar'
+2025-11-11T10:49:56.3027016Z CC='gcc'
+2025-11-11T10:49:56.3027400Z CGO_CFLAGS='-O2 -g'
+2025-11-11T10:49:56.3027722Z CGO_CPPFLAGS=''
+2025-11-11T10:49:56.3027956Z CGO_CXXFLAGS='-O2 -g'
+2025-11-11T10:49:56.3028166Z CGO_ENABLED='1'
+2025-11-11T10:49:56.3028342Z CGO_FFLAGS='-O2 -g'
+2025-11-11T10:49:56.3028556Z CGO_LDFLAGS='-O2 -g'
+2025-11-11T10:49:56.3028743Z CXX='g++'
+2025-11-11T10:49:56.3028905Z GCCGO='gccgo'
+2025-11-11T10:49:56.3029079Z GO111MODULE='on'
+2025-11-11T10:49:56.3029376Z GOAMD64='v1'
+2025-11-11T10:49:56.3029588Z GOARCH='amd64'
+2025-11-11T10:49:56.3029764Z GOAUTH='netrc'
+2025-11-11T10:49:56.3029924Z GOBIN=''
+2025-11-11T10:49:56.3030105Z GOCACHE='/home/runner/.cache/go-build'
+2025-11-11T10:49:56.3030345Z GOCACHEPROG=''
+2025-11-11T10:49:56.3030513Z GODEBUG=''
+2025-11-11T10:49:56.3030914Z GOENV='/home/runner/.config/go/env'
+2025-11-11T10:49:56.3031134Z GOEXE=''
+2025-11-11T10:49:56.3031285Z GOEXPERIMENT=''
+2025-11-11T10:49:56.3031456Z GOFIPS140='off'
+2025-11-11T10:49:56.3031613Z GOFLAGS=''
+2025-11-11T10:49:56.3032218Z GOGCCFLAGS='-fPIC -m64 -pthread -Wl,--no-gc-sections -fmessage-length=0 -ffile-prefix-map=/tmp/go-build2521113450=/tmp/go-build -gno-record-gcc-switches'
+2025-11-11T10:49:56.3032804Z GOHOSTARCH='amd64'
+2025-11-11T10:49:56.3032986Z GOHOSTOS='linux'
+2025-11-11T10:49:56.3033152Z GOINSECURE=''
+2025-11-11T10:49:56.3033348Z GOMOD='/dev/null'
+2025-11-11T10:49:56.3033550Z GOMODCACHE='/home/runner/go/pkg/mod'
+2025-11-11T10:49:56.3033776Z GONOPROXY=''
+2025-11-11T10:49:56.3033939Z GONOSUMDB=''
+2025-11-11T10:49:56.3034088Z GOOS='linux'
+2025-11-11T10:49:56.3034263Z GOPATH='/home/runner/go'
+2025-11-11T10:49:56.3034448Z GOPRIVATE=''
+2025-11-11T10:49:56.3034669Z GOPROXY='https://proxy.golang.org,direct'
+2025-11-11T10:49:56.3034953Z GOROOT='/opt/hostedtoolcache/go/1.24.2/x64'
+2025-11-11T10:49:56.3035204Z GOSUMDB='sum.golang.org'
+2025-11-11T10:49:56.3035404Z GOTELEMETRY='local'
+2025-11-11T10:49:56.3035643Z GOTELEMETRYDIR='/home/runner/.config/go/telemetry'
+2025-11-11T10:49:56.3035914Z GOTMPDIR=''
+2025-11-11T10:49:56.3036076Z GOTOOLCHAIN='auto'
+2025-11-11T10:49:56.3036771Z GOTOOLDIR='/opt/hostedtoolcache/go/1.24.2/x64/pkg/tool/linux_amd64'
+2025-11-11T10:49:56.3037090Z GOVCS=''
+2025-11-11T10:49:56.3037257Z GOVERSION='go1.24.2'
+2025-11-11T10:49:56.3037479Z GOWORK='/home/runner/work/ai-aas/ai-aas/go.work'
+2025-11-11T10:49:56.3037778Z PKG_CONFIG='pkg-config'
+2025-11-11T10:49:56.3037904Z 
+2025-11-11T10:49:56.3038273Z ##[endgroup]
+2025-11-11T10:49:56.3200416Z ##[group]Run for i in {1..10}; do
+2025-11-11T10:49:56.3201079Z [36;1mfor i in {1..10}; do[0m
+2025-11-11T10:49:56.3201364Z [36;1m  if pg_isready -h localhost -U postgres; then[0m
+2025-11-11T10:49:56.3201655Z [36;1m    break[0m
+2025-11-11T10:49:56.3201830Z [36;1m  fi[0m
+2025-11-11T10:49:56.3202003Z [36;1m  sleep 5[0m
+2025-11-11T10:49:56.3202169Z [36;1mdone[0m
+2025-11-11T10:49:56.3240508Z shell: /usr/bin/bash -e {0}
+2025-11-11T10:49:56.3241047Z env:
+2025-11-11T10:49:56.3241204Z   GO111MODULE: on
+2025-11-11T10:49:56.3264516Z ##[endgroup]
+2025-11-11T10:49:56.3775558Z localhost:5432 - accepting connections
+2025-11-11T10:49:56.3811482Z ##[group]Run psql ***localhost:5432/postgres -c "CREATE DATABASE ai_aas;" || true
+2025-11-11T10:49:56.3812264Z [36;1mpsql ***localhost:5432/postgres -c "CREATE DATABASE ai_aas;" || true[0m
+2025-11-11T10:49:56.3812898Z [36;1mpsql ***localhost:5432/postgres -c "CREATE DATABASE ai_aas_analytics;" || true[0m
+2025-11-11T10:49:56.3846127Z shell: /usr/bin/bash -e {0}
+2025-11-11T10:49:56.3846345Z env:
+2025-11-11T10:49:56.3846544Z   GO111MODULE: on
+2025-11-11T10:49:56.3846781Z ##[endgroup]
+2025-11-11T10:49:56.5437966Z ERROR:  database "ai_aas" already exists
+2025-11-11T10:49:56.6182040Z CREATE DATABASE
+2025-11-11T10:49:56.6221137Z ##[group]Run cat > migrate.env <<'ENV'
+2025-11-11T10:49:56.6221469Z [36;1mcat > migrate.env <<'ENV'[0m
+2025-11-11T10:49:56.6221988Z [36;1mDB_URL=***localhost:5432/ai_aas?sslmode=disable[0m
+2025-11-11T10:49:56.6222482Z [36;1mANALYTICS_URL=***localhost:5432/ai_aas_analytics?sslmode=disable[0m
+2025-11-11T10:49:56.6222866Z [36;1mMIGRATION_EMAIL_HASH_KEY=ci-guardrail-email-hmac[0m
+2025-11-11T10:49:56.6223185Z [36;1mMIGRATION_COMPONENT=operational[0m
+2025-11-11T10:49:56.6223435Z [36;1mMIGRATION_REQUIRE_CONFIRMATION=0[0m
+2025-11-11T10:49:56.6223665Z [36;1mENV[0m
+2025-11-11T10:49:56.6257185Z shell: /usr/bin/bash -e {0}
+2025-11-11T10:49:56.6257403Z env:
+2025-11-11T10:49:56.6257563Z   GO111MODULE: on
+2025-11-11T10:49:56.6257731Z ##[endgroup]
+2025-11-11T10:49:56.6343518Z ##[group]Run cd db/tools/lint
+2025-11-11T10:49:56.6343765Z [36;1mcd db/tools/lint[0m
+2025-11-11T10:49:56.6343967Z [36;1mGOWORK=off go run .[0m
+2025-11-11T10:49:56.6375750Z shell: /usr/bin/bash -e {0}
+2025-11-11T10:49:56.6375968Z env:
+2025-11-11T10:49:56.6376129Z   GO111MODULE: on
+2025-11-11T10:49:56.6376303Z ##[endgroup]
+2025-11-11T10:49:56.6481033Z go: downloading gopkg.in/yaml.v3 v3.0.1
+2025-11-11T10:50:01.7851443Z ##[group]Run scripts/db/apply.sh --env migrate.env --component operational --yes
+2025-11-11T10:50:01.7851979Z [36;1mscripts/db/apply.sh --env migrate.env --component operational --yes[0m
+2025-11-11T10:50:01.7884271Z shell: /usr/bin/bash -e {0}
+2025-11-11T10:50:01.7884511Z env:
+2025-11-11T10:50:01.7884667Z   GO111MODULE: on
+2025-11-11T10:50:01.7884862Z   MIGRATION_APPROVED_BY: ci-guardrail
+2025-11-11T10:50:01.7885088Z ##[endgroup]
+2025-11-11T10:50:01.8018640Z go: downloading go.opentelemetry.io/otel v1.24.0
+2025-11-11T10:50:01.8023445Z go: downloading go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.24.0
+2025-11-11T10:50:01.8837188Z go: downloading go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.24.0
+2025-11-11T10:50:02.0209847Z go: downloading go.opentelemetry.io/otel/sdk v1.24.0
+2025-11-11T10:50:02.0211201Z go: downloading go.opentelemetry.io/otel/trace v1.24.0
+2025-11-11T10:50:02.0212942Z go: downloading google.golang.org/grpc v1.63.2
+2025-11-11T10:50:02.0755054Z go: downloading github.com/jackc/pgx/v5 v5.7.6
+2025-11-11T10:50:02.0794994Z go: downloading github.com/go-logr/logr v1.4.1
+2025-11-11T10:50:02.1217653Z go: downloading go.opentelemetry.io/otel/metric v1.24.0
+2025-11-11T10:50:02.1673248Z go: downloading go.opentelemetry.io/proto/otlp v1.1.0
+2025-11-11T10:50:02.2057784Z go: downloading google.golang.org/genproto/googleapis/rpc v0.0.0-20240227224415-6ceb2ff114de
+2025-11-11T10:50:02.2900220Z go: downloading golang.org/x/sys v0.32.0
+2025-11-11T10:50:02.2949440Z go: downloading github.com/go-logr/stdr v1.2.2
+2025-11-11T10:50:02.3018620Z go: downloading github.com/cenkalti/backoff/v4 v4.2.1
+2025-11-11T10:50:02.3124190Z go: downloading github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.0
+2025-11-11T10:50:02.3300322Z go: downloading google.golang.org/protobuf v1.33.0
+2025-11-11T10:50:02.5366762Z go: downloading golang.org/x/net v0.21.0
+2025-11-11T10:50:02.5688541Z go: downloading github.com/jackc/pgpassfile v1.0.0
+2025-11-11T10:50:02.6027778Z go: downloading github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761
+2025-11-11T10:50:02.6290833Z go: downloading golang.org/x/crypto v0.37.0
+2025-11-11T10:50:02.7530266Z go: downloading golang.org/x/text v0.24.0
+2025-11-11T10:50:03.2463945Z go: downloading google.golang.org/genproto/googleapis/api v0.0.0-20240227224415-6ceb2ff114de
+2025-11-11T10:50:18.4475473Z 2025/11/11 10:50:18 telemetry disabled: OTEL_EXPORTER_OTLP_ENDPOINT not set
+2025-11-11T10:50:18.4476376Z 2025/11/11 10:50:18 migration_start component=operational direction=up version= dry_run=false
+2025-11-11T10:50:18.4477305Z 2025/11/11 10:50:18 migration_pre_checks component=operational direction=up version= dry_run=false
+2025-11-11T10:50:18.4656268Z 2025/11/11 10:50:18 [WARN] unable to count rows for organizations: ERROR: relation "organizations" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.4658945Z 2025/11/11 10:50:18 [WARN] unable to count rows for users: ERROR: relation "users" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.4662217Z 2025/11/11 10:50:18 [WARN] unable to count rows for api_keys: ERROR: relation "api_keys" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.4665527Z 2025/11/11 10:50:18 [WARN] unable to count rows for model_registry_entries: ERROR: relation "model_registry_entries" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.4668072Z 2025/11/11 10:50:18 [WARN] unable to count rows for usage_events: ERROR: relation "usage_events" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.4671273Z 2025/11/11 10:50:18 [WARN] unable to count rows for audit_log_entries: ERROR: relation "audit_log_entries" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.5674532Z 2025/11/11 10:50:18 migration_post_checks component=operational direction=up version= dry_run=false duration_ms=120
+2025-11-11T10:50:18.5722170Z 2025/11/11 10:50:18 [WARN] unable to count rows for organizations after migration: ERROR: relation "organizations" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.5725061Z 2025/11/11 10:50:18 [WARN] unable to count rows for users after migration: ERROR: relation "users" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.5727391Z 2025/11/11 10:50:18 [WARN] unable to count rows for api_keys after migration: ERROR: relation "api_keys" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.5732208Z 2025/11/11 10:50:18 [WARN] unable to count rows for model_registry_entries after migration: ERROR: relation "model_registry_entries" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.5733830Z 2025/11/11 10:50:18 [WARN] unable to count rows for usage_events after migration: ERROR: relation "usage_events" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.5736374Z 2025/11/11 10:50:18 [WARN] unable to count rows for audit_log_entries after migration: ERROR: relation "audit_log_entries" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.5781345Z 2025/11/11 10:50:18 [WARN] audit log recording failed: audit insert: ERROR: relation "audit_log_entries" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.5782598Z 2025/11/11 10:50:18 migration_finish component=operational direction=up version= dry_run=false status=success duration_ms=126
+2025-11-11T10:50:18.6420731Z ##[group]Run scripts/db/apply.sh --env migrate.env --component analytics --yes
+2025-11-11T10:50:18.6421824Z [36;1mscripts/db/apply.sh --env migrate.env --component analytics --yes[0m
+2025-11-11T10:50:18.6469419Z shell: /usr/bin/bash -e {0}
+2025-11-11T10:50:18.6469803Z env:
+2025-11-11T10:50:18.6470081Z   GO111MODULE: on
+2025-11-11T10:50:18.6470491Z   MIGRATION_APPROVED_BY: ci-guardrail
+2025-11-11T10:50:18.6471274Z ##[endgroup]
+2025-11-11T10:50:18.7592554Z 2025/11/11 10:50:18 telemetry disabled: OTEL_EXPORTER_OTLP_ENDPOINT not set
+2025-11-11T10:50:18.7593498Z 2025/11/11 10:50:18 migration_start component=analytics direction=up version= dry_run=false
+2025-11-11T10:50:18.7594397Z 2025/11/11 10:50:18 migration_pre_checks component=analytics direction=up version= dry_run=false
+2025-11-11T10:50:18.7769137Z 2025/11/11 10:50:18 [WARN] unable to count rows for usage_events: ERROR: relation "usage_events" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.8772177Z 2025/11/11 10:50:18 migration_post_checks component=analytics direction=up version= dry_run=false duration_ms=117
+2025-11-11T10:50:18.8817984Z 2025/11/11 10:50:18 [WARN] unable to count rows for usage_events after migration: ERROR: relation "usage_events" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.8860811Z 2025/11/11 10:50:18 [WARN] audit log recording failed: audit insert: ERROR: relation "audit_log_entries" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.8871925Z 2025/11/11 10:50:18 migration_finish component=analytics direction=up version= dry_run=false status=success duration_ms=122
+2025-11-11T10:50:18.8921649Z ##[group]Run scripts/db/seed.sh --env migrate.env --component operational
+2025-11-11T10:50:18.8922127Z [36;1mscripts/db/seed.sh --env migrate.env --component operational[0m
+2025-11-11T10:50:18.8922534Z [36;1mscripts/db/seed.sh --env migrate.env --component analytics[0m
+2025-11-11T10:50:18.8954425Z shell: /usr/bin/bash -e {0}
+2025-11-11T10:50:18.8954645Z env:
+2025-11-11T10:50:18.8954808Z   GO111MODULE: on
+2025-11-11T10:50:18.8954979Z ##[endgroup]
+2025-11-11T10:50:18.9097101Z go: downloading github.com/google/uuid v1.5.0
+2025-11-11T10:50:18.9098846Z go: downloading github.com/jackc/pgx/v5 v5.5.4
+2025-11-11T10:50:18.9099418Z go: downloading golang.org/x/crypto v0.17.0
+2025-11-11T10:50:19.1182818Z go: downloading github.com/jackc/puddle/v2 v2.2.1
+2025-11-11T10:50:19.1193551Z go: downloading github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a
+2025-11-11T10:50:19.1445063Z go: downloading golang.org/x/text v0.14.0
+2025-11-11T10:50:19.1501525Z go: downloading golang.org/x/sync v0.1.0
+2025-11-11T10:50:23.7670031Z 2025/11/11 10:50:23 seed organization: ERROR: relation "organizations" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:23.7675550Z exit status 1
+2025-11-11T10:50:23.7817083Z ##[error]Process completed with exit code 1.
+2025-11-11T10:50:23.7860827Z ##[group]Run psql ***localhost:5432/ai_aas -c "SELECT actor_type, actor_id, action, target, occurred_at FROM audit_log_entries ORDER BY occurred_at DESC LIMIT 10;"
+2025-11-11T10:50:23.7861993Z [36;1mpsql ***localhost:5432/ai_aas -c "SELECT actor_type, actor_id, action, target, occurred_at FROM audit_log_entries ORDER BY occurred_at DESC LIMIT 10;"[0m
+2025-11-11T10:50:23.7894310Z shell: /usr/bin/bash -e {0}
+2025-11-11T10:50:23.7894526Z env:
+2025-11-11T10:50:23.7894687Z   GO111MODULE: on
+2025-11-11T10:50:23.7894858Z ##[endgroup]
+2025-11-11T10:50:23.8322181Z ERROR:  relation "audit_log_entries" does not exist
+2025-11-11T10:50:23.8322905Z LINE 1: ..._type, actor_id, action, target, occurred_at FROM audit_log_...
+2025-11-11T10:50:23.8324174Z                                                              ^
+2025-11-11T10:50:23.8335504Z ##[error]Process completed with exit code 1.
+2025-11-11T10:50:23.8406075Z Post job cleanup.
+2025-11-11T10:50:23.9333820Z [command]/usr/bin/git version
+2025-11-11T10:50:23.9371048Z git version 2.51.2
+2025-11-11T10:50:23.9421601Z Temporarily overriding HOME='/home/runner/work/_temp/879420bb-46ff-40dc-81f8-93367e937b28' before making global git config changes
+2025-11-11T10:50:23.9422867Z Adding repository directory to the temporary git global config as a safe directory
+2025-11-11T10:50:23.9427618Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/ai-aas/ai-aas
+2025-11-11T10:50:23.9462199Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-11-11T10:50:23.9494295Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-11-11T10:50:23.9720001Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-11-11T10:50:23.9740070Z http.https://github.com/.extraheader
+2025-11-11T10:50:23.9752929Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2025-11-11T10:50:23.9782949Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-11-11T10:50:24.0085928Z Print service container logs: 3410cfa7f011416f9a9f8356834fb1e8_postgres15alpine_e805af
+2025-11-11T10:50:24.0090125Z ##[command]/usr/bin/docker logs --details 7551f3b7260003179604f331bd3dc3f366b62b6ac8f1e48415260a668d402d58
+2025-11-11T10:50:24.0214013Z  The files belonging to this database system will be owned by user "postgres".
+2025-11-11T10:50:24.0217745Z  sh: locale: not found
+2025-11-11T10:50:24.0218082Z  This user must also own the server process.
+2025-11-11T10:50:24.0218490Z  2025-11-11 10:49:32.090 UTC [35] WARNING:  no usable system locales were found
+2025-11-11T10:50:24.0218905Z  initdb: warning: enabling "trust" authentication for local connections
+2025-11-11T10:50:24.0219518Z  initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+2025-11-11T10:50:24.0220285Z  2025-11-11 10:49:32.870 UTC [1] LOG:  starting PostgreSQL 15.14 on x86_64-pc-linux-musl, compiled by gcc (Alpine 14.2.0) 14.2.0, 64-bit
+2025-11-11T10:50:24.0221083Z  2025-11-11 10:49:32.870 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+2025-11-11T10:50:24.0221477Z  2025-11-11 10:49:32.871 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+2025-11-11T10:50:24.0221906Z  2025-11-11 10:49:32.872 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2025-11-11T10:50:24.0222361Z  2025-11-11 10:49:32.874 UTC [57] LOG:  database system was shut down at 2025-11-11 10:49:32 UTC
+2025-11-11T10:50:24.0222777Z  2025-11-11 10:49:32.878 UTC [1] LOG:  database system is ready to accept connections
+2025-11-11T10:50:24.0223159Z  2025-11-11 10:49:56.543 UTC [76] ERROR:  database "ai_aas" already exists
+2025-11-11T10:50:24.0223501Z  2025-11-11 10:49:56.543 UTC [76] STATEMENT:  CREATE DATABASE ai_aas;
+2025-11-11T10:50:24.0223899Z  2025-11-11 10:50:18.465 UTC [93] ERROR:  relation "organizations" does not exist at character 22
+2025-11-11T10:50:24.0224316Z  2025-11-11 10:50:18.465 UTC [93] STATEMENT:  SELECT COUNT(*) FROM organizations
+2025-11-11T10:50:24.0224713Z  2025-11-11 10:50:18.465 UTC [93] ERROR:  relation "users" does not exist at character 22
+2025-11-11T10:50:24.0225091Z  2025-11-11 10:50:18.465 UTC [93] STATEMENT:  SELECT COUNT(*) FROM users
+2025-11-11T10:50:24.0225468Z  2025-11-11 10:50:18.465 UTC [93] ERROR:  relation "api_keys" does not exist at character 22
+2025-11-11T10:50:24.0225859Z  2025-11-11 10:50:18.465 UTC [93] STATEMENT:  SELECT COUNT(*) FROM api_keys
+2025-11-11T10:50:24.0226282Z  2025-11-11 10:50:18.466 UTC [93] ERROR:  relation "model_registry_entries" does not exist at character 22
+2025-11-11T10:50:24.0226732Z  2025-11-11 10:50:18.466 UTC [93] STATEMENT:  SELECT COUNT(*) FROM model_registry_entries
+2025-11-11T10:50:24.0227156Z  2025-11-11 10:50:18.466 UTC [93] ERROR:  relation "usage_events" does not exist at character 22
+2025-11-11T10:50:24.0227560Z  2025-11-11 10:50:18.466 UTC [93] STATEMENT:  SELECT COUNT(*) FROM usage_events
+2025-11-11T10:50:24.0228026Z  2025-11-11 10:50:18.466 UTC [93] ERROR:  relation "audit_log_entries" does not exist at character 22
+2025-11-11T10:50:24.0229681Z  2025-11-11 10:50:18.466 UTC [93] STATEMENT:  SELECT COUNT(*) FROM audit_log_entries
+2025-11-11T10:50:24.0230405Z  2025-11-11 10:50:18.571 UTC [94] ERROR:  relation "organizations" does not exist at character 22
+2025-11-11T10:50:24.0231259Z  2025-11-11 10:50:18.571 UTC [94] STATEMENT:  SELECT COUNT(*) FROM organizations
+2025-11-11T10:50:24.0231765Z  2025-11-11 10:50:18.572 UTC [94] ERROR:  relation "users" does not exist at character 22
+2025-11-11T10:50:24.0232160Z  2025-11-11 10:50:18.572 UTC [94] STATEMENT:  SELECT COUNT(*) FROM users
+2025-11-11T10:50:24.0232549Z  2025-11-11 10:50:18.572 UTC [94] ERROR:  relation "api_keys" does not exist at character 22
+2025-11-11T10:50:24.0232948Z  2025-11-11 10:50:18.572 UTC [94] STATEMENT:  SELECT COUNT(*) FROM api_keys
+2025-11-11T10:50:24.0233378Z  2025-11-11 10:50:18.572 UTC [94] ERROR:  relation "model_registry_entries" does not exist at character 22
+2025-11-11T10:50:24.0234141Z  2025-11-11 10:50:18.572 UTC [94] STATEMENT:  SELECT COUNT(*) FROM model_registry_entries
+2025-11-11T10:50:24.0234598Z  2025-11-11 10:50:18.573 UTC [94] ERROR:  relation "usage_events" does not exist at character 22
+2025-11-11T10:50:24.0235016Z  2025-11-11 10:50:18.573 UTC [94] STATEMENT:  SELECT COUNT(*) FROM usage_events
+2025-11-11T10:50:24.0235448Z  2025-11-11 10:50:18.573 UTC [94] ERROR:  relation "audit_log_entries" does not exist at character 22
+2025-11-11T10:50:24.0235887Z  2025-11-11 10:50:18.573 UTC [94] STATEMENT:  SELECT COUNT(*) FROM audit_log_entries
+2025-11-11T10:50:24.0236316Z  2025-11-11 10:50:18.577 UTC [95] ERROR:  relation "audit_log_entries" does not exist at character 14
+2025-11-11T10:50:24.0236686Z  2025-11-11 10:50:18.577 UTC [95] STATEMENT:  
+2025-11-11T10:50:24.0237044Z  	INSERT INTO audit_log_entries (actor_type, actor_id, action, target, metadata)
+2025-11-11T10:50:24.0237392Z  	VALUES ($1, $2, $3, $4, $5)
+2025-11-11T10:50:24.0237595Z  	
+2025-11-11T10:50:24.0237883Z  2025-11-11 10:50:18.776 UTC [96] ERROR:  relation "usage_events" does not exist at character 22
+2025-11-11T10:50:24.0238302Z  2025-11-11 10:50:18.776 UTC [96] STATEMENT:  SELECT COUNT(*) FROM usage_events
+2025-11-11T10:50:24.0238726Z  2025-11-11 10:50:18.881 UTC [97] ERROR:  relation "usage_events" does not exist at character 22
+2025-11-11T10:50:24.0239142Z  2025-11-11 10:50:18.881 UTC [97] STATEMENT:  SELECT COUNT(*) FROM usage_events
+2025-11-11T10:50:24.0239578Z  2025-11-11 10:50:18.885 UTC [98] ERROR:  relation "audit_log_entries" does not exist at character 14
+2025-11-11T10:50:24.0239955Z  2025-11-11 10:50:18.885 UTC [98] STATEMENT:  
+2025-11-11T10:50:24.0240304Z  	INSERT INTO audit_log_entries (actor_type, actor_id, action, target, metadata)
+2025-11-11T10:50:24.0240874Z  	VALUES ($1, $2, $3, $4, $5)
+2025-11-11T10:50:24.0241075Z  	
+2025-11-11T10:50:24.0241356Z  2025-11-11 10:50:23.766 UTC [105] ERROR:  relation "organizations" does not exist at character 14
+2025-11-11T10:50:24.0241735Z  2025-11-11 10:50:23.766 UTC [105] STATEMENT:  
+2025-11-11T10:50:24.0242130Z  	INSERT INTO organizations (slug, display_name, plan_tier, budget_limit_tokens, status)
+2025-11-11T10:50:24.0242507Z  	VALUES ($1, $2, $3, $4, $5)
+2025-11-11T10:50:24.0242723Z  	ON CONFLICT (slug) DO UPDATE
+2025-11-11T10:50:24.0242956Z  	SET display_name = EXCLUDED.display_name,
+2025-11-11T10:50:24.0243217Z  	    plan_tier = EXCLUDED.plan_tier,
+2025-11-11T10:50:24.0243492Z  	    budget_limit_tokens = EXCLUDED.budget_limit_tokens,
+2025-11-11T10:50:24.0243762Z  	    status = EXCLUDED.status
+2025-11-11T10:50:24.0243995Z  	RETURNING organization_id
+2025-11-11T10:50:24.0244346Z  2025-11-11 10:50:23.831 UTC [106] ERROR:  relation "audit_log_entries" does not exist at character 63
+2025-11-11T10:50:24.0244999Z  2025-11-11 10:50:23.831 UTC [106] STATEMENT:  SELECT actor_type, actor_id, action, target, occurred_at FROM audit_log_entries ORDER BY occurred_at DESC LIMIT 10;
+2025-11-11T10:50:24.0245511Z  
+2025-11-11T10:50:24.0245762Z  The database cluster will be initialized with locale "en_US.utf8".
+2025-11-11T10:50:24.0246323Z  The default database encoding has accordingly been set to "UTF8".
+2025-11-11T10:50:24.0246700Z  The default text search configuration will be set to "english".
+2025-11-11T10:50:24.0246992Z  
+2025-11-11T10:50:24.0247162Z  Data page checksums are disabled.
+2025-11-11T10:50:24.0247380Z  
+2025-11-11T10:50:24.0247634Z  fixing permissions on existing directory /var/lib/postgresql/data ... ok
+2025-11-11T10:50:24.0247981Z  creating subdirectories ... ok
+2025-11-11T10:50:24.0248256Z  selecting dynamic shared memory implementation ... posix
+2025-11-11T10:50:24.0248557Z  selecting default max_connections ... 100
+2025-11-11T10:50:24.0248815Z  selecting default shared_buffers ... 128MB
+2025-11-11T10:50:24.0249056Z  selecting default time zone ... UTC
+2025-11-11T10:50:24.0249293Z  creating configuration files ... ok
+2025-11-11T10:50:24.0249527Z  running bootstrap script ... ok
+2025-11-11T10:50:24.0249778Z  performing post-bootstrap initialization ... ok
+2025-11-11T10:50:24.0250249Z  syncing data to disk ... ok
+2025-11-11T10:50:24.0250440Z  
+2025-11-11T10:50:24.0250767Z  
+2025-11-11T10:50:24.0250969Z  Success. You can now start the database server using:
+2025-11-11T10:50:24.0251216Z  
+2025-11-11T10:50:24.0251414Z      pg_ctl -D /var/lib/postgresql/data -l logfile start
+2025-11-11T10:50:24.0251658Z  
+2025-11-11T10:50:24.0252116Z  waiting for server to start....2025-11-11 10:49:32.604 UTC [41] LOG:  starting PostgreSQL 15.14 on x86_64-pc-linux-musl, compiled by gcc (Alpine 14.2.0) 14.2.0, 64-bit
+2025-11-11T10:50:24.0252780Z  2025-11-11 10:49:32.605 UTC [41] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2025-11-11T10:50:24.0253250Z  2025-11-11 10:49:32.608 UTC [44] LOG:  database system was shut down at 2025-11-11 10:49:32 UTC
+2025-11-11T10:50:24.0253673Z  2025-11-11 10:49:32.612 UTC [41] LOG:  database system is ready to accept connections
+2025-11-11T10:50:24.0253981Z   done
+2025-11-11T10:50:24.0254133Z  server started
+2025-11-11T10:50:24.0254319Z  CREATE DATABASE
+2025-11-11T10:50:24.0254498Z  
+2025-11-11T10:50:24.0254631Z  
+2025-11-11T10:50:24.0254914Z  /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+2025-11-11T10:50:24.0255254Z  
+2025-11-11T10:50:24.0255548Z  waiting for server to shut down...2025-11-11 10:49:32.750 UTC [41] LOG:  received fast shutdown request
+2025-11-11T10:50:24.0255992Z  .2025-11-11 10:49:32.751 UTC [41] LOG:  aborting any active transactions
+2025-11-11T10:50:24.0256465Z  2025-11-11 10:49:32.754 UTC [41] LOG:  background worker "logical replication launcher" (PID 47) exited with exit code 1
+2025-11-11T10:50:24.0256912Z  2025-11-11 10:49:32.754 UTC [42] LOG:  shutting down
+2025-11-11T10:50:24.0257240Z  2025-11-11 10:49:32.755 UTC [42] LOG:  checkpoint starting: shutdown immediate
+2025-11-11T10:50:24.0258036Z  2025-11-11 10:49:32.771 UTC [42] LOG:  checkpoint complete: wrote 921 buffers (5.6%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.013 s, sync=0.002 s, total=0.017 s; sync files=301, longest=0.001 s, average=0.001 s; distance=4238 kB, estimate=4238 kB
+2025-11-11T10:50:24.0258822Z  2025-11-11 10:49:32.778 UTC [41] LOG:  database system is shut down
+2025-11-11T10:50:24.0259090Z   done
+2025-11-11T10:50:24.0259243Z  server stopped
+2025-11-11T10:50:24.0259408Z  
+2025-11-11T10:50:24.0259605Z  PostgreSQL init process complete; ready for start up.
+2025-11-11T10:50:24.0259870Z  
+2025-11-11T10:50:24.0265213Z Stop and remove container: 3410cfa7f011416f9a9f8356834fb1e8_postgres15alpine_e805af
+2025-11-11T10:50:24.0270383Z ##[command]/usr/bin/docker rm --force 7551f3b7260003179604f331bd3dc3f366b62b6ac8f1e48415260a668d402d58
+2025-11-11T10:50:25.0514322Z 7551f3b7260003179604f331bd3dc3f366b62b6ac8f1e48415260a668d402d58
+2025-11-11T10:50:25.0544689Z Remove container network: github_network_70bdf0f7eed54bc180086a068ef7d081
+2025-11-11T10:50:25.0549126Z ##[command]/usr/bin/docker network rm github_network_70bdf0f7eed54bc180086a068ef7d081
+2025-11-11T10:50:25.1947019Z github_network_70bdf0f7eed54bc180086a068ef7d081
+2025-11-11T10:50:25.2003111Z Cleaning up orphan processes

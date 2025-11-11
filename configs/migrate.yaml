@@ -1,0 +1,27 @@
+# Migration tooling configuration (consumed by scripts/db helpers)
+
+source:
+  operational: db/migrations/operational
+  analytics: db/migrations/analytics
+
+artifacts:
+  bucket_env: ARTIFACT_BUCKET
+  prefix: migrations/
+
+telemetry:
+  exporter: otlp
+  endpoint_env: OTEL_EXPORTER_OTLP_ENDPOINT
+  headers_env: OTEL_EXPORTER_OTLP_HEADERS
+
+safety:
+  require_confirmation: true
+  allow_downtime_minutes: 1
+  dry_run_default: false
+
+status:
+  table: schema_migrations
+  analytics_table: analytics_schema_migrations
+
+smoke_test:
+  retries: 2
+  delay_seconds: 5

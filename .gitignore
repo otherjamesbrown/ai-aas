@@ -12,6 +12,7 @@
 # Environment files
 .env
 .env.*
+migrate.env
 
 # Build outputs
 bin/

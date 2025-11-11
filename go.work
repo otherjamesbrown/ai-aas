@@ -1,4 +1,4 @@
-go 1.21
+go 1.23.0
 
 use (
 	./services/_template
@@ -10,4 +10,9 @@ use (
 	./tests/go/unit
 	./samples/service-template/go
 	./shared/go
+	./db/tools/migrate
+	./db/tools/lint
+	./db/seeds/operational
+	./db/tools/sqlrunner
+	./analytics/tests
 )

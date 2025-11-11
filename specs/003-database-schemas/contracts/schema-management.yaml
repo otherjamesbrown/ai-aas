@@ -1,0 +1,290 @@
+openapi: 3.1.0
+info:
+  title: Schema Management API
+  version: 0.1.0
+  description: >
+    Contract governing platform migration orchestration and schema telemetry.
+    Service developers and platform engineers consume this API to inspect schema metadata,
+    run migrations, and trigger analytics rollups in controlled environments.
+servers:
+  - url: https://platform.ai-aas.internal
+    description: Internal control plane (staging/prod)
+  - url: http://localhost:8085
+    description: Local developer daemon
+tags:
+  - name: Schema
+    description: Read-only schema metadata contracts
+  - name: Migrations
+    description: Apply, rollback, and status workflows
+  - name: Analytics
+    description: Time-series rollup orchestration
+paths:
+  /v1/schema/entities:
+    get:
+      tags: [Schema]
+      summary: List schema entities and relationships
+      operationId: listEntities
+      parameters:
+        - in: query
+          name: includeFields
+          schema:
+            type: boolean
+            default: false
+          description: Set true to include field-level metadata in the response.
+      responses:
+        '200':
+          description: Entities successfully retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntityCollection'
+        '503':
+          description: Schema metadata unavailable (regeneration in progress)
+  /v1/schema/migrations/apply:
+    post:
+      tags: [Migrations]
+      summary: Apply migrations up to a target version
+      operationId: applyMigrations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyRequest'
+      responses:
+        '202':
+          description: Migration run accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationRun'
+        '409':
+          description: Migration run already in progress
+        '422':
+          description: Validation failed (missing scripts, pre-check failure)
+  /v1/schema/migrations/rollback:
+    post:
+      tags: [Migrations]
+      summary: Roll back a migration version
+      operationId: rollbackMigration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RollbackRequest'
+      responses:
+        '202':
+          description: Rollback initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationRun'
+        '409':
+          description: No prior run found or conflicting apply in progress
+        '422':
+          description: Rollback script missing or health checks failed
+  /v1/schema/migrations/status/{runId}:
+    get:
+      tags: [Migrations]
+      summary: Retrieve migration run status and telemetry
+      operationId: getMigrationStatus
+      parameters:
+        - in: path
+          name: runId
+          required: true
+          schema:
+            type: string
+          description: Identifier returned when apply/rollback was initiated.
+      responses:
+        '200':
+          description: Current run status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationRun'
+        '404':
+          description: Run identifier not found
+  /v1/analytics/rollups/run:
+    post:
+      tags: [Analytics]
+      summary: Trigger rollup execution for a time window
+      operationId: triggerRollup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RollupRequest'
+      responses:
+        '202':
+          description: Rollup execution enqueued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RollupRun'
+        '422':
+          description: Validation failed (unsupported granularity or window)
+components:
+  schemas:
+    EntityCollection:
+      type: object
+      required: [entities, generatedAt]
+      properties:
+        generatedAt:
+          type: string
+          format: date-time
+        entities:
+          type: array
+          items:
+            $ref: '#/components/schemas/Entity'
+    Entity:
+      type: object
+      required: [name, description, relationships]
+      properties:
+        name:
+          type: string
+          example: Organization
+        description:
+          type: string
+        relationships:
+          type: array
+          items:
+            $ref: '#/components/schemas/Relationship'
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/Field'
+    Field:
+      type: object
+      required: [name, type, nullable]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        nullable:
+          type: boolean
+        classification:
+          type: string
+          enum: [restricted, confidential, internal, public]
+        retentionDays:
+          type: integer
+          minimum: 0
+    Relationship:
+      type: object
+      required: [type, target, cardinality]
+      properties:
+        type:
+          type: string
+          enum: [owns, references, derivedFrom]
+        target:
+          type: string
+        cardinality:
+          type: string
+          example: one-to-many
+    ApplyRequest:
+      type: object
+      required: [component]
+      properties:
+        component:
+          type: string
+          enum: [operational, analytics]
+        targetVersion:
+          type: string
+          description: >
+            Optional version to stop at. If omitted, applies all pending migrations.
+        dryRun:
+          type: boolean
+          default: false
+        hooks:
+          type: object
+          properties:
+            skipTelemetry:
+              type: boolean
+              default: false
+    RollbackRequest:
+      type: object
+      required: [component, version]
+      properties:
+        component:
+          type: string
+          enum: [operational, analytics]
+        version:
+          type: string
+        reason:
+          type: string
+    MigrationRun:
+      type: object
+      required: [runId, component, status, submittedAt]
+      properties:
+        runId:
+          type: string
+        component:
+          type: string
+          enum: [operational, analytics]
+        status:
+          type: string
+          enum: [pending, running, succeeded, failed, rolled_back]
+        submittedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        targetVersion:
+          type: string
+          nullable: true
+        appliedVersions:
+          type: array
+          items:
+            type: string
+        metrics:
+          type: object
+          properties:
+            durationSeconds:
+              type: number
+            rowChanges:
+              type: integer
+            tablesTouched:
+              type: array
+              items:
+                type: string
+    RollupRequest:
+      type: object
+      required: [granularity, start, end]
+      properties:
+        granularity:
+          type: string
+          enum: [hour, day]
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+        reconcileLateArrivals:
+          type: boolean
+          default: true
+    RollupRun:
+      type: object
+      required: [runId, status, granularities]
+      properties:
+        runId:
+          type: string
+        status:
+          type: string
+          enum: [queued, running, succeeded, failed]
+        granularities:
+          type: array
+          items:
+            type: string
+        submittedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+

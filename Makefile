@@ -214,6 +214,26 @@ metrics-upload: ## Upload metrics artifact (FILE=<path>, optional METRICS_BUCKET
 	@test -n "$(FILE)" || (echo "FILE variable required, e.g. make metrics-upload FILE=scripts/metrics/output/run.json" >&2 && exit 1)
 	@./scripts/metrics/upload.sh "$(FILE)"
 
+.PHONY: db-migrate-status
+db-migrate-status: ## Display latest migration status for operational and analytics databases
+	@./scripts/db/apply.sh --status
+
+.PHONY: db-docs-generate
+db-docs-generate: ## Generate schema documentation artifacts (dictionary + ERD)
+	@./scripts/db/docgen.sh generate
+
+.PHONY: db-docs-validate
+db-docs-validate: ## Validate schema documentation consistency with live database state
+	@./scripts/db/docgen.sh validate
+
+.PHONY: analytics-rollup-run
+analytics-rollup-run: ## Execute analytics rollup (PERIOD=hourly|daily, requires migrate.env or DB_URL)
+	@./scripts/analytics/run-hourly.sh $(if $(PERIOD),--period $(PERIOD),)
+
+.PHONY: analytics-verify
+analytics-verify: ## Run analytics reconciliation tests (requires migrate.env or DB_URL)
+	@./scripts/analytics/verify.sh
+
 .PHONY: gofmt
 gofmt: ## Run gofmt across repository
 	@find . -name '*.go' -not -path './vendor/*' -exec gofmt -w {} +

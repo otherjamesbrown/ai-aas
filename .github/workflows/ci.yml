@@ -7,7 +7,7 @@ on:
   pull_request:
 
 env:
-  GO_VERSION: "1.21.x"
+  GO_VERSION: "1.23.x"
 
 jobs:
   setup:
@@ -39,7 +39,7 @@ jobs:
     with:
       service: ${{ matrix.service }}
       target: build
-      go-version: "1.21.x"
+      go-version: ${{ env.GO_VERSION }}
 
   test:
     name: Test
@@ -53,7 +53,7 @@ jobs:
     with:
       service: ${{ matrix.service }}
       target: test
-      go-version: "1.21.x"
+      go-version: ${{ env.GO_VERSION }}
 
   lint:
     name: Lint
