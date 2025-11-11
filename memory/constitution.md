@@ -35,7 +35,7 @@ Rationale: A single, well‑defined surface enables client choice, automation, t
 ### 2. Stateless Microservices & Async Non‑Critical Paths
 - Services MUST be independently deployable with single responsibility.
 - No shared state in service memory; persistent state in PostgreSQL, cache in Redis, queues in RabbitMQ.
-- Critical path (inference) MUST be ultra‑low latency; non‑critical work (analytics, logging) MUST be asynchronous and idempotent.
+- Critical path (inference) MUST be ultra‑low latency; non‑critical work (analytics, logging) MUST be asynchronous and idempotent. **When analytics pipelines reuse operational data stores (e.g., guardrail workflows that seed analytics from operational tables), this coupling MUST be documented in runbooks and automated checks MUST guard against schema drift.**
 - Inter‑service communication via REST or queues; no shared databases between services.
 
 Rationale: Statelessness and clear boundaries enable horizontal scale, resilience, and predictable latency.
