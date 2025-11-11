@@ -66,15 +66,15 @@
 
 ### Implementation for User Story 2
 
-- [ ] T021 [P] [US2] Implement Go authorization middleware integrating OPA bundles in `shared/go/auth/middleware.go`
-- [ ] T022 [P] [US2] Implement TypeScript authorization middleware integrating OPA bundles in `shared/ts/auth/middleware.ts`
-- [ ] T023 [P] [US2] Add request context injectors (request IDs, trace IDs) in `shared/go/observability/middleware.go`
-- [ ] T024 [P] [US2] Add request context injectors for Node in `shared/ts/observability/middleware.ts`
-- [ ] T025 [US2] Extend sample Go service with protected routes and policy tests in `samples/service-template/go/handlers/secure.go`
-- [ ] T026 [US2] Extend sample TypeScript service with protected routes and policy tests in `samples/service-template/ts/src/secure.ts`
-- [ ] T027 [US2] Publish audit event formatter shared between languages in `shared/go/auth/audit.go` and `shared/ts/auth/audit.ts`
-- [ ] T028 [US2] Validate middleware via integration tests in `tests/go/integration/authz_test.go`
-- [ ] T029 [US2] Validate middleware via integration tests in `tests/ts/integration/authz.spec.ts`
+- [x] T021 [P] [US2] Implement Go authorization middleware integrating policy bundles in `shared/go/auth/middleware.go`
+- [x] T022 [P] [US2] Implement TypeScript authorization middleware integrating policy bundles in `shared/ts/auth/middleware.ts`
+- [x] T023 [P] [US2] Add request context injectors (request IDs, trace IDs) in `shared/go/observability/middleware.go`
+- [x] T024 [P] [US2] Add request context injectors for Node in `shared/ts/observability/middleware.ts`
+- [x] T025 [US2] Extend sample Go service with protected routes and policy tests in `samples/service-template/go/cmd/service-template/main.go`
+- [x] T026 [US2] Extend sample TypeScript service with protected routes and policy tests in `samples/service-template/ts/src/index.ts`
+- [x] T027 [US2] Publish audit event formatter shared between languages in `shared/go/auth/audit.go` and `shared/ts/auth/audit.ts`
+- [x] T028 [US2] Validate middleware via integration tests in `tests/go/integration/authz_test.go`
+- [x] T029 [US2] Validate middleware via integration tests in `tests/ts/integration/src/authz.spec.ts`
 
 **Checkpoint**: Authorization and request handling standardized with telemetry and audit coverage.
 

@@ -7,11 +7,13 @@ import (
 	"log"
 	"net/http"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/ai-aas/shared-go/auth"
 	"github.com/ai-aas/shared-go/config"
 	"github.com/ai-aas/shared-go/dataaccess"
 	"github.com/ai-aas/shared-go/observability"
@@ -55,6 +57,7 @@ func main() {
 	}
 
 	router := chi.NewRouter()
+	router.Use(observability.RequestContextMiddleware)
 
 	router.Get("/healthz", dataaccess.Handler(registry))
 	router.Get("/info", func(w http.ResponseWriter, _ *http.Request) {
@@ -63,6 +66,23 @@ func main() {
 			"version": "0.0.0",
 		})
 	})
+
+	policyPath := filepath.Join("samples", "service-template", "policies", "service-template", "policy.json")
+	engine, err := auth.LoadPolicyFromFile(policyPath)
+	if err != nil {
+		log.Printf("failed to load policy bundle: %v", err)
+	} else {
+		secure := chi.NewRouter()
+		secure.Use(auth.Middleware(engine, auth.HeaderExtractor))
+		secure.Get("/data", func(w http.ResponseWriter, r *http.Request) {
+			actor, _ := auth.ActorFromContext(r.Context())
+			writeJSON(w, http.StatusOK, map[string]any{
+				"message": "authorized access granted",
+				"subject": actor.Subject,
+			})
+		})
+		router.Mount("/secure", secure)
+	}
 
 	server := &http.Server{
 		Addr:    cfg.Service.Address,

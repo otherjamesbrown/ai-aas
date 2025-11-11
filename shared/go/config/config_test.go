@@ -79,6 +79,19 @@ func TestLoadValidation(t *testing.T) {
 	}
 }
 
+func TestMustLoadPanics(t *testing.T) {
+	defer snapshotEnv(t, []string{"SERVICE_NAME"})()
+	os.Setenv("SERVICE_NAME", "")
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("expected panic from MustLoad")
+		}
+	}()
+
+	MustLoad(context.Background())
+}
+
 func snapshotEnv(t *testing.T, keys []string) func() {
 	t.Helper()
 	values := make(map[string]*string, len(keys))

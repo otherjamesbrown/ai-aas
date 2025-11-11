@@ -1,0 +1,6 @@
+{
+  "rules": {
+    "GET:/secure/data": ["admin"]
+  }
+}
+

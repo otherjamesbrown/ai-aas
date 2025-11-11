@@ -8,6 +8,8 @@ use (
 	./tests/infra/perf
 	./tests/infra/synthetics
 	./tests/go/unit
+	./tests/go/integration
+	./tests/go/contract
 	./samples/service-template/go
 	./shared/go
 	./db/tools/migrate
@@ -16,3 +18,5 @@ use (
 	./db/tools/sqlrunner
 	./analytics/tests
 )
+
+replace github.com/ai-aas/shared-go v0.0.0 => ./shared/go

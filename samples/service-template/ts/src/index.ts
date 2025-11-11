@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
-import { loadConfig, startTelemetry, Registry, httpHandler, initDataAccess } from '@ai-aas/shared';
+import path from 'node:path';
+import { loadConfig, startTelemetry, Registry, httpHandler, initDataAccess, PolicyEngine, createAuthMiddleware, createRequestContextHook } from '@ai-aas/shared';
 
 async function start() {
   const config = loadConfig();
@@ -10,6 +11,7 @@ async function start() {
   });
 
   const app = Fastify({ logger: true });
+  app.addHook('onRequest', createRequestContextHook());
 
   const registry = new Registry();
   registry.register('self', async () => {});
@@ -26,6 +28,34 @@ async function start() {
     service: config.service.name,
     version: '0.0.0',
   }));
+
+  const policyPathCandidates = [
+    process.env.POLICY_PATH,
+    path.resolve(__dirname, '../policies/service-template/policy.json'),
+    path.resolve(process.cwd(), 'samples/service-template/ts/policies/service-template/policy.json'),
+  ].filter(Boolean) as string[];
+
+  let policyEngine: PolicyEngine | undefined;
+  let policyError: unknown;
+  for (const candidate of policyPathCandidates) {
+    try {
+      policyEngine = await PolicyEngine.fromFile(candidate);
+      break;
+    } catch (err) {
+      policyError = err;
+    }
+  }
+  if (!policyEngine) {
+    throw policyError ?? new Error('unable to load authorization policy');
+  }
+
+  app.register(async (instance) => {
+    instance.addHook('preHandler', createAuthMiddleware(policyEngine));
+    instance.get('/secure/data', async (request) => ({
+      message: 'authorized access granted',
+      subject: request.headers['x-actor-subject'] ?? '',
+    }));
+  }, { prefix: '/secure' });
 
   const close = async () => {
     await telemetry.shutdown();

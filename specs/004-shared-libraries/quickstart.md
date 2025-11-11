@@ -88,6 +88,7 @@ npm install @ai-aas/shared@0.1.0
 2. Reference the bundle in service bootstrap:
    - Go: `auth.NewMiddleware(policy.WithBundle("service-template", version))`
    - TypeScript: `createAuthMiddleware({ bundleId: 'service-template', version })`
+3. Ensure inbound requests include `X-Actor-Subject` and `X-Actor-Roles` headers so middleware can evaluate policies.
 
 ## 7. Verify Telemetry & Health
 1. Start the sample service:

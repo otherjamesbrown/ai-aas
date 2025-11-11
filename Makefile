@@ -9,6 +9,7 @@ RUN_ID ?= $(shell date +%s)
 
 SHARED_GO_DIR := $(ROOT_DIR)/shared/go
 SHARED_TS_DIR := $(ROOT_DIR)/shared/ts
+SHARED_GO_COVERAGE_TARGET ?= 80
 SHARED_TS_NODE_MODULES := $(SHARED_TS_DIR)/node_modules
 SHARED_TS_TEST_DIR := $(ROOT_DIR)/tests/ts/unit
 SHARED_TS_TEST_NODE_MODULES := $(SHARED_TS_TEST_DIR)/node_modules
@@ -62,8 +63,10 @@ shared-go-build: ## Build shared Go libraries
 
 .PHONY: shared-go-test
 shared-go-test: ## Run Go unit tests for shared libraries
-	@echo ">> Testing shared Go libraries"
-	@cd $(SHARED_GO_DIR) && go test ./...
+	@echo ">> Testing shared Go libraries (coverage target $(SHARED_GO_COVERAGE_TARGET)%)"
+	@cd $(SHARED_GO_DIR) && go test ./... -coverprofile=coverage.out -covermode=atomic
+	@cd $(SHARED_GO_DIR) && go tool cover -func=coverage.out | awk -v target=$(SHARED_GO_COVERAGE_TARGET) 'BEGIN { status=0 } /^total:/ { gsub("%","",$$3); if ($$3+0 < target) { printf "total coverage %.2f%% below target %.2f%%\n", $$3, target; status=1 } } END { exit status }'
+	@cd $(SHARED_GO_DIR) && rm -f coverage.out
 
 .PHONY: shared-go-lint
 shared-go-lint: ## Run go vet for shared libraries

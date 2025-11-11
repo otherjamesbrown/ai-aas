@@ -4,7 +4,12 @@
     "rootDir": "src",
     "outDir": "dist",
     "types": ["vitest/globals"],
-    "noEmit": true
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@ai-aas/shared": ["../../../shared/ts/src"],
+      "@ai-aas/shared/*": ["../../../shared/ts/src/*"]
+    }
   },
   "include": [
     "src"
