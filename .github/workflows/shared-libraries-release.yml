@@ -56,10 +56,9 @@ jobs:
 
       - name: Prepare release artifacts
         run: |
-          mkdir -p release-artifacts
-          tar -czf release-artifacts/shared-go-${VERSION}.tar.gz -C shared go
-          npm pack --pack-destination ../release-artifacts
-        working-directory: shared/ts
+          mkdir -p shared/release-artifacts
+          tar -czf shared/release-artifacts/shared-go-${VERSION}.tar.gz -C shared go
+          cd shared/ts && npm pack --pack-destination ../release-artifacts
 
       - name: Capture TypeScript artifact name
         id: capture_ts_artifact
