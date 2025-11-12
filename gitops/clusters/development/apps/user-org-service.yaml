@@ -33,6 +33,8 @@ spec:
               secretKeyRef:
                 name: user-org-service-db-secret
                 key: database-url
+          - name: REDIS_ADDR
+            value: ""
           - name: OAUTH_HMAC_SECRET
             valueFrom:
               secretKeyRef:
