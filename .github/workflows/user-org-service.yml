@@ -33,9 +33,13 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          key: ${{ runner.os }}-go-${{ hashFiles('services/user-org-service/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        working-directory: services/user-org-service
+        run: GOWORK=off go mod download
 
       - name: Go fmt
         working-directory: services/user-org-service
