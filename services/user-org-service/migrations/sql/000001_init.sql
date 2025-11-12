@@ -1,12 +1,5 @@
 -- +goose Up
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
-CREATE OR REPLACE FUNCTION set_updated_at() RETURNS trigger AS $func$
-BEGIN
-  NEW.updated_at = now();
-  RETURN NEW;
-END;
-$func$ LANGUAGE plpgsql;
+-- Function set_updated_at() is created in 000000_setup_function.sql
 
 CREATE TABLE orgs (
   org_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -180,7 +173,7 @@ DROP TRIGGER IF EXISTS trg_service_accounts_updated_at ON service_accounts;
 DROP TRIGGER IF EXISTS trg_users_updated_at ON users;
 DROP TRIGGER IF EXISTS trg_orgs_updated_at ON orgs;
 
-DROP FUNCTION IF EXISTS set_updated_at;
+-- Function set_updated_at() is dropped in 000000_setup_function.sql
 
 DROP TABLE IF EXISTS oauth_sessions;
 DROP TABLE IF EXISTS sessions;
