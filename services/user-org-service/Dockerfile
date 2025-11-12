@@ -26,6 +26,17 @@ WORKDIR /app
 COPY --from=builder /bin/admin-api /app/admin-api
 COPY --from=builder /bin/reconciler /app/reconciler
 
+# Install goose for migrations
+RUN apk --no-cache add go
+WORKDIR /tmp
+RUN go install github.com/pressly/goose/v3/cmd/goose@latest
+RUN cp /root/go/bin/goose /usr/local/bin/goose
+
+# Copy migrations directory for init container
+COPY migrations /app/migrations
+
+WORKDIR /app
+
 # No default entrypoint - each container in the deployment specifies its own command/args
 # admin-api container uses: args: ["./admin-api"]
 # reconciler container uses: args: ["./reconciler"]

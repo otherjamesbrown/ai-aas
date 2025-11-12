@@ -59,4 +59,7 @@ redis:
 postgres:
   dsnSecretName: ""
 
+migrations:
+  enabled: true
+
 

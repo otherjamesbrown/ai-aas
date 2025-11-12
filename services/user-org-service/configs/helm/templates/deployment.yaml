@@ -21,6 +21,44 @@ spec:
         {{- end }}
       {{- end }}
       serviceAccountName: {{ include "user-org-service.serviceAccountName" . }}
+      {{- if .Values.migrations.enabled }}
+      initContainers:
+        - name: migrate
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              echo "Running database migrations..."
+              goose -dir /app/migrations/sql postgres "$DATABASE_URL" up
+              echo "Migrations completed successfully"
+          env:
+            {{- range .Values.env }}
+            {{- if .valueFrom }}
+            - name: {{ .name }}
+              valueFrom:
+                {{- toYaml .valueFrom | nindent 16 }}
+            {{- else }}
+            - name: {{ .name }}
+              value: {{ .value | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.postgres.dsnSecretName }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.dsnSecretName }}
+                  key: database-url
+            {{- end }}
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+      {{- end }}
       containers:
         - name: admin-api
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
