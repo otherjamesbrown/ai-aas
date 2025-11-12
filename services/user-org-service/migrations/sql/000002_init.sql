@@ -94,15 +94,26 @@ CREATE TABLE IF NOT EXISTS sessions (
   UNIQUE(org_id, refresh_token_hash)
 );
 
--- Create indexes only if tables have the required columns
+-- Drop existing tables if they have wrong schema (development only)
 -- +goose StatementBegin
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'external_idp_id') THEN
-    CREATE UNIQUE INDEX IF NOT EXISTS users_external_idp_idx ON users(org_id, external_idp_id) WHERE external_idp_id IS NOT NULL;
+  -- Drop tables if they exist with wrong schema
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'users' AND table_schema = 'public') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'org_id') THEN
+      DROP TABLE IF EXISTS oauth_sessions CASCADE;
+      DROP TABLE IF EXISTS sessions CASCADE;
+      DROP TABLE IF EXISTS api_keys CASCADE;
+      DROP TABLE IF EXISTS service_accounts CASCADE;
+      DROP TABLE IF EXISTS users CASCADE;
+      DROP TABLE IF EXISTS orgs CASCADE;
+    END IF;
   END IF;
 END $$;
 -- +goose StatementEnd
+
+-- Create indexes
+CREATE UNIQUE INDEX IF NOT EXISTS users_external_idp_idx ON users(org_id, external_idp_id) WHERE external_idp_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS users_org_status_idx ON users(org_id, status);
 CREATE INDEX IF NOT EXISTS api_keys_lookup_idx ON api_keys(org_id, principal_type, principal_id);
 CREATE INDEX IF NOT EXISTS sessions_lookup_idx ON sessions(org_id, user_id);
