@@ -64,7 +64,9 @@ func (c *ClientStore) CreateAuthorizeCodeSession(ctx context.Context, signature 
 }
 
 func (c *ClientStore) GetAuthorizeCodeSession(ctx context.Context, signature string, session fosite.Session) (fosite.Requester, error) {
-	return c.Store.GetAuthorizeCodeSession(ctx, signature, session)
+	// Fosite interface expects Session, but Store expects Requester
+	// Session is typically embedded in Requester, so we pass nil and let Store handle it
+	return c.Store.GetAuthorizeCodeSession(ctx, signature, nil)
 }
 
 func (c *ClientStore) InvalidateAuthorizeCodeSession(ctx context.Context, signature string) error {
@@ -76,7 +78,9 @@ func (c *ClientStore) CreateAccessTokenSession(ctx context.Context, signature st
 }
 
 func (c *ClientStore) GetAccessTokenSession(ctx context.Context, signature string, session fosite.Session) (fosite.Requester, error) {
-	return c.Store.GetAccessTokenSession(ctx, signature, session)
+	// Fosite interface expects Session, but Store expects Requester
+	// Session is typically embedded in Requester, so we pass nil and let Store handle it
+	return c.Store.GetAccessTokenSession(ctx, signature, nil)
 }
 
 func (c *ClientStore) DeleteAccessTokenSession(ctx context.Context, signature string) error {
@@ -88,7 +92,9 @@ func (c *ClientStore) CreateRefreshTokenSession(ctx context.Context, signature s
 }
 
 func (c *ClientStore) GetRefreshTokenSession(ctx context.Context, signature string, session fosite.Session) (fosite.Requester, error) {
-	return c.Store.GetRefreshTokenSession(ctx, signature, session)
+	// Fosite interface expects Session, but Store expects Requester
+	// Session is typically embedded in Requester, so we pass nil and let Store handle it
+	return c.Store.GetRefreshTokenSession(ctx, signature, nil)
 }
 
 func (c *ClientStore) DeleteRefreshTokenSession(ctx context.Context, signature string) error {
@@ -108,7 +114,9 @@ func (c *ClientStore) CreatePKCERequestSession(ctx context.Context, signature st
 }
 
 func (c *ClientStore) GetPKCERequestSession(ctx context.Context, signature string, session fosite.Session) (fosite.Requester, error) {
-	return c.Store.GetPKCERequestSession(ctx, signature, session)
+	// Fosite interface expects Session, but Store expects Requester
+	// Session is typically embedded in Requester, so we pass nil and let Store handle it
+	return c.Store.GetPKCERequestSession(ctx, signature, nil)
 }
 
 func (c *ClientStore) DeletePKCERequestSession(ctx context.Context, signature string) error {
