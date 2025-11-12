@@ -34,7 +34,7 @@ spec:
                 name: user-org-service-db-secret
                 key: database-url
           - name: REDIS_ADDR
-            value: ""
+            value: "redis.development.svc.cluster.local:6379"
           - name: OAUTH_HMAC_SECRET
             valueFrom:
               secretKeyRef:
