@@ -24,6 +24,11 @@ import (
 func setupOAuthStore(t *testing.T) (*Store, func()) {
 	t.Helper()
 
+	// Skip if running in short mode (CI)
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
 	ctx := context.Background()
 
 	provider, err := newDockerProviderSafe()
@@ -106,6 +111,9 @@ func newTestRequest(orgID uuid.UUID) (*fosite.Request, *Session) {
 
 func TestAuthorizeCodeLifecycle(t *testing.T) {
 	store, cleanup := setupOAuthStore(t)
+	if store == nil {
+		return // Test was skipped
+	}
 	defer cleanup()
 
 	orgID := uuid.New()
@@ -127,6 +135,9 @@ func TestAuthorizeCodeLifecycle(t *testing.T) {
 
 func TestAccessTokenLifecycle(t *testing.T) {
 	store, cleanup := setupOAuthStore(t)
+	if store == nil {
+		return // Test was skipped
+	}
 	defer cleanup()
 
 	orgID := uuid.New()
@@ -147,6 +158,9 @@ func TestAccessTokenLifecycle(t *testing.T) {
 
 func TestRefreshTokenLifecycle(t *testing.T) {
 	store, cleanup := setupOAuthStore(t)
+	if store == nil {
+		return // Test was skipped
+	}
 	defer cleanup()
 
 	orgID := uuid.New()
@@ -173,6 +187,9 @@ func TestRefreshTokenLifecycle(t *testing.T) {
 
 func TestPKCELifecycle(t *testing.T) {
 	store, cleanup := setupOAuthStore(t)
+	if store == nil {
+		return // Test was skipped
+	}
 	defer cleanup()
 
 	orgID := uuid.New()
@@ -193,6 +210,9 @@ func TestPKCELifecycle(t *testing.T) {
 
 func TestSessionRoundTripPreservesFields(t *testing.T) {
 	store, cleanup := setupOAuthStore(t)
+	if store == nil {
+		return // Test was skipped
+	}
 	defer cleanup()
 
 	orgID := uuid.New()
