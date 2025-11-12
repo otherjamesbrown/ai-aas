@@ -58,6 +58,7 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/bootstrap"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/auth"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/middleware"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/orgs"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/users"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/logging"
@@ -85,12 +86,20 @@ func main() {
 		ServiceName: cfg.ServiceName + "-admin-api",
 		Readiness:   readinessProbe(runtime, logger),
 		RegisterRoutes: func(r chi.Router) {
+			// Public auth routes (no auth required)
 			auth.RegisterRoutes(r, runtime)
-			// Register orgs routes first - this creates /v1/orgs/{orgId} routes
-			orgs.RegisterRoutes(r, runtime, logger)
-			// Register users routes - these are more specific (/v1/orgs/{orgId}/invites, etc.)
-			// and will match after the orgs routes
-			users.RegisterRoutes(r, runtime, logger)
+			
+			// Protected routes (require authentication)
+			r.Group(func(r chi.Router) {
+				// Apply auth middleware to all routes in this group
+				r.Use(middleware.RequireAuth(runtime, logger))
+				
+				// Register orgs routes first - this creates /v1/orgs/{orgId} routes
+				orgs.RegisterRoutes(r, runtime, logger)
+				// Register users routes - these are more specific (/v1/orgs/{orgId}/invites, etc.)
+				// and will match after the orgs routes
+				users.RegisterRoutes(r, runtime, logger)
+			})
 		},
 	})
 

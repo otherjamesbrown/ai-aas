@@ -56,6 +56,7 @@ import (
 
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/audit"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/bootstrap"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/middleware"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/security"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/storage/postgres"
 )
@@ -503,13 +504,10 @@ func toUserResponse(user postgres.User) UserResponse {
 	}
 }
 
-// getActorID extracts the actor ID from the request.
-// TODO: Extract from authenticated session/JWT token once auth middleware is in place.
-// For now, returns a system actor UUID.
+// getActorID extracts the actor ID from the request context.
+// Requires RequireAuth middleware to be applied to the route.
 func getActorID(r *http.Request) uuid.UUID {
-	// TODO: Extract from r.Context() when auth middleware is added
-	// For now, use a system actor
-	return uuid.Nil // System actor (will be replaced with actual user ID from session)
+	return middleware.GetUserID(r.Context())
 }
 
 // generateInviteToken generates a secure random token for user invites.
