@@ -1,0 +1,62 @@
+replicaCount: 2
+
+image:
+  repository: ghcr.io/otherjamesbrown/user-org-service
+  tag: latest
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  name: ""
+
+service:
+  type: ClusterIP
+  port: 8081
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+livenessProbe:
+  path: /healthz
+  initialDelaySeconds: 10
+  periodSeconds: 10
+
+readinessProbe:
+  path: /readyz
+  initialDelaySeconds: 15
+  periodSeconds: 10
+
+env:
+  - name: ENVIRONMENT
+    value: development
+  - name: LOG_LEVEL
+    value: info
+
+extraEnv: []
+extraVolumes: []
+extraVolumeMounts: []
+
+otel:
+  enabled: false
+  collectorEndpoint: ""
+
+prometheus:
+  enabled: true
+  port: 8081
+  path: /metrics
+
+kafka:
+  brokers: []
+
+redis:
+  address: ""
+
+postgres:
+  dsnSecretName: ""
+
+
