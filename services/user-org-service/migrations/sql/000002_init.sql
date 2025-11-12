@@ -1,6 +1,24 @@
 -- +goose Up
 -- Function set_updated_at() is created in 000001_setup_function.sql
 
+-- Drop existing tables if they have wrong schema (development only)
+-- +goose StatementBegin
+DO $$
+BEGIN
+  -- Drop tables if they exist with wrong schema
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'users' AND table_schema = 'public') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'org_id') THEN
+      DROP TABLE IF EXISTS oauth_sessions CASCADE;
+      DROP TABLE IF EXISTS sessions CASCADE;
+      DROP TABLE IF EXISTS api_keys CASCADE;
+      DROP TABLE IF EXISTS service_accounts CASCADE;
+      DROP TABLE IF EXISTS users CASCADE;
+      DROP TABLE IF EXISTS orgs CASCADE;
+    END IF;
+  END IF;
+END $$;
+-- +goose StatementEnd
+
 CREATE TABLE IF NOT EXISTS orgs (
   org_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   slug TEXT NOT NULL UNIQUE,
@@ -93,24 +111,6 @@ CREATE TABLE IF NOT EXISTS sessions (
   deleted_at TIMESTAMPTZ,
   UNIQUE(org_id, refresh_token_hash)
 );
-
--- Drop existing tables if they have wrong schema (development only)
--- +goose StatementBegin
-DO $$
-BEGIN
-  -- Drop tables if they exist with wrong schema
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'users' AND table_schema = 'public') THEN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'org_id') THEN
-      DROP TABLE IF EXISTS oauth_sessions CASCADE;
-      DROP TABLE IF EXISTS sessions CASCADE;
-      DROP TABLE IF EXISTS api_keys CASCADE;
-      DROP TABLE IF EXISTS service_accounts CASCADE;
-      DROP TABLE IF EXISTS users CASCADE;
-      DROP TABLE IF EXISTS orgs CASCADE;
-    END IF;
-  END IF;
-END $$;
--- +goose StatementEnd
 
 -- Create indexes
 CREATE UNIQUE INDEX IF NOT EXISTS users_external_idp_idx ON users(org_id, external_idp_id) WHERE external_idp_id IS NOT NULL;
