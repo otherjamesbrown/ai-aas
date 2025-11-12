@@ -1,0 +1,229 @@
+name: user-org-service
+
+on:
+  push:
+    paths:
+      - "services/user-org-service/**"
+      - "specs/005-user-org-service/**"
+      - ".github/workflows/user-org-service.yml"
+  pull_request:
+    paths:
+      - "services/user-org-service/**"
+      - "specs/005-user-org-service/**"
+      - ".github/workflows/user-org-service.yml"
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.work
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Go fmt
+        run: gofmt -l .
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Unit Tests
+        run: go test ./services/user-org-service/... -cover
+
+      - name: Lint
+        run: make lint
+
+      - name: OPA Policy Tests
+        if: ${{ !cancelled() }}
+        run: |
+          if [ -d policies ]; then
+            make opa-test
+          else
+            echo "policies directory not present; skipping"
+          fi
+
+      - name: Contract Validation
+        if: ${{ !cancelled() }}
+        run: |
+          if [ -f specs/005-user-org-service/contracts/user-org-service.openapi.yaml ]; then
+            npx @redocly/cli lint specs/005-user-org-service/contracts/user-org-service.openapi.yaml
+          else
+            echo "OpenAPI spec missing; skipping contract lint"
+          fi
+
+      - name: k6 Smoke Tests
+        if: ${{ !cancelled() }}
+        run: |
+          if [ -d tests/load/user-org-service ]; then
+            ./scripts/service/test_new_service.sh user-org-service
+          else
+            echo "k6 load tests not present; skipping"
+          fi
+
+  deploy-e2e-test:
+    name: Deploy and Run E2E Tests (Development)
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build E2E Test Image
+        working-directory: services/user-org-service
+        run: |
+          docker build -f Dockerfile.e2e-test \
+            -t ghcr.io/${{ github.repository_owner }}/user-org-service-e2e-test:${{ github.sha }} \
+            -t ghcr.io/${{ github.repository_owner }}/user-org-service-e2e-test:latest \
+            .
+
+      - name: Push E2E Test Image
+        run: |
+          docker push ghcr.io/${{ github.repository_owner }}/user-org-service-e2e-test:${{ github.sha }}
+          docker push ghcr.io/${{ github.repository_owner }}/user-org-service-e2e-test:latest
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        if: env.DEV_KUBECONFIG_B64 != ''
+
+      - name: Configure kubectl for Development
+        if: env.DEV_KUBECONFIG_B64 != ''
+        env:
+          DEV_KUBECONFIG_B64: ${{ secrets.DEV_KUBECONFIG_B64 }}
+          DEV_KUBE_CONTEXT: ${{ secrets.DEV_KUBE_CONTEXT }}
+        run: |
+          mkdir -p ~/.kube
+          echo "$DEV_KUBECONFIG_B64" | base64 -d > ~/.kube/config
+          kubectl config use-context "${DEV_KUBE_CONTEXT:-lke531921-ctx}" || kubectl config current-context
+
+      - name: Deploy and Run E2E Test Job
+        if: env.DEV_KUBECONFIG_B64 != ''
+        working-directory: services/user-org-service
+        env:
+          REGISTRY: ghcr.io/${{ github.repository_owner }}
+          IMAGE_TAG: ${{ github.sha }}
+          KUBECTL_CONTEXT: ${{ secrets.DEV_KUBE_CONTEXT }}
+          NAMESPACE: user-org-service
+        run: |
+          TIMESTAMP=$(date +%s)
+          JOB_NAME="e2e-test-${TIMESTAMP}"
+          FULL_IMAGE="${REGISTRY}/user-org-service-e2e-test:${IMAGE_TAG}"
+          
+          # Create job manifest
+          cat <<EOF | kubectl --context="${KUBECTL_CONTEXT}" apply -f -
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: ${JOB_NAME}
+            namespace: ${NAMESPACE}
+            labels:
+              app: user-org-service
+              component: e2e-test
+              github-run-id: ${{ github.run_id }}
+          spec:
+            ttlSecondsAfterFinished: 3600
+            backoffLimit: 2
+            template:
+              metadata:
+                labels:
+                  app: user-org-service
+                  component: e2e-test
+              spec:
+                restartPolicy: Never
+                containers:
+                - name: e2e-test
+                  image: ${FULL_IMAGE}
+                  imagePullPolicy: Always
+                  env:
+                  - name: API_URL
+                    value: "http://user-org-service.${NAMESPACE}.svc.cluster.local:8081"
+                  resources:
+                    requests:
+                      memory: "128Mi"
+                      cpu: "100m"
+                    limits:
+                      memory: "256Mi"
+                      cpu: "500m"
+          EOF
+          
+          echo "Job created: ${JOB_NAME}"
+          echo "Waiting for job to start..."
+          sleep 5
+          
+          # Wait for pod
+          for i in {1..30}; do
+            POD_NAME=$(kubectl --context="${KUBECTL_CONTEXT}" -n "${NAMESPACE}" get pods -l job-name="${JOB_NAME}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+            if [ -n "$POD_NAME" ]; then
+              break
+            fi
+            sleep 2
+          done
+          
+          if [ -z "$POD_NAME" ]; then
+            echo "Pod not found. Job status:"
+            kubectl --context="${KUBECTL_CONTEXT}" -n "${NAMESPACE}" describe job "${JOB_NAME}"
+            exit 1
+          fi
+          
+          echo "Pod: ${POD_NAME}"
+          echo "Streaming logs..."
+          
+          # Stream logs and capture exit code
+          kubectl --context="${KUBECTL_CONTEXT}" -n "${NAMESPACE}" logs -f "job/${JOB_NAME}" || true
+          
+          # Wait for job completion
+          echo "Waiting for job to complete..."
+          kubectl --context="${KUBECTL_CONTEXT}" -n "${NAMESPACE}" wait --for=condition=complete --timeout=5m "job/${JOB_NAME}" || true
+          
+          # Check final status
+          JOB_STATUS=$(kubectl --context="${KUBECTL_CONTEXT}" -n "${NAMESPACE}" get job "${JOB_NAME}" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null || echo "Unknown")
+          JOB_FAILED=$(kubectl --context="${KUBECTL_CONTEXT}" -n "${NAMESPACE}" get job "${JOB_NAME}" -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null || echo "Unknown")
+          
+          if [ "$JOB_STATUS" = "True" ]; then
+            echo "✅ E2E tests passed!"
+            exit 0
+          elif [ "$JOB_FAILED" = "True" ]; then
+            echo "❌ E2E tests failed!"
+            kubectl --context="${KUBECTL_CONTEXT}" -n "${NAMESPACE}" logs "job/${JOB_NAME}"
+            exit 1
+          else
+            echo "⚠️ Job status unknown. Check manually:"
+            echo "kubectl --context=${KUBECTL_CONTEXT} -n ${NAMESPACE} get job ${JOB_NAME}"
+            exit 1
+          fi
+
+      - name: E2E Test Skipped (No Kubeconfig)
+        if: env.DEV_KUBECONFIG_B64 == ''
+        run: |
+          echo "⚠️ DEV_KUBECONFIG_B64 secret not configured. Skipping e2e-test deployment."
+          echo "To enable: Add DEV_KUBECONFIG_B64 and DEV_KUBE_CONTEXT secrets to GitHub repository."
+
+

@@ -1,0 +1,8 @@
+apiVersion: v2
+name: user-org-service
+description: Helm chart for deploying the User & Organization Service
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
+
