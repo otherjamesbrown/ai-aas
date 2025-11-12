@@ -231,25 +231,37 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	// Store invite token hash in separate table (in tenant transaction for RLS)
-	err = h.runtime.Postgres.Pool().BeginTxFunc(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
-		// Set tenant context for RLS
-		escapedOrgID := strings.ReplaceAll(orgID.String(), "'", "''")
-		if _, err := tx.Exec(ctx, fmt.Sprintf("SET LOCAL app.org_id = '%s'", escapedOrgID)); err != nil {
-			return err
-		}
-		
-		// Store invite token hash
-		_, err := tx.Exec(ctx, `
-			INSERT INTO invite_tokens (org_id, user_id, token_hash, expires_at, created_by_user_id)
-			VALUES ($1, $2, $3, $4, $5)
-		`, orgID, userID, tokenHash, expiresAt, actorID)
-		return err
-	})
+	tx, err := h.runtime.Postgres.Pool().BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		h.logger.Error().Err(err).Str("email", email).Msg("failed to begin transaction for invite token")
+		http.Error(w, "failed to create invite", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(ctx)
 	
+	// Set tenant context for RLS
+	escapedOrgID := strings.ReplaceAll(orgID.String(), "'", "''")
+	if _, err := tx.Exec(ctx, fmt.Sprintf("SET LOCAL app.org_id = '%s'", escapedOrgID)); err != nil {
+		h.logger.Error().Err(err).Str("email", email).Msg("failed to set tenant context")
+		http.Error(w, "failed to create invite", http.StatusInternalServerError)
+		return
+	}
+	
+	// Store invite token hash
+	_, err = tx.Exec(ctx, `
+		INSERT INTO invite_tokens (org_id, user_id, token_hash, expires_at, created_by_user_id)
+		VALUES ($1, $2, $3, $4, $5)
+	`, orgID, userID, tokenHash, expiresAt, actorID)
 	if err != nil {
 		h.logger.Error().Err(err).Str("email", email).Msg("failed to store invite token")
 		// User was created but token wasn't - this is a partial failure
 		// In production, consider rolling back or marking user for cleanup
+		http.Error(w, "failed to create invite", http.StatusInternalServerError)
+		return
+	}
+	
+	if err := tx.Commit(ctx); err != nil {
+		h.logger.Error().Err(err).Str("email", email).Msg("failed to commit invite token transaction")
 		http.Error(w, "failed to create invite", http.StatusInternalServerError)
 		return
 	}
