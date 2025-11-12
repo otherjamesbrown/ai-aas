@@ -45,13 +45,17 @@ package users
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog"
 
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/audit"
@@ -168,10 +172,26 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 	}
 	expiresAt := time.Now().Add(time.Duration(expiresInHours) * time.Hour)
 
-	// Generate temporary password for invite (user will reset on acceptance)
-	tempPassword, err := generateInviteToken()
+	// Generate secure invite token
+	inviteToken, err := generateInviteToken()
 	if err != nil {
 		h.logger.Error().Err(err).Msg("failed to generate invite token")
+		http.Error(w, "failed to create invite", http.StatusInternalServerError)
+		return
+	}
+	
+	// Hash the invite token for secure storage
+	tokenHash, err := security.HashPassword(inviteToken)
+	if err != nil {
+		h.logger.Error().Err(err).Msg("failed to hash invite token")
+		http.Error(w, "failed to create invite", http.StatusInternalServerError)
+		return
+	}
+
+	// Generate temporary password for user (user will reset on acceptance)
+	tempPassword, err := generateInviteToken()
+	if err != nil {
+		h.logger.Error().Err(err).Msg("failed to generate temporary password")
 		http.Error(w, "failed to create invite", http.StatusInternalServerError)
 		return
 	}
@@ -184,6 +204,9 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 
 	// Create user with invited status
 	userID := uuid.New()
+	actorID := getActorID(r)
+	
+	// Create user first (uses its own transaction with RLS)
 	params := postgres.CreateUserParams{
 		ID:           userID,
 		OrgID:        orgID,
@@ -196,20 +219,42 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 		RecoveryTokens: []string{},
 		Metadata: map[string]any{
 			"invite_expires_at": expiresAt.Format(time.RFC3339),
-			"invite_token":       tempPassword, // TODO: Store hashed, use separate invite_tokens table
 			"roles":             req.Roles,
 		},
 	}
-
+	
 	createdUser, err := h.runtime.Postgres.CreateUser(ctx, params)
 	if err != nil {
 		h.logger.Error().Err(err).Str("email", email).Msg("failed to create invited user")
 		http.Error(w, "failed to create invite", http.StatusInternalServerError)
 		return
 	}
+	
+	// Store invite token hash in separate table (in tenant transaction for RLS)
+	err = h.runtime.Postgres.Pool().BeginTxFunc(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		// Set tenant context for RLS
+		escapedOrgID := strings.ReplaceAll(orgID.String(), "'", "''")
+		if _, err := tx.Exec(ctx, fmt.Sprintf("SET LOCAL app.org_id = '%s'", escapedOrgID)); err != nil {
+			return err
+		}
+		
+		// Store invite token hash
+		_, err := tx.Exec(ctx, `
+			INSERT INTO invite_tokens (org_id, user_id, token_hash, expires_at, created_by_user_id)
+			VALUES ($1, $2, $3, $4, $5)
+		`, orgID, userID, tokenHash, expiresAt, actorID)
+		return err
+	})
+	
+	if err != nil {
+		h.logger.Error().Err(err).Str("email", email).Msg("failed to store invite token")
+		// User was created but token wasn't - this is a partial failure
+		// In production, consider rolling back or marking user for cleanup
+		http.Error(w, "failed to create invite", http.StatusInternalServerError)
+		return
+	}
 
 	// Emit audit event
-	actorID := getActorID(r) // TODO: Extract from authenticated session
 	event := audit.BuildEvent(orgID, actorID, audit.ActorTypeSystem, audit.ActionUserInvite, audit.TargetTypeUser, &createdUser.ID)
 	event = audit.BuildEventFromRequest(event, r)
 	event.Metadata = map[string]any{
@@ -511,14 +556,14 @@ func getActorID(r *http.Request) uuid.UUID {
 }
 
 // generateInviteToken generates a secure random token for user invites.
-// TODO: Replace with crypto/rand for production use.
+// Uses crypto/rand for cryptographically secure random bytes.
 func generateInviteToken() (string, error) {
-	// Generate a URL-safe random token
-	// For now, using a simple generator - replace with crypto/rand in production
+	// Generate 32 bytes of random data
 	b := make([]byte, 32)
-	for i := range b {
-		b[i] = byte('A' + (i*7+13)%26)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("generate invite token: %w", err)
 	}
-	return string(b), nil
+	// Encode as URL-safe base64 (no padding)
+	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
