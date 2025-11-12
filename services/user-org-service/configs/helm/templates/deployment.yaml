@@ -14,12 +14,18 @@ spec:
       labels:
         {{- include "user-org-service.selectorLabels" . | nindent 8 }}
     spec:
+      {{- if .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- range .Values.image.pullSecrets }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
       serviceAccountName: {{ include "user-org-service.serviceAccountName" . }}
       containers:
         - name: admin-api
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          args: ["./admin-api"]
+          command: ["/app/admin-api"]
           env:
             {{- range .Values.env }}
             {{- if .valueFrom }}
@@ -66,7 +72,7 @@ spec:
         - name: reconciler
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          args: ["./reconciler"]
+          command: ["/app/reconciler"]
           env:
             {{- range .Values.env }}
             {{- if .valueFrom }}
