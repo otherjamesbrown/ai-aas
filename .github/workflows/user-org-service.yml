@@ -159,7 +159,7 @@ jobs:
             labels:
               app: user-org-service
               component: e2e-test
-              github-run-id: ${{ github.run_id }}
+              github-run-id: "${{ github.run_id }}"
           spec:
             ttlSecondsAfterFinished: 3600
             backoffLimit: 2
