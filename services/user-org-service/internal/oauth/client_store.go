@@ -63,8 +63,8 @@ func (c *ClientStore) CreateAuthorizeCodeSession(ctx context.Context, signature 
 	return c.Store.CreateAuthorizeCodeSession(ctx, signature, request)
 }
 
-func (c *ClientStore) GetAuthorizeCodeSession(ctx context.Context, signature string, requester fosite.Requester) (fosite.Requester, error) {
-	return c.Store.GetAuthorizeCodeSession(ctx, signature, requester)
+func (c *ClientStore) GetAuthorizeCodeSession(ctx context.Context, signature string, session fosite.Session) (fosite.Requester, error) {
+	return c.Store.GetAuthorizeCodeSession(ctx, signature, session)
 }
 
 func (c *ClientStore) InvalidateAuthorizeCodeSession(ctx context.Context, signature string) error {
@@ -75,8 +75,8 @@ func (c *ClientStore) CreateAccessTokenSession(ctx context.Context, signature st
 	return c.Store.CreateAccessTokenSession(ctx, signature, request)
 }
 
-func (c *ClientStore) GetAccessTokenSession(ctx context.Context, signature string, requester fosite.Requester) (fosite.Requester, error) {
-	return c.Store.GetAccessTokenSession(ctx, signature, requester)
+func (c *ClientStore) GetAccessTokenSession(ctx context.Context, signature string, session fosite.Session) (fosite.Requester, error) {
+	return c.Store.GetAccessTokenSession(ctx, signature, session)
 }
 
 func (c *ClientStore) DeleteAccessTokenSession(ctx context.Context, signature string) error {
@@ -87,8 +87,8 @@ func (c *ClientStore) CreateRefreshTokenSession(ctx context.Context, signature s
 	return c.Store.CreateRefreshTokenSession(ctx, signature, request)
 }
 
-func (c *ClientStore) GetRefreshTokenSession(ctx context.Context, signature string, requester fosite.Requester) (fosite.Requester, error) {
-	return c.Store.GetRefreshTokenSession(ctx, signature, requester)
+func (c *ClientStore) GetRefreshTokenSession(ctx context.Context, signature string, session fosite.Session) (fosite.Requester, error) {
+	return c.Store.GetRefreshTokenSession(ctx, signature, session)
 }
 
 func (c *ClientStore) DeleteRefreshTokenSession(ctx context.Context, signature string) error {
@@ -107,8 +107,8 @@ func (c *ClientStore) CreatePKCERequestSession(ctx context.Context, signature st
 	return c.Store.CreatePKCERequestSession(ctx, signature, request)
 }
 
-func (c *ClientStore) GetPKCERequestSession(ctx context.Context, signature string, requester fosite.Requester) (fosite.Requester, error) {
-	return c.Store.GetPKCERequestSession(ctx, signature, requester)
+func (c *ClientStore) GetPKCERequestSession(ctx context.Context, signature string, session fosite.Session) (fosite.Requester, error) {
+	return c.Store.GetPKCERequestSession(ctx, signature, session)
 }
 
 func (c *ClientStore) DeletePKCERequestSession(ctx context.Context, signature string) error {
