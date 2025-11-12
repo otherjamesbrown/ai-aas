@@ -1,0 +1,78 @@
+# Kubernetes Job for running end-to-end tests against deployed user-org-service.
+#
+# Purpose:
+#   This job runs the e2e-test binary against a deployed instance of the
+#   user-org-service in the development environment. It can be triggered
+#   manually or as part of a CI/CD pipeline after deployment.
+#
+# Usage:
+#   # Run against default development service
+#   kubectl apply -f configs/k8s/e2e-test-job.yaml
+#
+#   # Run against custom service URL
+#   kubectl create job e2e-test-$(date +%s) --from=job/e2e-test-template \
+#     --env="API_URL=http://user-org-service.dev.svc.cluster.local:8081"
+#
+#   # View logs
+#   kubectl logs -f job/e2e-test-<timestamp>
+#
+#   # Clean up
+#   kubectl delete job e2e-test-<timestamp>
+# Template for e2e-test Kubernetes Job
+# This is a template - use deploy-e2e-test.sh script to generate and apply the actual job
+# Or manually replace {{TIMESTAMP}} and {{IMAGE}} placeholders
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: e2e-test-{{TIMESTAMP}}
+  namespace: development
+  labels:
+    app: user-org-service
+    component: e2e-test
+spec:
+  ttlSecondsAfterFinished: 3600  # Clean up after 1 hour
+  backoffLimit: 2  # Retry up to 2 times on failure
+  template:
+    metadata:
+      labels:
+        app: user-org-service
+        component: e2e-test
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: e2e-test
+        image: {{IMAGE}}
+        imagePullPolicy: Always
+        env:
+        - name: API_URL
+          value: "http://user-org-service.development.svc.cluster.local:8081"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+---
+# ServiceAccount for e2e-test job (if needed for service mesh/auth)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: e2e-test-runner
+  namespace: development
+---
+# RoleBinding (if RBAC is required)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: e2e-test-runner
+  namespace: development
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: e2e-test-runner
+subjects:
+- kind: ServiceAccount
+  name: e2e-test-runner
+  namespace: development
+
