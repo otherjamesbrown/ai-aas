@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 )
 
@@ -47,6 +48,9 @@ func New(opts Options) *http.Server {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ready"}`))
 	})
+
+	// Prometheus metrics endpoint
+	router.Get("/metrics", promhttp.Handler().ServeHTTP)
 
 	if opts.RegisterRoutes != nil {
 		opts.RegisterRoutes(router)

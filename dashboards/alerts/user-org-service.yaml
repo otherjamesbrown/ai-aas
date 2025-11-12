@@ -1,0 +1,86 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: user-org-service-alerts
+  labels:
+    role: alert-rules
+    app.kubernetes.io/name: user-org-service
+spec:
+  groups:
+    - name: user-org-service.slo
+      interval: 1m
+      rules:
+        - alert: UserOrgServiceDown
+          expr: |
+            up{job=~".*user-org-service.*"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            service: user-org-service
+          annotations:
+            summary: "User-Org-Service is down"
+            description: |
+              The service has been unreachable for 5 minutes.
+              Check pod status and logs.
+            runbook_url: https://github.com/otherjamesbrown/ai-aas/blob/main/services/user-org-service/docs/COMPLETE-SETUP-GUIDE.md
+
+        - alert: UserOrgServicePodCrashLooping
+          expr: |
+            rate(kube_pod_container_status_restarts_total{pod=~"user-org-service.*"}[15m]) > 0
+          for: 10m
+          labels:
+            severity: critical
+            service: user-org-service
+          annotations:
+            summary: "User-Org-Service pod is crash looping"
+            description: |
+              Pod {{ $labels.pod }} is restarting frequently.
+              Check pod logs for errors.
+            runbook_url: https://github.com/otherjamesbrown/ai-aas/blob/main/services/user-org-service/docs/COMPLETE-SETUP-GUIDE.md
+
+        - alert: UserOrgServiceHighMemoryUsage
+          expr: |
+            (
+              container_memory_usage_bytes{pod=~"user-org-service.*",container="admin-api"}
+              /
+              container_spec_memory_limit_bytes{pod=~"user-org-service.*",container="admin-api"}
+            ) > 0.9
+          for: 10m
+          labels:
+            severity: warning
+            service: user-org-service
+          annotations:
+            summary: "User-Org-Service memory usage above 90%"
+            description: |
+              Container memory usage has exceeded 90% of the limit.
+              Consider increasing memory limits or investigating memory leaks.
+            runbook_url: https://github.com/otherjamesbrown/ai-aas/blob/main/services/user-org-service/docs/COMPLETE-SETUP-GUIDE.md
+
+        - alert: UserOrgServiceHighCPUUsage
+          expr: |
+            rate(container_cpu_usage_seconds_total{pod=~"user-org-service.*",container="admin-api"}[5m]) > 0.8
+          for: 10m
+          labels:
+            severity: warning
+            service: user-org-service
+          annotations:
+            summary: "User-Org-Service CPU usage above 80%"
+            description: |
+              Container CPU usage has exceeded 80% for 10 minutes.
+              Consider scaling horizontally or increasing CPU limits.
+            runbook_url: https://github.com/otherjamesbrown/ai-aas/blob/main/services/user-org-service/docs/COMPLETE-SETUP-GUIDE.md
+
+        - alert: UserOrgServiceDatabaseConnectionFailure
+          expr: |
+            increase(http_server_requests_total{service="user-org-service",status="503"}[5m]) > 10
+          for: 5m
+          labels:
+            severity: critical
+            service: user-org-service
+          annotations:
+            summary: "User-Org-Service database connection failures"
+            description: |
+              Multiple 503 errors detected, likely indicating database connectivity issues.
+              Check database connection pool and PostgreSQL availability.
+            runbook_url: https://github.com/otherjamesbrown/ai-aas/blob/main/services/user-org-service/docs/COMPLETE-SETUP-GUIDE.md
+
