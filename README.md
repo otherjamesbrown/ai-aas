@@ -10,6 +10,25 @@ Spec-driven repository for an inference-as-a-service platform built on Akamai Li
 
 ---
 
+## Using the Platform
+
+**Are you looking to use the AIaaS platform?** Start with the **[Usage Guide](./usage-guide/README.md)** for role-based documentation:
+
+- **[Getting Started](./usage-guide/getting-started.md)** - First-time setup and onboarding
+- **[Architects](./usage-guide/architect/README.md)** - System architecture and component design
+- **[Developers](./usage-guide/developer/README.md)** - API integration and development workflows
+- **[System Administrators](./usage-guide/system-admin/README.md)** - Platform administration and infrastructure
+- **[Operations](./usage-guide/operations/README.md)** - Day-to-day operations and monitoring
+- **[Organization Administrators](./usage-guide/org-admin/README.md)** - Organization and user management
+- **[Security](./usage-guide/security/README.md)** - Security architecture and incident response
+- **[Finance](./usage-guide/finance/README.md)** - Budget management and billing
+- **[Managers](./usage-guide/manager/README.md)** - Team oversight and reporting
+- **[Analysts](./usage-guide/analyst/README.md)** - Usage analytics and insights
+- **[FAQ](./usage-guide/FAQ.md)** - Frequently asked questions
+- **[Troubleshooting](./usage-guide/troubleshooting.md)** - Common issues and solutions
+
+---
+
 ## Quickstart
 
 ```bash
@@ -37,7 +56,8 @@ Consult `specs/000-project-setup/quickstart.md` for prerequisite tooling, remote
 | `configs/` | Shared lint/security/tooling configuration, including `tool-versions.mk`. |
 | `scripts/` | Setup, CI, metrics, and service generator scripts. |
 | `services/` | Service implementations. `_template/` provides scaffolding for new services. |
-| `docs/` | Runbooks, platform guides, troubleshooting references. |
+| `usage-guide/` | **Platform usage documentation organized by persona** (architects, developers, admins, etc.). |
+| `docs/` | Runbooks, platform guides, troubleshooting references for operations and development. |
 | `specs/` | Feature specifications, plans, research, and derived task lists. |
 | `tests/` | Performance and check fixtures executed via Make targets. |
 
@@ -81,9 +101,16 @@ Consult `specs/000-project-setup/quickstart.md` for prerequisite tooling, remote
 
 ## Resources
 
-- [Quickstart](./specs/000-project-setup/quickstart.md)
-- [Troubleshooting Guides](./docs/troubleshooting/)
-- [Linode Access Guide](./docs/platform/linode-access.md)
-- [Remote CI Runbook](./docs/runbooks/ci-remote.md)
-- [llms.txt index](./llms.txt)
+### Platform Usage
+- **[Usage Guide](./usage-guide/README.md)** - Complete platform usage documentation by role
+- **[Getting Started](./usage-guide/getting-started.md)** - First-time user onboarding
+- **[FAQ](./usage-guide/FAQ.md)** - Frequently asked questions
+- **[Troubleshooting](./usage-guide/troubleshooting.md)** - Common issues and solutions
+
+### Development & Operations
+- [Quickstart](./specs/000-project-setup/quickstart.md) - Developer setup and prerequisites
+- [Troubleshooting Guides](./docs/troubleshooting/) - Development and operations troubleshooting
+- [Linode Access Guide](./docs/platform/linode-access.md) - Infrastructure access
+- [Remote CI Runbook](./docs/runbooks/ci-remote.md) - CI/CD operations
+- [llms.txt index](./llms.txt) - LLM context index
 
