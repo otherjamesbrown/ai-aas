@@ -86,9 +86,10 @@ func main() {
 		Readiness:   readinessProbe(runtime, logger),
 		RegisterRoutes: func(r chi.Router) {
 			auth.RegisterRoutes(r, runtime)
-			// Register orgs routes first, then users routes (which are nested under /v1/orgs/{orgId})
-			// This ensures GET /v1/orgs/{orgId} matches before the users route group
+			// Register orgs routes first - this creates /v1/orgs/{orgId} routes
 			orgs.RegisterRoutes(r, runtime, logger)
+			// Register users routes - these are more specific (/v1/orgs/{orgId}/invites, etc.)
+			// and will match after the orgs routes
 			users.RegisterRoutes(r, runtime, logger)
 		},
 	})
