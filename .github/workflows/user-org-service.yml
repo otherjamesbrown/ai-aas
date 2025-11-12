@@ -1,5 +1,6 @@
 name: user-org-service
 
+# Trigger workflow on changes to user-org-service
 on:
   push:
     paths:
