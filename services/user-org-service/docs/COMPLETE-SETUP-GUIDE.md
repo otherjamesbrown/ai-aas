@@ -26,10 +26,10 @@
   - ✅ Routing issues fixed (chi router Route() interception resolved)
   - ✅ Both `admin-api` and `reconciler` containers running
 - ✅ **Step 8: Configure GitHub Secrets** - Secrets confirmed in GitHub
-- ✅ **Step 9: Testing** - E2E tests running! Organization lifecycle tests passing.
+- ✅ **Step 9: E2E Tests** - All tests passing! Fixed invite endpoint SQL error.
 
 ### Current Step
-- ✅ **Service Fully Operational** - All core functionality working. User invite endpoints need implementation.
+- 🔄 **Step 10: Verify CI/CD Integration** - Ready to test automated e2e-test deployment via GitHub Actions
 
 ### Key Findings
 - **Kubernetes Context**: `lke531921-ctx` (development cluster)
@@ -80,30 +80,26 @@
     - Changed from `router.Route("/v1/orgs/{orgId}", ...)` to direct route registration
     - This prevents the route group from intercepting GET `/v1/orgs/{orgId}` requests
   - **Current Status**: Organization retrieval by ID and slug working correctly.
+- **Step 9**: User invite SQL error - `INSERT has more target columns than expressions` when creating user invites.
+  - ✅ **RESOLVED**: Fixed `CreateUser` INSERT statement in `store.go` - was missing `$14` parameter for `metadata` column.
+  - **Current Status**: All e2e tests passing, including user invite flow.
 
 ### Test Results
 - ✅ **Health Check**: PASS
 - ✅ **Organization Lifecycle**: PASS (create, get by ID, get by slug, update all working)
-- ⚠️ **User Invite Flow**: FAIL (endpoint returns 500 - needs implementation)
-- ⚠️ **User Management**: FAIL (depends on invite flow)
+- ✅ **User Invite Flow**: PASS (fixed SQL INSERT error - missing metadata parameter)
+- ✅ **User Management**: PASS (all endpoints working)
 - ✅ **Authentication Flow**: PASS (skipped - requires seeded data)
 
 ### Next Steps
-1. **Implement User Invite Endpoints** (if needed):
-   - POST `/v1/orgs/{orgId}/invites` currently returns 500
-   - Check logs for specific error and implement missing functionality
+1. **Verify CI/CD Integration** (Step 10):
+   - GitHub Actions workflow will build e2e-test image and deploy it
+   - Workflow runs on pushes to `main` or manual trigger
+   - Review workflow configuration and trigger a test run
 
 2. **Set Up Automated Migrations** (production readiness):
    - Add init container or migration job to run migrations automatically
    - Consider using a migration operator or ArgoCD pre-sync hook
-
-3. **Complete E2E Test Coverage** (Step 9):
-   - User invite endpoints need to be implemented for full test coverage
-   - Once implemented, all e2e tests should pass
-
-4. **Verify CI/CD Integration** (Step 10):
-   - GitHub Actions workflow will build e2e-test image and deploy it
-   - Workflow runs on pushes to `main` or manual trigger
 
 ---
 
