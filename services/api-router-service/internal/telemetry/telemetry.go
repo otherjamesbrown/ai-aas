@@ -1,0 +1,150 @@
+// Package telemetry provides OpenTelemetry and structured logging initialization.
+//
+// Purpose:
+//   This package wires together OpenTelemetry tracing and structured logging
+//   using the shared observability library and zap logger. It provides a unified
+//   interface for telemetry initialization and shutdown.
+//
+// Dependencies:
+//   - github.com/otherjamesbrown/ai-aas/shared/go/observability: OpenTelemetry setup
+//   - go.uber.org/zap: Structured logging
+//   - github.com/rs/zerolog: Alternative logger (for compatibility)
+//
+// Key Responsibilities:
+//   - Initialize OpenTelemetry tracer provider
+//   - Configure zap logger with structured output
+//   - Provide shutdown hooks for graceful teardown
+//   - Handle telemetry failures gracefully
+//
+// Requirements Reference:
+//   - specs/006-api-router-service/spec.md#NFR-010 (RED metrics)
+//   - specs/006-api-router-service/spec.md#NFR-011 (Trace spans)
+//
+package telemetry
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"strings"
+
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+
+	"github.com/otherjamesbrown/ai-aas/shared/go/observability"
+)
+
+// Telemetry bundles initialized telemetry components.
+type Telemetry struct {
+	TracerProvider *observability.Provider
+	Logger         *zap.Logger
+}
+
+// Config controls telemetry initialization.
+type Config struct {
+	ServiceName string
+	Environment string
+	Endpoint    string
+	Protocol    string
+	Headers     map[string]string
+	Insecure    bool
+	LogLevel    string
+}
+
+// Init initializes OpenTelemetry and structured logging.
+func Init(ctx context.Context, cfg Config) (*Telemetry, error) {
+	// Initialize OpenTelemetry
+	otelCfg := observability.Config{
+		ServiceName: cfg.ServiceName,
+		Environment: cfg.Environment,
+		Endpoint:    cfg.Endpoint,
+		Protocol:    cfg.Protocol,
+		Headers:     cfg.Headers,
+		Insecure:    cfg.Insecure,
+	}
+
+	tracerProvider, err := observability.Init(ctx, otelCfg)
+	if err != nil {
+		return nil, fmt.Errorf("init telemetry: %w", err)
+	}
+
+	// Initialize zap logger
+	logLevel := parseLogLevel(cfg.LogLevel)
+	zapConfig := zap.NewProductionConfig()
+	zapConfig.Level = zap.NewAtomicLevelAt(logLevel)
+	zapConfig.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	zapConfig.EncoderConfig.EncodeLevel = zapcore.LowercaseLevelEncoder
+
+	if cfg.Environment == "development" {
+		zapConfig = zap.NewDevelopmentConfig()
+		zapConfig.Level = zap.NewAtomicLevelAt(logLevel)
+	}
+
+	logger, err := zapConfig.Build(
+		zap.AddCaller(),
+		zap.AddStacktrace(zapcore.ErrorLevel),
+		zap.Fields(
+			zap.String("service", cfg.ServiceName),
+			zap.String("environment", cfg.Environment),
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("init logger: %w", err)
+	}
+
+	return &Telemetry{
+		TracerProvider: tracerProvider,
+		Logger:         logger,
+	}, nil
+}
+
+// MustInit panics if Init returns an error.
+func MustInit(ctx context.Context, cfg Config) *Telemetry {
+	telemetry, err := Init(ctx, cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to initialize telemetry: %v\n", err)
+		os.Exit(1)
+	}
+	return telemetry
+}
+
+// Shutdown gracefully shuts down telemetry components.
+func (t *Telemetry) Shutdown(ctx context.Context) error {
+	var firstErr error
+
+	if t.TracerProvider != nil {
+		if err := t.TracerProvider.Shutdown(ctx); err != nil {
+			firstErr = err
+		}
+	}
+
+	if t.Logger != nil {
+		if err := t.Logger.Sync(); err != nil {
+			// Ignore sync errors on stdout/stderr
+			if !strings.Contains(err.Error(), "sync /dev/stdout") &&
+				!strings.Contains(err.Error(), "sync /dev/stderr") {
+				if firstErr == nil {
+					firstErr = err
+				}
+			}
+		}
+	}
+
+	return firstErr
+}
+
+// parseLogLevel converts a string log level to zapcore.Level.
+func parseLogLevel(level string) zapcore.Level {
+	switch strings.ToLower(level) {
+	case "debug":
+		return zapcore.DebugLevel
+	case "info":
+		return zapcore.InfoLevel
+	case "warn":
+		return zapcore.WarnLevel
+	case "error":
+		return zapcore.ErrorLevel
+	default:
+		return zapcore.InfoLevel
+	}
+}

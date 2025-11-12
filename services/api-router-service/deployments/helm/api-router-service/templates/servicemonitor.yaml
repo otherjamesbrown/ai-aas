@@ -1,0 +1,20 @@
+{{- if .Values.prometheus.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "api-router-service.fullname" . }}
+  labels:
+    {{- include "api-router-service.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "api-router-service.selectorLabels" . | nindent 6 }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  endpoints:
+    - port: http
+      path: {{ .Values.prometheus.path }}
+      interval: 30s
+{{- end }}
+

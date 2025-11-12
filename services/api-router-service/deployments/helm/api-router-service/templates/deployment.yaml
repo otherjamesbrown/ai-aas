@@ -1,0 +1,159 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "api-router-service.fullname" . }}
+  labels:
+    {{- include "api-router-service.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "api-router-service.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "api-router-service.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- if .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- range .Values.image.pullSecrets }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
+      serviceAccountName: {{ include "api-router-service.serviceAccountName" . }}
+      containers:
+        - name: router
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/app/router"]
+          env:
+            {{- range .Values.env }}
+            {{- if .valueFrom }}
+            - name: {{ .name }}
+              valueFrom:
+                {{- toYaml .valueFrom | nindent 16 }}
+            {{- else }}
+            - name: {{ .name }}
+              value: {{ .value | quote }}
+            {{- end }}
+            {{- end }}
+            {{- range .Values.extraEnv }}
+            {{- if .valueFrom }}
+            - name: {{ .name }}
+              valueFrom:
+                {{- toYaml .valueFrom | nindent 16 }}
+            {{- else }}
+            - name: {{ .name }}
+              value: {{ .value | quote }}
+            {{- end }}
+            {{- end }}
+            # Redis configuration
+            - name: REDIS_ADDR
+              value: {{ .Values.redis.address | quote }}
+            {{- if .Values.redis.passwordSecretName }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.redis.passwordSecretName }}
+                  key: password
+            {{- else if .Values.redis.password }}
+            - name: REDIS_PASSWORD
+              value: {{ .Values.redis.password | quote }}
+            {{- end }}
+            - name: REDIS_DB
+              value: {{ .Values.redis.db | toString | quote }}
+            # Kafka configuration
+            - name: KAFKA_BROKERS
+              value: {{ .Values.kafka.brokers | quote }}
+            - name: KAFKA_TOPIC
+              value: {{ .Values.kafka.topic | quote }}
+            - name: KAFKA_AUDIT_TOPIC
+              value: {{ .Values.kafka.auditTopic | quote }}
+            {{- if .Values.kafka.brokersSecretName }}
+            - name: KAFKA_BROKERS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.kafka.brokersSecretName }}
+                  key: brokers
+            {{- end }}
+            # Config service (etcd) configuration
+            - name: CONFIG_SERVICE_ENDPOINT
+              value: {{ .Values.configService.endpoint | quote }}
+            - name: CONFIG_WATCH_ENABLED
+              value: {{ .Values.configService.watchEnabled | toString | quote }}
+            - name: CONFIG_CACHE_PATH
+              value: {{ .Values.configService.cachePath | quote }}
+            # Backend endpoints
+            {{- if .Values.backends.endpoints }}
+            - name: BACKEND_ENDPOINTS
+              value: {{ .Values.backends.endpoints | quote }}
+            {{- end }}
+            # Rate limiting
+            - name: RATE_LIMIT_REDIS_ADDR
+              value: {{ .Values.redis.address | quote }}
+            - name: RATE_LIMIT_DEFAULT_RPS
+              value: {{ .Values.rateLimit.defaultRPS | toString | quote }}
+            - name: RATE_LIMIT_BURST_SIZE
+              value: {{ .Values.rateLimit.burstSize | toString | quote }}
+            # Budget service
+            {{- if .Values.budget.endpoint }}
+            - name: BUDGET_SERVICE_ENDPOINT
+              value: {{ .Values.budget.endpoint | quote }}
+            {{- end }}
+            {{- if .Values.budget.endpointSecretName }}
+            - name: BUDGET_SERVICE_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.budget.endpointSecretName }}
+                  key: endpoint
+            {{- end }}
+            - name: BUDGET_SERVICE_TIMEOUT
+              value: {{ .Values.budget.timeout | quote }}
+            # Telemetry
+            {{- if .Values.otel.enabled }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.otel.collectorEndpoint | quote }}
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: {{ .Values.otel.protocol | quote }}
+            - name: OTEL_EXPORTER_OTLP_INSECURE
+              value: {{ .Values.otel.insecure | toString | quote }}
+            {{- end }}
+          ports:
+            - containerPort: {{ .Values.service.port }}
+              name: http
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.livenessProbe.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.readinessProbe.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            {{- range .Values.extraVolumeMounts }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath }}
+            {{- end }}
+            # Config cache volume
+            - name: config-cache
+              mountPath: /tmp
+      volumes:
+        {{- range .Values.extraVolumes }}
+        - name: {{ .name }}
+          {{- toYaml .volume | nindent 8 }}
+        {{- end }}
+        # Config cache volume (emptyDir for temporary storage)
+        - name: config-cache
+          emptyDir: {}
+

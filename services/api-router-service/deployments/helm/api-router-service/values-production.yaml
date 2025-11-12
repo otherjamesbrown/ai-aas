@@ -1,0 +1,100 @@
+# Production environment overrides
+replicaCount: 5
+
+image:
+  tag: production
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/rate-limit: "1000"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+  hosts:
+    - host: router.api.ai-aas.prod
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: api-router-service-tls
+      hosts:
+        - router.api.ai-aas.prod
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 5
+  maxReplicas: 50
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+livenessProbe:
+  path: /v1/status/healthz
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  path: /v1/status/readyz
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+env:
+  - name: SERVICE_NAME
+    value: api-router-service
+  - name: HTTP_PORT
+    value: "8080"
+  - name: ENVIRONMENT
+    value: production
+  - name: LOG_LEVEL
+    value: warn
+
+otel:
+  enabled: true
+  collectorEndpoint: otel-collector.observability:4317
+  protocol: grpc
+  insecure: false
+
+prometheus:
+  enabled: true
+  port: 8080
+  path: /metrics
+
+redis:
+  address: redis-production:6379
+  passwordSecretName: redis-production-secret
+
+kafka:
+  brokers: kafka-production:9092
+  topic: usage.records.v1
+  auditTopic: audit.router
+  brokersSecretName: kafka-production-secret
+
+configService:
+  endpoint: etcd-production:2379
+  watchEnabled: true
+  cachePath: /tmp/api-router-config.db
+
+budget:
+  endpoint: budget-service-production:8080
+  timeout: 2s
+
+rateLimit:
+  defaultRPS: 1000
+  burstSize: 2000
+

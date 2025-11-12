@@ -1,0 +1,153 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: api-router-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - api-router-network
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: api-router-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - api-router-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: api-router-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - api-router-network
+
+  mock-backend-1:
+    image: python:3.11-slim
+    container_name: api-router-mock-backend-1
+    ports:
+      - "8001:8000"
+    working_dir: /app
+    command: >
+      sh -c "
+        pip install fastapi uvicorn pydantic &&
+        python -c \"
+from fastapi import FastAPI
+from pydantic import BaseModel
+import uvicorn
+
+app = FastAPI()
+
+class CompletionRequest(BaseModel):
+    prompt: str
+    max_tokens: int = 100
+
+class CompletionResponse(BaseModel):
+    text: str
+    tokens_used: int
+
+@app.post('/v1/completions')
+async def completions(req: CompletionRequest):
+    return CompletionResponse(
+        text=req.prompt + ' [mock response from backend-1]',
+        tokens_used=len(req.prompt.split()) + 10
+    )
+
+@app.get('/health')
+async def health():
+    return {'status': 'healthy'}
+
+if __name__ == '__main__':
+    uvicorn.run(app, host='0.0.0.0', port=8000)
+        \"
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - api-router-network
+
+  mock-backend-2:
+    image: python:3.11-slim
+    container_name: api-router-mock-backend-2
+    ports:
+      - "8002:8000"
+    working_dir: /app
+    command: >
+      sh -c "
+        pip install fastapi uvicorn pydantic &&
+        python -c \"
+from fastapi import FastAPI
+from pydantic import BaseModel
+import uvicorn
+
+app = FastAPI()
+
+class CompletionRequest(BaseModel):
+    prompt: str
+    max_tokens: int = 100
+
+class CompletionResponse(BaseModel):
+    text: str
+    tokens_used: int
+
+@app.post('/v1/completions')
+async def completions(req: CompletionRequest):
+    return CompletionResponse(
+        text=req.prompt + ' [mock response from backend-2]',
+        tokens_used=len(req.prompt.split()) + 10
+    )
+
+@app.get('/health')
+async def health():
+    return {'status': 'healthy'}
+
+if __name__ == '__main__':
+    uvicorn.run(app, host='0.0.0.0', port=8000)
+        \"
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - api-router-network
+
+volumes:
+  redis-data:
+  kafka-data:
+
+networks:
+  api-router-network:
+    driver: bridge
+

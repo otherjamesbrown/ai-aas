@@ -1,0 +1,42 @@
+# Routing Policy Configuration
+# This file defines routing policies for model backends
+# Policies are loaded from Config Service and cached locally
+
+# Global default policy
+default_policy:
+  failover_threshold: 3  # Consecutive failures before failover
+  health_check_interval: 10s
+  warmup_window: 30s  # Time to wait before restoring primary after recovery
+
+# Model-specific routing policies
+models:
+  - model: gpt-4o
+    organization_id: "*"  # "*" means applies to all orgs, or specific UUID
+    backends:
+      - backend_id: mock-backend-1
+        weight: 70  # 70% of traffic
+        allow_list: []  # Empty means all API keys allowed
+        deny_list: []  # API key IDs to deny
+      - backend_id: mock-backend-2
+        weight: 30  # 30% of traffic
+        allow_list: []
+        deny_list: []
+    failover_threshold: 3
+    degraded_backends: []  # Backend IDs marked as degraded (auto-failover)
+
+# Organization-specific overrides
+organization_overrides:
+  # Example: Organization-specific routing
+  # - organization_id: "123e4567-e89b-12d3-a456-426614174000"
+  #   model: gpt-4o
+  #   backends:
+  #     - backend_id: mock-backend-1
+  #       weight: 100
+
+# Emergency kill switches
+kill_switches:
+  # Example: Disable a backend globally
+  # - backend_id: mock-backend-1
+  #   enabled: false
+  #   reason: "Maintenance window"
+

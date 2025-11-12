@@ -1,0 +1,122 @@
+replicaCount: 2
+
+image:
+  repository: ghcr.io/otherjamesbrown/api-router-service
+  tag: latest
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: router.api.ai-aas.dev
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+livenessProbe:
+  path: /v1/status/healthz
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  path: /v1/status/readyz
+  initialDelaySeconds: 15
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+env:
+  - name: SERVICE_NAME
+    value: api-router-service
+  - name: HTTP_PORT
+    value: "8080"
+  - name: ENVIRONMENT
+    value: development
+  - name: LOG_LEVEL
+    value: info
+
+extraEnv: []
+extraVolumes: []
+extraVolumeMounts: []
+
+# Telemetry configuration
+otel:
+  enabled: false
+  collectorEndpoint: ""
+  protocol: grpc
+  insecure: true
+
+# Prometheus metrics
+prometheus:
+  enabled: true
+  port: 8080
+  path: /metrics
+
+# Redis configuration for rate limiting
+redis:
+  address: redis-service:6379
+  password: ""
+  db: 0
+  passwordSecretName: ""
+
+# Kafka configuration for usage records
+kafka:
+  brokers: kafka-service:9092
+  topic: usage.records.v1
+  auditTopic: audit.router
+  brokersSecretName: ""
+
+# Config service (etcd) configuration
+configService:
+  endpoint: etcd-service:2379
+  watchEnabled: true
+  cachePath: /tmp/api-router-config.db
+
+# Backend endpoints configuration
+backends:
+  endpoints: ""
+
+# Rate limiting configuration
+rateLimit:
+  defaultRPS: 100
+  burstSize: 200
+
+# Budget service configuration
+budget:
+  endpoint: ""
+  timeout: 2s
+  endpointSecretName: ""
+

@@ -1,0 +1,115 @@
+{{- if .Values.prometheus.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "api-router-service.fullname" . }}-alerts
+  labels:
+    {{- include "api-router-service.labels" . | nindent 4 }}
+spec:
+  groups:
+    - name: api-router-service.rules
+      interval: 30s
+      rules:
+        # High error rate alert
+        - alert: ApiRouterHighErrorRate
+          expr: |
+            sum(rate(api_router_backend_requests_total{status="error"}[5m])) 
+            / 
+            sum(rate(api_router_backend_requests_total[5m])) 
+            > 0.05
+          for: 5m
+          labels:
+            severity: warning
+            service: api-router-service
+          annotations:
+            summary: "High error rate detected in API Router Service"
+            description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%) for the last 5 minutes"
+
+        # High latency alert (P95 > 3s)
+        - alert: ApiRouterHighLatency
+          expr: |
+            histogram_quantile(0.95, 
+              sum(rate(api_router_backend_request_duration_seconds_bucket[10m])) 
+              by (le)
+            ) > 3
+          for: 10m
+          labels:
+            severity: warning
+            service: api-router-service
+          annotations:
+            summary: "High latency detected in API Router Service"
+            description: "P95 latency is {{ $value }}s (threshold: 3s) for the last 10 minutes"
+
+        # Backend unhealthy alert
+        - alert: ApiRouterBackendUnhealthy
+          expr: |
+            router_backend_health_status{status="unhealthy"} == -1
+          for: 5m
+          labels:
+            severity: warning
+            service: api-router-service
+          annotations:
+            summary: "Backend is unhealthy"
+            description: "Backend {{ $labels.backend_id }} has been unhealthy for more than 5 minutes"
+
+        # High failover rate alert
+        - alert: ApiRouterHighFailoverRate
+          expr: |
+            sum(rate(router_failover_total[5m])) * 60 > 10
+          for: 5m
+          labels:
+            severity: warning
+            service: api-router-service
+          annotations:
+            summary: "High failover rate detected"
+            description: "Failover rate is {{ $value }} per minute (threshold: 10/min) for the last 5 minutes"
+
+        # Buffer store size high alert
+        - alert: ApiRouterBufferStoreSizeHigh
+          expr: |
+            sum(api_router_buffer_store_size) > 1000
+          for: 5m
+          labels:
+            severity: warning
+            service: api-router-service
+          annotations:
+            summary: "Buffer store size is high"
+            description: "Buffer store contains {{ $value }} records (threshold: 1000) for more than 5 minutes"
+
+        # Buffer store age high alert
+        - alert: ApiRouterBufferStoreAgeHigh
+          expr: |
+            max(api_router_buffer_store_age_seconds) > 86400
+          for: 5m
+          labels:
+            severity: warning
+            service: api-router-service
+          annotations:
+            summary: "Buffer store age is high"
+            description: "Oldest record in buffer store is {{ $value | humanizeDuration }} (threshold: 24h) for more than 5 minutes"
+
+        # Rate limit denials high alert
+        - alert: ApiRouterRateLimitDenialsHigh
+          expr: |
+            sum(rate(api_router_rate_limit_denials_total[5m])) * 60 > 100
+          for: 5m
+          labels:
+            severity: info
+            service: api-router-service
+          annotations:
+            summary: "High rate limit denial rate"
+            description: "Rate limit denials are {{ $value }} per minute (threshold: 100/min) for the last 5 minutes"
+
+        # Service unavailable alert
+        - alert: ApiRouterServiceUnavailable
+          expr: |
+            up{job="{{ include "api-router-service.fullname" . }}"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            service: api-router-service
+          annotations:
+            summary: "API Router Service is unavailable"
+            description: "API Router Service has been down for more than 1 minute"
+{{- end }}
+

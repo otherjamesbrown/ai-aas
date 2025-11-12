@@ -1,0 +1,61 @@
+# API Router Service Configuration
+# Copy this file to router.yaml and customize for your environment
+
+service:
+  name: api-router-service
+  environment: development  # development, staging, production
+  http_port: 8080
+  admin_port: 8443  # Admin API with mTLS
+
+# Telemetry configuration
+telemetry:
+  endpoint: localhost:4317  # OTLP endpoint
+  protocol: grpc  # grpc or http
+  insecure: true  # Set to false in production
+  headers: {}  # Optional headers for authentication
+
+# Redis configuration for rate limiting
+redis:
+  addr: localhost:6379
+  password: ""  # Set in production
+  db: 0
+  pool_size: 10
+
+# Kafka configuration for usage record publishing
+kafka:
+  brokers:
+    - localhost:9092
+  topic: usage.records.v1
+  client_id: api-router-service
+  # Optional SASL/SSL configuration for production
+
+# Config Service configuration
+config_service:
+  endpoint: localhost:2379  # etcd or Config Service endpoint
+  watch_enabled: true
+  cache_path: /tmp/api-router-config.db  # BoltDB cache location
+
+# Backend endpoints (model services)
+backends:
+  - id: mock-backend-1
+    model_variant: gpt-4o
+    uri: http://localhost:8001/v1/completions
+    health_check_interval: 10s
+    timeout: 30s
+  - id: mock-backend-2
+    model_variant: gpt-4o
+    uri: http://localhost:8002/v1/completions
+    health_check_interval: 10s
+    timeout: 30s
+
+# Request handling
+request:
+  max_payload_size: 65536  # 64 KB
+  timeout: 30s
+  idempotency_window: 5m  # Window for idempotency checks
+
+# Rate limiting defaults
+rate_limiting:
+  default_rps: 100  # Requests per second per organization
+  burst_size: 200
+

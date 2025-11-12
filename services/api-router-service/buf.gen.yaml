@@ -1,0 +1,7 @@
+version: v1
+plugins:
+  - remote: buf.build/protocolbuffers/go
+    out: pkg/contracts
+    opt:
+      - paths=source_relative
+
