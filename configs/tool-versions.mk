@@ -1,8 +1,8 @@
 # Centralized tool version manifest.
 # Update these values when bumping toolchains; automation must reference them.
 
-GO_VERSION ?= 1.23.0
-GO_TOOLCHAIN ?= go1.23.0
+GO_VERSION ?= 1.24.0
+GO_TOOLCHAIN ?= go1.24.2
 GOLANGCI_LINT_VERSION ?= 1.55.2
 GOSEC_VERSION ?= 2.19.0
 ACT_VERSION ?= 0.2.61
