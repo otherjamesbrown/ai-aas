@@ -1,0 +1,72 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: user-org-service-development
+  namespace: argocd
+  labels:
+    environment: development
+    app: user-org-service
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform-development
+  source:
+    repoURL: https://github.com/otherjamesbrown/ai-aas
+    targetRevision: main  # Update this to your branch name if not on main
+    path: services/user-org-service/configs/helm
+    helm:
+      valueFiles:
+        - values.yaml
+      # Development-specific overrides
+      values: |
+        image:
+          repository: ghcr.io/otherjamesbrown/user-org-service
+          tag: latest
+          pullPolicy: Always
+        env:
+          - name: ENVIRONMENT
+            value: development
+          - name: LOG_LEVEL
+            value: info
+          - name: DATABASE_URL
+            valueFrom:
+              secretKeyRef:
+                name: user-org-service-db-secret
+                key: database-url
+          - name: OAUTH_HMAC_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: user-org-service-secrets
+                key: oauth-hmac-secret
+          - name: OAUTH_CLIENT_ID
+            value: "user-org-admin"
+          - name: OAUTH_CLIENT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: user-org-service-secrets
+                key: oauth-client-secret
+        service:
+          type: ClusterIP
+          port: 8081
+        resources:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        prometheus:
+          enabled: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: user-org-service
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+
