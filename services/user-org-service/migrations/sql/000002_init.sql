@@ -1,7 +1,7 @@
 -- +goose Up
 -- Function set_updated_at() is created in 000001_setup_function.sql
 
-CREATE TABLE orgs (
+CREATE TABLE IF NOT EXISTS orgs (
   org_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   slug TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
@@ -20,7 +20,7 @@ CREATE TABLE orgs (
   deleted_at TIMESTAMPTZ
 );
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id UUID NOT NULL REFERENCES orgs(org_id) ON DELETE CASCADE,
   email TEXT NOT NULL,
@@ -42,7 +42,7 @@ CREATE TABLE users (
   UNIQUE(org_id, email)
 );
 
-CREATE TABLE service_accounts (
+CREATE TABLE IF NOT EXISTS service_accounts (
   service_account_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id UUID NOT NULL REFERENCES orgs(org_id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -57,7 +57,7 @@ CREATE TABLE service_accounts (
   UNIQUE(org_id, name)
 );
 
-CREATE TABLE api_keys (
+CREATE TABLE IF NOT EXISTS api_keys (
   api_key_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id UUID NOT NULL REFERENCES orgs(org_id) ON DELETE CASCADE,
   principal_type TEXT NOT NULL CHECK (principal_type IN ('user', 'service_account')),
@@ -77,7 +77,7 @@ CREATE TABLE api_keys (
   UNIQUE(org_id, fingerprint)
 );
 
-CREATE TABLE sessions (
+CREATE TABLE IF NOT EXISTS sessions (
   session_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id UUID NOT NULL REFERENCES orgs(org_id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
@@ -94,12 +94,12 @@ CREATE TABLE sessions (
   UNIQUE(org_id, refresh_token_hash)
 );
 
-CREATE UNIQUE INDEX users_external_idp_idx ON users(org_id, external_idp_id) WHERE external_idp_id IS NOT NULL;
-CREATE INDEX users_org_status_idx ON users(org_id, status);
-CREATE INDEX api_keys_lookup_idx ON api_keys(org_id, principal_type, principal_id);
-CREATE INDEX sessions_lookup_idx ON sessions(org_id, user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS users_external_idp_idx ON users(org_id, external_idp_id) WHERE external_idp_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS users_org_status_idx ON users(org_id, status);
+CREATE INDEX IF NOT EXISTS api_keys_lookup_idx ON api_keys(org_id, principal_type, principal_id);
+CREATE INDEX IF NOT EXISTS sessions_lookup_idx ON sessions(org_id, user_id);
 
-CREATE TABLE oauth_sessions (
+CREATE TABLE IF NOT EXISTS oauth_sessions (
   signature TEXT PRIMARY KEY,
   token_type TEXT NOT NULL,
   request_id UUID NOT NULL,
@@ -119,13 +119,18 @@ CREATE TABLE oauth_sessions (
   active BOOLEAN NOT NULL DEFAULT true
 );
 
-CREATE INDEX oauth_sessions_request_idx ON oauth_sessions(request_id);
-CREATE INDEX oauth_sessions_type_idx ON oauth_sessions(token_type);
+CREATE INDEX IF NOT EXISTS oauth_sessions_request_idx ON oauth_sessions(request_id);
+CREATE INDEX IF NOT EXISTS oauth_sessions_type_idx ON oauth_sessions(token_type);
 
+DROP TRIGGER IF EXISTS trg_orgs_updated_at ON orgs;
 CREATE TRIGGER trg_orgs_updated_at BEFORE UPDATE ON orgs FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+DROP TRIGGER IF EXISTS trg_users_updated_at ON users;
 CREATE TRIGGER trg_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+DROP TRIGGER IF EXISTS trg_service_accounts_updated_at ON service_accounts;
 CREATE TRIGGER trg_service_accounts_updated_at BEFORE UPDATE ON service_accounts FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+DROP TRIGGER IF EXISTS trg_api_keys_updated_at ON api_keys;
 CREATE TRIGGER trg_api_keys_updated_at BEFORE UPDATE ON api_keys FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+DROP TRIGGER IF EXISTS trg_sessions_updated_at ON sessions;
 CREATE TRIGGER trg_sessions_updated_at BEFORE UPDATE ON sessions FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 ALTER TABLE orgs ENABLE ROW LEVEL SECURITY;
@@ -134,22 +139,27 @@ ALTER TABLE service_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS orgs_tenant_isolation ON orgs;
 CREATE POLICY orgs_tenant_isolation ON orgs
 USING (org_id::text = current_setting('app.org_id', true))
 WITH CHECK (org_id::text = current_setting('app.org_id', true));
 
+DROP POLICY IF EXISTS users_tenant_isolation ON users;
 CREATE POLICY users_tenant_isolation ON users
 USING (org_id::text = current_setting('app.org_id', true))
 WITH CHECK (org_id::text = current_setting('app.org_id', true));
 
+DROP POLICY IF EXISTS service_accounts_tenant_isolation ON service_accounts;
 CREATE POLICY service_accounts_tenant_isolation ON service_accounts
 USING (org_id::text = current_setting('app.org_id', true))
 WITH CHECK (org_id::text = current_setting('app.org_id', true));
 
+DROP POLICY IF EXISTS api_keys_tenant_isolation ON api_keys;
 CREATE POLICY api_keys_tenant_isolation ON api_keys
 USING (org_id::text = current_setting('app.org_id', true))
 WITH CHECK (org_id::text = current_setting('app.org_id', true));
 
+DROP POLICY IF EXISTS sessions_tenant_isolation ON sessions;
 CREATE POLICY sessions_tenant_isolation ON sessions
 USING (org_id::text = current_setting('app.org_id', true))
 WITH CHECK (org_id::text = current_setting('app.org_id', true));
