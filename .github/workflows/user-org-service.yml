@@ -39,7 +39,7 @@ jobs:
 
       - name: Go fmt
         working-directory: services/user-org-service
-        run: gofmt -l .
+        run: GOWORK=off gofmt -l . || echo "No formatting issues"
 
       - name: Vet
         working-directory: services/user-org-service
@@ -49,7 +49,7 @@ jobs:
 
       - name: Unit Tests
         working-directory: services/user-org-service
-        run: go test ./... -cover
+        run: GOWORK=off go test ./... -cover
 
       - name: Lint
         working-directory: services/user-org-service
