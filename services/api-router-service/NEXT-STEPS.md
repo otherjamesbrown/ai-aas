@@ -101,16 +101,17 @@ All development phases (1-8) are complete. The service is functionally complete 
 
 ### 2.2 README Improvements
 
-**Status**: ⚠️ Missing troubleshooting section and quick reference
+**Status**: ⚠️ Troubleshooting section exists but could be expanded; quick reference missing
 
 **Actions Required**:
 
-1. **Add Troubleshooting Section**:
-   - Common issues and solutions
-   - Service startup problems
-   - Health check failures
-   - Rate limiting issues
-   - Backend connectivity problems
+1. **Expand Troubleshooting Section**:
+   - Current section covers basic issues (lines 124-161)
+   - Add more common issues and solutions
+   - Expand service startup problems
+   - Add more health check failure scenarios
+   - Expand rate limiting troubleshooting
+   - Add backend connectivity problems
    - Reference: `docs/quickstart-validation.md` has good examples
 
 2. **Add Quick Reference Card**:
@@ -418,8 +419,9 @@ All development phases (1-8) are complete. The service is functionally complete 
    - Implement `integration-test` target
    - Implement `contract-test` target
 
-4. **Add troubleshooting to README**:
-   - Copy common issues from `docs/quickstart-validation.md`
+4. **Expand troubleshooting section in README**:
+   - Troubleshooting section exists but could be expanded
+   - Copy additional common issues from `docs/quickstart-validation.md`
    - Add quick reference card
 
 5. **Deploy to staging**:
