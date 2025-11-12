@@ -12,6 +12,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -177,15 +178,24 @@ func GetHTTPStatus(code string) int {
 }
 
 // MapError maps an internal error to an error code and HTTP status.
-// This function provides intelligent error mapping based on error content.
+// This function uses typed error checking first, then falls back to string matching
+// for errors that don't implement the APIError interface.
 func MapError(err error) (code string, statusCode int) {
 	if err == nil {
 		return ErrCodeInternalError, http.StatusInternalServerError
 	}
 
-	errStr := err.Error()
+	// First, try to extract error code from typed APIError using errors.As
+	// This handles both direct APIError instances and wrapped errors (e.g., fmt.Errorf("%w", apiErr))
+	// This is more robust than string matching as it works with error wrapping
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.Code, GetHTTPStatus(apiErr.Code)
+	}
 
-	// Map common error patterns to error codes
+	// Fallback to string matching for errors that don't implement typed errors
+	// This is less robust but necessary for compatibility with third-party errors
+	errStr := err.Error()
 	switch {
 	case contains(errStr, "authentication") || contains(errStr, "unauthorized") || contains(errStr, "invalid api key"):
 		return ErrCodeUnauthorized, http.StatusUnauthorized
@@ -255,15 +265,34 @@ func (e *APIError) Error() string {
 	return e.Message
 }
 
+// Is implements the errors.Is interface for error comparison.
+// This allows errors.Is(err, target) to work correctly.
+func (e *APIError) Is(target error) bool {
+	if target == nil {
+		return false
+	}
+	t, ok := target.(*APIError)
+	if !ok {
+		return false
+	}
+	// Compare by code, allowing nil code to match any code
+	if t.Code != "" && e.Code != "" {
+		return t.Code == e.Code
+	}
+	// If target has no code specified, match by message
+	return t.Message == e.Message || (t.Message == "" && e.Code == t.Code)
+}
+
 // IsAPIError checks if an error is an APIError.
 func IsAPIError(err error) bool {
-	_, ok := err.(*APIError)
-	return ok
+	var apiErr *APIError
+	return errors.As(err, &apiErr)
 }
 
 // GetErrorCode extracts the error code from an error.
 func GetErrorCode(err error) string {
-	if apiErr, ok := err.(*APIError); ok {
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
 		return apiErr.Code
 	}
 	code, _ := MapError(err)

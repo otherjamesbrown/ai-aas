@@ -7,8 +7,10 @@
 package public
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -176,6 +178,54 @@ func BudgetMiddleware(budgetClient *limiter.BudgetClient, auditLogger *usage.Aud
 	}
 }
 
+// BodyBufferMiddleware buffers the request body so it can be read multiple times.
+// This is needed for HMAC verification and model extraction in middleware.
+func BodyBufferMiddleware(maxSize int64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Only buffer POST/PUT/PATCH requests with bodies
+			if r.Method != "POST" && r.Method != "PUT" && r.Method != "PATCH" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			if r.Body == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Read the body
+			body, err := io.ReadAll(io.LimitReader(r.Body, maxSize))
+			if err != nil {
+				http.Error(w, "failed to read request body", http.StatusBadRequest)
+				return
+			}
+
+			// Check if body exceeds max size
+			if int64(len(body)) >= maxSize {
+				http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+				return
+			}
+
+			// Restore the body for downstream handlers
+			r.Body = io.NopCloser(bytes.NewReader(body))
+
+			// Store buffered body in context for HMAC verification
+			ctx := context.WithValue(r.Context(), "buffered_body", body)
+
+			// Try to extract model from body and store in context
+			var req struct {
+				Model string `json:"model"`
+			}
+			if err := json.Unmarshal(body, &req); err == nil && req.Model != "" {
+				ctx = context.WithValue(ctx, "model", req.Model)
+			}
+
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
 // AuthContextMiddleware extracts auth context and adds it to request context.
 func AuthContextMiddleware(authenticator *auth.Authenticator, logger *zap.Logger, tracer trace.Tracer) func(http.Handler) http.Handler {
 		return func(next http.Handler) http.Handler {
@@ -290,10 +340,10 @@ func getRequestID(r *http.Request) string {
 	return ""
 }
 
-// getModelFromRequest extracts model from request context (set by handler after parsing).
-// Returns empty string if not available (request body may not be parsed yet in middleware).
+// getModelFromRequest extracts model from request context.
+// The model is extracted from the buffered request body by BodyBufferMiddleware.
 func getModelFromRequest(r *http.Request) string {
-	// Try to get from context (set by handler after parsing request body)
+	// Try to get from context (set by BodyBufferMiddleware after parsing request body)
 	if model := r.Context().Value("model"); model != nil {
 		if m, ok := model.(string); ok {
 			return m

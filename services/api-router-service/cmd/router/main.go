@@ -51,6 +51,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/api/admin"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/api/public"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/auth"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/config"
@@ -213,14 +214,46 @@ func main() {
 	// Initialize backend client
 	backendClient := routing.NewBackendClient(logger, 30*time.Second)
 
-	// Initialize public API handler
-	publicHandler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry)
+	// Initialize health monitor
+	healthMonitor := routing.NewHealthMonitor(backendClient, logger, cfg.HealthCheckInterval)
+	
+	// Initialize routing engine
+	routingEngine := routing.NewEngine(healthMonitor, backendRegistry, logger)
+	
+	// Initialize routing metrics
+	routingMetrics, err := telemetry.NewRoutingMetrics(logger)
+	if err != nil {
+		logger.Warn("failed to initialize routing metrics", zap.Error(err))
+		routingMetrics = nil
+	}
+
+	// Register backends with health monitor
+	for _, backendID := range backendRegistry.ListBackends() {
+		backendCfg, err := backendRegistry.GetBackend(backendID)
+		if err == nil {
+			endpoint := &routing.BackendEndpoint{
+				ID:      backendCfg.ID,
+				URI:     backendCfg.URI,
+				Timeout: backendCfg.Timeout,
+			}
+			healthMonitor.RegisterBackend(backendID, endpoint)
+		}
+	}
+
+	// Start health monitor
+	healthMonitor.Start()
+	defer healthMonitor.Stop()
+
+	// Initialize public API handler with routing engine
+	publicHandler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, routingEngine, routingMetrics)
 
 	// Create tracer for middleware
 	tracer := otel.Tracer("api-router-service")
 
-	// Register middleware (order matters: auth -> rate limit -> budget -> handler)
-	// Note: AuthContextMiddleware must be first to set auth context
+	// Register middleware (order matters: body buffer -> auth -> rate limit -> budget -> handler)
+	// BodyBufferMiddleware must be first to buffer request body for HMAC verification and model extraction
+	router.Use(public.BodyBufferMiddleware(64 * 1024)) // 64 KB max body size
+	// AuthContextMiddleware must come after body buffer for HMAC verification
 	router.Use(public.AuthContextMiddleware(authenticator, logger, tracer))
 	
 	// Rate limit middleware (only if Redis is available)
@@ -242,7 +275,9 @@ func main() {
 		defer redisClient.Close()
 	}
 
-	// TODO: Register admin routes (/v1/admin/*)
+	// Initialize admin handler
+	adminHandler := admin.NewHandler(logger, loader, healthMonitor, routingEngine, backendRegistry)
+	adminHandler.RegisterRoutes(router)
 
 	// Metrics endpoint
 	router.Handle("/metrics", promhttp.Handler())

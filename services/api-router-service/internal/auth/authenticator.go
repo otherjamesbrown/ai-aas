@@ -233,16 +233,36 @@ func (a *Authenticator) computeFingerprint(apiKey string) string {
 }
 
 // verifyHMAC verifies an HMAC signature of the request payload.
+// The request body should be buffered by BodyBufferMiddleware before calling this function.
 func (a *Authenticator) verifyHMAC(r *http.Request, apiKey, signature string) error {
-	// Read request body
-	body := make([]byte, 0)
-	if r.Body != nil {
-		// TODO: Read body without consuming it (use middleware to buffer)
-		// For now, this is a placeholder
+	// Get buffered body from context (set by BodyBufferMiddleware)
+	var body []byte
+	if bufferedBody := r.Context().Value("buffered_body"); bufferedBody != nil {
+		if b, ok := bufferedBody.([]byte); ok {
+			body = b
+		}
+	}
+
+	// If no buffered body in context, try to read from request body
+	// (fallback for cases where middleware isn't used)
+	if len(body) == 0 && r.Body != nil {
+		var err error
+		body, err = io.ReadAll(r.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read request body: %w", err)
+		}
+		// Restore body for downstream handlers
+		r.Body = io.NopCloser(bytes.NewReader(body))
+	}
+
+	if len(body) == 0 {
+		return fmt.Errorf("request body is empty")
 	}
 
 	// TODO: Get secret from API key (requires user-org-service integration)
-	secret := []byte("stub-secret") // Placeholder
+	// For now, use a stub secret. In production, this should fetch the secret
+	// associated with the API key from user-org-service.
+	secret := []byte("stub-secret") // Placeholder - replace with actual secret retrieval
 
 	// Compute HMAC
 	mac := hmac.New(sha256.New, secret)
