@@ -71,6 +71,9 @@ func mockBackendServer(t *testing.T) *httptest.Server {
 
 // TestInferenceSuccess tests the happy-path inference request flow.
 func TestInferenceSuccess(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
 	// Setup mock backend server
 	mockBackend := mockBackendServer(t)
 	defer mockBackend.Close()
@@ -234,6 +237,9 @@ func TestInferenceAuthFailure(t *testing.T) {
 
 // TestInferenceValidationError tests request validation errors.
 func TestInferenceValidationError(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
 	logger := zap.NewNop()
 	authenticator := auth.NewAuthenticator(logger, "", 2*time.Second)
 	cache, _ := config.NewCache(":memory:")

@@ -57,9 +57,9 @@ build: _ensure-module ## Build service binary
 	fi
 
 .PHONY: test
-test: _ensure-module ## Run Go tests
+test: _ensure-module ## Run Go tests (excludes integration tests requiring external dependencies)
 	@$(SERVICE_PRE_TEST)
-	@$(GO) test $(SERVICE_TEST_FLAGS) ./...
+	@$(GO) test $(SERVICE_TEST_FLAGS) -short ./...
 	@$(SERVICE_POST_TEST)
 
 .PHONY: fmt

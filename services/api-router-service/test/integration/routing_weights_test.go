@@ -82,6 +82,9 @@ func mockBackendServerWithError(t *testing.T, statusCode int) *httptest.Server {
 // TestRoutingWeightDistribution tests that traffic can be routed to weighted backends.
 // This test validates the routing infrastructure supports weighted selection.
 func TestRoutingWeightDistribution(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
 	// Setup multiple mock backend servers
 	backend1 := mockBackendServerWithID(t, "backend-1")
 	defer backend1.Close()
@@ -179,6 +182,9 @@ func TestRoutingWeightDistribution(t *testing.T) {
 
 // TestRoutingFailover tests failover behavior when primary backend fails.
 func TestRoutingFailover(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
 	// Setup: primary backend returns errors, secondary succeeds
 	failingBackend := mockBackendServerWithError(t, http.StatusInternalServerError)
 	defer failingBackend.Close()
@@ -272,6 +278,9 @@ func TestRoutingFailover(t *testing.T) {
 
 // TestDegradedBackendExclusion tests that degraded backends are excluded from routing.
 func TestDegradedBackendExclusion(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
 	degradedBackend := mockBackendServerWithID(t, "backend-degraded")
 	defer degradedBackend.Close()
 

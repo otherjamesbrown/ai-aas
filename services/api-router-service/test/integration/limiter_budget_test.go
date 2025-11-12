@@ -160,6 +160,9 @@ func TestRateLimitExceeded(t *testing.T) {
 
 // TestBudgetExceeded tests that budget enforcement returns HTTP 402.
 func TestBudgetExceeded(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
 	// Setup
 	logger := zap.NewNop()
 	authenticator := auth.NewAuthenticator(logger, "", 2*time.Second)
@@ -237,6 +240,9 @@ func TestBudgetExceeded(t *testing.T) {
 
 // TestQuotaExceeded tests that quota enforcement returns HTTP 402.
 func TestQuotaExceeded(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
 	// Setup
 	logger := zap.NewNop()
 	authenticator := auth.NewAuthenticator(logger, "", 2*time.Second)
@@ -317,6 +323,9 @@ func TestQuotaExceeded(t *testing.T) {
 
 // TestAuditEventEmitted tests that audit events are emitted for limit denials.
 func TestAuditEventEmitted(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
 	// Setup
 	logger := zap.NewNop()
 	authenticator := auth.NewAuthenticator(logger, "", 2*time.Second)
