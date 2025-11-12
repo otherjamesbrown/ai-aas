@@ -54,6 +54,7 @@ import (
 )
 
 // RegisterRoutes mounts organization routes beneath /v1/orgs.
+// Users routes should be registered separately after this call.
 func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger zerolog.Logger) {
 	if rt == nil || rt.Postgres == nil {
 		return
@@ -65,8 +66,8 @@ func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger zerolog.Log
 	router.Route("/v1/orgs", func(r chi.Router) {
 		r.Post("/", handler.CreateOrg)
 		r.Get("/", handler.ListOrgs)
-		// Register {orgId} routes - these must match before users.RegisterRoutes
-		// which also registers under /v1/orgs/{orgId} but with more specific paths
+		// Register {orgId} routes - these must be registered before users routes
+		// to ensure GET /v1/orgs/{orgId} matches correctly
 		r.Get("/{orgId}", handler.GetOrg)
 		r.Patch("/{orgId}", handler.UpdateOrg)
 	})

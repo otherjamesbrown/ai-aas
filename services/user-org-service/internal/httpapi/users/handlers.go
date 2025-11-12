@@ -70,15 +70,13 @@ func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger zerolog.Log
 		runtime: rt,
 		logger:  logger,
 	}
-	// Register routes under /v1/orgs/{orgId} - this will work when called
-	// from within the orgs route group, or as a standalone route group
-	router.Route("/v1/orgs/{orgId}", func(r chi.Router) {
-		r.Post("/invites", handler.InviteUser)
-		r.Get("/users", handler.ListUsers)
-		r.Get("/users/{userId}", handler.GetUser)
-		r.Patch("/users/{userId}", handler.UpdateUser)
-		r.Put("/users/{userId}/roles", handler.UpdateUserRoles)
-	})
+	// Register routes directly under /v1/orgs/{orgId} without using Route()
+	// This prevents the route group from intercepting GET /v1/orgs/{orgId} requests
+	router.Post("/v1/orgs/{orgId}/invites", handler.InviteUser)
+	router.Get("/v1/orgs/{orgId}/users", handler.ListUsers)
+	router.Get("/v1/orgs/{orgId}/users/{userId}", handler.GetUser)
+	router.Patch("/v1/orgs/{orgId}/users/{userId}", handler.UpdateUser)
+	router.Put("/v1/orgs/{orgId}/users/{userId}/roles", handler.UpdateUserRoles)
 }
 
 // Handler serves user management endpoints.
