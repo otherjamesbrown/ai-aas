@@ -44,6 +44,16 @@ spec:
               value: {{ .value | quote }}
             {{- end }}
             {{- end }}
+            {{- range .Values.extraEnv }}
+            {{- if .valueFrom }}
+            - name: {{ .name }}
+              valueFrom:
+                {{- toYaml .valueFrom | nindent 16 }}
+            {{- else }}
+            - name: {{ .name }}
+              value: {{ .value | quote }}
+            {{- end }}
+            {{- end }}
             {{- if .Values.postgres.dsnSecretName }}
             - name: DATABASE_URL
               valueFrom:
