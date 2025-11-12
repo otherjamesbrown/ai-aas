@@ -1,0 +1,79 @@
+# Staging environment overrides
+replicaCount: 3
+
+image:
+  tag: staging
+
+service:
+  type: ClusterIP
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+  hosts:
+    - host: router.api.ai-aas.dev
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: api-router-service-tls
+      hosts:
+        - router.api.ai-aas.dev
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+env:
+  - name: SERVICE_NAME
+    value: api-router-service
+  - name: HTTP_PORT
+    value: "8080"
+  - name: ENVIRONMENT
+    value: staging
+  - name: LOG_LEVEL
+    value: info
+
+otel:
+  enabled: true
+  collectorEndpoint: otel-collector.observability:4317
+  protocol: grpc
+  insecure: false
+
+prometheus:
+  enabled: true
+  port: 8080
+  path: /metrics
+
+redis:
+  address: redis-staging:6379
+  passwordSecretName: redis-staging-secret
+
+kafka:
+  brokers: kafka-staging:9092
+  topic: usage.records.v1
+  auditTopic: audit.router
+  brokersSecretName: kafka-staging-secret
+
+configService:
+  endpoint: etcd-staging:2379
+  watchEnabled: true
+  cachePath: /tmp/api-router-config.db
+
+budget:
+  endpoint: budget-service-staging:8080
+  timeout: 2s
+

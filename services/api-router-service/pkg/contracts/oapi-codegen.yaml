@@ -1,0 +1,31 @@
+# oapi-codegen configuration file
+# This file configures how oapi-codegen generates Go code from the OpenAPI spec
+
+# Package name for generated code
+package: contracts
+
+# Output file
+output: generated.go
+
+# Generation options
+generate:
+  # Generate type definitions from schemas
+  types: true
+  
+  # Generate server code (chi router handlers)
+  server: false
+  
+  # Generate client code
+  client: false
+
+# Additional options
+options:
+  # Include additional properties in generated types
+  include-tags: []
+  
+  # Exclude specific tags from generation
+  exclude-tags: []
+  
+  # Generate embedded spec
+  embed-spec: false
+

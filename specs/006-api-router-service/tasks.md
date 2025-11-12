@@ -9,12 +9,12 @@
 
 **Purpose**: Establish repository structure, build tooling, and developer ergonomics
 
-- [ ] T001 Create service scaffold directories in `services/api-router-service/` (`cmd/router/`, `internal/auth/`, `internal/limiter/`, `internal/routing/`, `internal/usage/`, `internal/admin/`, `internal/telemetry/`, `pkg/contracts/`, `configs/`, `deployments/helm/api-router-service/`, `scripts/`, `docs/`, `test/`, `dev/`)
-- [ ] T002 Initialize Go module with shared framework dependencies in `services/api-router-service/go.mod`
-- [ ] T003 [P] Author bootstrap Makefile with run/test targets in `services/api-router-service/Makefile`
-- [ ] T004 [P] Seed sample runtime configs in `services/api-router-service/configs/router.sample.yaml` and `services/api-router-service/configs/policies.sample.yaml`
-- [ ] T005 [P] Create developer docker-compose harness for Redis, Kafka, and mock backends in `services/api-router-service/dev/docker-compose.yml`
-- [ ] T006 [P] Add GitHub Actions workflow running Go, contract, and integration checks in `.github/workflows/api-router-service.yml`
+- [ ] T-S006-P01-001 Create service scaffold directories in `services/api-router-service/` (`cmd/router/`, `internal/auth/`, `internal/limiter/`, `internal/routing/`, `internal/usage/`, `internal/admin/`, `internal/telemetry/`, `pkg/contracts/`, `configs/`, `deployments/helm/api-router-service/`, `scripts/`, `docs/`, `test/`, `dev/`)
+- [ ] T-S006-P01-002 Initialize Go module with shared framework dependencies in `services/api-router-service/go.mod`
+- [ ] T-S006-P01-003 [P] Author bootstrap Makefile with run/test targets in `services/api-router-service/Makefile`
+- [ ] T-S006-P01-004 [P] Seed sample runtime configs in `services/api-router-service/configs/router.sample.yaml` and `services/api-router-service/configs/policies.sample.yaml`
+- [ ] T-S006-P01-005 [P] Create developer docker-compose harness for Redis, Kafka, and mock backends in `services/api-router-service/dev/docker-compose.yml`
+- [ ] T-S006-P01-006 [P] Add GitHub Actions workflow running Go, contract, and integration checks in `.github/workflows/api-router-service.yml`
 
 ---
 
@@ -22,11 +22,11 @@
 
 **Purpose**: Core infrastructure that MUST be complete before ANY user story
 
-- [ ] T007 Implement configuration loader consuming Config Service watch stream in `services/api-router-service/internal/config/loader.go`
-- [ ] T008 [P] Persist configuration cache to BoltDB in `services/api-router-service/internal/config/cache.go`
-- [ ] T009 [P] Wire telemetry bootstrap with zap logger and OpenTelemetry exporters in `services/api-router-service/internal/telemetry/telemetry.go`
-- [ ] T010 [P] Compose shared middleware stack and lifecycle management in `services/api-router-service/cmd/router/main.go`
-- [ ] T011 [P] Define contract generation workflow using `buf` in `services/api-router-service/pkg/contracts/generate.go` and supporting targets in `services/api-router-service/Makefile`
+- [ ] T-S006-P02-007 Implement configuration loader consuming Config Service watch stream in `services/api-router-service/internal/config/loader.go`
+- [ ] T-S006-P02-008 [P] Persist configuration cache to BoltDB in `services/api-router-service/internal/config/cache.go`
+- [ ] T-S006-P02-009 [P] Wire telemetry bootstrap with zap logger and OpenTelemetry exporters in `services/api-router-service/internal/telemetry/telemetry.go`
+- [ ] T-S006-P02-010 [P] Compose shared middleware stack and lifecycle management in `services/api-router-service/cmd/router/main.go`
+- [ ] T-S006-P02-011 [P] Define contract generation workflow using `buf` in `services/api-router-service/pkg/contracts/generate.go` and supporting targets in `services/api-router-service/Makefile`
 
 **Checkpoint**: Foundation ready — proceed to user stories
 
@@ -37,19 +37,19 @@
 **Goal**: Deliver authenticated inference routing that returns completions with latency metadata
 **Independent Test**: Send a signed request to `/v1/inference` and receive a valid completion payload with router-computed metrics
 
-- [ ] T012 [P] [US1] Add contract test for `POST /v1/inference` in `services/api-router-service/test/contract/inference_contract_test.go`
-- [ ] T013 [P] [US1] Add integration test covering happy-path routing in `services/api-router-service/test/integration/inference_success_test.go`
-- [ ] T014 [P] [US1] Implement request DTOs and validation logic in `services/api-router-service/internal/api/public/inference.go`
-- [ ] T015 [P] [US1] Implement API key and HMAC authentication adapter in `services/api-router-service/internal/auth/authenticator.go`
-- [ ] T016 [P] [US1] Implement backend client wrapper for synchronous completions in `services/api-router-service/internal/routing/backend_client.go`
-- [ ] T017 [US1] Compose `/v1/inference` handler pipeline with error mapping in `services/api-router-service/internal/api/public/handler.go`
-- [ ] T018 [US1] Register public router and middleware stack in `services/api-router-service/cmd/router/http.go`
+- [ ] T-S006-P03-012 [P] [US1] Add contract test for `POST /v1/inference` in `services/api-router-service/test/contract/inference_contract_test.go`
+- [ ] T-S006-P03-013 [P] [US1] Add integration test covering happy-path routing in `services/api-router-service/test/integration/inference_success_test.go`
+- [ ] T-S006-P03-014 [P] [US1] Implement request DTOs and validation logic in `services/api-router-service/internal/api/public/inference.go`
+- [ ] T-S006-P03-015 [P] [US1] Implement API key and HMAC authentication adapter in `services/api-router-service/internal/auth/authenticator.go`
+- [ ] T-S006-P03-016 [P] [US1] Implement backend client wrapper for synchronous completions in `services/api-router-service/internal/routing/backend_client.go`
+- [ ] T-S006-P03-017 [US1] Compose `/v1/inference` handler pipeline with error mapping in `services/api-router-service/internal/api/public/handler.go`
+- [ ] T-S006-P03-018 [US1] Register public router and middleware stack in `services/api-router-service/cmd/router/http.go`
 
 **Parallel Example**:
 ```
-Task: T012
-Task: T013
-Task: T014
+Task: T-S006-P03-012
+Task: T-S006-P03-013
+Task: T-S006-P03-014
 ```
 
 ---
@@ -59,18 +59,18 @@ Task: T014
 **Goal**: Enforce budget, quota, and rate limits with auditable denials
 **Independent Test**: Simulate limit exhaustion and confirm HTTP 402/429 responses plus durable audit records
 
-- [ ] T019 [P] [US2] Add integration test for quota exhaustion denial in `services/api-router-service/test/integration/limiter_budget_test.go`
-- [ ] T020 [P] [US2] Implement budget service client integration in `services/api-router-service/internal/limiter/budget_client.go`
-- [ ] T021 [P] [US2] Implement Redis token-bucket limiter wrapper in `services/api-router-service/internal/limiter/rate_limiter.go`
-- [ ] T022 [P] [US2] Attach rate-limit and budget middleware to request pipeline in `services/api-router-service/internal/api/public/middleware.go`
-- [ ] T023 [US2] Emit audit events for deny and queue outcomes in `services/api-router-service/internal/usage/audit_logger.go`
-- [ ] T024 [US2] Produce structured limit error responses and metrics in `services/api-router-service/internal/telemetry/limits.go`
+- [ ] T-S006-P04-019 [P] [US2] Add integration test for quota exhaustion denial in `services/api-router-service/test/integration/limiter_budget_test.go`
+- [ ] T-S006-P04-020 [P] [US2] Implement budget service client integration in `services/api-router-service/internal/limiter/budget_client.go`
+- [ ] T-S006-P04-021 [P] [US2] Implement Redis token-bucket limiter wrapper in `services/api-router-service/internal/limiter/rate_limiter.go`
+- [ ] T-S006-P04-022 [P] [US2] Attach rate-limit and budget middleware to request pipeline in `services/api-router-service/internal/api/public/middleware.go`
+- [ ] T-S006-P04-023 [US2] Emit audit events for deny and queue outcomes in `services/api-router-service/internal/usage/audit_logger.go`
+- [ ] T-S006-P04-024 [US2] Produce structured limit error responses and metrics in `services/api-router-service/internal/telemetry/limits.go`
 
 **Parallel Example**:
 ```
-Task: T020
-Task: T021
-Task: T022
+Task: T-S006-P04-020
+Task: T-S006-P04-021
+Task: T-S006-P04-022
 ```
 
 ---
@@ -80,18 +80,18 @@ Task: T022
 **Goal**: Provide weighted routing, automatic failover, and admin overrides with observability
 **Independent Test**: Apply routing fixtures, simulate backend degradation, and observe automatic failover with decision logs
 
-- [ ] T025 [P] [US3] Add routing weight distribution test in `services/api-router-service/test/integration/routing_weights_test.go`
-- [ ] T026 [P] [US3] Implement routing policy cache with Config Service watch updates in `services/api-router-service/internal/routing/policy_cache.go`
-- [ ] T027 [P] [US3] Implement backend health probe scheduler in `services/api-router-service/internal/routing/health_monitor.go`
-- [ ] T028 [P] [US3] Implement routing engine with failover and weight logic in `services/api-router-service/internal/routing/engine.go`
-- [ ] T029 [US3] Expose admin routing override endpoints in `services/api-router-service/internal/api/admin/routing_handlers.go`
-- [ ] T030 [US3] Publish routing decision metrics and alerts in `services/api-router-service/internal/telemetry/routing_metrics.go`
+- [ ] T-S006-P05-025 [P] [US3] Add routing weight distribution test in `services/api-router-service/test/integration/routing_weights_test.go`
+- [ ] T-S006-P05-026 [P] [US3] Implement routing policy cache with Config Service watch updates in `services/api-router-service/internal/routing/policy_cache.go`
+- [ ] T-S006-P05-027 [P] [US3] Implement backend health probe scheduler in `services/api-router-service/internal/routing/health_monitor.go`
+- [ ] T-S006-P05-028 [P] [US3] Implement routing engine with failover and weight logic in `services/api-router-service/internal/routing/engine.go`
+- [ ] T-S006-P05-029 [US3] Expose admin routing override endpoints in `services/api-router-service/internal/api/admin/routing_handlers.go`
+- [ ] T-S006-P05-030 [US3] Publish routing decision metrics and alerts in `services/api-router-service/internal/telemetry/routing_metrics.go`
 
 **Parallel Example**:
 ```
-Task: T026
-Task: T027
-Task: T028
+Task: T-S006-P05-026
+Task: T-S006-P05-027
+Task: T-S006-P05-028
 ```
 
 ---
@@ -101,18 +101,18 @@ Task: T028
 **Goal**: Emit near-real-time usage records with at-least-once guarantees and audit retrieval
 **Independent Test**: Generate requests with known usage and verify Kafka records plus audit API responses within SLA
 
-- [ ] T031 [P] [US4] Add contract test validating usage record schema in `services/api-router-service/test/contract/usage_record_contract_test.go`
-- [ ] T032 [P] [US4] Implement usage record builder capturing routing metadata in `services/api-router-service/internal/usage/record.go`
-- [ ] T033 [P] [US4] Implement Kafka exporter using shared publisher in `services/api-router-service/internal/usage/publisher.go`
-- [ ] T034 [P] [US4] Persist exporter buffer state to disk in `services/api-router-service/internal/usage/buffer_store.go`
-- [ ] T035 [US4] Hook usage emission and retry logic into inference flow in `services/api-router-service/internal/api/public/usage_hook.go`
-- [ ] T036 [US4] Implement audit lookup endpoint `/v1/audit/requests/{requestId}` in `services/api-router-service/internal/api/public/audit_handler.go`
+- [ ] T-S006-P06-031 [P] [US4] Add contract test validating usage record schema in `services/api-router-service/test/contract/usage_record_contract_test.go`
+- [ ] T-S006-P06-032 [P] [US4] Implement usage record builder capturing routing metadata in `services/api-router-service/internal/usage/record.go`
+- [ ] T-S006-P06-033 [P] [US4] Implement Kafka exporter using shared publisher in `services/api-router-service/internal/usage/publisher.go`
+- [ ] T-S006-P06-034 [P] [US4] Persist exporter buffer state to disk in `services/api-router-service/internal/usage/buffer_store.go`
+- [ ] T-S006-P06-035 [US4] Hook usage emission and retry logic into inference flow in `services/api-router-service/internal/api/public/usage_hook.go`
+- [ ] T-S006-P06-036 [US4] Implement audit lookup endpoint `/v1/audit/requests/{requestId}` in `services/api-router-service/internal/api/public/audit_handler.go`
 
 **Parallel Example**:
 ```
-Task: T031
-Task: T032
-Task: T033
+Task: T-S006-P06-031
+Task: T-S006-P06-032
+Task: T-S006-P06-033
 ```
 
 ---
@@ -122,17 +122,17 @@ Task: T033
 **Goal**: Deliver health endpoints, metrics, dashboards, and runbooks for operational readiness
 **Independent Test**: Exercise health endpoints, dashboards, and runbooks during simulated incident to confirm 15-minute recovery
 
-- [ ] T037 [P] [US5] Add integration tests for `/v1/status/healthz` and `/v1/status/readyz` in `services/api-router-service/test/integration/health_endpoints_test.go`
-- [ ] T038 [P] [US5] Implement health and readiness handlers with component probes in `services/api-router-service/internal/api/public/status_handlers.go`
-- [ ] T039 [P] [US5] Integrate per-backend metrics and tracing exporters in `services/api-router-service/internal/telemetry/exporters.go`
-- [ ] T040 [US5] Author Grafana dashboard definitions for router operations in `deployments/helm/api-router-service/dashboards/api-router.json`
-- [ ] T041 [US5] Document incident response runbooks in `services/api-router-service/docs/runbooks.md`
+- [ ] T-S006-P07-037 [P] [US5] Add integration tests for `/v1/status/healthz` and `/v1/status/readyz` in `services/api-router-service/test/integration/health_endpoints_test.go`
+- [ ] T-S006-P07-038 [P] [US5] Implement health and readiness handlers with component probes in `services/api-router-service/internal/api/public/status_handlers.go`
+- [ ] T-S006-P07-039 [P] [US5] Integrate per-backend metrics and tracing exporters in `services/api-router-service/internal/telemetry/exporters.go`
+- [ ] T-S006-P07-040 [US5] Author Grafana dashboard definitions for router operations in `deployments/helm/api-router-service/dashboards/api-router.json`
+- [ ] T-S006-P07-041 [US5] Document incident response runbooks in `services/api-router-service/docs/runbooks.md`
 
 **Parallel Example**:
 ```
-Task: T037
-Task: T038
-Task: T039
+Task: T-S006-P07-037
+Task: T-S006-P07-038
+Task: T-S006-P07-039
 ```
 
 ---
@@ -141,11 +141,11 @@ Task: T039
 
 **Purpose**: Service-wide hardening, documentation, and release readiness
 
-- [ ] T042 [P] Harden error catalog and response codes in `services/api-router-service/internal/api/errors.go`
-- [ ] T043 [P] Finalize Helm values and alert rules for staging/production in `deployments/helm/api-router-service/values.yaml`
-- [ ] T044 [P] Tune load test scenarios for SLO coverage in `services/api-router-service/scripts/loadtest.sh`
-- [ ] T045 [P] Extend smoke test coverage for limiter and routing validation in `services/api-router-service/scripts/smoke.sh`
-- [ ] T046 Validate quickstart instructions and capture follow-ups in `services/api-router-service/docs/quickstart-validation.md`
+- [ ] T-S006-P08-042 [P] Harden error catalog and response codes in `services/api-router-service/internal/api/errors.go`
+- [ ] T-S006-P08-043 [P] Finalize Helm values and alert rules for staging/production in `deployments/helm/api-router-service/values.yaml`
+- [ ] T-S006-P08-044 [P] Tune load test scenarios for SLO coverage in `services/api-router-service/scripts/loadtest.sh`
+- [ ] T-S006-P08-045 [P] Extend smoke test coverage for limiter and routing validation in `services/api-router-service/scripts/smoke.sh`
+- [ ] T-S006-P08-046 Validate quickstart instructions and capture follow-ups in `services/api-router-service/docs/quickstart-validation.md`
 
 ---
 
@@ -159,7 +159,7 @@ Task: T039
 
 ### User Story Dependencies
 - User Story 1 (P1): Independent once foundational infrastructure is ready
-- User Story 2 (P1): Requires limiter integration points from US1 handler pipeline but can progress in parallel after T017
+- User Story 2 (P1): Requires limiter integration points from US1 handler pipeline but can progress in parallel after T-S006-P03-017
 - User Story 3 (P2): Requires policy cache hooks laid down in foundational work; no additional story dependencies
 - User Story 4 (P2): Requires inference pipeline from US1 and audit hooks from US2 to emit records
 - User Story 5 (P3): Builds on telemetry wiring from foundational work and routing data from US3/US4 for dashboards
@@ -173,11 +173,11 @@ Task: T039
 ---
 
 ## Parallel Execution Examples (Expanded)
-- **US1**: T012, T013, and T014 can proceed together after foundational middleware exists
-- **US2**: T020, T021, and T022 run concurrently while T019 executes against the shared harness
-- **US3**: T026, T027, and T028 can run in parallel once policy cache scaffolding is ready
-- **US4**: T031, T032, and T033 build independent components before wiring T035
-- **US5**: T037, T038, and T039 progress simultaneously leveraging telemetry groundwork
+- **US1**: T-S006-P03-012, T-S006-P03-013, and T-S006-P03-014 can proceed together after foundational middleware exists
+- **US2**: T-S006-P04-020, T-S006-P04-021, and T-S006-P04-022 run concurrently while T-S006-P04-019 executes against the shared harness
+- **US3**: T-S006-P05-026, T-S006-P05-027, and T-S006-P05-028 can run in parallel once policy cache scaffolding is ready
+- **US4**: T-S006-P06-031, T-S006-P06-032, and T-S006-P06-033 build independent components before wiring T-S006-P06-035
+- **US5**: T-S006-P07-037, T-S006-P07-038, and T-S006-P07-039 progress simultaneously leveraging telemetry groundwork
 
 ---
 
