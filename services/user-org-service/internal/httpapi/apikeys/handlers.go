@@ -1,0 +1,371 @@
+// Package apikeys provides HTTP handlers for API key lifecycle management.
+//
+// Purpose:
+//   This package implements REST API handlers for API key operations:
+//   issuing keys for service accounts, revoking keys, and managing key metadata.
+//   Handlers enforce authorization, validate input, emit audit events, and
+//   integrate with Vault Transit for secret encryption.
+//
+// Dependencies:
+//   - github.com/go-chi/chi/v5: HTTP router for route parameters
+//   - github.com/google/uuid: UUID parsing and validation
+//   - internal/bootstrap: Runtime dependencies (Postgres store, config, Redis)
+//   - internal/storage/postgres: Data access layer
+//   - internal/security: Cryptographic utilities for fingerprint generation
+//
+// Key Responsibilities:
+//   - IssueAPIKey: POST /v1/orgs/{orgId}/service-accounts/{serviceAccountId}/api-keys - Issue new key
+//   - RevokeAPIKey: DELETE /v1/orgs/{orgId}/api-keys/{apiKeyId} - Revoke a key
+//
+// Requirements Reference:
+//   - specs/005-user-org-service/spec.md#FR-004 (API Key Lifecycle)
+//   - specs/005-user-org-service/contracts/user-org-service.openapi.yaml
+//
+// Debugging Notes:
+//   - API keys are displayed once on creation (secret never stored in DB)
+//   - Fingerprints are SHA-256 hashes of the secret (for identification)
+//   - Vault Transit encrypts secret material (stub implementation for now)
+//   - Revocation propagates to Redis for fast revocation checks
+//   - Optimistic locking prevents concurrent revocation conflicts
+//
+// Thread Safety:
+//   - Handler methods are safe for concurrent use (stateless, uses runtime dependencies)
+//
+// Error Handling:
+//   - Invalid UUID returns 400 Bad Request
+//   - Not found returns 404 Not Found
+//   - Optimistic lock conflicts return 409 Conflict
+//   - Database errors return 500 Internal Server Error
+package apikeys
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	"github.com/rs/zerolog"
+
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/audit"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/bootstrap"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/middleware"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/metrics"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/storage/postgres"
+)
+
+// RegisterRoutes mounts API key routes beneath /v1/orgs/{orgId}.
+func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger zerolog.Logger) {
+	if rt == nil || rt.Postgres == nil {
+		return
+	}
+	handler := &Handler{
+		runtime: rt,
+		logger:  logger,
+	}
+	router.Post("/v1/orgs/{orgId}/service-accounts/{serviceAccountId}/api-keys", handler.IssueAPIKey)
+	router.Delete("/v1/orgs/{orgId}/api-keys/{apiKeyId}", handler.RevokeAPIKey)
+}
+
+// Handler serves API key lifecycle endpoints.
+type Handler struct {
+	runtime *bootstrap.Runtime
+	logger  zerolog.Logger
+}
+
+// IssueAPIKeyRequest represents the payload for issuing an API key.
+type IssueAPIKeyRequest struct {
+	Scopes       []string               `json:"scopes,omitempty"`
+	ExpiresInDays *int                  `json:"expiresInDays,omitempty"`
+	Annotations  map[string]any        `json:"annotations,omitempty"`
+}
+
+// IssuedAPIKeyResponse represents an issued API key (secret shown once).
+type IssuedAPIKeyResponse struct {
+	APIKeyID    string    `json:"apiKeyId"`
+	Secret      string    `json:"secret"`
+	Fingerprint string    `json:"fingerprint"`
+	Status      string    `json:"status"`
+	ExpiresAt   *string   `json:"expiresAt,omitempty"`
+}
+
+// IssueAPIKey handles POST /v1/orgs/{orgId}/service-accounts/{serviceAccountId}/api-keys.
+// Generates a secure random secret, computes fingerprint, stores metadata in DB,
+// encrypts secret via Vault Transit, and returns the secret once.
+func (h *Handler) IssueAPIKey(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgIDParam := chi.URLParam(r, "orgId")
+	serviceAccountIDParam := chi.URLParam(r, "serviceAccountId")
+
+	// Parse org ID (UUID or slug)
+	var orgID uuid.UUID
+	var err error
+	if orgID, err = uuid.Parse(orgIDParam); err != nil {
+		// Try as slug
+		org, err := h.runtime.Postgres.GetOrgBySlug(ctx, orgIDParam)
+		if err != nil {
+			if err == postgres.ErrNotFound {
+				http.Error(w, "organization not found", http.StatusNotFound)
+				return
+			}
+			h.logger.Error().Err(err).Str("orgId", orgIDParam).Msg("failed to resolve organization")
+			http.Error(w, "failed to resolve organization", http.StatusInternalServerError)
+			return
+		}
+		orgID = org.ID
+	}
+
+	// Parse service account ID
+	serviceAccountID, err := uuid.Parse(serviceAccountIDParam)
+	if err != nil {
+		http.Error(w, "invalid service account ID", http.StatusBadRequest)
+		return
+	}
+
+	// Verify service account exists and belongs to org
+	serviceAccount, err := h.runtime.Postgres.GetServiceAccountByID(ctx, serviceAccountID)
+	if err != nil {
+		if err == postgres.ErrNotFound {
+			http.Error(w, "service account not found", http.StatusNotFound)
+			return
+		}
+		h.logger.Error().Err(err).Str("serviceAccountId", serviceAccountID.String()).Msg("failed to get service account")
+		http.Error(w, "failed to retrieve service account", http.StatusInternalServerError)
+		return
+	}
+
+	// Verify service account belongs to org
+	if serviceAccount.OrgID != orgID {
+		http.Error(w, "service account not found", http.StatusNotFound)
+		return
+	}
+
+	// Verify service account is active
+	if serviceAccount.Status != "active" {
+		http.Error(w, "service account is not active", http.StatusBadRequest)
+		return
+	}
+
+	var req IssueAPIKeyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.Warn().Err(err).Msg("invalid request payload")
+		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		return
+	}
+
+	// Generate secure random secret (32 bytes = 256 bits)
+	secretBytes := make([]byte, 32)
+	if _, err := rand.Read(secretBytes); err != nil {
+		h.logger.Error().Err(err).Msg("failed to generate secret")
+		http.Error(w, "failed to generate API key", http.StatusInternalServerError)
+		return
+	}
+
+	// Encode secret as base64url (URL-safe, no padding)
+	secret := base64.RawURLEncoding.EncodeToString(secretBytes)
+
+	// Compute fingerprint (SHA-256 hash of secret)
+	fingerprintHash := sha256.Sum256([]byte(secret))
+	fingerprint := base64.RawURLEncoding.EncodeToString(fingerprintHash[:])
+
+	// Encrypt secret via Vault Transit (stub for now)
+	encryptedSecret, err := h.encryptSecret(ctx, secret)
+	if err != nil {
+		h.logger.Error().Err(err).Msg("failed to encrypt secret")
+		http.Error(w, "failed to encrypt API key", http.StatusInternalServerError)
+		return
+	}
+
+	// Calculate expiration
+	var expiresAt *time.Time
+	if req.ExpiresInDays != nil && *req.ExpiresInDays > 0 {
+		exp := time.Now().UTC().Add(time.Duration(*req.ExpiresInDays) * 24 * time.Hour)
+		expiresAt = &exp
+	}
+
+	// Create API key record in database
+	params := postgres.CreateAPIKeyParams{
+		OrgID:         orgID,
+		PrincipalType: postgres.PrincipalTypeServiceAccount,
+		PrincipalID:   serviceAccountID,
+		Fingerprint:   fingerprint,
+		Status:        "active",
+		Scopes:        req.Scopes,
+		ExpiresAt:     expiresAt,
+		Annotations:   req.Annotations,
+	}
+
+	apiKey, err := h.runtime.Postgres.CreateAPIKey(ctx, params)
+	if err != nil {
+		h.logger.Error().Err(err).Str("orgId", orgID.String()).Str("serviceAccountId", serviceAccountID.String()).Msg("failed to create API key")
+		http.Error(w, "failed to create API key", http.StatusInternalServerError)
+		return
+	}
+
+	// Store encrypted secret in Vault (async, best-effort)
+	// TODO: Store encryptedSecret in Vault Transit with key ID = apiKey.ID
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = h.storeEncryptedSecret(ctx, apiKey.ID, encryptedSecret)
+	}()
+
+	// Emit audit event
+	actorID := middleware.GetUserID(r.Context())
+	event := audit.BuildEvent(orgID, actorID, audit.ActorTypeUser, audit.ActionAPIKeyIssue, audit.TargetTypeAPIKey, &apiKey.ID)
+	event = audit.BuildEventFromRequest(event, r)
+	event.Metadata = map[string]any{
+		"principal_type": "service_account",
+		"principal_id":   serviceAccountID.String(),
+		"fingerprint":    fingerprint,
+	}
+	_ = h.runtime.Audit.Emit(ctx, event)
+
+	// Record API key issuance
+	metrics.RecordAPIKeyIssued()
+
+	// Build response (secret shown once)
+	resp := IssuedAPIKeyResponse{
+		APIKeyID:    apiKey.ID.String(),
+		Secret:      secret, // Only time secret is returned
+		Fingerprint: fingerprint,
+		Status:      apiKey.Status,
+	}
+	if apiKey.ExpiresAt != nil {
+		expStr := apiKey.ExpiresAt.Format(time.RFC3339)
+		resp.ExpiresAt = &expStr
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		h.logger.Error().Err(err).Msg("failed to encode response")
+	}
+}
+
+// RevokeAPIKey handles DELETE /v1/orgs/{orgId}/api-keys/{apiKeyId}.
+// Marks the key as revoked in the database and propagates revocation to Redis.
+func (h *Handler) RevokeAPIKey(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgIDParam := chi.URLParam(r, "orgId")
+	apiKeyIDParam := chi.URLParam(r, "apiKeyId")
+
+	// Parse org ID (UUID or slug)
+	var orgID uuid.UUID
+	var err error
+	if orgID, err = uuid.Parse(orgIDParam); err != nil {
+		// Try as slug
+		org, err := h.runtime.Postgres.GetOrgBySlug(ctx, orgIDParam)
+		if err != nil {
+			if err == postgres.ErrNotFound {
+				http.Error(w, "organization not found", http.StatusNotFound)
+				return
+			}
+			h.logger.Error().Err(err).Str("orgId", orgIDParam).Msg("failed to resolve organization")
+			http.Error(w, "failed to resolve organization", http.StatusInternalServerError)
+			return
+		}
+		orgID = org.ID
+	}
+
+	// Parse API key ID
+	apiKeyID, err := uuid.Parse(apiKeyIDParam)
+	if err != nil {
+		http.Error(w, "invalid API key ID", http.StatusBadRequest)
+		return
+	}
+
+	// Get existing key to obtain version for optimistic locking
+	apiKey, err := h.runtime.Postgres.GetAPIKeyByID(ctx, apiKeyID)
+	if err != nil {
+		if err == postgres.ErrNotFound {
+			http.Error(w, "API key not found", http.StatusNotFound)
+			return
+		}
+		h.logger.Error().Err(err).Str("apiKeyId", apiKeyID.String()).Msg("failed to get API key")
+		http.Error(w, "failed to retrieve API key", http.StatusInternalServerError)
+		return
+	}
+
+	// Verify key belongs to org
+	if apiKey.OrgID != orgID {
+		http.Error(w, "API key not found", http.StatusNotFound)
+		return
+	}
+
+	// Check if already revoked
+	if apiKey.Status == "revoked" || apiKey.RevokedAt != nil {
+		http.Error(w, "API key already revoked", http.StatusConflict)
+		return
+	}
+
+	// Revoke key in database
+	revokedAt := time.Now().UTC()
+	_, err = h.runtime.Postgres.RevokeAPIKey(ctx, postgres.RevokeAPIKeyParams{
+		ID:        apiKey.ID,
+		Version:   apiKey.Version,
+		Status:    "revoked",
+		RevokedAt: revokedAt,
+	}, orgID)
+	if err != nil {
+		if err == postgres.ErrOptimisticLock {
+			http.Error(w, "API key was modified concurrently", http.StatusConflict)
+			return
+		}
+		h.logger.Error().Err(err).Str("apiKeyId", apiKeyID.String()).Msg("failed to revoke API key")
+		http.Error(w, "failed to revoke API key", http.StatusInternalServerError)
+		return
+	}
+
+	// Propagate revocation to Redis for fast revocation checks
+	if h.runtime.Redis != nil {
+		revocationKey := fmt.Sprintf("api_key:revoked:%s", apiKey.Fingerprint)
+		// Store with TTL matching key expiration (or 1 year if no expiration)
+		ttl := 365 * 24 * time.Hour
+		if apiKey.ExpiresAt != nil && apiKey.ExpiresAt.After(time.Now()) {
+			ttl = time.Until(*apiKey.ExpiresAt)
+		}
+		if err := h.runtime.Redis.Set(ctx, revocationKey, "1", ttl).Err(); err != nil {
+			h.logger.Warn().Err(err).Str("fingerprint", apiKey.Fingerprint).Msg("failed to propagate revocation to Redis")
+			// Non-fatal: continue even if Redis propagation fails
+		}
+	}
+
+	// Emit audit event
+	actorID := middleware.GetUserID(r.Context())
+	event := audit.BuildEvent(orgID, actorID, audit.ActorTypeUser, audit.ActionAPIKeyRevoke, audit.TargetTypeAPIKey, &apiKey.ID)
+	event = audit.BuildEventFromRequest(event, r)
+	event.Metadata = map[string]any{
+		"fingerprint": apiKey.Fingerprint,
+		"revoked_at":  revokedAt.Format(time.RFC3339),
+	}
+	_ = h.runtime.Audit.Emit(ctx, event)
+
+	// Record API key revocation
+	metrics.RecordAPIKeyRevoked()
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// encryptSecret encrypts the secret using Vault Transit (stub implementation).
+// TODO: Integrate with Hashicorp Vault Transit engine for production.
+func (h *Handler) encryptSecret(ctx context.Context, secret string) (string, error) {
+	// Stub: return base64-encoded secret (in production, use Vault Transit)
+	// This allows the code to compile and run, but secrets are not properly encrypted
+	h.logger.Warn().Msg("using stub Vault Transit encryption - secrets are not encrypted")
+	return base64.StdEncoding.EncodeToString([]byte(secret)), nil
+}
+
+// storeEncryptedSecret stores the encrypted secret in Vault (stub implementation).
+// TODO: Store encrypted secret in Vault Transit with proper key management.
+func (h *Handler) storeEncryptedSecret(ctx context.Context, keyID uuid.UUID, encryptedSecret string) error {
+	// Stub: log the operation (in production, store in Vault Transit)
+	h.logger.Debug().Str("keyId", keyID.String()).Msg("stub: storing encrypted secret in Vault")
+	return nil
+}
+

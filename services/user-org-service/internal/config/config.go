@@ -63,6 +63,34 @@ type Config struct {
 	OAuthClientID string `envconfig:"OAUTH_CLIENT_ID" default:"user-org-admin"`
 	// OAuthClientSecret is the plaintext secret for the confidential client. It is hashed before storage.
 	OAuthClientSecret string `envconfig:"OAUTH_CLIENT_SECRET" required:"true"`
+	// KafkaBrokers is a comma-separated list of Kafka broker addresses (e.g., "broker1:9092,broker2:9092").
+	// If empty, audit events will be logged instead of sent to Kafka.
+	KafkaBrokers string `envconfig:"KAFKA_BROKERS" default:""`
+	// KafkaTopic is the Kafka topic name for audit events (default: "audit.identity").
+	KafkaTopic string `envconfig:"KAFKA_TOPIC" default:"audit.identity"`
+	// KafkaClientID is the client ID used when connecting to Kafka.
+	KafkaClientID string `envconfig:"KAFKA_CLIENT_ID" default:"user-org-service"`
+	// OIDCBaseURL is the base URL for OIDC callback redirects (e.g., "https://api.example.com").
+	// Used to construct callback URLs for IdP providers.
+	OIDCBaseURL string `envconfig:"OIDC_BASE_URL" default:""`
+	// OIDCGoogleClientID is the Google OAuth2 client ID for IdP federation.
+	OIDCGoogleClientID string `envconfig:"OIDC_GOOGLE_CLIENT_ID" default:""`
+	// OIDCGoogleClientSecret is the Google OAuth2 client secret for IdP federation.
+	OIDCGoogleClientSecret string `envconfig:"OIDC_GOOGLE_CLIENT_SECRET" default:""`
+	// OIDCGithubClientID is the GitHub OAuth2 client ID for IdP federation.
+	OIDCGithubClientID string `envconfig:"OIDC_GITHUB_CLIENT_ID" default:""`
+	// OIDCGithubClientSecret is the GitHub OAuth2 client secret for IdP federation.
+	OIDCGithubClientSecret string `envconfig:"OIDC_GITHUB_CLIENT_SECRET" default:""`
+	
+	// Lockout configuration
+	// LockoutMaxAttempts is the maximum number of failed login attempts before lockout (default: 5).
+	LockoutMaxAttempts int `envconfig:"LOCKOUT_MAX_ATTEMPTS" default:"5"`
+	// LockoutDurationMinutes is the duration of lockout in minutes (default: 15).
+	LockoutDurationMinutes int `envconfig:"LOCKOUT_DURATION_MINUTES" default:"15"`
+	// LockoutWindowMinutes is the time window for counting failed attempts in minutes (default: 15).
+	LockoutWindowMinutes int `envconfig:"LOCKOUT_WINDOW_MINUTES" default:"15"`
+	// RecoveryRequiresAdminApproval enables admin approval workflow for recovery requests (default: false).
+	RecoveryRequiresAdminApproval bool `envconfig:"RECOVERY_REQUIRES_ADMIN_APPROVAL" default:"false"`
 }
 
 // Load reads environment variables into Config, applying defaults where necessary.

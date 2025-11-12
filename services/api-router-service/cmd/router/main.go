@@ -188,6 +188,41 @@ func main() {
 		logger.Info("Kafka publisher not configured (usage tracking disabled)")
 	}
 
+	// Initialize buffer store for usage records
+	var bufferStore *usage.BufferStore
+	if kafkaPublisher != nil {
+		bufferStore, err = usage.NewBufferStore(usage.BufferStoreConfig{
+			Dir:     cfg.UsageBufferDir,
+			MaxSize: 10000, // Max 10k buffered records
+			MaxAge:  24 * time.Hour, // 24 hour retention
+			Logger:  logger,
+		})
+		if err != nil {
+			logger.Warn("failed to initialize buffer store", zap.Error(err))
+			bufferStore = nil
+		} else {
+			logger.Info("usage buffer store initialized", zap.String("dir", cfg.UsageBufferDir))
+		}
+	}
+
+	// Initialize usage record builder
+	recordBuilder := usage.NewRecordBuilder()
+
+	// Initialize usage hook
+	var usageHook *public.UsageHook
+	if kafkaPublisher != nil {
+		usageHook = public.NewUsageHook(public.UsageHookConfig{
+			Publisher:   kafkaPublisher,
+			BufferStore: bufferStore,
+			Builder:     recordBuilder,
+			Logger:      logger,
+			RetryDelay:  5 * time.Second,
+			MaxRetries:  3,
+		})
+		logger.Info("usage hook initialized")
+		defer usageHook.Stop()
+	}
+
 	// Build metadata (can be set at build time via environment variables)
 	buildMetadata := public.BuildMetadata{
 		Version:   getEnvOrDefault("VERSION", "dev"),
@@ -244,8 +279,8 @@ func main() {
 	healthMonitor.Start()
 	defer healthMonitor.Stop()
 
-	// Initialize public API handler with routing engine
-	publicHandler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, routingEngine, routingMetrics)
+	// Initialize public API handler with routing engine and usage hook
+	publicHandler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, routingEngine, routingMetrics, usageHook)
 
 	// Create tracer for middleware
 	tracer := otel.Tracer("api-router-service")
@@ -278,6 +313,10 @@ func main() {
 	// Initialize admin handler
 	adminHandler := admin.NewHandler(logger, loader, healthMonitor, routingEngine, backendRegistry)
 	adminHandler.RegisterRoutes(router)
+
+	// Initialize audit handler
+	auditHandler := public.NewAuditHandler(logger, bufferStore)
+	auditHandler.RegisterRoutes(router)
 
 	// Metrics endpoint
 	router.Handle("/metrics", promhttp.Handler())

@@ -114,7 +114,7 @@ func TestInferenceSuccess(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 	
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry)
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil)
 
 	// Configure handler to use mock backend URI
 	handler.SetBackendURI("mock-backend-1", mockBackend.URL+"/v1/completions")
@@ -207,7 +207,7 @@ func TestInferenceAuthFailure(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 	
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry)
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil)
 
 	router := chi.NewRouter()
 	handler.RegisterRoutes(router)
@@ -248,7 +248,7 @@ func TestInferenceValidationError(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 	
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry)
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil)
 
 	router := chi.NewRouter()
 	handler.RegisterRoutes(router)

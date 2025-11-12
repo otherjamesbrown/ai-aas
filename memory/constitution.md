@@ -96,6 +96,13 @@ Rationale: Measurability and automated feedback ensure reliability and velocity.
   - No DB mocks; verify audit logging, auth failures, budget enforcement, RBAC constraints.
 - API standards:
   - JSON responses; RFC7807 errors; UUID IDs; streaming SSE for inference; OpenAI‑format error semantics.
+- Task naming convention:
+  - Format: `T-S{spec_number}-P{phase_number}-{task_number}`
+  - Spec number: three-digit (e.g., `006` for `006-api-router-service`)
+  - Phase number: two-digit (e.g., `01` for Phase 1, `02` for Phase 2)
+  - Task number: three-digit sequential within spec (continues across phases)
+  - Examples: `T-S006-P01-001`, `T-S006-P01-006`, `T-S006-P02-007`, `T-S006-P02-013`
+  - Task numbers continue sequentially across phases within a spec (if Phase 1 ends at 006, Phase 2 starts at 007).
 
 ### Constitution Gates (for plans/specs)
 All implementation plans MUST explicitly pass these gates:
@@ -124,5 +131,5 @@ All implementation plans MUST explicitly pass these gates:
   - Keep specs aligned via targeted spec bumps and CHANGELOGs when contracts change.
 - Reviews: Periodic compliance reviews ensure gates remain testable, enforced, and automated where possible.
 
-**Version**: 1.4.0 | **Ratified**: 2025-11-06 | **Last Amended**: 2025-11-07
+**Version**: 1.4.1 | **Ratified**: 2025-11-06 | **Last Amended**: 2025-01-27
 

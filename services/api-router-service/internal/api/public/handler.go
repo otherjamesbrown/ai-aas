@@ -7,6 +7,7 @@
 package public
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
@@ -23,6 +24,7 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/auth"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/routing"
+	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/telemetry"
 )
 
 // Handler handles public API requests.
@@ -32,6 +34,9 @@ type Handler struct {
 	configLoader   *config.Loader
 	backendClient  *routing.BackendClient
 	backendRegistry *config.BackendRegistry
+	routingEngine  *routing.Engine
+	routingMetrics *telemetry.RoutingMetrics
+	usageHook      *UsageHook
 	tracer         trace.Tracer
 	errorBuilder   *api.ErrorBuilder
 	backendURIs    map[string]string // Map of backend ID to URI (for testing/configuration - overrides registry)
@@ -44,6 +49,9 @@ func NewHandler(
 	configLoader *config.Loader,
 	backendClient *routing.BackendClient,
 	backendRegistry *config.BackendRegistry,
+	routingEngine *routing.Engine,
+	routingMetrics *telemetry.RoutingMetrics,
+	usageHook *UsageHook,
 ) *Handler {
 	tracer := otel.Tracer("api-router-service")
 	return &Handler{
@@ -52,6 +60,9 @@ func NewHandler(
 		configLoader:    configLoader,
 		backendClient:   backendClient,
 		backendRegistry: backendRegistry,
+		routingEngine:   routingEngine,
+		routingMetrics:  routingMetrics,
+		usageHook:       usageHook,
 		tracer:          tracer,
 		errorBuilder:   api.NewErrorBuilder(tracer),
 		backendURIs:     make(map[string]string),
@@ -123,52 +134,60 @@ func (h *Handler) HandleInference(w http.ResponseWriter, r *http.Request) {
 		Parameters: req.Parameters,
 	}
 
-	// Try backends with failover
+	// Use routing engine for intelligent routing with failover
 	var backendResp *routing.BackendResponse
-	var backend *routing.BackendEndpoint
-	var routingDecision string
-	var lastErr error
+	var routingDecision *routing.RoutingDecision
+	var routingErr error
 
-	// Get available backends (excluding degraded)
-	availableBackends := h.getAvailableBackends(policy)
-	if len(availableBackends) == 0 {
-		h.writeError(w, r, fmt.Errorf("no available backend"), api.ErrCodeNoBackendAvailable)
-		return
+	if h.routingEngine != nil {
+		// Use routing engine for intelligent routing
+		backendResp, routingDecision, routingErr = h.routingEngine.RouteWithFailover(ctx, policy, backendReq, h.backendClient)
+	} else {
+		// Fallback to simple routing if engine not available
+		h.logger.Warn("routing engine not available, using fallback routing")
+		backendResp, routingDecision, routingErr = h.fallbackRouting(ctx, policy, backendReq)
 	}
 
-	// Try each backend until one succeeds or all fail
-	for i, backendWeight := range availableBackends {
-		backend = h.buildBackendEndpoint(backendWeight.BackendID, policy.Model)
-		
-		if i == 0 {
-			routingDecision = "PRIMARY"
-		} else {
-			routingDecision = "FAILOVER"
+	if routingErr != nil {
+		// Record error metrics
+		if routingDecision != nil {
+			telemetry.RecordBackendError(
+				routingDecision.BackendID,
+				authCtx.OrganizationID,
+				req.Model,
+				"routing_failed",
+			)
 		}
-
-		backendResp, lastErr = h.backendClient.ForwardRequest(ctx, backend, backendReq)
-		if lastErr == nil {
-			// Success - break out of retry loop
-			break
-		}
-
-		h.logger.Warn("backend request failed, trying failover",
-			zap.String("backend_id", backend.ID),
-			zap.Int("attempt", i+1),
-			zap.Int("total_backends", len(availableBackends)),
-			zap.Error(lastErr),
-		)
-
-		// If this was the last backend, we'll return the error
-		if i == len(availableBackends)-1 {
-			h.writeError(w, r, fmt.Errorf("all backends failed, last error: %w", lastErr), api.ErrCodeBackendError)
-			return
-		}
+		h.writeError(w, r, fmt.Errorf("routing failed: %w", routingErr), api.ErrCodeBackendError)
+		return
 	}
 
 	if backendResp == nil {
-		h.writeError(w, r, fmt.Errorf("backend request failed: %w", lastErr), api.ErrCodeBackendError)
+		h.writeError(w, r, fmt.Errorf("no backend response"), api.ErrCodeBackendError)
 		return
+	}
+
+	// Record routing metrics if available
+	if h.routingMetrics != nil && routingDecision != nil {
+		decisionLatency := time.Since(startTime)
+		h.routingMetrics.RecordRoutingDecision(
+			routingDecision.BackendID,
+			routingDecision.DecisionType,
+			true, // success
+			decisionLatency,
+		)
+	}
+
+	// Record per-backend metrics
+	if routingDecision != nil {
+		requestLatency := time.Since(startTime)
+		telemetry.RecordBackendRequest(
+			routingDecision.BackendID,
+			authCtx.OrganizationID,
+			req.Model,
+			true, // success
+			requestLatency,
+		)
 	}
 
 	// Build response
@@ -189,8 +208,33 @@ func (h *Handler) HandleInference(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add routing headers
-	w.Header().Set("X-Routing-Backend", backend.ID)
-	w.Header().Set("X-Routing-Decision", routingDecision)
+	if routingDecision != nil {
+		w.Header().Set("X-Routing-Backend", routingDecision.BackendID)
+		w.Header().Set("X-Routing-Decision", routingDecision.DecisionType)
+	}
+
+	// Emit usage record if usage hook is available
+	if h.usageHook != nil && routingDecision != nil {
+		decisionReason := routingDecision.DecisionType
+		if routingDecision.AttemptNumber > 1 {
+			decisionReason = "FAILOVER"
+		}
+		
+		_ = h.usageHook.EmitUsage(
+			ctx,
+			authCtx,
+			req.RequestID,
+			req.Model,
+			routingDecision.BackendID,
+			decisionReason,
+			response.Usage.TokensInput,
+			response.Usage.TokensOutput,
+			response.Usage.LatencyMS,
+			response.Usage.LimitState,
+			span.SpanContext(),
+			routingDecision.AttemptNumber-1, // retry count
+		)
+	}
 
 	// Write response
 	if err := h.writeJSON(w, http.StatusOK, response); err != nil {
@@ -198,86 +242,44 @@ func (h *Handler) HandleInference(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// getAvailableBackends returns available backends (excluding degraded ones) in weighted order.
-func (h *Handler) getAvailableBackends(policy *config.RoutingPolicy) []config.BackendWeight {
+// fallbackRouting provides simple routing when routing engine is not available.
+func (h *Handler) fallbackRouting(
+	ctx context.Context,
+	policy *config.RoutingPolicy,
+	backendReq *routing.BackendRequest,
+) (*routing.BackendResponse, *routing.RoutingDecision, error) {
 	if len(policy.Backends) == 0 {
-		return nil
+		return nil, nil, fmt.Errorf("no backends configured")
 	}
 
-	// Filter out degraded backends
-	availableBackends := make([]config.BackendWeight, 0)
-	degradedMap := make(map[string]bool)
-	for _, degradedID := range policy.DegradedBackends {
-		degradedMap[degradedID] = true
-	}
-
-	for _, backend := range policy.Backends {
-		if !degradedMap[backend.BackendID] {
-			availableBackends = append(availableBackends, backend)
+	// Try backends in order
+	for i, backendWeight := range policy.Backends {
+		backend := h.buildBackendEndpoint(backendWeight.BackendID, policy.Model)
+		decisionType := "PRIMARY"
+		if i > 0 {
+			decisionType = "FAILOVER"
 		}
-	}
 
-	if len(availableBackends) == 0 {
-		// All backends are degraded, fall back to all backends
-		availableBackends = policy.Backends
-	}
-
-	// Sort by weight (descending) for failover order
-	// Higher weight backends are tried first
-	for i := 0; i < len(availableBackends)-1; i++ {
-		for j := i + 1; j < len(availableBackends); j++ {
-			if availableBackends[i].Weight < availableBackends[j].Weight {
-				availableBackends[i], availableBackends[j] = availableBackends[j], availableBackends[i]
+		response, err := h.backendClient.ForwardRequest(ctx, backend, backendReq)
+		if err == nil {
+			decision := &routing.RoutingDecision{
+				BackendID:     backend.ID,
+				DecisionType:  decisionType,
+				Reason:        fmt.Sprintf("fallback routing (attempt %d)", i+1),
+				Timestamp:     time.Now(),
+				AttemptNumber: i + 1,
 			}
+			return response, decision, nil
 		}
+
+		h.logger.Warn("backend request failed in fallback routing",
+			zap.String("backend_id", backend.ID),
+			zap.Int("attempt", i+1),
+			zap.Error(err),
+		)
 	}
 
-	return availableBackends
-}
-
-// selectBackend selects a backend from the routing policy using weighted selection.
-// Implements weighted random selection based on backend weights.
-// This is used for initial selection; failover logic handles retries.
-func (h *Handler) selectBackend(policy *config.RoutingPolicy) *routing.BackendEndpoint {
-	availableBackends := h.getAvailableBackends(policy)
-	if len(availableBackends) == 0 {
-		return nil
-	}
-
-	// Calculate total weight
-	totalWeight := 0
-	for _, backend := range availableBackends {
-		totalWeight += backend.Weight
-	}
-
-	if totalWeight == 0 {
-		// No weights specified, use first backend
-		return h.buildBackendEndpoint(availableBackends[0].BackendID, policy.Model)
-	}
-
-	// Weighted random selection using crypto/rand
-	selectedWeight, err := randomInt64(int64(totalWeight))
-	if err != nil {
-		// Fallback to time-based if crypto/rand fails
-		selectedWeight = time.Now().UnixNano() % int64(totalWeight)
-	}
-
-	currentWeight := 0
-	var selected config.BackendWeight
-	for _, backend := range availableBackends {
-		currentWeight += backend.Weight
-		if int64(currentWeight) > selectedWeight {
-			selected = backend
-			break
-		}
-	}
-
-	// Fallback to first backend if selection didn't work
-	if selected.BackendID == "" {
-		selected = availableBackends[0]
-	}
-
-	return h.buildBackendEndpoint(selected.BackendID, policy.Model)
+	return nil, nil, fmt.Errorf("all backends failed")
 }
 
 // buildBackendEndpoint constructs a BackendEndpoint from a backend ID.

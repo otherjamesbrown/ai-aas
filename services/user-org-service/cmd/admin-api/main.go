@@ -46,6 +46,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -57,9 +58,11 @@ import (
 
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/bootstrap"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/config"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/apikeys"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/auth"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/middleware"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/orgs"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/serviceaccounts"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/users"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/logging"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/server"
@@ -80,6 +83,21 @@ func main() {
 	}
 	logger.Info().Msg("runtime dependencies initialized")
 
+	// Initialize IdP registry if OIDC is configured (moved here to avoid import cycles)
+	baseURL := cfg.OIDCBaseURL
+	if baseURL == "" {
+		// Default to HTTP port if base URL not provided (for development)
+		baseURL = fmt.Sprintf("http://localhost:%d", cfg.HTTPPort)
+	}
+	idpRegistry, err := auth.InitializeIdPProviders(ctx, baseURL, cfg)
+	if err != nil {
+		logger.Warn().Err(err).Msg("failed to initialize IdP providers, OIDC federation disabled")
+	} else if idpRegistry != nil {
+		// Set IdP registry in runtime (we need to add a setter or make it accessible)
+		// For now, we'll pass it to RegisterRoutes
+		logger.Info().Msg("IdP providers initialized")
+	}
+
 	srv := server.New(server.Options{
 		Port:        cfg.HTTPPort,
 		Logger:      logger,
@@ -87,7 +105,7 @@ func main() {
 		Readiness:   readinessProbe(runtime, logger),
 		RegisterRoutes: func(r chi.Router) {
 			// Public auth routes (no auth required)
-			auth.RegisterRoutes(r, runtime)
+			auth.RegisterRoutes(r, runtime, idpRegistry)
 			
 			// Protected routes (require authentication)
 			r.Group(func(r chi.Router) {
@@ -99,6 +117,10 @@ func main() {
 				// Register users routes - these are more specific (/v1/orgs/{orgId}/invites, etc.)
 				// and will match after the orgs routes
 				users.RegisterRoutes(r, runtime, logger)
+				// Register service account routes
+				serviceaccounts.RegisterRoutes(r, runtime, logger)
+				// Register API key routes
+				apikeys.RegisterRoutes(r, runtime, logger)
 			})
 		},
 	})

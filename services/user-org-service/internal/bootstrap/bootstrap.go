@@ -54,6 +54,7 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/logging"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/oauth"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/security"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/storage/postgres"
 )
 
@@ -68,6 +69,9 @@ type Runtime struct {
 	OAuthConfig *fosite.Config      // Fosite OAuth2 configuration (token lifetimes, PKCE settings, etc.)
 	Provider    fosite.OAuth2Provider // Composed OAuth2 provider ready for use in HTTP handlers
 	Audit       audit.Emitter       // Audit event emitter (logger-based stub, replace with Kafka in production)
+	LockoutTracker *security.LockoutTracker // Lockout tracker for failed authentication attempts (optional, nil if Redis not configured)
+	// Note: IdPRegistry is initialized separately in main.go to avoid import cycles
+	// It should be set after bootstrap initialization
 }
 
 // Initialize wires core dependencies based on the provided configuration.
@@ -82,10 +86,23 @@ func Initialize(ctx context.Context, cfg *config.Config) (*Runtime, error) {
 
 	logger := logging.New(cfg.ServiceName, cfg.LogLevel)
 	
+	// Initialize audit emitter (Kafka if configured, otherwise logger)
+	var auditEmitter audit.Emitter
+	if kafkaEmitter, err := audit.NewKafkaEmitterFromConfig(cfg.KafkaBrokers, cfg.KafkaTopic, cfg.KafkaClientID, logger); err != nil {
+		logger.Warn().Err(err).Msg("failed to initialize Kafka emitter, falling back to logger")
+		auditEmitter = audit.NewLoggerEmitter(logger)
+	} else if kafkaEmitter != nil {
+		logger.Info().Str("topic", cfg.KafkaTopic).Msg("using Kafka emitter for audit events")
+		auditEmitter = kafkaEmitter
+	} else {
+		logger.Info().Msg("Kafka not configured, using logger emitter for audit events")
+		auditEmitter = audit.NewLoggerEmitter(logger)
+	}
+	
 	runtime := &Runtime{
 		Config:   cfg,
 		Postgres: pgStore,
-		Audit:    audit.NewLoggerEmitter(logger), // Logger-based stub (replace with KafkaEmitter in production)
+		Audit:    auditEmitter,
 	}
 
 	if cfg.RedisAddr != "" {
@@ -112,6 +129,16 @@ func Initialize(ctx context.Context, cfg *config.Config) (*Runtime, error) {
 	runtime.OAuthStore = oauthStore
 	runtime.OAuthCache = sessionCache
 
+	// Initialize lockout tracker if Redis is available
+	if runtime.Redis != nil {
+		lockoutCfg := security.LockoutConfig{
+			MaxAttempts:     cfg.LockoutMaxAttempts,
+			LockoutDuration: time.Duration(cfg.LockoutDurationMinutes) * time.Minute,
+			WindowDuration:  time.Duration(cfg.LockoutWindowMinutes) * time.Minute,
+		}
+		runtime.LockoutTracker = security.NewLockoutTracker(runtime.Redis, lockoutCfg)
+	}
+
 	provider, err := oauth.NewProvider(oauth.ProviderDependencies{
 		PostgresStore: pgStore,
 		SessionCache:  sessionCache,
@@ -124,13 +151,16 @@ func Initialize(ctx context.Context, cfg *config.Config) (*Runtime, error) {
 	runtime.OAuthConfig = oauthStore.Config()
 	runtime.Provider = provider
 
+	// Note: IdP registry initialization moved to main.go to avoid import cycles
+	// Initialize it there after bootstrap completes
+
 	return runtime, nil
 }
 
 // Close releases runtime resources in reverse initialization order.
 // Safe to call multiple times (idempotent). Returns the first error encountered,
-// but continues closing other resources. Postgres pool and Redis connections are
-// closed; OAuth provider and stores require no explicit cleanup.
+// but continues closing other resources. Postgres pool, Redis connections, and
+// Kafka emitter are closed; OAuth provider and stores require no explicit cleanup.
 func (rt *Runtime) Close(ctx context.Context) error {
 	if rt == nil {
 		return nil
@@ -141,6 +171,12 @@ func (rt *Runtime) Close(ctx context.Context) error {
 	}
 	if rt.Redis != nil {
 		if err := rt.Redis.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	// Close Kafka emitter if it's a KafkaEmitter
+	if kafkaEmitter, ok := rt.Audit.(*audit.KafkaEmitter); ok {
+		if err := kafkaEmitter.Close(); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}

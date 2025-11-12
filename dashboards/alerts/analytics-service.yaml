@@ -1,0 +1,203 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: analytics-service-alerts
+  labels:
+    role: alert-rules
+    app.kubernetes.io/name: analytics-service
+spec:
+  groups:
+    - name: analytics-service.slo
+      interval: 1m
+      rules:
+        - alert: AnalyticsServiceDown
+          expr: |
+            up{job=~".*analytics-service.*"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            service: analytics-service
+          annotations:
+            summary: "Analytics Service is down"
+            description: |
+              The analytics service has been unreachable for 5 minutes.
+              Check pod status and logs.
+            runbook_url: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/runbooks/analytics-incident-response.md
+
+        - alert: AnalyticsServiceHighFreshnessLag
+          expr: |
+            # Query freshness_status table via PostgreSQL exporter or custom metric
+            # This assumes a custom metric is exposed
+            analytics_freshness_lag_seconds > 600
+          for: 5m
+          labels:
+            severity: critical
+            service: analytics-service
+          annotations:
+            summary: "Analytics freshness lag exceeds 10 minutes"
+            description: |
+              Freshness lag has exceeded 600 seconds (10 minutes).
+              Check rollup worker status and database connectivity.
+            runbook_url: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/runbooks/analytics-incident-response.md
+
+        - alert: AnalyticsServiceHighDedupeFailureRate
+          expr: |
+            # Dedupe failure rate from ingestion batches
+            rate(analytics_ingestion_dedupe_conflicts_total[5m]) / rate(analytics_ingestion_events_total[5m]) > 0.01
+          for: 10m
+          labels:
+            severity: warning
+            service: analytics-service
+          annotations:
+            summary: "Analytics deduplication failure rate above 1%"
+            description: |
+              Deduplication conflict rate has exceeded 1% threshold.
+              Investigate duplicate event generation upstream.
+            runbook_url: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/runbooks/analytics-incident-response.md
+
+        - alert: AnalyticsServiceRollupWorkerStalled
+          expr: |
+            # Time since last successful rollup
+            time() - analytics_rollup_last_success_timestamp > 3600
+          for: 15m
+          labels:
+            severity: critical
+            service: analytics-service
+          annotations:
+            summary: "Analytics rollup worker has not run in over 1 hour"
+            description: |
+              Rollup worker has not completed successfully in over 1 hour.
+              Check rollup worker logs and database connectivity.
+            runbook_url: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/runbooks/analytics-incident-response.md
+
+        - alert: AnalyticsServiceHighMemoryUsage
+          expr: |
+            (
+              container_memory_usage_bytes{pod=~"analytics-service.*",container="analytics-service"}
+              /
+              container_spec_memory_limit_bytes{pod=~"analytics-service.*",container="analytics-service"}
+            ) > 0.9
+          for: 10m
+          labels:
+            severity: warning
+            service: analytics-service
+          annotations:
+            summary: "Analytics Service memory usage above 90%"
+            description: |
+              Container memory usage has exceeded 90% of the limit.
+              Consider increasing memory limits or investigating memory leaks.
+            runbook_url: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/runbooks/analytics-incident-response.md
+
+        - alert: AnalyticsServiceHighCPUUsage
+          expr: |
+            rate(container_cpu_usage_seconds_total{pod=~"analytics-service.*",container="analytics-service"}[5m]) > 0.8
+          for: 10m
+          labels:
+            severity: warning
+            service: analytics-service
+          annotations:
+            summary: "Analytics Service CPU usage above 80%"
+            description: |
+              Container CPU usage has exceeded 80% for 10 minutes.
+              Consider scaling horizontally or increasing CPU limits.
+            runbook_url: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/runbooks/analytics-incident-response.md
+
+    - name: analytics-service.reliability
+      interval: 1m
+      rules:
+        - alert: AnalyticsServiceHighErrorRate
+          expr: |
+            # Error rate calculated from usage_events via PostgreSQL exporter
+            # This metric should be exposed by a custom exporter querying analytics.usage_events
+            analytics_usage_error_rate{org_id=~".*"} > 0.05
+          for: 5m
+          labels:
+            severity: critical
+            service: analytics-service
+            component: reliability
+          annotations:
+            summary: "Analytics error rate exceeds 5% (org={{ $labels.org_id }})"
+            description: |
+              Error rate for organization {{ $labels.org_id }} has exceeded 5% threshold.
+              Check reliability API endpoint: /analytics/v1/orgs/{{ $labels.org_id }}/reliability
+              Export incident data if needed for investigation.
+            runbook_url: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/runbooks/analytics-incident-response.md
+
+        - alert: AnalyticsServiceHighLatencyP95
+          expr: |
+            # Latency p95 calculated from usage_events via PostgreSQL exporter
+            analytics_usage_latency_p95_ms{org_id=~".*"} > 2000
+          for: 10m
+          labels:
+            severity: warning
+            service: analytics-service
+            component: reliability
+          annotations:
+            summary: "Analytics latency p95 exceeds 2s (org={{ $labels.org_id }})"
+            description: |
+              P95 latency for organization {{ $labels.org_id }} has exceeded 2000ms (2 seconds).
+              Check reliability API for detailed latency breakdown by model.
+              Investigate downstream dependencies and recent changes.
+            runbook_url: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/runbooks/analytics-incident-response.md
+
+        - alert: AnalyticsServiceHighLatencyP99
+          expr: |
+            # Latency p99 calculated from usage_events via PostgreSQL exporter
+            analytics_usage_latency_p99_ms{org_id=~".*"} > 5000
+          for: 5m
+          labels:
+            severity: critical
+            service: analytics-service
+            component: reliability
+          annotations:
+            summary: "Analytics latency p99 exceeds 5s (org={{ $labels.org_id }})"
+            description: |
+              P99 latency for organization {{ $labels.org_id }} has exceeded 5000ms (5 seconds).
+              This indicates severe performance degradation affecting tail latency.
+              Check reliability API endpoint and export incident data for analysis.
+            runbook_url: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/runbooks/analytics-incident-response.md
+
+        - alert: AnalyticsServiceErrorRateSpike
+          expr: |
+            # Detect sudden spike in error rate (3x increase)
+            (
+              analytics_usage_error_rate{org_id=~".*"}
+              /
+              (analytics_usage_error_rate{org_id=~".*"} offset 15m)
+            ) > 3
+            AND analytics_usage_error_rate{org_id=~".*"} > 0.01
+          for: 2m
+          labels:
+            severity: critical
+            service: analytics-service
+            component: reliability
+          annotations:
+            summary: "Analytics error rate spike detected (org={{ $labels.org_id }})"
+            description: |
+              Error rate for organization {{ $labels.org_id }} has spiked 3x in the last 15 minutes.
+              This indicates a potential incident. Export incident data immediately.
+              Check: /analytics/v1/orgs/{{ $labels.org_id }}/reliability
+            runbook_url: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/runbooks/analytics-incident-response.md
+
+        - alert: AnalyticsServiceLatencySpike
+          expr: |
+            # Detect sudden spike in latency p95 (2x increase)
+            (
+              analytics_usage_latency_p95_ms{org_id=~".*"}
+              /
+              (analytics_usage_latency_p95_ms{org_id=~".*"} offset 15m)
+            ) > 2
+            AND analytics_usage_latency_p95_ms{org_id=~".*"} > 1000
+          for: 5m
+          labels:
+            severity: warning
+            service: analytics-service
+            component: reliability
+          annotations:
+            summary: "Analytics latency spike detected (org={{ $labels.org_id }})"
+            description: |
+              P95 latency for organization {{ $labels.org_id }} has doubled in the last 15 minutes.
+              Investigate recent deployments, downstream dependencies, or traffic patterns.
+              Check reliability API for model-level attribution.
+            runbook_url: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/runbooks/analytics-incident-response.md
+

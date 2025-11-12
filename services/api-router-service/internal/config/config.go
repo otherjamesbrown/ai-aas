@@ -54,6 +54,12 @@ type Config struct {
 
 	// Audit/Kafka
 	KafkaAuditTopic string `envconfig:"KAFKA_AUDIT_TOPIC" default:"audit.router"`
+
+	// Health Monitoring
+	HealthCheckInterval time.Duration `envconfig:"HEALTH_CHECK_INTERVAL" default:"10s"`
+
+	// Usage Accounting
+	UsageBufferDir string `envconfig:"USAGE_BUFFER_DIR" default:"/tmp/api-router-usage-buffer"`
 }
 
 // BackendEndpointConfig represents a configured backend endpoint.

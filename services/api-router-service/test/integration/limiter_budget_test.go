@@ -62,7 +62,7 @@ func TestRateLimitExceeded(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 	
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry)
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil)
 
 	// Set up Redis for rate limiting (skip test if Redis unavailable)
 	redisClient := redis.NewClient(&redis.Options{
@@ -177,7 +177,7 @@ func TestBudgetExceeded(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 	
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry)
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil)
 
 	// TODO: Add budget middleware to router
 	router := chi.NewRouter()
@@ -254,7 +254,7 @@ func TestQuotaExceeded(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 	
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry)
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil)
 
 	// TODO: Add quota middleware to router
 	router := chi.NewRouter()
@@ -334,7 +334,7 @@ func TestAuditEventEmitted(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 	
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry)
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil)
 
 	// TODO: Add audit logger to handler/middleware
 	router := chi.NewRouter()
@@ -400,7 +400,7 @@ func TestRateLimitPerOrganization(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 	
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry)
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil)
 
 	// Set up Redis for rate limiting (skip test if Redis unavailable)
 	redisClient := redis.NewClient(&redis.Options{
@@ -493,7 +493,7 @@ func TestRateLimitPerKey(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 	
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry)
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil)
 
 	// Set up Redis for rate limiting (skip test if Redis unavailable)
 	redisClient := redis.NewClient(&redis.Options{

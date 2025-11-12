@@ -50,10 +50,16 @@ cd services/analytics-service
 make run \
   RABBITMQ_URL=amqp://guest:guest@localhost:5672 \
   DATABASE_URL=postgres://analytics:analytics@localhost:5432/ai_aas?sslmode=disable \
-  REDIS_URL=redis://localhost:6379
+  REDIS_URL=redis://localhost:6379 \
+  S3_ENDPOINT=https://us-east-1.linodeobjects.com \
+  S3_ACCESS_KEY=your-access-key \
+  S3_SECRET_KEY=your-secret-key \
+  S3_BUCKET=analytics-exports
 ```
 - Starts HTTP server on `:8084` with `/analytics/v1` endpoints and background consumers.
 - Logs include ingestion lag, dedupe metrics, and health probes.
+- RBAC middleware is enabled by default (can be disabled for development via `ENABLE_RBAC=false`).
+- Export worker processes pending export jobs every 30 seconds (configurable via `EXPORT_WORKER_INTERVAL`).
 
 ### Seed Sample Events
 ```bash
@@ -71,12 +77,30 @@ scripts/analytics/verify.sh
 
 ### Trigger Export Flow
 ```bash
+# Create export job (requires RBAC headers)
 curl -X POST http://localhost:8084/analytics/v1/orgs/00000000-0000-0000-0000-000000000001/exports \
-  -H "Authorization: Bearer $ANALYTICS_TOKEN" \
+  -H "X-Actor-Subject: user-123" \
+  -H "X-Actor-Roles: analytics:exports:create,admin" \
+  -H "Content-Type: application/json" \
   -d '{"timeRange":{"start":"2025-11-01T00:00:00Z","end":"2025-11-07T23:59:59Z"},"granularity":"daily"}'
+
+# Response includes jobId - use it to check status
+export JOB_ID="<jobId-from-response>"
+
+# Poll job status until succeeded
+curl "http://localhost:8084/analytics/v1/orgs/00000000-0000-0000-0000-000000000001/exports/$JOB_ID" \
+  -H "X-Actor-Subject: user-123" \
+  -H "X-Actor-Roles: analytics:exports:read,admin"
+
+# Download CSV via signed URL (when status is succeeded)
+curl "http://localhost:8084/analytics/v1/orgs/00000000-0000-0000-0000-000000000001/exports/$JOB_ID/download" \
+  -H "X-Actor-Subject: user-123" \
+  -H "X-Actor-Roles: analytics:exports:download,admin" \
+  -L -o export.csv
 ```
-- Poll `GET /analytics/v1/orgs/{orgId}/exports/{jobId}` until `status` becomes `succeeded`.
-- Download CSV via signed URL and validate checksum.
+- Export jobs are processed asynchronously by the export worker
+- CSV files are stored in Linode Object Storage (S3-compatible)
+- Signed URLs expire after 24 hours (configurable via `EXPORT_SIGNED_URL_TTL`)
 
 ## 4. Kubernetes Deployment
 
@@ -105,11 +129,15 @@ curl -X POST http://localhost:8084/analytics/v1/orgs/00000000-0000-0000-0000-000
 
 - Prometheus metrics available at `/metrics`; add scrape config via `gitops/templates/argocd-values.yaml`.
 - Grafana dashboards located in `dashboards/analytics/usage.json` and `dashboards/analytics/reliability.json`.
-- Synthetic freshness probe defined in `tests/analytics/perf/freshness_benchmark_test.go`; schedule nightly CI run with `make analytics-nightly`.
+- Performance benchmarks defined in `services/analytics-service/test/perf/freshness_benchmark_test.go`; run with `go test -bench=. -benchmem`.
+- Audit logging captures all authorization decisions (allowed/denied) with actor, action, and outcome.
 - Alert thresholds:
   - Freshness lag > 600 seconds (critical)
   - Dedup failure rate > 1% (critical)
   - Export job failure twice within 60 minutes (warning)
+  - Error rate > 5% for 5 minutes (critical)
+  - Latency P95 > 2s for 10 minutes (warning)
+  - Latency P99 > 5s for 5 minutes (critical)
 
 ## 6. Troubleshooting
 
@@ -117,7 +145,9 @@ curl -X POST http://localhost:8084/analytics/v1/orgs/00000000-0000-0000-0000-000
 |----------|------------|
 | Consumer stuck with increasing lag | Check RabbitMQ stream depth, verify `analytics-service` pods have sufficient concurrency (`Values.ingestion.consumers`). |
 | Timescale aggregate stale | Run `scripts/analytics/run-hourly.sh --refresh` to force refresh; confirm CronJob logs. |
-| Export job fails with permission error | Validate S3 credentials, ensure IAM policy allows `PutObject`/`GetObject` in `analytics/exports/` prefix. |
+| Export job fails with permission error | Validate Linode Object Storage credentials (`S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`), ensure bucket exists and credentials have `PutObject`/`GetObject` permissions. |
+| RBAC middleware rejecting requests | Ensure `X-Actor-Subject` and `X-Actor-Roles` headers are set. For development, set `ENABLE_RBAC=false` to disable RBAC. |
+| Export job stuck in pending | Check export worker logs, verify S3 credentials are configured, check worker concurrency settings (`EXPORT_WORKER_CONCURRENCY`). |
 | Dashboard missing data | Compare `freshness_status` table with Redis cache, clear key `analytics:freshness:*` if stale. |
 | Local tests unable to start RabbitMQ | Use `docker compose -f analytics/local-dev/docker-compose.yml up -d` (file generated during bootstrap). |
 

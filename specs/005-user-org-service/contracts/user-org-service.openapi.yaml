@@ -1,0 +1,793 @@
+openapi: 3.1.0
+info:
+  title: User & Organization Service API
+  version: 0.1.0
+  description: >
+    Contracts for interactive admin API, authentication flows, policy decisions,
+    budget enforcement, declarative reconciliation controls, and audit exports.
+servers:
+  - url: https://user-org-service.{env}.platform.internal
+    description: Cluster-scoped service endpoint (dev/staging/prod)
+  - url: http://localhost:8081
+    description: Local development (admin API)
+tags:
+  - name: Authentication
+  - name: Organizations
+  - name: Users
+  - name: ServiceAccounts
+  - name: APIKeys
+  - name: Budgets
+  - name: Policy
+  - name: Declarative
+  - name: Audit
+security:
+  - bearerAuth: []
+  - m2mToken: []
+paths:
+  /v1/auth/login:
+    post:
+      tags: [Authentication]
+      summary: Authenticate an interactive user with password and MFA
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSession'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '423':
+          description: Account locked
+  /v1/auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Rotate access/refresh tokens
+      security:
+        - refreshToken: []
+      responses:
+        '200':
+          description: Tokens rotated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSession'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /v1/auth/sessions/{sessionId}:
+    delete:
+      tags: [Authentication]
+      summary: Revoke an active session
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '204':
+          description: Session revoked
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /v1/orgs:
+    post:
+      tags: [Organizations]
+      summary: Create a new organization
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrgRequest'
+      responses:
+        '201':
+          description: Organization created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /v1/orgs/{orgId}:
+    get:
+      tags: [Organizations]
+      summary: Retrieve organization details
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Organization fetched
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Organizations]
+      summary: Update organization metadata or policies
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrgRequest'
+      responses:
+        '200':
+          description: Organization updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /v1/orgs/{orgId}/invites:
+    post:
+      tags: [Users]
+      summary: Invite a new user
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteUserRequest'
+      responses:
+        '202':
+          description: Invite dispatched
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invite'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /v1/orgs/{orgId}/users/{userId}/roles:
+    put:
+      tags: [Users]
+      summary: Replace user role assignments
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleAssignment'
+      responses:
+        '200':
+          description: Roles updated
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /v1/orgs/{orgId}/service-accounts:
+    post:
+      tags: [ServiceAccounts]
+      summary: Create a service account
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateServiceAccountRequest'
+      responses:
+        '201':
+          description: Service account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceAccount'
+  /v1/orgs/{orgId}/service-accounts/{serviceAccountId}/api-keys:
+    post:
+      tags: [APIKeys]
+      summary: Issue a new API key
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/ServiceAccountId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IssueApiKeyRequest'
+      responses:
+        '201':
+          description: API key issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssuedApiKey'
+        '429':
+          description: Rotation rate limited
+  /v1/orgs/{orgId}/api-keys/{apiKeyId}:
+    delete:
+      tags: [APIKeys]
+      summary: Revoke an API key
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/ApiKeyId'
+      responses:
+        '204':
+          description: API key revoked
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /v1/policy/evaluate:
+    post:
+      tags: [Policy]
+      summary: Evaluate authorization decision (PDP endpoint)
+      security:
+        - m2mToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyEvaluationRequest'
+      responses:
+        '200':
+          description: Policy decision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyDecision'
+        '503':
+          description: PDP unavailable
+  /v1/budgets/{orgId}/status:
+    get:
+      tags: [Budgets]
+      summary: Retrieve budget status and recent alerts
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Budget status returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetStatus'
+  /v1/budgets/{orgId}/overrides:
+    post:
+      tags: [Budgets]
+      summary: Request a temporary budget override
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BudgetOverrideRequest'
+      responses:
+        '202':
+          description: Override request recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetOverride'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /v1/declarative/config:
+    post:
+      tags: [Declarative]
+      summary: Manually trigger declarative reconciliation
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManualReconcileRequest'
+      responses:
+        '202':
+          description: Reconciliation enqueued
+  /v1/declarative/status/{orgId}:
+    get:
+      tags: [Declarative]
+      summary: Fetch latest declarative reconciliation status
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Status payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeclarativeStatus'
+  /v1/audit/export:
+    post:
+      tags: [Audit]
+      summary: Export audit logs for an organization within time window
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuditExportRequest'
+      responses:
+        '202':
+          description: Export initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditExportTicket'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    refreshToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Refresh token with dedicated scope
+    m2mToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Machine-to-machine token issued to downstream services
+  parameters:
+    OrgId:
+      name: orgId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: slug
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ServiceAccountId:
+      name: serviceAccountId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ApiKeyId:
+      name: apiKeyId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    Unauthorized:
+      description: Authentication failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Resource state conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        totp:
+          type: string
+          description: Required when MFA enforced
+        webauthnAssertion:
+          type: object
+          description: Used for WebAuthn completion
+    AuthSession:
+      type: object
+      required: [accessToken, refreshToken, sessionId, expiresAt]
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        sessionId:
+          type: string
+          format: uuid
+        expiresAt:
+          type: string
+          format: date-time
+        mfaVerified:
+          type: boolean
+    CreateOrgRequest:
+      type: object
+      required: [name, slug, billingOwnerEmail]
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+        billingOwnerEmail:
+          type: string
+          format: email
+        declarative:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            repoUrl:
+              type: string
+              format: uri
+            branch:
+              type: string
+    Organization:
+      type: object
+      required: [orgId, name, slug, status]
+      properties:
+        orgId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        status:
+          type: string
+          enum: [active, suspended, pending_delete]
+        budgets:
+          $ref: '#/components/schemas/BudgetStatus'
+        declarative:
+          $ref: '#/components/schemas/DeclarativeStatus'
+        metadata:
+          type: object
+          additionalProperties: true
+    UpdateOrgRequest:
+      type: object
+      properties:
+        displayName:
+          type: string
+        status:
+          type: string
+          enum: [active, suspended]
+        budgetPolicyId:
+          type: string
+          format: uuid
+        declarative:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            repoUrl:
+              type: string
+              format: uri
+            branch:
+              type: string
+    InviteUserRequest:
+      type: object
+      required: [email, roles]
+      properties:
+        email:
+          type: string
+          format: email
+        roles:
+          type: array
+          items:
+            type: string
+        expiresInHours:
+          type: integer
+          default: 72
+    Invite:
+      type: object
+      required: [inviteId, status, expiresAt]
+      properties:
+        inviteId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, accepted, expired, revoked]
+        expiresAt:
+          type: string
+          format: date-time
+    RoleAssignment:
+      type: object
+      required: [roles]
+      properties:
+        roles:
+          type: array
+          items:
+            type: string
+        justification:
+          type: string
+    CreateServiceAccountRequest:
+      type: object
+      required: [name, roles]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+    ServiceAccount:
+      type: object
+      required: [serviceAccountId, name, status]
+      properties:
+        serviceAccountId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [active, disabled, deleted]
+        roles:
+          type: array
+          items:
+            type: string
+    IssueApiKeyRequest:
+      type: object
+      required: [scopes]
+      properties:
+        scopes:
+          type: array
+          items:
+            type: string
+        expiresInDays:
+          type: integer
+        annotations:
+          type: object
+          additionalProperties: true
+    IssuedApiKey:
+      type: object
+      required: [apiKeyId, secret, fingerprint, status]
+      properties:
+        apiKeyId:
+          type: string
+          format: uuid
+        secret:
+          type: string
+          description: Displayed once
+        fingerprint:
+          type: string
+        status:
+          type: string
+          enum: [active, pending_rotation]
+        expiresAt:
+          type: string
+          format: date-time
+    PolicyEvaluationRequest:
+      type: object
+      required: [subject, action, resource, context]
+      properties:
+        subject:
+          $ref: '#/components/schemas/Subject'
+        action:
+          type: string
+        resource:
+          type: string
+        context:
+          type: object
+          additionalProperties: true
+    Subject:
+      type: object
+      required: [orgId, principalId, principalType]
+      properties:
+        orgId:
+          type: string
+          format: uuid
+        principalId:
+          type: string
+          format: uuid
+        principalType:
+          type: string
+          enum: [user, service_account]
+        roles:
+          type: array
+          items:
+            type: string
+    PolicyDecision:
+      type: object
+      required: [decision, policyId]
+      properties:
+        decision:
+          type: string
+          enum: [allow, deny]
+        policyId:
+          type: string
+        reason:
+          type: string
+        ttlSeconds:
+          type: integer
+        obligations:
+          type: array
+          items:
+            type: string
+    BudgetStatus:
+      type: object
+      required: [period, spend, currency, warnThreshold, blockThreshold]
+      properties:
+        period:
+          type: string
+        spend:
+          type: number
+        currency:
+          type: string
+        warnThreshold:
+          type: number
+        blockThreshold:
+          type: number
+        status:
+          type: string
+          enum: [ok, warn, block]
+        overridesActive:
+          type: boolean
+        pendingOverride:
+          $ref: '#/components/schemas/BudgetOverride'
+    BudgetOverrideRequest:
+      type: object
+      required: [amount, reason]
+      properties:
+        amount:
+          type: number
+        reason:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+    BudgetOverride:
+      type: object
+      required: [overrideId, status]
+      properties:
+        overrideId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, approved, rejected, expired]
+        amount:
+          type: number
+        requestedBy:
+          type: string
+          format: uuid
+        approvedBy:
+          type: array
+          items:
+            type: string
+          description: Approver user IDs
+        expiresAt:
+          type: string
+          format: date-time
+    ManualReconcileRequest:
+      type: object
+      required: [orgId]
+      properties:
+        orgId:
+          type: string
+          format: uuid
+        commitSha:
+          type: string
+          description: Optional override commit hash
+    DeclarativeStatus:
+      type: object
+      required: [mode, lastCommit, state]
+      properties:
+        mode:
+          type: string
+          enum: [enabled, disabled, paused]
+        lastCommit:
+          type: string
+        state:
+          type: string
+          enum: [synced, drift_detected, failed, pending]
+        lastSyncedAt:
+          type: string
+          format: date-time
+        driftDiff:
+          type: object
+          additionalProperties: true
+    AuditExportRequest:
+      type: object
+      required: [orgId, from, to]
+      properties:
+        orgId:
+          type: string
+          format: uuid
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        format:
+          type: string
+          enum: [ndjson, parquet]
+          default: ndjson
+    AuditExportTicket:
+      type: object
+      required: [ticketId, status, exportUrl, signatureUrl]
+      properties:
+        ticketId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, ready, failed]
+        exportUrl:
+          type: string
+          format: uri
+        signatureUrl:
+          type: string
+          format: uri
+        expiresAt:
+          type: string
+          format: date-time
+

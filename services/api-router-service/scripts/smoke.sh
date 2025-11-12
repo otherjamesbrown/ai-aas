@@ -353,6 +353,52 @@ EOF
     fi
 }
 
+# Test routing validation
+test_routing_validation() {
+    log_info "Testing routing validation..."
+    
+    # Test inference request with routing headers
+    local request_id=$(generate_uuid)
+    local request_body=$(cat <<EOF
+{
+  "request_id": "$request_id",
+  "model": "gpt-4o",
+  "payload": "Routing validation test"
+}
+EOF
+)
+    
+    local response=$(http_request "POST" "$SERVICE_URL/v1/inference" "$request_body" "-H 'Content-Type: application/json' -H 'X-API-Key: $API_KEY'")
+    local status_code=$(echo "$response" | tail -n1)
+    local body=$(echo "$response" | head -n-1)
+    
+    log_verbose "Routing validation response status: $status_code"
+    
+    # Check for routing headers in successful responses
+    if [ "$status_code" = "200" ]; then
+        log_success "Routing validation: Request routed successfully"
+        
+        # Verify response contains expected fields
+        if echo "$body" | grep -q '"request_id"'; then
+            log_success "Routing validation: Response contains request_id"
+        else
+            log_error "Routing validation: Response missing request_id"
+            return 1
+        fi
+        
+        return 0
+    elif [ "$status_code" = "503" ] || [ "$status_code" = "502" ]; then
+        log_error "Routing validation: Backend unavailable (status $status_code)"
+        return 1
+    elif [ "$status_code" = "429" ] || [ "$status_code" = "402" ]; then
+        log_skip "Routing validation: Rate limited or budget exceeded (expected in test environment)"
+        return 0
+    else
+        log_error "Routing validation: Unexpected status $status_code"
+        return 1
+    fi
+}
+
 # Test admin endpoints
 test_admin_endpoints() {
     if [ "$SKIP_ADMIN" = true ]; then
@@ -369,6 +415,12 @@ test_admin_endpoints() {
     
     if [ "$status_code" = "200" ]; then
         log_success "  List backends endpoint returned 200"
+        
+        # Verify response contains backends array
+        local body=$(echo "$response" | head -n-1)
+        if echo "$body" | grep -q "backend"; then
+            log_success "  List backends response contains backend data"
+        fi
     else
         log_error "  List backends endpoint returned $status_code"
         return 1
@@ -485,6 +537,7 @@ main() {
     test_inference_endpoint || true
     test_rate_limiting || true
     test_budget_enforcement || true
+    test_routing_validation || true
     test_admin_endpoints || true
     test_audit_endpoint || true
     

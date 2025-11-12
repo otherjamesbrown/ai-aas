@@ -4,17 +4,12 @@
 |------|------------|------|-------|----------------|------------------|-------|
 | 000-project-setup | ✅ | ✅ | ✅ | ✅ | ✅ | Baseline reference implementation |
 | 001-infrastructure | ✅ | ✅ | ✅ | ✅ | ✅ | Plan, research, data model, quickstart, contracts, tasks, and cross-artifact review completed |
-<<<<<<< HEAD
 | 002-local-dev-environment | ✅ | ✅ | ☐ | ☐ | ☐ | Plan, research, data model, contracts, quickstart delivered |
-| 003-database-schemas | ✅ | ✅ | ✅ | ✅ | ☐ | Guardrails, analytics rollups, docs completed (llms.txt pending) |
-=======
-| 002-local-dev-environment | ☐ | ☐ | ☐ | ☐ | ☐ | |
-| 003-database-schemas | ✅ | ✅ | ✅ | ✅ | ☐ | Guardrails, analytics rollups, docs completed (llms.txt pending) |
->>>>>>> 88eeb04 (feat: finalize db guardrails and analytics rollups)
+| 003-database-schemas | ✅ | ✅ | ✅ | ✅ | ✅ | Guardrails, analytics rollups, docs completed |
 | 004-shared-libraries | ☐ | ☐ | ☐ | ☐ | ☐ | |
 | 005-user-org-service | ☐ | ☐ | ☐ | ☐ | ☐ | |
 | 006-api-router-service | ☐ | ☐ | ☐ | ☐ | ☐ | |
-| 007-analytics-service | ☐ | ☐ | ☐ | ☐ | ☐ | |
+| 007-analytics-service | ✅ | ✅ | ✅ | ✅ | ✅ | Phases 1-6 complete: Setup, foundational, usage visibility, reliability, finance exports, RBAC/audit/polish |
 | 008-web-portal | ☐ | ☐ | ☐ | ☐ | ☐ | |
 | 009-admin-cli | ☐ | ☐ | ☐ | ☐ | ☐ | |
 | 010-vllm-deployment | ☐ | ☐ | ☐ | ☐ | ☐ | |

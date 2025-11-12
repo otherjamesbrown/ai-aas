@@ -29,6 +29,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
+	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/api/public"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/usage"
 )
@@ -41,21 +42,32 @@ type HealthResponse struct {
 
 // ReadinessResponse represents the readiness endpoint response.
 type ReadinessResponse struct {
-	Status    string                 `json:"status"`
-	Components map[string]string     `json:"components,omitempty"`
-	Build     map[string]string      `json:"build,omitempty"`
-	Timestamp string                 `json:"timestamp,omitempty"`
+	Status     string            `json:"status"`
+	Components map[string]string `json:"components,omitempty"`
+	Build      *struct {
+		Version   string `json:"version"`
+		Commit    string `json:"commit"`
+		BuildTime string `json:"build_time"`
+	} `json:"build,omitempty"`
+	Timestamp string `json:"timestamp,omitempty"`
 }
 
 // TestHealthzEndpoint tests the basic liveness check endpoint.
 func TestHealthzEndpoint(t *testing.T) {
-	// Set up minimal router with health endpoint
-	router := chi.NewRouter()
-	router.Get("/v1/status/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"healthy"}`))
+	// Set up status handlers
+	logger := zap.NewNop()
+	statusHandlers := public.NewStatusHandlers(public.StatusHandlersConfig{
+		Logger: logger,
+		BuildMetadata: public.BuildMetadata{
+			Version:   "test-version",
+			Commit:    "test-commit",
+			BuildTime: time.Now().Format(time.RFC3339),
+		},
 	})
+
+	// Set up router with health endpoint
+	router := chi.NewRouter()
+	router.Get("/v1/status/healthz", statusHandlers.Healthz)
 
 	// Make request
 	req := httptest.NewRequest("GET", "/v1/status/healthz", nil)
@@ -119,72 +131,25 @@ func TestReadyzEndpointAllHealthy(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 
+	// Set up status handlers
+	statusHandlers := public.NewStatusHandlers(public.StatusHandlersConfig{
+		RedisClient:    redisClient,
+		KafkaPublisher: publisher,
+		ConfigLoader:   loader,
+		BackendRegistry: backendRegistry,
+		Logger:         logger,
+		BuildMetadata: public.BuildMetadata{
+			Version:   "test-version",
+			Commit:    "test-commit",
+			BuildTime: time.Now().Format(time.RFC3339),
+		},
+		HealthTimeout: 1 * time.Second,
+		ReadyTimeout:  5 * time.Second,
+	})
+
 	// Set up router with readiness endpoint
 	router := chi.NewRouter()
-	router.Get("/v1/status/readyz", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
-		// Check components
-		components := make(map[string]string)
-		allHealthy := true
-
-		// Check Redis
-		redisCtx, cancel := context.WithTimeout(r.Context(), 1*time.Second)
-		defer cancel()
-		if err := redisClient.Ping(redisCtx).Err(); err != nil {
-			components["redis"] = "unhealthy"
-			allHealthy = false
-		} else {
-			components["redis"] = "healthy"
-		}
-
-		// Check Kafka (via publisher health check)
-		if err := publisher.Health(r.Context()); err != nil {
-			components["kafka"] = "unhealthy"
-			allHealthy = false
-		} else {
-			components["kafka"] = "healthy"
-		}
-
-		// Check Config Service (via loader)
-		if loader == nil {
-			components["config_service"] = "unhealthy"
-			allHealthy = false
-		} else {
-			components["config_service"] = "healthy"
-		}
-
-		// Check Backend Registry
-		if backendRegistry == nil || len(backendRegistry.ListBackends()) == 0 {
-			components["backend_registry"] = "unhealthy"
-			allHealthy = false
-		} else {
-			components["backend_registry"] = "healthy"
-		}
-
-		// Build metadata (would be injected at build time)
-		build := map[string]string{
-			"version":   "test-version",
-			"commit":    "test-commit",
-			"build_time": time.Now().Format(time.RFC3339),
-		}
-
-		response := ReadinessResponse{
-			Status:     "ready",
-			Components: components,
-			Build:      build,
-			Timestamp:  time.Now().Format(time.RFC3339),
-		}
-
-		if !allHealthy {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			response.Status = "degraded"
-		} else {
-			w.WriteHeader(http.StatusOK)
-		}
-
-		json.NewEncoder(w).Encode(response)
-	})
+	router.Get("/v1/status/readyz", statusHandlers.Readyz)
 
 	// Make request
 	req := httptest.NewRequest("GET", "/v1/status/readyz", nil)
@@ -225,13 +190,13 @@ func TestReadyzEndpointAllHealthy(t *testing.T) {
 	if response.Build == nil {
 		t.Error("expected build metadata in response")
 	} else {
-		if _, ok := response.Build["version"]; !ok {
+		if response.Build.Version == "" {
 			t.Error("expected 'version' in build metadata")
 		}
-		if _, ok := response.Build["commit"]; !ok {
+		if response.Build.Commit == "" {
 			t.Error("expected 'commit' in build metadata")
 		}
-		if _, ok := response.Build["build_time"]; !ok {
+		if response.Build.BuildTime == "" {
 			t.Error("expected 'build_time' in build metadata")
 		}
 	}
@@ -273,70 +238,25 @@ func TestReadyzEndpointRedisDown(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 
+	// Set up status handlers
+	statusHandlers := public.NewStatusHandlers(public.StatusHandlersConfig{
+		RedisClient:    redisClient,
+		KafkaPublisher: publisher,
+		ConfigLoader:   loader,
+		BackendRegistry: backendRegistry,
+		Logger:         logger,
+		BuildMetadata: public.BuildMetadata{
+			Version:   "test-version",
+			Commit:    "test-commit",
+			BuildTime: time.Now().Format(time.RFC3339),
+		},
+		HealthTimeout: 1 * time.Second,
+		ReadyTimeout:  5 * time.Second,
+	})
+
 	// Set up router with readiness endpoint
 	router := chi.NewRouter()
-	router.Get("/v1/status/readyz", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
-		components := make(map[string]string)
-		allHealthy := true
-
-		// Check Redis (should fail)
-		redisCtx, cancel := context.WithTimeout(r.Context(), 1*time.Second)
-		defer cancel()
-		if err := redisClient.Ping(redisCtx).Err(); err != nil {
-			components["redis"] = "unhealthy"
-			allHealthy = false
-		} else {
-			components["redis"] = "healthy"
-		}
-
-		// Check Kafka
-		if err := publisher.Health(r.Context()); err != nil {
-			components["kafka"] = "unhealthy"
-			allHealthy = false
-		} else {
-			components["kafka"] = "healthy"
-		}
-
-		// Check Config Service
-		if loader == nil {
-			components["config_service"] = "unhealthy"
-			allHealthy = false
-		} else {
-			components["config_service"] = "healthy"
-		}
-
-		// Check Backend Registry
-		if backendRegistry == nil || len(backendRegistry.ListBackends()) == 0 {
-			components["backend_registry"] = "unhealthy"
-			allHealthy = false
-		} else {
-			components["backend_registry"] = "healthy"
-		}
-
-		build := map[string]string{
-			"version":   "test-version",
-			"commit":    "test-commit",
-			"build_time": time.Now().Format(time.RFC3339),
-		}
-
-		response := ReadinessResponse{
-			Status:     "ready",
-			Components: components,
-			Build:      build,
-			Timestamp:  time.Now().Format(time.RFC3339),
-		}
-
-		if !allHealthy {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			response.Status = "degraded"
-		} else {
-			w.WriteHeader(http.StatusOK)
-		}
-
-		json.NewEncoder(w).Encode(response)
-	})
+	router.Get("/v1/status/readyz", statusHandlers.Readyz)
 
 	// Make request
 	req := httptest.NewRequest("GET", "/v1/status/readyz", nil)
@@ -412,70 +332,25 @@ func TestReadyzEndpointBackendRegistryEmpty(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 
+	// Set up status handlers
+	statusHandlers := public.NewStatusHandlers(public.StatusHandlersConfig{
+		RedisClient:    redisClient,
+		KafkaPublisher: publisher,
+		ConfigLoader:   loader,
+		BackendRegistry: backendRegistry,
+		Logger:         logger,
+		BuildMetadata: public.BuildMetadata{
+			Version:   "test-version",
+			Commit:    "test-commit",
+			BuildTime: time.Now().Format(time.RFC3339),
+		},
+		HealthTimeout: 1 * time.Second,
+		ReadyTimeout:  5 * time.Second,
+	})
+
 	// Set up router with readiness endpoint
 	router := chi.NewRouter()
-	router.Get("/v1/status/readyz", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
-		components := make(map[string]string)
-		allHealthy := true
-
-		// Check Redis
-		redisCtx, cancel := context.WithTimeout(r.Context(), 1*time.Second)
-		defer cancel()
-		if err := redisClient.Ping(redisCtx).Err(); err != nil {
-			components["redis"] = "unhealthy"
-			allHealthy = false
-		} else {
-			components["redis"] = "healthy"
-		}
-
-		// Check Kafka
-		if err := publisher.Health(r.Context()); err != nil {
-			components["kafka"] = "unhealthy"
-			allHealthy = false
-		} else {
-			components["kafka"] = "healthy"
-		}
-
-		// Check Config Service
-		if loader == nil {
-			components["config_service"] = "unhealthy"
-			allHealthy = false
-		} else {
-			components["config_service"] = "healthy"
-		}
-
-		// Check Backend Registry (should fail if empty)
-		if backendRegistry == nil || len(backendRegistry.ListBackends()) == 0 {
-			components["backend_registry"] = "unhealthy"
-			allHealthy = false
-		} else {
-			components["backend_registry"] = "healthy"
-		}
-
-		build := map[string]string{
-			"version":   "test-version",
-			"commit":    "test-commit",
-			"build_time": time.Now().Format(time.RFC3339),
-		}
-
-		response := ReadinessResponse{
-			Status:     "ready",
-			Components: components,
-			Build:      build,
-			Timestamp:  time.Now().Format(time.RFC3339),
-		}
-
-		if !allHealthy {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			response.Status = "degraded"
-		} else {
-			w.WriteHeader(http.StatusOK)
-		}
-
-		json.NewEncoder(w).Encode(response)
-	})
+	router.Get("/v1/status/readyz", statusHandlers.Readyz)
 
 	// Make request
 	req := httptest.NewRequest("GET", "/v1/status/readyz", nil)
@@ -512,24 +387,20 @@ func TestReadyzEndpointBackendRegistryEmpty(t *testing.T) {
 
 // TestHealthzWithBuildMetadata tests that health endpoint can include build metadata.
 func TestHealthzWithBuildMetadata(t *testing.T) {
-	// Set up router with health endpoint that includes build metadata
-	router := chi.NewRouter()
-	router.Get("/v1/status/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		
-		response := map[string]interface{}{
-			"status": "healthy",
-			"build": map[string]string{
-				"version":   "test-version",
-				"commit":    "test-commit",
-				"build_time": time.Now().Format(time.RFC3339),
-			},
-			"timestamp": time.Now().Format(time.RFC3339),
-		}
-		
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(response)
+	// Set up status handlers with build metadata
+	logger := zap.NewNop()
+	statusHandlers := public.NewStatusHandlers(public.StatusHandlersConfig{
+		Logger: logger,
+		BuildMetadata: public.BuildMetadata{
+			Version:   "test-version",
+			Commit:    "test-commit",
+			BuildTime: time.Now().Format(time.RFC3339),
+		},
 	})
+
+	// Set up router with health endpoint
+	router := chi.NewRouter()
+	router.Get("/v1/status/healthz", statusHandlers.Healthz)
 
 	// Make request
 	req := httptest.NewRequest("GET", "/v1/status/healthz", nil)
@@ -551,11 +422,16 @@ func TestHealthzWithBuildMetadata(t *testing.T) {
 		t.Errorf("expected status 'healthy', got '%v'", response["status"])
 	}
 
-	// Build metadata is optional for healthz, but if present should be valid
+	// Build metadata should be present
 	if build, ok := response["build"].(map[string]interface{}); ok {
 		if _, ok := build["version"]; !ok {
-			t.Error("expected 'version' in build metadata if build is present")
+			t.Error("expected 'version' in build metadata")
 		}
+		if _, ok := build["commit"]; !ok {
+			t.Error("expected 'commit' in build metadata")
+		}
+	} else {
+		t.Error("expected 'build' metadata in response")
 	}
 }
 

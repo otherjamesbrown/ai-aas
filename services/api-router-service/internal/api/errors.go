@@ -12,6 +12,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -223,23 +224,35 @@ func MapError(err error) (code string, statusCode int) {
 // WriteError writes an error response to the HTTP response writer.
 func WriteError(w http.ResponseWriter, r *http.Request, builder *ErrorBuilder, err error, code string) {
 	statusCode := GetHTTPStatus(code)
-	builder.BuildError(r.Context(), err, code)
+	response := builder.BuildError(r.Context(), err, code)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	// Note: Error encoding is handled by the caller or middleware
-	// This function just sets up the response structure
+	
+	// Encode JSON response
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		// Fallback to plain text if JSON encoding fails
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Internal server error"))
+	}
 }
 
 // WriteLimitError writes a limit error response to the HTTP response writer.
 func WriteLimitError(w http.ResponseWriter, r *http.Request, builder *ErrorBuilder, err error, code string, retryAfter *int, limitContext map[string]interface{}) {
 	statusCode := GetHTTPStatus(code)
-	builder.BuildLimitError(r.Context(), err, code, retryAfter, limitContext)
+	response := builder.BuildLimitError(r.Context(), err, code, retryAfter, limitContext)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	// Note: Error encoding is handled by the caller or middleware
-	// This function just sets up the response structure
+	
+	// Encode JSON response
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		// Fallback to plain text if JSON encoding fails
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Internal server error"))
+	}
 }
 
 // Helper function to check if a string contains a substring (case-insensitive)

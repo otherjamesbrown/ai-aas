@@ -1,0 +1,120 @@
+name: API Router Service CI
+
+on:
+  push:
+    paths:
+      - 'services/api-router-service/**'
+      - '.github/workflows/api-router-service.yml'
+      - 'templates/service.mk'
+      - 'configs/golangci.yml'
+      - 'configs/gosec.toml'
+  pull_request:
+    paths:
+      - 'services/api-router-service/**'
+      - '.github/workflows/api-router-service.yml'
+      - 'templates/service.mk'
+      - 'configs/golangci.yml'
+      - 'configs/gosec.toml'
+
+jobs:
+  test:
+    name: Test and Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/api-router-service
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: services/api-router-service/go.sum
+
+      - name: Install dependencies
+        run: |
+          go mod download
+          go mod verify
+
+      - name: Run gofmt
+        run: make fmt
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: services/api-router-service
+          args: --config ../../configs/golangci.yml
+
+      - name: Run gosec security scan
+        uses: securego/gosec@master
+        with:
+          args: '-no-fail -fmt json -out gosec-report.json ./...'
+          working-directory: services/api-router-service
+
+      - name: Run tests
+        run: make test
+
+  contract-test:
+    name: Contract Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/api-router-service
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: services/api-router-service/go.sum
+
+      - name: Install buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: latest
+
+      - name: Run contract tests
+        run: make contract-test
+
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/api-router-service
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: services/api-router-service/go.sum
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Start dependencies
+        run: make dev-up
+
+      - name: Wait for services
+        run: |
+          timeout 60 bash -c 'until docker compose -f dev/docker-compose.yml exec -T redis redis-cli ping > /dev/null 2>&1; do sleep 2; done'
+          timeout 60 bash -c 'until docker compose -f dev/docker-compose.yml exec -T kafka kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1; do sleep 2; done'
+
+      - name: Run integration tests
+        run: make integration-test
+
+      - name: Stop dependencies
+        if: always()
+        run: make dev-down
+

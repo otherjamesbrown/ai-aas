@@ -1,23 +1,31 @@
-go 1.23.0
+go 1.24.0
+
+toolchain go1.24.2
 
 use (
+	./analytics/tests
+	./db/seeds/operational
+	./db/tools/lint
+	./db/tools/migrate
+	./db/tools/sqlrunner
+	./samples/service-template/go
 	./services/_template
+	./services/analytics-service
+	./services/analytics-service/test/integration-phase5
+	./services/analytics-service/test/perf
+	./services/api-router-service
 	./services/hello-service
+	./services/user-org-service
 	./services/world-service
-	./tests/infra/terratest
+	./shared/go
+	./tests/analytics/integration
+	./tests/go/contract
+	./tests/go/integration
+	./tests/go/perf
+	./tests/go/unit
 	./tests/infra/perf
 	./tests/infra/synthetics
-	./tests/go/unit
-	./tests/go/integration
-	./tests/go/contract
-	./tests/go/perf
-	./samples/service-template/go
-	./shared/go
-	./db/tools/migrate
-	./db/tools/lint
-	./db/seeds/operational
-	./db/tools/sqlrunner
-	./analytics/tests
+	./tests/infra/terratest
 )
 
 replace github.com/ai-aas/shared-go v0.0.0 => ./shared/go

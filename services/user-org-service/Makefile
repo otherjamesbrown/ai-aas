@@ -68,4 +68,21 @@ docker-build-e2e-test: ## Build Docker image for e2e-test
 deploy-e2e-test: ## Deploy and run e2e-test in development environment
 	@./scripts/deploy-e2e-test.sh
 
+.PHONY: smoke-k6
+smoke-k6: ## Run k6 smoke tests (requires k6: https://k6.io/docs/getting-started/installation/)
+	@command -v k6 >/dev/null 2>&1 || { echo "k6 not installed. Install from https://k6.io/docs/getting-started/installation/"; exit 1; }
+	@API_URL=$${API_URL:-http://localhost:8081} k6 run scripts/smoke-k6.js
+
+.PHONY: smoke-k6-local
+smoke-k6-local: smoke-k6 ## Run k6 smoke tests against localhost (default)
+
+.PHONY: smoke-k6-dev
+smoke-k6-dev: ## Run k6 smoke tests against development environment
+	@command -v k6 >/dev/null 2>&1 || { echo "k6 not installed. Install from https://k6.io/docs/getting-started/installation/"; exit 1; }
+	@if [ -z "$$DEV_API_URL" ]; then \
+		echo "DEV_API_URL env var must be set (e.g., http://user-org-service.dev.platform.internal:8081)"; \
+		exit 1; \
+	fi
+	@API_URL=$$DEV_API_URL k6 run scripts/smoke-k6.js
+
 

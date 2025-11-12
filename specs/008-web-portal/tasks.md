@@ -19,13 +19,13 @@
 
 **Purpose**: Establish portal workspace, tooling, and configuration baseline.
 
-- [ ] T001 Create `pnpm-workspace.yaml` at repo root including `shared/ts`, `tests/ts/*`, and new `web/portal` package.
-- [ ] T002 Scaffold `web/portal/package.json` with React 18, Vite 5, TanStack Query, Zod, Tailwind, Playwright, Vitest, and shared dependencies.
-- [ ] T003 Add TypeScript project config in `web/portal/tsconfig.json` aligning with monorepo references.
-- [ ] T004 Define Vite build pipeline in `web/portal/vite.config.ts` (HTTPS dev server, alias to `shared/ts`).
-- [ ] T005 [P] Configure Tailwind theme tokens in `web/portal/tailwind.config.ts`.
-- [ ] T006 [P] Add PostCSS pipeline in `web/portal/postcss.config.cjs` (Tailwind + autoprefixer).
-- [ ] T007 [P] Document environment variables in `web/portal/.env.example` (OAuth client, API base, telemetry keys).
+- [ ] T-S008-P01-001 Create `pnpm-workspace.yaml` at repo root including `shared/ts`, `tests/ts/*`, and new `web/portal` package.
+- [ ] T-S008-P01-002 Scaffold `web/portal/package.json` with React 18, Vite 5, TanStack Query, Zod, Tailwind, Playwright, Vitest, and shared dependencies.
+- [ ] T-S008-P01-003 Add TypeScript project config in `web/portal/tsconfig.json` aligning with monorepo references.
+- [ ] T-S008-P01-004 Define Vite build pipeline in `web/portal/vite.config.ts` (HTTPS dev server, alias to `shared/ts`).
+- [ ] T-S008-P01-005 [P] Configure Tailwind theme tokens in `web/portal/tailwind.config.ts`.
+- [ ] T-S008-P01-006 [P] Add PostCSS pipeline in `web/portal/postcss.config.cjs` (Tailwind + autoprefixer).
+- [ ] T-S008-P01-007 [P] Document environment variables in `web/portal/.env.example` (OAuth client, API base, telemetry keys).
 
 ---
 
@@ -34,19 +34,19 @@
 **Purpose**: Core app shell, providers, and tooling that all user stories depend on.  
 **⚠️ CRITICAL**: No user story work can begin until these tasks are complete.
 
-- [ ] T008 Create root app bootstrap in `web/portal/src/main.tsx` wiring routing, auth, telemetry, feature flags, and global styles.
-- [ ] T009 Implement TanStack Router shell in `web/portal/src/app/AppRouter.tsx` with lazy route placeholders.
-- [ ] T010 Build shared layout (app bar, nav shell, notification slot) in `web/portal/src/app/Layout.tsx`.
-- [ ] T011 Implement OAuth2/OIDC context in `web/portal/src/providers/AuthProvider.tsx` (silent refresh + MFA prompts).
-- [ ] T012 [P] Implement feature flag provider backed by `@aio/feature-flags` in `web/portal/src/providers/FeatureFlagProvider.tsx`.
-- [ ] T013 [P] Implement OpenTelemetry wiring in `web/portal/src/providers/TelemetryProvider.tsx` (OTLP exporters, correlation IDs).
-- [ ] T014 [P] Create Axios client with auth/CSRF interceptors in `web/portal/src/lib/http/client.ts`.
-- [ ] T015 [P] Expose TanStack Query client + hydration utilities in `web/portal/src/lib/query/index.ts`.
-- [ ] T016 [P] Add global Tailwind styles, responsive breakpoints, and container queries in `web/portal/src/styles/global.css`.
-- [ ] T017 Configure Vitest runner with JSX + axe-core setup in `web/portal/vitest.config.ts`.
-- [ ] T018 Configure Playwright (projects, storage state, axe plugin) in `web/portal/playwright.config.ts`.
-- [ ] T019 [P] Document responsive viewport guidelines in `web/portal/tailwind.config.ts` (fluid typography, layout constraints).
-- [ ] T020 [P] Scaffold Storybook workspace (`web/portal/.storybook/*`) and scripts integrating `shared/ts`.
+- [ ] T-S008-P02-008 Create root app bootstrap in `web/portal/src/main.tsx` wiring routing, auth, telemetry, feature flags, and global styles.
+- [ ] T-S008-P02-009 Implement TanStack Router shell in `web/portal/src/app/AppRouter.tsx` with lazy route placeholders.
+- [ ] T-S008-P02-010 Build shared layout (app bar, nav shell, notification slot) in `web/portal/src/app/Layout.tsx`.
+- [ ] T-S008-P02-011 Implement OAuth2/OIDC context in `web/portal/src/providers/AuthProvider.tsx` (silent refresh + MFA prompts).
+- [ ] T-S008-P02-012 [P] Implement feature flag provider backed by `@aio/feature-flags` in `web/portal/src/providers/FeatureFlagProvider.tsx`.
+- [ ] T-S008-P02-013 [P] Implement OpenTelemetry wiring in `web/portal/src/providers/TelemetryProvider.tsx` (OTLP exporters, correlation IDs).
+- [ ] T-S008-P02-014 [P] Create Axios client with auth/CSRF interceptors in `web/portal/src/lib/http/client.ts`.
+- [ ] T-S008-P02-015 [P] Expose TanStack Query client + hydration utilities in `web/portal/src/lib/query/index.ts`.
+- [ ] T-S008-P02-016 [P] Add global Tailwind styles, responsive breakpoints, and container queries in `web/portal/src/styles/global.css`.
+- [ ] T-S008-P02-017 Configure Vitest runner with JSX + axe-core setup in `web/portal/vitest.config.ts`.
+- [ ] T-S008-P02-018 Configure Playwright (projects, storage state, axe plugin) in `web/portal/playwright.config.ts`.
+- [ ] T-S008-P02-019 [P] Document responsive viewport guidelines in `web/portal/tailwind.config.ts` (fluid typography, layout constraints).
+- [ ] T-S008-P02-020 [P] Scaffold Storybook workspace (`web/portal/.storybook/*`) and scripts integrating `shared/ts`.
 
 **Checkpoint**: App shell renders, providers resolve, tests/e2e commands execute.
 
@@ -60,27 +60,27 @@
 
 ### Tests for User Story 1
 
-- [ ] T021 [P] [US1] Add Pact contract coverage for organization/member/budget/key endpoints in `web/portal/tests/contract/admin-portal.pact.ts`.
-- [ ] T022 [P] [US1] Create Playwright journey for admin flows in `web/portal/tests/e2e/admin-workflows.spec.ts`.
+- [ ] T-S008-P03-021 [P] [US1] Add Pact contract coverage for organization/member/budget/key endpoints in `web/portal/tests/contract/admin-portal.pact.ts`.
+- [ ] T-S008-P03-022 [P] [US1] Create Playwright journey for admin flows in `web/portal/tests/e2e/admin-workflows.spec.ts`.
 
 ### Implementation for User Story 1
 
-- [ ] T023 [US1] Define admin domain types (OrganizationProfile, MemberAccount, BudgetPolicy, ApiKeyCredential) in `web/portal/src/features/admin/types.ts`.
-- [ ] T024 [P] [US1] Implement organization profile SDK in `web/portal/src/features/admin/api/organization.ts`.
-- [ ] T025 [P] [US1] Implement member management SDK in `web/portal/src/features/admin/api/members.ts`.
-- [ ] T026 [P] [US1] Implement budget policy SDK in `web/portal/src/features/admin/api/budgets.ts`.
-- [ ] T027 [P] [US1] Implement API key lifecycle SDK in `web/portal/src/features/admin/api/apiKeys.ts`.
-- [ ] T028 [US1] Build organization settings page with optimistic updates in `web/portal/src/features/admin/org/OrganizationSettingsPage.tsx`.
-- [ ] T029 [US1] Build member management flows (invite/resend/remove/role) in `web/portal/src/features/admin/members/MemberManagementPage.tsx`.
-- [ ] T030 [US1] Build budget controls UI with confirmations in `web/portal/src/features/admin/budgets/BudgetControlsPage.tsx`.
-- [ ] T031 [US1] Build API key management UI (create/rotate/revoke with masked display) in `web/portal/src/features/admin/api-keys/ApiKeysPage.tsx`.
-- [ ] T032 [US1] Implement audit event banner + toast system in `web/portal/src/features/admin/components/AuditEventBanner.tsx`.
-- [ ] T033 [US1] Register admin routes and loaders in `web/portal/src/app/routes/adminRoutes.tsx`.
-- [ ] T034 [US1] Persist multi-step invite wizard state across session refresh in `web/portal/src/features/admin/members/hooks/useInviteWizard.ts`.
-- [ ] T035 [US1] Surface stale data conflicts with refresh guidance in `web/portal/src/features/admin/components/StaleDataBanner.tsx`.
-- [ ] T036 [P] [US1] Author Storybook stories for admin forms and confirmation flows in `web/portal/src/features/admin/**/*.stories.tsx`.
-- [ ] T037 [P] [US1] Add session expiry recovery Playwright spec in `web/portal/tests/e2e/session-expiry.spec.ts`.
-- [ ] T038 [US1] Implement session expiry re-auth banner/reset logic in `web/portal/src/features/admin/components/SessionExpiredNotice.tsx`.
+- [ ] T-S008-P03-023 [US1] Define admin domain types (OrganizationProfile, MemberAccount, BudgetPolicy, ApiKeyCredential) in `web/portal/src/features/admin/types.ts`.
+- [ ] T-S008-P03-024 [P] [US1] Implement organization profile SDK in `web/portal/src/features/admin/api/organization.ts`.
+- [ ] T-S008-P03-025 [P] [US1] Implement member management SDK in `web/portal/src/features/admin/api/members.ts`.
+- [ ] T-S008-P03-026 [P] [US1] Implement budget policy SDK in `web/portal/src/features/admin/api/budgets.ts`.
+- [ ] T-S008-P03-027 [P] [US1] Implement API key lifecycle SDK in `web/portal/src/features/admin/api/apiKeys.ts`.
+- [ ] T-S008-P03-028 [US1] Build organization settings page with optimistic updates in `web/portal/src/features/admin/org/OrganizationSettingsPage.tsx`.
+- [ ] T-S008-P03-029 [US1] Build member management flows (invite/resend/remove/role) in `web/portal/src/features/admin/members/MemberManagementPage.tsx`.
+- [ ] T-S008-P03-030 [US1] Build budget controls UI with confirmations in `web/portal/src/features/admin/budgets/BudgetControlsPage.tsx`.
+- [ ] T-S008-P03-031 [US1] Build API key management UI (create/rotate/revoke with masked display) in `web/portal/src/features/admin/api-keys/ApiKeysPage.tsx`.
+- [ ] T-S008-P03-032 [US1] Implement audit event banner + toast system in `web/portal/src/features/admin/components/AuditEventBanner.tsx`.
+- [ ] T-S008-P03-033 [US1] Register admin routes and loaders in `web/portal/src/app/routes/adminRoutes.tsx`.
+- [ ] T-S008-P03-034 [US1] Persist multi-step invite wizard state across session refresh in `web/portal/src/features/admin/members/hooks/useInviteWizard.ts`.
+- [ ] T-S008-P03-035 [US1] Surface stale data conflicts with refresh guidance in `web/portal/src/features/admin/components/StaleDataBanner.tsx`.
+- [ ] T-S008-P03-036 [P] [US1] Author Storybook stories for admin forms and confirmation flows in `web/portal/src/features/admin/**/*.stories.tsx`.
+- [ ] T-S008-P03-037 [P] [US1] Add session expiry recovery Playwright spec in `web/portal/tests/e2e/session-expiry.spec.ts`.
+- [ ] T-S008-P03-038 [US1] Implement session expiry re-auth banner/reset logic in `web/portal/src/features/admin/components/SessionExpiredNotice.tsx`.
 
 **Checkpoint**: Admin flows complete within 3 minutes, audit events fire, confirmations enforced.
 
@@ -94,19 +94,19 @@
 
 ### Tests for User Story 2
 
-- [ ] T039 [P] [US2] Add RBAC navigation integration tests in `web/portal/tests/integration/rbac-navigation.test.tsx`.
-- [ ] T040 [P] [US2] Add Playwright destructive-action confirmation suite in `web/portal/tests/e2e/destructive-confirmation.spec.ts`.
-- [ ] T041 [P] [US2] Add responsive navigation Playwright suite covering breakpoints in `web/portal/tests/e2e/responsive-navigation.spec.ts`.
+- [ ] T-S008-P04-039 [P] [US2] Add RBAC navigation integration tests in `web/portal/tests/integration/rbac-navigation.test.tsx`.
+- [ ] T-S008-P04-040 [P] [US2] Add Playwright destructive-action confirmation suite in `web/portal/tests/e2e/destructive-confirmation.spec.ts`.
+- [ ] T-S008-P04-041 [P] [US2] Add responsive navigation Playwright suite covering breakpoints in `web/portal/tests/e2e/responsive-navigation.spec.ts`.
 
 ### Implementation for User Story 2
 
-- [ ] T042 [US2] Extend role metadata and permission matrices in `web/portal/src/features/access/types.ts`.
-- [ ] T043 [US2] Implement permission guard hook with feature flag checks in `web/portal/src/features/access/hooks/usePermissionGuard.ts`.
-- [ ] T044 [US2] Build role-aware navigation/menu component in `web/portal/src/app/components/RoleAwareNav.tsx`.
-- [ ] T045 [US2] Implement typed confirmation modal for destructive actions in `web/portal/src/components/ConfirmDestructiveModal.tsx`.
-- [ ] T046 [US2] Implement permission tooltip helper in `web/portal/src/components/PermissionTooltip.tsx`.
-- [ ] T047 [US2] Add access denied page with support links in `web/portal/src/app/pages/AccessDeniedPage.tsx`.
-- [ ] T048 [US2] Wire protected route wrapper enforcing scopes in `web/portal/src/app/routes/ProtectedRoute.tsx`.
+- [ ] T-S008-P04-042 [US2] Extend role metadata and permission matrices in `web/portal/src/features/access/types.ts`.
+- [ ] T-S008-P04-043 [US2] Implement permission guard hook with feature flag checks in `web/portal/src/features/access/hooks/usePermissionGuard.ts`.
+- [ ] T-S008-P04-044 [US2] Build role-aware navigation/menu component in `web/portal/src/app/components/RoleAwareNav.tsx`.
+- [ ] T-S008-P04-045 [US2] Implement typed confirmation modal for destructive actions in `web/portal/src/components/ConfirmDestructiveModal.tsx`.
+- [ ] T-S008-P04-046 [US2] Implement permission tooltip helper in `web/portal/src/components/PermissionTooltip.tsx`.
+- [ ] T-S008-P04-047 [US2] Add access denied page with support links in `web/portal/src/app/pages/AccessDeniedPage.tsx`.
+- [ ] T-S008-P04-048 [US2] Wire protected route wrapper enforcing scopes in `web/portal/src/app/routes/ProtectedRoute.tsx`.
 
 **Checkpoint**: Unauthorized users cannot access admin actions; destructive actions require type-to-confirm + logging.
 
@@ -120,21 +120,21 @@
 
 ### Tests for User Story 3
 
-- [ ] T049 [P] [US3] Add usage aggregation unit tests in `web/portal/tests/unit/usage-calculations.test.ts`.
-- [ ] T050 [P] [US3] Add Playwright dashboard filter coverage in `web/portal/tests/e2e/usage-insights.spec.ts`.
+- [ ] T-S008-P05-049 [P] [US3] Add usage aggregation unit tests in `web/portal/tests/unit/usage-calculations.test.ts`.
+- [ ] T-S008-P05-050 [P] [US3] Add Playwright dashboard filter coverage in `web/portal/tests/e2e/usage-insights.spec.ts`.
 
 ### Implementation for User Story 3
 
-- [ ] T051 [US3] Define usage and report types in `web/portal/src/features/usage/types.ts`.
-- [ ] T052 [P] [US3] Implement usage API client with degraded state handling in `web/portal/src/features/usage/api.ts`.
-- [ ] T053 [US3] Implement TanStack Query hooks for usage reports in `web/portal/src/features/usage/hooks/useUsageReport.ts`.
-- [ ] T054 [US3] Build dashboard UI with charts and KPIs in `web/portal/src/features/usage/components/UsageDashboard.tsx`.
-- [ ] T055 [US3] Build empty/degraded state components in `web/portal/src/features/usage/components/UsageEmptyState.tsx`.
-- [ ] T056 [US3] Implement CSV export worker handling large datasets in `web/portal/src/features/usage/workers/exportUsageCsv.ts`.
-- [ ] T057 [US3] Add usage routes and loaders in `web/portal/src/app/routes/usageRoutes.tsx`.
-- [ ] T058 [US3] Implement status badge component showing last successful sync in `web/portal/src/features/usage/components/StatusBadge.tsx`.
-- [ ] T059 [P] [US3] Wire status badge telemetry + tests in `web/portal/src/features/usage/hooks/useStatusBadge.ts`.
-- [ ] T060 [P] [US3] Author Storybook stories for usage dashboard, empty state, and status badge in `web/portal/src/features/usage/**/*.stories.tsx`.
+- [ ] T-S008-P05-051 [US3] Define usage and report types in `web/portal/src/features/usage/types.ts`.
+- [ ] T-S008-P05-052 [P] [US3] Implement usage API client with degraded state handling in `web/portal/src/features/usage/api.ts`.
+- [ ] T-S008-P05-053 [US3] Implement TanStack Query hooks for usage reports in `web/portal/src/features/usage/hooks/useUsageReport.ts`.
+- [ ] T-S008-P05-054 [US3] Build dashboard UI with charts and KPIs in `web/portal/src/features/usage/components/UsageDashboard.tsx`.
+- [ ] T-S008-P05-055 [US3] Build empty/degraded state components in `web/portal/src/features/usage/components/UsageEmptyState.tsx`.
+- [ ] T-S008-P05-056 [US3] Implement CSV export worker handling large datasets in `web/portal/src/features/usage/workers/exportUsageCsv.ts`.
+- [ ] T-S008-P05-057 [US3] Add usage routes and loaders in `web/portal/src/app/routes/usageRoutes.tsx`.
+- [ ] T-S008-P05-058 [US3] Implement status badge component showing last successful sync in `web/portal/src/features/usage/components/StatusBadge.tsx`.
+- [ ] T-S008-P05-059 [P] [US3] Wire status badge telemetry + tests in `web/portal/src/features/usage/hooks/useStatusBadge.ts`.
+- [ ] T-S008-P05-060 [P] [US3] Author Storybook stories for usage dashboard, empty state, and status badge in `web/portal/src/features/usage/**/*.stories.tsx`.
 
 **Checkpoint**: Usage dashboard meets latency targets, handles empty/degraded states, exports data.
 
@@ -148,17 +148,17 @@
 
 ### Tests for User Story 4
 
-- [ ] T061 [P] [US4] Add Playwright flow for support impersonation in `web/portal/tests/e2e/support-impersonation.spec.ts`.
-- [ ] T062 [P] [US4] Add guard unit tests in `web/portal/tests/unit/support-readonly-guard.test.ts`.
+- [ ] T-S008-P06-061 [P] [US4] Add Playwright flow for support impersonation in `web/portal/tests/e2e/support-impersonation.spec.ts`.
+- [ ] T-S008-P06-062 [P] [US4] Add guard unit tests in `web/portal/tests/unit/support-readonly-guard.test.ts`.
 
 ### Implementation for User Story 4
 
-- [ ] T063 [US4] Implement support impersonation API module in `web/portal/src/features/support/api/impersonation.ts`.
-- [ ] T064 [US4] Build consent modal capturing justification + token in `web/portal/src/features/support/components/ImpersonationConsentModal.tsx`.
-- [ ] T065 [US4] Build session banner with countdown + revoke button in `web/portal/src/features/support/components/ImpersonationBanner.tsx`.
-- [ ] T066 [US4] Implement read-only guard hook in `web/portal/src/features/support/hooks/useImpersonationGuard.ts`.
-- [ ] T067 [US4] Build support console page in `web/portal/src/features/support/pages/SupportConsolePage.tsx`.
-- [ ] T068 [US4] Forward impersonation audit events to telemetry in `web/portal/src/features/support/api/auditTrail.ts`.
+- [ ] T-S008-P06-063 [US4] Implement support impersonation API module in `web/portal/src/features/support/api/impersonation.ts`.
+- [ ] T-S008-P06-064 [US4] Build consent modal capturing justification + token in `web/portal/src/features/support/components/ImpersonationConsentModal.tsx`.
+- [ ] T-S008-P06-065 [US4] Build session banner with countdown + revoke button in `web/portal/src/features/support/components/ImpersonationBanner.tsx`.
+- [ ] T-S008-P06-066 [US4] Implement read-only guard hook in `web/portal/src/features/support/hooks/useImpersonationGuard.ts`.
+- [ ] T-S008-P06-067 [US4] Build support console page in `web/portal/src/features/support/pages/SupportConsolePage.tsx`.
+- [ ] T-S008-P06-068 [US4] Forward impersonation audit events to telemetry in `web/portal/src/features/support/api/auditTrail.ts`.
 
 **Checkpoint**: Support engineers can resolve escalations without persistent admin rights; audit trail intact.
 
@@ -168,16 +168,16 @@
 
 **Purpose**: Hardening, documentation, and compliance tasks spanning all stories.
 
-- [ ] T069 [P] Author portal usage troubleshooting guide in `docs/runbooks/portal-usage.md`.
-- [ ] T070 [P] Document synthetic monitoring setup in `dashboards/web-portal/README.md`.
-- [ ] T071 Record accessibility audit (axe + manual screen reader) in `docs/metrics/report.md`.
-- [ ] T072 Capture Lighthouse performance baseline (<3s TTI, <0.1 CLS) in `docs/metrics/report.md`.
-- [ ] T073 Execute quickstart end-to-end and annotate verification notes in `specs/008-web-portal/quickstart.md`.
-- [ ] T074 Update portal entries in `llms.txt` with spec, plan, quickstart, and dashboards links.
-- [ ] T075 Configure Storybook build + visual regression check in CI via `web/portal/package.json` scripts and `.github/workflows`.
-- [ ] T076 Capture destructive-action latency metrics <2.5s through synthetic monitoring in `web/portal/tests/e2e/destructive-confirmation.spec.ts` and telemetry dashboards.
-- [ ] T077 Run k6 load test for 5k concurrent sessions with CDN/rate-limit validation; document results in `docs/metrics/report.md`.
-- [ ] T078 Document CDN caching and rate-limiting configuration in `docs/platform/observability-guide.md`.
+- [ ] T-S008-P07-069 [P] Author portal usage troubleshooting guide in `docs/runbooks/portal-usage.md`.
+- [ ] T-S008-P07-070 [P] Document synthetic monitoring setup in `dashboards/web-portal/README.md`.
+- [ ] T-S008-P07-071 Record accessibility audit (axe + manual screen reader) in `docs/metrics/report.md`.
+- [ ] T-S008-P07-072 Capture Lighthouse performance baseline (<3s TTI, <0.1 CLS) in `docs/metrics/report.md`.
+- [ ] T-S008-P07-073 Execute quickstart end-to-end and annotate verification notes in `specs/008-web-portal/quickstart.md`.
+- [ ] T-S008-P07-074 Update portal entries in `llms.txt` with spec, plan, quickstart, and dashboards links.
+- [ ] T-S008-P07-075 Configure Storybook build + visual regression check in CI via `web/portal/package.json` scripts and `.github/workflows`.
+- [ ] T-S008-P07-076 Capture destructive-action latency metrics <2.5s through synthetic monitoring in `web/portal/tests/e2e/destructive-confirmation.spec.ts` and telemetry dashboards.
+- [ ] T-S008-P07-077 Run k6 load test for 5k concurrent sessions with CDN/rate-limit validation; document results in `docs/metrics/report.md`.
+- [ ] T-S008-P07-078 Document CDN caching and rate-limiting configuration in `docs/platform/observability-guide.md`.
 
 ---
 
@@ -207,11 +207,11 @@
 
 ### Parallel Opportunities
 
-- **Phase 1**: T005–T007 can run in parallel after workspace manifest exists.
-- **Phase 2**: Providers (T012–T016) can divide across engineers once bootstrap (T008–T010) is ready.
+- **Phase 1**: T-S008-P01-005–T-S008-P01-007 can run in parallel after workspace manifest exists.
+- **Phase 2**: Providers (T-S008-P02-012–T-S008-P02-016) can divide across engineers once bootstrap (T-S008-P02-008–T-S008-P02-010) is ready.
 - **User Stories**: After foundational work, US-001 and US-002 can proceed concurrently with coordination on shared navigation; US-003 and US-004 can begin when relevant API clients exist.
 - **Tests**: Contract/unit/e2e tasks marked [P] can run simultaneously to shorten feedback loops.
-- **Cross-Cutting**: Storybook tasks (T020, T036, T058, T073) and performance work (T074–T076) can continue in parallel once dependent components land.
+- **Cross-Cutting**: Storybook tasks (T-S008-P02-020, T-S008-P03-036, T-S008-P05-058, T-S008-P07-073) and performance work (T-S008-P07-074–T-S008-P07-076) can continue in parallel once dependent components land.
 
 ---
 
@@ -219,14 +219,14 @@
 
 ```bash
 # Parallelize contract + e2e coverage once fixtures exist
-Task T021 → "web/portal/tests/contract/admin-portal.pact.ts"
-Task T022 → "web/portal/tests/e2e/admin-workflows.spec.ts"
+Task T-S008-P03-021 → "web/portal/tests/contract/admin-portal.pact.ts"
+Task T-S008-P03-022 → "web/portal/tests/e2e/admin-workflows.spec.ts"
 
 # Parallelize API module implementations
-Task T024 → "web/portal/src/features/admin/api/organization.ts"
-Task T025 → "web/portal/src/features/admin/api/members.ts"
-Task T026 → "web/portal/src/features/admin/api/budgets.ts"
-Task T027 → "web/portal/src/features/admin/api/apiKeys.ts"
+Task T-S008-P03-024 → "web/portal/src/features/admin/api/organization.ts"
+Task T-S008-P03-025 → "web/portal/src/features/admin/api/members.ts"
+Task T-S008-P03-026 → "web/portal/src/features/admin/api/budgets.ts"
+Task T-S008-P03-027 → "web/portal/src/features/admin/api/apiKeys.ts"
 ```
 
 ---

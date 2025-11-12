@@ -54,6 +54,7 @@ type HealthMonitor struct {
 	client       *BackendClient
 	logger       *zap.Logger
 	backends     map[string]*BackendHealth
+	endpoints    map[string]*BackendEndpoint // Store endpoints for health checks
 	mu           sync.RWMutex
 	checkInterval time.Duration
 	ctx           context.Context
@@ -68,6 +69,7 @@ func NewHealthMonitor(client *BackendClient, logger *zap.Logger, checkInterval t
 		client:        client,
 		logger:        logger,
 		backends:      make(map[string]*BackendHealth),
+		endpoints:     make(map[string]*BackendEndpoint),
 		checkInterval: checkInterval,
 		ctx:           ctx,
 		cancel:        cancel,
@@ -85,10 +87,16 @@ func (m *HealthMonitor) RegisterBackend(backendID string, endpoint *BackendEndpo
 			Status:            HealthStatusUnknown,
 			ConsecutiveErrors: 0,
 		}
-		m.logger.Info("registered backend for health monitoring",
-			zap.String("backend_id", backendID),
-		)
 	}
+	
+	// Store endpoint for health checks
+	if endpoint != nil {
+		m.endpoints[backendID] = endpoint
+	}
+	
+	m.logger.Info("registered backend for health monitoring",
+		zap.String("backend_id", backendID),
+	)
 }
 
 // UnregisterBackend removes a backend from health monitoring.
@@ -97,6 +105,7 @@ func (m *HealthMonitor) UnregisterBackend(backendID string) {
 	defer m.mu.Unlock()
 
 	delete(m.backends, backendID)
+	delete(m.endpoints, backendID)
 	m.logger.Info("unregistered backend from health monitoring",
 		zap.String("backend_id", backendID),
 	)
@@ -163,12 +172,16 @@ func (m *HealthMonitor) checkBackend(backendID string) {
 		return
 	}
 
-	// Get backend endpoint from registry (would need to be passed in or stored)
-	// For now, we'll need to construct it - this is a limitation we'll address
-	// when integrating with the routing engine
-	endpoint := &BackendEndpoint{
-		ID:   backendID,
-		URI:  "", // Would need to be provided
+	// Get stored endpoint
+	m.mu.RLock()
+	endpoint, hasEndpoint := m.endpoints[backendID]
+	m.mu.RUnlock()
+
+	if !hasEndpoint || endpoint == nil {
+		m.logger.Warn("no endpoint stored for backend health check",
+			zap.String("backend_id", backendID),
+		)
+		return
 	}
 
 	startTime := time.Now()

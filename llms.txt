@@ -39,6 +39,13 @@ This file highlights the most relevant specifications, plans, and external refer
 - [Shared Libraries Pilot Plan](./docs/adoption/pilot-plan.md) & [Results](./docs/adoption/pilot-results.md): Phase 7 adoption strategy and measurement template.
 - [Analytics Transforms](./analytics/transforms/): Hourly + daily rollup SQL, adapter config for default vs warehouse targets.
 - [Analytics Tests](./analytics/tests/): Reconciliation checks ensuring rollups match raw usage (hourly + daily, configurable test window).
+- [007 Analytics Service Spec](./specs/007-analytics-service/spec.md): Analytics ingestion, aggregation, and querying service with usage visibility, reliability metrics, and finance-friendly CSV exports.
+- [007 Analytics Service Quickstart](./specs/007-analytics-service/quickstart.md): Local development setup, API usage examples, Kubernetes deployment, and troubleshooting guide.
+- [007 Analytics Service Tasks](./specs/007-analytics-service/tasks.md): Phase-by-phase implementation backlog covering setup through polish (Phases 1-6).
+- [007 Analytics Service Handoff P5](./services/analytics-service/handoff-007-P05.md): Phase 5 handoff document for finance-friendly CSV exports with S3 delivery.
+- [007 Analytics Service Handoff P6](./services/analytics-service/handoff-007-P06.md): Phase 6 handoff document for RBAC middleware, audit logging, and performance benchmarks.
+- [Analytics Service Runbook](./docs/runbooks/analytics-incident-response.md): Incident response procedures for error rates, latency, freshness lag, and export job troubleshooting.
+- [Analytics Service Performance Benchmarks](./services/analytics-service/test/perf/freshness_benchmark_test.go): Performance benchmarks for rollup queries, CSV generation, and freshness cache operations.
 - [Remote CI Runbook](./docs/runbooks/ci-remote.md): Step-by-step guide for `make ci-remote`, expected SLA, troubleshooting.
 - [Service Automation Guide](./docs/services/customizing.md): Shared Make template hooks, flags, and customization patterns.
 - Sample services: `hello-service` (CLI greeting) and `world-service` (HTTP JSON endpoint) demonstrate build/test/check workflows.

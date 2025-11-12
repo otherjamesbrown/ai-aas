@@ -9,12 +9,13 @@
 // Dependencies:
 //   - github.com/google/uuid: UUID generation for event IDs
 //   - github.com/rs/zerolog: Structured logging for stub implementation
+//   - github.com/segmentio/kafka-go: Kafka producer for audit event streaming
 //
 // Key Responsibilities:
 //   - Event struct defines audit event schema matching data model
 //   - Emitter interface abstracts Kafka vs logger implementations
 //   - LoggerEmitter provides development-friendly stub (logs events)
-//   - KafkaEmitter (TODO) will produce to audit.identity topic
+//   - KafkaEmitter produces to audit.identity topic when Kafka is configured
 //
 // Requirements Reference:
 //   - specs/005-user-org-service/spec.md#US-004 (Audit & Compliance)
@@ -34,7 +35,7 @@
 // Error Handling:
 //   - Emit methods return errors for production monitoring
 //   - LoggerEmitter never fails (best-effort logging)
-//   - Future KafkaEmitter will handle retries and dead-letter queue
+//   - KafkaEmitter handles retries via kafka-go library and returns errors for monitoring
 package audit
 
 import (
@@ -44,10 +45,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"github.com/segmentio/kafka-go"
 )
 
 // Event represents an audit event matching the data model schema.
@@ -118,6 +122,125 @@ func NewNoopEmitter() *NoopEmitter {
 // Emit discards the event (no-op).
 func (e *NoopEmitter) Emit(ctx context.Context, event Event) error {
 	return nil
+}
+
+// KafkaEmitter produces audit events to a Kafka topic.
+// Thread-safe and handles connection lifecycle automatically.
+type KafkaEmitter struct {
+	writer *kafka.Writer
+	logger zerolog.Logger
+	mu     sync.RWMutex
+}
+
+// NewKafkaEmitter creates a Kafka-based audit emitter.
+// The writer is configured for at-least-once delivery with automatic retries.
+func NewKafkaEmitter(brokers []string, topic, clientID string, logger zerolog.Logger) *KafkaEmitter {
+	writer := &kafka.Writer{
+		Addr:         kafka.TCP(brokers...),
+		Topic:        topic,
+		Balancer:     &kafka.LeastBytes{},
+		RequiredAcks: kafka.RequireOne, // Wait for leader acknowledgment
+		Async:        false,             // Synchronous writes for reliability
+		BatchSize:    1,                 // Send immediately (audit events are critical)
+		BatchTimeout: 10 * time.Millisecond,
+		WriteTimeout: 5 * time.Second,
+		ReadTimeout:  5 * time.Second,
+	}
+
+	return &KafkaEmitter{
+		writer: writer,
+		logger: logger.With().Str("component", "audit-kafka").Logger(),
+	}
+}
+
+// Emit serializes the audit event to JSON and writes it to Kafka.
+// Returns an error if the write fails (for monitoring/alerting).
+// The event is written synchronously to ensure delivery before returning.
+func (e *KafkaEmitter) Emit(ctx context.Context, event Event) error {
+	e.mu.RLock()
+	writer := e.writer
+	e.mu.RUnlock()
+
+	if writer == nil {
+		return fmt.Errorf("kafka writer is closed")
+	}
+
+	// Serialize event to JSON
+	payload, err := json.Marshal(event)
+	if err != nil {
+		e.logger.Error().Err(err).Str("event_id", event.EventID.String()).Msg("failed to serialize audit event")
+		return fmt.Errorf("serialize audit event: %w", err)
+	}
+
+	// Set delivered_at timestamp
+	now := time.Now().UTC()
+	event.DeliveredAt = &now
+
+	// Write to Kafka with event ID as key for partitioning
+	message := kafka.Message{
+		Key:   []byte(event.EventID.String()),
+		Value: payload,
+		Headers: []kafka.Header{
+			{Key: "event_id", Value: []byte(event.EventID.String())},
+			{Key: "org_id", Value: []byte(event.OrgID.String())},
+			{Key: "action", Value: []byte(event.Action)},
+			{Key: "target_type", Value: []byte(event.TargetType)},
+		},
+		Time: event.CreatedAt,
+	}
+
+	if err := writer.WriteMessages(ctx, message); err != nil {
+		e.logger.Error().
+			Err(err).
+			Str("event_id", event.EventID.String()).
+			Str("org_id", event.OrgID.String()).
+			Str("action", event.Action).
+			Msg("failed to write audit event to Kafka")
+		return fmt.Errorf("write audit event to Kafka: %w", err)
+	}
+
+	e.logger.Debug().
+		Str("event_id", event.EventID.String()).
+		Str("org_id", event.OrgID.String()).
+		Str("action", event.Action).
+		Msg("audit event emitted to Kafka")
+
+	return nil
+}
+
+// Close closes the Kafka writer connection.
+// Safe to call multiple times.
+func (e *KafkaEmitter) Close() error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.writer == nil {
+		return nil
+	}
+
+	err := e.writer.Close()
+	e.writer = nil
+	return err
+}
+
+// NewKafkaEmitterFromConfig creates a KafkaEmitter from configuration.
+// Returns nil if brokers are not configured (use LoggerEmitter instead).
+func NewKafkaEmitterFromConfig(brokers, topic, clientID string, logger zerolog.Logger) (*KafkaEmitter, error) {
+	if brokers == "" {
+		return nil, nil // Not configured, caller should use LoggerEmitter
+	}
+
+	brokerList := strings.Split(brokers, ",")
+	// Trim whitespace from each broker address
+	for i := range brokerList {
+		brokerList[i] = strings.TrimSpace(brokerList[i])
+	}
+
+	if topic == "" {
+		topic = "audit.identity" // Default topic
+	}
+
+	return NewKafkaEmitter(brokerList, topic, clientID, logger), nil
 }
 
 // BuildEvent constructs an audit event from common parameters.
@@ -199,13 +322,21 @@ const (
 	ActionUserDelete   = "user.delete"
 	ActionRoleAssign   = "role.assign"
 	ActionRoleRevoke   = "role.revoke"
+	ActionAPIKeyIssue  = "api_key.issue"
+	ActionAPIKeyRevoke = "api_key.revoke"
+	ActionAccountLockout = "account.lockout"
+	ActionRecoveryInitiate = "recovery.initiate"
+	ActionRecoveryApprove = "recovery.approve"
+	ActionRecoveryReject = "recovery.reject"
+	ActionRecoveryComplete = "recovery.complete"
 )
 
 // Common target type constants.
 const (
-	TargetTypeOrg  = "org"
-	TargetTypeUser = "user"
-	TargetTypeRole = "role"
+	TargetTypeOrg     = "org"
+	TargetTypeUser    = "user"
+	TargetTypeRole    = "role"
+	TargetTypeAPIKey  = "api_key"
 )
 
 // Common actor type constants.

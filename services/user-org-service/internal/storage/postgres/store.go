@@ -2,8 +2,10 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -227,6 +229,64 @@ func (s *Store) GetUserByID(ctx context.Context, orgID, userID uuid.UUID) (User,
 		return nil
 	})
 	return out, err
+}
+
+// GetUserByExternalIDP retrieves a user by external IdP identifier within an organization.
+func (s *Store) GetUserByExternalIDP(ctx context.Context, orgID uuid.UUID, externalIDP string) (User, error) {
+	var out User
+	err := s.withTenantTx(ctx, orgID, func(ctx context.Context, tx pgx.Tx) error {
+		row := tx.QueryRow(ctx, `
+			SELECT * FROM users
+			WHERE org_id = $1 AND external_idp_id = $2 AND deleted_at IS NULL
+		`, orgID, externalIDP)
+		user, err := scanUser(row)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				return ErrNotFound
+			}
+			return err
+		}
+		out = user
+		return nil
+	})
+	return out, err
+}
+
+// GetUserOrgIDByUserID retrieves the organization ID for a user by their user ID.
+// This method does not use tenant transactions since we're looking up the user's org.
+func (s *Store) GetUserOrgIDByUserID(ctx context.Context, userID uuid.UUID) (uuid.UUID, error) {
+	var orgID uuid.UUID
+	err := s.pool.QueryRow(ctx, `
+		SELECT org_id FROM users
+		WHERE user_id = $1 AND deleted_at IS NULL
+		LIMIT 1
+	`, userID).Scan(&orgID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, ErrNotFound
+		}
+		return uuid.Nil, err
+	}
+	return orgID, nil
+}
+
+// ValidateUserOrgMembership checks if a user belongs to a specific organization.
+// Returns nil if the user belongs to the org, ErrNotFound otherwise.
+func (s *Store) ValidateUserOrgMembership(ctx context.Context, userID, orgID uuid.UUID) error {
+	var count int
+	err := s.withTenantTx(ctx, orgID, func(ctx context.Context, tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `
+			SELECT COUNT(*) FROM users
+			WHERE user_id = $1 AND org_id = $2 AND deleted_at IS NULL
+		`, userID, orgID).Scan(&count)
+	})
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // UpdateOrg updates mutable fields using optimistic locking.
@@ -486,6 +546,64 @@ func (s *Store) UpdateUserPasswordHash(ctx context.Context, params UpdateUserPas
 	return out, err
 }
 
+// UpdateUserExternalIDP updates a user's external IdP identifier using optimistic locking.
+func (s *Store) UpdateUserExternalIDP(ctx context.Context, orgID, userID uuid.UUID, version int64, externalIDP string) (User, error) {
+	var out User
+	err := s.withTenantTx(ctx, orgID, func(ctx context.Context, tx pgx.Tx) error {
+		row := tx.QueryRow(ctx, `
+			UPDATE users
+			SET external_idp_id = $4, updated_at = NOW(), version = version + 1
+			WHERE org_id = $1 AND user_id = $2 AND version = $3 AND deleted_at IS NULL
+			RETURNING *
+		`, orgID, userID, version, externalIDP)
+		user, err := scanUser(row)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				return ErrOptimisticLock
+			}
+			return err
+		}
+		out = user
+		return nil
+	})
+	return out, err
+}
+
+// UpdateUserRecoveryTokens updates the recovery_tokens array using optimistic locking.
+func (s *Store) UpdateUserRecoveryTokens(ctx context.Context, orgID, userID uuid.UUID, version int64, recoveryTokens []string) (User, error) {
+	if recoveryTokens == nil {
+		recoveryTokens = []string{}
+	}
+	var out User
+	err := s.withTenantTx(ctx, orgID, func(ctx context.Context, tx pgx.Tx) error {
+		recoveryJSON, err := mustJSONB(recoveryTokens)
+		if err != nil {
+			return err
+		}
+		row := tx.QueryRow(ctx, `
+			UPDATE users
+			SET recovery_tokens = $1,
+				version = version + 1
+			WHERE user_id = $2 AND version = $3 AND deleted_at IS NULL
+			RETURNING *
+		`,
+			string(recoveryJSON),
+			userID,
+			version,
+		)
+		user, err := scanUser(row)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				return ErrOptimisticLock
+			}
+			return err
+		}
+		out = user
+		return nil
+	})
+	return out, err
+}
+
 // CreateSession inserts a new session row.
 func (s *Store) CreateSession(ctx context.Context, params CreateSessionParams) (Session, error) {
 	sessionID := params.ID
@@ -603,6 +721,124 @@ func (s *Store) CreateAPIKey(ctx context.Context, params CreateAPIKeyParams) (AP
 		return nil
 	})
 	return out, err
+}
+
+// GetAPIKeyByID retrieves an API key by its ID.
+func (s *Store) GetAPIKeyByID(ctx context.Context, apiKeyID uuid.UUID) (APIKey, error) {
+	row := s.pool.QueryRow(ctx, `
+		SELECT *
+		FROM api_keys
+		WHERE api_key_id = $1 AND deleted_at IS NULL
+	`, apiKeyID)
+	key, err := scanAPIKey(row)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return APIKey{}, ErrNotFound
+		}
+		return APIKey{}, err
+	}
+	return key, nil
+}
+
+// GetAPIKeyByFingerprint retrieves an API key by its fingerprint within an organization.
+func (s *Store) GetAPIKeyByFingerprint(ctx context.Context, orgID uuid.UUID, fingerprint string) (APIKey, error) {
+	var out APIKey
+	err := s.withTenantTx(ctx, orgID, func(ctx context.Context, tx pgx.Tx) error {
+		row := tx.QueryRow(ctx, `
+			SELECT *
+			FROM api_keys
+			WHERE org_id = $1 AND fingerprint = $2 AND deleted_at IS NULL
+		`, orgID, fingerprint)
+		key, err := scanAPIKey(row)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				return ErrNotFound
+			}
+			return err
+		}
+		out = key
+		return nil
+	})
+	return out, err
+}
+
+// CreateServiceAccount creates a new service account within an organization.
+func (s *Store) CreateServiceAccount(ctx context.Context, params CreateServiceAccountParams) (ServiceAccount, error) {
+	if params.Metadata == nil {
+		params.Metadata = map[string]any{}
+	}
+	if params.Status == "" {
+		params.Status = "active"
+	}
+	serviceAccountID := params.ID
+	if serviceAccountID == uuid.Nil {
+		serviceAccountID = uuid.New()
+	}
+
+	var out ServiceAccount
+	err := s.withTenantTx(ctx, params.OrgID, func(ctx context.Context, tx pgx.Tx) error {
+		metadataJSON, err := mustJSONB(params.Metadata)
+		if err != nil {
+			return err
+		}
+
+		row := tx.QueryRow(ctx, `
+			INSERT INTO service_accounts (
+				service_account_id,
+				org_id,
+				name,
+				description,
+				status,
+				metadata,
+				last_rotation_at
+			) VALUES ($1, $2, $3, $4, $5, $6, $7)
+			RETURNING *
+		`,
+			serviceAccountID,
+			params.OrgID,
+			params.Name,
+			params.Description,
+			params.Status,
+			string(metadataJSON),
+			params.LastRotationAt,
+		)
+
+		sa, err := scanServiceAccount(row)
+		if err != nil {
+			return err
+		}
+		out = sa
+		return nil
+	})
+	return out, err
+}
+
+// GetServiceAccountByID retrieves a service account by its ID.
+func (s *Store) GetServiceAccountByID(ctx context.Context, serviceAccountID uuid.UUID) (ServiceAccount, error) {
+	row := s.pool.QueryRow(ctx, `
+		SELECT *
+		FROM service_accounts
+		WHERE service_account_id = $1 AND deleted_at IS NULL
+	`, serviceAccountID)
+	sa, err := scanServiceAccount(row)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return ServiceAccount{}, ErrNotFound
+		}
+		return ServiceAccount{}, err
+	}
+	return sa, nil
+}
+
+// UpdateAPIKeyLastUsed updates the last_used_at timestamp for an API key.
+func (s *Store) UpdateAPIKeyLastUsed(ctx context.Context, apiKeyID uuid.UUID, lastUsedAt time.Time) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE api_keys
+		SET last_used_at = $1,
+			version = version + 1
+		WHERE api_key_id = $2 AND deleted_at IS NULL
+	`, lastUsedAt, apiKeyID)
+	return err
 }
 
 func (s *Store) RevokeAPIKey(ctx context.Context, params RevokeAPIKeyParams, orgID uuid.UUID) (APIKey, error) {
@@ -810,6 +1046,45 @@ func scanAPIKey(row pgx.Row) (APIKey, error) {
 	key.LastUsedAt = timePtr(lastUsed)
 	key.DeletedAt = timePtr(deleted)
 	return key, nil
+}
+
+func scanServiceAccount(row pgx.Row) (ServiceAccount, error) {
+	var (
+		sa          ServiceAccount
+		orgID       uuid.UUID
+		description pgtype.Text
+		metadataJSON []byte
+		lastRotation pgtype.Timestamptz
+		deleted     pgtype.Timestamptz
+	)
+	err := row.Scan(
+		&sa.ID,
+		&orgID,
+		&sa.Name,
+		&description,
+		&sa.Status,
+		&metadataJSON,
+		&lastRotation,
+		&sa.Version,
+		&sa.CreatedAt,
+		&sa.UpdatedAt,
+		&deleted,
+	)
+	if err != nil {
+		return ServiceAccount{}, err
+	}
+	sa.OrgID = orgID
+	sa.Description = textPtr(description)
+	sa.LastRotationAt = timePtr(lastRotation)
+	sa.DeletedAt = timePtr(deleted)
+
+	metadata, err := jsonStringMap(metadataJSON)
+	if err != nil {
+		return ServiceAccount{}, err
+	}
+	sa.Metadata = metadata
+
+	return sa, nil
 }
 
 func scanSession(row pgx.Row) (Session, error) {
