@@ -105,8 +105,12 @@ func (c *ClientStore) RevokeRefreshToken(ctx context.Context, requestID string) 
 	return c.Store.RevokeRefreshToken(ctx, requestID)
 }
 
-func (c *ClientStore) RevokeRefreshTokenMaybeGracePeriod(ctx context.Context, signature string, requestID string) error {
+func (c *ClientStore) RevokeRefreshTokenMaybeGracePeriod(ctx context.Context, requestID string, signature string) error {
 	return c.Store.RevokeRefreshTokenMaybeGracePeriod(ctx, signature, requestID)
+}
+
+func (c *ClientStore) RevokeAccessToken(ctx context.Context, requestID string) error {
+	return c.Store.RevokeAccessToken(ctx, requestID)
 }
 
 func (c *ClientStore) CreatePKCERequestSession(ctx context.Context, signature string, request fosite.Requester) error {
