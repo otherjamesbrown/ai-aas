@@ -95,12 +95,14 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 
 -- Create indexes only if tables have the required columns
+-- +goose StatementBegin
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'external_idp_id') THEN
     CREATE UNIQUE INDEX IF NOT EXISTS users_external_idp_idx ON users(org_id, external_idp_id) WHERE external_idp_id IS NOT NULL;
   END IF;
 END $$;
+-- +goose StatementEnd
 CREATE INDEX IF NOT EXISTS users_org_status_idx ON users(org_id, status);
 CREATE INDEX IF NOT EXISTS api_keys_lookup_idx ON api_keys(org_id, principal_type, principal_id);
 CREATE INDEX IF NOT EXISTS sessions_lookup_idx ON sessions(org_id, user_id);
