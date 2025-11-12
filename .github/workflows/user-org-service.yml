@@ -274,10 +274,10 @@ jobs:
 
       - name: Set up kubectl
         uses: azure/setup-kubectl@v3
-        if: ${{ secrets.PROD_KUBECONFIG_B64 != '' }}
+        if: env.PROD_KUBECONFIG_B64 != ''
 
       - name: Configure kubectl for Production
-        if: ${{ secrets.PROD_KUBECONFIG_B64 != '' }}
+        if: env.PROD_KUBECONFIG_B64 != ''
         env:
           PROD_KUBECONFIG_B64: ${{ secrets.PROD_KUBECONFIG_B64 }}
           PROD_KUBE_CONTEXT: ${{ secrets.PROD_KUBE_CONTEXT }}
@@ -287,9 +287,10 @@ jobs:
           kubectl config use-context "${PROD_KUBE_CONTEXT:-lke531922-ctx}" || kubectl config current-context
 
       - name: Deploy and Run E2E Test Job (Production)
-        if: ${{ secrets.PROD_KUBECONFIG_B64 != '' }}
+        if: env.PROD_KUBECONFIG_B64 != ''
         working-directory: services/user-org-service
         env:
+          PROD_KUBECONFIG_B64: ${{ secrets.PROD_KUBECONFIG_B64 }}
           REGISTRY: ghcr.io/${{ github.repository_owner }}
           IMAGE_TAG: ${{ github.sha }}
           KUBECTL_CONTEXT: ${{ secrets.PROD_KUBE_CONTEXT }}
@@ -385,7 +386,9 @@ jobs:
           fi
 
       - name: Production E2E Test Skipped (No Kubeconfig)
-        if: ${{ secrets.PROD_KUBECONFIG_B64 == '' }}
+        if: env.PROD_KUBECONFIG_B64 == ''
+        env:
+          PROD_KUBECONFIG_B64: ${{ secrets.PROD_KUBECONFIG_B64 }}
         run: |
           echo "⚠️ PROD_KUBECONFIG_B64 secret not configured. Skipping production e2e-test deployment."
           echo "To enable: Add PROD_KUBECONFIG_B64 and PROD_KUBE_CONTEXT secrets to GitHub repository."
