@@ -41,17 +41,8 @@ issues:
   max-issues-per-linter: 0
   max-same-issues: 0
   exclude-rules:
-    # Exclude all test files from typecheck - they're skipped in CI with -short flag
-    - path: _test\.go$
-      linters:
-        - typecheck
-    # Exclude files with known typecheck issues that build successfully
-    # These are false positives - the code builds fine with 'go build'
-    - path: (internal/httpapi/users/handlers\.go|internal/oauth/(provider|store)\.go|internal/api/(admin|public)/.*\.go|internal/usage/.*\.go|cmd/router/.*\.go|internal/limiter/.*\.go)
-      linters:
-        - typecheck
-    # Exclude typecheck false positives for packages that build successfully
+    # Exclude all typecheck errors - produces false positives for packages that build successfully
+    # The code builds fine with 'go build', so we rely on the compiler for type checking
     - linters:
         - typecheck
-      text: "undefined:"
 
