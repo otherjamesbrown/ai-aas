@@ -125,6 +125,36 @@ issues:
 - `configs/golangci.yml` - golangci-lint configuration
 - `templates/service.mk` - Makefile template that runs lint
 
+## GitHub Credentials
+
+To access the repository and monitor workflows, you'll need GitHub credentials configured:
+
+### For GitHub CLI (gh)
+- **Location**: Credentials are typically stored in `~/.config/gh/hosts.yml` or managed via `gh auth login`
+- **Setup**: Run `gh auth login` and follow the prompts to authenticate
+- **Verify**: Run `gh auth status` to check current authentication
+
+### For Git Operations
+- **Location**: Credentials can be stored in:
+  - `~/.gitconfig` - Git configuration file
+  - `~/.ssh/id_rsa` or `~/.ssh/id_ed25519` - SSH keys for SSH-based authentication
+  - macOS Keychain - For HTTPS authentication (macOS)
+  - Git Credential Manager - For cross-platform credential storage
+- **Setup**: 
+  - For SSH: Generate SSH key with `ssh-keygen` and add to GitHub account
+  - For HTTPS: Use `git config --global credential.helper` to configure credential storage
+- **Verify**: Run `git remote -v` to see remote URLs, then test with `git fetch`
+
+### Repository Access
+- **Repository**: `otherjamesbrown/ai-aas`
+- **URL**: `https://github.com/otherjamesbrown/ai-aas`
+- **SSH URL**: `git@github.com:otherjamesbrown/ai-aas.git`
+
+### Workflow Monitoring
+- **Actions Tab**: https://github.com/otherjamesbrown/ai-aas/actions
+- **CI Workflow**: https://github.com/otherjamesbrown/ai-aas/actions/workflows/ci.yml
+- **Latest Run**: https://github.com/otherjamesbrown/ai-aas/actions/runs/19325908306
+
 ## Workflow Run History
 
 - Latest failing run: https://github.com/otherjamesbrown/ai-aas/actions/runs/19325908306
