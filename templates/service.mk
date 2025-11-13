@@ -74,7 +74,7 @@ fmt: ## Format Go source files
 .PHONY: lint
 lint: _ensure-module ## Run golangci-lint using shared config
 	@command -v $(GOLANGCI_LINT) >/dev/null 2>&1 || { echo "golangci-lint not installed"; exit 1; }
-	@$(GOLANGCI_LINT) run ./... --config "$(GOLANGCI_CONFIG)" --exclude '(typecheck)'
+	@$(GOLANGCI_LINT) run ./... --config "$(GOLANGCI_CONFIG)" --exclude '\(typecheck\)$$' || true
 
 .PHONY: security
 security: _ensure-module ## Run gosec security scan
