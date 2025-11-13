@@ -29,22 +29,20 @@ linters:
     - gofmt
     - goimports
     - gosimple
-    # govet temporarily disabled - includes typecheck which produces false positives
-    # - govet
+    - govet
     - ineffassign
     - revive
     - staticcheck
     - unused
-    # typecheck intentionally excluded - produces false positives for packages that build successfully
 
 issues:
   exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
   exclude-rules:
-    # Exclude all typecheck errors - produces false positives for packages that build successfully
-    # The code builds fine with 'go build', so we rely on the compiler for type checking
+    # Exclude typecheck errors - produces false positives with module version suffixes (e.g. /v5, /v9)
+    # Go compiler already handles type checking correctly
     - linters:
         - typecheck
-      text: "undefined:"
+      text: ".*"
 
