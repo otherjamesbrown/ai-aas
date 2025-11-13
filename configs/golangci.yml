@@ -33,7 +33,9 @@ linters:
     - ineffassign
     - revive
     - staticcheck
-    - typecheck
+    # typecheck disabled - produces false positives for packages that build successfully
+    # The code builds fine with 'go build', so we rely on the compiler for type checking
+    # - typecheck
     - unused
 
 issues:
