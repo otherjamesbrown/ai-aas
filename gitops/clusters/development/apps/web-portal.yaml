@@ -1,0 +1,62 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: web-portal-development
+  namespace: argocd
+  labels:
+    environment: development
+    app: web-portal
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform-development
+  source:
+    repoURL: https://github.com/otherjamesbrown/ai-aas
+    targetRevision: main
+    path: web/portal/deployments/helm/web-portal
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-development.yaml
+      values: |
+        image:
+          repository: ghcr.io/otherjamesbrown/web-portal
+          tag: dev
+          pullPolicy: Always
+        env:
+          - name: VITE_API_BASE_URL
+            value: "http://api-router-service.development.svc.cluster.local:8080/api"
+          - name: VITE_OAUTH_CLIENT_ID
+            valueFrom:
+              secretKeyRef:
+                name: web-portal-secrets
+                key: oauth-client-id
+          - name: VITE_OAUTH_ISSUER_URL
+            value: "http://api-router-service.development.svc.cluster.local:8080"
+          - name: VITE_OAUTH_REDIRECT_URI
+            value: "https://portal.ai-aas.dev/auth/callback"
+          - name: VITE_FEATURE_FLAGS_API_URL
+            value: "http://api-router-service.development.svc.cluster.local:8080/api"
+        service:
+          type: ClusterIP
+          port: 80
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: development
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+

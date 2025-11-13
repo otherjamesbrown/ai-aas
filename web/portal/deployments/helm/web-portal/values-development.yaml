@@ -1,0 +1,53 @@
+# Development environment overrides
+replicaCount: 2
+
+image:
+  tag: dev
+  pullPolicy: IfNotPresent
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+  hosts:
+    - host: portal.ai-aas.dev
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: web-portal-tls-dev
+      hosts:
+        - portal.ai-aas.dev
+
+env:
+  - name: VITE_API_BASE_URL
+    value: "http://api-router-service.development.svc.cluster.local:8080/api"
+  - name: VITE_OAUTH_CLIENT_ID
+    value: ""
+  - name: VITE_OAUTH_ISSUER_URL
+    value: "http://api-router-service.development.svc.cluster.local:8080"
+  - name: VITE_OAUTH_REDIRECT_URI
+    value: "https://portal.ai-aas.dev/auth/callback"
+  - name: VITE_FEATURE_FLAGS_API_URL
+    value: "http://api-router-service.development.svc.cluster.local:8080/api"
+  - name: VITE_OTEL_EXPORTER_OTLP_ENDPOINT
+    value: ""
+  - name: VITE_OTEL_SERVICE_NAME
+    value: "web-portal"
+  - name: VITE_OTEL_SERVICE_VERSION
+    value: "0.1.0"
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+
