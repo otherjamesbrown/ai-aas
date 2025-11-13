@@ -5,16 +5,20 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useToast } from '@/providers/ToastProvider';
 
 /**
- * Login page with OAuth2/OIDC integration
- * Supports OAuth2/OIDC flow with identity provider
+ * Login page with OAuth2/OIDC and password-based authentication
+ * Supports both OAuth2/OIDC flow and username/password login
  */
 export default function LoginPage() {
   const navigate = useNavigate();
   // @ts-expect-error - TanStack Router type inference issue with optional search params
   const search = useSearch({ from: '/auth/login', strict: false }) as { redirect?: string };
-  const { login, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { login, loginWithPassword, isAuthenticated, isLoading: authLoading } = useAuth();
   const { showError, showSuccess } = useToast();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [loginMethod, setLoginMethod] = useState<'oauth' | 'password'>('password');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [orgId, setOrgId] = useState('');
 
   useEffect(() => {
     // Redirect if already authenticated
@@ -26,7 +30,7 @@ export default function LoginPage() {
     }
   }, [isAuthenticated, authLoading, navigate, search]);
 
-  const handleLogin = async () => {
+  const handleOAuthLogin = async () => {
     setIsLoggingIn(true);
     try {
       await login();
@@ -36,6 +40,29 @@ export default function LoginPage() {
       showError(
         'Login failed',
         error instanceof Error ? error.message : 'An error occurred during login'
+      );
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handlePasswordLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!email.trim() || !password) {
+      showError('Validation failed', 'Please enter both email and password');
+      return;
+    }
+
+    setIsLoggingIn(true);
+    try {
+      await loginWithPassword(email, password, orgId || undefined);
+      showSuccess('Login successful', 'Redirecting...');
+      // Navigation will happen via useEffect
+    } catch (error) {
+      showError(
+        'Login failed',
+        error instanceof Error ? error.message : 'Invalid email or password'
       );
     } finally {
       setIsLoggingIn(false);
@@ -62,42 +89,130 @@ export default function LoginPage() {
           </p>
         </div>
 
+        {/* Login method selector */}
+        <div className="mb-6">
+          <div className="flex rounded-lg border border-gray-300 p-1">
+            <button
+              type="button"
+              onClick={() => setLoginMethod('password')}
+              className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                loginMethod === 'password'
+                  ? 'bg-primary text-white'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              Email & Password
+            </button>
+            <button
+              type="button"
+              onClick={() => setLoginMethod('oauth')}
+              className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                loginMethod === 'oauth'
+                  ? 'bg-primary text-white'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              OAuth
+            </button>
+          </div>
+        </div>
+
         <div className="space-y-4">
-          {/* TODO: Replace with actual OAuth2/OIDC provider buttons */}
-          <button
-            onClick={handleLogin}
-            disabled={isLoggingIn}
-            className="w-full px-4 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-          >
-            {isLoggingIn ? (
-              <span className="flex items-center justify-center">
-                <LoadingSpinner size="sm" className="mr-2" />
-                Signing in...
-              </span>
-            ) : (
-              'Sign In with OAuth'
-            )}
-          </button>
+          {loginMethod === 'password' ? (
+            <form onSubmit={handlePasswordLogin} className="space-y-4">
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                  Email
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={isLoggingIn}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  placeholder="admin@example.com"
+                  autoComplete="email"
+                />
+              </div>
 
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300" />
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-gray-500">
-                Or continue with
-              </span>
-            </div>
-          </div>
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  disabled={isLoggingIn}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  placeholder="Enter your password"
+                  autoComplete="current-password"
+                />
+              </div>
 
-          {/* Placeholder for additional auth methods */}
-          <div className="text-center text-sm text-gray-500">
-            <p className="mb-2">Additional authentication methods:</p>
-            <ul className="list-disc list-inside space-y-1 text-left">
-              <li>SAML SSO (coming soon)</li>
-              <li>MFA (if enabled for your organization)</li>
-            </ul>
-          </div>
+              <div>
+                <label htmlFor="orgId" className="block text-sm font-medium text-gray-700 mb-1">
+                  Organization ID (optional)
+                </label>
+                <input
+                  id="orgId"
+                  type="text"
+                  value={orgId}
+                  onChange={(e) => setOrgId(e.target.value)}
+                  disabled={isLoggingIn}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  placeholder="Leave empty to use default"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Optional: Specify organization slug or ID if you belong to multiple organizations
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoggingIn}
+                className="w-full px-4 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+              >
+                {isLoggingIn ? (
+                  <span className="flex items-center justify-center">
+                    <LoadingSpinner size="sm" className="mr-2" />
+                    Signing in...
+                  </span>
+                ) : (
+                  'Sign In'
+                )}
+              </button>
+            </form>
+          ) : (
+            <>
+              <button
+                onClick={handleOAuthLogin}
+                disabled={isLoggingIn}
+                className="w-full px-4 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+              >
+                {isLoggingIn ? (
+                  <span className="flex items-center justify-center">
+                    <LoadingSpinner size="sm" className="mr-2" />
+                    Signing in...
+                  </span>
+                ) : (
+                  'Sign In with OAuth'
+                )}
+              </button>
+
+              <div className="text-center text-sm text-gray-500">
+                <p className="mb-2">Additional authentication methods:</p>
+                <ul className="list-disc list-inside space-y-1 text-left">
+                  <li>SAML SSO (coming soon)</li>
+                  <li>MFA (if enabled for your organization)</li>
+                </ul>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="mt-8 pt-6 border-t border-gray-200">

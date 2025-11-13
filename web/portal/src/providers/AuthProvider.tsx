@@ -15,6 +15,7 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (provider?: string) => Promise<void>;
+  loginWithPassword: (email: string, password: string, orgId?: string) => Promise<void>;
   logout: () => void;
   refreshToken: () => Promise<boolean>;
   getAccessToken: () => string | null;
@@ -120,25 +121,6 @@ export function AuthProvider({
     }
   };
 
-  const scheduleTokenRefresh = useCallback(() => {
-    // Clear existing timer
-    if (refreshTimer) {
-      clearTimeout(refreshTimer);
-    }
-
-    // Refresh token 5 minutes before expiry (assuming 1 hour token lifetime)
-    const refreshDelay = 55 * 60 * 1000; // 55 minutes
-
-    const timer = setTimeout(async () => {
-      const refreshed = await refreshToken();
-      if (refreshed) {
-        scheduleTokenRefresh();
-      }
-    }, refreshDelay);
-
-    setRefreshTimer(timer);
-  }, [refreshTimer]);
-
   const refreshToken = async (): Promise<boolean> => {
     try {
       const refreshTokenValue = sessionStorage.getItem('refresh_token');
@@ -172,6 +154,25 @@ export function AuthProvider({
     }
   };
 
+  const scheduleTokenRefresh = useCallback(() => {
+    // Clear existing timer
+    if (refreshTimer) {
+      clearTimeout(refreshTimer);
+    }
+
+    // Refresh token 5 minutes before expiry (assuming 1 hour token lifetime)
+    const refreshDelay = 55 * 60 * 1000; // 55 minutes
+
+    const timer = setTimeout(async () => {
+      const refreshed = await refreshToken();
+      if (refreshed) {
+        scheduleTokenRefresh();
+      }
+    }, refreshDelay);
+
+    setRefreshTimer(timer);
+  }, [refreshTimer]);
+
   const clearAuth = () => {
     setUser(null);
     sessionStorage.removeItem('auth_token');
@@ -200,6 +201,78 @@ export function AuthProvider({
       window.location.href = authUrl.toString();
     } catch (error) {
       console.error('Login initiation failed:', error);
+      throw error;
+    }
+  };
+
+  const loginWithPassword = async (email: string, password: string, orgId?: string): Promise<void> => {
+    try {
+      interface TokenResponse {
+        access_token?: string;
+        refresh_token?: string;
+        token_type?: string;
+        expires_in?: number;
+      }
+
+      interface UserInfoResponse {
+        sub?: string;
+        id?: string;
+        email: string;
+        name?: string;
+        roles?: string[];
+        scopes?: string[];
+        organization_id?: string;
+      }
+
+      // Call password-based login endpoint
+      const loginPayload: Record<string, string> = {
+        email: email.trim(),
+        password,
+      };
+
+      if (orgId) {
+        loginPayload.org_id = orgId;
+      }
+
+      if (oauthClientId) {
+        loginPayload.client_id = oauthClientId;
+      }
+
+      const response = await httpClient.post<TokenResponse>('/auth/login', loginPayload);
+
+      if (response.data.access_token) {
+        sessionStorage.setItem('auth_token', response.data.access_token);
+        if (response.data.refresh_token) {
+          sessionStorage.setItem('refresh_token', response.data.refresh_token);
+        }
+
+        // Fetch user info
+        const userInfoResponse = await httpClient.get<UserInfoResponse>('/auth/userinfo', {
+          headers: {
+            Authorization: `Bearer ${response.data.access_token}`,
+          },
+        });
+
+        const userInfo: User = {
+          id: userInfoResponse.data.sub || userInfoResponse.data.id || '',
+          email: userInfoResponse.data.email,
+          name: userInfoResponse.data.name,
+          roles: userInfoResponse.data.roles || [],
+          scopes: userInfoResponse.data.scopes || [],
+          organizationId: userInfoResponse.data.organization_id,
+        };
+
+        setUser(userInfo);
+        sessionStorage.setItem('auth_user', JSON.stringify(userInfo));
+
+        // Schedule token refresh
+        scheduleTokenRefresh();
+      } else {
+        throw new Error('No access token received');
+      }
+    } catch (error) {
+      console.error('Password login failed:', error);
+      clearAuth();
       throw error;
     }
   };
@@ -325,6 +398,7 @@ export function AuthProvider({
         isAuthenticated: !!user,
         isLoading,
         login,
+        loginWithPassword,
         logout,
         refreshToken,
         getAccessToken,
