@@ -45,5 +45,5 @@ issues:
     # The code builds fine with 'go build', so we rely on the compiler for type checking
     - linters:
         - typecheck
-      text: ".*"  # Match all typecheck errors
+      text: "undefined:"
 
