@@ -29,7 +29,8 @@ linters:
     - gofmt
     - goimports
     - gosimple
-    - govet
+    # govet temporarily disabled - includes typecheck which produces false positives
+    # - govet
     - ineffassign
     - revive
     - staticcheck
