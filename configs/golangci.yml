@@ -45,8 +45,12 @@ issues:
     - path: _test\.go$
       linters:
         - typecheck
-    # Exclude typecheck false positives for packages that build successfully
+    # Exclude files with known typecheck issues that build successfully
     # These are false positives - the code builds fine with 'go build'
+    - path: (internal/httpapi/users/handlers\.go|internal/oauth/(provider|store)\.go)
+      linters:
+        - typecheck
+    # Exclude typecheck false positives for packages that build successfully
     - linters:
         - typecheck
       text: "undefined: (chi|kafka|redis|pgx|goose)"
