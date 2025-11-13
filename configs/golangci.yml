@@ -23,18 +23,9 @@ linters-settings:
     checks: ["all"]
 
 linters:
+  enable-all: true
   disable:
     - typecheck  # Disabled: produces false positives with module version suffixes
-  enable:
-    - errcheck
-    - gofmt
-    - goimports
-    - gosimple
-    - govet
-    - ineffassign
-    - revive
-    - staticcheck
-    - unused
 
 issues:
   exclude-use-default: false
