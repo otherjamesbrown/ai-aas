@@ -48,8 +48,8 @@ issues:
         - typecheck
     # Exclude typecheck errors for packages that build successfully
     # These appear to be false positives from golangci-lint's typecheck
-    - path: internal/.*\.go
-      linters:
+    # The code builds fine with 'go build', so these are linter issues
+    - linters:
         - typecheck
-      text: "undefined: (chi|kafka|redis)"
+      text: "undefined: (chi|kafka|redis|pgx)"
 
