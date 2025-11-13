@@ -34,8 +34,7 @@ linters:
     - revive
     - staticcheck
     - unused
-  disable:
-    - typecheck  # Disabled - produces false positives for packages that build successfully
+    # typecheck intentionally excluded - produces false positives for packages that build successfully
 
 issues:
   exclude-use-default: false
