@@ -394,7 +394,7 @@ func (c *Client) RotateAPIKey(ctx context.Context, orgID, apiKeyID string) (*Rot
 }
 
 // ListAPIKeys lists API keys for an organization.
-func (c *Client) ListAPIKeys(ctx context.Context, orgID string) ([]map[string]interface{}, error) {
+func (c *Client) ListAPIKeys(ctx context.Context, orgID string) ([]APIKeyResponse, error) {
 	url := fmt.Sprintf("%s/v1/orgs/%s/api-keys", c.baseURL, orgID)
 
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
@@ -416,7 +416,7 @@ func (c *Client) ListAPIKeys(ctx context.Context, orgID string) ([]map[string]in
 		return nil, fmt.Errorf("list API keys failed: status %d", resp.StatusCode)
 	}
 
-	var result []map[string]interface{}
+	var result []APIKeyResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}

@@ -146,17 +146,12 @@ func runAPIKeyList(cmd *cobra.Command, args []string, flagOrgID, flagFormat stri
 		headers := []string{"apiKeyId", "userId", "fingerprint", "status", "expiresAt"}
 		var rows [][]string
 		for _, key := range apiKeys {
-			apiKeyID := getStringValue(key, "apiKeyId")
-			userID := getStringValue(key, "userId")
-			fingerprint := getStringValue(key, "fingerprint")
-			status := getStringValue(key, "status")
-			expiresAt := getStringValue(key, "expiresAt")
 			rows = append(rows, []string{
-				apiKeyID,
-				userID,
-				fingerprint,
-				status,
-				expiresAt,
+				key.APIKeyID,
+				key.UserID,
+				key.Fingerprint,
+				key.Status,
+				key.ExpiresAt,
 			})
 		}
 		return output.PrintTable(headers, rows)
@@ -164,17 +159,12 @@ func runAPIKeyList(cmd *cobra.Command, args []string, flagOrgID, flagFormat stri
 		headers := []string{"API Key ID", "User ID", "Fingerprint", "Status", "Expires At"}
 		var rows [][]string
 		for _, key := range apiKeys {
-			apiKeyID := getStringValue(key, "apiKeyId")
-			userID := getStringValue(key, "userId")
-			fingerprint := getStringValue(key, "fingerprint")
-			status := getStringValue(key, "status")
-			expiresAt := getStringValue(key, "expiresAt")
 			rows = append(rows, []string{
-				apiKeyID,
-				userID,
-				fingerprint,
-				status,
-				expiresAt,
+				key.APIKeyID,
+				key.UserID,
+				key.Fingerprint,
+				key.Status,
+				key.ExpiresAt,
 			})
 		}
 		if len(rows) == 0 && !cfg.Quiet {
@@ -499,14 +489,4 @@ func runAPIKeyDelete(cmd *cobra.Command, args []string, flagOrgID, flagAPIKeyID 
 	return nil
 }
 
-// getStringValue safely extracts a string value from a map[string]interface{}.
-func getStringValue(m map[string]interface{}, key string) string {
-	if val, ok := m[key]; ok {
-		if str, ok := val.(string); ok {
-			return str
-		}
-		return fmt.Sprintf("%v", val)
-	}
-	return ""
-}
 

@@ -77,7 +77,7 @@ func DoWithRetry(ctx context.Context, client *http.Client, req *http.Request, co
 		lastErr = err
 		if resp != nil {
 			resp.Body.Close()
-			lastErr = fmt.Errorf("status %d: %v", resp.StatusCode, err)
+			lastErr = fmt.Errorf("request failed with status code %d", resp.StatusCode)
 		}
 
 		// Don't wait after last attempt
