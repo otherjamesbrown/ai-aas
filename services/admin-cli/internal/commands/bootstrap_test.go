@@ -2,7 +2,6 @@
 package commands
 
 import (
-	"context"
 	"testing"
 
 	"github.com/spf13/cobra"
