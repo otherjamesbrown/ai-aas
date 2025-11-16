@@ -6,7 +6,8 @@ This guide documents best practices and common pitfalls when working with GitHub
 
 ```
 .github/workflows/
-├── ci.yml                    # Main CI on push/PR
+├── ci.yml                    # Main CI on push/PR (Go services)
+├── web-portal.yml           # Web portal CI (lint, test, e2e, build)
 ├── ci-remote.yml            # Manual dispatch workflow
 ├── reusable-build.yml       # Reusable workflow for build/test
 └── (other workflows)
@@ -145,6 +146,37 @@ gh run view RUN_ID --log-failed
 gh run watch RUN_ID
 ```
 
+## Web Portal Workflow Pattern
+
+The web portal workflow (`.github/workflows/web-portal.yml`) demonstrates a critical pattern: **test before build**.
+
+```yaml
+jobs:
+  lint:
+    name: Lint
+    # Runs ESLint
+  
+  test:
+    name: Unit Tests
+    # Runs Vitest unit tests
+  
+  test-e2e:
+    name: E2E Tests
+    # Runs Playwright E2E tests (including critical user workflows)
+  
+  build:
+    name: Build and Push Docker Image
+    needs: [lint, test, test-e2e]  # ⚠️ CRITICAL: Build depends on all tests
+    # Only builds if all tests pass
+```
+
+**Why This Matters**: Without this dependency, broken code (like a non-functional sign-in button) could be deployed if it compiles successfully. By making `build` depend on test jobs, we ensure:
+- ✅ All tests must pass before building images
+- ✅ Broken functionality cannot reach production
+- ✅ PRs are blocked if tests fail
+
+**Best Practice**: Always make build/deploy jobs depend on test jobs. Never build or deploy code that hasn't passed all tests.
+
 ## Workflow Design Patterns
 
 ### Pattern: Dispatch Info Collection
@@ -184,6 +216,25 @@ jobs:
     if: ${{ always() }}  # Run even if previous jobs fail
     runs-on: ubuntu-latest
 ```
+
+### Pattern: Test Before Build (Critical)
+```yaml
+jobs:
+  lint:
+    # Run linting
+  
+  test:
+    # Run unit tests
+  
+  test-e2e:
+    # Run E2E tests
+  
+  build:
+    needs: [lint, test, test-e2e]  # Build only if all tests pass
+    # Build and push Docker image
+```
+
+**Rule**: Never build or deploy without running tests first. Always use `needs:` to enforce test dependencies.
 
 ## Troubleshooting Checklist
 

@@ -19,15 +19,19 @@ git status
 2. **Commits changes** - Prompts for commit message
 3. **Pushes to git** - Pushes to current branch
 4. **Creates/updates PR** - Prompts for PR title/description
-5. **Triggers CI** - Kicks off GitHub Actions CI pipeline
-6. **Waits for PR merge** - After merge, ArgoCD auto-syncs
+5. **CI runs automatically** - GitHub Actions runs tests (lint, unit, E2E)
+6. **CI must pass** - With branch protection, PR cannot be merged until all tests pass
+7. **Merge PR** - After CI passes and code review, merge to main
+8. **ArgoCD auto-syncs** - Watches main branch and deploys
 
 **If on main branch:**
 1. **Reviews changes** - Shows git status
 2. **Commits changes** - Prompts for commit message
 3. **Pushes to main** - Pushes directly to main
-4. **ArgoCD auto-syncs** - Watches main branch (development)
-5. **Verifies deployment** - Checks ingress and services
+4. **CI runs automatically** - GitHub Actions runs tests
+5. **ArgoCD auto-syncs** - Watches main branch (development)
+6. **Note**: If CI fails, no new Docker image is built, so ArgoCD won't deploy changes
+7. **Verifies deployment** - Checks ingress and services
 
 ## Prerequisites
 
@@ -52,14 +56,20 @@ Commit & Push
   ↓
 Create PR (via deploy script)
   ↓
+CI Runs Automatically (lint, test, E2E)
+  ↓
+CI Must Pass (blocks PR merge)
+  ↓
 Code Review
   ↓
-Merge to main
+Merge to main (only if CI passes)
   ↓
 ArgoCD Auto-Sync (development)
   ↓
 Deployment Complete
 ```
+
+**Critical**: CI tests (including E2E tests) must pass before code can be merged. This prevents broken functionality from being deployed.
 
 ### Step-by-Step (Automated)
 
@@ -75,19 +85,25 @@ The `deploy.sh` script handles most steps automatically:
    - Enter PR title (if on feature branch)
    - Enter PR description (optional)
 
-3. **Review PR:**
+3. **Wait for CI:**
+   - CI runs automatically on PR creation
+   - Check CI status: `gh run list --workflow web-portal.yml` or GitHub UI
+   - **CI must pass** before PR can be merged (with branch protection)
+
+4. **Review PR:**
    - Script provides PR URL
    - Review changes in GitHub
    - Get approvals if required
 
-4. **Merge PR:**
-   - Merge via GitHub UI or CLI
+5. **Merge PR:**
+   - Merge via GitHub UI or CLI (only if CI passes)
    - ArgoCD auto-detects changes on main
    - Auto-syncs within 30-60 seconds
 
-5. **Verify:**
+6. **Verify:**
    - Check ArgoCD UI: https://argocd.dev.ai-aas.local
    - Monitor deployment status
+   - Verify CI passed: `gh run list --workflow web-portal.yml`
 
 ## Manual Steps (If Needed)
 
@@ -147,14 +163,17 @@ The deployment script (`scripts/dev/deploy.sh`) follows GitOps best practices:
 
 ### Branch Workflow
 
-**Feature Branch:**
+**Feature Branch (Recommended):**
 1. Run `./scripts/dev/deploy.sh` → Creates PR
-2. Review PR → Merge when ready
-3. ArgoCD auto-syncs from main
+2. **Wait for CI to pass** → All tests must pass (lint, unit, E2E)
+3. Review PR → Merge when CI passes and approved
+4. ArgoCD auto-syncs from main → Deploys tested code
 
-**Main Branch:**
+**Main Branch (Use with caution):**
 1. Run `./scripts/dev/deploy.sh` → Pushes directly
-2. ArgoCD auto-syncs immediately
+2. CI runs automatically → Tests must pass
+3. ArgoCD auto-syncs immediately → If CI fails, no new image is built
+4. **Note**: Pushing directly to main bypasses PR review. Use only for urgent fixes.
 
 ### Environments
 
@@ -169,10 +188,20 @@ The deployment script (`scripts/dev/deploy.sh`) follows GitOps best practices:
 
 ### Monitoring
 
-- **CI Status**: `gh run list --workflow ci.yml`
+- **CI Status (Go services)**: `gh run list --workflow ci.yml`
+- **CI Status (Web portal)**: `gh run list --workflow web-portal.yml`
 - **ArgoCD Apps**: `kubectl get application -n argocd`
 - **ArgoCD UI**: https://argocd.dev.ai-aas.local
 - **Kubernetes**: `kubectl get all --all-namespaces`
+
+**Check CI Status Before Merging:**
+```bash
+# Check web portal CI
+gh run list --workflow web-portal.yml --limit 5
+
+# Check specific PR CI status
+gh pr checks <PR_NUMBER>
+```
 
 ## Important Notes
 
@@ -182,10 +211,18 @@ The deployment script (`scripts/dev/deploy.sh`) follows GitOps best practices:
 - Commit → PR → Merge → ArgoCD syncs
 
 ✅ **Best Practices:**
-- Always use PRs for code review (unless emergency)
+- **Always use feature branches and PRs** - Ensures CI tests pass before merge
+- **Never merge PRs with failing CI** - All tests (lint, unit, E2E) must pass
+- **Monitor CI status** - Check GitHub Actions before merging
 - Let ArgoCD handle all deployments
 - Monitor ArgoCD UI for sync status
 - Trust the GitOps workflow
+
+⚠️ **Important**: With our CI setup, broken code (like a non-functional sign-in button) cannot be deployed because:
+- E2E tests catch user workflow issues
+- Build jobs depend on test jobs passing
+- No Docker image is built if tests fail
+- ArgoCD won't see changes to deploy if CI fails
 
 ## Documentation
 
