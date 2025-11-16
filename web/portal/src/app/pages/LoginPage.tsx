@@ -48,22 +48,52 @@ export default function LoginPage() {
 
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('Login form submitted', { email: email.trim(), hasPassword: !!password, orgId });
     
     if (!email.trim() || !password) {
+      console.warn('Validation failed: missing email or password');
       showError('Validation failed', 'Please enter both email and password');
       return;
     }
 
     setIsLoggingIn(true);
+    console.log('Starting login process...');
     try {
       await loginWithPassword(email, password, orgId || undefined);
+      console.log('Login successful');
       showSuccess('Login successful', 'Redirecting...');
       // Navigation will happen via useEffect
     } catch (error) {
-      showError(
-        'Login failed',
-        error instanceof Error ? error.message : 'Invalid email or password'
-      );
+      console.error('Login error caught in LoginPage:', error);
+      
+      // Extract error message with fallbacks
+      let errorMessage = 'Invalid email or password';
+      if (error instanceof Error) {
+        errorMessage = error.message || 'An unexpected error occurred';
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      } else {
+        errorMessage = 'An unexpected error occurred during login';
+      }
+      
+      // Always show error toast
+      console.log('Attempting to show error toast:', { title: 'Login failed', message: errorMessage });
+      try {
+        showError('Login failed', errorMessage);
+        console.log('showError called successfully');
+      } catch (toastError) {
+        // Fallback if toast fails - use alert
+        console.error('Failed to show toast, using alert:', toastError);
+        alert(`Login failed: ${errorMessage}`);
+      }
+      
+      // Also log to console for debugging
+      console.error('Full error details:', {
+        error,
+        errorType: typeof error,
+        errorConstructor: error?.constructor?.name,
+        stack: error instanceof Error ? error.stack : undefined,
+      });
     } finally {
       setIsLoggingIn(false);
     }

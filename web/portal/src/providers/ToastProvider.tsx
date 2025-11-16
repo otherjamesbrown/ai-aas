@@ -21,6 +21,7 @@ export function ToastProvider({ children }: ToastProviderProps) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const showToast = useCallback((toast: Omit<Toast, 'id'>) => {
+    console.log('ToastProvider.showToast called:', toast);
     const id = crypto.randomUUID();
     const newToast: Toast = {
       ...toast,
@@ -28,7 +29,12 @@ export function ToastProvider({ children }: ToastProviderProps) {
       duration: toast.duration ?? 5000, // Default 5 seconds
     };
 
-    setToasts((prev) => [...prev, newToast]);
+    console.log('Adding toast to state:', newToast);
+    setToasts((prev) => {
+      const updated = [...prev, newToast];
+      console.log('Toast state updated, total toasts:', updated.length);
+      return updated;
+    });
   }, []);
 
   const dismissToast = useCallback((id: string) => {
@@ -49,15 +55,23 @@ interface ToastContainerProps {
 }
 
 function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
+  console.log('ToastContainer rendering with toasts:', toasts.length);
+  
+  if (toasts.length === 0) {
+    return null;
+  }
+  
   return (
     <div
       className="fixed top-4 right-4 z-50 flex flex-col space-y-2 pointer-events-none"
       aria-live="polite"
       aria-label="Notifications"
+      style={{ zIndex: 9999 }} // Ensure it's on top
     >
-      {toasts.map((toast) => (
-        <Toast key={toast.id} toast={toast} onDismiss={onDismiss} />
-      ))}
+      {toasts.map((toast) => {
+        console.log('Rendering toast:', toast.id, toast.type, toast.title);
+        return <Toast key={toast.id} toast={toast} onDismiss={onDismiss} />;
+      })}
     </div>
   );
 }
@@ -80,7 +94,14 @@ export function useToast() {
 
   const showError = useCallback(
     (title: string, message?: string, duration?: number) => {
-      context.showToast({ type: 'error', title, message, duration: duration ?? 7000 }); // Errors stay longer
+      console.log('showError called:', { title, message, duration: duration ?? 7000 });
+      try {
+        context.showToast({ type: 'error', title, message, duration: duration ?? 7000 }); // Errors stay longer
+        console.log('showToast called successfully, toast should be visible');
+      } catch (error) {
+        console.error('Error in showError/showToast:', error);
+        throw error;
+      }
     },
     [context]
   );

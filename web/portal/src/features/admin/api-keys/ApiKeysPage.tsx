@@ -86,97 +86,128 @@ export default function ApiKeysPage() {
         </button>
       </div>
 
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Name
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Fingerprint
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Scopes
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Created
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {keys?.map((key) => (
-              <tr key={key.key_id}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {key.display_name}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
-                  {maskFingerprint(key.fingerprint)}
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-500">
-                  <div className="flex flex-wrap gap-1">
-                    {key.scopes.slice(0, 3).map((scope) => (
-                      <span
-                        key={scope}
-                        className="px-2 py-1 text-xs font-semibold rounded bg-gray-100 text-gray-800"
-                      >
-                        {scope}
-                      </span>
-                    ))}
-                    {key.scopes.length > 3 && (
-                      <span className="px-2 py-1 text-xs text-gray-500">
-                        +{key.scopes.length - 3} more
-                      </span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <span
-                    className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                      key.status === 'active'
-                        ? 'bg-green-100 text-green-800'
-                        : key.status === 'revoked'
-                        ? 'bg-red-100 text-red-800'
-                        : 'bg-yellow-100 text-yellow-800'
-                    }`}
-                  >
-                    {key.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {new Date(key.created_at).toLocaleDateString()}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <div className="flex justify-end space-x-2">
-                    {key.status === 'active' && (
-                      <>
-                        <button
-                          onClick={() => handleRotate(key)}
-                          className="text-primary hover:text-primary-dark"
-                        >
-                          Rotate
-                        </button>
-                        <button
-                          onClick={() => handleRevoke(key)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          Revoke
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </td>
+      {!keys || keys.length === 0 ? (
+        <div className="bg-white shadow rounded-lg p-12 text-center">
+          <svg
+            className="mx-auto h-12 w-12 text-gray-400"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+            />
+          </svg>
+          <h3 className="mt-2 text-sm font-semibold text-gray-900">No API keys</h3>
+          <p className="mt-1 text-sm text-gray-500">
+            Get started by creating your first API key to access the platform programmatically.
+          </p>
+          <div className="mt-6">
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex items-center px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+            >
+              Create API Key
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white shadow rounded-lg overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Name
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Fingerprint
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Scopes
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Created
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {keys.map((key) => (
+                <tr key={key.key_id}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    {key.display_name}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
+                    {maskFingerprint(key.fingerprint)}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-500">
+                    <div className="flex flex-wrap gap-1">
+                      {key.scopes.slice(0, 3).map((scope) => (
+                        <span
+                          key={scope}
+                          className="px-2 py-1 text-xs font-semibold rounded bg-gray-100 text-gray-800"
+                        >
+                          {scope}
+                        </span>
+                      ))}
+                      {key.scopes.length > 3 && (
+                        <span className="px-2 py-1 text-xs text-gray-500">
+                          +{key.scopes.length - 3} more
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <span
+                      className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                        key.status === 'active'
+                          ? 'bg-green-100 text-green-800'
+                          : key.status === 'revoked'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}
+                    >
+                      {key.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {new Date(key.created_at).toLocaleDateString()}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="flex justify-end space-x-2">
+                      {key.status === 'active' && (
+                        <>
+                          <button
+                            onClick={() => handleRotate(key)}
+                            className="text-primary hover:text-primary-dark"
+                          >
+                            Rotate
+                          </button>
+                          <button
+                            onClick={() => handleRevoke(key)}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            Revoke
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <CreateApiKeyModal
         isOpen={showCreateModal}

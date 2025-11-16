@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, useLocation } from '@tanstack/react-router';
 import { useAuth } from '@/providers/AuthProvider';
-import { ROUTE_PERMISSIONS } from '@/features/access/types';
+import { ROUTE_PERMISSIONS, hasPermission } from '@/features/access/types';
+import type { MemberRole } from '@/features/admin/types';
 
 interface NavItem {
   label: string;
@@ -37,19 +38,10 @@ export function RoleAwareNav() {
     }
 
     // Check if user has any of the required permissions
-    const userRole = user.roles[0] as any;
-    return requiredPermissions.some((permission) => {
-      // Simple permission check - in production this would use the permission guard
-      const rolePermissions: Record<string, string[]> = {
-        owner: ['org.read', 'org.members.read', 'org.budget.read', 'apikey.read', 'usage.read'],
-        admin: ['org.read', 'org.members.read', 'org.budget.read', 'apikey.read', 'usage.read'],
-        manager: ['org.read', 'org.members.read', 'usage.read'],
-        analyst: ['usage.read'],
-      };
-
-      const permissions = rolePermissions[userRole] || [];
-      return permissions.includes(permission);
-    });
+    const userRole = user.roles[0] as MemberRole;
+    return requiredPermissions.some((permission) =>
+      hasPermission(userRole, permission, user.scopes)
+    );
   });
 
   return (
@@ -100,16 +92,10 @@ export function MobileRoleAwareNav() {
     const requiredPermissions = ROUTE_PERMISSIONS[item.path] || [];
     if (requiredPermissions.length === 0) return true;
 
-    const userRole = user.roles[0] as any;
-    const rolePermissions: Record<string, string[]> = {
-      owner: ['org.read', 'org.members.read', 'org.budget.read', 'apikey.read', 'usage.read'],
-      admin: ['org.read', 'org.members.read', 'org.budget.read', 'apikey.read', 'usage.read'],
-      manager: ['org.read', 'org.members.read', 'usage.read'],
-      analyst: ['usage.read'],
-    };
-
-    const permissions = rolePermissions[userRole] || [];
-    return requiredPermissions.some((permission) => permissions.includes(permission));
+    const userRole = user.roles[0] as MemberRole;
+    return requiredPermissions.some((permission) =>
+      hasPermission(userRole, permission, user.scopes)
+    );
   });
 
   return (

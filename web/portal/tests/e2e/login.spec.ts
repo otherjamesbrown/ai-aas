@@ -66,8 +66,9 @@ test.describe('Login Page', () => {
 
   test('should successfully login with valid credentials', async ({ page }) => {
     // Fill in valid credentials
-    await page.getByLabel(/email/i).fill('admin@example.com');
-    await page.getByLabel(/password/i).fill('nubipwdkryfmtaho123!');
+    // Use Acme Ltd admin user for tests (see seeded-users.md)
+    await page.getByLabel(/email/i).fill('admin@example-acme.com');
+    await page.getByLabel(/password/i).fill('AcmeAdmin2024!Secure');
     
     // Submit form
     await page.getByRole('button', { name: /sign in$/i }).click();
@@ -85,16 +86,18 @@ test.describe('Login Page', () => {
     await expect(orgIdInput).toBeVisible();
     
     // Should be able to login without it
-    await page.getByLabel(/email/i).fill('admin@example.com');
-    await page.getByLabel(/password/i).fill('nubipwdkryfmtaho123!');
+    // Use Acme Ltd admin user for tests (see seeded-users.md)
+    await page.getByLabel(/email/i).fill('admin@example-acme.com');
+    await page.getByLabel(/password/i).fill('AcmeAdmin2024!Secure');
     await page.getByRole('button', { name: /sign in$/i }).click();
     
     await expect(page).toHaveURL(/\//, { timeout: 10000 });
   });
 
   test('should show loading state during login', async ({ page }) => {
-    await page.getByLabel(/email/i).fill('admin@example.com');
-    await page.getByLabel(/password/i).fill('nubipwdkryfmtaho123!');
+    // Use Acme Ltd admin user for tests (see seeded-users.md)
+    await page.getByLabel(/email/i).fill('admin@example-acme.com');
+    await page.getByLabel(/password/i).fill('AcmeAdmin2024!Secure');
     
     // Click submit
     const submitButton = page.getByRole('button', { name: /sign in$/i });
@@ -106,8 +109,9 @@ test.describe('Login Page', () => {
 
   test('should redirect to home if already authenticated', async ({ page }) => {
     // First login
-    await page.getByLabel(/email/i).fill('admin@example.com');
-    await page.getByLabel(/password/i).fill('nubipwdkryfmtaho123!');
+    // Use Acme Ltd admin user for tests (see seeded-users.md)
+    await page.getByLabel(/email/i).fill('admin@example-acme.com');
+    await page.getByLabel(/password/i).fill('AcmeAdmin2024!Secure');
     await page.getByRole('button', { name: /sign in$/i }).click();
     await expect(page).toHaveURL(/\//, { timeout: 10000 });
 

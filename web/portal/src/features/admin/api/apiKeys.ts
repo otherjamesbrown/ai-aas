@@ -1,9 +1,12 @@
-import { httpClient } from '@/lib/http/client';
+import axios from 'axios';
 import type {
   ApiKeyCredential,
   ApiKeyResponse,
   CreateApiKeyRequest,
 } from '../types';
+
+// Use user-org-service directly for API key operations
+const userOrgServiceUrl = import.meta.env.VITE_USER_ORG_SERVICE_URL || 'http://localhost:8081';
 
 /**
  * API key lifecycle management API client
@@ -13,8 +16,18 @@ export const apiKeysApi = {
    * List all API keys for the organization
    */
   async list(): Promise<ApiKeyCredential[]> {
-    const response = await httpClient.get<ApiKeyCredential[]>(
-      '/organizations/me/api-keys'
+    const token = sessionStorage.getItem('auth_token');
+    if (!token) {
+      throw new Error('Authentication required. Please log in.');
+    }
+    const response = await axios.get<ApiKeyCredential[]>(
+      `${userOrgServiceUrl}/organizations/me/api-keys`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      }
     );
     return response.data;
   },
@@ -23,8 +36,18 @@ export const apiKeysApi = {
    * Get API key by ID
    */
   async getById(keyId: string): Promise<ApiKeyCredential> {
-    const response = await httpClient.get<ApiKeyCredential>(
-      `/organizations/me/api-keys/${keyId}`
+    const token = sessionStorage.getItem('auth_token');
+    if (!token) {
+      throw new Error('Authentication required. Please log in.');
+    }
+    const response = await axios.get<ApiKeyCredential>(
+      `${userOrgServiceUrl}/organizations/me/api-keys/${keyId}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      }
     );
     return response.data;
   },
@@ -34,19 +57,51 @@ export const apiKeysApi = {
    * Returns the key with the full secret (only shown once)
    */
   async create(request: CreateApiKeyRequest): Promise<ApiKeyResponse> {
-    const response = await httpClient.post<ApiKeyResponse>(
-      '/organizations/me/api-keys',
-      request
-    );
-    return response.data;
+    console.log('apiKeys.create: called with request:', request);
+    const token = sessionStorage.getItem('auth_token');
+    console.log('apiKeys.create: token from sessionStorage:', token ? 'present' : 'missing');
+    if (!token) {
+      throw new Error('Authentication required. Please log in.');
+    }
+    console.log('API Key create: URL:', `${userOrgServiceUrl}/organizations/me/api-keys`);
+    console.log('API Key create: Token present:', !!token);
+    console.log('API Key create: Request:', request);
+    try {
+      const response = await axios.post<ApiKeyResponse>(
+        `${userOrgServiceUrl}/organizations/me/api-keys`,
+        request,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      console.log('API Key create: Success:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('API Key create: Error:', error);
+      throw error;
+    }
   },
 
   /**
    * Rotate an API key (generates new secret)
    */
   async rotate(keyId: string): Promise<ApiKeyResponse> {
-    const response = await httpClient.post<ApiKeyResponse>(
-      `/organizations/me/api-keys/${keyId}/rotate`
+    const token = sessionStorage.getItem('auth_token');
+    if (!token) {
+      throw new Error('Authentication required. Please log in.');
+    }
+    const response = await axios.post<ApiKeyResponse>(
+      `${userOrgServiceUrl}/organizations/me/api-keys/${keyId}/rotate`,
+      {},
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      }
     );
     return response.data;
   },
@@ -56,16 +111,39 @@ export const apiKeysApi = {
    * Idempotent - repeated revokes warn without duplicating audit entries
    */
   async revoke(keyId: string): Promise<void> {
-    await httpClient.post(`/organizations/me/api-keys/${keyId}/revoke`);
+    const token = sessionStorage.getItem('auth_token');
+    if (!token) {
+      throw new Error('Authentication required. Please log in.');
+    }
+    await axios.post(
+      `${userOrgServiceUrl}/organizations/me/api-keys/${keyId}/revoke`,
+      {},
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
   },
 
   /**
    * Update API key display name
    */
   async updateName(keyId: string, displayName: string): Promise<ApiKeyCredential> {
-    const response = await httpClient.patch<ApiKeyCredential>(
-      `/organizations/me/api-keys/${keyId}`,
-      { display_name: displayName }
+    const token = sessionStorage.getItem('auth_token');
+    if (!token) {
+      throw new Error('Authentication required. Please log in.');
+    }
+    const response = await axios.patch<ApiKeyCredential>(
+      `${userOrgServiceUrl}/organizations/me/api-keys/${keyId}`,
+      { display_name: displayName },
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      }
     );
     return response.data;
   },

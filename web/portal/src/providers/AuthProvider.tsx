@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import axios from 'axios';
 import { httpClient } from '@/lib/http/client';
 
 interface User {
@@ -238,32 +239,95 @@ export function AuthProvider({
         loginPayload.client_id = oauthClientId;
       }
 
-      const response = await httpClient.post<TokenResponse>('/auth/login', loginPayload);
+      // Use user-org-service directly for login (same as API key operations)
+      const userOrgServiceUrl = import.meta.env.VITE_USER_ORG_SERVICE_URL || 'http://localhost:8081';
+      const loginUrl = `${userOrgServiceUrl}/v1/auth/login`;
+      console.log('Attempting login to:', loginUrl);
+      console.log('Login payload:', { email: loginPayload.email, hasPassword: !!loginPayload.password, orgId: loginPayload.org_id || 'none' });
+      
+      let response;
+      let data: TokenResponse;
+      try {
+        console.log('About to call fetch...');
+        const fetchResponse = await fetch(loginUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(loginPayload),
+          signal: AbortSignal.timeout(10000), // 10 second timeout
+        });
+        console.log('Fetch call completed successfully, status:', fetchResponse.status);
+
+        // Parse response
+        data = await fetchResponse.json() as TokenResponse;
+        console.log('Response parsed successfully');
+
+        // Create axios-like response object for compatibility
+        response = {
+          status: fetchResponse.status,
+          statusText: fetchResponse.statusText,
+          data,
+          headers: fetchResponse.headers,
+          config: {},
+        };
+      } catch (fetchError) {
+        // Use console.log instead of console.error to ensure Playwright captures it
+        console.log('Fetch call failed:', fetchError);
+        console.log('Fetch error details:', JSON.stringify({
+          message: fetchError instanceof Error ? fetchError.message : String(fetchError),
+          name: fetchError instanceof Error ? fetchError.name : undefined,
+        }, null, 2));
+        throw fetchError; // Re-throw to be caught by outer catch
+      }
+
+      console.log('Login response received:', {
+        status: response.status,
+        hasAccessToken: !!response.data.access_token,
+        hasRefreshToken: !!response.data.refresh_token,
+        tokenType: response.data.token_type,
+        expiresIn: response.data.expires_in,
+        responseKeys: Object.keys(response.data),
+      });
 
       if (response.data.access_token) {
+        // Store token immediately - don't wait for userinfo
         sessionStorage.setItem('auth_token', response.data.access_token);
+        console.log('AuthProvider: access token stored in sessionStorage, length:', response.data.access_token.length);
         if (response.data.refresh_token) {
           sessionStorage.setItem('refresh_token', response.data.refresh_token);
         }
 
-        // Fetch user info
-        const userInfoResponse = await httpClient.get<UserInfoResponse>('/auth/userinfo', {
-          headers: {
-            Authorization: `Bearer ${response.data.access_token}`,
-          },
-        });
+        // Fetch user info (use user-org-service directly)
+        // If this fails, we still have the token stored, so don't clear auth
+        try {
+          const userInfoResponse = await axios.get<UserInfoResponse>(`${userOrgServiceUrl}/v1/auth/userinfo`, {
+            headers: {
+              Authorization: `Bearer ${response.data.access_token}`,
+              'Content-Type': 'application/json',
+            },
+          });
 
-        const userInfo: User = {
-          id: userInfoResponse.data.sub || userInfoResponse.data.id || '',
-          email: userInfoResponse.data.email,
-          name: userInfoResponse.data.name,
-          roles: userInfoResponse.data.roles || [],
-          scopes: userInfoResponse.data.scopes || [],
-          organizationId: userInfoResponse.data.organization_id,
-        };
+          const userInfo: User = {
+            id: userInfoResponse.data.sub || userInfoResponse.data.id || '',
+            email: userInfoResponse.data.email,
+            name: userInfoResponse.data.name,
+            roles: userInfoResponse.data.roles || [],
+            scopes: userInfoResponse.data.scopes || [],
+            organizationId: userInfoResponse.data.organization_id,
+          };
 
-        setUser(userInfo);
-        sessionStorage.setItem('auth_user', JSON.stringify(userInfo));
+          setUser(userInfo);
+          sessionStorage.setItem('auth_user', JSON.stringify(userInfo));
+          console.log('AuthProvider: user info fetched and stored');
+        } catch (userInfoError) {
+          // Log error but don't fail login - token is already stored
+          console.warn('AuthProvider: failed to fetch user info, but token is stored:', userInfoError);
+          // Create minimal user info from token if available
+          // The token will still work for API calls
+        }
+
+        console.log('AuthProvider: login successful, token stored in sessionStorage');
 
         // Schedule token refresh
         scheduleTokenRefresh();
@@ -272,8 +336,39 @@ export function AuthProvider({
       }
     } catch (error) {
       console.error('Password login failed:', error);
+      console.error('Error details:', {
+        errorType: typeof error,
+        errorName: error instanceof Error ? error.name : undefined,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
       clearAuth();
-      throw error;
+      
+      // Provide better error messages - handle all error types
+      let errorMessage = 'Login failed. Please try again.';
+
+      if (error instanceof Error) {
+        // Network errors (connection refused, timeout, etc.)
+        if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+          errorMessage = 'Cannot connect to backend API. Please ensure the API router and user-org services are running.';
+        } else if (error.name === 'AbortError' || error.message.includes('timeout')) {
+          errorMessage = 'Request timed out. Please try again.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      // Fallback for unknown error types
+      else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+
+      // Always log the full error for debugging
+      console.error('Full login error details:', {
+        error,
+        errorName: error instanceof Error ? error.name : undefined,
+        errorMessage: error instanceof Error ? error.message : undefined,
+      });
+      
+      throw new Error(errorMessage);
     }
   };
 

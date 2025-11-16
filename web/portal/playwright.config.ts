@@ -10,16 +10,24 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: [
-    ['html'],
-    ['list'],
-    ['json', { outputFile: 'test-results/results.json' }],
-  ],
+  reporter: process.env.CI 
+    ? [
+        ['html'],
+        ['list'],
+        ['json', { outputFile: 'test-results/results.json' }],
+      ]
+    : [
+        ['list'],
+        ['json', { outputFile: 'test-results/results.json' }],
+        ['html', { open: 'never' }], // Generate HTML report but don't open server
+      ],
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5173',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || (process.env.VITE_USE_HTTPS === 'false' ? 'http://localhost:5173' : 'https://localhost:5173'),
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
+    ignoreHTTPSErrors: true,
+    headless: process.env.PLAYWRIGHT_HEADLESS !== 'false', // Default to headless unless explicitly disabled
   },
 
   projects: [
@@ -52,9 +60,9 @@ export default defineConfig({
     },
   ],
 
-  webServer: {
+  webServer: process.env.SKIP_WEBSERVER ? undefined : {
     command: 'pnpm dev',
-    url: 'http://localhost:5173',
+    url: process.env.VITE_USE_HTTPS === 'false' ? 'http://localhost:5173' : 'https://localhost:5173',
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
   },

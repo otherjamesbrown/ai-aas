@@ -18,7 +18,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    https: true,
+    // Allow disabling HTTPS for local development to avoid SSL cipher issues
+    // Set VITE_USE_HTTPS=false to use HTTP instead
+    https: process.env.VITE_USE_HTTPS === 'false' ? false : true,
     host: true,
   },
   build: {
