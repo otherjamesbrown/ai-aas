@@ -29,6 +29,8 @@ env:
     value: "http://api-router-service.development.svc.cluster.local:8080"
   - name: VITE_OAUTH_REDIRECT_URI
     value: "https://portal.dev.ai-aas.local/auth/callback"
+  - name: VITE_USER_ORG_SERVICE_URL
+    value: "http://user-org-service-development-user-org-service.user-org-service.svc.cluster.local:8081"
   - name: VITE_FEATURE_FLAGS_API_URL
     value: "http://api-router-service.development.svc.cluster.local:8080/api"
   - name: VITE_OTEL_EXPORTER_OTLP_ENDPOINT
