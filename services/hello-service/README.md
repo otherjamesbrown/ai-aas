@@ -1,26 +1,29 @@
-# hello-service
+# Hello Service
 
-# hello-service
+The `hello-service` is an example service that demonstrates how to build a new service within the platform's architecture.
 
-Generated via `make service-new NAME=hello-service`.
+## Purpose
 
-## Local Development
+This service is a template for creating new services. It shows how to use the shared libraries and how to integrate with the platform's infrastructure.
 
-```bash
-make build
-make test
-make check
-```
+## Running the Service
 
-## Usage
-
-Build and run the CLI to produce a greeting:
+To run the service locally, you first need to start the local development environment:
 
 ```bash
-go run ./cmd/hello-service            # => Hello, there!
-go run ./cmd/hello-service Taylor     # => Hello, Taylor!
+make up
 ```
 
-The greeting logic lives in `pkg/hello` and is covered by unit tests.
+Then, you can run the service with the following command:
 
-For customization options see `docs/services/customizing.md`.
+```bash
+go run ./services/hello-service/cmd/server
+```
+
+## Running Tests
+
+To run the tests for this service, use the following command:
+
+```bash
+make test SERVICE=hello-service
+```

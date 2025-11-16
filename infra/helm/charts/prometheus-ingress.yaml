@@ -1,0 +1,41 @@
+# Prometheus Ingress Configuration (Optional - usually accessed via Grafana)
+# Apply this if you want direct access to Prometheus UI
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: prometheus-ingress
+  namespace: default  # Adjust namespace if Prometheus is in a different namespace
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: prometheus-basic-auth  # Create this secret if needed
+    nginx.ingress.kubernetes.io/auth-realm: "Prometheus - Authentication Required"
+spec:
+  ingressClassName: nginx
+  tls:
+    - secretName: ai-aas-tls
+      hosts:
+        - prometheus.dev.ai-aas.local
+        - prometheus.prod.ai-aas.local
+  rules:
+    - host: prometheus.dev.ai-aas.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: prometheus-kube-prometheus-prometheus  # Adjust service name based on your Prometheus deployment
+                port:
+                  number: 9090
+    - host: prometheus.prod.ai-aas.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: prometheus-kube-prometheus-prometheus  # Adjust service name based on your Prometheus deployment
+                port:
+                  number: 9090
+

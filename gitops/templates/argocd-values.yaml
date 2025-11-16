@@ -11,7 +11,18 @@ server:
     type: ClusterIP
     port: 8080
   ingress:
-    enabled: false
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+    hosts:
+      - argocd.dev.ai-aas.local
+    tls:
+      - secretName: ai-aas-tls
+        hosts:
+          - argocd.dev.ai-aas.local
+          - argocd.prod.ai-aas.local
 
 redis:
   auth:

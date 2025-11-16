@@ -25,18 +25,18 @@ spec:
           pullPolicy: Always
         env:
           - name: VITE_API_BASE_URL
-            value: "http://api-router-service.development.svc.cluster.local:8080/api"
+            value: "https://api.dev.ai-aas.local/api"
           - name: VITE_OAUTH_CLIENT_ID
             valueFrom:
               secretKeyRef:
                 name: web-portal-secrets
                 key: oauth-client-id
           - name: VITE_OAUTH_ISSUER_URL
-            value: "http://api-router-service.development.svc.cluster.local:8080"
+            value: "https://api.dev.ai-aas.local"
           - name: VITE_OAUTH_REDIRECT_URI
-            value: "https://portal.ai-aas.dev/auth/callback"
+            value: "https://portal.dev.ai-aas.local/auth/callback"
           - name: VITE_FEATURE_FLAGS_API_URL
-            value: "http://api-router-service.development.svc.cluster.local:8080/api"
+            value: "https://api.dev.ai-aas.local/api"
         service:
           type: ClusterIP
           port: 80

@@ -1,372 +1,42 @@
-# AI-AAS Platform - Cursor Rules
+# Cursor Rules for AI-AAS Platform
 
-This repository is a spec-driven inference-as-a-service platform built on Akamai Linode infrastructure. It provides automation scaffolding, documentation, and tooling for Go-based services with consistent build, test, and CI workflows.
+This document provides a set of rules and guidelines for interacting with the AI-AAS Platform repository using Cursor.
 
-## Project Structure
+## Core Principles
 
-- **Root Makefile**: Entry point for all automation (`make help` lists targets)
-- **services/**: Go service implementations (use `_template/` for scaffolding)
-- **shared/go** and **shared/ts**: Shared libraries for Go and TypeScript
-- **web/portal**: React/TypeScript web portal application
-- **specs/**: Feature specifications, plans, research, and tasks (spec-first workflow)
-- **docs/**: Runbooks, platform guides, troubleshooting references
-- **scripts/**: Setup, CI, metrics, database, and service generator scripts
-- **configs/**: Shared lint/security/tooling configuration (including `tool-versions.mk`)
-- **tests/**: Performance and check fixtures executed via Make targets
-- **db/migrations/**: Database schema migrations (operational and analytics)
+1.  **Spec-Driven Development**: This is a spec-driven repository. Always refer to the `specs/` directory for the relevant feature specification before making any changes.
+2.  **Makefile is the Entry Point**: All automation is handled through the root `Makefile`. Use `make help` to see a list of available commands.
+3.  **Microservices Architecture**: The platform is composed of multiple Go-based microservices located in the `services/` directory. The `api-router-service` is the central gateway.
+4.  **Shared Libraries**: Common code is located in the `shared/` directory.
 
-## Required Tooling & Versions
+## Key Files and Directories
 
-Reference `configs/tool-versions.mk` for pinned versions. Required tools:
-
-- **Go**: 1.24.6+ (toolchain go1.24.10)
-- **Node.js**: >=20 (for TypeScript/web portal)
-- **pnpm**: Package manager for TypeScript workspaces
-- **Docker**: For local databases and testcontainers
-- **Git**: Version control
-- **GNU Make**: 4.x+ for automation
-- **GitHub CLI (gh)**: For `make ci-remote` (requires auth: `gh auth login`)
-
-Optional but recommended:
-- **act**: 0.2.61 (local GitHub Actions)
-- **golangci-lint**: 1.55.2
-- **gosec**: 2.19.0
-- **buf**: For protobuf validation
-- **terraform**: 1.6.6 (for infrastructure work)
-- **helm**: 3.14.4 (for Kubernetes deployments)
-
-See `docs/setup/SETUP_CHECKLIST.md` and `docs/setup/INSTALL_REQUIREMENTS.md` for installation instructions.
-
-## Code Standards & Conventions
-
-### Go Code
-- Must pass `gofmt`, `golangci-lint`, and `gosec`
-- Use tabs for indentation (4-space width)
-- Follow Go standard library conventions
-- All production code must include robust comments:
-  - Package/type/function doc comments (`// Foo ...`)
-  - Explanatory comments for non-obvious logic (include "why", not just "what")
-  - Link to relevant specs, tickets, or runbooks for guardrails/feature flags
-  - Remove stale comments as behavior changes
-
-### TypeScript/JavaScript
-- Use pnpm workspaces (see `pnpm-workspace.yaml`)
-- Node.js >=20 required (see `web/portal/package.json` and `shared/ts/package.json`)
-- Follow TypeScript strict mode conventions
-- Use 2-space indentation (see `.editorconfig`)
-- ESLint configured per workspace
-
-### Scripts
-- Always use `set -euo pipefail` for bash scripts
-- Include usage documentation in scripts
-- Scripts must be executable (`chmod +x`)
-- Reference `scripts/` directory patterns for examples
-
-### Documentation
-- Prefer Markdown format
-- Include task IDs where applicable
-- Update README, quickstart, runbooks, and llms.txt when making changes
-- Documentation in `docs/` and `usage-guide/`
+*   `ARCHITECTURE.md`: A high-level overview of the system architecture.
+*   `CONTRIBUTING.md`: Guidelines for contributing to the project.
+*   `Makefile`: The main entry point for all automation.
+*   `services/`: The source code for each of the microservices.
+*   `shared/`: Shared libraries used by multiple services.
+*   `docs/`: Detailed documentation, including runbooks and setup guides.
+*   `specs/`: The feature specifications and design documents.
 
 ## Development Workflow
 
-### Branching Strategy
-- `main`: Long-lived integration branch
-- Feature branches: Named after spec ID (e.g., `feature/000-project-setup`)
-- All work merges back into `main`
-- Keep branches focused on a single spec or deliverable
-
-### Common Commands
-```bash
-# Bootstrap environment
-./scripts/setup/bootstrap.sh              # Initialize workspace
-./scripts/setup/bootstrap.sh --check-only # Verify prerequisites
-
-# Build & Test
-make help                                  # List all available targets
-make build SERVICE=<name>                  # Build a service (or SERVICE=all)
-make test SERVICE=<name>                   # Run tests
-make check SERVICE=<name>                  # Format, lint, security, test (use METRICS=true for metrics)
-make shared-build                          # Build shared Go/TypeScript libraries
-make shared-test                           # Test shared libraries
-
-# CI/CD
-make ci-local                              # Run GitHub Actions locally via act
-make ci-remote SERVICE=<name> REF=<branch> # Trigger remote pipeline
-
-# Environment Management
-make env-activate ENVIRONMENT=<name>       # Activate environment profile (local-dev, remote-dev, production)
-make env-show [COMPONENT=<name>]           # Show current environment configuration
-make env-validate                          # Validate active environment profile
-make env-diff ENV1=<env1> ENV2=<env2>     # Compare two environments
-make secrets-sync                          # Sync secrets for active environment
-
-# Database
-make db-migrate-status                     # Check migration status
-scripts/db/apply.sh --env local --component operational
-
-# Create New Service
-make service-new NAME=<service-name>       # Generates service skeleton
-
-# Version Information
-make version                               # Display pinned tool versions
-```
-
-### Before Committing
-1. Run `make check SERVICE=<name>` (or `SERVICE=all`)
-2. Ensure all tests pass
-3. Update documentation if behavior changes
-4. Link to spec/tasks in commit messages (e.g., `Fixes T041, T045`)
-
-## Testing Guidelines
-
-- **Unit Tests**: Required for all production code
-- **Integration Tests**: Use Testcontainers (no DB mocks)
-- **E2E Tests**: Happy path in CI; nightly regression
-- **Coverage**: Shared libraries target 80% coverage (configurable via `SHARED_GO_COVERAGE_TARGET`)
-- Follow Test-Driven Development when implementing tasks from `tasks.md`
-- Verify audit logging, auth failures, budget enforcement, RBAC constraints
-
-## Service Development
-
-### Service Structure
-- Each service has its own `Makefile` (uses `templates/service.mk`)
-- Services follow standard targets: `build`, `test`, `lint`, `fmt`, `check`, `clean`
-- Use `services/_template/` as scaffolding for new services
-- Services are added to `go.work` workspace automatically by `make service-new`
-
-### Database Migrations
-- Operational migrations: `db/migrations/operational/`
-- Analytics migrations: `db/migrations/analytics/`
-- Use `golang-migrate` or `goose` (see service-specific READMEs)
-- Connection strings via environment variables:
-  - `DB_URL`: Operational database
-  - `ANALYTICS_URL`: Analytics warehouse
-  - Service-specific: `USER_ORG_DATABASE_URL`, etc.
-
-### Configuration
-- **Environment Profiles**: Use `configs/environments/*.yaml` for environment-specific configuration (local-dev, remote-dev, production). Activate profiles with `make env-activate ENVIRONMENT=<name>`
-- **Component Registry**: Register new components in `configs/components.yaml` before adding to environment profiles
-- **Build Config**: Copy `configs/build.env.example` to `configs/build.env` for build config
-- **Migration Config**: Copy `configs/migrate.example.env` to `migrate.env` for database config
-- **Service Configs**: Service-specific configs in `services/<service>/configs/` - these should reference environment profile variables
-- **Never hardcode**: Environment-specific values (hosts, ports, credentials) must come from environment profiles, not hardcoded in service configs
-
-## Environment Management
-
-**CRITICAL: Use environment profiles for configuration management. Never hardcode environment-specific values.**
-
-### Environment Profiles
-
-The platform uses centralized environment profiles (`configs/environments/*.yaml`) to manage configurations across environments (local-dev, remote-dev, production). This ensures consistency and prevents misconfiguration.
-
-**Always use environment profiles instead of manually editing `.env` files or hardcoding values:**
-
-```bash
-# Activate environment profile before starting services
-make env-activate ENVIRONMENT=local-dev      # Local development
-make env-activate ENVIRONMENT=remote-dev     # Remote Linode workspace
-make env-activate ENVIRONMENT=production     # Production (requires credentials)
-
-# Validate configuration
-make env-validate
-
-# View current environment configuration
-make env-show
-
-# Compare environments
-make env-diff ENV1=local-dev ENV2=remote-dev
-
-# Export environment variables
-make env-export FORMAT=env > .env.export
-```
-
-**When working with services:**
-- Services should reference environment profile variables, not hardcode values
-- Use `configs/components.yaml` to register new components
-- Update environment profiles when adding new services or changing configurations
-- Never commit `.env.*` files (they're gitignored) - use environment profiles as source of truth
-
-**See `configs/environments/README.md` and `specs/002-local-dev-environment/quickstart.md` for complete documentation.**
-
-### Secrets Management
-
-**CRITICAL: Never hardcode secrets. Always use secret references in environment profiles.**
-
-Secrets are managed via:
-- **Local/Remote Dev**: `make secrets-sync` hydrates `.env.local` and `.env.linode` from GitHub secrets
-- **Production**: Vault or production secrets store (referenced in production profile)
-- Environment profiles reference secret sources but never contain actual values
-
-```bash
-# Sync secrets for active environment
-make secrets-sync              # Syncs based on active environment profile
-make secrets-sync MODE=local   # Force local mode
-```
-
-## Infrastructure & Environment Variables
-
-**Note**: Connection strings and environment variables are defined in environment profiles (`configs/environments/*.yaml`). Use `make env-show` to view current environment configuration.
-
-### Database (via Environment Profiles)
-Environment profiles define database connection strings. Examples:
-- **Local Dev**: `postgres://postgres:postgres@localhost:5432/ai_aas?sslmode=disable`
-- **Remote Dev**: Defined in remote-dev profile (private networking)
-- **Production**: Defined in production profile (Vault-managed credentials)
-
-Use environment variables from active profile:
-- `DB_URL`: Operational database
-- `ANALYTICS_URL`: Analytics warehouse
-- Service-specific: `USER_ORG_DATABASE_URL`, etc.
-
-### Observability
-```bash
-OTEL_EXPORTER_OTLP_ENDPOINT=https://otel.dev.ai-aas.internal
-OTEL_EXPORTER_OTLP_HEADERS="x-api-key=<token>"
-LOG_LEVEL=info  # debug, info, warn, error (controlled via environment profiles)
-```
-
-**Logging**: All Go services use `shared/go/logging` package. Logs are aggregated via Loki (local: `http://localhost:3100`, remote/production: Grafana Explore). Use `make logs-view` or `make logs-tail SERVICE=<name>` for local development.
-
-### Infrastructure (Optional)
-```bash
-LINODE_TOKEN=<token>          # For remote workspace provisioning
-METRICS_BUCKET=ai-aas-build-metrics
-```
-
-## Important Paths
-
-- **Tool Versions**: `configs/tool-versions.mk`
-- **Environment Profiles**: `configs/environments/` - Environment configuration profiles (local-dev, remote-dev, production)
-- **Component Registry**: `configs/components.yaml` - Registry of all platform components
-- **Environment Profile Manager**: `configs/manage-env.sh` - Tool for managing environment profiles
-- **Bootstrap Script**: `scripts/setup/bootstrap.sh`
-- **Service Template**: `services/_template/` and `templates/service.mk`
-- **Shared Libraries**: `shared/go/` and `shared/ts/`
-- **Quickstart Guide**: `specs/000-project-setup/quickstart.md`
-- **Dev Environment Guide**: `specs/002-local-dev-environment/quickstart.md` - Environment profile usage
-- **Contributing Guide**: `CONTRIBUTING.md`
-- **Setup Documentation**: `docs/setup/SETUP_CHECKLIST.md` and `docs/setup/INSTALL_REQUIREMENTS.md`
-
-## Architecture Principles
-
-This platform follows a spec-first, constitution-guided approach:
-
-- **API-First**: OpenAPI present; UI/CLI client-only
-- **Statelessness**: No in-process state; state in Postgres/Redis/RabbitMQ
-- **Async Non-Critical**: Analytics/logging off critical path; idempotent consumers
-- **Security**: authN/Z, secrets handling, SAST/DAST, NetworkPolicies, TLS/Ingress
-- **GitOps/Declarative**: Terraform/Helm/ArgoCD with Git as source of truth
-- **Observability**: health, metrics, logs, traces, dashboards defined
-
-## GitHub Actions Guidelines
-
-- Reusable workflows MUST be at `.github/workflows/` top level (no subdirectories)
-- Never use `${{ env.VAR }}` in reusable workflow call parameters; use hardcoded values
-- Declare all job dependencies in `needs:` list if accessing outputs
-- Test workflows exist on `main` before using `workflow_dispatch` on feature branches
-- See `docs/platform/github-actions-guide.md` for complete guidelines
-
-## Task Naming Convention
-
-Format: `T-S{spec_number}-P{phase_number}-{task_number}`
-- Spec number: three-digit (e.g., `006` for `006-api-router-service`)
-- Phase number: two-digit (e.g., `01` for Phase 1, `02` for Phase 2)
-- Task number: three-digit sequential within spec (continues across phases)
-- Examples: `T-S006-P01-001`, `T-S006-P01-006`, `T-S006-P02-007`
-
-Task numbers continue sequentially across phases within a spec.
-
-## When Writing Code
-
-1. **Check existing patterns**: Look at similar code in the codebase first
-2. **Use environment profiles**: Never hardcode environment-specific values (hosts, ports, credentials). Use environment profile variables instead
-3. **Register components**: When adding new components, register them in `configs/components.yaml` and add to environment profiles
-4. **Follow conventions**: Use tabs for Go, 2 spaces for TypeScript, `set -euo pipefail` for scripts
-5. **Use shared logging package**: All Go services MUST use `shared/go/logging` package with zap backend. Never use zerolog or other logging libraries directly. See `shared/go/logging/README.md` for usage examples.
-6. **Update tests**: Add/update tests as you modify code
-7. **Update docs**: Keep README, quickstart, and runbooks current
-8. **Link to specs**: Reference relevant spec/task IDs in commits
-9. **Run checks**: Always run `make check` before committing
-10. **Verify versions**: Check `configs/tool-versions.mk` if adding new tooling
-11. **Validate environment**: Run `make env-validate` when changing environment profiles
-
-## Temporary Documentation Files
-
-**CRITICAL: All temporary or informational-only markdown files MUST be created in `tmp_md/` directory.**
-
-Temporary files include:
-- Build/test result summaries
-- Setup completion checklists
-- Temporary notes or analysis documents
-- Debugging/investigation documents
-- One-time status or progress reports
-- Any markdown file created during troubleshooting or analysis
-
-**Do NOT create temporary MD files in the root directory or other permanent locations.**
-
-Examples of temporary files:
-- `tmp_md/BUILD_TEST_RESULTS.md` - Test execution results
-- `tmp_md/SETUP_COMPLETE.md` - Setup verification
-- `tmp_md/NEXT_STEPS.md` - Temporary action items
-- `tmp_md/ANALYSIS.md` - Investigation notes
-
-The `tmp_md/` directory is in `.gitignore` and will not be committed to version control.
-
-## Common Issues & Solutions
-
-- **Go workspace out of sync**: Run `go work sync`
-- **TypeScript dependencies**: Run `make shared-ts-install` or `pnpm install` in workspace
-- **Missing tools**: Run `./scripts/setup/bootstrap.sh --check-only` to see what's missing
-- **Database connection**: Activate correct environment profile (`make env-activate ENVIRONMENT=local-dev`) and verify Docker containers running
-- **Wrong environment configuration**: Check active profile with `make env-show`; switch with `make env-activate ENVIRONMENT=<name>`
-- **Configuration validation fails**: Run `make env-validate` for detailed errors; check component registry and secret availability
-- **Secrets not found**: Run `make secrets-sync` to hydrate secrets for active environment; verify GitHub auth with `gh auth status`
-- **GitHub CLI auth**: Run `gh auth login` and select required scopes (`repo`, `read:actions`)
-
-## Help & Documentation
-
-- **Quickstart**: `specs/000-project-setup/quickstart.md`
-- **Environment Management**: `configs/environments/README.md` - Environment profile documentation
-- **Dev Environment**: `specs/002-local-dev-environment/quickstart.md` - Local/remote development setup and environment profiles
-- **Contributing**: `CONTRIBUTING.md`
-- **Setup**: `docs/setup/SETUP_CHECKLIST.md` and `docs/setup/INSTALL_REQUIREMENTS.md`
-- **Troubleshooting**: `docs/troubleshooting/`
-- **Usage Guide**: `usage-guide/` (organized by persona)
-- **Make Help**: `make help` for all available targets
-
-## User Preferences & Automation
-
-**CRITICAL: The following preferences apply to all AI assistant interactions in this workspace.**
-
-### Command Execution
-- **Run commands automatically**: Execute commands immediately without asking for confirmation
-- **No prompts for execution**: Do not ask "Would you like me to run this?" or similar prompts
-- **Proceed with recommended actions**: If a command is needed to complete a task, run it automatically
-
-### Secrets & Authentication
-- **Use credentials automatically**: If keys, tokens, or secrets are needed and available (e.g., environment variables, config files, credential stores), use them automatically without prompting
-- **Access credential stores**: Read from standard locations (environment variables, `~/.config/`, `.env` files, `gh auth status`, etc.) without asking
-- **Authenticate when needed**: If authentication is required (e.g., `gh auth login`), proceed automatically if credentials are available
-
-### Decision Making
-- **Take recommended action**: When multiple options exist, automatically choose the recommended or most common option
-- **Follow best practices**: Default to project conventions, documentation recommendations, and best practices
-- **Prefer standard configurations**: Use standard/default settings unless explicitly overridden
-- **Choose safe defaults**: When in doubt, select the safer, more conservative option that follows project standards
-
-### Multi-Step Processes
-- **Execute all steps automatically**: When a task requires multiple steps, proceed through them sequentially without asking "Would you like to continue?" or "Should I proceed?"
-- **Chain operations**: Complete the entire sequence of operations without interruption
-- **Handle errors gracefully**: If an error occurs, attempt recovery or provide clear error context, but don't stop the entire sequence unnecessarily
-
-### Examples
-- If installing dependencies: Run `pnpm install` or `go mod download` automatically
-- If building: Run `make build` automatically
-- If tests need running: Run `make test` automatically
-- If authentication needed: Check `gh auth status` and use existing auth, or authenticate automatically if possible
-- If configuration files needed: Create them from examples automatically (e.g., copy `.example.env` to `.env`)
-- If multiple steps needed: Complete all steps in sequence without prompting between steps
-
-**This preference applies across all interactions: be proactive, not reactive.**
-
+1.  **Bootstrap the environment**: `make bootstrap`
+2.  **Start the local stack**: `make up`
+3.  **Run checks**: `make check`
+4.  **Run tests**: `make test SERVICE=<service-name>`
+
+## Important Commands
+
+*   `make help`: List all available commands.
+*   `make check`: Run all checks (format, lint, security, test).
+*   `make build`: Build the services.
+*   `make test`: Run unit tests.
+*   `make up`: Start the local development environment.
+*   `make stop`: Stop the local development environment.
+
+## Cursor-Specific Instructions
+
+*   **AI-Assisted Refactoring**: When refactoring, always refer to the `CONTRIBUTING.md` for coding style and conventions.
+*   **Code Generation**: When generating new code, use the `services/_template` directory as a reference for new services.
+*   **Chat Context**: Use the `@` symbol to reference specific files or directories in your chat prompts (e.g., `@services/api-router-service`).

@@ -66,12 +66,6 @@ credential rotation, sync triggers, and exports.`,
 			os.Exit(cliErr.ExitCode)
 		}
 		
-		// Handle usage errors from Cobra (typically exit code 2)
-		if _, ok := err.(*cobra.CommandError); ok || err == cobra.ErrSubCommandRequired {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(2) // Usage error
-		}
-		
 		// Default to exit code 1 for unknown errors
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)

@@ -1,0 +1,52 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: api-router-service-development
+  namespace: argocd
+  labels:
+    environment: development
+    app: api-router-service
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform-development
+  source:
+    repoURL: https://github.com/otherjamesbrown/ai-aas
+    targetRevision: main
+    path: services/api-router-service/deployments/helm/api-router-service
+    helm:
+      valueFiles:
+        - values.yaml
+      values: |
+        image:
+          repository: ghcr.io/otherjamesbrown/api-router-service
+          tag: latest
+          pullPolicy: Always
+        env:
+          - name: ENVIRONMENT
+            value: development
+          - name: LOG_LEVEL
+            value: info
+        service:
+          type: ClusterIP
+          port: 8080
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: development
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+

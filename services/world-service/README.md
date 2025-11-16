@@ -1,31 +1,29 @@
-# world-service
+# World Service
 
-# world-service
+The `world-service` is an example service that demonstrates how to build a new service within the platform's architecture.
 
-Generated via `make service-new NAME=world-service`.
+## Purpose
 
-## Local Development
+This service is a template for creating new services. It shows how to use the shared libraries and how to integrate with the platform's infrastructure.
 
-```bash
-make build
-make test
-make check
-```
+## Running the Service
 
-## Usage
+To run the service locally, you first need to start the local development environment:
 
 ```bash
-WORLD_SERVICE_ADDR=":8090" go run ./cmd/world-service &
-curl http://localhost:8090/world
+make up
 ```
 
-Example response:
+Then, you can run the service with the following command:
 
-```json
-{
-  "message": "Hello, world-service!",
-  "timestamp": "2025-11-08T12:34:56Z"
-}
+```bash
+go run ./services/world-service/cmd/server
 ```
 
-Stop the server with `Ctrl+C`. For customization, see `docs/services/customizing.md`.
+## Running Tests
+
+To run the tests for this service, use the following command:
+
+```bash
+make test SERVICE=world-service
+```
