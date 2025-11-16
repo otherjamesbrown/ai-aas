@@ -18,8 +18,10 @@ func TestCredentialsCommand(t *testing.T) {
 func TestCredentialsRotateCommand(t *testing.T) {
 	cmd := CredentialsCommand()
 	
-	rotateCmd := cmd.Commands()[0] // First subcommand should be rotate
-	require.NotNil(t, rotateCmd, "rotate command should exist")
+	// Find rotate command by name instead of index
+	rotateCmd, _, err := cmd.Find([]string{"rotate"})
+	require.NoError(t, err, "rotate command should exist")
+	require.NotNil(t, rotateCmd, "rotate command should not be nil")
 	assert.Equal(t, "rotate", rotateCmd.Use)
 
 	// Test flags
@@ -33,8 +35,10 @@ func TestCredentialsRotateCommand(t *testing.T) {
 func TestCredentialsBreakGlassCommand(t *testing.T) {
 	cmd := CredentialsCommand()
 	
-	breakGlassCmd := cmd.Commands()[1] // Second subcommand should be break-glass
-	require.NotNil(t, breakGlassCmd, "break-glass command should exist")
+	// Find break-glass command by name instead of index
+	breakGlassCmd, _, err := cmd.Find([]string{"break-glass"})
+	require.NoError(t, err, "break-glass command should exist")
+	require.NotNil(t, breakGlassCmd, "break-glass command should not be nil")
 	assert.Equal(t, "break-glass", breakGlassCmd.Use)
 
 	// Test flags
