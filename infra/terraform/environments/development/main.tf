@@ -76,3 +76,24 @@ module "argo_bootstrap" {
   revision    = "main"
   depends_on  = [null_resource.prepare_output]
 }
+
+# Dev workspace module (optional, provisioned per developer)
+# Usage: Set WORKSPACE_NAME and WORKSPACE_OWNER variables to provision
+module "dev_workspace" {
+  count  = var.enable_dev_workspace ? 1 : 0
+  source = "../../modules/dev-workspace"
+
+  workspace_name = var.workspace_name != "" ? var.workspace_name : "dev-${var.environment}"
+  region         = local.config.region
+  owner          = var.workspace_owner != "" ? var.workspace_owner : "unknown"
+  ttl_hours      = var.workspace_ttl_hours
+  instance_type  = var.workspace_instance_type
+  vlan_id        = var.workspace_vlan_id
+  ssh_keys       = var.workspace_ssh_keys
+  authorized_keys = var.workspace_authorized_keys
+
+  tags = [
+    "environment:${var.environment}",
+    "managed-by:terraform",
+  ]
+}

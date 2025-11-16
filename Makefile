@@ -266,3 +266,148 @@ infra-%: ## Run Terraform $* target (ENV=<environment>)
 		DESTROY_ARGS="$(DESTROY_ARGS)" \
 		DRIFT_ARGS="$(DRIFT_ARGS)"
 
+##@ Dev Environment - Remote Workspace
+
+# Remote workspace lifecycle commands with TTL enforcement and audit logging.
+# All operations are logged to ~/.ai-aas/workspace-audit.log for traceability.
+# TTL warnings are shown when workspace age approaches expiration (default: 24h).
+
+.PHONY: remote-provision remote-up remote-status remote-logs remote-stop remote-reset remote-destroy remote-secrets
+remote-provision: ## Provision remote workspace (WORKSPACE_NAME=, WORKSPACE_OWNER= required; default TTL: 24h)
+	@./scripts/dev/remote_provision.sh apply --workspace $(WORKSPACE_NAME) --owner $(WORKSPACE_OWNER)
+
+remote-up: ## Start dev stack on remote workspace (WORKSPACE_HOST=, WORKSPACE_NAME= required)
+	@./scripts/dev/remote_lifecycle.sh up --workspace-host $(WORKSPACE_HOST) --workspace $(WORKSPACE_NAME)
+
+remote-status: ## Check remote workspace status (WORKSPACE_HOST=, WORKSPACE_NAME= required; JSON=true for JSON output)
+	@./scripts/dev/remote_lifecycle.sh status --workspace-host $(WORKSPACE_HOST) --workspace $(WORKSPACE_NAME) $(if $(JSON),--json,)
+
+remote-logs: ## View logs from remote workspace (WORKSPACE_HOST=, WORKSPACE_NAME= required; COMPONENT= optional)
+	@./scripts/dev/remote_lifecycle.sh logs --workspace-host $(WORKSPACE_HOST) --workspace $(WORKSPACE_NAME) $(if $(COMPONENT),--component $(COMPONENT),)
+
+remote-stop: ## Stop dev stack on remote workspace (WORKSPACE_HOST=, WORKSPACE_NAME= required; alias for remote-down)
+	@./scripts/dev/remote_lifecycle.sh stop --workspace-host $(WORKSPACE_HOST) --workspace $(WORKSPACE_NAME)
+
+remote-reset: ## Reset remote dev stack (WORKSPACE_HOST=, WORKSPACE_NAME= required; removes all data, enforces 90-day log retention)
+	@./scripts/dev/remote_lifecycle.sh reset --workspace-host $(WORKSPACE_HOST) --workspace $(WORKSPACE_NAME)
+
+remote-destroy: ## Destroy remote workspace completely (WORKSPACE_HOST=, WORKSPACE_NAME= required; stops stack, removes data, cleans systemd)
+	@./scripts/dev/remote_lifecycle.sh destroy --workspace-host $(WORKSPACE_HOST) --workspace $(WORKSPACE_NAME)
+
+remote-secrets: ## Sync secrets from GitHub to .env files (WORKSPACE_NAME= optional)
+	@cd cmd/secrets-sync && go run . --verbose $(if $(WORKSPACE_NAME),--workspace $(WORKSPACE_NAME),)
+
+.PHONY: dev-status
+dev-status: ## Check dev stack component health (MODE=local|remote; HOST= required for remote; JSON=true for JSON; --diagnose for diagnostics)
+	@cd cmd/dev-status && go run . --mode $(if $(MODE),$(MODE),local) $(if $(HOST),--host $(HOST),) $(if $(JSON),--json,) $(if $(HUMAN),--human,) $(if $(DIAGNOSE),--diagnose,)
+
+##@ Dev Environment - Local Development
+
+# Local development stack lifecycle commands.
+# Port conflicts are detected and remediation guidance is provided via 'make diagnose'.
+# Use environment variables to override default ports (see .specify/local/ports.yaml).
+
+.PHONY: up status logs stop reset seed-data diagnose
+up: ## Start local dev stack (postgres, redis, nats, minio, mock-inference)
+	@./scripts/dev/local_lifecycle.sh up
+
+status: ## Check local dev stack status (JSON=true for JSON output; use 'make diagnose' for detailed diagnostics)
+	@./scripts/dev/local_lifecycle.sh status $(if $(JSON),--json,)
+
+logs: ## View logs from local dev stack (COMPONENT= optional; e.g., COMPONENT=postgres)
+	@./scripts/dev/local_lifecycle.sh logs $(if $(COMPONENT),--component $(COMPONENT),)
+
+logs-view: ## View logs via Loki/Grafana (SERVICE= optional service name; opens Grafana Explore or provides Loki query URL)
+	@./scripts/dev/log-view.sh $(if $(SERVICE),SERVICE=$(SERVICE),)
+
+logs-tail: ## Tail logs from Docker Compose services (SERVICE= optional service name; follows logs by default)
+	@./scripts/dev/log-tail.sh $(if $(SERVICE),SERVICE=$(SERVICE),) --follow
+
+logs-service: ## View logs for specific service from Loki (SERVICE= required service name)
+	@if [ -z "$(SERVICE)" ]; then \
+		echo "Error: SERVICE is required"; \
+		echo "Usage: make logs-service SERVICE=user-org-service"; \
+		exit 1; \
+	fi
+	@./scripts/dev/log-view.sh SERVICE=$(SERVICE)
+
+logs-error: ## Filter logs for error level entries (SERVICE= optional service name)
+	@if [ -n "$(SERVICE)" ]; then \
+		./scripts/dev/log-tail.sh SERVICE=$(SERVICE) --follow | grep -i "error\|fatal\|panic" || true; \
+	else \
+		./scripts/dev/log-tail.sh --follow | grep -i "error\|fatal\|panic" || true; \
+	fi
+
+logs-verbose: ## Set LOG_LEVEL=debug and restart services (requires services to be running)
+	@echo "Setting LOG_LEVEL=debug in environment..."
+	@export LOG_LEVEL=debug
+	@echo "Note: Services need to be restarted to pick up LOG_LEVEL change"
+	@echo "Run: make stop && make up"
+	@echo "Or restart specific service: docker compose -f .dev/compose/compose.base.yaml -f .dev/compose/compose.local.yaml restart <service>"
+
+stop: ## Stop local dev stack (graceful shutdown)
+	@./scripts/dev/local_lifecycle.sh down
+
+reset: ## Reset local dev stack (stops stack, removes volumes/data, restarts, re-seeds sample data)
+	@./scripts/dev/local_lifecycle.sh reset
+
+seed-data: ## Seed local database with sample data (.dev/data/seed.sql)
+	@./scripts/dev/local_lifecycle.sh seed-data
+
+diagnose: ## Diagnose local dev stack (check port conflicts, config files, Docker network; provides remediation guidance)
+	@./scripts/dev/local_lifecycle.sh diagnose
+
+##@ Environment Management
+
+env-activate: ## Activate environment profile (ENVIRONMENT=local-dev|remote-dev|production)
+	@if [ -z "$(ENVIRONMENT)" ]; then \
+		echo "Error: ENVIRONMENT is required"; \
+		echo "Usage: make env-activate ENVIRONMENT=local-dev"; \
+		exit 1; \
+	fi
+	@./configs/manage-env.sh activate $(ENVIRONMENT)
+
+env-show: ## Show current environment configuration (COMPONENT=optional component name)
+	@./configs/manage-env.sh show $(if $(COMPONENT),$(COMPONENT),)
+
+env-list: ## List available environment profiles
+	@./configs/manage-env.sh list
+
+env-validate: ## Validate current environment profile configuration
+	@./configs/manage-env.sh validate
+
+env-diff: ## Compare two environment profiles (ENV1=<env1> ENV2=<env2>)
+	@if [ -z "$(ENV1)" ] || [ -z "$(ENV2)" ]; then \
+		echo "Error: ENV1 and ENV2 are required"; \
+		echo "Usage: make env-diff ENV1=local-dev ENV2=remote-dev"; \
+		exit 1; \
+	fi
+	@./configs/manage-env.sh diff $(ENV1) $(ENV2)
+
+env-export: ## Export environment variables (FORMAT=env|yaml|json, default: env)
+	@./configs/manage-env.sh export $(if $(FORMAT),$(FORMAT),env)
+
+env-component-status: ## Show status of all components in current environment
+	@./configs/manage-env.sh component-status
+
+env-sync: ## Sync environment variables to active profile (updates .env.* files)
+	@./configs/manage-env.sh sync
+
+secrets-sync: ## Sync secrets for active environment (MODE=local|remote|production, default: from active env)
+	@if [ -z "$(MODE)" ]; then \
+		if [ ! -f configs/environments/.current-env ]; then \
+			echo "Error: No environment activated. Run 'make env-activate ENVIRONMENT=local-dev' first"; \
+			exit 1; \
+		fi; \
+		CURRENT_ENV=$$(cat configs/environments/.current-env); \
+		if [ "$$CURRENT_ENV" = "local-dev" ]; then \
+			./scripts/secrets/sync.sh local || echo "Secrets sync not implemented yet"; \
+		elif [ "$$CURRENT_ENV" = "remote-dev" ]; then \
+			./scripts/secrets/sync.sh remote || echo "Secrets sync not implemented yet"; \
+		else \
+			./scripts/secrets/sync.sh production || echo "Secrets sync not implemented yet"; \
+		fi; \
+	else \
+		./scripts/secrets/sync.sh $(MODE) || echo "Secrets sync not implemented yet"; \
+	fi
+
