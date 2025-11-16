@@ -45,7 +45,6 @@ jobs:
           cache-dependency-path: '**/pnpm-lock.yaml'
 
       - name: Install dependencies
-        working-directory: web/portal
         run: pnpm install --frozen-lockfile
 
       - name: Run ESLint
@@ -73,7 +72,6 @@ jobs:
           cache-dependency-path: '**/pnpm-lock.yaml'
 
       - name: Install dependencies
-        working-directory: web/portal
         run: pnpm install --frozen-lockfile
 
       - name: Run unit tests
@@ -101,7 +99,6 @@ jobs:
           cache-dependency-path: '**/pnpm-lock.yaml'
 
       - name: Install dependencies
-        working-directory: web/portal
         run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browsers
