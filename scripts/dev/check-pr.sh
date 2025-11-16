@@ -26,6 +26,12 @@ if ! command -v gh >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! command -v jq >/dev/null 2>&1; then
+  echo -e "${RED}❌ jq is required for parsing JSON output.${NC}"
+  echo "   Install: https://stedolan.github.io/jq/download/"
+  exit 1
+fi
+
 if ! gh auth status >/dev/null 2>&1; then
   echo -e "${RED}❌ GitHub CLI not authenticated${NC}"
   echo "   Run: gh auth login"
@@ -105,8 +111,9 @@ CHECK_OUTPUT=$(gh pr checks $PR_NUMBER 2>&1 || echo "")
 if [ -n "$CHECK_OUTPUT" ]; then
   echo "$CHECK_OUTPUT"
   
-  FAILED_COUNT=$(echo "$CHECK_OUTPUT" | grep -i "fail" | wc -l || echo "0")
-  if [ "$FAILED_COUNT" -gt 0 ]; then
+  # Count failed checks more robustly (check for "fail" status, not just the word "fail")
+  FAILED_COUNT=$(echo "$CHECK_OUTPUT" | awk '$2 ~ /fail|failure/ {count++} END {print count+0}')
+  if [ "${FAILED_COUNT:-0}" -gt 0 ]; then
     echo ""
     echo -e "${RED}⚠️  Found ${FAILED_COUNT} failing check(s)${NC}"
     echo ""

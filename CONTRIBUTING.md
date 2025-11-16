@@ -36,7 +36,9 @@ We welcome contributions from everyone. Here are some guidelines to follow.
 *   `make test`: Run unit tests.
 *   `make up`: Start the local development environment.
 *   `make stop`: Stop the local development environment.
-*   `make logs`: View logs from the local development stack.# Tooling Version Management
+*   `make logs`: View logs from the local development stack.
+
+## Tooling Version Management
 
 This repository centralizes all automation tool versions in `configs/tool-versions.mk`.  
 Teams MUST update that manifest whenever bumping the supported toolchain.

@@ -69,8 +69,7 @@
 
 Update this guide whenever roles, durations, or tooling change to keep downstream specs aligned.
 
-\n## Linode Access Setup\n
-# Linode Access Setup
+## Linode Access Setup
 
 Automation requires API access to Akamai Linode services:
 

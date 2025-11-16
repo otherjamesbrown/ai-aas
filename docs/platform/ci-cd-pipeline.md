@@ -80,6 +80,6 @@ This ensures that PRs cannot be merged unless all CI checks pass, preventing bro
 ## GitOps & ArgoCD
 
 - GitOps repository structure resides under `gitops/`.
-- Bootstrap ArgoCD per cluster with `./scripts/gitops/bootstrap_argocod.sh <environment> <kube-context>`.
+- Bootstrap ArgoCD per cluster with `./scripts/gitops/bootstrap_argocd.sh <environment> <kube-context>`.
 - Register this repository using `argocd repo add` and sync `platform-<env>-infrastructure` applications after each promotion.
 - Customize `gitops/templates/argocd-values.yaml` (ingress, service type, RBAC) and rerun the bootstrap script to apply changes.
