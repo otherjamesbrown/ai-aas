@@ -166,6 +166,124 @@ validate() {
     fi
 }
 
+# Resolve component field value
+resolve_component_field() {
+    local env_file=$1
+    local component=$2
+    local field=$3
+    
+    # Check if component exists in current profile
+    local value=$(yq eval ".components.$component.$field // \"\"" "$env_file" 2>/dev/null)
+    
+    # If not found and profile extends base, check base.yaml
+    if [[ -z "$value" ]] || [[ "$value" == "null" ]]; then
+        local extends=$(yq eval '.metadata.extends // ""' "$env_file" 2>/dev/null)
+        if [[ -n "$extends" ]] && [[ -f "$CONFIG_DIR/$extends.yaml" ]]; then
+            value=$(yq eval ".components.$component.$field // \"\"" "$CONFIG_DIR/$extends.yaml" 2>/dev/null)
+        fi
+    fi
+    
+    echo "$value"
+}
+
+# Resolve component template with substitutions
+resolve_component_template() {
+    local env_file=$1
+    local component=$2
+    local template_name=$3
+    local overrides_yaml=${4:-}
+    
+    # Get template from component
+    local template=$(resolve_component_field "$env_file" "$component" "$template_name")
+    
+    if [[ -z "$template" ]] || [[ "$template" == "null" ]]; then
+        return 1
+    fi
+    
+    # Get component values
+    local host=$(resolve_component_field "$env_file" "$component" "host")
+    local port=$(resolve_component_field "$env_file" "$component" "port")
+    local database=$(resolve_component_field "$env_file" "$component" "database")
+    local username=$(resolve_component_field "$env_file" "$component" "username")
+    local password=$(resolve_component_field "$env_file" "$component" "password")
+    local sslmode=$(resolve_component_field "$env_file" "$component" "sslmode")
+    local client_port=$(resolve_component_field "$env_file" "$component" "client_port")
+    local api_port=$(resolve_component_field "$env_file" "$component" "api_port")
+    local db=$(resolve_component_field "$env_file" "$component" "db")
+    
+    # Apply overrides if provided
+    if [[ -n "$overrides_yaml" ]]; then
+        local override_db=$(echo "$overrides_yaml" | yq eval '.database // ""' 2>/dev/null)
+        if [[ -n "$override_db" ]]; then
+            database="$override_db"
+        fi
+    fi
+    
+    # Handle password from environment variable if password_env is set
+    local password_env=$(resolve_component_field "$env_file" "$component" "password_env")
+    if [[ -n "$password_env" ]] && [[ -f ".env.local" ]]; then
+        local env_password=$(grep "^${password_env}=" ".env.local" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'")
+        if [[ -n "$env_password" ]]; then
+            password="$env_password"
+        fi
+    fi
+    
+    # Substitute template variables
+    template="${template//\{host\}/$host}"
+    template="${template//\{port\}/$port}"
+    template="${template//\{database\}/$database}"
+    template="${template//\{username\}/$username}"
+    template="${template//\{password\}/$password}"
+    template="${template//\{sslmode\}/$sslmode}"
+    template="${template//\{client_port\}/$client_port}"
+    template="${template//\{api_port\}/$api_port}"
+    template="${template//\{db\}/$db}"
+    
+    echo "$template"
+}
+
+# Resolve environment variable value (handles component references, templates, and simple values)
+resolve_env_var_value() {
+    local env_file=$1
+    local var_name=$2
+    
+    # Get variable definition
+    local has_component=$(yq eval ".environment_variables[] | select(.name == \"$var_name\") | has(\"component\")" "$env_file" 2>/dev/null)
+    local component=$(yq eval ".environment_variables[] | select(.name == \"$var_name\") | .component // \"\"" "$env_file" 2>/dev/null)
+    local template=$(yq eval ".environment_variables[] | select(.name == \"$var_name\") | .from_template // \"\"" "$env_file" 2>/dev/null)
+    local field=$(yq eval ".environment_variables[] | select(.name == \"$var_name\") | .field // \"\"" "$env_file" 2>/dev/null)
+    local value=$(yq eval ".environment_variables[] | select(.name == \"$var_name\") | .value // \"\"" "$env_file" 2>/dev/null)
+    local overrides=$(yq eval ".environment_variables[] | select(.name == \"$var_name\") | .overrides // {}" "$env_file" 2>/dev/null)
+    
+    # If explicit value is provided, use it (highest priority)
+    if [[ -n "$value" ]] && [[ "$value" != "null" ]]; then
+        echo "$value"
+        return 0
+    fi
+    
+    # If component reference exists
+    if [[ "$has_component" == "true" ]] && [[ -n "$component" ]]; then
+        # If template is specified, resolve template
+        if [[ -n "$template" ]] && [[ "$template" != "null" ]]; then
+            resolve_component_template "$env_file" "$component" "$template" "$overrides"
+            return $?
+        fi
+        
+        # If field is specified, get field value
+        if [[ -n "$field" ]] && [[ "$field" != "null" ]]; then
+            resolve_component_field "$env_file" "$component" "$field"
+            return $?
+        fi
+        
+        # Default: try to get value from component (fallback)
+        resolve_component_field "$env_file" "$component" "value"
+        return $?
+    fi
+    
+    # No resolution possible
+    return 1
+}
+
 export_env() {
     local format=${1:-env}
     
@@ -186,8 +304,13 @@ export_env() {
             echo "# Generated at: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
             echo ""
             
-            # Export environment variables from profile
-            yq eval '.environment_variables[] | "export \(.name)=\"\(.value // "")\""' "$env_file" 2>/dev/null | grep -v "^export $"
+            # Export environment variables from profile (with component/template resolution)
+            while IFS= read -r var_name; do
+                var_value=$(resolve_env_var_value "$env_file" "$var_name")
+                if [[ $? -eq 0 ]] && [[ -n "$var_value" ]]; then
+                    echo "export ${var_name}=\"${var_value}\""
+                fi
+            done < <(yq eval '.environment_variables[].name' "$env_file" 2>/dev/null)
             ;;
         yaml)
             cat "$env_file"
@@ -223,10 +346,12 @@ generate_env_file() {
         echo "# DO NOT EDIT MANUALLY - changes will be overwritten"
         echo ""
         
-        # Export environment variables
+        # Export environment variables (with component/template resolution)
         while IFS= read -r var_name; do
-            var_value=$(yq eval ".environment_variables[] | select(.name == \"$var_name\") | .value // \"\"" "$env_file" 2>/dev/null)
-            echo "${var_name}=${var_value}"
+            var_value=$(resolve_env_var_value "$env_file" "$var_name")
+            if [[ $? -eq 0 ]] && [[ -n "$var_value" ]]; then
+                echo "${var_name}=${var_value}"
+            fi
         done < <(yq eval '.environment_variables[].name' "$env_file" 2>/dev/null)
         
         # Add secrets (these come from .env.local if it exists, or use defaults)

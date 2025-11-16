@@ -66,7 +66,23 @@ fi
 WORKSPACE_DIR="/opt/ai-aas/dev-stack"
 log "Creating workspace directory: ${WORKSPACE_DIR}"
 mkdir -p "${WORKSPACE_DIR}"/{compose,data,logs,config}
+mkdir -p /etc/ai-aas
 chmod 755 "${WORKSPACE_DIR}"
+
+# Create workspace metadata file with TTL information
+log "Creating workspace metadata..."
+cat > /etc/ai-aas/workspace-metadata.json <<EOF
+{
+  "workspace_name": "${WORKSPACE_NAME}",
+  "owner": "${OWNER}",
+  "ttl_hours": ${TTL_HOURS},
+  "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "created_at_unix": $(date +%s),
+  "expires_at_unix": $(($(date +%s) + TTL_HOURS * 3600))
+}
+EOF
+chmod 644 /etc/ai-aas/workspace-metadata.json
+log "Workspace metadata created: TTL=${TTL_HOURS}h"
 
 # Install Vector agent (lightweight log shipper)
 VECTOR_VERSION="0.38.1"
@@ -162,23 +178,131 @@ log "Creating TTL cleanup script..."
 cat > /usr/local/bin/workspace-cleanup.sh <<'EOF'
 #!/bin/bash
 # TTL-based cleanup script for workspace teardown
-# Called by cron or systemd timer
+# Called by systemd timer or cron
 
-TTL_HOURS="${UDF_TTL_HOURS:-24}"
-WORKSPACE_NAME="${UDF_WORKSPACE_NAME:-unknown}"
+set -euo pipefail
 
-# Calculate expiration time (simplified - in production, parse from tags/metadata)
-# This is a placeholder; real implementation would check TTL from instance tags
+METADATA_FILE="/etc/ai-aas/workspace-metadata.json"
+LOG_TAG="workspace-cleanup"
 
 log() {
-  logger -t workspace-cleanup "[${WORKSPACE_NAME}] $*"
+  logger -t "${LOG_TAG}" "$*"
+  echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" >> /var/log/workspace-cleanup.log
 }
 
-log "TTL cleanup check for workspace (TTL: ${TTL_HOURS}h)"
-# Actual cleanup would trigger Terraform destroy or notify automation
-log "Cleanup logic would run here"
+# Load workspace metadata
+if [[ ! -f "${METADATA_FILE}" ]]; then
+  log "ERROR: Workspace metadata file not found: ${METADATA_FILE}"
+  exit 1
+fi
+
+WORKSPACE_NAME=$(jq -r '.workspace_name' "${METADATA_FILE}")
+OWNER=$(jq -r '.owner' "${METADATA_FILE}")
+TTL_HOURS=$(jq -r '.ttl_hours' "${METADATA_FILE}")
+CREATED_AT=$(jq -r '.created_at_unix' "${METADATA_FILE}")
+EXPIRES_AT=$(jq -r '.expires_at_unix' "${METADATA_FILE}")
+
+log "TTL cleanup check for workspace ${WORKSPACE_NAME} (TTL: ${TTL_HOURS}h, Owner: ${OWNER})"
+
+# Calculate current time and age
+NOW=$(date +%s)
+AGE_SECONDS=$((NOW - CREATED_AT))
+AGE_HOURS=$((AGE_SECONDS / 3600))
+TIME_UNTIL_EXPIRY=$((EXPIRES_AT - NOW))
+
+# Check if workspace has expired
+if [[ ${NOW} -ge ${EXPIRES_AT} ]]; then
+  log "WARNING: Workspace TTL expired! (Age: ${AGE_HOURS}h, TTL: ${TTL_HOURS}h)"
+  log "Initiating workspace destruction..."
+  
+  # Stop dev stack service
+  if systemctl is-active --quiet ai-aas-dev-stack.service; then
+    log "Stopping dev stack service..."
+    systemctl stop ai-aas-dev-stack.service || true
+  fi
+  
+  # Stop Docker Compose stack
+  if command -v docker >/dev/null 2>&1 && [[ -d /opt/ai-aas/dev-stack/compose ]]; then
+    log "Stopping Docker Compose stack..."
+    cd /opt/ai-aas/dev-stack/compose
+    docker compose -f compose.base.yaml -f compose.remote.yaml down -v || true
+  fi
+  
+  # Get Linode instance ID from metadata service or tags
+  # Linode instances can query their own metadata via http://169.254.169.254/latest/meta-data/
+  INSTANCE_ID=""
+  if command -v curl >/dev/null 2>&1; then
+    INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id 2>/dev/null || echo "")
+  fi
+  
+  # If we have Linode API token, attempt to destroy instance
+  # Otherwise, mark for manual cleanup
+  if [[ -n "${LINODE_TOKEN:-}" ]] && [[ -n "${INSTANCE_ID}" ]]; then
+    log "Attempting to destroy Linode instance ${INSTANCE_ID} via API..."
+    # Use Linode API to delete instance
+    # Note: This requires LINODE_TOKEN environment variable with appropriate permissions
+    curl -s -H "Authorization: Bearer ${LINODE_TOKEN}" \
+         -X DELETE \
+         "https://api.linode.com/v4/linode/instances/${INSTANCE_ID}" \
+         || log "WARNING: Failed to destroy instance via API (may require manual cleanup)"
+  else
+    log "WARNING: Cannot auto-destroy instance (missing LINODE_TOKEN or INSTANCE_ID)"
+    log "Instance should be destroyed manually via Terraform or Linode API"
+    log "Marking workspace as expired in metadata..."
+    jq '.expired = true | .expired_at = now' "${METADATA_FILE}" > "${METADATA_FILE}.tmp" && \
+      mv "${METADATA_FILE}.tmp" "${METADATA_FILE}"
+  fi
+  
+  # Send notification (if notification system configured)
+  log "Workspace ${WORKSPACE_NAME} has been cleaned up due to TTL expiration"
+  
+  exit 0
+else
+  # Workspace still valid
+  HOURS_REMAINING=$((TIME_UNTIL_EXPIRY / 3600))
+  log "Workspace still valid (Age: ${AGE_HOURS}h/${TTL_HOURS}h, ${HOURS_REMAINING}h remaining)"
+  
+  # Warn if approaching expiration (within 1 hour)
+  if [[ ${TIME_UNTIL_EXPIRY} -lt 3600 ]]; then
+    log "WARNING: Workspace expires in less than 1 hour!"
+  fi
+fi
 EOF
 chmod +x /usr/local/bin/workspace-cleanup.sh
+
+# Create systemd timer for TTL cleanup (runs every hour)
+log "Creating systemd timer for TTL cleanup..."
+cat > /etc/systemd/system/workspace-cleanup.timer <<'EOF'
+[Unit]
+Description=Workspace TTL Cleanup Timer
+After=network-online.target
+
+[Timer]
+OnBootSec=1h
+OnUnitActiveSec=1h
+AccuracySec=5m
+
+[Install]
+WantedBy=timers.target
+EOF
+
+cat > /etc/systemd/system/workspace-cleanup.service <<'EOF'
+[Unit]
+Description=Workspace TTL Cleanup Service
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/workspace-cleanup.sh
+StandardOutput=journal
+StandardError=journal
+EOF
+
+# Enable and start the timer
+systemctl daemon-reload
+systemctl enable workspace-cleanup.timer
+systemctl start workspace-cleanup.timer
+log "TTL cleanup timer enabled (runs every hour)"
 
 # Create status script for health checks
 log "Creating status check script..."

@@ -70,27 +70,6 @@ func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger *zap.Logger
 		logger:  logger,
 	}
 
-	// Handle CORS preflight for API key routes
-	apiKeyRoutes := []string{
-		"/organizations/me/api-keys",
-		"/organizations/me/api-keys/{apiKeyId}",
-	}
-	for _, route := range apiKeyRoutes {
-		router.Method("OPTIONS", route, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			origin := r.Header.Get("Origin")
-			if origin != "" && (origin == "http://localhost:5173" || origin == "https://localhost:5173" ||
-				(len(origin) >= 17 && origin[:17] == "http://localhost:") ||
-				(len(origin) >= 18 && origin[:18] == "https://localhost:")) {
-				w.Header().Set("Access-Control-Allow-Origin", origin)
-				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token, X-Correlation-ID")
-				w.Header().Set("Access-Control-Allow-Credentials", "true")
-				w.Header().Set("Access-Control-Max-Age", "3600")
-			}
-			w.WriteHeader(http.StatusNoContent)
-		}))
-	}
-
 	router.Post("/v1/orgs/{orgId}/service-accounts/{serviceAccountId}/api-keys", handler.IssueAPIKey)
 	router.Post("/v1/orgs/{orgId}/users/{userId}/api-keys", handler.IssueUserAPIKey)
 	router.Get("/v1/orgs/{orgId}/api-keys", handler.ListAPIKeys)

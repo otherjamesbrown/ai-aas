@@ -74,21 +74,6 @@ func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, idpRegistry *IdPRe
 	}
 	handler := &Handler{runtime: rt, idpRegistry: idpRegistry, logger: logger}
 	router.Route("/v1/auth", func(r chi.Router) {
-		// Handle CORS preflight for login route explicitly
-		r.Method("OPTIONS", "/login", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			origin := r.Header.Get("Origin")
-			if origin != "" && (origin == "http://localhost:5173" || origin == "https://localhost:5173" ||
-				(len(origin) >= 17 && origin[:17] == "http://localhost:") ||
-				(len(origin) >= 18 && origin[:18] == "https://localhost:")) {
-				w.Header().Set("Access-Control-Allow-Origin", origin)
-				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token, X-Correlation-ID")
-				w.Header().Set("Access-Control-Allow-Credentials", "true")
-				w.Header().Set("Access-Control-Max-Age", "3600")
-			}
-			w.WriteHeader(http.StatusNoContent)
-		}))
-
 		r.Post("/login", handler.Login)
 		r.Post("/refresh", handler.Refresh)
 		r.Post("/logout", handler.Logout)

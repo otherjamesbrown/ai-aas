@@ -73,65 +73,10 @@ services:
       - dev-network
 
   mock-inference:
-    image: python:3.11-slim
+    build:
+      context: ../mock-inference
+      dockerfile: Dockerfile
     container_name: dev-mock-inference
-    working_dir: /app
-    command:
-      - sh
-      - -c
-      - |
-        pip install --no-cache-dir fastapi uvicorn pydantic &&
-        python -c "
-        from fastapi import FastAPI, Request
-        from pydantic import BaseModel
-        import uvicorn
-        import asyncio
-        import time
-
-        app = FastAPI(title='Mock Inference Service')
-
-        class CompletionRequest(BaseModel):
-            prompt: str
-            max_tokens: int = 100
-            model: str = 'gpt-4o'
-
-        class CompletionResponse(BaseModel):
-            text: str
-            tokens_used: int
-            model: str
-
-        @app.post('/v1/completions')
-        async def completions(req: CompletionRequest, request: Request):
-            await asyncio.sleep(0.1)
-            tokens = len(req.prompt.split()) + 10
-            return CompletionResponse(
-                text=req.prompt + ' [mock inference response]',
-                tokens_used=min(tokens, req.max_tokens),
-                model=req.model
-            )
-
-        @app.post('/v1/chat/completions')
-        async def chat_completions(request: Request):
-            await asyncio.sleep(0.1)
-            return {
-                'choices': [{
-                    'message': {'role': 'assistant', 'content': '[mock chat response]'},
-                    'finish_reason': 'stop'
-                }],
-                'usage': {'total_tokens': 42}
-            }
-
-        @app.get('/health')
-        async def health():
-            return {'status': 'healthy', 'service': 'mock-inference'}
-
-        @app.get('/ready')
-        async def ready():
-            return {'ready': True}
-
-        if __name__ == '__main__':
-            uvicorn.run(app, host='0.0.0.0', port=8000)
-        "
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
@@ -182,7 +127,6 @@ services:
     command:
       - "grafana-server"
       - "--config=/etc/grafana/grafana.ini"
-      - "server"
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana-provisioning:/etc/grafana/provisioning:ro

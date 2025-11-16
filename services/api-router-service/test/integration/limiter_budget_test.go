@@ -106,9 +106,10 @@ func TestRateLimitExceeded(t *testing.T) {
 	}
 
 	// Send requests rapidly to exceed rate limit
-	// Assuming rate limit is 10 requests per second
+	// Rate limit is 10 RPS with burst 15, so we need to send more than 15 requests
+	// to exceed the burst limit and trigger a 429 response
 	rateLimitExceeded := false
-	for i := 0; i < 15; i++ {
+	for i := 0; i < 20; i++ {
 		req := httptest.NewRequest("POST", "/v1/inference", bytes.NewReader(jsonBody))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-API-Key", "dev-test-key")

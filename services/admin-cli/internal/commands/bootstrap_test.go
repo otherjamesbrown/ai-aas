@@ -1,15 +1,6 @@
 // Package commands provides tests for bootstrap command.
 package commands
 
-import (
-	"os"
-	"testing"
-
-	"github.com/spf13/cobra"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-)
-
 // TestBootstrapCommand is disabled - functionality tested in integration tests
 // func TestBootstrapCommand(t *testing.T) {
 // 	cmd := BootstrapCommand()

@@ -138,6 +138,27 @@ volumes:
       type: none
       o: bind
       device: /opt/ai-aas/dev-stack/data/minio
+  
+  loki-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/ai-aas/dev-stack/data/loki
+  
+  promtail-positions:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/ai-aas/dev-stack/data/promtail
+  
+  grafana-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/ai-aas/dev-stack/data/grafana
 
 # Ensure all services use the shared network
 networks:

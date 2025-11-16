@@ -84,12 +84,10 @@ func New(opts Options) *http.Server {
 		})
 	})
 
-	// Helper function to add CORS headers
+	// Helper function to add CORS headers (reuses isAllowedOrigin for consistency)
 	addCORSHeaders := func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
-		if origin != "" && (origin == "http://localhost:5173" || origin == "https://localhost:5173" ||
-			(len(origin) >= 17 && origin[:17] == "http://localhost:") ||
-			(len(origin) >= 18 && origin[:18] == "https://localhost:")) {
+		if isAllowedOrigin(origin) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token, X-Correlation-ID, X-API-Key")

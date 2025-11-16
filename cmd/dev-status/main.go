@@ -1,21 +1,23 @@
 // Command dev-status checks dependency health and outputs JSON status.
 //
 // Purpose:
-//   Polls dependency endpoints (PostgreSQL, Redis, NATS, MinIO, mock inference) and
-//   returns structured component states in JSON format for tooling consumption.
+//
+//	Polls dependency endpoints (PostgreSQL, Redis, NATS, MinIO, mock inference) and
+//	returns structured component states in JSON format for tooling consumption.
 //
 // Usage:
-//   dev-status [flags]
+//
+//	dev-status [flags]
 //
 // Flags:
-//   --mode MODE           Mode: remote or local (default: local)
-//   --host HOST           Remote workspace host (required for remote mode)
-//   --json                Output JSON format (default)
-//   --human               Output human-readable format
-//   --timeout SECONDS     Component check timeout (default: 2)
-//   --component NAME      Check specific component only
-//   --diagnose            Show diagnostic information (port conflicts, etc.)
 //
+//	--mode MODE           Mode: remote or local (default: local)
+//	--host HOST           Remote workspace host (required for remote mode)
+//	--json                Output JSON format (default)
+//	--human               Output human-readable format
+//	--timeout SECONDS     Component check timeout (default: 2)
+//	--component NAME      Check specific component only
+//	--diagnose            Show diagnostic information (port conflicts, etc.)
 package main
 
 import (
@@ -26,6 +28,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -44,20 +47,20 @@ type ComponentStatus struct {
 }
 
 type StatusOutput struct {
-	Timestamp string            `json:"timestamp"`
-	Mode      string            `json:"mode"`
+	Timestamp  string            `json:"timestamp"`
+	Mode       string            `json:"mode"`
 	Components []ComponentStatus `json:"components"`
-	Overall   string            `json:"overall"` // healthy, unhealthy, partial
+	Overall    string            `json:"overall"` // healthy, unhealthy, partial
 }
 
 var (
-	mode      string
-	host      string
-	jsonOutput bool
+	mode        string
+	host        string
+	jsonOutput  bool
 	humanOutput bool
-	timeout   int
-	component string
-	diagnose  bool
+	timeout     int
+	component   string
+	diagnose    bool
 )
 
 var rootCmd = &cobra.Command{
@@ -81,12 +84,12 @@ func init() {
 
 func runStatus(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
-	
+
 	// Handle diagnose mode
 	if diagnose {
 		return runDiagnose(cmd, args)
 	}
-	
+
 	var components []ComponentStatus
 
 	if mode == "remote" {
@@ -160,13 +163,13 @@ func checkLocalComponents(ctx context.Context, filter string) []ComponentStatus 
 
 	for _, name := range componentsToCheck {
 		status := checkComponent(ctx, name)
-		
+
 		// Override endpoint with port from config if available
 		if port, ok := portsMap[name]; ok && status.Endpoint != "" {
 			// Update endpoint port if it matches default
 			status.Endpoint = updateEndpointPort(status.Endpoint, port)
 		}
-		
+
 		components = append(components, status)
 	}
 
@@ -188,27 +191,27 @@ func loadPortMappings() map[string]string {
 	if ports["postgres"] == "" {
 		ports["postgres"] = "5432"
 	}
-	
+
 	ports["redis"] = os.Getenv("REDIS_PORT")
 	if ports["redis"] == "" {
 		ports["redis"] = "6379"
 	}
-	
+
 	ports["nats"] = os.Getenv("NATS_CLIENT_PORT")
 	if ports["nats"] == "" {
 		ports["nats"] = "4222"
 	}
-	
+
 	ports["minio"] = os.Getenv("MINIO_API_PORT")
 	if ports["minio"] == "" {
 		ports["minio"] = "9000"
 	}
-	
+
 	ports["mock-inference"] = os.Getenv("MOCK_INFERENCE_PORT")
 	if ports["mock-inference"] == "" {
 		ports["mock-inference"] = "8000"
 	}
-	
+
 	return ports
 }
 
@@ -239,28 +242,28 @@ type TTLWarning struct {
 
 func runDiagnose(cmd *cobra.Command, args []string) error {
 	var result DiagnosticResult
-	
+
 	if mode == "local" {
 		// Check port conflicts
 		result.PortConflicts = checkPortConflicts()
-		
+
 		// Check network issues
 		result.NetworkIssues = checkNetworkIssues()
-		
+
 		// Check config issues
 		result.ConfigIssues = checkConfigIssues()
 	} else if mode == "remote" {
 		if host == "" {
 			return errors.New("--host required for remote mode")
 		}
-		
+
 		// Check TTL warnings
 		result.TTLWarnings = checkRemoteTTL()
-		
+
 		// Remote network/config checks would go here
 		result.NetworkIssues = []string{"Remote diagnostics not fully implemented"}
 	}
-	
+
 	// Output diagnostic results
 	if humanOutput {
 		printDiagnosticHuman(result)
@@ -271,18 +274,18 @@ func runDiagnose(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("encode JSON: %w", err)
 		}
 	}
-	
+
 	// Exit with non-zero if issues found
 	if len(result.PortConflicts) > 0 || len(result.TTLWarnings) > 0 || len(result.NetworkIssues) > 0 || len(result.ConfigIssues) > 0 {
 		os.Exit(1)
 	}
-	
+
 	return nil
 }
 
 func checkPortConflicts() []PortConflict {
 	var conflicts []PortConflict
-	
+
 	// Default ports to check
 	ports := map[string]string{
 		"5432": "postgres",
@@ -293,7 +296,7 @@ func checkPortConflicts() []PortConflict {
 		"9001": "minio-console",
 		"8000": "mock-inference",
 	}
-	
+
 	// Check each port
 	for port, service := range ports {
 		conflict := checkPort(port, service)
@@ -301,7 +304,7 @@ func checkPortConflicts() []PortConflict {
 			conflicts = append(conflicts, *conflict)
 		}
 	}
-	
+
 	return conflicts
 }
 
@@ -312,21 +315,21 @@ func checkPort(port, service string) *PortConflict {
 		return nil // Port not in use
 	}
 	conn.Close()
-	
+
 	// Port is in use - check if it's Docker (placeholder, would check docker ps output)
 	dockerUsing := false
 	if dockerPs := os.Getenv("DOCKER_PS_CHECK"); dockerPs != "" {
 		dockerUsing = false // Placeholder
 	}
-	
+
 	if dockerUsing {
 		return nil // Docker is using it, not a conflict
 	}
-	
+
 	// Port conflict detected
-	remediation := fmt.Sprintf("Override port via environment variable: export %s_PORT=<alternate>", 
+	remediation := fmt.Sprintf("Override port via environment variable: export %s_PORT=<alternate>",
 		strings.ToUpper(strings.ReplaceAll(service, "-", "_")))
-	
+
 	return &PortConflict{
 		Port:        port,
 		Service:     service,
@@ -336,37 +339,37 @@ func checkPort(port, service string) *PortConflict {
 
 func checkRemoteTTL() []TTLWarning {
 	var warnings []TTLWarning
-	
+
 	// Placeholder: In real implementation, would SSH to remote and check TTL metadata
 	// For now, return empty (would need SSH integration)
-	
+
 	return warnings
 }
 
 func checkNetworkIssues() []string {
 	var issues []string
-	
+
 	// Check if Docker network exists
 	// Placeholder: Would check docker network ls
-	
+
 	return issues
 }
 
 func checkConfigIssues() []string {
 	var issues []string
-	
+
 	// Check if compose files exist
 	composeBase := ".dev/compose/compose.base.yaml"
 	composeLocal := ".dev/compose/compose.local.yaml"
-	
+
 	if _, err := os.Stat(composeBase); os.IsNotExist(err) {
 		issues = append(issues, fmt.Sprintf("Compose base file not found: %s", composeBase))
 	}
-	
+
 	if _, err := os.Stat(composeLocal); os.IsNotExist(err) {
 		issues = append(issues, fmt.Sprintf("Compose local override not found: %s", composeLocal))
 	}
-	
+
 	return issues
 }
 
@@ -378,7 +381,7 @@ func printDiagnosticHuman(result DiagnosticResult) {
 			fmt.Fprintf(os.Stderr, "    Remediation: %s\n", conflict.Remediation)
 		}
 	}
-	
+
 	if len(result.TTLWarnings) > 0 {
 		fmt.Fprintf(os.Stderr, "TTL Warnings:\n")
 		for _, warning := range result.TTLWarnings {
@@ -386,51 +389,81 @@ func printDiagnosticHuman(result DiagnosticResult) {
 			if !warning.Expired {
 				status = fmt.Sprintf("expires in %d hours", warning.TTLHours-warning.AgeHours)
 			}
-			fmt.Fprintf(os.Stderr, "  - Workspace %s: %s (age: %dh, TTL: %dh)\n", 
+			fmt.Fprintf(os.Stderr, "  - Workspace %s: %s (age: %dh, TTL: %dh)\n",
 				warning.Workspace, status, warning.AgeHours, warning.TTLHours)
 			fmt.Fprintf(os.Stderr, "    Remediation: %s\n", warning.Remediation)
 		}
 	}
-	
+
 	if len(result.NetworkIssues) > 0 {
 		fmt.Fprintf(os.Stderr, "Network Issues:\n")
 		for _, issue := range result.NetworkIssues {
 			fmt.Fprintf(os.Stderr, "  - %s\n", issue)
 		}
 	}
-	
+
 	if len(result.ConfigIssues) > 0 {
 		fmt.Fprintf(os.Stderr, "Config Issues:\n")
 		for _, issue := range result.ConfigIssues {
 			fmt.Fprintf(os.Stderr, "  - %s\n", issue)
 		}
 	}
-	
-	if len(result.PortConflicts) == 0 && len(result.TTLWarnings) == 0 && 
+
+	if len(result.PortConflicts) == 0 && len(result.TTLWarnings) == 0 &&
 		len(result.NetworkIssues) == 0 && len(result.ConfigIssues) == 0 {
 		fmt.Fprintf(os.Stderr, "No issues detected\n")
 	}
 }
 
 // updateEndpointPort updates the port in an endpoint URL/string
+// Uses proper URL parsing to avoid false matches (e.g., version numbers in paths)
 func updateEndpointPort(endpoint, newPort string) string {
-	// Simple port replacement for common formats
-	// postgres://host:oldport/db -> postgres://host:newport/db
-	// localhost:oldport -> localhost:newport
-	// http://localhost:oldport -> http://localhost:newport
-	
-	if strings.Contains(endpoint, ":") {
-		// Try to replace port number in endpoint
-		re := regexp.MustCompile(`:\d+`)
-		return re.ReplaceAllString(endpoint, ":"+newPort)
+	// Try to parse as URL first
+	if u, err := url.Parse(endpoint); err == nil && u.Host != "" {
+		// URL has a host component - update port properly
+		host, _, err := net.SplitHostPort(u.Host)
+		if err == nil {
+			// Host already has a port, replace it
+			u.Host = net.JoinHostPort(host, newPort)
+		} else {
+			// Host doesn't have a port, add it
+			u.Host = net.JoinHostPort(u.Host, newPort)
+		}
+		return u.String()
 	}
-	
+
+	// Fallback: Try to parse as host:port (no scheme)
+	if host, oldPort, err := net.SplitHostPort(endpoint); err == nil {
+		// Valid host:port format - replace port
+		return net.JoinHostPort(host, newPort)
+	}
+
+	// Fallback: Use regex only for simple hostname:port or IP:port patterns
+	// This prevents false matches with version numbers in paths (e.g., /api/v1:1234/)
+	// Only match if the pattern starts with hostname/IP:port (not in middle of path)
+	// Note: This fallback should rarely be needed since URL parsing handles most cases
+	if strings.Contains(endpoint, ":") {
+		// Match hostname:port or IP:port at the start (no leading slash or path)
+		// Pattern ensures we only match at the very start, not after a path separator
+		// This prevents matching version numbers like /api/v1:1234
+		re := regexp.MustCompile(`^((?:https?://)?)([a-zA-Z0-9.-]+|localhost|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):\d+(/|$|\?|#)`)
+		if re.MatchString(endpoint) {
+			// Replace scheme+hostname:oldport with scheme+hostname:newport
+			return re.ReplaceAllString(endpoint, "${1}${2}:"+newPort+"${3}")
+		}
+		// Also handle case where port is at end of string (no trailing path)
+		re2 := regexp.MustCompile(`^((?:https?://)?)([a-zA-Z0-9.-]+|localhost|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):\d+$`)
+		if re2.MatchString(endpoint) {
+			return re2.ReplaceAllString(endpoint, "${1}${2}:"+newPort)
+		}
+	}
+
 	return endpoint
 }
 
 func checkComponent(ctx context.Context, name string) ComponentStatus {
 	start := time.Now()
-	
+
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 	defer cancel()
 
@@ -659,7 +692,7 @@ func printHumanOutput(output StatusOutput) {
 	fmt.Printf("Mode: %s\n", output.Mode)
 	fmt.Printf("Timestamp: %s\n", output.Timestamp)
 	fmt.Printf("Overall: %s\n\n", output.Overall)
-	
+
 	fmt.Printf("Components:\n")
 	for _, c := range output.Components {
 		statusIcon := "✓"
@@ -683,7 +716,7 @@ func captureLocalTelemetry(output StatusOutput) {
 	// Calculate aggregate metrics
 	totalLatency := int64(0)
 	healthyCount := 0
-	
+
 	for _, c := range output.Components {
 		totalLatency += c.LatencyMs
 		if c.State == "healthy" {
@@ -697,9 +730,9 @@ func captureLocalTelemetry(output StatusOutput) {
 	}
 
 	metrics := map[string]interface{}{
-		"timestamp":      output.Timestamp,
-		"mode":           "local",
-		"overall":        output.Overall,
+		"timestamp":        output.Timestamp,
+		"mode":             "local",
+		"overall":          output.Overall,
 		"total_latency_ms": totalLatency,
 		"avg_latency_ms":   avgLatency,
 		"healthy_count":    healthyCount,
@@ -724,4 +757,3 @@ func main() {
 		os.Exit(1)
 	}
 }
-
