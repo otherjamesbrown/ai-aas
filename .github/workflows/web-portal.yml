@@ -20,6 +20,8 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/web-portal
+  NODE_VERSION: '20'
+  PNPM_VERSION: 8
 
 jobs:
   lint:
@@ -33,12 +35,12 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v3
         with:
-          version: 8
+          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
           cache-dependency-path: web/portal/pnpm-lock.yaml
 
@@ -61,12 +63,12 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v3
         with:
-          version: 8
+          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
           cache-dependency-path: web/portal/pnpm-lock.yaml
 
@@ -89,12 +91,12 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v3
         with:
-          version: 8
+          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
           cache-dependency-path: web/portal/pnpm-lock.yaml
 
@@ -106,13 +108,17 @@ jobs:
         working-directory: web/portal
         run: pnpm exec playwright install --with-deps chromium
 
+      - name: Build the application
+        working-directory: web/portal
+        run: pnpm build
+
       - name: Run E2E tests
         working-directory: web/portal
         env:
           CI: true
           PLAYWRIGHT_HEADLESS: true
-          SKIP_WEBSERVER: false
-        run: pnpm test:e2e
+          VITE_USER_ORG_SERVICE_URL: ${{ secrets.VITE_USER_ORG_SERVICE_URL_E2E }}
+        run: pnpm exec playwright test
 
       - name: Upload test results
         if: always()
