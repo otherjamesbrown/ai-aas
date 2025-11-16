@@ -126,15 +126,13 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm --filter @ai-aas/web-portal exec playwright install --with-deps chromium
 
-      - name: Build the application
-        run: pnpm --filter @ai-aas/web-portal build
-
       - name: Run E2E tests
         env:
           CI: true
           PLAYWRIGHT_HEADLESS: true
-          VITE_USER_ORG_SERVICE_URL: ${{ secrets.VITE_USER_ORG_SERVICE_URL_E2E }}
-        run: pnpm --filter @ai-aas/web-portal exec playwright test
+          VITE_USE_HTTPS: 'false'
+          VITE_USER_ORG_SERVICE_URL: ${{ secrets.VITE_USER_ORG_SERVICE_URL_E2E || 'http://localhost:8081' }}
+        run: pnpm --filter @ai-aas/web-portal exec playwright test --project=chromium
 
   build:
     name: Build and Push Docker Image
