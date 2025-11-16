@@ -58,7 +58,6 @@ jobs:
       - name: Set build args
         id: build-args
         run: |
-          echo "user_org_service_url=${VITE_USER_ORG_SERVICE_URL:-http://localhost:8080}" >> $GITHUB_OUTPUT
           echo "api_base_url=${VITE_API_BASE_URL:-http://localhost:8080/api}" >> $GITHUB_OUTPUT
           echo "oauth_client_id=${VITE_OAUTH_CLIENT_ID:-}" >> $GITHUB_OUTPUT
           echo "oauth_issuer_url=${VITE_OAUTH_ISSUER_URL:-http://localhost:8080}" >> $GITHUB_OUTPUT
@@ -68,7 +67,6 @@ jobs:
           echo "otel_service_name=${VITE_OTEL_SERVICE_NAME:-web-portal}" >> $GITHUB_OUTPUT
           echo "otel_service_version=${VITE_OTEL_SERVICE_VERSION:-0.1.0}" >> $GITHUB_OUTPUT
         env:
-          VITE_USER_ORG_SERVICE_URL: ${{ secrets.VITE_USER_ORG_SERVICE_URL }}
           VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
           VITE_OAUTH_CLIENT_ID: ${{ secrets.VITE_OAUTH_CLIENT_ID }}
           VITE_OAUTH_ISSUER_URL: ${{ secrets.VITE_OAUTH_ISSUER_URL }}
@@ -90,7 +88,6 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64
           build-args: |
-            VITE_USER_ORG_SERVICE_URL=${{ steps.build-args.outputs.user_org_service_url }}
             VITE_API_BASE_URL=${{ steps.build-args.outputs.api_base_url }}
             VITE_OAUTH_CLIENT_ID=${{ steps.build-args.outputs.oauth_client_id }}
             VITE_OAUTH_ISSUER_URL=${{ steps.build-args.outputs.oauth_issuer_url }}

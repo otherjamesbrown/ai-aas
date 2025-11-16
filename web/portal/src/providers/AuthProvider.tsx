@@ -239,9 +239,11 @@ export function AuthProvider({
         loginPayload.client_id = oauthClientId;
       }
 
-      // Use user-org-service directly for login (same as API key operations)
-      const userOrgServiceUrl = import.meta.env.VITE_USER_ORG_SERVICE_URL || 'http://localhost:8081';
-      const loginUrl = `${userOrgServiceUrl}/v1/auth/login`;
+      // Use API router for authentication endpoints
+      // Extract base URL from VITE_API_BASE_URL (remove /api suffix if present)
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
+      const baseUrl = apiBaseUrl.replace(/\/api\/?$/, '');
+      const loginUrl = `${baseUrl}/v1/auth/login`;
       console.log('Attempting login to:', loginUrl);
       console.log('Login payload:', { email: loginPayload.email, hasPassword: !!loginPayload.password, orgId: loginPayload.org_id || 'none' });
       
@@ -298,10 +300,10 @@ export function AuthProvider({
           sessionStorage.setItem('refresh_token', response.data.refresh_token);
         }
 
-        // Fetch user info (use user-org-service directly)
+        // Fetch user info (use API router)
         // If this fails, we still have the token stored, so don't clear auth
         try {
-          const userInfoResponse = await axios.get<UserInfoResponse>(`${userOrgServiceUrl}/v1/auth/userinfo`, {
+          const userInfoResponse = await axios.get<UserInfoResponse>(`${baseUrl}/v1/auth/userinfo`, {
             headers: {
               Authorization: `Bearer ${response.data.access_token}`,
               'Content-Type': 'application/json',

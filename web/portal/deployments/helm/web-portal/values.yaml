@@ -59,8 +59,6 @@ env:
     value: "https://api.dev.ai-aas.local"
   - name: VITE_OAUTH_REDIRECT_URI
     value: "https://portal.dev.ai-aas.local/auth/callback"
-  - name: VITE_USER_ORG_SERVICE_URL
-    value: "https://api.dev.ai-aas.local"  # API router handles routing to user-org-service
   - name: VITE_FEATURE_FLAGS_API_URL
     value: "https://api.dev.ai-aas.local/api"
   - name: VITE_OTEL_EXPORTER_OTLP_ENDPOINT
