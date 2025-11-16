@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-server-ingress
+  namespace: argocd
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+spec:
+  ingressClassName: nginx
+  tls:
+    - secretName: ai-aas-tls
+      hosts:
+        - argocd.dev.ai-aas.local
+        - argocd.prod.ai-aas.local
+  rules:
+    - host: argocd.dev.ai-aas.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  number: 80
+
