@@ -1,28 +1,18 @@
 package logging
 
 import (
-	"os"
-	"strings"
-	"time"
-
-	"github.com/rs/zerolog"
+	"github.com/ai-aas/shared-go/logging"
+	"go.uber.org/zap"
 )
 
-// New builds a zerolog.Logger configured with the provided service metadata.
-func New(serviceName, level string) zerolog.Logger {
-	zerolog.TimeFieldFormat = time.RFC3339
+// New creates a logger using the shared logging package.
+// This is a compatibility wrapper that maintains the same function signature
+// while using the shared logging package internally.
+func New(serviceName, level string) *zap.Logger {
+	cfg := logging.DefaultConfig().
+		WithServiceName(serviceName).
+		WithLogLevel(level)
 
-	lvl, err := zerolog.ParseLevel(strings.ToLower(level))
-	if err != nil {
-		lvl = zerolog.InfoLevel
-	}
-
-	logger := zerolog.New(os.Stdout).
-		With().
-		Timestamp().
-		Str("service", serviceName).
-		Logger().
-		Level(lvl)
-
-	return logger
+	logger := logging.MustNew(cfg)
+	return logger.Logger
 }

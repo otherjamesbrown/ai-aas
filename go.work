@@ -15,6 +15,7 @@ use (
 	./services/analytics-service/test/perf
 	./services/api-router-service
 	./services/hello-service
+	./services/admin-cli
 	./services/user-org-service
 	./services/world-service
 	./shared/go

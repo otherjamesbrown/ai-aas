@@ -44,3 +44,52 @@ variable "region_overrides" {
   type        = map(string)
   default     = {}
 }
+
+# Dev workspace variables (optional)
+variable "enable_dev_workspace" {
+  description = "Enable dev workspace provisioning (default: false)"
+  type        = bool
+  default     = false
+}
+
+variable "workspace_name" {
+  description = "Workspace name identifier (e.g., dev-jab)"
+  type        = string
+  default     = ""
+}
+
+variable "workspace_owner" {
+  description = "Workspace owner (GitHub username)"
+  type        = string
+  default     = ""
+}
+
+variable "workspace_ttl_hours" {
+  description = "Workspace TTL in hours (default: 24)"
+  type        = number
+  default     = 24
+}
+
+variable "workspace_instance_type" {
+  description = "Linode instance type for workspace (default: g6-nanode-1)"
+  type        = string
+  default     = "g6-nanode-1"
+}
+
+variable "workspace_vlan_id" {
+  description = "Private VLAN ID for workspace (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "workspace_ssh_keys" {
+  description = "List of Linode SSH key IDs for workspace"
+  type        = list(string)
+  default     = []
+}
+
+variable "workspace_authorized_keys" {
+  description = "List of SSH public keys to authorize on workspace"
+  type        = list(string)
+  default     = []
+}

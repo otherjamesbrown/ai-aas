@@ -1,10 +1,11 @@
 // Package auth provides password recovery endpoints.
 //
 // Purpose:
-//   This package implements password recovery flows:
-//   - Initiate recovery (generate recovery token)
-//   - Verify recovery token
-//   - Reset password with recovery token
+//
+//	This package implements password recovery flows:
+//	- Initiate recovery (generate recovery token)
+//	- Verify recovery token
+//	- Reset password with recovery token
 //
 // Dependencies:
 //   - github.com/go-chi/chi/v5: HTTP router
@@ -19,7 +20,6 @@
 //
 // Requirements Reference:
 //   - specs/005-user-org-service/spec.md#FR-007 (Credential Recovery)
-//
 package auth
 
 import (
@@ -160,7 +160,7 @@ func (h *Handler) InitiateRecovery(w http.ResponseWriter, r *http.Request) {
 		"expires_at": time.Now().UTC().Add(24 * time.Hour).Format(time.RFC3339),
 		"used":       false,
 	}
-	
+
 	// Add admin approval status if required
 	if h.runtime.Config.RecoveryRequiresAdminApproval {
 		recoveryToken["status"] = "pending"
@@ -365,9 +365,9 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 
 	// Update password
 	updatedUser, err := h.runtime.Postgres.UpdateUserPasswordHash(ctx, postgres.UpdateUserPasswordHashParams{
-		OrgID:       orgID,
-		ID:          user.ID,
-		Version:     user.Version,
+		OrgID:        orgID,
+		ID:           user.ID,
+		Version:      user.Version,
 		PasswordHash: passwordHash,
 	})
 	if err != nil {
@@ -482,4 +482,3 @@ func (h *Handler) markRecoveryTokenAsUsed(tokens []string, token string) []strin
 	}
 	return result
 }
-

@@ -13,6 +13,7 @@
 .env
 .env.*
 migrate.env
+configs/environments/.current-env
 
 # Build outputs
 bin/
@@ -39,3 +40,5 @@ scripts/metrics/output/
 # Docker
 docker-compose.override.yml
 
+tmp_md
+go1.24.6.linux-amd64.tar.gz

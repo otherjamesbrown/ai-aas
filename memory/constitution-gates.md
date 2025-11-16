@@ -26,6 +26,7 @@ All implementation plans and specs MUST explicitly satisfy these gates or docume
 - Terraform for cloud; Helm for apps; ArgoCD for reconciliation.
 - Git is source of truth; no manual applies in production.
 - Hybrid mode: policies in Git, secrets/runtime via API; drift detection + restore.
+- Environment profiles (`configs/environments/*.yaml`) manage configurations declaratively; no hardcoded environment-specific values in service configs.
 
 ## Observability
 - `/health`, `/ready`, `/metrics` for every service.

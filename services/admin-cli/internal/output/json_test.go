@@ -33,7 +33,9 @@ func TestJSONFormatterError(t *testing.T) {
 	var buf bytes.Buffer
 	formatter := NewJSONFormatter(&buf)
 
-	err := formatter.WriteError("test-command", &testError{msg: "test error"}, "retry")
+	if err := formatter.WriteError("test-command", &testError{msg: "test error"}, "retry"); err != nil {
+		t.Fatalf("WriteError() failed: %v", err)
+	}
 
 	var output map[string]interface{}
 	if err := json.Unmarshal(buf.Bytes(), &output); err != nil {

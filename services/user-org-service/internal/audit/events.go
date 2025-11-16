@@ -1,14 +1,15 @@
 // Package audit provides audit event emission for the user-org service.
 //
 // Purpose:
-//   This package defines the audit event structure and provides an interface
-//   for emitting audit events to Kafka. It includes a logger-based stub
-//   implementation for development and testing, with a clear path to replace
-//   with Kafka producer in production.
+//
+//	This package defines the audit event structure and provides an interface
+//	for emitting audit events to Kafka. It includes a logger-based stub
+//	implementation for development and testing, with a clear path to replace
+//	with Kafka producer in production.
 //
 // Dependencies:
 //   - github.com/google/uuid: UUID generation for event IDs
-//   - github.com/rs/zerolog: Structured logging for stub implementation
+//   - go.uber.org/zap: Structured logging for stub implementation
 //   - github.com/segmentio/kafka-go: Kafka producer for audit event streaming
 //
 // Key Responsibilities:
@@ -30,7 +31,7 @@
 //
 // Thread Safety:
 //   - Emitter implementations must be safe for concurrent use
-//   - LoggerEmitter uses zerolog (thread-safe)
+//   - LoggerEmitter uses zap (thread-safe)
 //
 // Error Handling:
 //   - Emit methods return errors for production monitoring
@@ -50,29 +51,29 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
 	"github.com/segmentio/kafka-go"
+	"go.uber.org/zap"
 )
 
 // Event represents an audit event matching the data model schema.
 // All state-mutating operations should emit audit events for compliance.
 type Event struct {
-	EventID    uuid.UUID              `json:"event_id"`
-	OrgID      uuid.UUID              `json:"org_id"`
-	ActorID    uuid.UUID              `json:"actor_id"`
-	ActorType  string                 `json:"actor_type"` // "user", "service_account", "system"
-	TargetID   *uuid.UUID             `json:"target_id,omitempty"`
-	TargetType string                 `json:"target_type,omitempty"` // "org", "user", "api_key", etc.
-	Action     string                 `json:"action"`                 // "org.create", "user.invite", "user.suspend", etc.
-	Resource   string                 `json:"resource,omitempty"`     // Resource path or identifier
-	PolicyID   *uuid.UUID             `json:"policy_id,omitempty"`
-	IPAddress  string                 `json:"ip_address,omitempty"`
-	UserAgent  string                 `json:"user_agent,omitempty"`
-	Metadata   map[string]any          `json:"metadata,omitempty"`
-	Hash       string                  `json:"hash"`       // SHA256 of event payload (for tamper detection)
-	Signature  string                  `json:"signature"` // Reserved for Ed25519 signature (future)
-	DeliveredAt *time.Time             `json:"delivered_at,omitempty"`
-	CreatedAt  time.Time              `json:"created_at"`
+	EventID     uuid.UUID      `json:"event_id"`
+	OrgID       uuid.UUID      `json:"org_id"`
+	ActorID     uuid.UUID      `json:"actor_id"`
+	ActorType   string         `json:"actor_type"` // "user", "service_account", "system"
+	TargetID    *uuid.UUID     `json:"target_id,omitempty"`
+	TargetType  string         `json:"target_type,omitempty"` // "org", "user", "api_key", etc.
+	Action      string         `json:"action"`                // "org.create", "user.invite", "user.suspend", etc.
+	Resource    string         `json:"resource,omitempty"`    // Resource path or identifier
+	PolicyID    *uuid.UUID     `json:"policy_id,omitempty"`
+	IPAddress   string         `json:"ip_address,omitempty"`
+	UserAgent   string         `json:"user_agent,omitempty"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
+	Hash        string         `json:"hash"`      // SHA256 of event payload (for tamper detection)
+	Signature   string         `json:"signature"` // Reserved for Ed25519 signature (future)
+	DeliveredAt *time.Time     `json:"delivered_at,omitempty"`
+	CreatedAt   time.Time      `json:"created_at"`
 }
 
 // Emitter defines the interface for audit event emission.
@@ -87,26 +88,25 @@ type Emitter interface {
 // Useful for local development and testing. In production, replace with
 // KafkaEmitter for proper event streaming.
 type LoggerEmitter struct {
-	logger zerolog.Logger
+	logger *zap.Logger
 }
 
 // NewLoggerEmitter creates a logger-based audit emitter.
-func NewLoggerEmitter(logger zerolog.Logger) *LoggerEmitter {
-	return &LoggerEmitter{logger: logger.With().Str("component", "audit").Logger()}
+func NewLoggerEmitter(logger *zap.Logger) *LoggerEmitter {
+	return &LoggerEmitter{logger: logger.With(zap.String("component", "audit"))}
 }
 
 // Emit logs the audit event as structured JSON.
 // Never fails (best-effort logging for development).
 func (e *LoggerEmitter) Emit(ctx context.Context, event Event) error {
-	e.logger.Info().
-		Str("event_id", event.EventID.String()).
-		Str("org_id", event.OrgID.String()).
-		Str("actor_id", event.ActorID.String()).
-		Str("actor_type", event.ActorType).
-		Str("action", event.Action).
-		Str("target_type", event.TargetType).
-		Interface("metadata", event.Metadata).
-		Msg("audit event")
+	e.logger.Info("audit event",
+		zap.String("event_id", event.EventID.String()),
+		zap.String("org_id", event.OrgID.String()),
+		zap.String("actor_id", event.ActorID.String()),
+		zap.String("actor_type", event.ActorType),
+		zap.String("action", event.Action),
+		zap.String("target_type", event.TargetType),
+		zap.Any("metadata", event.Metadata))
 	return nil
 }
 
@@ -128,20 +128,20 @@ func (e *NoopEmitter) Emit(ctx context.Context, event Event) error {
 // Thread-safe and handles connection lifecycle automatically.
 type KafkaEmitter struct {
 	writer *kafka.Writer
-	logger zerolog.Logger
+	logger *zap.Logger
 	mu     sync.RWMutex
 }
 
 // NewKafkaEmitter creates a Kafka-based audit emitter.
 // The writer is configured for at-least-once delivery with automatic retries.
-func NewKafkaEmitter(brokers []string, topic, clientID string, logger zerolog.Logger) *KafkaEmitter {
+func NewKafkaEmitter(brokers []string, topic, clientID string, logger *zap.Logger) *KafkaEmitter {
 	writer := &kafka.Writer{
 		Addr:         kafka.TCP(brokers...),
 		Topic:        topic,
 		Balancer:     &kafka.LeastBytes{},
 		RequiredAcks: kafka.RequireOne, // Wait for leader acknowledgment
-		Async:        false,             // Synchronous writes for reliability
-		BatchSize:    1,                 // Send immediately (audit events are critical)
+		Async:        false,            // Synchronous writes for reliability
+		BatchSize:    1,                // Send immediately (audit events are critical)
 		BatchTimeout: 10 * time.Millisecond,
 		WriteTimeout: 5 * time.Second,
 		ReadTimeout:  5 * time.Second,
@@ -149,7 +149,7 @@ func NewKafkaEmitter(brokers []string, topic, clientID string, logger zerolog.Lo
 
 	return &KafkaEmitter{
 		writer: writer,
-		logger: logger.With().Str("component", "audit-kafka").Logger(),
+		logger: logger.With(zap.String("component", "audit-kafka")),
 	}
 }
 
@@ -168,7 +168,9 @@ func (e *KafkaEmitter) Emit(ctx context.Context, event Event) error {
 	// Serialize event to JSON
 	payload, err := json.Marshal(event)
 	if err != nil {
-		e.logger.Error().Err(err).Str("event_id", event.EventID.String()).Msg("failed to serialize audit event")
+		e.logger.Error("failed to serialize audit event",
+			zap.Error(err),
+			zap.String("event_id", event.EventID.String()))
 		return fmt.Errorf("serialize audit event: %w", err)
 	}
 
@@ -190,20 +192,18 @@ func (e *KafkaEmitter) Emit(ctx context.Context, event Event) error {
 	}
 
 	if err := writer.WriteMessages(ctx, message); err != nil {
-		e.logger.Error().
-			Err(err).
-			Str("event_id", event.EventID.String()).
-			Str("org_id", event.OrgID.String()).
-			Str("action", event.Action).
-			Msg("failed to write audit event to Kafka")
+		e.logger.Error("failed to write audit event to Kafka",
+			zap.Error(err),
+			zap.String("event_id", event.EventID.String()),
+			zap.String("org_id", event.OrgID.String()),
+			zap.String("action", event.Action))
 		return fmt.Errorf("write audit event to Kafka: %w", err)
 	}
 
-	e.logger.Debug().
-		Str("event_id", event.EventID.String()).
-		Str("org_id", event.OrgID.String()).
-		Str("action", event.Action).
-		Msg("audit event emitted to Kafka")
+	e.logger.Debug("audit event emitted to Kafka",
+		zap.String("event_id", event.EventID.String()),
+		zap.String("org_id", event.OrgID.String()),
+		zap.String("action", event.Action))
 
 	return nil
 }
@@ -225,7 +225,7 @@ func (e *KafkaEmitter) Close() error {
 
 // NewKafkaEmitterFromConfig creates a KafkaEmitter from configuration.
 // Returns nil if brokers are not configured (use LoggerEmitter instead).
-func NewKafkaEmitterFromConfig(brokers, topic, clientID string, logger zerolog.Logger) (*KafkaEmitter, error) {
+func NewKafkaEmitterFromConfig(brokers, topic, clientID string, logger *zap.Logger) (*KafkaEmitter, error) {
 	if brokers == "" {
 		return nil, nil // Not configured, caller should use LoggerEmitter
 	}
@@ -250,14 +250,14 @@ func BuildEvent(orgID, actorID uuid.UUID, actorType, action, targetType string, 
 	now := time.Now().UTC()
 
 	event := Event{
-		EventID:   eventID,
-		OrgID:     orgID,
-		ActorID:   actorID,
-		ActorType: actorType,
-		Action:    action,
+		EventID:    eventID,
+		OrgID:      orgID,
+		ActorID:    actorID,
+		ActorType:  actorType,
+		Action:     action,
 		TargetType: targetType,
-		TargetID:  targetID,
-		CreatedAt: now,
+		TargetID:   targetID,
+		CreatedAt:  now,
 	}
 
 	// Compute hash of event payload (excluding hash/signature fields for consistency)
@@ -311,38 +311,37 @@ func getClientIP(r *http.Request) string {
 
 // Common action constants for consistency.
 const (
-	ActionOrgCreate   = "org.create"
-	ActionOrgUpdate   = "org.update"
-	ActionOrgSuspend  = "org.suspend"
-	ActionUserInvite  = "user.invite"
-	ActionUserCreate  = "user.create"
-	ActionUserUpdate  = "user.update"
-	ActionUserSuspend = "user.suspend"
-	ActionUserActivate = "user.activate"
-	ActionUserDelete   = "user.delete"
-	ActionRoleAssign   = "role.assign"
-	ActionRoleRevoke   = "role.revoke"
-	ActionAPIKeyIssue  = "api_key.issue"
-	ActionAPIKeyRevoke = "api_key.revoke"
-	ActionAccountLockout = "account.lockout"
+	ActionOrgCreate        = "org.create"
+	ActionOrgUpdate        = "org.update"
+	ActionOrgSuspend       = "org.suspend"
+	ActionUserInvite       = "user.invite"
+	ActionUserCreate       = "user.create"
+	ActionUserUpdate       = "user.update"
+	ActionUserSuspend      = "user.suspend"
+	ActionUserActivate     = "user.activate"
+	ActionUserDelete       = "user.delete"
+	ActionRoleAssign       = "role.assign"
+	ActionRoleRevoke       = "role.revoke"
+	ActionAPIKeyIssue      = "api_key.issue"
+	ActionAPIKeyRevoke     = "api_key.revoke"
+	ActionAccountLockout   = "account.lockout"
 	ActionRecoveryInitiate = "recovery.initiate"
-	ActionRecoveryApprove = "recovery.approve"
-	ActionRecoveryReject = "recovery.reject"
+	ActionRecoveryApprove  = "recovery.approve"
+	ActionRecoveryReject   = "recovery.reject"
 	ActionRecoveryComplete = "recovery.complete"
 )
 
 // Common target type constants.
 const (
-	TargetTypeOrg     = "org"
-	TargetTypeUser    = "user"
-	TargetTypeRole    = "role"
-	TargetTypeAPIKey  = "api_key"
+	TargetTypeOrg    = "org"
+	TargetTypeUser   = "user"
+	TargetTypeRole   = "role"
+	TargetTypeAPIKey = "api_key"
 )
 
 // Common actor type constants.
 const (
-	ActorTypeUser          = "user"
+	ActorTypeUser           = "user"
 	ActorTypeServiceAccount = "service_account"
-	ActorTypeSystem        = "system"
+	ActorTypeSystem         = "system"
 )
-

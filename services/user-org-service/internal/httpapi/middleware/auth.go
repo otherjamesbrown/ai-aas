@@ -1,8 +1,9 @@
 // Package middleware provides HTTP middleware for authentication and authorization.
 //
 // Purpose:
-//   This package implements middleware for validating OAuth2 Bearer tokens,
-//   extracting user context, and enforcing authentication on protected routes.
+//
+//	This package implements middleware for validating OAuth2 Bearer tokens,
+//	extracting user context, and enforcing authentication on protected routes.
 //
 // Dependencies:
 //   - github.com/go-chi/chi/v5: HTTP router middleware
@@ -40,12 +41,13 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/google/uuid"
 	"github.com/ory/fosite"
-	"github.com/rs/zerolog"
+	"go.uber.org/zap"
 
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/bootstrap"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/oauth"
@@ -72,9 +74,9 @@ type AuthenticatedUser struct {
 
 // RequireAuth creates middleware that validates Bearer tokens and extracts user context.
 // Returns 401 Unauthorized if token is missing, invalid, or expired.
-func RequireAuth(rt *bootstrap.Runtime, logger zerolog.Logger) func(http.Handler) http.Handler {
+func RequireAuth(rt *bootstrap.Runtime, logger *zap.Logger) func(http.Handler) http.Handler {
 	if rt == nil || rt.Provider == nil {
-		logger.Warn().Msg("OAuth provider not available, auth middleware will reject all requests")
+		logger.Warn("OAuth provider not available, auth middleware will reject all requests")
 		return func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "authentication not configured", http.StatusInternalServerError)
@@ -85,11 +87,32 @@ func RequireAuth(rt *bootstrap.Runtime, logger zerolog.Logger) func(http.Handler
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
+			requestID := r.Header.Get("X-Request-ID")
+			if requestID == "" {
+				requestID = "unknown"
+			}
 
 			// Extract Bearer token from Authorization header
 			authHeader := r.Header.Get("Authorization")
+			authPrefix := ""
+			if authHeader != "" {
+				parts := strings.SplitN(authHeader, " ", 2)
+				if len(parts) > 0 {
+					authPrefix = parts[0]
+				}
+			}
+			logger.Debug("RequireAuth: checking authorization header",
+				zap.String("path", r.URL.Path),
+				zap.String("request_id", requestID),
+				zap.Bool("has_auth_header", authHeader != ""),
+				zap.String("auth_header_prefix", authPrefix))
+
 			if authHeader == "" {
-				logger.Debug().Str("path", r.URL.Path).Msg("missing authorization header")
+				logger.Warn("RequireAuth: missing authorization header",
+					zap.String("path", r.URL.Path),
+					zap.String("request_id", requestID),
+					zap.String("origin", r.Header.Get("Origin")),
+					zap.String("user_agent", r.Header.Get("User-Agent")))
 				http.Error(w, "missing authorization header", http.StatusUnauthorized)
 				return
 			}
@@ -97,38 +120,67 @@ func RequireAuth(rt *bootstrap.Runtime, logger zerolog.Logger) func(http.Handler
 			// Parse "Bearer <token>"
 			parts := strings.SplitN(authHeader, " ", 2)
 			if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-				logger.Debug().Str("path", r.URL.Path).Msg("invalid authorization header format")
+				logger.Warn("RequireAuth: invalid authorization header format",
+					zap.String("path", r.URL.Path),
+					zap.String("request_id", requestID),
+					zap.String("auth_header_prefix", parts[0]))
 				http.Error(w, "invalid authorization header format", http.StatusUnauthorized)
 				return
 			}
 
 			token := parts[1]
 			if token == "" {
-				logger.Debug().Str("path", r.URL.Path).Msg("empty bearer token")
+				logger.Warn("RequireAuth: empty bearer token",
+					zap.String("path", r.URL.Path),
+					zap.String("request_id", requestID))
 				http.Error(w, "empty bearer token", http.StatusUnauthorized)
 				return
 			}
+
+			tokenPrefix := token
+			if len(token) > 10 {
+				tokenPrefix = token[:10] + "..."
+			}
+			logger.Debug("RequireAuth: validating token",
+				zap.String("path", r.URL.Path),
+				zap.String("request_id", requestID),
+				zap.Int("token_length", len(token)),
+				zap.String("token_prefix", tokenPrefix))
 
 			// Validate token using Fosite's introspection
 			// IntrospectToken validates the token signature and returns session info
 			_, accessRequester, err := rt.Provider.IntrospectToken(ctx, token, fosite.AccessToken, &oauth.Session{})
 			if err != nil {
-				logger.Debug().Err(err).Str("path", r.URL.Path).Msg("token validation failed")
+				logger.Warn("RequireAuth: token validation failed",
+					zap.Error(err),
+					zap.String("path", r.URL.Path),
+					zap.String("request_id", requestID),
+					zap.String("error_type", fmt.Sprintf("%T", err)))
 				http.Error(w, "invalid or expired token", http.StatusUnauthorized)
 				return
 			}
 
 			// Check if token is active (accessRequester is nil if token is invalid)
 			if accessRequester == nil {
-				logger.Debug().Str("path", r.URL.Path).Msg("token is not active")
+				logger.Warn("RequireAuth: token is not active",
+					zap.String("path", r.URL.Path),
+					zap.String("request_id", requestID))
 				http.Error(w, "token is not active", http.StatusUnauthorized)
 				return
 			}
 
+			logger.Debug("RequireAuth: token validated, extracting session",
+				zap.String("path", r.URL.Path),
+				zap.String("request_id", requestID))
+
 			// Extract session information
 			session, ok := accessRequester.GetSession().(*oauth.Session)
 			if !ok {
-				logger.Warn().Str("path", r.URL.Path).Msg("invalid session type")
+				sessionType := fmt.Sprintf("%T", accessRequester.GetSession())
+				logger.Warn("RequireAuth: invalid session type",
+					zap.String("path", r.URL.Path),
+					zap.String("request_id", requestID),
+					zap.String("session_type", sessionType))
 				http.Error(w, "invalid session", http.StatusUnauthorized)
 				return
 			}
@@ -139,15 +191,28 @@ func RequireAuth(rt *bootstrap.Runtime, logger zerolog.Logger) func(http.Handler
 				userIDStr = session.Subject // Fallback to subject if user_id not set
 			}
 
+			logger.Debug("RequireAuth: extracted session info",
+				zap.String("path", r.URL.Path),
+				zap.String("request_id", requestID),
+				zap.String("user_id", userIDStr),
+				zap.String("org_id", session.OrgID),
+				zap.String("subject", session.Subject))
+
 			if userIDStr == "" {
-				logger.Warn().Str("path", r.URL.Path).Msg("session missing user ID")
+				logger.Warn("RequireAuth: session missing user ID",
+					zap.String("path", r.URL.Path),
+					zap.String("request_id", requestID),
+					zap.String("subject", session.Subject))
 				http.Error(w, "invalid session: missing user ID", http.StatusUnauthorized)
 				return
 			}
 
 			userID, err := uuid.Parse(userIDStr)
 			if err != nil {
-				logger.Warn().Err(err).Str("user_id", userIDStr).Str("path", r.URL.Path).Msg("invalid user ID format")
+				logger.Warn("invalid user ID format",
+					zap.Error(err),
+					zap.String("user_id", userIDStr),
+					zap.String("path", r.URL.Path))
 				http.Error(w, "invalid session: invalid user ID", http.StatusUnauthorized)
 				return
 			}
@@ -156,7 +221,10 @@ func RequireAuth(rt *bootstrap.Runtime, logger zerolog.Logger) func(http.Handler
 			if session.OrgID != "" {
 				orgID, err = uuid.Parse(session.OrgID)
 				if err != nil {
-					logger.Warn().Err(err).Str("org_id", session.OrgID).Str("path", r.URL.Path).Msg("invalid org ID format")
+					logger.Warn("invalid org ID format",
+						zap.Error(err),
+						zap.String("org_id", session.OrgID),
+						zap.String("path", r.URL.Path))
 					http.Error(w, "invalid session: invalid org ID", http.StatusUnauthorized)
 					return
 				}
@@ -166,6 +234,12 @@ func RequireAuth(rt *bootstrap.Runtime, logger zerolog.Logger) func(http.Handler
 			ctx = context.WithValue(ctx, UserIDKey, userID)
 			ctx = context.WithValue(ctx, OrgIDKey, orgID)
 			ctx = context.WithValue(ctx, SessionKey, session)
+
+			logger.Debug("RequireAuth: authentication successful, proceeding to handler",
+				zap.String("path", r.URL.Path),
+				zap.String("request_id", requestID),
+				zap.String("user_id", userID.String()),
+				zap.String("org_id", orgID.String()))
 
 			// Continue to next handler with authenticated context
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -221,4 +295,3 @@ func GetAuthenticatedUser(ctx context.Context) *AuthenticatedUser {
 		Scopes: scopes,
 	}
 }
-

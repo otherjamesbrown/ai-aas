@@ -29,9 +29,59 @@ This guide covers analyzing logs to troubleshoot issues, investigate incidents, 
 
 ## Log Analysis Tools
 
-### Centralized Logging
+### Local Development
 
-- Access logs via logging platform
+For local development and testing, logs are aggregated via Loki and accessible via Make targets:
+
+```bash
+# View logs via Loki/Grafana (opens Grafana Explore if available)
+make logs-view
+
+# View logs for specific service
+make logs-view SERVICE=user-org-service
+
+# Tail logs from Docker Compose (all services)
+make logs-tail
+
+# Tail logs for specific service
+make logs-tail SERVICE=postgres
+
+# Filter for error-level logs
+make logs-error
+
+# Filter for error-level logs from specific service
+make logs-error SERVICE=user-org-service
+
+# View logs for specific service from Loki
+make logs-service SERVICE=user-org-service
+
+# Enable verbose logging (requires service restart)
+make logs-verbose
+```
+
+**Loki Access**:
+- **API**: `http://localhost:3100`
+- **Promtail**: `http://localhost:9080`
+- **Grafana** (if available): `http://localhost:3000`
+
+**LogQL Queries** (for direct Loki API access):
+```bash
+# All logs from local-dev environment
+{environment="local-dev"}
+
+# Logs from specific service
+{service="user-org-service"}
+
+# Error logs only
+{environment="local-dev"} |= "error"
+
+# Logs with specific request ID
+{environment="local-dev"} | json | request_id="req-123"
+```
+
+### Remote Development / Production
+
+- Access logs via Grafana Explore (Loki queries)
 - Search across all services
 - Filter by time, service, level
 - Export logs for analysis
@@ -39,7 +89,7 @@ This guide covers analyzing logs to troubleshoot issues, investigate incidents, 
 ### Command-Line Tools
 
 ```bash
-# View logs
+# View logs from Kubernetes
 kubectl logs <pod-name>
 
 # Follow logs
@@ -47,6 +97,9 @@ kubectl logs -f <pod-name>
 
 # Search logs
 kubectl logs <pod-name> | grep "error"
+
+# View logs from Loki via logcli (if installed)
+logcli query '{service="api-router-service"}' --addr=http://loki:3100
 ```
 
 ## Common Log Analysis Tasks
@@ -109,10 +162,12 @@ kubectl logs <pod-name> | grep "error"
 
 ### Logging Standards
 
-- Use structured logging
-- Include correlation IDs
-- Log at appropriate levels
-- Avoid logging sensitive data
+- **Use shared logging package**: All Go services MUST use `shared/go/logging` package
+- **Structured logging**: JSON format with standardized fields (`service`, `environment`, `trace_id`, `request_id`, `user_id`, `org_id`)
+- **Include correlation IDs**: Use `WithRequestID()`, `WithUserID()`, `WithOrgID()` helpers
+- **Log at appropriate levels**: Use `LOG_LEVEL` environment variable (debug, info, warn, error)
+- **Avoid logging sensitive data**: Use `logging.RedactString()` or `logging.RedactFields()` for sensitive values
+- **OpenTelemetry integration**: Use `WithContext()` to automatically include trace context
 
 ### Analysis Workflow
 

@@ -14,7 +14,6 @@ package output
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"time"

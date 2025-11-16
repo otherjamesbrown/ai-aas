@@ -54,6 +54,26 @@ jobs:
         run: npm run build
         working-directory: shared/ts
 
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -z "$PREV_TAG" ]; then
+            echo "No previous tag found, generating full changelog"
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges HEAD)
+          else
+            echo "Generating changelog from $PREV_TAG to ${VERSION}"
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges ${PREV_TAG}..HEAD)
+          fi
+          if [ -z "$CHANGELOG" ]; then
+            CHANGELOG="- No changes detected"
+          fi
+          {
+            echo "changelog<<EOF"
+            echo "$CHANGELOG"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Prepare release artifacts
         run: |
           mkdir -p shared/release-artifacts
@@ -82,6 +102,9 @@ jobs:
             ## Summary
             - Version: ${{ env.VERSION }}
             - Build: ${{ github.run_id }}
+
+            ## Changes
+            ${{ steps.changelog.outputs.changelog }}
 
             ## Verification
             - `make shared-check`

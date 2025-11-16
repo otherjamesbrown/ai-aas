@@ -91,6 +91,23 @@ A developer can reset, stop, and view logs for the local stack using a small set
 
 ---
 
+### User Story 5 (US-005) - Environment Profile Management (Priority: P2)
+
+Developers can manage configurations across multiple environments (local-dev, remote-dev, production) using a centralized profile system that tracks components, ports, credentials, and connection strings per environment.
+
+**Why this priority**: Enables consistent configuration management across environments and prevents misconfiguration errors when switching between local, remote, and production deployments.
+
+**Independent Test**: Can be tested by switching between environments using `manage-env activate <environment>`, verifying configurations are applied correctly, and ensuring services connect to the right endpoints without manual edits.
+
+**Acceptance Scenarios**:
+
+1. **[Primary]** **Given** environment profiles are defined, **When** a developer activates an environment profile, **Then** all services use the correct configuration (ports, hosts, credentials) for that environment.  
+2. **[Primary]** **Given** multiple environments are configured, **When** a developer switches between environments, **Then** configuration changes are applied without manual edits to service configs and secrets are preserved.  
+3. **[Primary]** **Given** an environment profile, **When** a developer validates the configuration, **Then** tooling reports any missing secrets, invalid connection strings, or component conflicts with actionable remediation steps.  
+4. **[Alternate]** **Given** a component registry exists, **When** a developer adds a new component, **Then** they can register it once and reference it across all environment profiles.
+
+---
+
 [Add more user stories as needed, each with an assigned priority]
 
 ## Default Workflow: Linode Secure Workspace
@@ -136,6 +153,10 @@ A developer can reset, stop, and view logs for the local stack using a small set
 - **FR-010**: Provide automated health probes for both remote and local stacks that feed into `make status` and expose structured JSON for observability tooling.  
 - **FR-011**: Provide secure secrets bootstrap workflow (`make secrets-sync`) that hydrates `.env.linode` and `.env.local` from an approved secret store without hardcoding credentials.  
 - **FR-012**: Provide audit-ready logging for remote workspace lifecycle actions (provision, start, stop, destroy) with documented retention expectations.
+- **FR-013**: Provide environment profile system (`configs/environments/*.yaml`) defining component configurations for local-dev, remote-dev, and production environments with inheritance from base profiles.
+- **FR-014**: Provide environment profile manager (`configs/manage-env.sh` or Go binary) supporting activation, validation, comparison, and configuration export across environments.
+- **FR-015**: Provide component registry (`configs/components.yaml`) documenting all platform components, their ports, dependencies, and required environment variables for validation and discovery.
+- **FR-016**: Integrate environment profiles with secrets-sync to generate environment-specific `.env.*` files automatically based on active profile.
 
 ### Non-Functional Requirements
 
@@ -163,6 +184,11 @@ A developer can reset, stop, and view logs for the local stack using a small set
 - **NFR-013**: Command names and flags are consistent between remote and local workflows; documentation highlights parity.  
 - **NFR-014**: Quickstart doc can be completed in under 15 minutes by a new developer on a managed device.  
 - **NFR-015**: Tooling prints troubleshooting guidance for common failures (prerequisite gaps, port conflicts, resource limits).
+
+**Configuration Management**  
+- **NFR-016**: Environment profile validation completes in under 5 seconds and reports actionable errors for missing secrets or invalid configurations.  
+- **NFR-017**: Environment activation generates correct configuration files within 2 seconds and preserves existing secrets during profile switches.  
+- **NFR-018**: Component registry must be version-controlled and updated whenever new components are added to the platform; validation tools verify registry completeness.
  
 ## Success Criteria *(mandatory)*
 
@@ -182,6 +208,9 @@ A developer can reset, stop, and view logs for the local stack using a small set
 - **SC-007**: Running `make secrets-sync` hydrates `.env.linode` and `.env.local` without manual edits and logs masked success messages only.  
 - **SC-008**: Remote workspace access logs (provision, connect, destroy) are exported to the centralized logging destination within 2 minutes of the event.  
 - **SC-009**: `make status --json` returns component-level health states consumable by the observability pipeline with 100% parity between remote and local modes.
+- **SC-010**: Running `manage-env activate <environment>` switches the active environment profile and generates correct `.env.*` files within 2 seconds without requiring manual edits.
+- **SC-011**: Running `manage-env validate` reports all configuration errors (missing secrets, invalid ports, dependency conflicts) within 5 seconds and provides actionable remediation guidance.
+- **SC-012**: Component registry (`configs/components.yaml`) includes all platform components with complete metadata (ports, dependencies, environment variables) and validation confirms registry completeness.
 
 ## Out of Scope
 
@@ -217,3 +246,4 @@ A developer can reset, stop, and view logs for the local stack using a small set
 | US-002 | FR-008, FR-009, FR-010 | NFR-001, NFR-002, NFR-007, NFR-010, NFR-013, NFR-015 | SC-006, SC-009 |
 | US-003 | FR-004, FR-006, FR-009, FR-011 | NFR-010, NFR-012, NFR-013 | SC-003, SC-005, SC-007, SC-009 |
 | US-004 | FR-005, FR-008, FR-010, FR-012 | NFR-007, NFR-009, NFR-015 | SC-004, SC-009 |
+| US-005 | FR-013, FR-014, FR-015, FR-016 | NFR-016, NFR-017, NFR-018 | SC-010, SC-011, SC-012 |

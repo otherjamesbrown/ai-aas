@@ -83,7 +83,8 @@ func (r *RateLimiter) CheckAPIKey(ctx context.Context, apiKeyID string, rps, bur
 // - If no tokens available, request is denied
 func (r *RateLimiter) check(ctx context.Context, key string, rps, burst int) (*CheckResult, error) {
 	now := time.Now()
-	nowUnix := now.Unix()
+	// Use Unix timestamp with fractional seconds for precision (millisecond precision)
+	nowUnixFloat := float64(now.UnixNano()) / float64(time.Second)
 	
 	// Calculate refill interval (seconds per token)
 	refillInterval := float64(1) / float64(rps)
@@ -121,12 +122,12 @@ func (r *RateLimiter) check(ctx context.Context, key string, rps, burst int) (*C
 		end
 	`
 	
-	result, err := r.client.Eval(ctx, script, []string{key}, nowUnix, refillInterval, burst).Result()
+	result, err := r.client.Eval(ctx, script, []string{key}, nowUnixFloat, refillInterval, burst).Result()
 	if err != nil {
 		if err == redis.Nil {
 			// Key doesn't exist, create it with full bucket
 			tokens := burst - 1
-			r.client.HSet(ctx, key, "tokens", tokens, "last_refill", nowUnix)
+			r.client.HSet(ctx, key, "tokens", tokens, "last_refill", nowUnixFloat)
 			r.client.Expire(ctx, key, time.Hour)
 			return &CheckResult{
 				Allowed:    true,
@@ -154,8 +155,32 @@ func (r *RateLimiter) check(ctx context.Context, key string, rps, burst int) (*C
 	}
 	
 	// If denied, calculate retry after
-	if !allowed && len(results) >= 4 {
-		retryAfterSeconds := results[3].(float64)
+	if !allowed {
+		refillInterval := float64(1) / float64(rps)
+		var retryAfterSeconds float64
+		
+		if len(results) >= 4 {
+			switch v := results[3].(type) {
+			case float64:
+				retryAfterSeconds = v
+			case int64:
+				retryAfterSeconds = float64(v)
+			default:
+				// Unexpected type, log and calculate default retry_after
+				r.logger.Warn("unexpected retry_after type from Redis", zap.Any("type", v), zap.Any("value", v))
+				retryAfterSeconds = refillInterval
+			}
+		} else {
+			// Lua script didn't return retry_after, calculate it based on refill_interval
+			r.logger.Warn("retry_after not returned from Redis Lua script, using default")
+			retryAfterSeconds = refillInterval
+		}
+		
+		// Ensure retry_after is at least one refill_interval (safeguard against 0 or negative values)
+		if retryAfterSeconds <= 0 {
+			retryAfterSeconds = refillInterval
+		}
+		
 		checkResult.RetryAfter = time.Duration(retryAfterSeconds * float64(time.Second))
 	}
 	

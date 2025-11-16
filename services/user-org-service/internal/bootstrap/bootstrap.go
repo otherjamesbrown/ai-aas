@@ -2,10 +2,11 @@
 // core service dependencies (Postgres, Redis, OAuth provider).
 //
 // Purpose:
-//   This package wires together the foundational runtime dependencies required by
-//   both the admin-api and reconciler binaries. It ensures consistent initialization
-//   order, handles connection failures gracefully, and provides a unified shutdown
-//   and health check interface.
+//
+//	This package wires together the foundational runtime dependencies required by
+//	both the admin-api and reconciler binaries. It ensures consistent initialization
+//	order, handles connection failures gracefully, and provides a unified shutdown
+//	and health check interface.
 //
 // Dependencies:
 //   - github.com/ory/fosite: OAuth2 provider framework
@@ -49,6 +50,7 @@ import (
 
 	"github.com/ory/fosite"
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/audit"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/config"
@@ -61,14 +63,14 @@ import (
 // Runtime bundles initialized runtime dependencies for use by service binaries.
 // All fields are populated during Initialize and remain valid until Close is called.
 type Runtime struct {
-	Config      *config.Config      // Service configuration (read-only after init)
-	Postgres    *postgres.Store     // PostgreSQL data access layer (required)
-	Redis       *redis.Client       // Redis client for session caching (optional, nil if not configured)
-	OAuthStore  *oauth.Store        // OAuth2 storage implementation (backed by Postgres + optional Redis cache)
-	OAuthCache  oauth.SessionCache  // Session cache implementation (Redis or no-op)
-	OAuthConfig *fosite.Config      // Fosite OAuth2 configuration (token lifetimes, PKCE settings, etc.)
-	Provider    fosite.OAuth2Provider // Composed OAuth2 provider ready for use in HTTP handlers
-	Audit       audit.Emitter       // Audit event emitter (logger-based stub, replace with Kafka in production)
+	Config         *config.Config           // Service configuration (read-only after init)
+	Postgres       *postgres.Store          // PostgreSQL data access layer (required)
+	Redis          *redis.Client            // Redis client for session caching (optional, nil if not configured)
+	OAuthStore     *oauth.Store             // OAuth2 storage implementation (backed by Postgres + optional Redis cache)
+	OAuthCache     oauth.SessionCache       // Session cache implementation (Redis or no-op)
+	OAuthConfig    *fosite.Config           // Fosite OAuth2 configuration (token lifetimes, PKCE settings, etc.)
+	Provider       fosite.OAuth2Provider    // Composed OAuth2 provider ready for use in HTTP handlers
+	Audit          audit.Emitter            // Audit event emitter (logger-based stub, replace with Kafka in production)
 	LockoutTracker *security.LockoutTracker // Lockout tracker for failed authentication attempts (optional, nil if Redis not configured)
 	// Note: IdPRegistry is initialized separately in main.go to avoid import cycles
 	// It should be set after bootstrap initialization
@@ -85,20 +87,20 @@ func Initialize(ctx context.Context, cfg *config.Config) (*Runtime, error) {
 	}
 
 	logger := logging.New(cfg.ServiceName, cfg.LogLevel)
-	
+
 	// Initialize audit emitter (Kafka if configured, otherwise logger)
 	var auditEmitter audit.Emitter
 	if kafkaEmitter, err := audit.NewKafkaEmitterFromConfig(cfg.KafkaBrokers, cfg.KafkaTopic, cfg.KafkaClientID, logger); err != nil {
-		logger.Warn().Err(err).Msg("failed to initialize Kafka emitter, falling back to logger")
+		logger.Warn("failed to initialize Kafka emitter, falling back to logger", zap.Error(err))
 		auditEmitter = audit.NewLoggerEmitter(logger)
 	} else if kafkaEmitter != nil {
-		logger.Info().Str("topic", cfg.KafkaTopic).Msg("using Kafka emitter for audit events")
+		logger.Info("using Kafka emitter for audit events", zap.String("topic", cfg.KafkaTopic))
 		auditEmitter = kafkaEmitter
 	} else {
-		logger.Info().Msg("Kafka not configured, using logger emitter for audit events")
+		logger.Info("Kafka not configured, using logger emitter for audit events")
 		auditEmitter = audit.NewLoggerEmitter(logger)
 	}
-	
+
 	runtime := &Runtime{
 		Config:   cfg,
 		Postgres: pgStore,

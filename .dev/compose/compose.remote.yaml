@@ -1,0 +1,168 @@
+version: '3.8'
+
+# Remote workspace override for Docker Compose stack.
+# Extends compose.base.yaml with remote-specific configurations:
+# - Systemd-managed volumes for persistence
+# - Remote-specific environment variables
+# - Resource constraints for cloud instances
+# - Health check endpoints for monitoring
+
+services:
+  postgres:
+    volumes:
+      - /opt/ai-aas/dev-stack/data/postgres:/var/lib/postgresql/data:rw
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-ai_aas}
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "workspace"
+
+  redis:
+    volumes:
+      - /opt/ai-aas/dev-stack/data/redis:/data:rw
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "workspace"
+
+  nats:
+    volumes:
+      - /opt/ai-aas/dev-stack/data/nats:/data:rw
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "workspace"
+
+  minio:
+    volumes:
+      - /opt/ai-aas/dev-stack/data/minio:/data:rw
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_DEFAULT_BUCKETS: ${MINIO_DEFAULT_BUCKETS:-ai-aas-artifacts,ai-aas-metrics}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "workspace"
+
+  mock-inference:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "workspace"
+
+# Override volumes to use systemd-managed persistent storage
+volumes:
+  postgres-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/ai-aas/dev-stack/data/postgres
+  
+  redis-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/ai-aas/dev-stack/data/redis
+  
+  nats-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/ai-aas/dev-stack/data/nats
+  
+  minio-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/ai-aas/dev-stack/data/minio
+  
+  loki-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/ai-aas/dev-stack/data/loki
+  
+  promtail-positions:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/ai-aas/dev-stack/data/promtail
+  
+  grafana-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/ai-aas/dev-stack/data/grafana
+
+# Ensure all services use the shared network
+networks:
+  dev-network:
+    external: true
+    name: ai-aas-dev-network
+

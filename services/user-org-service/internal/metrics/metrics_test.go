@@ -50,10 +50,10 @@ func TestMetricsRegistration(t *testing.T) {
 func TestRecordAuthSuccess(t *testing.T) {
 	// Get initial value
 	initialValue := getCounterValue(AuthAttemptsTotal.WithLabelValues("password", "success"))
-	
+
 	// Record success
 	RecordAuthSuccess("password")
-	
+
 	// Verify counter incremented
 	newValue := getCounterValue(AuthAttemptsTotal.WithLabelValues("password", "success"))
 	if newValue <= initialValue {
@@ -65,12 +65,12 @@ func TestRecordAuthSuccess(t *testing.T) {
 func TestRecordAuthFailure(t *testing.T) {
 	initialAttempts := getCounterValue(AuthAttemptsTotal.WithLabelValues("password", "failure"))
 	initialFailures := getCounterValue(AuthFailuresTotal.WithLabelValues("password", "invalid_credentials"))
-	
+
 	RecordAuthFailure("password", "invalid_credentials")
-	
+
 	newAttempts := getCounterValue(AuthAttemptsTotal.WithLabelValues("password", "failure"))
 	newFailures := getCounterValue(AuthFailuresTotal.WithLabelValues("password", "invalid_credentials"))
-	
+
 	if newAttempts <= initialAttempts {
 		t.Error("Expected AuthAttemptsTotal to increment")
 	}
@@ -82,11 +82,11 @@ func TestRecordAuthFailure(t *testing.T) {
 // TestRecordMFASuccess verifies MFA success recording.
 func TestRecordMFASuccess(t *testing.T) {
 	initialCount := getCounterValue(MFAAttemptsTotal.WithLabelValues("success"))
-	
+
 	RecordMFASuccess(0.5)
-	
+
 	newCount := getCounterValue(MFAAttemptsTotal.WithLabelValues("success"))
-	
+
 	if newCount <= initialCount {
 		t.Error("Expected MFAAttemptsTotal to increment")
 	}
@@ -95,9 +95,9 @@ func TestRecordMFASuccess(t *testing.T) {
 // TestRecordSessionCreated verifies session creation recording.
 func TestRecordSessionCreated(t *testing.T) {
 	initial := getCounterValue(SessionsCreatedTotal)
-	
+
 	RecordSessionCreated()
-	
+
 	new := getCounterValue(SessionsCreatedTotal)
 	if new <= initial {
 		t.Error("Expected SessionsCreatedTotal to increment")
@@ -107,9 +107,9 @@ func TestRecordSessionCreated(t *testing.T) {
 // TestRecordAPIKeyIssued verifies API key issuance recording.
 func TestRecordAPIKeyIssued(t *testing.T) {
 	initial := getCounterValue(APIKeysIssuedTotal)
-	
+
 	RecordAPIKeyIssued()
-	
+
 	new := getCounterValue(APIKeysIssuedTotal)
 	if new <= initial {
 		t.Error("Expected APIKeysIssuedTotal to increment")
@@ -119,9 +119,9 @@ func TestRecordAPIKeyIssued(t *testing.T) {
 // TestRecordOIDCLoginAttempt verifies OIDC login attempt recording.
 func TestRecordOIDCLoginAttempt(t *testing.T) {
 	initial := getCounterValue(OIDCLoginAttemptsTotal.WithLabelValues("google"))
-	
+
 	RecordOIDCLoginAttempt("google")
-	
+
 	new := getCounterValue(OIDCLoginAttemptsTotal.WithLabelValues("google"))
 	if new <= initial {
 		t.Error("Expected OIDCLoginAttemptsTotal to increment")
@@ -131,9 +131,9 @@ func TestRecordOIDCLoginAttempt(t *testing.T) {
 // TestRecordRecoveryAttempt verifies recovery attempt recording.
 func TestRecordRecoveryAttempt(t *testing.T) {
 	initial := getCounterValue(RecoveryAttemptsTotal.WithLabelValues("initiate"))
-	
+
 	RecordRecoveryAttempt("initiate")
-	
+
 	new := getCounterValue(RecoveryAttemptsTotal.WithLabelValues("initiate"))
 	if new <= initial {
 		t.Error("Expected RecoveryAttemptsTotal to increment")
@@ -151,4 +151,3 @@ func getCounterValue(counter prometheus.Counter) float64 {
 	}
 	return 0
 }
-

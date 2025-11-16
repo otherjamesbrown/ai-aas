@@ -664,7 +664,6 @@ func runUserDelete(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 
 	// Resolve user ID
 	resolvedUserID := flagUserID
-	var userEmail string
 	if resolvedUserID == "" {
 		if flagEmail == "" {
 			return errors.NewValidationError(
@@ -683,7 +682,6 @@ func runUserDelete(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 			)
 		}
 		resolvedUserID = user.UserID
-		userEmail = user.Email
 	}
 
 	// Confirmation check (non-interactive mode: require --confirm or --force)

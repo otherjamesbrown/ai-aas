@@ -1,9 +1,10 @@
 // Package auth provides OIDC/IdP federation handlers.
 //
 // Purpose:
-//   This package implements OIDC-based identity provider federation,
-//   allowing users to authenticate via external providers (Google, GitHub, etc.)
-//   and mapping them to internal user accounts via external_idp_id.
+//
+//	This package implements OIDC-based identity provider federation,
+//	allowing users to authenticate via external providers (Google, GitHub, etc.)
+//	and mapping them to internal user accounts via external_idp_id.
 //
 // Dependencies:
 //   - github.com/coreos/go-oidc/v3/oidc: OIDC provider client
@@ -17,7 +18,6 @@
 //
 // Requirements Reference:
 //   - specs/005-user-org-service/spec.md#FR-006 (IdP Federation)
-//
 package auth
 
 import (
@@ -184,8 +184,8 @@ func (h *Handler) OIDCLogin(w http.ResponseWriter, r *http.Request) {
 	// Store state in session/cookie (stub: in production use secure cookie or Redis)
 	// For now, encode org_id and redirect_uri in state
 	stateData := map[string]string{
-		"token":       stateToken,
-		"org_id":      orgID.String(),
+		"token":        stateToken,
+		"org_id":       orgID.String(),
 		"redirect_uri": redirectURI,
 	}
 	stateJSON, _ := json.Marshal(stateData)
@@ -383,12 +383,12 @@ func (h *Handler) findOrCreateUserFromIdP(ctx context.Context, orgID uuid.UUID, 
 	// In production, generate a secure random password hash that can never be used
 
 	params := postgres.CreateUserParams{
-		OrgID:       orgID,
-		Email:       email,
-		DisplayName: displayName,
+		OrgID:        orgID,
+		Email:        email,
+		DisplayName:  displayName,
 		PasswordHash: passwordHash,
-		Status:      "active",
-		ExternalIDP: &externalIDP,
+		Status:       "active",
+		ExternalIDP:  &externalIDP,
 	}
 
 	user, err = h.runtime.Postgres.CreateUser(ctx, params)
@@ -414,4 +414,3 @@ func getBaseURL(r *http.Request) string {
 	}
 	return fmt.Sprintf("%s://%s", scheme, r.Host)
 }
-

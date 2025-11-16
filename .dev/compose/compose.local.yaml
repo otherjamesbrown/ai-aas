@@ -1,0 +1,216 @@
+# Local development override for Docker Compose stack.
+# Extends compose.base.yaml with local-specific configurations:
+# - Host volume mounts for data persistence on developer machine
+# - Port mappings from .specify/local/ports.yaml
+# - Resource limits appropriate for local machines
+# - Development-friendly environment variables
+
+services:
+  postgres:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data:rw
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-ai_aas}
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "local-dev"
+
+  redis:
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data:rw
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "local-dev"
+
+  nats:
+    ports:
+      - "${NATS_CLIENT_PORT:-4222}:4222"   # Client connections
+      - "${NATS_HTTP_PORT:-8222}:8222"     # HTTP monitoring
+      - "${NATS_CLUSTER_PORT:-6222}:6222"  # Cluster routing (disabled for dev)
+    volumes:
+      - nats-data:/data:rw
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "local-dev"
+
+  minio:
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"       # API
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"   # Console
+    volumes:
+      - minio-data:/data:rw
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_DEFAULT_BUCKETS: ${MINIO_DEFAULT_BUCKETS:-ai-aas-artifacts,ai-aas-metrics}
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "local-dev"
+
+  mock-inference:
+    ports:
+      - "${MOCK_INFERENCE_PORT:-8000}:8000"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "local-dev"
+
+  loki:
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "local-dev"
+
+  promtail:
+    ports:
+      - "${PROMTAIL_PORT:-9080}:9080"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "local-dev"
+
+  grafana:
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "local-dev"
+
+# Local volumes use Docker-managed storage (not bind mounts for portability)
+volumes:
+  postgres-data:
+    driver: local
+    name: ai-aas-dev-postgres-data
+  
+  redis-data:
+    driver: local
+    name: ai-aas-dev-redis-data
+  
+  nats-data:
+    driver: local
+    name: ai-aas-dev-nats-data
+  
+  minio-data:
+    driver: local
+    name: ai-aas-dev-minio-data
+  
+  loki-data:
+    driver: local
+    name: ai-aas-dev-loki-data
+  
+  promtail-positions:
+    driver: local
+    name: ai-aas-dev-promtail-positions
+  
+  grafana-data:
+    driver: local
+    name: ai-aas-dev-grafana-data
+
+# Ensure all services use the shared network
+networks:
+  dev-network:
+    external: true
+    name: ai-aas-dev-network
+

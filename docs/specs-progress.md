@@ -11,7 +11,7 @@
 | 006-api-router-service | ☐ | ☐ | ☐ | ☐ | ☐ | |
 | 007-analytics-service | ✅ | ✅ | ✅ | ✅ | ✅ | Phases 1-6 complete: Setup, foundational, usage visibility, reliability, finance exports, RBAC/audit/polish |
 | 008-web-portal | ☐ | ☐ | ☐ | ☐ | ☐ | |
-| 009-admin-cli | ☐ | ☐ | ☐ | ☐ | ☐ | |
+| 009-admin-cli | ✅ | ✅ | ✅ | ✅ | ✅ | Spec upgraded, plan, tasks, quickstart, analyze complete; all issues addressed |
 | 010-vllm-deployment | ☐ | ☐ | ☐ | ☐ | ☐ | |
 | 011-observability | ☐ | ☐ | ☐ | ☐ | ☐ | |
 | 012-e2e-tests | ☐ | ☐ | ☐ | ☐ | ☐ | |

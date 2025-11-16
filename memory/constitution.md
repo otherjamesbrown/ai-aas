@@ -52,6 +52,7 @@ Rationale: A secure default posture reduces blast radius and operational risk.
 ### 4. Declarative Infrastructure & GitOps
 - Cloud infra via Terraform; apps via Helm; ArgoCD manages cluster state.
 - Git is the source of truth. No manual `kubectl apply`/`terraform apply` in production.
+- **Environment profiles** (`configs/environments/*.yaml`) centralize configuration management across environments (local-dev, remote-dev, production) ensuring consistency and preventing misconfiguration. No hardcoded environment-specific values in service configs.
 - Hybrid GitOps:
   - Git‑managed: org policies (budgets, rate limits, allowed models, memberships), observability config, model deployments.
   - API‑managed: secrets and runtime data (API keys, logs, audit records).
@@ -82,6 +83,7 @@ Rationale: Measurability and automated feedback ensure reliability and velocity.
 - Ingress & TLS: Nginx Ingress + cert‑manager (Let’s Encrypt), HTTPS redirect, CORS, security headers, IP rate‑limits.
 - NetworkPolicies: default deny; explicit egress to PostgreSQL/Redis/RabbitMQ/DNS; controlled egress for GitOps/HuggingFace.
 - Documentation: OpenAPI for all endpoints; architecture docs; deployment/runbooks; contracts in `specs/*/contracts/`.
+- Logging: All Go services MUST use `shared/go/logging` package with zap backend. Structured JSON logging with standardized fields (`service`, `environment`, `trace_id`, `request_id`, `user_id`, `org_id`). Log levels controlled via `LOG_LEVEL` environment variable (debug, info, warn, error). Log redaction patterns defined in `configs/log-redaction.yaml` MUST be applied for sensitive data.
 
 ## Development Workflow & Quality Gates
 
@@ -131,5 +133,5 @@ All implementation plans MUST explicitly pass these gates:
   - Keep specs aligned via targeted spec bumps and CHANGELOGs when contracts change.
 - Reviews: Periodic compliance reviews ensure gates remain testable, enforced, and automated where possible.
 
-**Version**: 1.4.1 | **Ratified**: 2025-11-06 | **Last Amended**: 2025-01-27
+**Version**: 1.4.2 | **Ratified**: 2025-11-06 | **Last Amended**: 2025-01-27
 

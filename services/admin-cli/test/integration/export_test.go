@@ -12,12 +12,8 @@ package integration
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"os/exec"
-	"path/filepath"
-	"runtime"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

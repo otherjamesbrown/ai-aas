@@ -1,10 +1,11 @@
 // Command admin-api is the main HTTP API server for the user-org service.
 //
 // Purpose:
-//   This binary provides the primary REST API for user and organization management,
-//   authentication, and authorization. It initializes core dependencies (Postgres,
-//   Redis, OAuth provider) via bootstrap, registers authentication routes, and
-//   serves HTTP requests with graceful shutdown handling.
+//
+//	This binary provides the primary REST API for user and organization management,
+//	authentication, and authorization. It initializes core dependencies (Postgres,
+//	Redis, OAuth provider) via bootstrap, registers authentication routes, and
+//	serves HTTP requests with graceful shutdown handling.
 //
 // Dependencies:
 //   - internal/bootstrap: Runtime initialization and lifecycle management
@@ -54,7 +55,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/rs/zerolog"
+	"go.uber.org/zap"
 
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/bootstrap"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/config"
@@ -71,17 +72,16 @@ import (
 func main() {
 	cfg := config.MustLoad()
 	logger := logging.New(cfg.ServiceName+"-admin-api", cfg.LogLevel)
-	logger.Info().
-		Str("env", cfg.Environment).
-		Int("port", cfg.HTTPPort).
-		Msg("starting admin API")
+	logger.Info("starting admin API",
+		zap.String("env", cfg.Environment),
+		zap.Int("port", cfg.HTTPPort))
 
 	ctx := context.Background()
 	runtime, err := bootstrap.Initialize(ctx, cfg)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to bootstrap runtime")
+		logger.Fatal("failed to bootstrap runtime", zap.Error(err))
 	}
-	logger.Info().Msg("runtime dependencies initialized")
+	logger.Info("runtime dependencies initialized")
 
 	// Initialize IdP registry if OIDC is configured (moved here to avoid import cycles)
 	baseURL := cfg.OIDCBaseURL
@@ -91,11 +91,11 @@ func main() {
 	}
 	idpRegistry, err := auth.InitializeIdPProviders(ctx, baseURL, cfg)
 	if err != nil {
-		logger.Warn().Err(err).Msg("failed to initialize IdP providers, OIDC federation disabled")
+		logger.Warn("failed to initialize IdP providers, OIDC federation disabled", zap.Error(err))
 	} else if idpRegistry != nil {
 		// Set IdP registry in runtime (we need to add a setter or make it accessible)
 		// For now, we'll pass it to RegisterRoutes
-		logger.Info().Msg("IdP providers initialized")
+		logger.Info("IdP providers initialized")
 	}
 
 	srv := server.New(server.Options{
@@ -105,13 +105,13 @@ func main() {
 		Readiness:   readinessProbe(runtime, logger),
 		RegisterRoutes: func(r chi.Router) {
 			// Public auth routes (no auth required)
-			auth.RegisterRoutes(r, runtime, idpRegistry)
-			
+			auth.RegisterRoutes(r, runtime, idpRegistry, logger)
+
 			// Protected routes (require authentication)
 			r.Group(func(r chi.Router) {
 				// Apply auth middleware to all routes in this group
 				r.Use(middleware.RequireAuth(runtime, logger))
-				
+
 				// Register orgs routes first - this creates /v1/orgs/{orgId} routes
 				orgs.RegisterRoutes(r, runtime, logger)
 				// Register users routes - these are more specific (/v1/orgs/{orgId}/invites, etc.)
@@ -130,7 +130,7 @@ func main() {
 
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Fatal().Err(err).Msg("admin API server failed")
+			logger.Fatal("admin API server failed", zap.Error(err))
 		}
 	}()
 
@@ -140,21 +140,21 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		logger.Error().Err(err).Msg("graceful shutdown failed")
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+		logger.Error("graceful shutdown failed", zap.Error(err))
 		os.Exit(1)
 	}
 	if err := runtime.Close(shutdownCtx); err != nil {
-		logger.Error().Err(err).Msg("failed to cleanly close runtime")
+		logger.Error("failed to cleanly close runtime", zap.Error(err))
 	}
 
-	logger.Info().Msg("admin API stopped")
+	logger.Info("admin API stopped")
 }
 
 // readinessProbe returns a function that checks Postgres and Redis connectivity.
 // Used by the HTTP server's /readyz endpoint. Redis failures are logged as warnings
 // but still fail the probe (Redis is optional but if configured, must be available).
-func readinessProbe(rt *bootstrap.Runtime, logger zerolog.Logger) func(context.Context) error {
+func readinessProbe(rt *bootstrap.Runtime, logger *zap.Logger) func(context.Context) error {
 	return func(ctx context.Context) error {
 		if rt == nil {
 			return nil
@@ -166,7 +166,7 @@ func readinessProbe(rt *bootstrap.Runtime, logger zerolog.Logger) func(context.C
 		}
 		if rt.Redis != nil {
 			if err := rt.Redis.Ping(ctx).Err(); err != nil {
-				logger.Warn().Err(err).Msg("redis ping failed")
+				logger.Warn("redis ping failed", zap.Error(err))
 				return err
 			}
 		}

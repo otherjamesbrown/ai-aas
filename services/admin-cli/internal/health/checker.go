@@ -124,7 +124,7 @@ func (c *Checker) CheckRequired(ctx context.Context, requiredServices map[string
 		errMsg += "  - Verify services are running\n"
 		errMsg += "  - Check endpoint URLs are correct\n"
 		errMsg += "  - Ensure network connectivity\n"
-		return results, fmt.Errorf(errMsg)
+		return results, fmt.Errorf("%s", errMsg)
 	}
 
 	return results, nil

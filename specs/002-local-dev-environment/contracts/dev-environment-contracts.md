@@ -19,6 +19,12 @@
 | `make reset` | optional `--preserve-volumes` | Resets local volumes, seeds data, prints status summary | Commands executed with `docker compose`; handles port cleanup |
 | `make logs COMPONENT=<name>` | `COMPONENT` enum | Streams container logs locally | Honors `--since`, `--follow`; colorizes output |
 | `make stop` | none | Stops local compose stack | Leaves volumes intact unless `make reset` invoked |
+| `make env-activate ENVIRONMENT=<name>` | `ENVIRONMENT` enum (`local-dev`, `remote-dev`, `production`) | Writes `.current-env` file, generates `.env` file from profile | Validates profile exists and is valid; preserves secrets; generates environment variables; completes within 2s |
+| `make env-show [COMPONENT=<name>]` | optional `COMPONENT` name | Displays current environment configuration (optionally filtered by component) | Shows active environment; component filter shows only relevant config; reads from `.current-env` |
+| `make env-validate` | none | Reports validation errors/warnings | Validates profile YAML syntax, required secrets exist, component dependencies satisfied; completes within 5s |
+| `make env-diff ENV1=<name> ENV2=<name>` | two environment names | Shows differences between profiles | Compares component configs, environment variables, secrets; outputs human-readable diff |
+| `make env-export [FORMAT=env]` | optional `FORMAT` (`env`, `yaml`, `json`) | Exports environment variables in requested format | Generates exportable configuration; defaults to `env` format; preserves secret masking |
+| `make env-component-status` | none | Shows status of all components in current environment | Checks component health using HealthProbe; shows running state, ports, connectivity; reads active profile |
 
 ## Terraform Module Interface (`modules/dev-workspace`)
 
@@ -93,6 +99,74 @@
 - `state` ∈ {`healthy`, `degraded`, `unhealthy`}.  
 - When any component `unhealthy`, `summary.state` must reflect that and `unhealthy_components` list details.  
 - Command accepts `--output=/path/to/file` for automation to persist payload.
+
+## Environment Profile File Contract
+
+Environment profiles are YAML files stored under `configs/environments/` following this schema:
+
+```yaml
+api_version: v1
+kind: EnvironmentProfile
+metadata:
+  name: local-dev
+  description: Local development environment
+  extends: base  # optional inheritance from base profile
+
+components:
+  postgres:
+    host: localhost
+    port: 5432
+    database: ai_aas
+    username: postgres
+    password_env: POSTGRES_PASSWORD
+    connection_string_template: "postgres://{username}:{password}@{host}:{port}/{database}?sslmode={sslmode}"
+    sslmode: disable
+    
+  user_org_service:
+    name: user-org-service
+    port: 8081
+    admin_port: 8443
+    host: localhost
+    endpoints:
+      health: http://localhost:8081/healthz
+      api: http://localhost:8081/v1
+    database_url_env: USER_ORG_DATABASE_URL
+
+environment_variables:
+  - name: ENVIRONMENT
+    value: local-dev
+  - name: DATABASE_URL
+    component: postgres
+    from_template: connection_string_template
+  - name: USER_ORG_DATABASE_URL
+    component: user_org_service
+    field: database_url_env
+
+secrets:
+  - name: POSTGRES_PASSWORD
+    source: env_file
+    file: .env.local
+  - name: OAUTH_HMAC_SECRET
+    source: env_file
+    file: .env.local
+```
+
+**Schema Rules**:
+- Profile files must be valid YAML with schema validation
+- `api_version` must be `v1` (future versions may introduce breaking changes)
+- `kind` must be `EnvironmentProfile`
+- Components can reference other components via `component:` field in environment variables
+- Secrets must reference secure sources (`env_file`, `vault`, `github`) and never hardcode values
+- Profiles can extend base profiles using `extends:` field for common defaults
+- Connection strings use templates with placeholders (`{username}`, `{password}`, etc.) that are substituted during activation
+- Component definitions must align with **ComponentRegistry** schema
+
+**Validation Requirements**:
+- YAML syntax validation
+- Schema validation (required fields present, types correct)
+- Component dependency validation (all dependencies exist in registry)
+- Secret availability validation (referenced secrets accessible from source)
+- Port conflict detection (within same environment profile)
 
 ## Observability Events
 

@@ -95,6 +95,9 @@ print_install_hint() {
         make) echo "Install GNU Make via Homebrew: brew install make" ;;
         aws) echo "Install AWS CLI via Homebrew: brew install awscli" ;;
         mc) echo "Install MinIO client via Homebrew: brew install minio/stable/mc" ;;
+        terraform) echo "Install Terraform via Homebrew: brew install terraform" ;;
+        vault) echo "Install Vault via Homebrew: brew install vault" ;;
+        linode-cli) echo "Install Linode CLI via pip: pip3 install linode-cli" ;;
         *) echo "Install ${cmd} using Homebrew or download from vendor site." ;;
       esac
       ;;
@@ -108,6 +111,9 @@ print_install_hint() {
         make) echo "Install GNU Make via package manager, e.g. sudo apt install build-essential." ;;
         aws) echo "Install AWS CLI v2: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html." ;;
         mc) echo "Install MinIO client: https://min.io/docs/minio/linux/reference/minio-mc.html." ;;
+        terraform) echo "Install Terraform: https://developer.hashicorp.com/terraform/downloads" ;;
+        vault) echo "Install Vault: https://developer.hashicorp.com/vault/downloads" ;;
+        linode-cli) echo "Install Linode CLI via pip: pip3 install linode-cli" ;;
         *) echo "Install ${cmd} via your distro package manager." ;;
       esac
       ;;
@@ -129,6 +135,34 @@ require_command() {
   return 1
 }
 
+check_docker_compose_v2() {
+  if command -v docker >/dev/null 2>&1; then
+    if docker compose version >/dev/null 2>&1; then
+      local version
+      version=$(docker compose version --short 2>/dev/null || docker compose version 2>/dev/null | head -1)
+      log "INFO" "Docker Compose v2: found (${version})"
+      return 0
+    else
+      log "ERROR" "Docker Compose v2: not found (required)"
+      case "${OS_NAME}" in
+        macOS)
+          echo "Upgrade Docker Desktop to enable Compose v2 plugin."
+          ;;
+        Linux|WSL)
+          echo "Install Docker Compose v2 plugin: https://docs.docker.com/compose/install/linux/"
+          ;;
+        *)
+          echo "Refer to Docker documentation for Compose v2 installation."
+          ;;
+      esac
+      return 1
+    fi
+  else
+    log "ERROR" "Docker CLI not found; cannot verify Docker Compose v2"
+    return 1
+  fi
+}
+
 validate_prereqs() {
   local missing=0
   step "Detect host operating system"
@@ -142,10 +176,16 @@ validate_prereqs() {
     fi
   done
 
-  for optional in "act:act (local GitHub Actions)" "aws:AWS CLI" "mc:MinIO Client"; do
+  # Verify Docker Compose v2
+  if ! check_docker_compose_v2; then
+    missing=1
+  fi
+
+  # Optional tooling for remote/local dev environment
+  for optional in "act:act (local GitHub Actions)" "aws:AWS CLI" "mc:MinIO Client" "terraform:Terraform (remote workspace)" "vault:Vault (secrets management)" "linode-cli:Linode CLI (remote workspace)"; do
     IFS=":" read -r cmd label <<<"${optional}"
     if ! command -v "${cmd}" >/dev/null 2>&1; then
-      log "WARN" "${label} not detected; optional but recommended"
+      log "WARN" "${label} not detected; optional but recommended for remote/local dev environment"
     else
       log "INFO" "${label} available"
     fi

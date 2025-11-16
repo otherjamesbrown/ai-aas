@@ -1,0 +1,130 @@
+# Log redaction patterns for Vector/system logs.
+# These patterns ensure sensitive data (passwords, tokens, keys) are masked in logs.
+# Used by Vector agent on remote workspaces and local development tooling.
+
+# Pattern definitions for common sensitive data types
+patterns:
+  # Password patterns (environment variables, connection strings, config files)
+  - name: postgres_password
+    description: "PostgreSQL password in connection strings and environment variables"
+    regex: '(?i)(postgres.*?password[=:]\s*)([^\s"',}]+)'
+    replacement: '\1***REDACTED***'
+  
+  - name: redis_password
+    description: "Redis password in connection strings"
+    regex: '(?i)(redis.*?password[=:]\s*)([^\s"',}]+)'
+    replacement: '\1***REDACTED***'
+  
+  - name: database_url_password
+    description: "Password in database URL connection strings"
+    regex: '(://[^:]+:)([^@]+)(@)'
+    replacement: '\1***REDACTED***\3'
+  
+  # API key and token patterns
+  - name: linode_token
+    description: "Linode API token"
+    regex: '(?i)(linode[_-]?token[=:]\s*|X-Auth-Token:\s*)([A-Za-z0-9]{40,})'
+    replacement: '\1***REDACTED***'
+  
+  - name: github_token
+    description: "GitHub personal access token or GitHub Actions token"
+    regex: '(?i)(github[_-]?token[=:]\s*|GITHUB_TOKEN[=:]\s*|ghp_[A-Za-z0-9]{36})'
+    replacement: '***REDACTED***'
+  
+  - name: api_key_header
+    description: "API key in HTTP headers"
+    regex: '(?i)(X-API-Key:\s*|Authorization:\s*Bearer\s+)([A-Za-z0-9\-_]{20,})'
+    replacement: '\1***REDACTED***'
+  
+  # Vault and secrets patterns
+  - name: vault_token
+    description: "Vault token"
+    regex: '(?i)(vault[_-]?token[=:]\s*|X-Vault-Token:\s*)([A-Za-z0-9\-_]{20,})'
+    replacement: '\1***REDACTED***'
+  
+  - name: aws_credentials
+    description: "AWS access key and secret"
+    regex: '(?i)(AWS_ACCESS_KEY_ID[=:]\s*|AWS_SECRET_ACCESS_KEY[=:]\s*)([A-Za-z0-9+/=]{20,})'
+    replacement: '\1***REDACTED***'
+  
+  # JWT tokens
+  - name: jwt_token
+    description: "JWT bearer tokens"
+    regex: '(Bearer\s+)([A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+)'
+    replacement: '\1***REDACTED***'
+  
+  # SSH key patterns
+  - name: ssh_private_key
+    description: "SSH private key content"
+    regex: '(-----BEGIN [A-Z ]+ PRIVATE KEY-----[\s\S]+?-----END [A-Z ]+ PRIVATE KEY-----)'
+    replacement: '***REDACTED SSH KEY***'
+  
+  # MinIO credentials
+  - name: minio_credentials
+    description: "MinIO access key and secret"
+    regex: '(?i)(MINIO_ROOT_USER[=:]\s*|MINIO_ROOT_PASSWORD[=:]\s*|MINIO_ACCESS_KEY[=:]\s*|MINIO_SECRET_KEY[=:]\s*)([^\s"',}]+)'
+    replacement: '\1***REDACTED***'
+  
+  # Generic environment variable patterns (fallback)
+  - name: password_env_var
+    description: "Generic password in environment variables"
+    regex: '(?i)([A-Z_]+PASSWORD[=:]\s*)([^\s"',}]+)'
+    replacement: '\1***REDACTED***'
+  
+  - name: secret_env_var
+    description: "Generic secret in environment variables"
+    regex: '(?i)([A-Z_]+SECRET[=:]\s*|[A-Z_]+_SECRET[=:]\s*)([^\s"',}]+)'
+    replacement: '\1***REDACTED***'
+  
+  - name: token_env_var
+    description: "Generic token in environment variables"
+    regex: '(?i)([A-Z_]+TOKEN[=:]\s*|[A-Z_]+_TOKEN[=:]\s*)([^\s"',}]+)'
+    replacement: '\1***REDACTED***'
+  
+  - name: key_env_var
+    description: "Generic key in environment variables"
+    regex: '(?i)([A-Z_]+KEY[=:]\s*|[A-Z_]+_KEY[=:]\s*)([^\s"',}]+)'
+    replacement: '\1***REDACTED***'
+
+# Field-level redaction (for structured logs/JSON)
+fields:
+  - name: "password"
+    patterns:
+      - password_env_var
+      - database_url_password
+  
+  - name: "secret"
+    patterns:
+      - secret_env_var
+      - vault_token
+  
+  - name: "token"
+    patterns:
+      - token_env_var
+      - jwt_token
+      - api_key_header
+  
+  - name: "credentials"
+    patterns:
+      - aws_credentials
+      - minio_credentials
+      - database_url_password
+
+# Vector agent configuration snippet
+# This can be included in Vector agent config for remote workspaces
+vector_config_snippet: |
+  [sources.local_logs]
+  type = "file"
+  include = ["/var/log/ai-aas/*.log"]
+  
+  [transforms.redact_secrets]
+  type = "remap"
+  inputs = ["local_logs"]
+  source = '''
+    # Apply redaction patterns (requires Vector remap transform)
+    # In practice, use Vector's built-in redaction or filter patterns
+    . = string(.message)
+    . = replace(.message, r'LINODE_TOKEN[=:]\s*[A-Za-z0-9]{40,}', 'LINODE_TOKEN=***REDACTED***')
+    . = replace(.message, r'password[=:]\s*[^\s"',}]+', 'password=***REDACTED***')
+  '''
+

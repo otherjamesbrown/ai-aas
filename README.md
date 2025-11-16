@@ -38,7 +38,26 @@ cd ai-aas
 make help
 ```
 
-Consult `specs/000-project-setup/quickstart.md` for prerequisite tooling, remote CI instructions, and troubleshooting guidance.
+### Prerequisites
+
+The bootstrap script verifies required and optional tooling. See `specs/000-project-setup/quickstart.md` for detailed installation instructions.
+
+**Required:**
+- Go 1.24+
+- Git
+- GNU Make 4.x
+- Docker (with Compose v2 plugin)
+- GitHub CLI (`gh`)
+
+**Optional (recommended for local/remote dev environment):**
+- Terraform (for remote workspace provisioning)
+- Vault (for secrets management)
+- Linode CLI (for remote workspace operations)
+- `act` (for local GitHub Actions testing)
+- AWS CLI (for S3-compatible storage)
+- MinIO Client (`mc`)
+
+For local development environment setup, see `specs/002-local-dev-environment/quickstart.md`.
 
 ### Database Schemas & Migrations
 
@@ -109,6 +128,7 @@ Consult `specs/000-project-setup/quickstart.md` for prerequisite tooling, remote
 
 ### Development & Operations
 - [Quickstart](./specs/000-project-setup/quickstart.md) - Developer setup and prerequisites
+- [Local Dev Environment](./specs/002-local-dev-environment/quickstart.md) - Local and remote workspace setup
 - [Troubleshooting Guides](./docs/troubleshooting/) - Development and operations troubleshooting
 - [Linode Access Guide](./docs/platform/linode-access.md) - Infrastructure access
 - [Remote CI Runbook](./docs/runbooks/ci-remote.md) - CI/CD operations

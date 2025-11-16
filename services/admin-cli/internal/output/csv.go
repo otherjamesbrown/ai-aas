@@ -14,7 +14,6 @@ package output
 import (
 	"encoding/csv"
 	"fmt"
-	"io"
 	"os"
 	"time"
 )

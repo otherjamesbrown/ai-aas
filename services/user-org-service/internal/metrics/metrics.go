@@ -1,9 +1,10 @@
 // Package metrics provides Prometheus metrics collectors for the user-org service.
 //
 // Purpose:
-//   This package defines and exports Prometheus metrics for authentication,
-//   authorization, and identity lifecycle operations. Metrics are registered
-//   globally and can be accessed via the /metrics endpoint.
+//
+//	This package defines and exports Prometheus metrics for authentication,
+//	authorization, and identity lifecycle operations. Metrics are registered
+//	globally and can be accessed via the /metrics endpoint.
 //
 // Dependencies:
 //   - github.com/prometheus/client_golang/prometheus: Prometheus Go client
@@ -17,11 +18,11 @@
 //   - specs/005-user-org-service/spec.md#T013 (Metrics & Observability)
 //
 // Usage:
-//   Metrics are automatically registered when the package is imported.
-//   Use the exported functions to record metric values:
-//     metrics.RecordAuthSuccess("password")
-//     metrics.RecordAuthFailure("password", "invalid_credentials")
 //
+//	Metrics are automatically registered when the package is imported.
+//	Use the exported functions to record metric values:
+//	  metrics.RecordAuthSuccess("password")
+//	  metrics.RecordAuthFailure("password", "invalid_credentials")
 package metrics
 
 import (
@@ -218,4 +219,3 @@ func RecordOIDCCallbackFailure(provider, reason string) {
 func RecordRecoveryAttempt(action string) {
 	RecoveryAttemptsTotal.WithLabelValues(action).Inc()
 }
-
