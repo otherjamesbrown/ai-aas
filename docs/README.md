@@ -1,43 +1,16 @@
-# Documentation Index
+# Documentation
 
-The AI-AAS repository maintains documentation alongside automation assets to aid onboarding, operations, and troubleshooting.
+This directory contains all the documentation for the AI-as-a-Service platform.
 
-## Getting Started
+## Directory Structure
 
-- [Quickstart](../specs/000-project-setup/quickstart.md)
-- [Project Plan](../specs/000-project-setup/plan.md)
-- [Project Spec](../specs/000-project-setup/spec.md)
-
-## Runbooks
-
-- [CI Remote Runbook](./runbooks/ci-remote.md)
-- [Linode Setup Runbook](./runbooks/linode-setup.md)
-
-## Platform Guides
-
-- [Infrastructure Overview](./platform/infrastructure-overview.md)
-- [Linode Access](./platform/linode-access.md)
-- [TLS/SSL Setup](./platform/tls-ssl-setup.md)
-- [Tooling Versions](./platform/tooling-versions.md)
-- [CI Remote CLI Usage](./platform/ci-remote-cli.md)
-
-## Troubleshooting
-
-- [Bootstrap Script](./troubleshooting/bootstrap.md)
-- [CI Parity](./troubleshooting/ci.md)
-- [Check Failures](./troubleshooting/check.md)
-
-## Metrics
-
-- [Retention Policy](./metrics/policy.md)
-- [Metrics README](./metrics/README.md)
-- [Sample Report](./metrics/report.md)
-
-## Services
-
-- [Service Customization](./services/customizing.md)
-- [Adoption Checklist](./services/checklist.md)
-- [Service Docs Index](./services/README.md)
-
-For broader repository context, refer to `llms.txt`.
-
+*   **`/adoption`**: Documents and resources related to driving adoption of the platform.
+*   **`/metrics`**: Information about the metrics the platform exposes and how to use them.
+*   **`/perf`**: Performance testing and analysis documentation.
+*   **`/platform`**: High-level documentation about the platform's architecture, design, and evolution.
+*   **`/release-notes`**: Notes for each release of the platform.
+*   **`/runbooks`**: Step-by-step guides for common operational tasks.
+*   **`/services`**: Detailed documentation for each of the microservices.
+*   **`/setup`**: Instructions for setting up the development environment and deploying the platform.
+*   **`/troubleshooting`**: Guides for diagnosing and resolving common issues.
+*   **`/upgrades`**: Instructions and playbooks for upgrading the platform.
