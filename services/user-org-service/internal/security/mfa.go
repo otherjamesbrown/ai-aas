@@ -1,9 +1,10 @@
 // Package security provides MFA (Multi-Factor Authentication) verification utilities.
 //
 // Purpose:
-//   This package implements TOTP (Time-based One-Time Password) verification
-//   for MFA-enabled users. It validates TOTP codes against stored secrets using
-//   the RFC 6238 standard.
+//
+//	This package implements TOTP (Time-based One-Time Password) verification
+//	for MFA-enabled users. It validates TOTP codes against stored secrets using
+//	the RFC 6238 standard.
 //
 // Dependencies:
 //   - github.com/pquerna/otp: TOTP code generation and verification
@@ -82,4 +83,3 @@ func GenerateTOTPQRCode(secret, email, issuer string) string {
 	return fmt.Sprintf("otpauth://totp/%s:%s?secret=%s&issuer=%s&algorithm=SHA1&digits=6&period=30",
 		issuer, email, secret, issuer)
 }
-

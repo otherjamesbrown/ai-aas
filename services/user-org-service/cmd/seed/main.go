@@ -1,9 +1,10 @@
 // Command seed bootstraps initial organization and user data for development/testing.
 //
 // Purpose:
-//   This utility creates a demo organization and admin user with a hashed password,
-//   enabling local development and testing without manual database setup. It supports
-//   custom org/user details via flags and can force re-seeding of existing data.
+//
+//	This utility creates a demo organization and admin user with a hashed password,
+//	enabling local development and testing without manual database setup. It supports
+//	custom org/user details via flags and can force re-seeding of existing data.
 //
 // Dependencies:
 //   - internal/config: Configuration (requires DATABASE_URL)
@@ -136,16 +137,16 @@ func seedUser(ctx context.Context, store *postgres.Store, orgID uuid.UUID, email
 
 	userID := uuid.New()
 	params := postgres.CreateUserParams{
-		ID:           userID,
-		OrgID:        orgID,
-		Email:        email,
-		DisplayName:   displayName,
-		PasswordHash:  passwordHash,
-		Status:        "active",
-		MFAEnrolled:   false,
-		MFAMethods:    []string{},
+		ID:             userID,
+		OrgID:          orgID,
+		Email:          email,
+		DisplayName:    displayName,
+		PasswordHash:   passwordHash,
+		Status:         "active",
+		MFAEnrolled:    false,
+		MFAMethods:     []string{},
 		RecoveryTokens: []string{},
-		Metadata:     map[string]any{},
+		Metadata:       map[string]any{},
 	}
 
 	user, err := store.CreateUser(ctx, params)
@@ -163,4 +164,3 @@ func generatePassword() string {
 	}
 	return string(b) + "123!"
 }
-

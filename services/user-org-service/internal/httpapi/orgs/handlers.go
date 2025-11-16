@@ -1,10 +1,11 @@
 // Package orgs provides HTTP handlers for organization lifecycle management.
 //
 // Purpose:
-//   This package implements REST API handlers for organization CRUD operations,
-//   including creation, retrieval, updates, and status management. Handlers
-//   enforce authorization, validate input, and emit audit events for all
-//   state changes.
+//
+//	This package implements REST API handlers for organization CRUD operations,
+//	including creation, retrieval, updates, and status management. Handlers
+//	enforce authorization, validate input, and emit audit events for all
+//	state changes.
 //
 // Dependencies:
 //   - github.com/go-chi/chi/v5: HTTP router for route parameters
@@ -46,7 +47,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
+	"go.uber.org/zap"
 
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/audit"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/bootstrap"
@@ -56,7 +57,7 @@ import (
 
 // RegisterRoutes mounts organization routes beneath /v1/orgs.
 // Users routes should be registered separately after this call.
-func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger zerolog.Logger) {
+func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger *zap.Logger) {
 	if rt == nil || rt.Postgres == nil {
 		return
 	}
@@ -77,43 +78,43 @@ func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger zerolog.Log
 // Handler serves organization management endpoints.
 type Handler struct {
 	runtime *bootstrap.Runtime
-	logger  zerolog.Logger
+	logger  *zap.Logger
 }
 
 // CreateOrgRequest represents the payload for creating an organization.
 type CreateOrgRequest struct {
-	Name              string            `json:"name"`
-	Slug              string            `json:"slug"`
-	BillingOwnerEmail string            `json:"billingOwnerEmail,omitempty"`
+	Name              string             `json:"name"`
+	Slug              string             `json:"slug"`
+	BillingOwnerEmail string             `json:"billingOwnerEmail,omitempty"`
 	Declarative       *DeclarativeConfig `json:"declarative,omitempty"`
-	Metadata          map[string]any    `json:"metadata,omitempty"`
+	Metadata          map[string]any     `json:"metadata,omitempty"`
 }
 
 // DeclarativeConfig represents declarative GitOps configuration.
 type DeclarativeConfig struct {
-	Enabled  bool   `json:"enabled"`
-	RepoURL  string `json:"repoUrl,omitempty"`
-	Branch   string `json:"branch,omitempty"`
+	Enabled bool   `json:"enabled"`
+	RepoURL string `json:"repoUrl,omitempty"`
+	Branch  string `json:"branch,omitempty"`
 }
 
 // UpdateOrgRequest represents the payload for updating an organization.
 type UpdateOrgRequest struct {
-	DisplayName   *string            `json:"displayName,omitempty"`
-	Status        *string            `json:"status,omitempty"`
-	BudgetPolicyID *string           `json:"budgetPolicyId,omitempty"`
-	Declarative   *DeclarativeConfig `json:"declarative,omitempty"`
-	Metadata      map[string]any     `json:"metadata,omitempty"`
+	DisplayName    *string            `json:"displayName,omitempty"`
+	Status         *string            `json:"status,omitempty"`
+	BudgetPolicyID *string            `json:"budgetPolicyId,omitempty"`
+	Declarative    *DeclarativeConfig `json:"declarative,omitempty"`
+	Metadata       map[string]any     `json:"metadata,omitempty"`
 }
 
 // OrganizationResponse represents an organization in API responses.
 type OrganizationResponse struct {
-	OrgID     string            `json:"orgId"`
-	Name      string            `json:"name"`
-	Slug      string            `json:"slug"`
-	Status    string            `json:"status"`
-	Metadata  map[string]any    `json:"metadata,omitempty"`
-	CreatedAt string            `json:"createdAt"`
-	UpdatedAt string            `json:"updatedAt"`
+	OrgID     string         `json:"orgId"`
+	Name      string         `json:"name"`
+	Slug      string         `json:"slug"`
+	Status    string         `json:"status"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
+	CreatedAt string         `json:"createdAt"`
+	UpdatedAt string         `json:"updatedAt"`
 }
 
 // CreateOrg handles POST /v1/orgs - Create a new organization.
@@ -123,7 +124,7 @@ func (h *Handler) CreateOrg(w http.ResponseWriter, r *http.Request) {
 
 	var req CreateOrgRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.logger.Warn().Err(err).Msg("invalid request payload")
+		h.logger.Warn("invalid request payload", zap.Error(err))
 		http.Error(w, "invalid request payload", http.StatusBadRequest)
 		return
 	}
@@ -165,20 +166,20 @@ func (h *Handler) CreateOrg(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := postgres.CreateOrgParams{
-		ID:                uuid.New(),
-		Slug:              slug,
-		Name:              req.Name,
-		Status:            "active",
+		ID:                 uuid.New(),
+		Slug:               slug,
+		Name:               req.Name,
+		Status:             "active",
 		BillingOwnerUserID: billingOwnerID,
-		DeclarativeMode:   declarativeMode,
+		DeclarativeMode:    declarativeMode,
 		DeclarativeRepoURL: declarativeRepoURL,
-		DeclarativeBranch: declarativeBranch,
-		Metadata:          req.Metadata,
+		DeclarativeBranch:  declarativeBranch,
+		Metadata:           req.Metadata,
 	}
 
 	org, err := h.runtime.Postgres.CreateOrg(ctx, params)
 	if err != nil {
-		h.logger.Error().Err(err).Str("slug", slug).Msg("failed to create organization")
+		h.logger.Error("failed to create organization", zap.Error(err), zap.String("slug", slug))
 		http.Error(w, "failed to create organization", http.StatusInternalServerError)
 		return
 	}
@@ -197,7 +198,7 @@ func (h *Handler) CreateOrg(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		h.logger.Error().Err(err).Msg("failed to encode response")
+		h.logger.Error("failed to encode response", zap.Error(err))
 	}
 }
 
@@ -222,7 +223,7 @@ func (h *Handler) GetOrg(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "organization not found", http.StatusNotFound)
 			return
 		}
-		h.logger.Error().Err(err).Str("orgId", orgIDParam).Msg("failed to get organization")
+		h.logger.Error("failed to get organization", zap.Error(err), zap.String("orgId", orgIDParam))
 		http.Error(w, "failed to retrieve organization", http.StatusInternalServerError)
 		return
 	}
@@ -230,7 +231,7 @@ func (h *Handler) GetOrg(w http.ResponseWriter, r *http.Request) {
 	resp := toOrgResponse(org)
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		h.logger.Error().Err(err).Msg("failed to encode response")
+		h.logger.Error("failed to encode response", zap.Error(err))
 	}
 }
 
@@ -254,14 +255,14 @@ func (h *Handler) UpdateOrg(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "organization not found", http.StatusNotFound)
 			return
 		}
-		h.logger.Error().Err(err).Str("orgId", orgIDParam).Msg("failed to get organization for update")
+		h.logger.Error("failed to get organization for update", zap.Error(err), zap.String("orgId", orgIDParam))
 		http.Error(w, "failed to retrieve organization", http.StatusInternalServerError)
 		return
 	}
 
 	var req UpdateOrgRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.logger.Warn().Err(err).Msg("invalid request payload")
+		h.logger.Warn("invalid request payload", zap.Error(err))
 		http.Error(w, "invalid request payload", http.StatusBadRequest)
 		return
 	}
@@ -320,7 +321,7 @@ func (h *Handler) UpdateOrg(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "organization was modified concurrently", http.StatusConflict)
 			return
 		}
-		h.logger.Error().Err(err).Str("orgId", existingOrg.ID.String()).Msg("failed to update organization")
+		h.logger.Error("failed to update organization", zap.Error(err), zap.String("orgId", existingOrg.ID.String()))
 		http.Error(w, "failed to update organization", http.StatusInternalServerError)
 		return
 	}
@@ -342,7 +343,7 @@ func (h *Handler) UpdateOrg(w http.ResponseWriter, r *http.Request) {
 	resp := toOrgResponse(org)
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		h.logger.Error().Err(err).Msg("failed to encode response")
+		h.logger.Error("failed to encode response", zap.Error(err))
 	}
 }
 
@@ -372,4 +373,3 @@ func toOrgResponse(org postgres.Org) OrganizationResponse {
 func getActorID(r *http.Request) uuid.UUID {
 	return middleware.GetUserID(r.Context())
 }
-

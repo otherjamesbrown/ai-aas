@@ -2,10 +2,11 @@
 // user-org service specific fields (org_id, user_id).
 //
 // Purpose:
-//   This file extends fosite.DefaultSession to include organization and user
-//   identifiers required for multi-tenant authorization. The session is
-//   serialized to JSON and stored in the oauth_sessions table, allowing
-//   token introspection and authorization decisions to include org context.
+//
+//	This file extends fosite.DefaultSession to include organization and user
+//	identifiers required for multi-tenant authorization. The session is
+//	serialized to JSON and stored in the oauth_sessions table, allowing
+//	token introspection and authorization decisions to include org context.
 //
 // Dependencies:
 //   - github.com/ory/fosite: DefaultSession base type and Session interface

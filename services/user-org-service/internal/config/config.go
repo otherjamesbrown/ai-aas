@@ -1,9 +1,10 @@
 // Package config provides environment variable-based configuration loading.
 //
 // Purpose:
-//   This package defines the service configuration structure and provides
-//   functions to load configuration from environment variables using envconfig.
-//   All binaries (admin-api, reconciler, seed) share this configuration structure.
+//
+//	This package defines the service configuration structure and provides
+//	functions to load configuration from environment variables using envconfig.
+//	All binaries (admin-api, reconciler, seed) share this configuration structure.
 //
 // Dependencies:
 //   - github.com/kelseyhightower/envconfig: Environment variable parsing
@@ -81,7 +82,7 @@ type Config struct {
 	OIDCGithubClientID string `envconfig:"OIDC_GITHUB_CLIENT_ID" default:""`
 	// OIDCGithubClientSecret is the GitHub OAuth2 client secret for IdP federation.
 	OIDCGithubClientSecret string `envconfig:"OIDC_GITHUB_CLIENT_SECRET" default:""`
-	
+
 	// Lockout configuration
 	// LockoutMaxAttempts is the maximum number of failed login attempts before lockout (default: 5).
 	LockoutMaxAttempts int `envconfig:"LOCKOUT_MAX_ATTEMPTS" default:"5"`

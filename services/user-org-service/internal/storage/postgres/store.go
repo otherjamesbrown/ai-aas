@@ -762,6 +762,36 @@ func (s *Store) GetAPIKeyByFingerprint(ctx context.Context, orgID uuid.UUID, fin
 	return out, err
 }
 
+// ListAPIKeysForPrincipal lists all API keys for a given principal (user or service account) within an organization.
+func (s *Store) ListAPIKeysForPrincipal(ctx context.Context, orgID uuid.UUID, principalType PrincipalType, principalID uuid.UUID) ([]APIKey, error) {
+	var out []APIKey
+	err := s.withTenantTx(ctx, orgID, func(ctx context.Context, tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT *
+			FROM api_keys
+			WHERE org_id = $1
+			  AND principal_type = $2
+			  AND principal_id = $3
+			  AND deleted_at IS NULL
+			ORDER BY created_at DESC
+		`, orgID, string(principalType), principalID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			key, err := scanAPIKey(rows)
+			if err != nil {
+				return err
+			}
+			out = append(out, key)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 // CreateServiceAccount creates a new service account within an organization.
 func (s *Store) CreateServiceAccount(ctx context.Context, params CreateServiceAccountParams) (ServiceAccount, error) {
 	if params.Metadata == nil {
@@ -1050,12 +1080,12 @@ func scanAPIKey(row pgx.Row) (APIKey, error) {
 
 func scanServiceAccount(row pgx.Row) (ServiceAccount, error) {
 	var (
-		sa          ServiceAccount
-		orgID       uuid.UUID
-		description pgtype.Text
+		sa           ServiceAccount
+		orgID        uuid.UUID
+		description  pgtype.Text
 		metadataJSON []byte
 		lastRotation pgtype.Timestamptz
-		deleted     pgtype.Timestamptz
+		deleted      pgtype.Timestamptz
 	)
 	err := row.Scan(
 		&sa.ID,

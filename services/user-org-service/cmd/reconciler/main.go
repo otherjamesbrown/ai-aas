@@ -2,10 +2,11 @@
 // configuration with the operational database state.
 //
 // Purpose:
-//   This binary runs as a separate process from admin-api, handling declarative
-//   configuration reconciliation, drift detection, and conflict resolution.
-//   It shares the same runtime dependencies (Postgres, Redis, OAuth) via bootstrap
-//   but serves on a different port (HTTP_PORT + 1) to avoid conflicts.
+//
+//	This binary runs as a separate process from admin-api, handling declarative
+//	configuration reconciliation, drift detection, and conflict resolution.
+//	It shares the same runtime dependencies (Postgres, Redis, OAuth) via bootstrap
+//	but serves on a different port (HTTP_PORT + 1) to avoid conflicts.
 //
 // Dependencies:
 //   - internal/bootstrap: Runtime initialization (shared with admin-api)
@@ -48,7 +49,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rs/zerolog"
+	"go.uber.org/zap"
 
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/bootstrap"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/config"
@@ -65,20 +66,19 @@ func main() {
 
 	runtime, err := bootstrap.Initialize(ctx, cfg)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to bootstrap runtime")
+		logger.Fatal("failed to bootstrap runtime", zap.Error(err))
 	}
 	defer func() {
 		if err := runtime.Close(ctx); err != nil {
-			logger.Error().Err(err).Msg("failed to close runtime resources")
+			logger.Error("failed to close runtime resources", zap.Error(err))
 		}
 	}()
 
 	// Reconciler typically exposes health on a different port to avoid conflicts with admin API.
 	port := cfg.HTTPPort + 1
-	logger.Info().
-		Str("env", cfg.Environment).
-		Int("port", port).
-		Msg("starting reconciler")
+	logger.Info("starting reconciler",
+		zap.String("env", cfg.Environment),
+		zap.Int("port", port))
 
 	srv := server.New(server.Options{
 		Port:        port,
@@ -89,7 +89,7 @@ func main() {
 
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Fatal().Err(err).Msg("reconciler server failed")
+			logger.Fatal("reconciler server failed", zap.Error(err))
 		}
 	}()
 
@@ -103,16 +103,16 @@ func main() {
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		logger.Error().Err(err).Msg("graceful shutdown failed")
+		logger.Error("graceful shutdown failed", zap.Error(err))
 		os.Exit(1)
 	}
 
-	logger.Info().Msg("reconciler stopped")
+	logger.Info("reconciler stopped")
 }
 
-func runWorker(ctx context.Context, logger zerolog.Logger, rt *bootstrap.Runtime) {
-	logger.Info().Msg("reconciler worker started (stub)")
+func runWorker(ctx context.Context, logger *zap.Logger, rt *bootstrap.Runtime) {
+	logger.Info("reconciler worker started (stub)")
 	// TODO: Use rt.Postgres, rt.OAuth2Provider, etc. for reconciliation logic
 	<-ctx.Done()
-	logger.Info().Msg("reconciler worker stopping")
+	logger.Info("reconciler worker stopping")
 }

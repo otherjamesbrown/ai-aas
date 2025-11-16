@@ -1,8 +1,9 @@
 // Package auth provides API key validation endpoint.
 //
 // Purpose:
-//   This package implements API key validation for external services (e.g., API Router Service).
-//   Validates API keys by computing fingerprint and looking up key metadata.
+//
+//	This package implements API key validation for external services (e.g., API Router Service).
+//	Validates API keys by computing fingerprint and looking up key metadata.
 //
 // Dependencies:
 //   - github.com/go-chi/chi/v5: HTTP router
@@ -15,7 +16,6 @@
 //
 // Requirements Reference:
 //   - specs/005-user-org-service/spec.md#FR-004 (API Key Lifecycle)
-//
 package auth
 
 import (
@@ -33,7 +33,7 @@ import (
 
 // ValidateAPIKeyRequest represents the payload for validating an API key.
 type ValidateAPIKeyRequest struct {
-	APIKeySecret string `json:"apiKeySecret"` // The API key secret to validate
+	APIKeySecret string `json:"apiKeySecret"`    // The API key secret to validate
 	OrgID        string `json:"orgId,omitempty"` // Optional: UUID or slug (helps narrow search)
 }
 
@@ -161,4 +161,3 @@ func (h *Handler) ValidateAPIKey(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
 }
-

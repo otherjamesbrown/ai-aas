@@ -1,8 +1,9 @@
 // Package serviceaccounts provides service account management endpoints.
 //
 // Purpose:
-//   This package implements service account CRUD operations for organizations.
-//   Service accounts are used to issue API keys for programmatic access.
+//
+//	This package implements service account CRUD operations for organizations.
+//	Service accounts are used to issue API keys for programmatic access.
 //
 // Dependencies:
 //   - github.com/go-chi/chi/v5: HTTP router
@@ -18,7 +19,6 @@
 //
 // Requirements Reference:
 //   - specs/005-user-org-service/spec.md#FR-004 (API Key Lifecycle)
-//
 package serviceaccounts
 
 import (
@@ -27,14 +27,14 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
+	"go.uber.org/zap"
 
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/bootstrap"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/storage/postgres"
 )
 
 // RegisterRoutes mounts service account routes beneath /v1/orgs/{orgId}.
-func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger zerolog.Logger) {
+func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger *zap.Logger) {
 	if rt == nil || rt.Postgres == nil {
 		return
 	}
@@ -52,7 +52,7 @@ func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger zerolog.Log
 // Handler serves service account management endpoints.
 type Handler struct {
 	runtime *bootstrap.Runtime
-	logger  zerolog.Logger
+	logger  *zap.Logger
 }
 
 // CreateServiceAccountRequest represents the payload for creating a service account.
@@ -78,7 +78,7 @@ func (h *Handler) CreateServiceAccount(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "organization not found", http.StatusNotFound)
 				return
 			}
-			h.logger.Error().Err(err).Str("orgId", orgIDParam).Msg("failed to resolve organization")
+			h.logger.Error("failed to resolve organization", zap.Error(err), zap.String("orgId", orgIDParam))
 			http.Error(w, "failed to resolve organization", http.StatusInternalServerError)
 			return
 		}
@@ -107,7 +107,7 @@ func (h *Handler) CreateServiceAccount(w http.ResponseWriter, r *http.Request) {
 
 	serviceAccount, err := h.runtime.Postgres.CreateServiceAccount(ctx, params)
 	if err != nil {
-		h.logger.Error().Err(err).Str("orgId", orgID.String()).Str("name", req.Name).Msg("failed to create service account")
+		h.logger.Error("failed to create service account", zap.Error(err), zap.String("orgId", orgID.String()), zap.String("name", req.Name))
 		http.Error(w, "failed to create service account", http.StatusInternalServerError)
 		return
 	}
@@ -160,7 +160,7 @@ func (h *Handler) GetServiceAccount(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "service account not found", http.StatusNotFound)
 			return
 		}
-		h.logger.Error().Err(err).Str("serviceAccountId", serviceAccountID.String()).Msg("failed to get service account")
+		h.logger.Error("failed to get service account", zap.Error(err), zap.String("serviceAccountId", serviceAccountID.String()))
 		http.Error(w, "failed to retrieve service account", http.StatusInternalServerError)
 		return
 	}
@@ -207,4 +207,3 @@ func (h *Handler) DeleteServiceAccount(w http.ResponseWriter, r *http.Request) {
 	// TODO: Implement soft delete
 	http.Error(w, "not implemented", http.StatusNotImplemented)
 }
-

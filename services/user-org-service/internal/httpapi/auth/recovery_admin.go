@@ -1,9 +1,9 @@
 // Package auth provides admin endpoints for recovery request approval.
 //
 // Purpose:
-//   This package implements admin endpoints for approving/rejecting recovery requests
-//   when RECOVERY_REQUIRES_ADMIN_APPROVAL is enabled.
 //
+//	This package implements admin endpoints for approving/rejecting recovery requests
+//	when RECOVERY_REQUIRES_ADMIN_APPROVAL is enabled.
 package auth
 
 import (
@@ -28,9 +28,9 @@ type ApproveRecoveryRequest struct {
 
 // RejectRecoveryRequest represents the payload for rejecting a recovery request.
 type RejectRecoveryRequest struct {
-	Token string `json:"token"` // Recovery token to reject
-	Email string `json:"email"` // User email
-	OrgID string `json:"org_id,omitempty"`
+	Token  string `json:"token"` // Recovery token to reject
+	Email  string `json:"email"` // User email
+	OrgID  string `json:"org_id,omitempty"`
 	Reason string `json:"reason,omitempty"` // Optional rejection reason
 }
 
@@ -269,4 +269,3 @@ func (h *Handler) rejectRecoveryToken(tokens []string, token string) ([]string, 
 	}
 	return result, found
 }
-

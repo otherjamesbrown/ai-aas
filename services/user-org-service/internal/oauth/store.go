@@ -1,11 +1,12 @@
 // Package oauth implements Fosite OAuth2/OpenID Connect storage and session management.
 //
 // Purpose:
-//   This package provides a PostgreSQL-backed implementation of fosite.Storage,
-//   enabling OAuth2 authorization code, refresh token, PKCE, and resource owner
-//   password credentials flows. Sessions are cached in Redis for performance,
-//   with Postgres as the source of truth. The package also includes user
-//   authentication via password verification and lockout checks.
+//
+//	This package provides a PostgreSQL-backed implementation of fosite.Storage,
+//	enabling OAuth2 authorization code, refresh token, PKCE, and resource owner
+//	password credentials flows. Sessions are cached in Redis for performance,
+//	with Postgres as the source of truth. The package also includes user
+//	authentication via password verification and lockout checks.
 //
 // Dependencies:
 //   - github.com/ory/fosite: OAuth2 framework interfaces and types
@@ -154,7 +155,9 @@ func (s *Store) SetClientAssertionJWT(context.Context, string, time.Time) error 
 // Side effects:
 //   - Updates last_login_at in background goroutine (non-blocking)
 func (s *Store) Authenticate(ctx context.Context, username, password string) (string, error) {
+	fmt.Printf("[AUTHENTICATE START] username=%s, ctx_done=%v\n", username, ctx.Err())
 	if username == "" || password == "" {
+		fmt.Printf("[AUTHENTICATE] Empty username or password\n")
 		return "", fosite.ErrNotFound
 	}
 
@@ -166,6 +169,7 @@ func (s *Store) Authenticate(ctx context.Context, username, password string) (st
 		lockoutUntil *time.Time
 	)
 
+	fmt.Printf("[AUTHENTICATE] Executing database query for username=%s\n", username)
 	err := s.Store.Pool().QueryRow(ctx, `
 		SELECT user_id, org_id, status, password_hash, lockout_until
 		FROM users
@@ -175,24 +179,43 @@ func (s *Store) Authenticate(ctx context.Context, username, password string) (st
 	`, username).Scan(&userID, &orgID, &status, &passwordHash, &lockoutUntil)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			fmt.Printf("[AUTHENTICATE] User not found: username=%s\n", username)
 			return "", fosite.ErrNotFound
 		}
-		return "", err
+		// Log database errors that cause server_error (non-ErrNotFound errors)
+		// This helps debug why browser requests fail while curl succeeds
+		// Using fmt.Printf as fallback since Store doesn't have direct logger access
+		fmt.Printf("[AUTHENTICATE ERROR] Database query failed for username=%s, error=%v, error_type=%T, ctx_done=%v\n",
+			username, err, err, ctx.Err())
+		return "", fmt.Errorf("authenticate database query failed: %w", err)
 	}
+	fmt.Printf("[AUTHENTICATE] Database query succeeded for username=%s, user_id=%s, status=%s\n", username, userID.String(), status)
 
 	// Check if account is locked out (specs/005-user-org-service/spec.md#FR-008)
 	if lockoutUntil != nil && lockoutUntil.After(time.Now()) {
+		fmt.Printf("[AUTHENTICATE] Account locked for username=%s, lockout_until=%v\n", username, lockoutUntil)
 		return "", fosite.ErrNotFound // Don't reveal lockout status
 	}
 
 	if !strings.EqualFold(status, "active") {
+		fmt.Printf("[AUTHENTICATE] Account not active for username=%s, status=%s\n", username, status)
 		return "", fosite.ErrNotFound
 	}
 
+	fmt.Printf("[AUTHENTICATE] About to verify password for username=%s, ctx_done=%v\n", username, ctx.Err())
 	ok, err := security.VerifyPassword(password, passwordHash)
-	if err != nil || !ok {
+	if err != nil {
+		fmt.Printf("[AUTHENTICATE ERROR] Password verification failed for username=%s, error=%v, error_type=%T, ctx_done=%v\n",
+			username, err, err, ctx.Err())
+		// Return the actual error (not ErrNotFound) so Fosite wraps it as server_error
+		// This helps us see what's actually failing
+		return "", fmt.Errorf("password verification error: %w", err)
+	}
+	if !ok {
+		fmt.Printf("[AUTHENTICATE] Password mismatch for username=%s\n", username)
 		return "", fosite.ErrNotFound
 	}
+	fmt.Printf("[AUTHENTICATE] Password verified successfully for username=%s, user_id=%s\n", username, userID.String())
 
 	// Best effort touch of last_login_at (non-blocking, fire-and-forget).
 	// This allows the auth flow to complete quickly while still tracking login times.

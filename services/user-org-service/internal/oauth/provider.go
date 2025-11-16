@@ -1,11 +1,12 @@
 // Package oauth (provider.go) composes and configures the Fosite OAuth2 provider.
 //
 // Purpose:
-//   This file provides the NewProvider function that wires together Fosite's
-//   OAuth2 provider with storage, HMAC strategy, and grant type handlers.
-//   It supports static client configuration from environment variables and
-//   composes the provider with standard OAuth2 flows (authorization code,
-//   refresh token, PKCE, resource owner password credentials, client credentials).
+//
+//	This file provides the NewProvider function that wires together Fosite's
+//	OAuth2 provider with storage, HMAC strategy, and grant type handlers.
+//	It supports static client configuration from environment variables and
+//	composes the provider with standard OAuth2 flows (authorization code,
+//	refresh token, PKCE, resource owner password credentials, client credentials).
 //
 // Dependencies:
 //   - github.com/ory/fosite: OAuth2 framework and compose utilities

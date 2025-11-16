@@ -26,6 +26,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/ai-aas/shared-go/logging"
 	"github.com/otherjamesbrown/ai-aas/shared/go/observability"
 )
 
@@ -63,29 +64,17 @@ func Init(ctx context.Context, cfg Config) (*Observability, error) {
 		return nil, fmt.Errorf("init observability: %w", err)
 	}
 
-	// Initialize zap logger
-	logLevel := parseLogLevel(cfg.LogLevel)
-	zapConfig := zap.NewProductionConfig()
-	zapConfig.Level = zap.NewAtomicLevelAt(logLevel)
-	zapConfig.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
-	zapConfig.EncoderConfig.EncodeLevel = zapcore.LowercaseLevelEncoder
+	// Initialize logger using shared logging package
+	loggingCfg := logging.DefaultConfig().
+		WithServiceName(cfg.ServiceName).
+		WithEnvironment(cfg.Environment).
+		WithLogLevel(cfg.LogLevel)
 
-	if cfg.Environment == "development" {
-		zapConfig = zap.NewDevelopmentConfig()
-		zapConfig.Level = zap.NewAtomicLevelAt(logLevel)
-	}
-
-	logger, err := zapConfig.Build(
-		zap.AddCaller(),
-		zap.AddStacktrace(zapcore.ErrorLevel),
-		zap.Fields(
-			zap.String("service", cfg.ServiceName),
-			zap.String("environment", cfg.Environment),
-		),
-	)
+	loggerWrapper, err := logging.New(loggingCfg)
 	if err != nil {
 		return nil, fmt.Errorf("init logger: %w", err)
 	}
+	logger := loggerWrapper.Logger
 
 	return &Observability{
 		TracerProvider: tracerProvider,
@@ -128,7 +117,8 @@ func (o *Observability) Shutdown(ctx context.Context) error {
 	return firstErr
 }
 
-// parseLogLevel converts a string log level to zapcore.Level.
+// parseLogLevel is deprecated - use shared/go/logging package instead.
+// Kept for backward compatibility during migration.
 func parseLogLevel(level string) zapcore.Level {
 	switch strings.ToLower(level) {
 	case "debug":

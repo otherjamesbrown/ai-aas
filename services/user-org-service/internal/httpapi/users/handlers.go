@@ -1,10 +1,11 @@
 // Package users provides HTTP handlers for user lifecycle management.
 //
 // Purpose:
-//   This package implements REST API handlers for user management operations,
-//   including invites, user CRUD, role assignments, and status updates (suspend,
-//   activate). Handlers enforce authorization, validate input, and emit audit
-//   events for all state changes.
+//
+//	This package implements REST API handlers for user management operations,
+//	including invites, user CRUD, role assignments, and status updates (suspend,
+//	activate). Handlers enforce authorization, validate input, and emit audit
+//	events for all state changes.
 //
 // Dependencies:
 //   - github.com/go-chi/chi/v5: HTTP router for route parameters
@@ -56,7 +57,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/rs/zerolog"
+	"go.uber.org/zap"
 
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/audit"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/bootstrap"
@@ -67,7 +68,7 @@ import (
 
 // RegisterRoutes mounts user management routes beneath /v1/orgs/{orgId}.
 // This should be called from within the orgs route group to ensure proper route matching.
-func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger zerolog.Logger) {
+func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger *zap.Logger) {
 	if rt == nil || rt.Postgres == nil {
 		return
 	}
@@ -87,14 +88,14 @@ func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger zerolog.Log
 // Handler serves user management endpoints.
 type Handler struct {
 	runtime *bootstrap.Runtime
-	logger  zerolog.Logger
+	logger  *zap.Logger
 }
 
 // InviteUserRequest represents the payload for inviting a user.
 type InviteUserRequest struct {
-	Email         string   `json:"email"`
-	Roles         []string `json:"roles,omitempty"`
-	ExpiresInHours int     `json:"expiresInHours,omitempty"`
+	Email          string   `json:"email"`
+	Roles          []string `json:"roles,omitempty"`
+	ExpiresInHours int      `json:"expiresInHours,omitempty"`
 }
 
 // InviteResponse represents an invite in API responses.
@@ -107,22 +108,22 @@ type InviteResponse struct {
 
 // UserResponse represents a user in API responses.
 type UserResponse struct {
-	UserID      string            `json:"userId"`
-	OrgID       string            `json:"orgId"`
-	Email       string            `json:"email"`
-	DisplayName string            `json:"displayName"`
-	Status      string            `json:"status"`
-	MFAEnrolled bool              `json:"mfaEnrolled"`
-	Metadata    map[string]any    `json:"metadata,omitempty"`
-	CreatedAt   string            `json:"createdAt"`
-	UpdatedAt   string            `json:"updatedAt"`
+	UserID      string         `json:"userId"`
+	OrgID       string         `json:"orgId"`
+	Email       string         `json:"email"`
+	DisplayName string         `json:"displayName"`
+	Status      string         `json:"status"`
+	MFAEnrolled bool           `json:"mfaEnrolled"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
+	CreatedAt   string         `json:"createdAt"`
+	UpdatedAt   string         `json:"updatedAt"`
 }
 
 // UpdateUserRequest represents the payload for updating a user.
 type UpdateUserRequest struct {
-	DisplayName *string         `json:"displayName,omitempty"`
-	Status      *string         `json:"status,omitempty"`
-	Metadata    map[string]any  `json:"metadata,omitempty"`
+	DisplayName *string        `json:"displayName,omitempty"`
+	Status      *string        `json:"status,omitempty"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
 }
 
 // RoleAssignmentRequest represents role assignment updates.
@@ -145,7 +146,7 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 
 	var req InviteUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.logger.Warn().Err(err).Msg("invalid request payload")
+		h.logger.Warn("invalid request payload", zap.Error(err))
 		http.Error(w, "invalid request payload", http.StatusBadRequest)
 		return
 	}
@@ -175,15 +176,15 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 	// Generate secure invite token
 	inviteToken, err := generateInviteToken()
 	if err != nil {
-		h.logger.Error().Err(err).Msg("failed to generate invite token")
+		h.logger.Error("failed to generate invite token", zap.Error(err))
 		http.Error(w, "failed to create invite", http.StatusInternalServerError)
 		return
 	}
-	
+
 	// Hash the invite token for secure storage
 	tokenHash, err := security.HashPassword(inviteToken)
 	if err != nil {
-		h.logger.Error().Err(err).Msg("failed to hash invite token")
+		h.logger.Error("failed to hash invite token", zap.Error(err))
 		http.Error(w, "failed to create invite", http.StatusInternalServerError)
 		return
 	}
@@ -191,13 +192,13 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 	// Generate temporary password for user (user will reset on acceptance)
 	tempPassword, err := generateInviteToken()
 	if err != nil {
-		h.logger.Error().Err(err).Msg("failed to generate temporary password")
+		h.logger.Error("failed to generate temporary password", zap.Error(err))
 		http.Error(w, "failed to create invite", http.StatusInternalServerError)
 		return
 	}
 	passwordHash, err := security.HashPassword(tempPassword)
 	if err != nil {
-		h.logger.Error().Err(err).Msg("failed to hash invite password")
+		h.logger.Error("failed to hash invite password", zap.Error(err))
 		http.Error(w, "failed to create invite", http.StatusInternalServerError)
 		return
 	}
@@ -205,63 +206,63 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 	// Create user with invited status
 	userID := uuid.New()
 	actorID := getActorID(r)
-	
+
 	// Create user first (uses its own transaction with RLS)
 	params := postgres.CreateUserParams{
-		ID:           userID,
-		OrgID:        orgID,
-		Email:        email,
-		DisplayName:  email, // Default to email until user sets display name
-		PasswordHash: passwordHash,
-		Status:       "invited",
-		MFAEnrolled:  false,
-		MFAMethods:   []string{},
+		ID:             userID,
+		OrgID:          orgID,
+		Email:          email,
+		DisplayName:    email, // Default to email until user sets display name
+		PasswordHash:   passwordHash,
+		Status:         "invited",
+		MFAEnrolled:    false,
+		MFAMethods:     []string{},
 		RecoveryTokens: []string{},
 		Metadata: map[string]any{
 			"invite_expires_at": expiresAt.Format(time.RFC3339),
 			"roles":             req.Roles,
 		},
 	}
-	
+
 	createdUser, err := h.runtime.Postgres.CreateUser(ctx, params)
 	if err != nil {
-		h.logger.Error().Err(err).Str("email", email).Msg("failed to create invited user")
+		h.logger.Error("failed to create invited user", zap.Error(err), zap.String("email", email))
 		http.Error(w, "failed to create invite", http.StatusInternalServerError)
 		return
 	}
-	
+
 	// Store invite token hash in separate table (in tenant transaction for RLS)
 	tx, err := h.runtime.Postgres.Pool().BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		h.logger.Error().Err(err).Str("email", email).Msg("failed to begin transaction for invite token")
+		h.logger.Error("failed to begin transaction for invite token", zap.Error(err), zap.String("email", email))
 		http.Error(w, "failed to create invite", http.StatusInternalServerError)
 		return
 	}
 	defer tx.Rollback(ctx)
-	
+
 	// Set tenant context for RLS
 	escapedOrgID := strings.ReplaceAll(orgID.String(), "'", "''")
 	if _, err := tx.Exec(ctx, fmt.Sprintf("SET LOCAL app.org_id = '%s'", escapedOrgID)); err != nil {
-		h.logger.Error().Err(err).Str("email", email).Msg("failed to set tenant context")
+		h.logger.Error("failed to set tenant context", zap.Error(err), zap.String("email", email))
 		http.Error(w, "failed to create invite", http.StatusInternalServerError)
 		return
 	}
-	
+
 	// Store invite token hash
 	_, err = tx.Exec(ctx, `
 		INSERT INTO invite_tokens (org_id, user_id, token_hash, expires_at, created_by_user_id)
 		VALUES ($1, $2, $3, $4, $5)
 	`, orgID, userID, tokenHash, expiresAt, actorID)
 	if err != nil {
-		h.logger.Error().Err(err).Str("email", email).Msg("failed to store invite token")
+		h.logger.Error("failed to store invite token", zap.Error(err), zap.String("email", email))
 		// User was created but token wasn't - this is a partial failure
 		// In production, consider rolling back or marking user for cleanup
 		http.Error(w, "failed to create invite", http.StatusInternalServerError)
 		return
 	}
-	
+
 	if err := tx.Commit(ctx); err != nil {
-		h.logger.Error().Err(err).Str("email", email).Msg("failed to commit invite token transaction")
+		h.logger.Error("failed to commit invite token transaction", zap.Error(err), zap.String("email", email))
 		http.Error(w, "failed to create invite", http.StatusInternalServerError)
 		return
 	}
@@ -288,7 +289,7 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		h.logger.Error().Err(err).Msg("failed to encode response")
+		h.logger.Error("failed to encode response", zap.Error(err))
 	}
 }
 
@@ -334,7 +335,7 @@ func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "user not found", http.StatusNotFound)
 			return
 		}
-		h.logger.Error().Err(err).Str("userId", userIDParam).Msg("failed to get user")
+		h.logger.Error("failed to get user", zap.Error(err), zap.String("userId", userIDParam))
 		http.Error(w, "failed to retrieve user", http.StatusInternalServerError)
 		return
 	}
@@ -342,7 +343,7 @@ func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 	resp := toUserResponse(user)
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		h.logger.Error().Err(err).Msg("failed to encode response")
+		h.logger.Error("failed to encode response", zap.Error(err))
 	}
 }
 
@@ -372,14 +373,14 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "user not found", http.StatusNotFound)
 			return
 		}
-		h.logger.Error().Err(err).Str("userId", userIDParam).Msg("failed to get user for update")
+		h.logger.Error("failed to get user for update", zap.Error(err), zap.String("userId", userIDParam))
 		http.Error(w, "failed to retrieve user", http.StatusInternalServerError)
 		return
 	}
 
 	var req UpdateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.logger.Warn().Err(err).Msg("invalid request payload")
+		h.logger.Warn("invalid request payload", zap.Error(err))
 		http.Error(w, "invalid request payload", http.StatusBadRequest)
 		return
 	}
@@ -393,10 +394,10 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		}
 
 		statusParams := postgres.UpdateUserStatusParams{
-			OrgID:  orgID,
-			ID:     userID,
+			OrgID:   orgID,
+			ID:      userID,
 			Version: existingUser.Version,
-			Status: *req.Status,
+			Status:  *req.Status,
 		}
 
 		user, err := h.runtime.Postgres.UpdateUserStatus(ctx, statusParams)
@@ -405,7 +406,7 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "user was modified concurrently", http.StatusConflict)
 				return
 			}
-			h.logger.Error().Err(err).Str("userId", userIDParam).Msg("failed to update user status")
+			h.logger.Error("failed to update user status", zap.Error(err), zap.String("userId", userIDParam))
 			http.Error(w, "failed to update user", http.StatusInternalServerError)
 			return
 		}
@@ -429,7 +430,7 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		resp := toUserResponse(user)
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
-			h.logger.Error().Err(err).Msg("failed to encode response")
+			h.logger.Error("failed to encode response", zap.Error(err))
 		}
 		return
 	}
@@ -437,13 +438,13 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	// Update profile (display name, metadata) if provided
 	if req.DisplayName != nil || req.Metadata != nil {
 		profileParams := postgres.UpdateUserProfileParams{
-			OrgID:      orgID,
-			ID:         userID,
-			Version:    existingUser.Version,
+			OrgID:       orgID,
+			ID:          userID,
+			Version:     existingUser.Version,
 			DisplayName: existingUser.DisplayName,
 			MFAEnrolled: existingUser.MFAEnrolled,
-			MFAMethods: existingUser.MFAMethods,
-			Metadata:   existingUser.Metadata,
+			MFAMethods:  existingUser.MFAMethods,
+			Metadata:    existingUser.Metadata,
 		}
 
 		if req.DisplayName != nil {
@@ -459,7 +460,7 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "user was modified concurrently", http.StatusConflict)
 				return
 			}
-			h.logger.Error().Err(err).Str("userId", userIDParam).Msg("failed to update user profile")
+			h.logger.Error("failed to update user profile", zap.Error(err), zap.String("userId", userIDParam))
 			http.Error(w, "failed to update user", http.StatusInternalServerError)
 			return
 		}
@@ -482,7 +483,7 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		resp := toUserResponse(user)
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
-			h.logger.Error().Err(err).Msg("failed to encode response")
+			h.logger.Error("failed to encode response", zap.Error(err))
 		}
 		return
 	}
@@ -512,7 +513,7 @@ func (h *Handler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
 
 	var req RoleAssignmentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.logger.Warn().Err(err).Msg("invalid request payload")
+		h.logger.Warn("invalid request payload", zap.Error(err))
 		http.Error(w, "invalid request payload", http.StatusBadRequest)
 		return
 	}
@@ -521,11 +522,10 @@ func (h *Handler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
 	// For now, store roles in user metadata as temporary solution
 	// TODO: Emit audit event
 
-	h.logger.Info().
-		Str("orgId", orgID.String()).
-		Str("userId", userID.String()).
-		Strs("roles", req.Roles).
-		Msg("role assignment requested (not yet implemented)")
+	h.logger.Info("role assignment requested (not yet implemented)",
+		zap.String("orgId", orgID.String()),
+		zap.String("userId", userID.String()),
+		zap.Strings("roles", req.Roles))
 
 	_ = ctx // Suppress unused variable warning
 	w.WriteHeader(http.StatusNotImplemented)
@@ -578,4 +578,3 @@ func generateInviteToken() (string, error) {
 	// Encode as URL-safe base64 (no padding)
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
-

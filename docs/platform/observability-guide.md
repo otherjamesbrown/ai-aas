@@ -21,6 +21,69 @@
 - **Tempo**:
   - Ingests OpenTelemetry traces; sample service emits traces for handshake pipeline.
 
+## 1.1. Logging Standards
+
+All Go services MUST use the `shared/go/logging` package for consistent structured logging:
+
+### Unified Logging Package
+
+- **Package**: `github.com/ai-aas/shared-go/logging`
+- **Backend**: zap (uber-go/zap)
+- **Format**: Structured JSON to stdout/stderr
+- **Standardized Fields**: `service`, `environment`, `trace_id`, `span_id`, `request_id`, `user_id`, `org_id`
+
+### Usage
+
+```go
+import "github.com/ai-aas/shared-go/logging"
+
+// Create logger with config
+cfg := logging.DefaultConfig().
+    WithServiceName("my-service").
+    WithEnvironment("development").
+    WithLogLevel("info")
+
+logger := logging.MustNew(cfg)
+
+// Use logger
+logger.Info("service started", zap.String("port", "8080"))
+
+// With OpenTelemetry context
+loggerWithCtx := logger.WithContext(ctx)
+loggerWithCtx.Info("request processed")
+
+// With request/user/org IDs
+logger = logger.WithRequestID("req-123")
+logger = logger.WithUserID("user-456")
+logger = logger.WithOrgID("org-789")
+```
+
+### Log Levels
+
+Controlled via `LOG_LEVEL` environment variable:
+- `debug`: Verbose debugging information
+- `info`: General informational messages (default)
+- `warn`: Warning messages
+- `error`: Error messages
+
+### Log Redaction
+
+Sensitive data is automatically redacted using patterns from `configs/log-redaction.yaml`:
+- Passwords, tokens, API keys
+- Connection strings with credentials
+- Secrets in environment variables
+
+Use `logging.RedactString()` or `logging.RedactFields()` for manual redaction when needed.
+
+### Local Development
+
+For local development and testing:
+- **Loki**: Available at `http://localhost:3100` (via Docker Compose)
+- **Promtail**: Collects logs from all containers
+- **Access**: Use `make logs-view` or `make logs-tail SERVICE=<name>`
+
+See `usage-guide/operations/log-analysis.md` for detailed log access patterns.
+
 ## 2. Required Dashboards
 
 | Dashboard UID | Name | Purpose | Owner |

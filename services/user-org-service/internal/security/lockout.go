@@ -1,8 +1,9 @@
 // Package security provides lockout tracking and enforcement.
 //
 // Purpose:
-//   This package implements account lockout tracking using Redis to count
-//   failed authentication attempts and enforce lockout policies.
+//
+//	This package implements account lockout tracking using Redis to count
+//	failed authentication attempts and enforce lockout policies.
 //
 // Dependencies:
 //   - github.com/redis/go-redis/v9: Redis client for tracking attempts
@@ -16,7 +17,6 @@
 //
 // Requirements Reference:
 //   - specs/005-user-org-service/spec.md#FR-008 (Account Lockout)
-//
 package security
 
 import (
@@ -36,9 +36,9 @@ type LockoutTracker struct {
 
 // LockoutConfig contains lockout policy configuration.
 type LockoutConfig struct {
-	MaxAttempts      int           // Maximum failed attempts before lockout
-	LockoutDuration  time.Duration // Duration of lockout
-	WindowDuration   time.Duration // Time window for counting attempts
+	MaxAttempts     int           // Maximum failed attempts before lockout
+	LockoutDuration time.Duration // Duration of lockout
+	WindowDuration  time.Duration // Time window for counting attempts
 }
 
 // NewLockoutTracker creates a new lockout tracker.
@@ -63,7 +63,7 @@ func (t *LockoutTracker) TrackFailedAttempt(ctx context.Context, identifier stri
 	}
 
 	key := t.key(identifier)
-	
+
 	// Increment counter with expiration set to window duration
 	pipe := t.client.TxPipeline()
 	pipe.Incr(ctx, key)
@@ -75,7 +75,7 @@ func (t *LockoutTracker) TrackFailedAttempt(ctx context.Context, identifier stri
 
 	count := results[0].(*redis.IntCmd).Val()
 	shouldLockout := count >= int64(t.cfg.MaxAttempts)
-	
+
 	return int(count), shouldLockout, nil
 }
 
@@ -115,4 +115,3 @@ func (t *LockoutTracker) ClearAttempts(ctx context.Context, email string, userID
 func (t *LockoutTracker) CalculateLockoutUntil() time.Time {
 	return time.Now().Add(t.cfg.LockoutDuration)
 }
-
