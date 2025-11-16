@@ -44,21 +44,77 @@ else
   echo ""
 fi
 
+# Generate defaults (needed for both commit and PR)
+DEFAULT_COMMIT_MSG="feat: Deploy changes to ${ENVIRONMENT}
+
+- Auto-deployed via deploy script
+- Timestamp: $(date -Iseconds)"
+
+DEFAULT_PR_TITLE=$(git log -1 --pretty=%s 2>/dev/null || echo "feat: Deploy changes to ${ENVIRONMENT}")
+DEFAULT_PR_BODY="Deploying changes to ${ENVIRONMENT} environment
+
+- Auto-created via deploy script
+- After merge, ArgoCD will auto-sync from main branch"
+
 # Step 2: Commit (if there are changes)
 if [ -n "$CHANGES" ]; then
   echo "💾 Step 2: Committing changes..."
   git add .
   
-  # Prompt for commit message
+  # Show defaults and ask for confirmation
   echo ""
-  echo "Enter commit message (or press Enter for default):"
-  read -r COMMIT_MSG
-  if [ -z "$COMMIT_MSG" ]; then
-    COMMIT_MSG="feat: Deploy changes to ${ENVIRONMENT}
-
-- Auto-deployed via deploy script
-- Timestamp: $(date -Iseconds)"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Default Commit Message:"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "${DEFAULT_COMMIT_MSG}"
+  echo ""
+  
+  if [ "${BRANCH}" != "main" ]; then
+    echo "Default PR Title:"
+    echo "${DEFAULT_PR_TITLE}"
+    echo ""
+    echo "Default PR Description:"
+    echo "${DEFAULT_PR_BODY}"
+    echo ""
   fi
+  
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Use these defaults? (y/n, or press Enter for yes):"
+  read -r USE_DEFAULTS
+  
+  USE_DEFAULTS=${USE_DEFAULTS:-y}
+  
+  if [[ "${USE_DEFAULTS}" =~ ^[Yy]$ ]]; then
+    COMMIT_MSG="$DEFAULT_COMMIT_MSG"
+    PR_TITLE="$DEFAULT_PR_TITLE"
+    PR_BODY="$DEFAULT_PR_BODY"
+    echo "✅ Using defaults"
+  else
+    # Prompt for custom values
+    echo ""
+    echo "Enter commit message:"
+    read -r COMMIT_MSG
+    if [ -z "$COMMIT_MSG" ]; then
+      COMMIT_MSG="$DEFAULT_COMMIT_MSG"
+    fi
+    
+    if [ "${BRANCH}" != "main" ]; then
+      echo ""
+      echo "Enter PR title (or press Enter for default):"
+      read -r PR_TITLE
+      if [ -z "$PR_TITLE" ]; then
+        PR_TITLE="$DEFAULT_PR_TITLE"
+      fi
+      
+      echo ""
+      echo "Enter PR description (or press Enter for default):"
+      read -r PR_BODY
+      if [ -z "$PR_BODY" ]; then
+        PR_BODY="$DEFAULT_PR_BODY"
+      fi
+    fi
+  fi
+  
   git commit -m "$COMMIT_MSG"
   echo "✅ Committed"
   echo ""
@@ -128,40 +184,14 @@ else
     echo "   2. After merge, ArgoCD will auto-sync from main"
     echo "   3. Monitor ArgoCD: https://argocd.dev.ai-aas.local"
   else
-    # Prompt for PR details
-    echo "Please provide PR details:"
-    echo ""
-    
-    # PR Title
-    DEFAULT_TITLE=$(git log -1 --pretty=%s)
-    echo "PR Title (or press Enter for: '${DEFAULT_TITLE}'):"
-    read -r PR_TITLE
-    if [ -z "$PR_TITLE" ]; then
-      PR_TITLE="$DEFAULT_TITLE"
-    fi
-    
-    # PR Description
-    echo ""
-    echo "PR Description (optional, press Enter to skip):"
-    read -r PR_BODY
-    
-    # Create PR
-    echo ""
+    # Create PR (using values from commit step or defaults)
     echo "Creating PR..."
     PR_ARGS=(
-      "--title" "${PR_TITLE}"
+      "--title" "${PR_TITLE:-${DEFAULT_PR_TITLE}}"
       "--base" "main"
       "--head" "${BRANCH}"
+      "--body" "${PR_BODY:-${DEFAULT_PR_BODY}}"
     )
-    
-    if [ -n "$PR_BODY" ]; then
-      PR_ARGS+=("--body" "${PR_BODY}")
-    else
-      PR_ARGS+=("--body" "Deploying changes to ${ENVIRONMENT} environment
-
-- Auto-created via deploy script
-- After merge, ArgoCD will auto-sync from main branch")
-    fi
     
     if PR_URL=$(gh pr create "${PR_ARGS[@]}" 2>&1); then
       echo "✅ PR created: ${PR_URL}"
