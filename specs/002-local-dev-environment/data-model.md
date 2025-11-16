@@ -125,16 +125,76 @@
   - Must print actionable errors and remediation steps
   - Remote variants log lifecycle events with timestamp and actor metadata
 
+### EnvironmentProfile
+- **description**: Centralized configuration profile defining component locations, connection strings, and environment-specific settings for a target environment (local-dev, remote-dev, production).
+- **fields**:
+  - `name`: string (e.g., `local-dev`, `remote-dev`, `production`)
+  - `description`: string
+  - `extends`: string (optional base profile name for common defaults)
+  - `components`: map of component configurations (postgres, redis, user_org_service, api_router_service, web_portal, etc.)
+    - Each component defines: `host`, `port`, `protocol`, `database` (if applicable), `connection_string_template`, `endpoints`
+  - `environment_variables`: list of environment variable definitions (name, value, component reference, from_secret)
+  - `secrets`: list of secret references (name, source: `env_file`|`vault`|`github`, path/file, expires_at)
+- **relationships**:
+  - Referenced by **DeveloperServiceConfig**
+  - Produced by **EnvironmentProfileManager**
+  - Consumed by services during startup via generated `.env.*` files
+- **rules**:
+  - Must validate component dependencies before activation
+  - Secrets must reference secure sources (env files, Vault, GitHub secrets) never hardcode values
+  - Profiles can extend base profiles for common defaults (e.g., `local-dev` extends `base`)
+  - Component configurations must align with **ComponentRegistry** definitions
+
+### ComponentRegistry
+- **description**: Centralized registry tracking all platform components, their ports, dependencies, and configurations across environments.
+- **fields**:
+  - `components`: list of component definitions
+    - `name`: string (e.g., `postgres`, `redis`, `user_org_service`, `api_router_service`, `web_portal`)
+    - `description`: string
+    - `ports`: list of port definitions (port number, protocol: `tcp`|`http`|`https`, description)
+    - `dependencies`: list of required component names (e.g., `user_org_service` depends on `postgres`, `redis`)
+    - `environment_variables`: list of required environment variable names (e.g., `DATABASE_URL`, `REDIS_ADDR`)
+- **relationships**:
+  - Referenced by **EnvironmentProfile** for validation
+  - Used by **HealthProbe** for component discovery and status checking
+  - Validated by **EnvironmentProfileManager** during profile validation
+- **rules**:
+  - Must be version-controlled and updated when new components are added
+  - Components must define their dependencies for validation and startup ordering
+  - Port definitions must specify protocol and include documentation
+
+### EnvironmentProfileManager
+- **description**: Tooling for managing environment profiles, activation, validation, and configuration generation.
+- **fields**:
+  - `binary`: path (`configs/manage-env.sh` or `cmd/env-manager/main.go`)
+  - `commands`: list of commands (`activate`, `show`, `validate`, `diff`, `export`, `component-status`, `generate-env-file`)
+  - `current_profile`: path to file tracking active environment (`.current-env`)
+  - `profile_directory`: path to environment profiles (`configs/environments/`)
+- **relationships**:
+  - Manages **EnvironmentProfile** entities (read, validate, activate)
+  - Generates **SecretsBundle** files (`.env.*`) from active profile
+  - References **ComponentRegistry** for validation
+- **rules**:
+  - Must validate profile YAML syntax and schema before activation
+  - Must validate component dependencies and secret availability
+  - Must preserve existing secrets during profile switches
+  - Must generate `.env.*` files with correct permissions (0600) and ensure `.gitignore` protection
+  - Commands must complete within SLAs (validation < 5s, activation < 2s)
+
 ### DeveloperServiceConfig
 - **description**: Environment-specific configuration for application services to connect to dev stack.
 - **fields**:
   - `service_name`: string
   - `config_template`: path under `configs/dev/<service>.env.tpl`
-  - `placeholders`: map of required substitutions (e.g., `${POSTGRES_HOST}`)
-  - `mode`: enum (`remote`, `local`)
+  - `environment_profile`: string (references **EnvironmentProfile** name, e.g., `local-dev`, `remote-dev`)
+  - `placeholders`: map of required substitutions (e.g., `${POSTGRES_HOST}`, `${DATABASE_URL}`)
+  - `mode`: enum (`local-dev`, `remote-dev`, `production`)
 - **relationships**:
-  - Populated using **SecretsBundle** values
+  - Populated using **EnvironmentProfile** values (component configs, environment variables)
+  - References **SecretsBundle** for secret injection
   - Referenced by service quickstarts and README instructions
 - **rules**:
-  - Templates must document toggles between remote/local by referencing shared variables only
-  - Configs must avoid embedding secret values directly; rely on `.env.*` injections
+  - Templates must document environment profile usage and reference profile variables
+  - Configs must reference environment profiles, not hardcode values
+  - Profile activation generates correct service configuration automatically via template substitution
+  - Placeholders must map to **EnvironmentProfile** component definitions or environment variables
