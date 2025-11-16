@@ -21,7 +21,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/web-portal
   NODE_VERSION: '20'
-  PNPM_VERSION: 8
+  PNPM_VERSION: '10'
 
 jobs:
   lint:
