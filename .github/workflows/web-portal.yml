@@ -42,7 +42,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
-          cache-dependency-path: web/portal/pnpm-lock.yaml
+          cache-dependency-path: 'web/portal/pnpm-lock.yaml'
 
       - name: Install dependencies
         working-directory: web/portal
@@ -70,7 +70,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
-          cache-dependency-path: web/portal/pnpm-lock.yaml
+          cache-dependency-path: 'web/portal/pnpm-lock.yaml'
 
       - name: Install dependencies
         working-directory: web/portal
@@ -98,7 +98,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
-          cache-dependency-path: web/portal/pnpm-lock.yaml
+          cache-dependency-path: 'web/portal/pnpm-lock.yaml'
 
       - name: Install dependencies
         working-directory: web/portal
