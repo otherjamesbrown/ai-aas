@@ -1,0 +1,128 @@
+api_version: v1
+kind: EnvironmentProfile
+metadata:
+  name: base
+  description: Base environment profile with common component definitions and defaults
+
+components:
+  postgres:
+    host: localhost
+    port: 5432
+    database: ai_aas
+    username: postgres
+    password_env: POSTGRES_PASSWORD
+    connection_string_template: "postgres://{username}:{password}@{host}:{port}/{database}?sslmode={sslmode}"
+    sslmode: disable
+    description: PostgreSQL database server
+    
+  redis:
+    host: localhost
+    port: 6379
+    password_env: REDIS_PASSWORD
+    db: 0
+    connection_string_template: "redis://{password}{host}:{port}/{db}"
+    description: Redis cache and session store
+    
+  nats:
+    host: localhost
+    client_port: 4222
+    http_port: 8222
+    cluster_port: 6222
+    connection_string_template: "nats://{host}:{client_port}"
+    description: NATS messaging server
+    
+  minio:
+    host: localhost
+    api_port: 9000
+    console_port: 9001
+    access_key: minioadmin
+    secret_key_env: MINIO_SECRET_KEY
+    connection_string_template: "http://{host}:{api_port}"
+    description: MinIO S3-compatible object storage
+    
+  mock_inference:
+    host: localhost
+    port: 8000
+    connection_string_template: "http://{host}:{port}"
+    description: Mock inference service for testing
+    
+  user_org_service:
+    name: user-org-service
+    host: localhost
+    port: 8081
+    admin_port: 8443
+    endpoints:
+      health: "http://{host}:{port}/healthz"
+      api: "http://{host}:{port}/v1"
+    database_url_env: USER_ORG_DATABASE_URL
+    description: User & Organization Service
+    
+  api_router_service:
+    name: api-router-service
+    host: localhost
+    port: 8080
+    admin_port: 8443
+    endpoints:
+      health: "http://{host}:{port}/healthz"
+      api: "http://{host}:{port}/api"
+    description: API Router Service (gateway)
+    
+  web_portal:
+    name: web-portal
+    host: localhost
+    port: 5173
+    protocol: http
+    endpoints:
+      base: "http://{host}:{port}"
+      login: "http://{host}:{port}/auth/login"
+    api_base_url: "http://localhost:8080/api"
+    description: Web Portal UI
+
+environment_variables:
+  - name: ENVIRONMENT
+    value: base
+  - name: LOG_LEVEL
+    value: info
+  - name: DATABASE_URL
+    component: postgres
+    from_template: connection_string_template
+  - name: ANALYTICS_URL
+    component: postgres
+    from_template: connection_string_template
+    overrides:
+      database: ai_aas_warehouse
+  - name: REDIS_ADDR
+    component: redis
+    value: "{host}:{port}"
+  - name: NATS_URL
+    component: nats
+    from_template: connection_string_template
+  - name: MINIO_ENDPOINT
+    component: minio
+    from_template: connection_string_template
+  - name: MOCK_INFERENCE_URL
+    component: mock_inference
+    from_template: connection_string_template
+
+secrets:
+  - name: POSTGRES_PASSWORD
+    source: env_file
+    file: .env.local
+    description: PostgreSQL password (default: postgres for local-dev)
+  - name: REDIS_PASSWORD
+    source: env_file
+    file: .env.local
+    description: Redis password (default: empty for local-dev)
+  - name: MINIO_SECRET_KEY
+    source: env_file
+    file: .env.local
+    description: MinIO secret key (default: minioadmin for local-dev)
+  - name: OAUTH_HMAC_SECRET
+    source: env_file
+    file: .env.local
+    description: OAuth HMAC secret for user-org-service
+  - name: OAUTH_CLIENT_SECRET
+    source: env_file
+    file: .env.local
+    description: OAuth client secret for user-org-service
+

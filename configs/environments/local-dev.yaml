@@ -1,0 +1,170 @@
+api_version: v1
+kind: EnvironmentProfile
+metadata:
+  name: local-dev
+  description: Local development environment (localhost, Docker containers, default dev ports)
+  extends: base
+
+components:
+  postgres:
+    host: localhost
+    port: 5433  # Using port 5433 to avoid conflict with existing PostgreSQL on 5432
+    database: ai_aas
+    username: postgres
+    password: postgres  # Default dev password
+    password_env: POSTGRES_PASSWORD
+    connection_string_template: "postgres://{username}:{password}@{host}:{port}/{database}?sslmode={sslmode}"
+    sslmode: disable
+    docker_container: dev-postgres
+    docker_image: postgres:15-alpine
+    
+  redis:
+    host: localhost
+    port: 6379
+    password: ""  # No password for local-dev
+    password_env: REDIS_PASSWORD
+    db: 0
+    docker_container: dev-redis
+    docker_image: redis:7-alpine
+    
+  nats:
+    host: localhost
+    client_port: 4222
+    http_port: 8222
+    cluster_port: 6222
+    docker_container: dev-nats
+    docker_image: nats:2.10-alpine
+    
+  minio:
+    host: localhost
+    api_port: 9000
+    console_port: 9001
+    access_key: minioadmin
+    secret_key: minioadmin  # Default dev secret
+    secret_key_env: MINIO_SECRET_KEY
+    docker_container: dev-minio
+    docker_image: minio/minio:RELEASE.2025-01-16T00-00-00Z
+    
+  mock_inference:
+    host: localhost
+    port: 8000
+    docker_container: dev-mock-inference
+    docker_image: ghcr.io/ai-aas/mock-inference:latest
+    
+  user_org_service:
+    host: localhost
+    port: 8081
+    admin_port: 8443
+    endpoints:
+      health: "http://localhost:8081/healthz"
+      api: "http://localhost:8081/v1"
+    database_url_env: USER_ORG_DATABASE_URL
+    # Database connection from postgres component
+    database_url: "postgres://postgres:postgres@localhost:5433/ai_aas?sslmode=disable"
+    
+  api_router_service:
+    host: localhost
+    port: 8080
+    admin_port: 8443
+    endpoints:
+      health: "http://localhost:8080/healthz"
+      api: "http://localhost:8080/api"
+    backend_endpoints: "mock-backend-1:http://localhost:8000/v1/completions"
+    
+  web_portal:
+    host: localhost
+    port: 5173
+    protocol: http  # Use HTTP for local-dev to avoid SSL cipher issues
+    endpoints:
+      base: "http://localhost:5173"
+      login: "http://localhost:5173/auth/login"
+    api_base_url: "http://localhost:8081/v1"  # Temporarily use user-org-service directly until API router is fixed
+    environment_variables:
+      - name: VITE_API_BASE_URL
+        value: "http://localhost:8081/v1"  # Temporarily use user-org-service directly
+      - name: VITE_USE_HTTPS
+        value: "false"
+
+environment_variables:
+  - name: ENVIRONMENT
+    value: local-dev
+  - name: LOG_LEVEL
+    value: debug
+  - name: DATABASE_URL
+    component: postgres
+    from_template: connection_string_template
+    value: "postgres://postgres:postgres@localhost:5433/ai_aas?sslmode=disable"
+  - name: USER_ORG_DATABASE_URL
+    component: user_org_service
+    field: database_url
+    value: "postgres://postgres:postgres@localhost:5433/ai_aas?sslmode=disable"
+  - name: ANALYTICS_URL
+    component: postgres
+    from_template: connection_string_template
+    overrides:
+      database: ai_aas_warehouse
+  - name: REDIS_ADDR
+    component: redis
+    value: "localhost:6379"
+  - name: REDIS_PASSWORD
+    component: redis
+    value: ""
+  - name: NATS_URL
+    component: nats
+    value: "nats://localhost:4222"
+  - name: MINIO_ENDPOINT
+    component: minio
+    value: "http://localhost:9000"
+  - name: MINIO_ROOT_USER
+    component: minio
+    value: "minioadmin"
+  - name: MINIO_ROOT_PASSWORD
+    component: minio
+    value: "minioadmin"
+  - name: MOCK_INFERENCE_URL
+    component: mock_inference
+    value: "http://localhost:8000"
+  - name: HTTP_PORT
+    component: user_org_service
+    field: port
+    value: "8081"
+  - name: SERVICE_NAME
+    value: "user-org-service"
+  - name: OAUTH_HMAC_SECRET
+    value: "dev-secret-key-change-in-production"
+  - name: OAUTH_CLIENT_SECRET
+    value: "dev-client-secret-change-in-production"
+  - name: OAUTH_CLIENT_ID
+    value: "user-org-admin"
+  - name: POSTGRES_PORT
+    component: postgres
+    field: port
+    value: "5433"
+
+secrets:
+  - name: POSTGRES_PASSWORD
+    source: env_file
+    file: .env.local
+    default: postgres
+    description: "PostgreSQL password (default: postgres for local-dev)"
+  - name: REDIS_PASSWORD
+    source: env_file
+    file: .env.local
+    default: ""
+    description: "Redis password (empty for local-dev)"
+  - name: MINIO_SECRET_KEY
+    source: env_file
+    file: .env.local
+    default: minioadmin
+    description: "MinIO secret key (default: minioadmin for local-dev)"
+  - name: OAUTH_HMAC_SECRET
+    source: env_file
+    file: .env.local
+    default: dev-secret-key-change-in-production
+    description: OAuth HMAC secret for user-org-service
+  - name: OAUTH_CLIENT_SECRET
+    source: env_file
+    file: .env.local
+    default: dev-client-secret-change-in-production
+    description: OAuth client secret for user-org-service
+

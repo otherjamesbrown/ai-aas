@@ -1,0 +1,145 @@
+# Vector agent configuration for remote workspace log shipping
+# Installed on remote workspace via StackScript bootstrap
+# Ships logs to centralized observability stack (Loki)
+
+[api]
+enabled = true
+address = "127.0.0.1:8686"
+playground = false
+
+[data_dir]
+path = "/var/lib/vector"
+
+# Source: Systemd journal logs
+[sources.journal]
+type = "journald"
+journal_directory = "/var/log/journal"
+
+# Source: Docker Compose service logs
+[sources.docker_logs]
+type = "file"
+include = [
+  "/var/lib/docker/containers/*/*-json.log",
+  "/opt/ai-aas/dev-stack/logs/*.log"
+]
+read_from = "end"
+multiline = { mode = "continue_through", condition_pattern = "^[^0-9]" }
+
+# Source: Application logs
+[sources.app_logs]
+type = "file"
+include = [
+  "/opt/ai-aas/dev-stack/logs/*.log",
+  "/var/log/ai-aas/*.log"
+]
+read_from = "end"
+
+# Transform: Add workspace metadata
+[transforms.add_metadata]
+type = "remap"
+inputs = ["journal", "docker_logs", "app_logs"]
+source = '''
+  # Add workspace identification
+  .workspace_name = "${UDF_WORKSPACE_NAME:-unknown}"
+  .workspace_owner = "${UDF_OWNER:-unknown}"
+  .workspace_region = "${UDF_REGION:-unknown}"
+  .environment = "development"
+  .source_type = "dev-workspace"
+  
+  # Extract timestamp if present
+  if exists(.timestamp) {
+    .timestamp = parse_timestamp(.timestamp, format: "%Y-%m-%dT%H:%M:%S%.f%z")
+  } else {
+    .timestamp = now()
+  }
+  
+  # Normalize log level
+  if exists(.level) {
+    .log_level = downcase(string(.level))
+  } else if exists(.PRIORITY) {
+    # Map syslog priority to log level
+    pri = int(.PRIORITY)
+    if pri <= 3 {
+      .log_level = "error"
+    } else if pri <= 4 {
+      .log_level = "warning"
+    } else if pri <= 6 {
+      .log_level = "info"
+    } else {
+      .log_level = "debug"
+    }
+  }
+'''
+
+# Transform: Redact sensitive information
+[transforms.redact_secrets]
+type = "remap"
+inputs = ["add_metadata"]
+source = '''
+  # Apply redaction patterns from configs/log-redaction.yaml
+  # Redact passwords
+  if exists(.message) {
+    .message = replace(.message, r'password[=:]\s*[^\s"',}]+', 'password=***REDACTED***')
+    .message = replace(.message, r'POSTGRES_PASSWORD[=:]\s*[^\s"',}]+', 'POSTGRES_PASSWORD=***REDACTED***')
+    .message = replace(.message, r'REDIS_PASSWORD[=:]\s*[^\s"',}]+', 'REDIS_PASSWORD=***REDACTED***')
+    .message = replace(.message, r'MINIO_ROOT_PASSWORD[=:]\s*[^\s"',}]+', 'MINIO_ROOT_PASSWORD=***REDACTED***')
+  }
+  
+  # Redact tokens
+  if exists(.message) {
+    .message = replace(.message, r'LINODE_TOKEN[=:]\s*[A-Za-z0-9]{20,}', 'LINODE_TOKEN=***REDACTED***')
+    .message = replace(.message, r'GITHUB_TOKEN[=:]\s*[A-Za-z0-9]{20,}', 'GITHUB_TOKEN=***REDACTED***')
+    .message = replace(.message, r'Bearer [A-Za-z0-9\-_.]{20,}', 'Bearer ***REDACTED***')
+  }
+  
+  # Redact connection strings with credentials
+  if exists(.message) {
+    .message = replace(.message, r'://[^:]+:[^@]+@', '://***REDACTED***@')
+  }
+'''
+
+# Sink: Loki (observability stack)
+[sinks.loki]
+type = "loki"
+inputs = ["redact_secrets"]
+endpoint = "${LOKI_ENDPOINT:-http://localhost:3100}"
+compression = "gzip"
+healthcheck.enabled = true
+healthcheck.uri = "/ready"
+
+# Labels for Loki
+[sinks.loki.labels]
+workspace = "${UDF_WORKSPACE_NAME:-unknown}"
+owner = "${UDF_OWNER:-unknown}"
+environment = "development"
+host = "${HOSTNAME:-unknown}"
+
+# Encoding
+[sinks.loki.encoding]
+codec = "json"
+
+# Retry configuration
+[sinks.loki.buffer]
+max_size = 10485760  # 10MB
+when_full = "drop_newest"
+
+[sinks.loki.request]
+retry_attempts = 5
+retry_initial_backoff_secs = 1
+retry_max_duration_secs = 300
+timeout_secs = 30
+
+# Fallback sink: Local file if Loki unavailable
+[sinks.local_fallback]
+type = "file"
+inputs = ["redact_secrets"]
+path = "/var/log/vector/fallback-%Y-%m-%d.log"
+compression = "gzip"
+encoding.codec = "json"
+
+# Metrics sink (optional)
+[sinks.metrics]
+type = "prometheus_exporter"
+inputs = ["add_metadata"]
+address = "0.0.0.0:9598"
+

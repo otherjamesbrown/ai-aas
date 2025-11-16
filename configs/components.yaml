@@ -1,0 +1,212 @@
+api_version: v1
+kind: ComponentRegistry
+metadata:
+  description: Registry of all platform components, their ports, dependencies, and required environment variables
+  version: "1.0.0"
+
+components:
+  - name: postgres
+    description: PostgreSQL database server
+    type: database
+    ports:
+      - port: 5432
+        protocol: tcp
+        description: PostgreSQL server port (default)
+      - port: 5433
+        protocol: tcp
+        description: PostgreSQL server port (alternate, for local-dev to avoid conflicts)
+    environment_variables:
+      - DATABASE_URL
+      - USER_ORG_DATABASE_URL
+      - ANALYTICS_URL
+      - POSTGRES_PASSWORD
+      - POSTGRES_USER
+      - POSTGRES_DB
+    required_credentials:
+      - username
+      - password
+    docker_image: postgres:15-alpine
+    docker_container: dev-postgres
+    health_check:
+      type: tcp
+      port: 5432
+    dependencies: []
+    
+  - name: redis
+    description: Redis cache and session store
+    type: cache
+    ports:
+      - port: 6379
+        protocol: tcp
+        description: Redis server port
+    environment_variables:
+      - REDIS_ADDR
+      - REDIS_PASSWORD
+      - REDIS_DB
+    required_credentials:
+      - password (optional, empty for local-dev)
+    docker_image: redis:7-alpine
+    docker_container: dev-redis
+    health_check:
+      type: tcp
+      port: 6379
+    dependencies: []
+    
+  - name: nats
+    description: NATS messaging server
+    type: messaging
+    ports:
+      - port: 4222
+        protocol: tcp
+        description: NATS client connections
+      - port: 8222
+        protocol: http
+        description: NATS HTTP monitoring
+      - port: 6222
+        protocol: tcp
+        description: NATS cluster routing (disabled for dev)
+    environment_variables:
+      - NATS_URL
+      - NATS_CLIENT_PORT
+      - NATS_HTTP_PORT
+    required_credentials: []
+    docker_image: nats:2.10-alpine
+    docker_container: dev-nats
+    health_check:
+      type: http
+      url: "http://localhost:8222/healthz"
+    dependencies: []
+    
+  - name: minio
+    description: MinIO S3-compatible object storage
+    type: storage
+    ports:
+      - port: 9000
+        protocol: http
+        description: MinIO API port
+      - port: 9001
+        protocol: http
+        description: MinIO console port
+    environment_variables:
+      - MINIO_ENDPOINT
+      - MINIO_ROOT_USER
+      - MINIO_ROOT_PASSWORD
+      - MINIO_SECRET_KEY
+      - MINIO_ACCESS_KEY
+    required_credentials:
+      - access_key
+      - secret_key
+    docker_image: minio/minio:latest
+    docker_container: dev-minio
+    health_check:
+      type: http
+      url: "http://localhost:9000/minio/health/live"
+    dependencies: []
+    
+  - name: mock_inference
+    description: Mock inference service for testing
+    type: service
+    ports:
+      - port: 8000
+        protocol: http
+        description: Mock inference API port
+    environment_variables:
+      - MOCK_INFERENCE_URL
+    required_credentials: []
+    docker_image: ghcr.io/ai-aas/mock-inference:latest
+    docker_container: dev-mock-inference
+    health_check:
+      type: http
+      url: "http://localhost:8000/healthz"
+    dependencies: []
+    
+  - name: user_org_service
+    description: User & Organization Service - manages tenant identity, access, budgeting
+    type: service
+    ports:
+      - port: 8081
+        protocol: http
+        description: HTTP API port
+      - port: 8443
+        protocol: https
+        description: Admin API port
+    environment_variables:
+      - SERVICE_NAME
+      - HTTP_PORT
+      - ADMIN_PORT
+      - DATABASE_URL
+      - USER_ORG_DATABASE_URL
+      - REDIS_ADDR
+      - REDIS_PASSWORD
+      - OAUTH_HMAC_SECRET
+      - OAUTH_CLIENT_SECRET
+      - OAUTH_CLIENT_ID
+      - KAFKA_BROKERS
+      - ENVIRONMENT
+      - LOG_LEVEL
+    required_credentials:
+      - database_url
+      - oauth_hmac_secret
+      - oauth_client_secret
+    docker_image: user-org-service:latest
+    binary_path: "services/user-org-service/bin/admin-api"
+    health_check:
+      type: http
+      url: "http://localhost:8081/healthz"
+    dependencies:
+      - postgres
+      - redis
+      
+  - name: api_router_service
+    description: API Router Service - gateway and request routing
+    type: service
+    ports:
+      - port: 8080
+        protocol: http
+        description: HTTP API port (gateway)
+      - port: 8443
+        protocol: https
+        description: Admin API port
+    environment_variables:
+      - SERVICE_NAME
+      - HTTP_PORT
+      - ADMIN_PORT
+      - REDIS_ADDR
+      - REDIS_PASSWORD
+      - KAFKA_BROKERS
+      - BACKEND_ENDPOINTS
+      - CONFIG_SERVICE_ENDPOINT
+      - ENVIRONMENT
+      - LOG_LEVEL
+    required_credentials:
+      - redis_addr
+    docker_image: api-router-service:latest
+    binary_path: "services/api-router-service/bin/router"
+    health_check:
+      type: http
+      url: "http://localhost:8080/healthz"
+    dependencies:
+      - redis
+      - user_org_service
+      
+  - name: web_portal
+    description: Web Portal UI - React/TypeScript frontend
+    type: service
+    ports:
+      - port: 5173
+        protocol: http
+        description: Development server port
+    environment_variables:
+      - VITE_API_BASE_URL
+      - VITE_OAUTH_CLIENT_ID
+      - VITE_OAUTH_ISSUER_URL
+      - VITE_USE_HTTPS
+    required_credentials: []
+    build_command: "cd web/portal && pnpm build"
+    dev_command: "cd web/portal && pnpm dev"
+    health_check:
+      type: http
+      url: "http://localhost:5173"
+    dependencies:
+      - api_router_service
+

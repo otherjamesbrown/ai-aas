@@ -1,0 +1,226 @@
+# Shared dependency stack for local and remote development environments.
+# This base configuration defines PostgreSQL, Redis, NATS, MinIO, and mock inference services.
+# Services extend this base with mode-specific overrides (local ports, volumes, etc.)
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: dev-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ai_aas
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - dev-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: dev-redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - dev-network
+
+  nats:
+    image: nats:2.10-alpine
+    container_name: dev-nats
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    ports:
+      - "4222:4222"  # Client connections
+      - "8222:8222"  # HTTP monitoring
+      - "6222:6222"  # Cluster routing (disabled for dev)
+    volumes:
+      - nats-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dev-network
+
+  minio:
+    image: minio/minio:latest
+    container_name: dev-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_DEFAULT_BUCKETS: "ai-aas-artifacts,ai-aas-metrics"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dev-network
+
+  mock-inference:
+    image: python:3.11-slim
+    container_name: dev-mock-inference
+    working_dir: /app
+    command:
+      - sh
+      - -c
+      - |
+        pip install --no-cache-dir fastapi uvicorn pydantic &&
+        python -c "
+        from fastapi import FastAPI, Request
+        from pydantic import BaseModel
+        import uvicorn
+        import asyncio
+        import time
+
+        app = FastAPI(title='Mock Inference Service')
+
+        class CompletionRequest(BaseModel):
+            prompt: str
+            max_tokens: int = 100
+            model: str = 'gpt-4o'
+
+        class CompletionResponse(BaseModel):
+            text: str
+            tokens_used: int
+            model: str
+
+        @app.post('/v1/completions')
+        async def completions(req: CompletionRequest, request: Request):
+            await asyncio.sleep(0.1)
+            tokens = len(req.prompt.split()) + 10
+            return CompletionResponse(
+                text=req.prompt + ' [mock inference response]',
+                tokens_used=min(tokens, req.max_tokens),
+                model=req.model
+            )
+
+        @app.post('/v1/chat/completions')
+        async def chat_completions(request: Request):
+            await asyncio.sleep(0.1)
+            return {
+                'choices': [{
+                    'message': {'role': 'assistant', 'content': '[mock chat response]'},
+                    'finish_reason': 'stop'
+                }],
+                'usage': {'total_tokens': 42}
+            }
+
+        @app.get('/health')
+        async def health():
+            return {'status': 'healthy', 'service': 'mock-inference'}
+
+        @app.get('/ready')
+        async def ready():
+            return {'ready': True}
+
+        if __name__ == '__main__':
+            uvicorn.run(app, host='0.0.0.0', port=8000)
+        "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - dev-network
+
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: dev-loki
+    command: -config.file=/etc/loki/loki-config.yaml
+    volumes:
+      - ./loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki-data:/loki
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - dev-network
+
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: dev-promtail
+    command: -config.file=/etc/promtail/promtail-config.yaml
+    volumes:
+      - ./promtail-config.yaml:/etc/promtail/promtail-config.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - promtail-positions:/tmp
+    depends_on:
+      - loki
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9080/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - dev-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: dev-grafana
+    command:
+      - "grafana-server"
+      - "--config=/etc/grafana/grafana.ini"
+      - "server"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana-provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - dev-network
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_INSTALL_PLUGINS=
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  nats-data:
+    driver: local
+  minio-data:
+    driver: local
+  loki-data:
+    driver: local
+  promtail-positions:
+    driver: local
+  grafana-data:
+    driver: local
+
+networks:
+  dev-network:
+    driver: bridge
+    name: ai-aas-dev-network
+

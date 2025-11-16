@@ -1,0 +1,45 @@
+# Port mappings for local development dependencies.
+# Developers can override these in a local `.specify/local/ports.override.yaml` file
+# if conflicts arise with existing services on their machines.
+
+services:
+  postgres:
+    default_port: 5432
+    description: "PostgreSQL database"
+    env_var: "POSTGRES_PORT"
+  
+  redis:
+    default_port: 6379
+    description: "Redis cache and session store"
+    env_var: "REDIS_PORT"
+  
+  nats:
+    client_port: 4222
+    http_port: 8222
+    cluster_port: 6222
+    description: "NATS messaging server (client, HTTP monitoring, cluster)"
+    env_var: "NATS_PORT"
+  
+  minio:
+    api_port: 9000
+    console_port: 9001
+    description: "MinIO S3-compatible object storage (API, Console)"
+    env_var: "MINIO_PORT"
+  
+  mock-inference:
+    default_port: 8000
+    description: "Mock inference service for testing"
+    env_var: "MOCK_INFERENCE_PORT"
+
+# Service connection strings (for environment variable injection)
+connection_strings:
+  postgres: "postgres://postgres:postgres@localhost:${POSTGRES_PORT}/ai_aas?sslmode=disable"
+  redis: "redis://localhost:${REDIS_PORT}/0"
+  nats: "nats://localhost:${NATS_CLIENT_PORT}"
+  minio:
+    endpoint: "http://localhost:${MINIO_API_PORT}"
+    access_key: "minioadmin"
+    secret_key: "minioadmin"
+    use_ssl: false
+  mock_inference: "http://localhost:${MOCK_INFERENCE_PORT}"
+
