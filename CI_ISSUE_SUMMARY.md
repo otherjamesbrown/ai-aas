@@ -51,13 +51,37 @@ The issue was resolved by:
 
 ## Verification
 
-The fix was verified locally:
+The fix was verified both locally and in CI:
+
+**Local Testing:**
 - ✅ `pnpm install --frozen-lockfile` completes successfully
 - ✅ `pnpm --filter @ai-aas/web-portal <command>` correctly targets the web portal package
 - ✅ Workspace recognizes all 2 packages (`@ai-aas/shared` and `@ai-aas/web-portal`)
+
+**CI Testing (Run #19411572735):**
+- ✅ All jobs successfully install dependencies
+- ✅ Unit tests pass completely
+- ✅ pnpm cache strategy works correctly
+- ❌ Lint job fails due to missing ESLint configuration (separate issue)
+- ❌ E2E tests fail due to webServer timeout (separate issue)
+
+## Status
+
+**RESOLVED** - The original pnpm workspace/lockfile issue is completely fixed. The CI can now successfully install dependencies from the pnpm workspace.
+
+## Remaining Issues (Not Related to Original Problem)
+
+1. **Missing ESLint Configuration**: The `web/portal` directory needs an ESLint config file (`.eslintrc.js`, `eslint.config.js`, or similar)
+2. **E2E Test Web Server**: Playwright's `config.webServer` is timing out - may need environment configuration
+
+These are separate from the pnpm workspace issue and should be addressed independently.
 
 ## Lessons Learned
 
 - In a pnpm workspace monorepo, there should be **only one** `pnpm-workspace.yaml` file at the repository root
 - The `--filter` flag should use the **package name** from `package.json`, not the directory path
 - pnpm workspace package names should follow a consistent naming convention (e.g., `@scope/package-name`)
+- **Critical**: The pnpm version in CI must match the lockfile format version:
+  - pnpm v8 cannot read lockfile version 9.0 (created by pnpm v9+)
+  - pnpm v10 can read lockfile version 9.0
+  - Always align CI pnpm version with local development environment
