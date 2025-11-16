@@ -11,6 +11,8 @@ package analytics
 
 // Types placeholder - full implementation in Phase 5.
 // This file is created as part of Phase 2 foundational infrastructure.
+
+// ExportUsageRequest is a placeholder type for Phase 5 implementation.
 type ExportUsageRequest struct {
 	// TODO: Implement in Phase 5
 }

@@ -52,6 +52,10 @@ Here is a high-level overview of the key directories in this repository:
 | `specs/` | The feature specifications and design documents. |
 | `usage-guide/` | Documentation for end-users of the platform, organized by role. |
 
+## CI/CD
+
+Our CI/CD pipeline is powered by GitHub Actions and ArgoCD. For a detailed explanation of the pipeline, please see the [CI/CD Pipeline document](./docs/platform/ci-cd-pipeline.md).
+
 ## Key Commands
 
 Here are some of the most common commands you will use during development:

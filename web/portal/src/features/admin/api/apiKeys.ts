@@ -5,8 +5,10 @@ import type {
   CreateApiKeyRequest,
 } from '../types';
 
-// Use user-org-service directly for API key operations
-const userOrgServiceUrl = import.meta.env.VITE_USER_ORG_SERVICE_URL || 'http://localhost:8081';
+// Use API router for API key operations
+// Extract base URL from VITE_API_BASE_URL (remove /api suffix if present)
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
+const userOrgServiceUrl = apiBaseUrl.replace(/\/api\/?$/, '');
 
 /**
  * API key lifecycle management API client

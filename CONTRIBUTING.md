@@ -27,7 +27,7 @@ We welcome contributions from everyone. Here are some guidelines to follow.
 *   Your pull request should have a clear title and description.
 *   The description should explain the "why" behind your changes.
 *   If your pull request addresses an issue, link to it in the description.
-*   Ensure that the CI checks pass on your pull request.
+*   Ensure that the CI checks pass on your pull request. For more information on our CI/CD pipeline, please see the [CI/CD Pipeline document](./docs/platform/ci-cd-pipeline.md).
 
 ## Key Makefile Commands
 
