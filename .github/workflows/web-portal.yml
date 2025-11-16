@@ -56,7 +56,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run ESLint
-        run: pnpm --filter web/portal lint
+        run: pnpm --filter @ai-aas/web-portal lint
 
   test:
     name: Unit Tests
@@ -90,7 +90,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run unit tests
-        run: pnpm --filter web/portal test
+        run: pnpm --filter @ai-aas/web-portal test
 
   test-e2e:
     name: E2E Tests
@@ -124,17 +124,17 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browsers
-        run: pnpm --filter web/portal exec playwright install --with-deps chromium
+        run: pnpm --filter @ai-aas/web-portal exec playwright install --with-deps chromium
 
       - name: Build the application
-        run: pnpm --filter web/portal build
+        run: pnpm --filter @ai-aas/web-portal build
 
       - name: Run E2E tests
         env:
           CI: true
           PLAYWRIGHT_HEADLESS: true
           VITE_USER_ORG_SERVICE_URL: ${{ secrets.VITE_USER_ORG_SERVICE_URL_E2E }}
-        run: pnpm --filter web/portal exec playwright test
+        run: pnpm --filter @ai-aas/web-portal exec playwright test
 
   build:
     name: Build and Push Docker Image
