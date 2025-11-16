@@ -90,4 +90,3 @@ func TestStatusOutput(t *testing.T) {
 // Note: Actual health check tests (checkPostgres, checkRedis, etc.) would require
 // either mock servers or integration test setup with actual services running.
 // These are left as integration tests rather than unit tests.
-

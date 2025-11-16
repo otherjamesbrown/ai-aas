@@ -8,6 +8,7 @@ set -euo pipefail
 # Source common helper library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/dev/common.sh
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/common.sh"
 
 WORKSPACE_HOST="${WORKSPACE_HOST:-}"
