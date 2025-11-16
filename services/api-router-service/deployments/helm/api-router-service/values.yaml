@@ -19,15 +19,20 @@ service:
   port: 8080
 
 ingress:
-  enabled: false
+  enabled: true
   className: nginx
-  annotations: {}
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: router.api.ai-aas.dev
+    - host: api.dev.ai-aas.local
       paths:
         - path: /
           pathType: Prefix
-  tls: []
+  tls:
+    - secretName: ai-aas-tls
+      hosts:
+        - api.dev.ai-aas.local
+        - api.prod.ai-aas.local
 
 resources:
   limits:

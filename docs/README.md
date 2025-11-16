@@ -15,7 +15,9 @@ The AI-AAS repository maintains documentation alongside automation assets to aid
 
 ## Platform Guides
 
+- [Infrastructure Overview](./platform/infrastructure-overview.md)
 - [Linode Access](./platform/linode-access.md)
+- [TLS/SSL Setup](./platform/tls-ssl-setup.md)
 - [Tooling Versions](./platform/tooling-versions.md)
 - [CI Remote CLI Usage](./platform/ci-remote-cli.md)
 

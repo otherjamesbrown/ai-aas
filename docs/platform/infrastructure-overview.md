@@ -13,8 +13,9 @@
   - GPU (system): `g1-gpu-rtx6000` (2 nodes) reserved for vLLM workloads.
 - **Networking**:
   - Calico NetworkPolicies implement default-deny stance.
-  - Ingress via NGINX Ingress Controller + cert-manager (Let’s Encrypt).
-  - External DNS records served through Linode DNS.
+  - Ingress via NGINX Ingress Controller + cert-manager (Let's Encrypt for production).
+  - Self-signed certificates for local development (see `infra/secrets/certs/README.md`).
+  - External DNS records served through Linode DNS (production) or local hosts file (development).
 - **GitOps**:
   - Terraform provisions clusters, networking, secrets scaffolding.
   - ArgoCD reconciles Helm charts (`infra/helm/charts/*`), including observability, ingress, and sample service.
@@ -59,30 +60,44 @@
 - ArgoCD application events forward to Loki (label `argo_app`).
 - Quarterly controls: secrets rotation check, rollback drill (SC-007), alert simulation.
 
-## 7. Dependencies
+## 7. TLS/SSL Certificates
+
+### Production
+- **Let's Encrypt**: Automatic certificate issuance and renewal via cert-manager
+- **DNS**: Public DNS records required for Let's Encrypt validation
+- **Ingress**: NGINX Ingress Controller with TLS termination
+
+### Local Development
+- **Self-Signed Certificates**: CA and TLS certificates in `infra/secrets/certs/`
+- **Local DNS**: Hosts file entries for `.ai-aas.local` domains
+- **Firewall-Restricted**: Access limited to authorized machines (no VPN required)
+- **Setup**: See `infra/secrets/certs/README.md` for certificate generation and trust instructions
+
+## 8. Dependencies
 
 - `docs/platform/linode-access.md`: Token creation and CLI setup.
 - `docs/platform/access-control.md`: Detailed RBAC and package issuance procedures.
 - `docs/platform/observability-guide.md`: Dashboard conventions, alert tuning.
 - `docs/runbooks/infrastructure-rollback.md`: Step-by-step rollback instructions.
 - `docs/runbooks/infrastructure-troubleshooting.md`: Issue resolution catalog.
+- `infra/secrets/certs/README.md`: Self-signed certificate setup and management.
 
 Keep this document updated alongside infrastructure changes to ensure context for downstream specs (`005-user-org-service`, `010-vllm-deployment`, `011-observability`).
 
-## 8. Capacity Validation
+## 9. Capacity Validation
 
 - Terraform module `infra/terraform/modules/lke-cluster/quotas.tf` defines per-environment quotas supporting 30 services.  
 - Performance harness `tests/infra/perf/capacity_test.go` deploys placeholder workloads to verify scheduling and HPA thresholds.  
 - Record results and tuning notes in this guide after each significant scaling event.
 
-## 9. Cluster Inventory
+## 10. Cluster Inventory
 
 - **Development**: LKE cluster `531921`, kubeconfig context `lke531921-ctx`. GitHub secrets: `DEV_KUBECONFIG_B64`, `DEV_KUBE_CONTEXT`.
 - **Production**: LKE cluster `531922`, kubeconfig context `lke531922-ctx`. GitHub secrets: `PROD_KUBECONFIG_B64`, `PROD_KUBE_CONTEXT`.
 - **Staging/System**: Defined in Terraform for future rollout; keep configuration in sync but defer `terraform apply` until post-launch objectives require additional environments.
 - Kubeconfigs are stored in 1Password and replicated into GitHub Actions secrets for automation (availability probes, scripted applies).
 
-## 10. Generated Artifacts
+## 11. Generated Artifacts
 
 - Terraform renders manifests into `infra/generated/<environment>/` for GitOps promotion.
 - Running Terraform per environment writes manifests and values into `infra/terraform/environments/<env>/.generated/`:
@@ -92,7 +107,7 @@ Keep this document updated alongside infrastructure changes to ensure context fo
   - ArgoCD ApplicationSet manifests (`argo/`).
 - Copy the contents into `infra/generated/<environment>/` (already committed) and promote those files into the GitOps repository that ArgoCD watches.
 
-## 11. GitOps & ArgoCD
+## 12. GitOps & ArgoCD
 
 - GitOps repository structure resides under `gitops/`.
 - Bootstrap ArgoCD per cluster with `./scripts/gitops/bootstrap_argocd.sh <environment> <kube-context>`.

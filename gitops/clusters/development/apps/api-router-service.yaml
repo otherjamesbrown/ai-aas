@@ -1,11 +1,11 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: web-portal-development
+  name: api-router-service-development
   namespace: argocd
   labels:
     environment: development
-    app: web-portal
+    app: api-router-service
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
@@ -13,40 +13,30 @@ spec:
   source:
     repoURL: https://github.com/otherjamesbrown/ai-aas
     targetRevision: main
-    path: web/portal/deployments/helm/web-portal
+    path: services/api-router-service/deployments/helm/api-router-service
     helm:
       valueFiles:
         - values.yaml
-        - values-development.yaml
       values: |
         image:
-          repository: ghcr.io/otherjamesbrown/web-portal
-          tag: dev
+          repository: ghcr.io/otherjamesbrown/api-router-service
+          tag: latest
           pullPolicy: Always
         env:
-          - name: VITE_API_BASE_URL
-            value: "https://api.dev.ai-aas.local/api"
-          - name: VITE_OAUTH_CLIENT_ID
-            valueFrom:
-              secretKeyRef:
-                name: web-portal-secrets
-                key: oauth-client-id
-          - name: VITE_OAUTH_ISSUER_URL
-            value: "https://api.dev.ai-aas.local"
-          - name: VITE_OAUTH_REDIRECT_URI
-            value: "https://portal.dev.ai-aas.local/auth/callback"
-          - name: VITE_FEATURE_FLAGS_API_URL
-            value: "https://api.dev.ai-aas.local/api"
+          - name: ENVIRONMENT
+            value: development
+          - name: LOG_LEVEL
+            value: info
         service:
           type: ClusterIP
-          port: 80
+          port: 8080
         resources:
           requests:
             cpu: 100m
             memory: 128Mi
           limits:
-            cpu: 200m
-            memory: 256Mi
+            cpu: 500m
+            memory: 512Mi
   destination:
     server: https://kubernetes.default.svc
     namespace: development

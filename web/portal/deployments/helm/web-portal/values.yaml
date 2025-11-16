@@ -22,17 +22,17 @@ ingress:
   enabled: true
   className: nginx
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-staging
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: portal.ai-aas.dev
+    - host: portal.dev.ai-aas.local
       paths:
         - path: /
           pathType: Prefix
   tls:
-    - secretName: web-portal-tls
+    - secretName: ai-aas-tls
       hosts:
-        - portal.ai-aas.dev
+        - portal.dev.ai-aas.local
+        - portal.prod.ai-aas.local
 
 resources:
   limits:
@@ -52,15 +52,15 @@ autoscaling:
 # Environment variables for the web portal
 env:
   - name: VITE_API_BASE_URL
-    value: "http://api-router-service:8080/api"
+    value: "https://api.dev.ai-aas.local/api"
   - name: VITE_OAUTH_CLIENT_ID
     value: ""
   - name: VITE_OAUTH_ISSUER_URL
-    value: "http://api-router-service:8080"
+    value: "https://api.dev.ai-aas.local"
   - name: VITE_OAUTH_REDIRECT_URI
-    value: "https://portal.ai-aas.dev/auth/callback"
+    value: "https://portal.dev.ai-aas.local/auth/callback"
   - name: VITE_FEATURE_FLAGS_API_URL
-    value: "http://api-router-service:8080/api"
+    value: "https://api.dev.ai-aas.local/api"
   - name: VITE_OTEL_EXPORTER_OTLP_ENDPOINT
     value: ""
   - name: VITE_OTEL_SERVICE_NAME
