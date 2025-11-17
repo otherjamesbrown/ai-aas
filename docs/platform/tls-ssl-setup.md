@@ -169,7 +169,7 @@ sudo ./scripts/infra/update-hosts-file.sh
 ## Related Documentation
 
 - `infra/secrets/certs/README.md` - Detailed certificate management
-- `tmp_md/ENDPOINTS_AND_URLS.md` - Complete endpoint configuration guide
+- `docs/platform/endpoints-and-urls.md` - Complete endpoint configuration guide
 - `tmp_md/KUBECONFIG_SETUP_SIMPLE.md` - Kubeconfig setup
 - `specs/013-ingress-tls/spec.md` - Ingress TLS specification
 

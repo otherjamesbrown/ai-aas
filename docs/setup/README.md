@@ -23,6 +23,7 @@ This directory contains documentation for setting up a new development environme
 
 ## Related Documentation
 
+- **Endpoints & URLs**: `docs/platform/endpoints-and-urls.md` - Complete endpoint and URL configuration guide
 - **Main Quickstart**: `specs/000-project-setup/quickstart.md` - Developer quickstart guide
 - **Bootstrap Script**: `scripts/setup/bootstrap.sh` - Automated environment setup
 - **Contributing Guide**: `CONTRIBUTING.md` - Code contribution guidelines

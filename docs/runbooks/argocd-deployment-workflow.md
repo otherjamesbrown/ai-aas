@@ -174,6 +174,7 @@ Password: (get from secret: kubectl get secret argocd-initial-admin-secret -n ar
 
 ## Related Documentation
 
+- `docs/platform/endpoints-and-urls.md` - Complete endpoint and URL configuration guide
 - `docs/runbooks/deploy-to-environments.md` - Complete deployment guide
 - `docs/platform/infrastructure-overview.md` - Infrastructure details
 - `.cursor/commands/deploy.md` - Deployment command reference
