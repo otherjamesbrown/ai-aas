@@ -50,7 +50,7 @@ spec:
             service: api-router-service
           annotations:
             summary: "Backend is unhealthy"
-            description: "Backend {{ $labels.backend_id }} has been unhealthy for more than 5 minutes"
+            description: "Backend {{ `{{ $labels.backend_id }}` }} has been unhealthy for more than 5 minutes"
 
         # High failover rate alert
         - alert: ApiRouterHighFailoverRate
