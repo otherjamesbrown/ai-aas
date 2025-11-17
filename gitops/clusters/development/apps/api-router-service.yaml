@@ -27,9 +27,24 @@ spec:
             value: development
           - name: LOG_LEVEL
             value: info
+          - name: HTTP_PORT
+            value: "8080"
+          - name: SERVICE_NAME
+            value: api-router-service
         service:
           type: ClusterIP
           port: 8080
+        redis:
+          address: redis.development.svc.cluster.local:6379
+        kafka:
+          brokers: ""
+          topic: usage.records.v1
+          auditTopic: audit.router
+        configService:
+          endpoint: ""
+          watchEnabled: false
+        backends:
+          endpoints: ""
         resources:
           requests:
             cpu: 100m
