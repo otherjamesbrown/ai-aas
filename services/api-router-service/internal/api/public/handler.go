@@ -40,6 +40,7 @@ type Handler struct {
 	tracer         trace.Tracer
 	errorBuilder   *api.ErrorBuilder
 	backendURIs    map[string]string // Map of backend ID to URI (for testing/configuration - overrides registry)
+	httpClient     *http.Client      // Shared HTTP client for OpenAI requests (PR#16 Issue#4)
 }
 
 // NewHandler creates a new public API handler.
@@ -66,6 +67,10 @@ func NewHandler(
 		tracer:          tracer,
 		errorBuilder:   api.NewErrorBuilder(tracer),
 		backendURIs:     make(map[string]string),
+		httpClient: &http.Client{
+			// Shared client without timeout - we'll use context for per-request timeouts (PR#16 Issue#4)
+			Timeout: 0,
+		},
 	}
 }
 

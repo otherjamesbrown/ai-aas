@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"go.uber.org/zap"
@@ -132,6 +133,12 @@ func (h *Handler) HandleOpenAIChatCompletions(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Validate that at least one backend is configured (PR#16 Issue#1)
+	if len(policy.Backends) == 0 {
+		h.writeError(w, r, fmt.Errorf("no backends configured for model %q", openAIReq.Model), api.ErrCodeRoutingError)
+		return
+	}
+
 	// Forward OpenAI request directly to backend's OpenAI endpoint
 	backendEndpoint := h.buildBackendEndpointForOpenAI(policy.Backends[0].BackendID, openAIReq.Model, "/v1/chat/completions")
 	
@@ -228,6 +235,12 @@ func (h *Handler) HandleOpenAICompletions(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Validate that at least one backend is configured (PR#16 Issue#2)
+	if len(policy.Backends) == 0 {
+		h.writeError(w, r, fmt.Errorf("no backends configured for model %q", openAIReq.Model), api.ErrCodeRoutingError)
+		return
+	}
+
 	// Forward OpenAI request directly to backend's OpenAI endpoint
 	backendEndpoint := h.buildBackendEndpointForOpenAI(policy.Backends[0].BackendID, openAIReq.Model, "/v1/completions")
 	
@@ -276,24 +289,25 @@ func (h *Handler) HandleOpenAICompletions(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// messagesToPrompt converts OpenAI messages array to a prompt string
-func (h *Handler) messagesToPrompt(messages []OpenAIMessage) string {
-	var prompt string
-	for _, msg := range messages {
-		prompt += fmt.Sprintf("%s: %s\n", msg.Role, msg.Content)
-	}
-	return prompt
-}
-
 // buildBackendEndpointForOpenAI constructs a backend endpoint for OpenAI-compatible requests
+// Uses net/url for safe URL manipulation (PR#16 Issue#3)
 func (h *Handler) buildBackendEndpointForOpenAI(backendID, model, path string) *routing.BackendEndpoint {
 	baseEndpoint := h.buildBackendEndpoint(backendID, model)
+
+	// Parse the backend URI using net/url for safe manipulation
+	parsedURI, err := url.Parse(baseEndpoint.URI)
+	if err != nil {
+		h.logger.Error("failed to parse backend URI",
+			zap.String("uri", baseEndpoint.URI),
+			zap.Error(err),
+		)
+		return baseEndpoint // Fallback to original on parse error
+	}
+
 	// Replace the path with the OpenAI endpoint path
-	baseURI := baseEndpoint.URI
-	// Remove existing path and add OpenAI path
-	// For example: http://localhost:8000/v1/completions -> http://localhost:8000/v1/chat/completions
-	// We'll construct the base URL and append the OpenAI path
-	baseEndpoint.URI = baseURI[:len(baseURI)-len("/v1/completions")] + path
+	parsedURI.Path = path
+	baseEndpoint.URI = parsedURI.String()
+
 	return baseEndpoint
 }
 
@@ -312,11 +326,11 @@ func (h *Handler) forwardOpenAIRequest(ctx context.Context, backend *routing.Bac
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	// Execute request using a new HTTP client (similar to BackendClient)
-	httpClient := &http.Client{
-		Timeout: backend.Timeout,
-	}
-	resp, err := httpClient.Do(httpReq)
+	// Use shared HTTP client with context-based timeout (PR#16 Issue#4)
+	reqCtx, cancel := context.WithTimeout(ctx, backend.Timeout)
+	defer cancel()
+
+	resp, err := h.httpClient.Do(httpReq.WithContext(reqCtx))
 	if err != nil {
 		return nil, nil, fmt.Errorf("backend request failed: %w", err)
 	}
