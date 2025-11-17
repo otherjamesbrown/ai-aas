@@ -21,15 +21,34 @@ locals {
       node_pools = [
         {
           type  = "g6-standard-4"
-          count = 3
+          count = 2
           autoscaler = {
-            min = 3
-            max = 6
+            min = 2
+            max = 4
           }
           labels = {
             role = "general"
           }
           taints = []
+        },
+        {
+          type  = "g1-gpu-rtx6000"
+          count = 1
+          autoscaler = {
+            min = 1
+            max = 1
+          }
+          labels = {
+            role = "gpu"
+            node-type = "gpu"
+          }
+          taints = [
+            {
+              key    = "gpu-workload"
+              value  = "true"
+              effect = "NoSchedule"
+            }
+          ]
         }
       ]
       ingress_whitelist = ["0.0.0.0/0"]
