@@ -66,14 +66,17 @@ export KUBECONFIG=~/kubeconfigs/kubeconfig-development.yaml
 
 **Or manually**:
 ```bash
-# Get GPU node name
-GPU_NODE=$(kubectl get nodes -o json | jq -r '.items[] | select(.metadata.labels."node.kubernetes.io/instance-type" == "g1-gpu-rtx6000") | .metadata.name')
+# Get GPU node names (handles multiple nodes)
+GPU_NODES=$(kubectl get nodes -o json | jq -r '.items[] | select(.metadata.labels."node.kubernetes.io/instance-type" == "g1-gpu-rtx6000") | .metadata.name')
 
-# Apply labels
-kubectl label node "$GPU_NODE" role=gpu node-type=gpu --overwrite
-
-# Apply taint
-kubectl taint node "$GPU_NODE" gpu-workload=true:NoSchedule --overwrite
+# Apply labels and taints to each GPU node
+for node in $GPU_NODES; do
+  # Apply labels
+  kubectl label node "$node" role=gpu node-type=gpu --overwrite
+  
+  # Apply taint
+  kubectl taint node "$node" gpu-workload=true:NoSchedule --overwrite
+done
 ```
 
 ### Step 3: Verify GPU Node

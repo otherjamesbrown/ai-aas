@@ -38,17 +38,11 @@ locals {
             min = 1
             max = 1
           }
-          labels = {
-            role = "gpu"
-            node-type = "gpu"
-          }
-          taints = [
-            {
-              key    = "gpu-workload"
-              value  = "true"
-              effect = "NoSchedule"
-            }
-          ]
+          # Note: labels and taints are not supported by the Linode Terraform provider
+          # They must be applied manually after node pool creation using:
+          # ./scripts/infra/apply-gpu-node-labels.sh
+          labels = {}
+          taints = []
         }
       ]
       ingress_whitelist = ["0.0.0.0/0"]
