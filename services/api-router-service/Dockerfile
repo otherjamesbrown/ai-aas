@@ -5,13 +5,17 @@ WORKDIR /build
 
 # Copy go.mod and go.sum first for better caching
 COPY go.mod go.sum ./
+
+# Disable Go workspace mode for Docker builds
+ENV GOWORK=off
+
 RUN go mod download
 
 # Copy source code
 COPY . .
 
 # Build the router binary
-RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/router ./cmd/router
+RUN CGO_ENABLED=0 GOOS=linux GOWORK=off go build -o /bin/router ./cmd/router
 
 # Final stage: minimal runtime image
 FROM alpine:latest
