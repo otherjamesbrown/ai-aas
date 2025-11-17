@@ -282,7 +282,7 @@ on:
 ### Promotion Flow
 
 ```
-Development → Staging → Production
+Development (main branch) → Production (release tags)
 ```
 
 **Process**:
@@ -290,28 +290,44 @@ Development → Staging → Production
 1. **Development**
    - Auto-deploy on merge to `main`
    - Fast feedback loop
-   - No approval required
+   - All CI tests must pass before merge
+   - No manual approval required
 
-2. **Staging**
-   - Auto-deploy on merge to `main`
-   - Validation environment
-   - Smoke tests run
-
-3. **Production**
+2. **Production**
+   - Manual release tag creation using `./scripts/dev/release.sh`
+   - Tags follow semantic versioning (v1.0.0, v1.1.0, etc.)
    - Manual ArgoCD sync required
-   - Requires approval
    - Health checks mandatory
 
 ### Promotion Criteria
 
-**Development → Staging**:
-- ✅ All CI checks pass
-- ✅ No blocking issues
+**Development → Production**:
+- ✅ All CI checks pass on `main`
+- ✅ Features validated in development environment
+- ✅ Release tag created (vMAJOR.MINOR.PATCH)
+- ✅ Manual approval via ArgoCD sync command
+- ✅ Health checks pass after deployment
 
-**Staging → Production**:
-- ✅ Staging validation successful
-- ✅ Manual approval
-- ✅ Health checks pass
+### Creating a Production Release
+
+```bash
+# 1. Ensure main branch is tested and ready
+git checkout main
+git pull origin main
+
+# 2. Create and push release tag
+./scripts/dev/release.sh v1.0.0 "Initial production release"
+
+# 3. Wait for CI/CD pipeline to build Docker images
+gh run list --workflow ci.yml
+
+# 4. Manually sync production applications to the new tag
+argocd app sync user-org-service-production --revision v1.0.0
+
+# 5. Verify deployment health
+argocd app get user-org-service-production
+kubectl get pods -n user-org-service
+```
 
 ## Monitoring & Observability
 

@@ -8,9 +8,21 @@ Our approach to CI/CD is guided by the principles of GitOps. The `main` branch i
 
 ## Git Strategy
 
-*   **`main` branch**: The `main` branch represents the latest stable version of the application. All development work is ultimately merged into this branch.
+### Branch and Tag Strategy
+
+*   **`main` branch**: The `main` branch represents the latest version of the application and automatically deploys to the **development environment**.
 *   **Feature branches**: All new features and bug fixes are developed on feature branches. These branches are created from `main` and should have a descriptive name (e.g., `feature/new-billing-endpoint`).
 *   **Pull Requests**: When a feature is complete, a pull request is opened to merge the feature branch into `main`. All pull requests must pass the CI pipeline before they can be merged.
+*   **Release Tags**: Production deployments are triggered by creating Git tags following semantic versioning (e.g., `v1.0.0`, `v1.1.0`, `v1.2.3`).
+
+### Environment Promotion Flow
+
+```
+Feature Branch → main (development) → tag vX.Y.Z (production)
+```
+
+1. **Development**: Merge feature branch to `main` → auto-deploys to development
+2. **Production**: Create release tag from `main` → manually sync production apps to tag
 
 ## Continuous Integration (CI)
 
@@ -86,14 +98,57 @@ We employ a multi-layered testing strategy to ensure the quality and reliability
 
 We use ArgoCD to automate the deployment of our application to our Kubernetes clusters. ArgoCD is a declarative, GitOps continuous delivery tool for Kubernetes.
 
-*   **GitOps Repository**: This repository serves as the single source of truth for our application's desired state. The `gitops/clusters/` directory contains the Kubernetes manifests for each of our environments (`development`, `staging`, and `production`).
-*   **ArgoCD Application**: We have an ArgoCD application configured to monitor the `gitops/clusters/` directory in this repository.
-*   **Deployment Process**: When a pull request is merged into `main`, the following happens:
-    1.  The CI pipeline runs and **validates all tests pass** (unit, integration, E2E, linting).
-    2.  **Only if tests pass**, new container images are built for the services that have changed.
-    3.  The new container image tags are updated in the Kubernetes manifests in the `gitops/clusters/` directory.
-    4.  ArgoCD detects that the state of the repository has changed.
-    5.  ArgoCD automatically syncs the changes to the appropriate Kubernetes cluster, deploying the new version of the application.
+*   **GitOps Repository**: This repository serves as the single source of truth for our application's desired state. The `gitops/clusters/` directory contains the Kubernetes manifests for each of our environments (`development` and `production`).
+*   **ArgoCD Application**: We have ArgoCD applications configured to monitor this repository for changes.
+
+### Deployment Process by Environment
+
+#### Development Environment
+
+**Trigger**: Merge to `main` branch
+
+1.  The CI pipeline runs and **validates all tests pass** (unit, integration, E2E, linting).
+2.  **Only if tests pass**, new container images are built for the services that have changed.
+3.  ArgoCD detects that the `main` branch has changed.
+4.  ArgoCD **automatically syncs** the changes to the development Kubernetes cluster.
+
+**Configuration**: Development apps watch `main` branch with `automated` sync enabled.
+
+#### Production Environment
+
+**Trigger**: Git tag creation (e.g., `v1.0.0`)
+
+1.  Create a release tag using the release script: `./scripts/dev/release.sh v1.0.0`
+2.  CI pipeline builds and pushes production Docker images tagged with the version.
+3.  ArgoCD detects the new tag is available.
+4.  **Manual sync required**: Run `argocd app sync <app-name> --revision v1.0.0`
+5.  ArgoCD deploys the tagged version to the production Kubernetes cluster.
+
+**Configuration**: Production apps watch `v*` tags with manual sync (`automated: null`).
+
+### Creating a Production Release
+
+Use the provided release script to create and push a release tag:
+
+```bash
+# Create a release
+./scripts/dev/release.sh v1.0.0 "Initial production release"
+
+# The script will:
+# 1. Validate version format (vMAJOR.MINOR.PATCH)
+# 2. Check you're on main branch
+# 3. Show what's included in the release
+# 4. Create and push an annotated Git tag
+# 5. Provide next steps for deployment
+
+# After the tag is pushed, manually sync production:
+argocd app sync user-org-service-production --revision v1.0.0
+```
+
+**Semantic Versioning Guidelines:**
+- **MAJOR** (v2.0.0): Breaking changes, incompatible API changes
+- **MINOR** (v1.1.0): New features, backwards-compatible
+- **PATCH** (v1.0.1): Bug fixes, backwards-compatible
 
 **Important**: ArgoCD validates Kubernetes resources and deployment health, but **does not run application tests**. All testing must pass in CI before code reaches ArgoCD. This ensures that broken functionality (like a broken sign-in button) cannot be deployed, even if the code compiles successfully.
 

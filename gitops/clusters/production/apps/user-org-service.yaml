@@ -12,7 +12,7 @@ spec:
   project: platform-production
   source:
     repoURL: https://github.com/otherjamesbrown/ai-aas
-    targetRevision: main
+    targetRevision: v*  # Watch all tags starting with 'v' (e.g., v1.0.0, v1.1.0)
     path: services/user-org-service/configs/helm
     helm:
       valueFiles:
@@ -21,8 +21,8 @@ spec:
       values: |
         image:
           repository: ghcr.io/otherjamesbrown/user-org-service
-          tag: latest
-          pullPolicy: Always
+          tag: latest  # Updated by CI/CD on tag creation
+          pullPolicy: IfNotPresent  # Changed from Always for production stability
         env:
           - name: ENVIRONMENT
             value: production
@@ -64,10 +64,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: user-org-service
   syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-      allowEmpty: false
+    # Manual sync required for production (no automated sync)
+    # Use: argocd app sync user-org-service-production --revision <tag>
+    automated: null
     syncOptions:
       - CreateNamespace=true
       - PrunePropagationPolicy=foreground
