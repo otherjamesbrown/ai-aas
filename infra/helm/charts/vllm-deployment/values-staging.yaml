@@ -1,0 +1,19 @@
+# Staging environment values
+environment: staging
+namespace: system
+
+replicaCount: 1
+
+resources:
+  limits:
+    nvidia.com/gpu: 1
+    memory: "48Gi"
+    cpu: "16"
+  requests:
+    nvidia.com/gpu: 1
+    memory: "32Gi"
+    cpu: "8"
+
+startupProbe:
+  failureThreshold: 30  # 15 minutes for medium models
+
