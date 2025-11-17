@@ -55,7 +55,7 @@ check_gpu_availability() {
   log_info "Checking GPU node availability..."
   
   # Get GPU nodes
-  GPU_NODES=$(kubectl get nodes -l node-type=gpu --no-headers 2>/dev/null | wc -l || echo "0")
+  GPU_NODES=$(kubectl get nodes -l node-type=gpu --no-headers | wc -l)
   
   if [ "$GPU_NODES" -eq 0 ]; then
     log_error "No GPU nodes found with label 'node-type=gpu'"
@@ -64,8 +64,14 @@ check_gpu_availability() {
   
   log_info "Found ${GPU_NODES} GPU node(s)"
   
-  # Check available GPU resources
-  AVAILABLE_GPUS=$(kubectl describe nodes -l node-type=gpu 2>/dev/null | grep -c "nvidia.com/gpu.*[0-9]" || echo "0")
+  # Check available GPU resources using jsonpath (more robust than parsing describe)
+  AVAILABLE_GPUS=0
+  for node in $(kubectl get nodes -l node-type=gpu -o name); do
+    NODE_GPUS=$(kubectl get $node -o jsonpath='{.status.allocatable.nvidia\.com/gpu}' || echo "0")
+    if [ -n "$NODE_GPUS" ] && [ "$NODE_GPUS" != "null" ] && [ "$NODE_GPUS" != "" ]; then
+      AVAILABLE_GPUS=$((AVAILABLE_GPUS + NODE_GPUS))
+    fi
+  done
   
   if [ "$AVAILABLE_GPUS" -eq 0 ]; then
     log_warn "No available GPUs found (may be allocated)"

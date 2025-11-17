@@ -19,7 +19,7 @@ spec:
       serviceAccountName: {{ include "vllm-deployment.serviceAccountName" . }}
       containers:
         - name: pre-install-check
-          image: bitnami/kubectl:latest
+          image: bitnami/kubectl:1.28
           command:
             - /bin/sh
             - -c
@@ -28,7 +28,7 @@ spec:
               echo "Checking GPU node availability..."
               
               # Check for GPU nodes
-              GPU_NODES=$(kubectl get nodes -l node-type=gpu --no-headers 2>/dev/null | wc -l || echo "0")
+              GPU_NODES=$(kubectl get nodes -l node-type=gpu --no-headers | wc -l)
               if [ "$GPU_NODES" -eq 0 ]; then
                 echo "ERROR: No GPU nodes found with label 'node-type=gpu'"
                 exit 1
@@ -40,14 +40,14 @@ spec:
               # Note: Kubernetes doesn't track allocated GPUs directly, so we check allocatable
               TOTAL_GPUS=0
               for node in $(kubectl get nodes -l node-type=gpu -o name); do
-                NODE_GPUS=$(kubectl get $node -o jsonpath='{.status.allocatable.nvidia\.com/gpu}' 2>/dev/null || echo "0")
+                NODE_GPUS=$(kubectl get $node -o jsonpath='{.status.allocatable.nvidia\.com/gpu}' || echo "0")
                 if [ -z "$NODE_GPUS" ] || [ "$NODE_GPUS" = "null" ] || [ "$NODE_GPUS" = "" ]; then
                   NODE_GPUS=0
                 fi
                 TOTAL_GPUS=$((TOTAL_GPUS + NODE_GPUS))
               done
               
-              REQUIRED_GPUS={{ index .Values.resources.requests "nvidia.com/gpu" | default 1 | quote }}
+              REQUIRED_GPUS={{ index .Values.resources.requests "nvidia.com/gpu" | default 1 }}
               if [ "$TOTAL_GPUS" -lt "$REQUIRED_GPUS" ]; then
                 echo "ERROR: Insufficient GPU resources. Required: $REQUIRED_GPUS, Total allocatable: $TOTAL_GPUS"
                 echo "Note: This check verifies allocatable GPUs. Actual availability may be lower if GPUs are in use."

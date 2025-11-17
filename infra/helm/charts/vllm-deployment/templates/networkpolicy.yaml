@@ -16,7 +16,7 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              name: {{ .namespace }}
+              kubernetes.io/metadata.name: {{ .namespace | quote }}
           podSelector:
             {{- toYaml .podSelector | nindent 12 }}
       ports:

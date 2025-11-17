@@ -63,6 +63,6 @@ Service Account name
 Service endpoint format: {release-name}.{namespace}.svc.cluster.local:{port}
 */}}
 {{- define "vllm-deployment.serviceEndpoint" -}}
-{{- printf "%s.%s.svc.cluster.local:%d" (include "vllm-deployment.fullname" .) .Values.namespace .Values.service.port -}}
+{{- printf "%s.%s.svc.cluster.local:%d" (include "vllm-deployment.fullname" .) .Release.Namespace .Values.service.port -}}
 {{- end -}}
 

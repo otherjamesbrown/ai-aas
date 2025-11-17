@@ -37,12 +37,13 @@ spec:
             - -m
             - vllm.entrypoints.openai.api_server
           args:
-            - --model
-            - {{ .Values.model.path | quote }}
-            - --host
-            - {{ .Values.vllm.host | quote }}
-            - --port
-            - {{ .Values.vllm.port | toString | quote }}
+            - |
+              --model
+              {{ .Values.model.path | quote }}
+              --host
+              {{ .Values.vllm.host | quote }}
+              --port
+              {{ .Values.vllm.port | toString | quote }}
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}

@@ -214,17 +214,15 @@ test_documentation() {
   done
 }
 
-# Test 8: Check values files for required fields
+# Test 8: Check values files for environment-specific fields
 test_values_files() {
   log_info "Test 8: Checking values files..."
   
-  local required_fields=(
-    "model:"
-    "resources:"
-    "service:"
-    "livenessProbe:"
-    "readinessProbe:"
-    "startupProbe:"
+  # Only check fields that should be present in environment-specific files
+  # Other fields are inherited from base values.yaml
+  local env_specific_fields=(
+    "environment:"
+    "namespace:"
   )
   
   for env in development staging production; do
@@ -232,7 +230,7 @@ test_values_files() {
     if [ -f "$values_file" ]; then
       log_success "Values file found: values-${env}.yaml"
       
-      for field in "${required_fields[@]}"; do
+      for field in "${env_specific_fields[@]}"; do
         if grep -q "^${field}" "$values_file" || grep -q "  ${field}" "$values_file"; then
           log_success "Field found in ${env}: ${field}"
         else
