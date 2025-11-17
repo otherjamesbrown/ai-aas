@@ -1,0 +1,19 @@
+# Development environment values
+environment: development
+namespace: system
+
+replicaCount: 1
+
+resources:
+  limits:
+    nvidia.com/gpu: 1
+    memory: "32Gi"
+    cpu: "8"
+  requests:
+    nvidia.com/gpu: 1
+    memory: "24Gi"
+    cpu: "4"
+
+startupProbe:
+  failureThreshold: 20  # 10 minutes for small models
+
