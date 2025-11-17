@@ -31,7 +31,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/ai-aas/shared-go/logging"
+	"github.com/otherjamesbrown/ai-aas/shared/go/logging"
 	"github.com/otherjamesbrown/ai-aas/shared/go/observability"
 )
 
