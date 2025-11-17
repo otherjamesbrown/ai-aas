@@ -384,6 +384,7 @@ readinessProbe:
 
 ## Related Documentation
 
+- `docs/platform/endpoints-and-urls.md` - Complete endpoint and URL configuration guide
 - `docs/platform/ci-cd-pipeline.md` - CI/CD pipeline overview
 - `docs/runbooks/argocd-deployment-workflow.md` - ArgoCD deployment guide
 - `docs/runbooks/deploy-to-environments.md` - Complete deployment guide

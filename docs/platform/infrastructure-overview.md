@@ -78,6 +78,8 @@
 - `docs/platform/linode-access.md`: Token creation and CLI setup.
 - `docs/platform/access-control.md`: Detailed RBAC and package issuance procedures.
 - `docs/platform/observability-guide.md`: Dashboard conventions, alert tuning.
+- `docs/platform/endpoints-and-urls.md`: Complete endpoint and URL configuration guide.
+- `docs/platform/tls-ssl-setup.md`: TLS/SSL certificate setup and management.
 - `docs/runbooks/infrastructure-rollback.md`: Step-by-step rollback instructions.
 - `docs/runbooks/infrastructure-troubleshooting.md`: Issue resolution catalog.
 - `infra/secrets/certs/README.md`: Self-signed certificate setup and management.

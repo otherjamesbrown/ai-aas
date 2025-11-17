@@ -237,6 +237,7 @@ kubectl describe ingress -n <namespace> <ingress-name>
 
 ## Related Documentation
 
+- `docs/platform/endpoints-and-urls.md` - Complete endpoint and URL configuration guide
 - `docs/platform/tls-ssl-setup.md` - TLS/SSL configuration
 - `docs/platform/infrastructure-overview.md` - Infrastructure details
 - `docs/runbooks/ci-remote.md` - Remote CI execution

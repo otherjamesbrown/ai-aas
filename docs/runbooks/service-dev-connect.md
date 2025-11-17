@@ -473,6 +473,7 @@ make remote-destroy WORKSPACE_NAME=dev-jab WORKSPACE_OWNER=jab
 
 ## References
 
+- **Endpoints & URLs**: `docs/platform/endpoints-and-urls.md` - Complete endpoint configuration guide
 - **Configuration Template**: `configs/dev/service-example.env.tpl`
 - **Example Runner**: `scripts/dev/examples/run_sample_service.sh`
 - **Smoke Test**: `tests/dev/service_happy_path.sh`
