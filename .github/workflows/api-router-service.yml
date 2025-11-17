@@ -154,7 +154,7 @@ jobs:
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
         with:
-          context: ./services/api-router-service
+          context: .  # Use repo root to include shared module
           file: ./services/api-router-service/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
