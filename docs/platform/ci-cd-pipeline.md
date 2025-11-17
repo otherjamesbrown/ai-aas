@@ -37,6 +37,41 @@ The web portal CI pipeline runs independently and is triggered when changes are 
 
 **Critical**: The build stage depends on all test stages passing. This ensures that broken code cannot be deployed, even if it compiles successfully.
 
+### Required Secrets
+
+The web portal CI pipeline requires the following GitHub repository secrets:
+
+#### GHCR_TOKEN
+
+**Purpose**: Authentication for pushing Docker images to GitHub Container Registry (GHCR).
+
+**Setup**:
+1. Create a GitHub Personal Access Token (Classic) at https://github.com/settings/tokens/new
+2. Grant the following scopes:
+   - `repo` (Full control of private repositories)
+   - `write:packages` (Upload packages to GitHub Package Registry)
+   - `read:packages` (Download packages from GitHub Package Registry)
+   - `delete:packages` (Optional, for cleanup)
+3. Add the token to repository secrets:
+   ```bash
+   gh secret set GHCR_TOKEN
+   # Paste the token when prompted
+   ```
+
+**Validation**:
+```bash
+# Verify the secret is set
+gh secret list | grep GHCR_TOKEN
+
+# Test GHCR authentication locally
+echo $GHCR_TOKEN | docker login ghcr.io -u <username> --password-stdin
+```
+
+**Troubleshooting**: If the workflow fails with "denied: denied" during Docker login:
+- Token may be expired or revoked - create a new one
+- Token may be missing required scopes - ensure `write:packages` is enabled
+- See `docs/troubleshooting/ci.md` for detailed resolution steps
+
 ## Automated Testing Strategy
 
 We employ a multi-layered testing strategy to ensure the quality and reliability of our platform.
