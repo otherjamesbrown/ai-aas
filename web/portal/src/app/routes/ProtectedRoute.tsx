@@ -30,11 +30,13 @@ export function ProtectedRoute({
 
   // Use route-based permissions if no explicit permissions provided
   const routePermission = useRoutePermission(location.pathname);
-  const explicitPermission = permissions
-    ? usePermissionGuard({ permission: permissions, requireAll, featureFlag })
-    : null;
+  const explicitPermission = usePermissionGuard({
+    permission: permissions || [],
+    requireAll,
+    featureFlag
+  });
 
-  const guard = explicitPermission || routePermission;
+  const guard = permissions ? explicitPermission : routePermission;
 
   useEffect(() => {
     // Wait for auth to finish loading

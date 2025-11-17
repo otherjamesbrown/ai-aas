@@ -5,6 +5,16 @@ test.describe('Login Page', () => {
     await page.goto('/auth/login');
   });
 
+  // Helper to check if backend services are available
+  async function checkBackendAvailable({ request }: { request: any }): Promise<boolean> {
+    try {
+      const response = await request.get('http://localhost:8081/healthz', { timeout: 2000 });
+      return response.ok();
+    } catch {
+      return false;
+    }
+  }
+
   test('should display login page with password form by default', async ({ page }) => {
     // Check for main heading
     await expect(page.getByRole('heading', { name: /sign in/i })).toBeVisible();
@@ -43,7 +53,9 @@ test.describe('Login Page', () => {
     await expect(page.getByLabel(/email/i)).toBeVisible();
   });
 
-  test('should validate required fields', async ({ page }) => {
+  test('should validate required fields', async ({ page, request }) => {
+    test.skip(!(await checkBackendAvailable({ request })), 'Requires backend services');
+
     // Try to submit empty form
     await page.getByRole('button', { name: /sign in$/i }).click();
 
@@ -64,18 +76,20 @@ test.describe('Login Page', () => {
     await expect(page.getByText(/login failed|invalid.*password/i)).toBeVisible({ timeout: 5000 });
   });
 
-  test('should successfully login with valid credentials', async ({ page }) => {
+  test('should successfully login with valid credentials', async ({ page, request }) => {
+    test.skip(!(await checkBackendAvailable({ request })), 'Requires backend services');
+
     // Fill in valid credentials
     // Use Acme Ltd admin user for tests (see seeded-users.md)
     await page.getByLabel(/email/i).fill('admin@example-acme.com');
     await page.getByLabel(/password/i).fill('AcmeAdmin2024!Secure');
-    
+
     // Submit form
     await page.getByRole('button', { name: /sign in$/i }).click();
 
     // Should redirect to home page after successful login
     await expect(page).toHaveURL(/\//, { timeout: 10000 });
-    
+
     // Should not see login button in header anymore
     await expect(page.getByRole('link', { name: /login/i })).not.toBeVisible();
   });
@@ -94,11 +108,13 @@ test.describe('Login Page', () => {
     await expect(page).toHaveURL(/\//, { timeout: 10000 });
   });
 
-  test('should show loading state during login', async ({ page }) => {
+  test('should show loading state during login', async ({ page, request }) => {
+    test.skip(!(await checkBackendAvailable({ request })), 'Requires backend services');
+
     // Use Acme Ltd admin user for tests (see seeded-users.md)
     await page.getByLabel(/email/i).fill('admin@example-acme.com');
     await page.getByLabel(/password/i).fill('AcmeAdmin2024!Secure');
-    
+
     // Click submit
     const submitButton = page.getByRole('button', { name: /sign in$/i });
     await submitButton.click();

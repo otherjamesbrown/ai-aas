@@ -4,7 +4,7 @@
 **Last Updated**: 2025-11-08  
 **Owner**: Platform Engineering
 
-## 1. Stack Components
+## Stack Components
 
 - **Prometheus** (kube-prometheus-stack):
   - Scrapes cluster metrics, Kubernetes components, ingress, sample service.
@@ -84,7 +84,7 @@ For local development and testing:
 
 See `usage-guide/operations/log-analysis.md` for detailed log access patterns.
 
-## 2. Required Dashboards
+## Required Dashboards
 
 | Dashboard UID | Name | Purpose | Owner |
 |---------------|------|---------|-------|
@@ -96,7 +96,7 @@ See `usage-guide/operations/log-analysis.md` for detailed log access patterns.
 
 Dashboards must include links to Loki queries (`Explore` view) and Tempo traces filtered by `environment`.
 
-## 3. Alert Policies
+## Alert Policies
 
 - **EnvironmentDegraded**: Fires when namespace health check fails (`status != Healthy` for 5 minutes). PagerDuty critical.
 - **IngressLatencyHigh**: P95 latency > 300ms for 5 minutes. Slack warning.
@@ -106,13 +106,13 @@ Dashboards must include links to Loki queries (`Explore` view) and Tempo traces 
 
 Alert definitions codified in `infra/helm/charts/observability-stack/templates/alerts/*.yaml`. Every change requires updating success criteria SC-006/SC-007 verification notes.
 
-## 4. Operational Runbooks
+## Operational Runbooks
 
 - `docs/runbooks/infrastructure-rollback.md`: Use after alert indicates failed deployment.
 - `docs/runbooks/infrastructure-troubleshooting.md`: Map alerts to remediation.
 - `docs/platform/access-control.md`: Reference for access-related alerts.
 
-## 5. Verification & Testing
+## Verification & Testing
 
 1. Post-provisioning:
    ```bash
@@ -135,7 +135,7 @@ Alert definitions codified in `infra/helm/charts/observability-stack/templates/a
 
 4. Dashboard snapshots exported weekly via GitHub Actions job `observability-backup`.
 
-## 6. Onboarding Checklist
+## Onboarding Checklist
 
 - [ ] Grafana user added to `platform-observers` team.  
 - [ ] Access package includes dashboard URLs (`observability-links.json`).  

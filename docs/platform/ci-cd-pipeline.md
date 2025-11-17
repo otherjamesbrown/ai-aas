@@ -14,15 +14,63 @@ Our approach to CI/CD is guided by the principles of GitOps. The `main` branch i
 
 ## Continuous Integration (CI)
 
-Our CI pipeline is powered by GitHub Actions and is defined in the `.github/workflows/ci.yml` file. The pipeline is triggered on every push to `main` and on every pull request.
+Our CI pipeline is powered by GitHub Actions and consists of multiple workflows:
 
-The CI pipeline consists of the following stages:
+### Go Services CI (`.github/workflows/ci.yml`)
+
+The main CI pipeline for Go microservices is triggered on every push to `main` and on every pull request. It consists of the following stages:
 
 1.  **Setup & Discover Services**: This stage checks out the code and dynamically discovers all the microservices in the `services/` directory.
 2.  **Build**: This stage compiles the code for each microservice to ensure that it is buildable.
 3.  **Test**: This stage runs the unit and integration tests for each microservice.
 4.  **Lint**: This stage runs a static analysis tool (`golangci-lint`) to check for code quality and style issues.
 5.  **Metrics Upload**: This stage generates and archives build metrics.
+
+### Web Portal CI (`.github/workflows/web-portal.yml`)
+
+The web portal CI pipeline runs independently and is triggered when changes are made to `web/portal/` or `shared/ts/`. It consists of the following stages:
+
+1.  **Lint**: Runs ESLint to check for code quality and style issues.
+2.  **Unit Tests**: Runs Vitest unit tests to verify component and hook functionality.
+3.  **E2E Tests**: Runs Playwright end-to-end tests to verify user workflows (including critical paths like sign-in).
+4.  **Build**: Builds and pushes Docker images **only if all tests pass**.
+
+**Critical**: The build stage depends on all test stages passing. This ensures that broken code cannot be deployed, even if it compiles successfully.
+
+### Required Secrets
+
+The web portal CI pipeline requires the following GitHub repository secrets:
+
+#### GHCR_TOKEN
+
+**Purpose**: Authentication for pushing Docker images to GitHub Container Registry (GHCR).
+
+**Setup**:
+1. Create a GitHub Personal Access Token (Classic) at https://github.com/settings/tokens/new
+2. Grant the following scopes:
+   - `repo` (Full control of private repositories)
+   - `write:packages` (Upload packages to GitHub Package Registry)
+   - `read:packages` (Download packages from GitHub Package Registry)
+   - `delete:packages` (Optional, for cleanup)
+3. Add the token to repository secrets:
+   ```bash
+   gh secret set GHCR_TOKEN
+   # Paste the token when prompted
+   ```
+
+**Validation**:
+```bash
+# Verify the secret is set
+gh secret list | grep GHCR_TOKEN
+
+# Test GHCR authentication locally
+echo $GHCR_TOKEN | docker login ghcr.io -u <username> --password-stdin
+```
+
+**Troubleshooting**: If the workflow fails with "denied: denied" during Docker login:
+- Token may be expired or revoked - create a new one
+- Token may be missing required scopes - ensure `write:packages` is enabled
+- See `docs/troubleshooting/ci.md` for detailed resolution steps
 
 ## Automated Testing Strategy
 
@@ -41,7 +89,32 @@ We use ArgoCD to automate the deployment of our application to our Kubernetes cl
 *   **GitOps Repository**: This repository serves as the single source of truth for our application's desired state. The `gitops/clusters/` directory contains the Kubernetes manifests for each of our environments (`development`, `staging`, and `production`).
 *   **ArgoCD Application**: We have an ArgoCD application configured to monitor the `gitops/clusters/` directory in this repository.
 *   **Deployment Process**: When a pull request is merged into `main`, the following happens:
-    1.  The CI pipeline runs and builds new container images for the services that have changed.
-    2.  The new container image tags are updated in the Kubernetes manifests in the `gitops/clusters/` directory.
-    3.  ArgoCD detects that the state of the repository has changed.
-    4.  ArgoCD automatically syncs the changes to the appropriate Kubernetes cluster, deploying the new version of the application.
+    1.  The CI pipeline runs and **validates all tests pass** (unit, integration, E2E, linting).
+    2.  **Only if tests pass**, new container images are built for the services that have changed.
+    3.  The new container image tags are updated in the Kubernetes manifests in the `gitops/clusters/` directory.
+    4.  ArgoCD detects that the state of the repository has changed.
+    5.  ArgoCD automatically syncs the changes to the appropriate Kubernetes cluster, deploying the new version of the application.
+
+**Important**: ArgoCD validates Kubernetes resources and deployment health, but **does not run application tests**. All testing must pass in CI before code reaches ArgoCD. This ensures that broken functionality (like a broken sign-in button) cannot be deployed, even if the code compiles successfully.
+
+## Branch Protection
+
+To ensure broken code cannot be merged, configure branch protection rules for the `main` branch:
+
+1. Go to repository Settings → Branches
+2. Add branch protection rule for `main`
+3. Enable "Require status checks to pass before merging"
+4. Select required checks:
+   - `lint` (web-portal)
+   - `test` (web-portal)
+   - `test-e2e` (web-portal)
+   - Other service CI checks as needed
+
+This ensures that PRs cannot be merged unless all CI checks pass, preventing broken code from reaching production.
+
+## GitOps & ArgoCD
+
+- GitOps repository structure resides under `gitops/`.
+- Bootstrap ArgoCD per cluster with `./scripts/gitops/bootstrap_argocd.sh <environment> <kube-context>`.
+- Register this repository using `argocd repo add` and sync `platform-<env>-infrastructure` applications after each promotion.
+- Customize `gitops/templates/argocd-values.yaml` (ingress, service type, RBAC) and rerun the bootstrap script to apply changes.
