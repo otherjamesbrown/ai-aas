@@ -23,7 +23,7 @@ spec:
             service: api-router-service
           annotations:
             summary: "High error rate detected in API Router Service"
-            description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%) for the last 5 minutes"
+            description: "Error rate is {{ `{{ $value | humanizePercentage }}` }} (threshold: 5%) for the last 5 minutes"
 
         # High latency alert (P95 > 3s)
         - alert: ApiRouterHighLatency
@@ -38,7 +38,7 @@ spec:
             service: api-router-service
           annotations:
             summary: "High latency detected in API Router Service"
-            description: "P95 latency is {{ $value }}s (threshold: 3s) for the last 10 minutes"
+            description: "P95 latency is {{ `{{ $value }}` }}s (threshold: 3s) for the last 10 minutes"
 
         # Backend unhealthy alert
         - alert: ApiRouterBackendUnhealthy
@@ -62,7 +62,7 @@ spec:
             service: api-router-service
           annotations:
             summary: "High failover rate detected"
-            description: "Failover rate is {{ $value }} per minute (threshold: 10/min) for the last 5 minutes"
+            description: "Failover rate is {{ `{{ $value }}` }} per minute (threshold: 10/min) for the last 5 minutes"
 
         # Buffer store size high alert
         - alert: ApiRouterBufferStoreSizeHigh
@@ -74,7 +74,7 @@ spec:
             service: api-router-service
           annotations:
             summary: "Buffer store size is high"
-            description: "Buffer store contains {{ $value }} records (threshold: 1000) for more than 5 minutes"
+            description: "Buffer store contains {{ `{{ $value }}` }} records (threshold: 1000) for more than 5 minutes"
 
         # Buffer store age high alert
         - alert: ApiRouterBufferStoreAgeHigh
@@ -86,7 +86,7 @@ spec:
             service: api-router-service
           annotations:
             summary: "Buffer store age is high"
-            description: "Oldest record in buffer store is {{ $value | humanizeDuration }} (threshold: 24h) for more than 5 minutes"
+            description: "Oldest record in buffer store is {{ `{{ $value | humanizeDuration }}` }} (threshold: 24h) for more than 5 minutes"
 
         # Rate limit denials high alert
         - alert: ApiRouterRateLimitDenialsHigh
@@ -98,7 +98,7 @@ spec:
             service: api-router-service
           annotations:
             summary: "High rate limit denial rate"
-            description: "Rate limit denials are {{ $value }} per minute (threshold: 100/min) for the last 5 minutes"
+            description: "Rate limit denials are {{ `{{ $value }}` }} per minute (threshold: 100/min) for the last 5 minutes"
 
         # Service unavailable alert
         - alert: ApiRouterServiceUnavailable
