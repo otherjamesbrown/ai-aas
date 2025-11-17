@@ -36,6 +36,13 @@ if ! gh auth status >/dev/null 2>&1; then
   echo -e "${RED}❌ GitHub CLI not authenticated.${NC}"
   echo "   Run 'gh auth login' to authenticate."
   exit 1
+  exit 1
+fi
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo -e "${RED}❌ jq is required for parsing JSON.${NC}"
+  echo "   Install instructions: https://stedolan.github.io/jq/download/"
+  exit 1
 fi
 
 # If no PR number provided, list open PRs
