@@ -31,7 +31,7 @@ As a platform engineer, I can roll out model inference engines on GPU nodes with
 **Acceptance Scenarios**:
 
 1. **Given** an environment, **When** I deploy a model instance, **Then** the endpoint becomes ready and returns a valid completion to a test request.  
-2. **Given** a failed rollout, **When** I initiate rollback, **Then** the previous stable version resumes service without client-visible errors.
+2. **Given** a failed rollout, **When** I initiate basic Helm rollback (helm rollback), **Then** the previous Helm release revision resumes service without client-visible errors. (Note: Advanced rollback workflows with validation gates and status aggregation are covered in User Story 3)
 
 ---
 
@@ -65,8 +65,6 @@ As an operator, I can separate environments and perform safe rollouts with clear
 
 ---
 
-[Add more user stories as needed, each with an assigned priority]
-
 ### Edge Cases
 
 - GPU scarcity or scheduling delays; deployment waits and fallbacks.  
@@ -75,11 +73,6 @@ As an operator, I can separate environments and perform safe rollouts with clear
 - Misconfigured registration leading to unroutable model names.
 
 ## Requirements *(mandatory)*
-
-<!--
-  ACTION REQUIRED: The content in this section represents placeholders.
-  Fill them out with the right functional requirements.
--->
 
 ### Functional Requirements
 
@@ -93,14 +86,9 @@ As an operator, I can separate environments and perform safe rollouts with clear
 
 ## Success Criteria *(mandatory)*
 
-<!--
-  ACTION REQUIRED: Define measurable success criteria.
-  These must be technology-agnostic and measurable.
--->
-
 ### Measurable Outcomes
 
 - **SC-001**: New model deployments reach ready state in ≤10 minutes 95% of the time.  
 - **SC-002**: Post-deploy verification: a test completion returns successfully within ≤3 seconds 95% of the time.  
 - **SC-003**: Registrations enable routing within ≤2 minutes of change for 95% of updates; disabled models are denied 100% of the time.  
-- **SC-004**: Rollbacks complete within ≤5 minutes with prior stable behavior restored.*** End Patch
+- **SC-004**: Rollbacks complete within ≤5 minutes with prior stable behavior restored.
