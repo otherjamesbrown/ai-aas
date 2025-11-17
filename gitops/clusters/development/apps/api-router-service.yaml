@@ -37,6 +37,8 @@ spec:
           limits:
             cpu: 500m
             memory: 512Mi
+        prometheus:
+          enabled: false
   destination:
     server: https://kubernetes.default.svc
     namespace: development
