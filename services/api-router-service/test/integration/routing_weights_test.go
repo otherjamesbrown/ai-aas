@@ -141,12 +141,13 @@ func TestRoutingWeightDistribution(t *testing.T) {
 	// Create router and register routes
 	tracer := otel.Tracer("test")
 	router := chi.NewRouter()
+	router.Use(public.BodyBufferMiddleware(64 * 1024))
 	router.Use(public.AuthContextMiddleware(authenticator, logger, tracer))
 	handler.RegisterRoutes(router)
 
 	// Send a request and verify it routes to one of the backends
 	requestBody := map[string]interface{}{
-		"request_id": "test-weighted-1",
+		"request_id": "550e8400-e29b-41d4-a716-446655440010",
 		"model":      "gpt-4o",
 		"payload":    "Test weighted routing",
 	}
