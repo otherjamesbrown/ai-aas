@@ -246,7 +246,7 @@ func TestRoutingFailover(t *testing.T) {
 
 	// Send request - should failover to backend-2
 	requestBody := map[string]interface{}{
-		"request_id": "test-failover-1",
+		"request_id": "550e8400-e29b-41d4-a716-446655440020",
 		"model":      "gpt-4o",
 		"payload":    "Test failover",
 	}
@@ -342,7 +342,7 @@ func TestDegradedBackendExclusion(t *testing.T) {
 
 	// Send request - should route to healthy backend only
 	requestBody := map[string]interface{}{
-		"request_id": "test-degraded-1",
+		"request_id": "550e8400-e29b-41d4-a716-446655440030",
 		"model":      "gpt-4o",
 		"payload":    "Test degraded exclusion",
 	}
