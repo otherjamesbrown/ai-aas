@@ -1,0 +1,854 @@
+openapi: 3.1.0
+info:
+  title: Model Deployment Management API
+  version: 1.0.0
+  description: |
+    Management API for deploying, registering, and managing vLLM model inference engines.
+    
+    This API enables operators to:
+    - Deploy model instances to Kubernetes
+    - Register models for routing
+    - Monitor deployment health and status
+    - Perform rollbacks and environment promotions
+    
+    All endpoints require authentication and authorization via RBAC middleware.
+  contact:
+    name: Platform Engineering
+    email: platform@example.com
+
+servers:
+  - url: https://api.example.com/admin/v1
+    description: Production server
+  - url: http://localhost:8081/admin/v1
+    description: Local development server
+
+tags:
+  - name: deployments
+    description: Model deployment operations
+  - name: registry
+    description: Model registration and routing configuration
+  - name: health
+    description: Health check and status monitoring
+
+paths:
+  /deployments:
+    get:
+      summary: List model deployments
+      description: Retrieve a list of all model deployments across environments
+      operationId: listDeployments
+      tags:
+        - deployments
+      parameters:
+        - name: environment
+          in: query
+          description: Filter by environment
+          required: false
+          schema:
+            type: string
+            enum: [development, staging, production]
+        - name: status
+          in: query
+          description: Filter by deployment status
+          required: false
+          schema:
+            type: string
+            enum: [pending, deploying, ready, degraded, failed, disabled]
+        - name: model_name
+          in: query
+          description: Filter by model name
+          required: false
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          description: Pagination cursor
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Maximum number of results
+          required: false
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: List of deployments
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Deploy a model instance
+      description: Create a new model deployment in the specified environment
+      operationId: createDeployment
+      tags:
+        - deployments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDeploymentRequest'
+      responses:
+        '201':
+          description: Deployment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Deployment already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /deployments/{deployment_id}:
+    get:
+      summary: Get deployment details
+      description: Retrieve detailed information about a specific deployment
+      operationId: getDeployment
+      tags:
+        - deployments
+      parameters:
+        - name: deployment_id
+          in: path
+          required: true
+          description: Deployment identifier (UUID or release name)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deployment details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    delete:
+      summary: Delete a deployment
+      description: Remove a model deployment and clean up resources
+      operationId: deleteDeployment
+      tags:
+        - deployments
+      parameters:
+        - name: deployment_id
+          in: path
+          required: true
+          description: Deployment identifier
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deployment deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /deployments/{deployment_id}/rollback:
+    post:
+      summary: Rollback a deployment
+      description: Rollback to a previous Helm release revision
+      operationId: rollbackDeployment
+      tags:
+        - deployments
+      parameters:
+        - name: deployment_id
+          in: path
+          required: true
+          description: Deployment identifier
+          schema:
+            type: string
+        - name: revision
+          in: query
+          description: Target Helm revision (defaults to previous)
+          required: false
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RollbackRequest'
+      responses:
+        '200':
+          description: Rollback initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /deployments/{deployment_id}/promote:
+    post:
+      summary: Promote deployment to next environment
+      description: Promote a deployment from development → staging → production
+      operationId: promoteDeployment
+      tags:
+        - deployments
+      parameters:
+        - name: deployment_id
+          in: path
+          required: true
+          description: Deployment identifier
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromoteRequest'
+      responses:
+        '201':
+          description: Promotion initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /registry/models:
+    get:
+      summary: List registered models
+      description: Retrieve all models registered for routing
+      operationId: listRegisteredModels
+      tags:
+        - registry
+      parameters:
+        - name: status
+          in: query
+          description: Filter by registration status
+          required: false
+          schema:
+            type: string
+            enum: [ready, disabled]
+        - name: environment
+          in: query
+          description: Filter by environment
+          required: false
+          schema:
+            type: string
+            enum: [development, staging, production]
+      responses:
+        '200':
+          description: List of registered models
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelRegistryListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      summary: Register a model for routing
+      description: Register a deployed model in the routing registry
+      operationId: registerModel
+      tags:
+        - registry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterModelRequest'
+      responses:
+        '201':
+          description: Model registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelRegistryEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          description: Deployment not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /registry/models/{model_id}:
+    get:
+      summary: Get model registration details
+      description: Retrieve registration details for a specific model
+      operationId: getModelRegistration
+      tags:
+        - registry
+      parameters:
+        - name: model_id
+          in: path
+          required: true
+          description: Model registry entry ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Model registration details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelRegistryEntry'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    patch:
+      summary: Update model registration
+      description: Update registration status (enable/disable) or metadata
+      operationId: updateModelRegistration
+      tags:
+        - registry
+      parameters:
+        - name: model_id
+          in: path
+          required: true
+          description: Model registry entry ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateModelRegistrationRequest'
+      responses:
+        '200':
+          description: Registration updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelRegistryEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    delete:
+      summary: Deregister a model
+      description: Remove a model from the routing registry
+      operationId: deregisterModel
+      tags:
+        - registry
+      parameters:
+        - name: model_id
+          in: path
+          required: true
+          description: Model registry entry ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Model deregistered
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /health/deployments:
+    get:
+      summary: Get deployment health status
+      description: Retrieve health status for all deployments or filtered subset
+      operationId: getDeploymentHealth
+      tags:
+        - health
+      parameters:
+        - name: environment
+          in: query
+          description: Filter by environment
+          required: false
+          schema:
+            type: string
+            enum: [development, staging, production]
+        - name: model_name
+          in: query
+          description: Filter by model name
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Health status for deployments
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+components:
+  schemas:
+    Deployment:
+      type: object
+      required:
+        - deployment_id
+        - model_name
+        - revision
+        - environment
+        - status
+        - endpoint
+      properties:
+        deployment_id:
+          type: string
+          description: Deployment identifier (UUID or Helm release name)
+          example: "llama-7b-production"
+        model_name:
+          type: string
+          description: Logical model name
+          example: "llama-7b"
+        revision:
+          type: integer
+          description: Model revision number
+          example: 1
+        environment:
+          type: string
+          enum: [development, staging, production]
+          description: Deployment environment
+        namespace:
+          type: string
+          description: Kubernetes namespace
+          example: "system"
+        endpoint:
+          type: string
+          description: Service endpoint URL
+          example: "llama-7b-production.system.svc.cluster.local:8000"
+        status:
+          type: string
+          enum: [pending, deploying, ready, degraded, failed, disabled]
+          description: Current deployment status
+        helm_revision:
+          type: integer
+          description: Helm release revision number
+          example: 3
+        deployed_at:
+          type: string
+          format: date-time
+          description: When deployment was created
+        last_updated_at:
+          type: string
+          format: date-time
+          description: When deployment was last updated
+        last_health_check_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp of last successful health check
+
+    DeploymentResponse:
+      type: object
+      properties:
+        deployment:
+          $ref: '#/components/schemas/Deployment'
+        message:
+          type: string
+          description: Human-readable message
+          example: "Deployment created successfully"
+
+    DeploymentListResponse:
+      type: object
+      properties:
+        deployments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Deployment'
+        cursor:
+          type: string
+          nullable: true
+          description: Pagination cursor for next page
+        total:
+          type: integer
+          description: Total number of deployments
+
+    CreateDeploymentRequest:
+      type: object
+      required:
+        - model_name
+        - revision
+        - environment
+        - model_path
+      properties:
+        model_name:
+          type: string
+          description: Logical model name
+          example: "llama-7b"
+        revision:
+          type: integer
+          description: Model revision number
+          example: 1
+        environment:
+          type: string
+          enum: [development, staging, production]
+          description: Target environment
+        model_path:
+          type: string
+          description: HuggingFace model path or local path
+          example: "meta-llama/Llama-2-7b-chat-hf"
+        gpu_count:
+          type: integer
+          default: 1
+          description: Number of GPUs to allocate
+          minimum: 1
+          maximum: 8
+        resources:
+          type: object
+          description: Resource requests and limits
+          properties:
+            memory:
+              type: string
+              example: "32Gi"
+            cpu:
+              type: string
+              example: "8"
+        metadata:
+          type: object
+          description: Additional metadata
+          additionalProperties: true
+
+    RollbackRequest:
+      type: object
+      properties:
+        revision:
+          type: integer
+          description: Target Helm revision (defaults to previous)
+          example: 2
+        reason:
+          type: string
+          description: Reason for rollback
+          example: "Model performance degradation"
+
+    PromoteRequest:
+      type: object
+      required:
+        - target_environment
+      properties:
+        target_environment:
+          type: string
+          enum: [staging, production]
+          description: Target environment for promotion
+        validate:
+          type: boolean
+          default: true
+          description: Run validation checks before promotion
+
+    ModelRegistryEntry:
+      type: object
+      required:
+        - model_id
+        - model_name
+        - revision
+        - deployment_status
+      properties:
+        model_id:
+          type: string
+          format: uuid
+          description: Model registry entry ID
+        organization_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Organization ID (null for global models)
+        model_name:
+          type: string
+          description: Logical model name
+        revision:
+          type: integer
+          description: Model revision number
+        deployment_target:
+          type: string
+          enum: [managed, self_hosted]
+          description: Deployment target type
+        deployment_endpoint:
+          type: string
+          nullable: true
+          description: Service endpoint URL
+        deployment_status:
+          type: string
+          enum: [pending, deploying, ready, degraded, failed, disabled]
+          description: Current deployment status
+        deployment_environment:
+          type: string
+          enum: [development, staging, production]
+          nullable: true
+          description: Deployment environment
+        deployment_namespace:
+          type: string
+          nullable: true
+          description: Kubernetes namespace
+        cost_per_1k_tokens:
+          type: number
+          format: float
+          description: Cost per 1000 tokens
+        metadata:
+          type: object
+          description: Additional metadata
+          additionalProperties: true
+        last_health_check_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last health check timestamp
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ModelRegistryListResponse:
+      type: object
+      properties:
+        models:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModelRegistryEntry'
+        total:
+          type: integer
+
+    RegisterModelRequest:
+      type: object
+      required:
+        - model_name
+        - revision
+        - deployment_endpoint
+        - environment
+      properties:
+        model_name:
+          type: string
+          description: Logical model name
+        revision:
+          type: integer
+          description: Model revision number
+        deployment_endpoint:
+          type: string
+          description: Service endpoint URL
+        environment:
+          type: string
+          enum: [development, staging, production]
+        organization_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Organization ID (null for global)
+        cost_per_1k_tokens:
+          type: number
+          format: float
+          description: Cost per 1000 tokens
+        metadata:
+          type: object
+          additionalProperties: true
+
+    UpdateModelRegistrationRequest:
+      type: object
+      properties:
+        deployment_status:
+          type: string
+          enum: [ready, disabled]
+          description: Update registration status
+        cost_per_1k_tokens:
+          type: number
+          format: float
+        metadata:
+          type: object
+          additionalProperties: true
+
+    HealthStatus:
+      type: object
+      properties:
+        deployment_id:
+          type: string
+        model_name:
+          type: string
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        last_check:
+          type: string
+          format: date-time
+        response_time_ms:
+          type: integer
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+
+    HealthStatusResponse:
+      type: object
+      properties:
+        deployments:
+          type: array
+          items:
+            $ref: '#/components/schemas/HealthStatus'
+        checked_at:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      required:
+        - type
+        - title
+        - status
+      properties:
+        type:
+          type: string
+          format: uri
+          description: Error type URI
+          example: "https://api.example.com/errors/deployment-not-found"
+        title:
+          type: string
+          description: Human-readable error title
+          example: "Deployment Not Found"
+        status:
+          type: integer
+          description: HTTP status code
+          example: 404
+        detail:
+          type: string
+          description: Detailed error message
+        instance:
+          type: string
+          format: uri
+          description: Request URI that caused the error
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            type: "https://api.example.com/errors/bad-request"
+            title: "Bad Request"
+            status: 400
+            detail: "Invalid deployment configuration"
+
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            type: "https://api.example.com/errors/unauthorized"
+            title: "Unauthorized"
+            status: 401
+            detail: "Authentication required"
+
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            type: "https://api.example.com/errors/forbidden"
+            title: "Forbidden"
+            status: 403
+            detail: "Insufficient permissions"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            type: "https://api.example.com/errors/not-found"
+            title: "Not Found"
+            status: 404
+            detail: "Deployment not found"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            type: "https://api.example.com/errors/internal-server-error"
+            title: "Internal Server Error"
+            status: 500
+            detail: "An unexpected error occurred"
+
+security:
+  - BearerAuth: []
+
+securitySchemes:
+  BearerAuth:
+    type: http
+    scheme: bearer
+    bearerFormat: JWT
+    description: API key or JWT token authentication
+

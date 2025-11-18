@@ -21,14 +21,27 @@ locals {
       node_pools = [
         {
           type  = "g6-standard-4"
-          count = 3
+          count = 2
           autoscaler = {
-            min = 3
-            max = 6
+            min = 2
+            max = 4
           }
           labels = {
             role = "general"
           }
+          taints = []
+        },
+        {
+          type  = "g1-gpu-rtx6000"
+          count = 1
+          autoscaler = {
+            min = 1
+            max = 1
+          }
+          # Note: labels and taints are not supported by the Linode Terraform provider
+          # They must be applied manually after node pool creation using:
+          # ./scripts/infra/apply-gpu-node-labels.sh
+          labels = {}
           taints = []
         }
       ]

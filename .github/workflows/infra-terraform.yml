@@ -36,9 +36,9 @@ jobs:
           tflint_version: ${{ env.TFLINT_VERSION }}
 
       - name: Set up tfsec
-        uses: aquasecurity/setup-tfsec@v1
+        uses: aquasecurity/tfsec-action@v1.0.0
         with:
-          version: ${{ env.TFSEC_VERSION }}
+          tfsec_version: ${{ env.TFSEC_VERSION }}
 
       - name: Validate Terraform configuration
         run: ./scripts/infra/validate.sh --env development
