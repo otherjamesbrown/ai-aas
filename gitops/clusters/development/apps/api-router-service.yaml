@@ -31,6 +31,10 @@ spec:
             value: "8080"
           - name: SERVICE_NAME
             value: api-router-service
+          - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            value: "localhost:4317"
+          - name: OTEL_EXPORTER_OTLP_INSECURE
+            value: "true"
         service:
           type: ClusterIP
           port: 8080
