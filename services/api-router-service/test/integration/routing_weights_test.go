@@ -241,6 +241,7 @@ func TestRoutingFailover(t *testing.T) {
 	// Create router
 	tracer := otel.Tracer("test")
 	router := chi.NewRouter()
+	router.Use(public.BodyBufferMiddleware(64 * 1024))
 	router.Use(public.AuthContextMiddleware(authenticator, logger, tracer))
 	handler.RegisterRoutes(router)
 
@@ -337,6 +338,7 @@ func TestDegradedBackendExclusion(t *testing.T) {
 	// Create router
 	tracer := otel.Tracer("test")
 	router := chi.NewRouter()
+	router.Use(public.BodyBufferMiddleware(64 * 1024))
 	router.Use(public.AuthContextMiddleware(authenticator, logger, tracer))
 	handler.RegisterRoutes(router)
 
