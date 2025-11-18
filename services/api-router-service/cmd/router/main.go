@@ -242,7 +242,7 @@ func main() {
 		ReadyTimeout:   5 * time.Second,
 	})
 
-	// Register health endpoints
+	// Register health endpoints (before application middleware so they don't require auth)
 	router.Get("/v1/status/healthz", statusHandlers.Healthz)
 	router.Get("/v1/status/readyz", statusHandlers.Readyz)
 
@@ -285,24 +285,30 @@ func main() {
 	// Create tracer for middleware
 	tracer := otel.Tracer("api-router-service")
 
-	// Register middleware (order matters: body buffer -> auth -> rate limit -> budget -> handler)
+	// Create sub-router for application routes (with middleware)
+	appRouter := chi.NewRouter()
+
+	// Register application middleware on sub-router (order matters: body buffer -> auth -> rate limit -> budget -> handler)
 	// BodyBufferMiddleware must be first to buffer request body for HMAC verification and model extraction
-	router.Use(public.BodyBufferMiddleware(64 * 1024)) // 64 KB max body size
+	appRouter.Use(public.BodyBufferMiddleware(64 * 1024)) // 64 KB max body size
 	// AuthContextMiddleware must come after body buffer for HMAC verification
-	router.Use(public.AuthContextMiddleware(authenticator, logger, tracer))
+	appRouter.Use(public.AuthContextMiddleware(authenticator, logger, tracer))
 	
 	// Rate limit middleware (only if Redis is available)
 	if rateLimiter != nil {
-		router.Use(public.RateLimitMiddleware(rateLimiter, auditLogger, logger, tracer))
+		appRouter.Use(public.RateLimitMiddleware(rateLimiter, auditLogger, logger, tracer))
 	} else {
 		logger.Warn("rate limiting disabled (Redis unavailable)")
 	}
 
 	// Budget middleware
-	router.Use(public.BudgetMiddleware(budgetClient, auditLogger, logger, tracer))
+	appRouter.Use(public.BudgetMiddleware(budgetClient, auditLogger, logger, tracer))
 
-	// Register routes (handler will use auth context from middleware)
-	publicHandler.RegisterRoutes(router)
+	// Register routes on sub-router (handler will use auth context from middleware)
+	publicHandler.RegisterRoutes(appRouter)
+
+	// Mount sub-router on main router
+	router.Mount("/", appRouter)
 
 	// Store references for graceful shutdown
 	_ = auditLogger // TODO: Close audit logger on shutdown
@@ -312,13 +318,13 @@ func main() {
 
 	// Initialize admin handler
 	adminHandler := admin.NewHandler(logger, loader, healthMonitor, routingEngine, backendRegistry)
-	adminHandler.RegisterRoutes(router)
+	adminHandler.RegisterRoutes(appRouter)
 
 	// Initialize audit handler
 	auditHandler := public.NewAuditHandler(logger, bufferStore)
-	auditHandler.RegisterRoutes(router)
+	auditHandler.RegisterRoutes(appRouter)
 
-	// Metrics endpoint
+	// Metrics endpoint (no auth required)
 	router.Handle("/metrics", promhttp.Handler())
 
 	srv := &http.Server{
