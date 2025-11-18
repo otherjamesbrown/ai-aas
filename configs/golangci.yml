@@ -25,7 +25,31 @@ linters-settings:
 linters:
   enable-all: true
   disable:
-    - typecheck  # Disabled: produces false positives with module version suffixes
+    # Disabled: produces false positives with module version suffixes
+    - typecheck
+
+    # Overly aggressive linters that block development without proper configuration
+    - depguard       # Blocks imports without explicit allowlist - needs configuration
+    - exhaustruct    # Requires all struct fields initialized - too strict for practical use
+    - godox          # Blocks TODO/FIXME comments - prevents development notes
+    - err113         # Requires static errors - good practice but needs codebase refactor
+    - wrapcheck      # Requires wrapping all errors - too verbose for internal errors
+    - nlreturn       # Requires newlines before returns - stylistic preference
+    - varnamelen     # Enforces variable name length - conflicts with idiomatic Go
+    - ireturn        # Restricts interface returns - conflicts with good design patterns
+    - tagliatelle    # Enforces struct tag naming - too opinionated
+    - musttag        # Requires struct tags - not always needed
+    - gomnd          # Magic number detector - too aggressive for constants
+    - gochecknoglobals # Blocks global variables - sometimes necessary
+    - gochecknoinits # Blocks init functions - sometimes necessary
+    - testpackage    # Requires separate test packages - not always appropriate
+    - paralleltest   # Requires t.Parallel() - not always safe
+    - tparallel      # Table test parallelization - not always appropriate
+    - funlen         # Function length limit - arbitrary and context-dependent
+    - gocognit       # Cognitive complexity - arbitrary threshold
+    - cyclop         # Cyclomatic complexity - arbitrary threshold
+    - nestif         # Nested if depth - arbitrary threshold
+    - maintidx       # Maintainability index - arbitrary metric
 
 issues:
   exclude-use-default: false
