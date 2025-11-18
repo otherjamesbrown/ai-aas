@@ -32,7 +32,9 @@ spec:
           - name: SERVICE_NAME
             value: api-router-service
           - name: OTEL_EXPORTER_OTLP_ENDPOINT
-            value: "localhost:4317"
+            value: "localhost:4318"
+          - name: OTEL_EXPORTER_OTLP_PROTOCOL
+            value: "http"
           - name: OTEL_EXPORTER_OTLP_INSECURE
             value: "true"
         service:
