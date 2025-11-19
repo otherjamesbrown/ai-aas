@@ -234,7 +234,7 @@ func WriteError(w http.ResponseWriter, r *http.Request, builder *ErrorBuilder, e
 		// Fallback to plain text if JSON encoding fails
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Internal server error"))
+		_, _ = w.Write([]byte("Internal server error"))
 	}
 }
 
@@ -245,13 +245,13 @@ func WriteLimitError(w http.ResponseWriter, r *http.Request, builder *ErrorBuild
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	
+
 	// Encode JSON response
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		// Fallback to plain text if JSON encoding fails
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Internal server error"))
+		_, _ = w.Write([]byte("Internal server error"))
 	}
 }
 

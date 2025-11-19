@@ -105,7 +105,7 @@ func (l *Loader) connect(ctx context.Context) error {
 	defer cancel()
 	_, err = client.Status(ctx, l.endpoint)
 	if err != nil {
-		client.Close()
+		_ = client.Close()
 		return fmt.Errorf("etcd status check failed: %w", err)
 	}
 
@@ -390,7 +390,7 @@ func (l *Loader) Health(ctx context.Context) error {
 	_, err := l.client.Status(ctx, l.endpoint)
 	if err != nil {
 		// Connection lost - try to reconnect
-		l.close()
+		_ = l.close()
 		return fmt.Errorf("etcd status check failed: %w", err)
 	}
 

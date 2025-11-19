@@ -236,7 +236,7 @@ func AuthContextMiddleware(authenticator *auth.Authenticator, logger *zap.Logger
 				response := errorBuilder.BuildError(r.Context(), err, api.ErrCodeAuthInvalid)
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(api.GetHTTPStatus(api.ErrCodeAuthInvalid))
-				json.NewEncoder(w).Encode(response)
+				_ = json.NewEncoder(w).Encode(response)
 				return
 			}
 

@@ -94,7 +94,7 @@ func (c *BackendClient) ForwardRequest(ctx context.Context, backend *BackendEndp
 	if err != nil {
 		return nil, fmt.Errorf("backend request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	latency := time.Since(startTime)
 
@@ -152,7 +152,7 @@ func (c *BackendClient) HealthCheck(ctx context.Context, backend *BackendEndpoin
 	if err != nil {
 		return fmt.Errorf("health check failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("backend unhealthy: status %d", resp.StatusCode)

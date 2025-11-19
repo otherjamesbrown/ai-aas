@@ -107,7 +107,11 @@ func main() {
 	if err != nil {
 		logger.Fatal("failed to initialize config cache", zap.Error(err))
 	}
-	defer cache.Close()
+	defer func() {
+		if err := cache.Close(); err != nil {
+			logger.Error("failed to close config cache", zap.Error(err))
+		}
+	}()
 
 	loader := config.NewLoader(cfg.ConfigServiceEndpoint, cfg.ConfigWatchEnabled, cache, logger)
 	if err := loader.Load(ctx); err != nil {
@@ -386,7 +390,11 @@ func main() {
 	// Store references for graceful shutdown
 	_ = auditLogger // TODO: Close audit logger on shutdown
 	if redisClient != nil {
-		defer redisClient.Close()
+		defer func() {
+			if err := redisClient.Close(); err != nil {
+				logger.Error("failed to close redis client", zap.Error(err))
+			}
+		}()
 	}
 
 	// Register admin routes on sub-router (requires authentication)

@@ -52,7 +52,7 @@ func TestRateLimitExceeded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create cache: %v", err)
 	}
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	loader := config.NewLoader("", false, cache, logger)
 	backendClient := routing.NewBackendClient(logger, 5*time.Second)
@@ -73,7 +73,7 @@ func TestRateLimitExceeded(t *testing.T) {
 	if err := redisClient.Ping(ctx).Err(); err != nil {
 		t.Skipf("Redis not available for rate limit test: %v", err)
 	}
-	defer redisClient.Close()
+	defer func() { _ = redisClient.Close() }()
 	defer redisClient.FlushDB(ctx) // Clean up test data
 
 	// Initialize rate limiter with low limits for testing
@@ -171,7 +171,7 @@ func TestBudgetExceeded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create cache: %v", err)
 	}
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	loader := config.NewLoader("", false, cache, logger)
 	backendClient := routing.NewBackendClient(logger, 5*time.Second)
@@ -258,7 +258,7 @@ func TestQuotaExceeded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create cache: %v", err)
 	}
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	loader := config.NewLoader("", false, cache, logger)
 	backendClient := routing.NewBackendClient(logger, 5*time.Second)
@@ -348,7 +348,7 @@ func TestAuditEventEmitted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create cache: %v", err)
 	}
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	loader := config.NewLoader("", false, cache, logger)
 	backendClient := routing.NewBackendClient(logger, 5*time.Second)
@@ -370,7 +370,7 @@ func TestAuditEventEmitted(t *testing.T) {
 	if err := redisClient.Ping(ctx).Err(); err != nil {
 		t.Skipf("Redis not available: %v", err)
 	}
-	defer redisClient.Close()
+	defer func() { _ = redisClient.Close() }()
 	defer redisClient.FlushDB(ctx)
 	
 	rateLimiter := limiter.NewRateLimiter(redisClient, logger, 100, 200)
@@ -434,7 +434,7 @@ func TestRateLimitPerOrganization(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create cache: %v", err)
 	}
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	loader := config.NewLoader("", false, cache, logger)
 	backendClient := routing.NewBackendClient(logger, 5*time.Second)
@@ -455,7 +455,7 @@ func TestRateLimitPerOrganization(t *testing.T) {
 	if err := redisClient.Ping(ctx).Err(); err != nil {
 		t.Skipf("Redis not available for rate limit test: %v", err)
 	}
-	defer redisClient.Close()
+	defer func() { _ = redisClient.Close() }()
 	defer redisClient.FlushDB(ctx) // Clean up test data
 
 	// Initialize rate limiter with low limits for testing
@@ -527,7 +527,7 @@ func TestRateLimitPerKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create cache: %v", err)
 	}
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	loader := config.NewLoader("", false, cache, logger)
 	backendClient := routing.NewBackendClient(logger, 5*time.Second)
@@ -548,7 +548,7 @@ func TestRateLimitPerKey(t *testing.T) {
 	if err := redisClient.Ping(ctx).Err(); err != nil {
 		t.Skipf("Redis not available for rate limit test: %v", err)
 	}
-	defer redisClient.Close()
+	defer func() { _ = redisClient.Close() }()
 	defer redisClient.FlushDB(ctx) // Clean up test data
 
 	// Initialize rate limiter with low limits for testing

@@ -43,7 +43,7 @@ func TestRateLimiter_CheckOrganization(t *testing.T) {
 	if client == nil {
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	logger := zap.NewNop()
 	limiter := NewRateLimiter(client, logger, 10, 20) // 10 RPS, burst of 20
@@ -96,7 +96,7 @@ func TestRateLimiter_CheckAPIKey(t *testing.T) {
 	if client == nil {
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	logger := zap.NewNop()
 	limiter := NewRateLimiter(client, logger, 10, 20) // Default: 10 RPS, burst of 20
@@ -146,7 +146,7 @@ func TestRateLimiter_TokenRefill(t *testing.T) {
 	if client == nil {
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	logger := zap.NewNop()
 	limiter := NewRateLimiter(client, logger, 10, 20) // 10 RPS = 1 token per 100ms
@@ -196,7 +196,7 @@ func TestRateLimiter_Isolation(t *testing.T) {
 	if client == nil {
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	logger := zap.NewNop()
 	limiter := NewRateLimiter(client, logger, 10, 20)
@@ -244,7 +244,7 @@ func TestRateLimiter_Reset(t *testing.T) {
 	if client == nil {
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	logger := zap.NewNop()
 	limiter := NewRateLimiter(client, logger, 10, 20)
@@ -285,7 +285,7 @@ func TestRateLimiter_DefaultLimits(t *testing.T) {
 	if client == nil {
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	logger := zap.NewNop()
 	limiter := NewRateLimiter(client, logger, 10, 20) // Default: 10 RPS, burst 20
@@ -315,7 +315,7 @@ func TestRateLimiter_ConcurrentAccess(t *testing.T) {
 	if client == nil {
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	logger := zap.NewNop()
 	limiter := NewRateLimiter(client, logger, 100, 200) // High limits for concurrent test

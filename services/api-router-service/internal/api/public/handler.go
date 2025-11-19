@@ -354,7 +354,7 @@ func (h *Handler) writeError(w http.ResponseWriter, r *http.Request, err error, 
 		zap.Error(err),
 	)
 
-	h.writeJSON(w, statusCode, response)
+	_ = h.writeJSON(w, statusCode, response)
 }
 
 // writeJSON writes a JSON response.

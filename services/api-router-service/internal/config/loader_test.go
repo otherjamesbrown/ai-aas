@@ -97,7 +97,7 @@ func putPolicyToEtcd(t *testing.T, client *clientv3.Client, policy *RoutingPolic
 
 func TestLoader_Load_FromCache(t *testing.T) {
 	cache := setupTestCache(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	logger := zaptest.NewLogger(t)
 	loader := NewLoader("invalid-endpoint:2379", false, cache, logger)
@@ -133,11 +133,11 @@ func TestLoader_Load_FromEtcd(t *testing.T) {
 	if client == nil {
 		t.Skip("etcd not available, skipping etcd integration test")
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 	defer cleanupEtcd(t, client)
 
 	cache := setupTestCache(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	logger := zaptest.NewLogger(t)
 	loader := NewLoader(endpoint, false, cache, logger)
@@ -181,7 +181,7 @@ func TestLoader_Load_FromEtcd(t *testing.T) {
 
 func TestLoader_GetPolicy_CacheHit(t *testing.T) {
 	cache := setupTestCache(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	logger := zaptest.NewLogger(t)
 	loader := NewLoader("invalid-endpoint:2379", false, cache, logger)
@@ -217,7 +217,7 @@ func TestLoader_GetPolicy_CacheHit(t *testing.T) {
 
 func TestLoader_GetPolicy_GlobalFallback(t *testing.T) {
 	cache := setupTestCache(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	logger := zaptest.NewLogger(t)
 	loader := NewLoader("invalid-endpoint:2379", false, cache, logger)
@@ -257,11 +257,11 @@ func TestLoader_GetPolicy_FromEtcd(t *testing.T) {
 	if client == nil {
 		t.Skip("etcd not available, skipping etcd integration test")
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 	defer cleanupEtcd(t, client)
 
 	cache := setupTestCache(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	logger := zaptest.NewLogger(t)
 	loader := NewLoader(endpoint, false, cache, logger)
@@ -313,11 +313,11 @@ func TestLoader_Watch_UpdatesCache(t *testing.T) {
 	if client == nil {
 		t.Skip("etcd not available, skipping watch test")
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 	defer cleanupEtcd(t, client)
 
 	cache := setupTestCache(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	logger := zaptest.NewLogger(t)
 	loader := NewLoader(endpoint, true, cache, logger)
@@ -374,11 +374,11 @@ func TestLoader_Stop_ClosesConnection(t *testing.T) {
 	if client == nil {
 		t.Skip("etcd not available, skipping stop test")
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 	defer cleanupEtcd(t, client)
 
 	cache := setupTestCache(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	logger := zaptest.NewLogger(t)
 	loader := NewLoader(endpoint, true, cache, logger)
@@ -403,7 +403,7 @@ func TestLoader_Stop_ClosesConnection(t *testing.T) {
 
 func TestLoader_Load_NoSourcesAvailable(t *testing.T) {
 	cache := setupTestCache(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	logger := zaptest.NewLogger(t)
 	loader := NewLoader("invalid-endpoint:2379", false, cache, logger)

@@ -51,7 +51,7 @@ func mockBackendServer(t *testing.T) *httptest.Server {
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 			return
 		}
 
@@ -64,7 +64,7 @@ func mockBackendServer(t *testing.T) *httptest.Server {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	})
 
 	return httptest.NewServer(handler)
@@ -86,7 +86,7 @@ func TestInferenceSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create cache: %v", err)
 	}
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	loader := config.NewLoader("", false, cache, logger)
 
@@ -203,7 +203,7 @@ func TestInferenceAuthFailure(t *testing.T) {
 	logger := zap.NewNop()
 	authenticator := auth.NewAuthenticator(logger, "", 2*time.Second)
 	cache, _ := config.NewCache(":memory:")
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	loader := config.NewLoader("", false, cache, logger)
 	backendClient := routing.NewBackendClient(logger, 5*time.Second)
@@ -250,7 +250,7 @@ func TestInferenceValidationError(t *testing.T) {
 	logger := zap.NewNop()
 	authenticator := auth.NewAuthenticator(logger, "", 2*time.Second)
 	cache, _ := config.NewCache(":memory:")
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	loader := config.NewLoader("", false, cache, logger)
 	backendClient := routing.NewBackendClient(logger, 5*time.Second)
