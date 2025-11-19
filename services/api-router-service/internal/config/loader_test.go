@@ -54,7 +54,7 @@ func setupTestEtcdClient(t *testing.T, endpoint string) *clientv3.Client {
 	defer cancel()
 	_, err = client.Status(ctx, endpoint)
 	if err != nil {
-		client.Close()
+		_ = client.Close()
 		t.Logf("etcd not available at %s: %v (testing fallback behavior)", endpoint, err)
 		return nil
 	}

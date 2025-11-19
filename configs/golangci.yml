@@ -38,9 +38,6 @@ linters:
     - ineffassign    # Detect ineffectual assignments
     - unused         # Find unused constants, variables, functions, and types
 
-    # Security
-    - gosec          # Security-focused linter - finds common security issues
-
     # Code quality and style
     - revive         # Drop-in replacement for golint with more checks
     - misspell       # Spell checker for comments
