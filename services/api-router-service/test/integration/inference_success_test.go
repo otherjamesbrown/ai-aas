@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
 
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/api/public"
