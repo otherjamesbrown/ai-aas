@@ -32,7 +32,7 @@ linters:
     - depguard       # Blocks imports without explicit allowlist - needs configuration
     - exhaustruct    # Requires all struct fields initialized - too strict for practical use
     - godox          # Blocks TODO/FIXME comments - prevents development notes
-    - err113         # Requires static errors - good practice but needs codebase refactor
+    - goerr113       # Requires static errors - good practice but needs codebase refactor
     - wrapcheck      # Requires wrapping all errors - too verbose for internal errors
     - nlreturn       # Requires newlines before returns - stylistic preference
     - varnamelen     # Enforces variable name length - conflicts with idiomatic Go
