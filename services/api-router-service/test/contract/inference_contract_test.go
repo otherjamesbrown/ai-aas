@@ -433,7 +433,7 @@ func validateJSONAgainstSchema(t *testing.T, schema *openapi3.Schema, jsonData [
 	}
 
 	// If schema has no properties (might be a reference), do basic validation only
-	if schema.Properties == nil || len(schema.Properties) == 0 {
+	if len(schema.Properties) == 0 {
 		// Basic validation passed (required fields checked above)
 		return nil
 	}

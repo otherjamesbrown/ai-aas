@@ -328,21 +328,6 @@ func (h *Handler) buildBackendEndpoint(backendID, model string) *routing.Backend
 	}
 }
 
-// randomInt64 generates a random int64 in the range [0, max).
-func randomInt64(max int64) (int64, error) {
-	if max <= 0 {
-		return 0, fmt.Errorf("max must be positive")
-	}
-
-	var buf [8]byte
-	if _, err := rand.Read(buf[:]); err != nil {
-		return 0, err
-	}
-
-	val := binary.BigEndian.Uint64(buf[:])
-	return int64(val % uint64(max)), nil
-}
-
 // writeError writes an error response using the error catalog.
 func (h *Handler) writeError(w http.ResponseWriter, r *http.Request, err error, code string) {
 	statusCode := api.GetHTTPStatus(code)
