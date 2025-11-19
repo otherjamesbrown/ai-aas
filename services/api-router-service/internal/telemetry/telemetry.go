@@ -29,7 +29,6 @@ import (
 	"strings"
 
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 
 	"github.com/otherjamesbrown/ai-aas/shared/go/logging"
 	"github.com/otherjamesbrown/ai-aas/shared/go/observability"
