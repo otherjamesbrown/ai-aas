@@ -122,8 +122,11 @@ func TestInferenceSuccess(t *testing.T) {
 	// Configure handler to use mock backend URI
 	handler.SetBackendURI("mock-backend-1", mockBackend.URL+"/v1/completions")
 
-	// Create router and register routes
+	// Create router and register routes with middleware (matching main.go structure)
 	router := chi.NewRouter()
+	tracer := otel.Tracer("test")
+	router.Use(public.BodyBufferMiddleware(64 * 1024))
+	router.Use(public.AuthContextMiddleware(authenticator, logger, tracer))
 	handler.RegisterRoutes(router)
 
 	// Create a test request
@@ -213,6 +216,9 @@ func TestInferenceAuthFailure(t *testing.T) {
 	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil)
 
 	router := chi.NewRouter()
+	tracer := otel.Tracer("test")
+	router.Use(public.BodyBufferMiddleware(64 * 1024))
+	router.Use(public.AuthContextMiddleware(authenticator, logger, tracer))
 	handler.RegisterRoutes(router)
 
 	// Test without API key
@@ -257,6 +263,9 @@ func TestInferenceValidationError(t *testing.T) {
 	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil)
 
 	router := chi.NewRouter()
+	tracer := otel.Tracer("test")
+	router.Use(public.BodyBufferMiddleware(64 * 1024))
+	router.Use(public.AuthContextMiddleware(authenticator, logger, tracer))
 	handler.RegisterRoutes(router)
 
 	// Test with missing required fields

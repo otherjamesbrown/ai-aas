@@ -183,8 +183,15 @@ func TestBudgetExceeded(t *testing.T) {
 	
 	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil)
 
-	// TODO: Add budget middleware to router
+	// Initialize budget client
+	budgetClient := limiter.NewBudgetClient("", 2*time.Second, logger)
+	auditLogger := usage.NewAuditLogger(logger)
+	
 	router := chi.NewRouter()
+	tracer := otel.Tracer("test")
+	router.Use(public.BodyBufferMiddleware(64 * 1024))
+	router.Use(public.AuthContextMiddleware(authenticator, logger, tracer))
+	router.Use(public.BudgetMiddleware(budgetClient, auditLogger, logger, tracer))
 	handler.RegisterRoutes(router)
 
 	// Create a valid request
@@ -263,8 +270,15 @@ func TestQuotaExceeded(t *testing.T) {
 	
 	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil)
 
-	// TODO: Add quota middleware to router
+	// Initialize budget client
+	budgetClient := limiter.NewBudgetClient("", 2*time.Second, logger)
+	auditLogger := usage.NewAuditLogger(logger)
+	
 	router := chi.NewRouter()
+	tracer := otel.Tracer("test")
+	router.Use(public.BodyBufferMiddleware(64 * 1024))
+	router.Use(public.AuthContextMiddleware(authenticator, logger, tracer))
+	router.Use(public.BudgetMiddleware(budgetClient, auditLogger, logger, tracer))
 	handler.RegisterRoutes(router)
 
 	// Create a valid request
@@ -346,8 +360,28 @@ func TestAuditEventEmitted(t *testing.T) {
 	
 	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil)
 
-	// TODO: Add audit logger to handler/middleware
+	// Initialize budget client and rate limiter
+	budgetClient := limiter.NewBudgetClient("", 2*time.Second, logger)
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+		DB:   1,
+	})
+	ctx := context.Background()
+	if err := redisClient.Ping(ctx).Err(); err != nil {
+		t.Skipf("Redis not available: %v", err)
+	}
+	defer redisClient.Close()
+	defer redisClient.FlushDB(ctx)
+	
+	rateLimiter := limiter.NewRateLimiter(redisClient, logger, 100, 200)
+	auditLogger := usage.NewAuditLogger(logger)
+	
 	router := chi.NewRouter()
+	tracer := otel.Tracer("test")
+	router.Use(public.BodyBufferMiddleware(64 * 1024))
+	router.Use(public.AuthContextMiddleware(authenticator, logger, tracer))
+	router.Use(public.RateLimitMiddleware(rateLimiter, auditLogger, logger, tracer))
+	router.Use(public.BudgetMiddleware(budgetClient, auditLogger, logger, tracer))
 	handler.RegisterRoutes(router)
 
 	// Create a valid request that will be denied

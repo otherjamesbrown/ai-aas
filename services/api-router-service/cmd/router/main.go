@@ -26,10 +26,19 @@
 //   - specs/006-api-router-service/spec.md#US-001 (Route authenticated inference requests)
 //   - specs/006-api-router-service/spec.md#NFR-004 (Service Availability)
 //
+// Router Architecture:
+//   The service uses a two-tier router architecture:
+//   - Main router: Base middleware + health/metrics endpoints (no auth)
+//   - Sub-router: Application middleware + authenticated routes
+//   This pattern is required because chi router enforces that ALL middleware
+//   must be registered before ANY routes. See router setup comments for details.
+//
 // Debugging Notes:
 //   - Server starts on configured HTTP port (default 8080)
 //   - Readiness probe checks Redis, Kafka, and config service connectivity
 //   - Graceful shutdown allows in-flight requests to complete (10s timeout)
+//   - Health endpoints (/v1/status/*) are accessible without authentication
+//   - All other routes require authentication via X-API-Key header
 //
 package main
 
@@ -111,10 +120,39 @@ func main() {
 	}
 	defer loader.Stop()
 
+	// ============================================================================
+	// Router Setup and Architecture
+	// ============================================================================
+	//
+	// The router uses a two-tier architecture to handle chi's middleware ordering
+	// constraint while keeping health endpoints accessible without authentication:
+	//
+	// 1. Main Router (router):
+	//    - Base chi middleware (RequestID, RealIP, Logger, Recoverer, Timeout)
+	//    - Health endpoints (/v1/status/healthz, /v1/status/readyz) - NO AUTH
+	//    - Metrics endpoint (/metrics) - NO AUTH
+	//
+	// 2. Sub-Router (appRouter):
+	//    - Application middleware (BodyBuffer, Auth, RateLimit, Budget)
+	//    - All authenticated routes (/v1/inference, /v1/admin/*, etc.)
+	//    - Mounted at "/" on main router
+	//
+	// IMPORTANT: chi router requires ALL middleware to be registered BEFORE any
+	// routes. This is why we use a sub-router pattern - health endpoints are
+	// registered on the main router before we create the sub-router, ensuring
+	// they remain accessible without authentication.
+	//
+	// If you need to add new routes:
+	//   - Public endpoints (no auth): Register on main router BEFORE mounting appRouter
+	//   - Authenticated endpoints: Register on appRouter (will go through all middleware)
+	//   - Admin endpoints: Register on appRouter (already has auth middleware)
+	//
+	// ============================================================================
+
 	// Set up HTTP server with middleware
 	router := chi.NewRouter()
 
-	// Middleware stack
+	// Base middleware stack (applies to all routes including health endpoints)
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
 	router.Use(middleware.Logger)
@@ -242,7 +280,10 @@ func main() {
 		ReadyTimeout:   5 * time.Second,
 	})
 
-	// Register health endpoints
+	// Register health endpoints on main router (before sub-router mounting)
+	// These endpoints must be registered BEFORE appRouter is created to ensure
+	// they don't go through authentication middleware. This is required for
+	// Kubernetes liveness/readiness probes to work correctly.
 	router.Get("/v1/status/healthz", statusHandlers.Healthz)
 	router.Get("/v1/status/readyz", statusHandlers.Readyz)
 
@@ -285,24 +326,62 @@ func main() {
 	// Create tracer for middleware
 	tracer := otel.Tracer("api-router-service")
 
-	// Register middleware (order matters: body buffer -> auth -> rate limit -> budget -> handler)
-	// BodyBufferMiddleware must be first to buffer request body for HMAC verification and model extraction
-	router.Use(public.BodyBufferMiddleware(64 * 1024)) // 64 KB max body size
-	// AuthContextMiddleware must come after body buffer for HMAC verification
-	router.Use(public.AuthContextMiddleware(authenticator, logger, tracer))
+	// ============================================================================
+	// Sub-Router for Authenticated Application Routes
+	// ============================================================================
+	//
+	// Create a sub-router for all routes that require authentication and
+	// application-level middleware. This allows us to:
+	//   1. Register middleware before routes (chi requirement)
+	//   2. Keep health endpoints accessible without auth (on main router)
+	//   3. Apply consistent middleware chain to all authenticated routes
+	//
+	// CRITICAL: Middleware order matters! The order below is intentional:
+	//   1. BodyBufferMiddleware - Must be first to buffer request body for:
+	//      - HMAC signature verification (requires full body)
+	//      - Model extraction from request payload
+	//      - Request body reuse in subsequent middleware
+	//
+	//   2. AuthContextMiddleware - Must come after body buffer because:
+	//      - HMAC verification needs the buffered body
+	//      - Sets auth context for downstream middleware and handlers
+	//
+	//   3. RateLimitMiddleware - Applied after auth to:
+	//      - Use authenticated user/org context for rate limiting
+	//      - Track rate limits per organization or API key
+	//
+	//   4. BudgetMiddleware - Applied after rate limit to:
+	//      - Check budget/quota after rate limit passes
+	//      - Use authenticated context for budget checks
+	//
+	// DO NOT change this order without understanding the dependencies!
+	// ============================================================================
+
+	appRouter := chi.NewRouter()
+
+	// Step 1: Body buffer (MUST be first)
+	appRouter.Use(public.BodyBufferMiddleware(64 * 1024)) // 64 KB max body size
+
+	// Step 2: Authentication (requires buffered body for HMAC)
+	appRouter.Use(public.AuthContextMiddleware(authenticator, logger, tracer))
 	
-	// Rate limit middleware (only if Redis is available)
+	// Step 3: Rate limiting (requires auth context)
 	if rateLimiter != nil {
-		router.Use(public.RateLimitMiddleware(rateLimiter, auditLogger, logger, tracer))
+		appRouter.Use(public.RateLimitMiddleware(rateLimiter, auditLogger, logger, tracer))
 	} else {
 		logger.Warn("rate limiting disabled (Redis unavailable)")
 	}
 
-	// Budget middleware
-	router.Use(public.BudgetMiddleware(budgetClient, auditLogger, logger, tracer))
+	// Step 4: Budget enforcement (requires auth context)
+	appRouter.Use(public.BudgetMiddleware(budgetClient, auditLogger, logger, tracer))
 
-	// Register routes (handler will use auth context from middleware)
-	publicHandler.RegisterRoutes(router)
+	// Register all authenticated routes on sub-router
+	// These routes will go through the middleware chain above in order
+	publicHandler.RegisterRoutes(appRouter)
+
+	// Mount sub-router on main router at root path
+	// All routes registered on appRouter will be accessible at their original paths
+	router.Mount("/", appRouter)
 
 	// Store references for graceful shutdown
 	_ = auditLogger // TODO: Close audit logger on shutdown
@@ -310,15 +389,16 @@ func main() {
 		defer redisClient.Close()
 	}
 
-	// Initialize admin handler
+	// Register admin routes on sub-router (requires authentication)
 	adminHandler := admin.NewHandler(logger, loader, healthMonitor, routingEngine, backendRegistry)
-	adminHandler.RegisterRoutes(router)
+	adminHandler.RegisterRoutes(appRouter)
 
-	// Initialize audit handler
+	// Register audit routes on sub-router (requires authentication)
 	auditHandler := public.NewAuditHandler(logger, bufferStore)
-	auditHandler.RegisterRoutes(router)
+	auditHandler.RegisterRoutes(appRouter)
 
-	// Metrics endpoint
+	// Metrics endpoint on main router (no auth required for Prometheus scraping)
+	// This must be registered on main router, not appRouter, to avoid authentication
 	router.Handle("/metrics", promhttp.Handler())
 
 	srv := &http.Server{
