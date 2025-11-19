@@ -155,7 +155,7 @@ func (c *BudgetClient) checkBudgetHTTP(ctx context.Context, orgID string) (*Budg
 			QuotaType: "budget",
 		}, nil
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	
 	if resp.StatusCode != http.StatusOK {
 		c.logger.Warn("budget service returned error, allowing request",

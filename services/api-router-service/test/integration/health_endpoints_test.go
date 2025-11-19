@@ -98,7 +98,7 @@ func TestReadyzEndpointAllHealthy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create cache: %v", err)
 	}
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	loader := config.NewLoader("", false, cache, logger)
 
@@ -112,7 +112,7 @@ func TestReadyzEndpointAllHealthy(t *testing.T) {
 	if !redisAvailable {
 		t.Skipf("Redis not available for readiness test: %v", redisClient.Ping(ctx).Err())
 	}
-	defer redisClient.Close()
+	defer func() { _ = redisClient.Close() }()
 
 	// Set up Kafka publisher (mock for now - will be properly implemented in T038)
 	publisher := usage.NewPublisher(usage.PublisherConfig{
@@ -210,7 +210,7 @@ func TestReadyzEndpointRedisDown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create cache: %v", err)
 	}
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	loader := config.NewLoader("", false, cache, logger)
 
@@ -219,7 +219,7 @@ func TestReadyzEndpointRedisDown(t *testing.T) {
 		Addr: "localhost:9999", // Invalid port
 		DB:   1,
 	})
-	defer redisClient.Close()
+	defer func() { _ = redisClient.Close() }()
 
 	// Set up Kafka publisher
 	publisher := usage.NewPublisher(usage.PublisherConfig{
@@ -299,7 +299,7 @@ func TestReadyzEndpointBackendRegistryEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create cache: %v", err)
 	}
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	loader := config.NewLoader("", false, cache, logger)
 
@@ -313,7 +313,7 @@ func TestReadyzEndpointBackendRegistryEmpty(t *testing.T) {
 	if !redisAvailable {
 		t.Skipf("Redis not available: %v", redisClient.Ping(ctx).Err())
 	}
-	defer redisClient.Close()
+	defer func() { _ = redisClient.Close() }()
 
 	// Set up Kafka publisher
 	publisher := usage.NewPublisher(usage.PublisherConfig{

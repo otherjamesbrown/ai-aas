@@ -18,14 +18,42 @@ linters-settings:
     rules:
       - name: indent-error-flow
       - name: early-return
-      - name: exported
+      # Disabled: exported rule checks for "stuttering" (e.g., api.APIError)
+      # This would require renaming 84 occurrences across 13 files
+      # - name: exported
   staticcheck:
     checks: ["all"]
 
 linters:
-  enable-all: true
+  # Use explicit enable list instead of enable-all for better control
+  # This follows golangci-lint best practices
+  enable:
+    # Code formatting
+    - gofmt          # Format Go code
+    - goimports      # Manage imports and format code
+
+    # Code correctness and bug detection
+    - govet          # Official Go vet tool - reports suspicious constructs
+    - staticcheck    # Advanced static analysis - high signal-to-noise ratio
+    - errcheck       # Check for unchecked errors - important for reliability
+    - gosimple       # Simplify code - suggests simpler alternatives
+    - ineffassign    # Detect ineffectual assignments
+    - unused         # Find unused constants, variables, functions, and types
+
+    # Code quality and style
+    - revive         # Drop-in replacement for golint with more checks
+    - misspell       # Spell checker for comments
+
+    # Best practices
+    - bodyclose      # Check HTTP response body is closed
+    - nilerr         # Find code returning nil instead of error
+    - rowserrcheck   # Check SQL rows.Err is checked
+    - sqlclosecheck  # Check SQL resources are closed
+
   disable:
-    - typecheck  # Disabled: produces false positives with module version suffixes
+    # Disabled: produces false positives with module version suffixes
+    # The Go compiler handles type checking correctly
+    - typecheck
 
 issues:
   exclude-use-default: false

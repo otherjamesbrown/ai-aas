@@ -118,7 +118,7 @@ func TestBudgetClient_CheckBudget_HTTP_Success(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer mockServer.Close()
 
@@ -157,7 +157,7 @@ func TestBudgetClient_CheckBudget_HTTP_Denied(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer mockServer.Close()
 
@@ -228,7 +228,7 @@ func TestBudgetClient_CheckBudget_HTTP_InvalidJSON(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("invalid json"))
+		_, _ = w.Write([]byte("invalid json"))
 	}))
 	defer mockServer.Close()
 

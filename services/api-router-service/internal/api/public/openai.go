@@ -22,7 +22,7 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/routing"
 )
 
-// OpenAI Chat Completions Request (OpenAI-compatible format)
+// OpenAIChatCompletionRequest represents an OpenAI chat completions API request.
 type OpenAIChatCompletionRequest struct {
 	Model       string                 `json:"model"`
 	Messages    []OpenAIMessage        `json:"messages"`
@@ -32,12 +32,13 @@ type OpenAIChatCompletionRequest struct {
 	Parameters  map[string]interface{} `json:"parameters,omitempty"`
 }
 
+// OpenAIMessage represents a message in an OpenAI chat conversation.
 type OpenAIMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
-// OpenAI Chat Completions Response (OpenAI-compatible format)
+// OpenAIChatCompletionResponse represents an OpenAI chat completions API response.
 type OpenAIChatCompletionResponse struct {
 	ID      string                 `json:"id"`
 	Object  string                 `json:"object"`
@@ -47,19 +48,21 @@ type OpenAIChatCompletionResponse struct {
 	Usage   OpenAIUsage            `json:"usage"`
 }
 
+// OpenAIChoice represents a completion choice in an OpenAI response.
 type OpenAIChoice struct {
 	Index        int             `json:"index"`
 	Message      OpenAIMessage   `json:"message"`
 	FinishReason string          `json:"finish_reason"`
 }
 
+// OpenAIUsage represents token usage information in an OpenAI response.
 type OpenAIUsage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
 }
 
-// OpenAI Completions Request (OpenAI-compatible format)
+// OpenAICompletionRequest represents an OpenAI text completions API request.
 type OpenAICompletionRequest struct {
 	Model       string                 `json:"model"`
 	Prompt      string                 `json:"prompt"`
@@ -69,7 +72,7 @@ type OpenAICompletionRequest struct {
 	Parameters  map[string]interface{} `json:"parameters,omitempty"`
 }
 
-// OpenAI Completions Response (OpenAI-compatible format)
+// OpenAICompletionResponse represents an OpenAI text completions API response.
 type OpenAICompletionResponse struct {
 	ID      string                 `json:"id"`
 	Object  string                 `json:"object"`
@@ -79,6 +82,7 @@ type OpenAICompletionResponse struct {
 	Usage   OpenAIUsage             `json:"usage"`
 }
 
+// OpenAICompletionChoice represents a text completion choice in an OpenAI response.
 type OpenAICompletionChoice struct {
 	Text         string `json:"text"`
 	Index        int    `json:"index"`
@@ -334,7 +338,7 @@ func (h *Handler) forwardOpenAIRequest(ctx context.Context, backend *routing.Bac
 	if err != nil {
 		return nil, nil, fmt.Errorf("backend request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

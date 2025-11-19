@@ -43,7 +43,7 @@ func NewCache(path string) (*Cache, error) {
 		return err
 	})
 	if err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("create buckets: %w", err)
 	}
 

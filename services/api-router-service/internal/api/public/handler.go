@@ -1,15 +1,13 @@
 // Package public provides HTTP handlers for the public API.
 //
 // Purpose:
-//   This package implements HTTP handlers for inference requests, including
-//   request validation, authentication, routing, and response formatting.
 //
+//	This package implements HTTP handlers for inference requests, including
+//	request validation, authentication, routing, and response formatting.
 package public
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -29,18 +27,18 @@ import (
 
 // Handler handles public API requests.
 type Handler struct {
-	logger         *zap.Logger
-	authenticator  *auth.Authenticator
-	configLoader   *config.Loader
-	backendClient  *routing.BackendClient
+	logger          *zap.Logger
+	authenticator   *auth.Authenticator
+	configLoader    *config.Loader
+	backendClient   *routing.BackendClient
 	backendRegistry *config.BackendRegistry
-	routingEngine  *routing.Engine
-	routingMetrics *telemetry.RoutingMetrics
-	usageHook      *UsageHook
-	tracer         trace.Tracer
-	errorBuilder   *api.ErrorBuilder
-	backendURIs    map[string]string // Map of backend ID to URI (for testing/configuration - overrides registry)
-	httpClient     *http.Client      // Shared HTTP client for OpenAI requests (PR#16 Issue#4)
+	routingEngine   *routing.Engine
+	routingMetrics  *telemetry.RoutingMetrics
+	usageHook       *UsageHook
+	tracer          trace.Tracer
+	errorBuilder    *api.ErrorBuilder
+	backendURIs     map[string]string // Map of backend ID to URI (for testing/configuration - overrides registry)
+	httpClient      *http.Client      // Shared HTTP client for OpenAI requests (PR#16 Issue#4)
 }
 
 // NewHandler creates a new public API handler.
@@ -65,7 +63,7 @@ func NewHandler(
 		routingMetrics:  routingMetrics,
 		usageHook:       usageHook,
 		tracer:          tracer,
-		errorBuilder:   api.NewErrorBuilder(tracer),
+		errorBuilder:    api.NewErrorBuilder(tracer),
 		backendURIs:     make(map[string]string),
 		httpClient: &http.Client{
 			// Shared client without timeout - we'll use context for per-request timeouts (PR#16 Issue#4)
@@ -206,7 +204,7 @@ func (h *Handler) HandleInference(w http.ResponseWriter, r *http.Request) {
 			"text": backendResp.Text,
 		},
 		Usage: &UsageSummary{
-			TokensInput: len(req.Payload), // Simplified token counting
+			TokensInput:  len(req.Payload), // Simplified token counting
 			TokensOutput: backendResp.TokensUsed,
 			LatencyMS:    int(latency.Milliseconds()),
 			LimitState:   "WITHIN_LIMIT",
@@ -227,7 +225,7 @@ func (h *Handler) HandleInference(w http.ResponseWriter, r *http.Request) {
 		if routingDecision.AttemptNumber > 1 {
 			decisionReason = "FAILOVER"
 		}
-		
+
 		_ = h.usageHook.EmitUsage(
 			ctx,
 			authCtx,
@@ -321,26 +319,11 @@ func (h *Handler) buildBackendEndpoint(backendID, model string) *routing.Backend
 	}
 
 	return &routing.BackendEndpoint{
-		ID:          backendID,
-		URI:         uri,
+		ID:           backendID,
+		URI:          uri,
 		ModelVariant: model,
-		Timeout:     timeout,
+		Timeout:      timeout,
 	}
-}
-
-// randomInt64 generates a random int64 in the range [0, max).
-func randomInt64(max int64) (int64, error) {
-	if max <= 0 {
-		return 0, fmt.Errorf("max must be positive")
-	}
-
-	var buf [8]byte
-	if _, err := rand.Read(buf[:]); err != nil {
-		return 0, err
-	}
-
-	val := binary.BigEndian.Uint64(buf[:])
-	return int64(val % uint64(max)), nil
 }
 
 // writeError writes an error response using the error catalog.
@@ -354,7 +337,7 @@ func (h *Handler) writeError(w http.ResponseWriter, r *http.Request, err error, 
 		zap.Error(err),
 	)
 
-	h.writeJSON(w, statusCode, response)
+	_ = h.writeJSON(w, statusCode, response)
 }
 
 // writeJSON writes a JSON response.
@@ -363,4 +346,3 @@ func (h *Handler) writeJSON(w http.ResponseWriter, statusCode int, v interface{}
 	w.WriteHeader(statusCode)
 	return json.NewEncoder(w).Encode(v)
 }
-

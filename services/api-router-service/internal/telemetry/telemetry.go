@@ -29,7 +29,6 @@ import (
 	"strings"
 
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 
 	"github.com/otherjamesbrown/ai-aas/shared/go/logging"
 	"github.com/otherjamesbrown/ai-aas/shared/go/observability"
@@ -120,21 +119,4 @@ func (t *Telemetry) Shutdown(ctx context.Context) error {
 	}
 
 	return firstErr
-}
-
-// parseLogLevel is deprecated - use shared/go/logging package instead.
-// Kept for backward compatibility during migration.
-func parseLogLevel(level string) zapcore.Level {
-	switch strings.ToLower(level) {
-	case "debug":
-		return zapcore.DebugLevel
-	case "info":
-		return zapcore.InfoLevel
-	case "warn":
-		return zapcore.WarnLevel
-	case "error":
-		return zapcore.ErrorLevel
-	default:
-		return zapcore.InfoLevel
-	}
 }

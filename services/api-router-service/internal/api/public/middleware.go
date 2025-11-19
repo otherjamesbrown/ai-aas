@@ -25,6 +25,14 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/usage"
 )
 
+// Context key types to avoid collisions
+type contextKey string
+
+const (
+	bufferedBodyKey contextKey = "buffered_body"
+	modelKey        contextKey = "model"
+)
+
 // RateLimitMiddleware creates middleware for rate limiting.
 func RateLimitMiddleware(rateLimiter *limiter.RateLimiter, auditLogger *usage.AuditLogger, logger *zap.Logger, tracer trace.Tracer) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -211,14 +219,14 @@ func BodyBufferMiddleware(maxSize int64) func(http.Handler) http.Handler {
 			r.Body = io.NopCloser(bytes.NewReader(body))
 
 			// Store buffered body in context for HMAC verification
-			ctx := context.WithValue(r.Context(), "buffered_body", body)
+			ctx := context.WithValue(r.Context(), bufferedBodyKey, body)
 
 			// Try to extract model from body and store in context
 			var req struct {
 				Model string `json:"model"`
 			}
 			if err := json.Unmarshal(body, &req); err == nil && req.Model != "" {
-				ctx = context.WithValue(ctx, "model", req.Model)
+				ctx = context.WithValue(ctx, modelKey, req.Model)
 			}
 
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -236,7 +244,7 @@ func AuthContextMiddleware(authenticator *auth.Authenticator, logger *zap.Logger
 				response := errorBuilder.BuildError(r.Context(), err, api.ErrCodeAuthInvalid)
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(api.GetHTTPStatus(api.ErrCodeAuthInvalid))
-				json.NewEncoder(w).Encode(response)
+				_ = json.NewEncoder(w).Encode(response)
 				return
 			}
 

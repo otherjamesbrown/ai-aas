@@ -47,7 +47,7 @@ func mockBackendServerWithID(t *testing.T, backendID string) *httptest.Server {
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 			return
 		}
 
@@ -63,7 +63,7 @@ func mockBackendServerWithID(t *testing.T, backendID string) *httptest.Server {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	})
 
 	return httptest.NewServer(handler)
@@ -73,7 +73,7 @@ func mockBackendServerWithID(t *testing.T, backendID string) *httptest.Server {
 func mockBackendServerWithError(t *testing.T, statusCode int) *httptest.Server {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(statusCode)
-		json.NewEncoder(w).Encode(map[string]string{"error": "backend error"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "backend error"})
 	})
 
 	return httptest.NewServer(handler)
@@ -98,7 +98,7 @@ func TestRoutingWeightDistribution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create cache: %v", err)
 	}
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	loader := config.NewLoader("", false, cache, logger)
 
@@ -199,7 +199,7 @@ func TestRoutingFailover(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create cache: %v", err)
 	}
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	loader := config.NewLoader("", false, cache, logger)
 
@@ -295,7 +295,7 @@ func TestDegradedBackendExclusion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create cache: %v", err)
 	}
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	loader := config.NewLoader("", false, cache, logger)
 

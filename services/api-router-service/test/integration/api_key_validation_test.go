@@ -46,7 +46,7 @@ func mockUserOrgService(t *testing.T, responses map[string]*authValidationRespon
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 			return
 		}
 
@@ -56,7 +56,7 @@ func mockUserOrgService(t *testing.T, responses map[string]*authValidationRespon
 			// Default: key not found
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(authValidationResponse{
+			_ = json.NewEncoder(w).Encode(authValidationResponse{
 				Valid:   false,
 				Message: "API key not found",
 			})
@@ -66,7 +66,7 @@ func mockUserOrgService(t *testing.T, responses map[string]*authValidationRespon
 		// Return configured response
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	})
 
 	return httptest.NewServer(handler)
@@ -275,7 +275,7 @@ func TestAPIKeyValidationCaching(t *testing.T) {
 			requestCount++
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(authValidationResponse{
+			_ = json.NewEncoder(w).Encode(authValidationResponse{
 				Valid:          true,
 				APIKeyID:       "cached-key-id",
 				OrganizationID: "cached-org-id",
@@ -378,7 +378,7 @@ func TestAPIKeyValidationErrorResponse(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/auth/validate-api-key" {
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]string{"error": "internal server error"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "internal server error"})
 		}
 	})
 	mockService := httptest.NewServer(handler)
@@ -407,7 +407,7 @@ func TestAPIKeyValidationMalformedResponse(t *testing.T) {
 		if r.URL.Path == "/v1/auth/validate-api-key" {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("{ invalid json }"))
+			_, _ = w.Write([]byte("{ invalid json }"))
 		}
 	})
 	mockService := httptest.NewServer(handler)
@@ -437,7 +437,7 @@ func TestAPIKeyValidationTimeout(t *testing.T) {
 			time.Sleep(3 * time.Second) // Longer than timeout
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(authValidationResponse{
+			_ = json.NewEncoder(w).Encode(authValidationResponse{
 				Valid: true,
 			})
 		}

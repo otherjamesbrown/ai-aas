@@ -158,7 +158,7 @@ func (a *Authenticator) validateAPIKey(apiKey string) (*AuthenticatedContext, er
 		}
 		return nil, fmt.Errorf("user-org-service unavailable: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
