@@ -4,11 +4,10 @@ metadata:
   name: vllm-ingress
   namespace: system
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
-    nginx.ingress.kubernetes.io/ssl-redirect: "false"  # Allow HTTP for testing
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"  # Enforce HTTPS for security
 spec:
   ingressClassName: nginx
   rules:

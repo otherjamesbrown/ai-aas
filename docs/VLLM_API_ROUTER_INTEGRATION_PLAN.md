@@ -160,7 +160,7 @@ type InferenceHandler struct {
 
 func (h *InferenceHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
     // 1. Validate authentication
-    apiKey := r.Header.Get("Authorization")
+    apiKey := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
     if !h.validateAPIKey(apiKey) {
         http.Error(w, "Unauthorized", http.StatusUnauthorized)
         return
@@ -266,8 +266,9 @@ func (rl *RateLimiter) getLimiter(apiKey string) *rate.Limiter {
 
     // Create new limiter: 10 requests per minute
     limiter := rate.NewLimiter(rate.Every(6*time.Second), 10)
-    rl.limiters.Store(apiKey, limiter)
-    return limiter
+    // Use LoadOrStore to prevent race condition - ensures atomicity
+    actualLimiter, _ := rl.limiters.LoadOrStore(apiKey, limiter)
+    return actualLimiter.(*rate.Limiter)
 }
 ```
 
@@ -599,12 +600,19 @@ curl -X POST https://api.yourdomain.com/v1/chat/completions \
 kubectl rollout undo deployment/api-router-service -n system
 ```
 
-**Option 2: Scale Down New Deployment**
+**Option 2: Use kubectl rollout undo (Recommended)**
 ```bash
-kubectl scale deployment/api-router-service -n system --replicas=0
-# Deploy previous version
-kubectl apply -f infra/k8s/api-router-deployment.yaml.backup
+# Rollback to previous revision
+kubectl rollout undo deployment/api-router-service -n system
+
+# Or rollback to specific revision
+kubectl rollout undo deployment/api-router-service -n system --to-revision=2
+
+# Verify rollback status
+kubectl rollout status deployment/api-router-service -n system
 ```
+
+**Note**: For GitOps workflows, consider reverting the Git commit and letting ArgoCD/Flux handle the rollback automatically.
 
 ### If Ingress Issues
 
@@ -649,7 +657,7 @@ spec:
   - from:
     - namespaceSelector:
         matchLabels:
-          name: ingress-nginx
+          kubernetes.io/metadata.name: ingress-nginx
     ports:
     - protocol: TCP
       port: 8080

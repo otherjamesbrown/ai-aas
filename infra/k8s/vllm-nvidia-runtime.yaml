@@ -54,7 +54,7 @@ spec:
 
       containers:
       - name: vllm
-        image: vllm/vllm-openai:latest
+        image: vllm/vllm-openai:v0.6.3  # Pinned version for reproducible deployments
         command:
           - python3
           - -m
@@ -64,6 +64,10 @@ spec:
           - --kv-cache-dtype=fp8
           - --gpu-memory-utilization=0.9
           - --max-model-len=16384
+          # SECURITY NOTE: --trust-remote-code allows execution of arbitrary code from the model repository.
+          # This is required for the unsloth/gpt-oss-20b model which includes custom modeling code.
+          # The unsloth organization is a trusted source for optimized open-source models.
+          # For production, consider vendoring the model and code after thorough review.
           - --trust-remote-code
           - --host=0.0.0.0
           - --port=8000
