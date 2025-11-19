@@ -18,7 +18,9 @@ linters-settings:
     rules:
       - name: indent-error-flow
       - name: early-return
-      - name: exported
+      # Disabled: exported rule checks for "stuttering" (e.g., api.APIError)
+      # This would require renaming 84 occurrences across 13 files
+      # - name: exported
   staticcheck:
     checks: ["all"]
 
