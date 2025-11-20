@@ -240,10 +240,14 @@ func BodyBufferMiddleware(maxSize int64) func(http.Handler) http.Handler {
 
 // AuthContextMiddleware extracts auth context and adds it to request context.
 func AuthContextMiddleware(authenticator *auth.Authenticator, logger *zap.Logger, tracer trace.Tracer) func(http.Handler) http.Handler {
-		return func(next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authCtx, err := authenticator.Authenticate(r)
 			if err != nil {
+				logger.Debug("authentication failed in middleware",
+					zap.Error(err),
+					zap.String("path", r.URL.Path),
+					zap.String("method", r.Method))
 				errorBuilder := api.NewErrorBuilder(tracer)
 				response := errorBuilder.BuildError(r.Context(), err, api.ErrCodeAuthInvalid)
 				w.Header().Set("Content-Type", "application/json")
@@ -252,8 +256,12 @@ func AuthContextMiddleware(authenticator *auth.Authenticator, logger *zap.Logger
 				return
 			}
 
+			logger.Debug("authentication successful",
+				zap.String("org_id", authCtx.OrganizationID),
+				zap.String("api_key_id", authCtx.APIKeyID))
+
 			// Add auth context to request context
-			ctx := context.WithValue(r.Context(), authContextKey, authCtx)
+			ctx := context.WithValue(r.Context(), "auth_context", authCtx)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

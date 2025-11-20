@@ -117,14 +117,17 @@ func (a *Authenticator) validateAPIKey(apiKey string) (*AuthenticatedContext, er
 	fingerprint := a.computeFingerprint(apiKey)
 	if cached, ok := a.validationCache[fingerprint]; ok {
 		if time.Now().Before(cached.expiresAt) {
+			a.logger.Debug("API key validation cache hit", zap.String("fingerprint", fingerprint[:8]))
 			return cached.result, nil
 		}
 		// Cache expired, remove it
 		delete(a.validationCache, fingerprint)
+		a.logger.Debug("API key validation cache expired", zap.String("fingerprint", fingerprint[:8]))
 	}
 
 	// Fallback to stub for dev/test keys (for local development)
 	if strings.HasPrefix(apiKey, "dev-") || strings.HasPrefix(apiKey, "test-") {
+		a.logger.Debug("using stub validator for dev/test key", zap.String("prefix", apiKey[:5]))
 		return a.validateAPIKeyStub(apiKey)
 	}
 
