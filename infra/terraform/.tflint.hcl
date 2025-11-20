@@ -1,5 +1,5 @@
 config {
-  module = true
+  call_module_type = "all"  # Replaced deprecated "module" attribute (removed in v0.54.0)
 }
 
 plugin "linode" {
