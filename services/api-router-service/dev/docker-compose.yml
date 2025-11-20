@@ -55,39 +55,40 @@ services:
     ports:
       - "8001:8000"
     working_dir: /app
-    command: >
-      sh -c "
+    command:
+      - sh
+      - -c
+      - |
         pip install fastapi uvicorn pydantic &&
-        python -c \"
-from fastapi import FastAPI
-from pydantic import BaseModel
-import uvicorn
+        python -c '
+        from fastapi import FastAPI
+        from pydantic import BaseModel
+        import uvicorn
 
-app = FastAPI()
+        app = FastAPI()
 
-class CompletionRequest(BaseModel):
-    prompt: str
-    max_tokens: int = 100
+        class CompletionRequest(BaseModel):
+            prompt: str
+            max_tokens: int = 100
 
-class CompletionResponse(BaseModel):
-    text: str
-    tokens_used: int
+        class CompletionResponse(BaseModel):
+            text: str
+            tokens_used: int
 
-@app.post('/v1/completions')
-async def completions(req: CompletionRequest):
-    return CompletionResponse(
-        text=req.prompt + ' [mock response from backend-1]',
-        tokens_used=len(req.prompt.split()) + 10
-    )
+        @app.post("/v1/completions")
+        async def completions(req: CompletionRequest):
+            return CompletionResponse(
+                text=req.prompt + " [mock response from backend-1]",
+                tokens_used=len(req.prompt.split()) + 10
+            )
 
-@app.get('/health')
-async def health():
-    return {'status': 'healthy'}
+        @app.get("/health")
+        async def health():
+            return {"status": "healthy"}
 
-if __name__ == '__main__':
-    uvicorn.run(app, host='0.0.0.0', port=8000)
-        \"
-      "
+        if __name__ == "__main__":
+            uvicorn.run(app, host="0.0.0.0", port=8000)
+        '
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
@@ -102,39 +103,40 @@ if __name__ == '__main__':
     ports:
       - "8002:8000"
     working_dir: /app
-    command: >
-      sh -c "
+    command:
+      - sh
+      - -c
+      - |
         pip install fastapi uvicorn pydantic &&
-        python -c \"
-from fastapi import FastAPI
-from pydantic import BaseModel
-import uvicorn
+        python -c '
+        from fastapi import FastAPI
+        from pydantic import BaseModel
+        import uvicorn
 
-app = FastAPI()
+        app = FastAPI()
 
-class CompletionRequest(BaseModel):
-    prompt: str
-    max_tokens: int = 100
+        class CompletionRequest(BaseModel):
+            prompt: str
+            max_tokens: int = 100
 
-class CompletionResponse(BaseModel):
-    text: str
-    tokens_used: int
+        class CompletionResponse(BaseModel):
+            text: str
+            tokens_used: int
 
-@app.post('/v1/completions')
-async def completions(req: CompletionRequest):
-    return CompletionResponse(
-        text=req.prompt + ' [mock response from backend-2]',
-        tokens_used=len(req.prompt.split()) + 10
-    )
+        @app.post("/v1/completions")
+        async def completions(req: CompletionRequest):
+            return CompletionResponse(
+                text=req.prompt + " [mock response from backend-2]",
+                tokens_used=len(req.prompt.split()) + 10
+            )
 
-@app.get('/health')
-async def health():
-    return {'status': 'healthy'}
+        @app.get("/health")
+        async def health():
+            return {"status": "healthy"}
 
-if __name__ == '__main__':
-    uvicorn.run(app, host='0.0.0.0', port=8000)
-        \"
-      "
+        if __name__ == "__main__":
+            uvicorn.run(app, host="0.0.0.0", port=8000)
+        '
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
