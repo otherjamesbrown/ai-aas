@@ -66,6 +66,8 @@ env:
     value: "http://localhost:8081"  # Stub for now - will use dev keys
   - name: USER_ORG_SERVICE_TIMEOUT
     value: "2s"
+  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+    value: "otel-collector.monitoring.svc.cluster.local:4317"
 
 # Backend endpoints - configure vLLM service
 backends:
