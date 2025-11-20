@@ -41,6 +41,8 @@ log "Running terraform validate for ENV=$ENVIRONMENT"
 run_make infra-validate ENV="$ENVIRONMENT"
 
 if command -v tflint >/dev/null 2>&1; then
+  log "Initializing TFLint plugins"
+  (cd "$ENV_DIR" && tflint --config "$TFLINT_CONFIG" --init)
   log "Running tflint"
   (cd "$ENV_DIR" && tflint --config "$TFLINT_CONFIG" --recursive)
 else

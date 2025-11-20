@@ -14,7 +14,7 @@ jobs:
       LINODE_TOKEN: ${{ secrets.LINODE_TOKEN }}
       TERRAFORM_VERSION: "1.6.6"
       GO_VERSION: "1.21.6"
-      TFLINT_VERSION: "0.50.0"
+      TFLINT_VERSION: "latest"
       TFSEC_VERSION: "1.28.1"
     steps:
       - name: Checkout repository
@@ -34,6 +34,10 @@ jobs:
         uses: terraform-linters/setup-tflint@v3
         with:
           tflint_version: ${{ env.TFLINT_VERSION }}
+
+      - name: Initialize TFLint plugins
+        run: tflint --init
+        working-directory: ./infra/terraform
 
       - name: Set up tfsec
         uses: aquasecurity/tfsec-action@v1.0.0

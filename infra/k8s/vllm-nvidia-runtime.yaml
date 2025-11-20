@@ -1,0 +1,148 @@
+# vLLM deployment using NVIDIA Container Runtime
+# This uses runtimeClassName: nvidia instead of manual device mounts
+#
+# The NVIDIA runtime automatically handles:
+# - GPU device access
+# - CUDA library injection
+# - Proper LD_LIBRARY_PATH configuration
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: system
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vllm-model-cache
+  namespace: system
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-gpt-oss-20b
+  namespace: system
+  labels:
+    app: vllm
+    model: gpt-oss-20b
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm
+      model: gpt-oss-20b
+  template:
+    metadata:
+      labels:
+        app: vllm
+        model: gpt-oss-20b
+    spec:
+      runtimeClassName: nvidia  # Use NVIDIA Container Runtime
+      nodeSelector:
+        node-type: gpu
+      tolerations:
+        - key: gpu-workload
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+
+      containers:
+      - name: vllm
+        image: vllm/vllm-openai:v0.6.3  # Pinned version for reproducible deployments
+        command:
+          - python3
+          - -m
+          - vllm.entrypoints.openai.api_server
+        args:
+          - --model=unsloth/gpt-oss-20b
+          - --kv-cache-dtype=fp8
+          - --gpu-memory-utilization=0.9
+          - --max-model-len=16384
+          # SECURITY NOTE: --trust-remote-code allows execution of arbitrary code from the model repository.
+          # This is required for the unsloth/gpt-oss-20b model which includes custom modeling code.
+          # The unsloth organization is a trusted source for optimized open-source models.
+          # For production, consider vendoring the model and code after thorough review.
+          - --trust-remote-code
+          - --host=0.0.0.0
+          - --port=8000
+
+        env:
+          - name: HF_HOME
+            value: /root/.cache/huggingface
+          - name: NVIDIA_VISIBLE_DEVICES
+            value: all
+          - name: NVIDIA_DRIVER_CAPABILITIES
+            value: compute,utility
+
+        ports:
+          - name: http
+            containerPort: 8000
+            protocol: TCP
+
+        volumeMounts:
+          - name: model-cache
+            mountPath: /root/.cache/huggingface
+
+        resources:
+          requests:
+            nvidia.com/gpu: 1
+            memory: "16Gi"
+            cpu: "4"
+          limits:
+            nvidia.com/gpu: 1
+            memory: "20Gi"
+            cpu: "8"
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 120
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /v1/models
+            port: http
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 0
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 30  # 15 minutes max
+
+      volumes:
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: vllm-model-cache
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-gpt-oss-20b
+  namespace: system
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app: vllm
+    model: gpt-oss-20b
