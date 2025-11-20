@@ -73,7 +73,7 @@ func TestOpenAIChatCompletions_E2E(t *testing.T) {
 		t.Fatalf("vLLM backend is not reachable at %s/health. Error: %v", vllmURL, err)
 	}
 	if resp != nil {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}
 	t.Logf("✓ vLLM backend is healthy")
 
@@ -306,7 +306,7 @@ func TestOpenAIChatCompletions_E2E_StressTest(t *testing.T) {
 				errors <- fmt.Errorf("request %d failed: %w", requestNum, err)
 				return
 			}
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			if resp.StatusCode != 200 {
 				errors <- fmt.Errorf("request %d returned status %d", requestNum, resp.StatusCode)

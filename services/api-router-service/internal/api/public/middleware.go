@@ -29,6 +29,10 @@ import (
 type contextKey string
 
 const (
+	authContextKey contextKey = "auth_context"
+)
+
+const (
 	bufferedBodyKey contextKey = "buffered_body"
 	modelKey        contextKey = "model"
 )
@@ -249,7 +253,7 @@ func AuthContextMiddleware(authenticator *auth.Authenticator, logger *zap.Logger
 			}
 
 			// Add auth context to request context
-			ctx := context.WithValue(r.Context(), "auth_context", authCtx)
+			ctx := context.WithValue(r.Context(), authContextKey, authCtx)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
