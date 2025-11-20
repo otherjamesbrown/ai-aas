@@ -58,6 +58,8 @@ credential rotation, sync triggers, and exports.`,
 	rootCmd.AddCommand(commands.CredentialsCommand())
 	rootCmd.AddCommand(commands.SyncCommand())
 	rootCmd.AddCommand(commands.ExportCommand())
+	rootCmd.AddCommand(commands.RegistryCommand())
+	rootCmd.AddCommand(commands.DeploymentCommand())
 
 	if err := rootCmd.Execute(); err != nil {
 		// Handle structured CLI errors with exit codes

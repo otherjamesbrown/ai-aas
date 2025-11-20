@@ -10,6 +10,9 @@ func ApplyDefaults(v *viper.Viper) {
 	v.SetDefault("api-endpoints.user-org-service", "http://localhost:8081")
 	v.SetDefault("api-endpoints.analytics-service", "http://localhost:8084")
 
+	// Database (default to local PostgreSQL for development)
+	v.SetDefault("database.url", "postgres://postgres:postgres@localhost:5432/ai_aas_operational?sslmode=disable")
+
 	// Output Settings
 	v.SetDefault("defaults.output-format", "table") // table, json, csv
 	v.SetDefault("defaults.verbose", false)

@@ -1,15 +1,12 @@
 package logging
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"os"
 	"strings"
 	"testing"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -183,8 +180,6 @@ func TestLogger_WithOrgID(t *testing.T) {
 }
 
 func TestLogger_StructuredOutput(t *testing.T) {
-	var buf bytes.Buffer
-
 	cfg := Config{
 		ServiceName: "test-service",
 		Environment: "development",
@@ -325,6 +320,89 @@ func TestGetOutputWriter(t *testing.T) {
 	}
 	if writer != os.Stderr {
 		t.Error("getOutputWriter(\"stderr\") did not return os.Stderr")
+	}
+
+	// Test file output
+	tmpFile := "/tmp/test-log-output.txt"
+	_ = os.Remove(tmpFile) // Clean up if exists
+	writer, err = getOutputWriter(tmpFile)
+	if err != nil {
+		t.Errorf("getOutputWriter(file) error = %v", err)
+	}
+	if writer == nil {
+		t.Error("getOutputWriter(file) returned nil writer")
+	}
+	_ = os.Remove(tmpFile) // Clean up
+}
+
+func TestConfig_WithMethods(t *testing.T) {
+	cfg := DefaultConfig()
+
+	// Test WithEnvironment
+	cfg = cfg.WithEnvironment("production")
+	if cfg.Environment != "production" {
+		t.Errorf("WithEnvironment() failed, got %s", cfg.Environment)
+	}
+
+	// Test WithLogLevel
+	cfg = cfg.WithLogLevel("debug")
+	if cfg.LogLevel != "debug" {
+		t.Errorf("WithLogLevel() failed, got %s", cfg.LogLevel)
+	}
+
+	// Test WithOutputPath
+	cfg = cfg.WithOutputPath("stderr")
+	if cfg.OutputPath != "stderr" {
+		t.Errorf("WithOutputPath() failed, got %s", cfg.OutputPath)
+	}
+}
+
+func TestLogger_MustNew(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Error("MustNew() panicked with valid config")
+		}
+	}()
+
+	cfg := DefaultConfig().WithServiceName("test-service")
+	logger := MustNew(cfg)
+	if logger == nil {
+		t.Error("MustNew() returned nil")
+	}
+	defer logger.Sync()
+}
+
+func TestLogger_WithFields(t *testing.T) {
+	cfg := DefaultConfig().WithServiceName("test-service")
+	logger, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer logger.Sync()
+
+	loggerWithFields := logger.WithFields(zap.String("test", "value"))
+	if loggerWithFields == nil {
+		t.Error("WithFields() returned nil")
+	}
+}
+
+func TestRedactValue(t *testing.T) {
+	// Test string value
+	result := RedactValue("password=secret123")
+	if str, ok := result.(string); !ok || !strings.Contains(str, "***REDACTED***") {
+		t.Errorf("RedactValue() failed for string, got %v", result)
+	}
+
+	// Test nil value
+	result = RedactValue(nil)
+	if result != nil {
+		t.Errorf("RedactValue(nil) should return nil, got %v", result)
+	}
+
+	// Test non-string value
+	result = RedactValue(123)
+	if result != 123 {
+		t.Errorf("RedactValue(int) should return same value, got %v", result)
 	}
 }
 

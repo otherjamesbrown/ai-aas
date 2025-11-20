@@ -1,0 +1,171 @@
+---
+# ArgoCD Application template for vLLM model deployments
+#
+# Purpose:
+#   GitOps-based deployment of vLLM models using ArgoCD
+#   Supports automatic sync for dev/staging, manual sync for production
+#
+# Usage:
+#   1. Copy this template for each model deployment
+#   2. Replace placeholders: {MODEL_NAME}, {ENVIRONMENT}
+#   3. Apply to ArgoCD: kubectl apply -f argocd-apps/vllm-{model}-{env}.yaml
+#
+# Requirements Reference:
+#   - specs/010-vllm-deployment/tasks.md#T-S010-P05-051
+#
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vllm-{MODEL_NAME}-{ENVIRONMENT}
+  namespace: argocd
+  # Finalizer to ensure proper cleanup
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app.kubernetes.io/name: vllm-deployment
+    app.kubernetes.io/instance: "{MODEL_NAME}-{ENVIRONMENT}"
+    app.kubernetes.io/component: inference
+    app.kubernetes.io/part-of: ai-aas
+    environment: "{ENVIRONMENT}"
+    model: "{MODEL_NAME}"
+spec:
+  # Project this application belongs to
+  project: default
+
+  # Source repository configuration
+  source:
+    # Git repository URL
+    repoURL: https://github.com/otherjamesbrown/ai-aas.git
+    # Target revision (branch, tag, or commit)
+    targetRevision: main
+    # Path to Helm chart
+    path: infra/helm/charts/vllm-deployment
+
+    # Helm configuration
+    helm:
+      # Release name
+      releaseName: "{MODEL_NAME}-{ENVIRONMENT}"
+
+      # Values files to use (in order of precedence)
+      valueFiles:
+        - values.yaml
+        - values-{ENVIRONMENT}.yaml
+
+      # Override values (optional)
+      # parameters:
+      #   - name: replicaCount
+      #     value: "2"
+      #   - name: model.name
+      #     value: "{MODEL_NAME}"
+
+  # Destination cluster and namespace
+  destination:
+    # Kubernetes cluster (in-cluster or external)
+    server: https://kubernetes.default.svc
+    # Target namespace
+    namespace: system
+
+  # Sync policy configuration
+  syncPolicy:
+    # Automated sync configuration
+    automated:
+      # Enable auto-sync for development and staging
+      # IMPORTANT: Set to null for production (manual sync only)
+      prune: true      # Delete resources that are no longer in Git
+      selfHeal: true   # Revert manual changes to match Git
+      allowEmpty: false # Don't sync if target is empty
+
+    # Sync options
+    syncOptions:
+      - CreateNamespace=true  # Create namespace if it doesn't exist
+      - PrunePropagationPolicy=foreground  # Wait for resource deletion
+      - PruneLast=true  # Prune resources last to avoid downtime
+      - RespectIgnoreDifferences=true  # Respect ignoreDifferences rules
+      - ServerSideApply=true  # Use server-side apply for better merging
+
+    # Retry configuration for failed syncs
+    retry:
+      limit: 5  # Maximum number of retries
+      backoff:
+        duration: 5s  # Initial backoff duration
+        factor: 2     # Backoff factor
+        maxDuration: 3m  # Maximum backoff duration
+
+  # Health assessment configuration
+  # ArgoCD will mark the application as healthy when these conditions are met
+  # (default behavior works well for Deployments with readiness probes)
+
+  # Ignore differences in certain fields (to prevent drift detection on dynamic values)
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas  # Ignore HPA-managed replica count
+    - group: ""
+      kind: Service
+      jsonPointers:
+        - /spec/clusterIP  # Ignore auto-assigned cluster IP
+
+---
+# Example: Development environment with auto-sync enabled
+# Filename: argocd-apps/vllm-llama-2-7b-development.yaml
+#
+# apiVersion: argoproj.io/v1alpha1
+# kind: Application
+# metadata:
+#   name: vllm-llama-2-7b-development
+#   namespace: argocd
+# spec:
+#   source:
+#     repoURL: https://github.com/otherjamesbrown/ai-aas.git
+#     targetRevision: main
+#     path: infra/helm/charts/vllm-deployment
+#     helm:
+#       releaseName: llama-2-7b-development
+#       valueFiles:
+#         - values.yaml
+#         - values-development.yaml
+#   destination:
+#     server: https://kubernetes.default.svc
+#     namespace: system
+#   syncPolicy:
+#     automated:
+#       prune: true
+#       selfHeal: true
+
+---
+# Example: Production environment with manual sync only
+# Filename: argocd-apps/vllm-llama-2-7b-production.yaml
+#
+# apiVersion: argoproj.io/v1alpha1
+# kind: Application
+# metadata:
+#   name: vllm-llama-2-7b-production
+#   namespace: argocd
+# spec:
+#   source:
+#     repoURL: https://github.com/otherjamesbrown/ai-aas.git
+#     targetRevision: main
+#     path: infra/helm/charts/vllm-deployment
+#     helm:
+#       releaseName: llama-2-7b-production
+#       valueFiles:
+#         - values.yaml
+#         - values-production.yaml
+#   destination:
+#     server: https://kubernetes.default.svc
+#     namespace: system
+#   syncPolicy:
+#     # NO automated sync for production - manual approval required
+#     syncOptions:
+#       - CreateNamespace=true
+#       - PrunePropagationPolicy=foreground
+#       - PruneLast=true
+#       - RespectIgnoreDifferences=true
+#       - ServerSideApply=true
+#     retry:
+#       limit: 5
+#       backoff:
+#         duration: 5s
+#         factor: 2
+#         maxDuration: 3m

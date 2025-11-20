@@ -1,0 +1,503 @@
+# Prometheus Alert Rules for vLLM Deployments
+#
+# Purpose:
+#   Production-grade alerting for vLLM model deployments
+#   Covers deployment health, performance, and resource utilization
+#
+# Installation:
+#   kubectl apply -f vllm-alerts.yaml -n monitoring
+#   Or configure via Prometheus Operator PrometheusRule CRD
+#
+# Requirements Reference:
+#   - specs/010-vllm-deployment/tasks.md#T-S010-P06-060
+#
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: vllm-deployment-alerts
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: vllm-deployment
+    app.kubernetes.io/component: monitoring
+    prometheus: kube-prometheus
+spec:
+  groups:
+    # =========================================================================
+    # Deployment Health Alerts
+    # =========================================================================
+    - name: vllm-deployment-health
+      interval: 30s
+      rules:
+        # CRITICAL: All pods down
+        - alert: VLLMDeploymentDown
+          expr: |
+            sum(kube_pod_status_ready{namespace="system", pod=~".*-(development|staging|production)-.*", condition="true"}) by (deployment, environment) == 0
+          for: 2m
+          labels:
+            severity: critical
+            component: vllm-deployment
+            category: availability
+          annotations:
+            summary: "vLLM deployment {{ $labels.deployment }} is completely down"
+            description: |
+              No pods are ready for deployment {{ $labels.deployment }} in {{ $labels.environment }} environment.
+              All traffic will fail. Immediate action required.
+
+              Current ready pods: {{ $value }}
+
+              Runbook: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/rollback-workflow.md
+            dashboard: "https://grafana.example.com/d/vllm-deployment-status"
+
+        # HIGH: Partial failure (< 50% pods ready)
+        - alert: VLLMDeploymentPartialFailure
+          expr: |
+            (
+              sum(kube_pod_status_ready{namespace="system", pod=~".*-(development|staging|production)-.*", condition="true"}) by (deployment, environment)
+              /
+              sum(kube_pod_status_phase{namespace="system", pod=~".*-(development|staging|production)-.*", phase="Running"}) by (deployment, environment)
+            ) < 0.5
+          for: 5m
+          labels:
+            severity: high
+            component: vllm-deployment
+            category: availability
+          annotations:
+            summary: "vLLM deployment {{ $labels.deployment }} has < 50% pods ready"
+            description: |
+              Deployment {{ $labels.deployment }} in {{ $labels.environment }} has less than 50% of pods ready.
+              Service is degraded with potential impact to production traffic.
+
+              Ready ratio: {{ $value | humanizePercentage }}
+
+              Runbook: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/runbooks/partial-failure-remediation.md
+            dashboard: "https://grafana.example.com/d/vllm-deployment-status"
+
+        # MEDIUM: Degraded (< 75% pods ready)
+        - alert: VLLMDeploymentDegraded
+          expr: |
+            (
+              sum(kube_pod_status_ready{namespace="system", pod=~".*-(development|staging|production)-.*", condition="true"}) by (deployment, environment)
+              /
+              sum(kube_pod_status_phase{namespace="system", pod=~".*-(development|staging|production)-.*", phase="Running"}) by (deployment, environment)
+            ) < 0.75
+          for: 10m
+          labels:
+            severity: medium
+            component: vllm-deployment
+            category: availability
+          annotations:
+            summary: "vLLM deployment {{ $labels.deployment }} is degraded (< 75% ready)"
+            description: |
+              Deployment {{ $labels.deployment }} in {{ $labels.environment }} has reduced capacity.
+              Monitor for further degradation.
+
+              Ready ratio: {{ $value | humanizePercentage }}
+
+              Runbook: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/runbooks/partial-failure-remediation.md
+
+        # Pods pending for extended period (resource starvation)
+        - alert: VLLMPodsPending
+          expr: |
+            sum(kube_pod_status_phase{namespace="system", pod=~".*-(development|staging|production)-.*", phase="Pending"}) by (pod, environment) > 0
+          for: 10m
+          labels:
+            severity: high
+            component: vllm-deployment
+            category: scheduling
+          annotations:
+            summary: "vLLM pod {{ $labels.pod }} stuck in Pending"
+            description: |
+              Pod {{ $labels.pod }} in {{ $labels.environment }} has been pending for > 10 minutes.
+              Likely causes: GPU resource shortage, node selector mismatch, or insufficient cluster capacity.
+
+              Check: kubectl describe pod {{ $labels.pod }} -n system
+
+              Runbook: https://github.com/otherjamesbrown/ai-aas/blob/main/infra/helm/charts/vllm-deployment/README.md#pods-stuck-in-pending
+
+        # Excessive pod restarts (crash loops)
+        - alert: VLLMPodRestarts
+          expr: |
+            increase(kube_pod_container_status_restarts_total{namespace="system", pod=~"^vllm-.*-(development|staging|production)-.*"}[30m]) > 3
+          for: 5m
+          labels:
+            severity: high
+            component: vllm-deployment
+            category: stability
+          annotations:
+            summary: "vLLM pod {{ $labels.pod }} is restarting frequently"
+            description: |
+              Pod {{ $labels.pod }} has restarted {{ $value | humanize }} times in the last 30 minutes.
+              Likely causes: OOM, health check failures, or application crashes.
+
+              Check logs: kubectl logs {{ $labels.pod }} -n system --previous
+
+              Runbook: https://github.com/otherjamesbrown/ai-aas/blob/main/infra/helm/charts/vllm-deployment/README.md#model-loading-timeout
+
+        # Pod OOMKilled
+        - alert: VLLMPodOOMKilled
+          expr: |
+            (kube_pod_container_status_terminated_reason{namespace="system", pod=~".*-(development|staging|production)-.*", reason="OOMKilled"} == 1)
+          for: 1m
+          labels:
+            severity: critical
+            component: vllm-deployment
+            category: resources
+          annotations:
+            summary: "vLLM pod {{ $labels.pod }} was OOM killed"
+            description: |
+              Pod {{ $labels.pod }} was terminated due to out-of-memory.
+              Increase memory limits or reduce model size/batch size.
+
+              Action: Increase resources.limits.memory in values file
+
+              Runbook: https://github.com/otherjamesbrown/ai-aas/blob/main/infra/helm/charts/vllm-deployment/README.md#troubleshooting
+
+    # =========================================================================
+    # Performance Alerts
+    # =========================================================================
+    - name: vllm-performance
+      interval: 30s
+      rules:
+        # High error rate
+        - alert: VLLMHighErrorRate
+          expr: |
+            (
+              sum(rate(vllm_errors_total{environment=~"production|staging"}[5m])) by (model, environment)
+              /
+              sum(rate(vllm_requests_total{environment=~"production|staging"}[5m])) by (model, environment)
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: critical
+            component: vllm-deployment
+            category: performance
+          annotations:
+            summary: "High error rate for vLLM model {{ $labels.model }}"
+            description: |
+              Model {{ $labels.model }} in {{ $labels.environment }} has error rate of {{ $value | humanizePercentage }}.
+              SLO threshold: < 0.1% errors
+              Current: {{ $value | humanizePercentage }} errors
+
+              Consider immediate rollback if recently deployed.
+
+              Runbook: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/rollback-workflow.md
+
+        # P95 latency exceeds SLO (production: 3s)
+        - alert: VLLMHighLatency
+          expr: |
+            histogram_quantile(0.95, sum(rate(vllm_request_duration_seconds_bucket{environment="production"}[5m])) by (le, model)) > 3
+          for: 10m
+          labels:
+            severity: high
+            component: vllm-deployment
+            category: performance
+          annotations:
+            summary: "High P95 latency for vLLM model {{ $labels.model }}"
+            description: |
+              Model {{ $labels.model }} P95 latency is {{ $value }}s, exceeding 3s SLO.
+
+              Check for:
+              - Resource contention (GPU, CPU)
+              - Increased traffic
+              - Model initialization issues
+
+              Runbook: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/runbooks/partial-failure-remediation.md
+
+        # P99 latency exceeds critical threshold (6s)
+        - alert: VLLMCriticalLatency
+          expr: |
+            histogram_quantile(0.99, sum(rate(vllm_request_duration_seconds_bucket{environment="production"}[5m])) by (le, model)) > 6
+          for: 5m
+          labels:
+            severity: critical
+            component: vllm-deployment
+            category: performance
+          annotations:
+            summary: "Critical P99 latency for vLLM model {{ $labels.model }}"
+            description: |
+              Model {{ $labels.model }} P99 latency is {{ $value }}s, exceeding critical threshold of 6s.
+              Immediate investigation required.
+
+              Current P99: {{ $value }}s
+              Threshold: 6s
+
+              Runbook: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/rollback-workflow.md
+
+        # Throughput drop (request rate decreased significantly)
+        - alert: VLLMThroughputDrop
+          expr: |
+            (
+              sum(rate(vllm_requests_total{environment="production"}[5m])) by (model)
+              /
+              sum(rate(vllm_requests_total{environment="production"}[30m] offset 1h)) by (model)
+            ) < 0.5
+          for: 10m
+          labels:
+            severity: medium
+            component: vllm-deployment
+            category: performance
+          annotations:
+            summary: "Throughput drop for vLLM model {{ $labels.model }}"
+            description: |
+              Model {{ $labels.model }} throughput has dropped by > 50% compared to 1 hour ago.
+              Current ratio: {{ $value | humanizePercentage }}
+
+              Possible causes:
+              - Pod failures
+              - Registry disabled
+              - Upstream routing issues
+
+    # =========================================================================
+    # Resource Alerts
+    # =========================================================================
+    - name: vllm-resources
+      interval: 30s
+      rules:
+        # High GPU utilization (> 95%)
+        - alert: VLLMHighGPUUtilization
+          expr: |
+            avg(nvidia_gpu_utilization{pod=~".*-(development|staging|production)-.*"}) by (pod, environment) > 95
+          for: 15m
+          labels:
+            severity: medium
+            component: vllm-deployment
+            category: resources
+          annotations:
+            summary: "High GPU utilization on {{ $labels.pod }}"
+            description: |
+              Pod {{ $labels.pod }} has sustained GPU utilization > 95% for 15 minutes.
+              Current: {{ $value }}%
+
+              Consider scaling up replicas to distribute load.
+
+        # GPU memory pressure (> 90%)
+        - alert: VLLMGPUMemoryPressure
+          expr: |
+            (
+              avg(nvidia_gpu_memory_used_bytes{pod=~".*-(development|staging|production)-.*"}) by (pod, environment)
+              /
+              avg(nvidia_gpu_memory_total_bytes{pod=~".*-(development|staging|production)-.*"}) by (pod, environment)
+            ) > 0.9
+          for: 10m
+          labels:
+            severity: high
+            component: vllm-deployment
+            category: resources
+          annotations:
+            summary: "GPU memory pressure on {{ $labels.pod }}"
+            description: |
+              Pod {{ $labels.pod }} is using {{ $value | humanizePercentage }} of GPU memory.
+              Risk of OOM errors.
+
+              Consider:
+              - Reducing max_model_len
+              - Reducing batch size
+              - Using smaller model variant
+
+        # High system memory usage (> 85%)
+        - alert: VLLMHighMemoryUsage
+          expr: |
+            (
+              sum(container_memory_working_set_bytes{namespace="system", pod=~".*-(development|staging|production)-.*", container!=""}) by (pod, environment)
+              /
+              sum(container_spec_memory_limit_bytes{namespace="system", pod=~".*-(development|staging|production)-.*", container!=""}) by (pod, environment)
+            ) > 0.85
+          for: 10m
+          labels:
+            severity: medium
+            component: vllm-deployment
+            category: resources
+          annotations:
+            summary: "High memory usage on {{ $labels.pod }}"
+            description: |
+              Pod {{ $labels.pod }} is using {{ $value | humanizePercentage }} of memory limit.
+              Risk of OOM kill.
+
+              Current usage: {{ $value | humanizePercentage }}
+              Consider increasing memory limits.
+
+        # CPU throttling (container being throttled)
+        - alert: VLLMCPUThrottling
+          expr: |
+            rate(container_cpu_cfs_throttled_seconds_total{namespace="system", pod=~".*-(development|staging|production)-.*", container!=""}[5m]) > 0.5
+          for: 10m
+          labels:
+            severity: medium
+            component: vllm-deployment
+            category: resources
+          annotations:
+            summary: "CPU throttling on {{ $labels.pod }}"
+            description: |
+              Pod {{ $labels.pod }} is experiencing CPU throttling.
+              Application may be CPU-bound.
+
+              Throttled time rate: {{ $value }}s/s
+              Consider increasing CPU limits.
+
+    # =========================================================================
+    # Registry and Routing Alerts
+    # =========================================================================
+    - name: vllm-registry
+      interval: 60s
+      rules:
+        # Model disabled in registry (production)
+        - alert: VLLMModelDisabled
+          expr: |
+            count(model_registry_status{environment="production", status="disabled"}) by (model_name) > 0
+          for: 5m
+          labels:
+            severity: high
+            component: vllm-deployment
+            category: routing
+          annotations:
+            summary: "Production model {{ $labels.model_name }} is disabled in registry"
+            description: |
+              Model {{ $labels.model_name }} in production is marked as disabled.
+              No traffic will route to this model.
+
+              Check: admin-cli registry list --environment production
+
+              If unexpected, re-enable: admin-cli registry enable --model-name {{ $labels.model_name }} --environment production
+
+        # Model not in registry (production deployment exists but not registered)
+        # NOTE: This alert is disabled until model_registry_entries metric is exposed
+        # The 'unless' operator requires matching label sets, but kube_deployment_created
+        # has 'deployment' label while model_registry_entries would need 'model_name' label
+        # TODO: Implement custom metric exporter that exposes model registry data with
+        # matching labels, or use a different approach like recording rules
+        # - alert: VLLMModelNotRegistered
+        #   expr: |
+        #     count(kube_deployment_created{namespace="system", deployment=~".*-production"}) by (deployment)
+        #     unless
+        #     count(model_registry_entries{environment="production"}) by (model_name)
+        #   for: 10m
+        #   labels:
+        #     severity: high
+        #     component: vllm-deployment
+        #     category: routing
+        #   annotations:
+        #     summary: "Deployment {{ $labels.deployment }} exists but model not registered"
+        #     description: |
+        #       Deployment {{ $labels.deployment }} is running but not registered in model registry.
+        #       Traffic will not route to this deployment.
+        #
+        #       Register: admin-cli registry register --model-name <model> --endpoint <endpoint> --environment production --namespace system
+
+    # =========================================================================
+    # Deployment Change Alerts
+    # =========================================================================
+    - name: vllm-deployment-changes
+      interval: 60s
+      rules:
+        # Production deployment change notification
+        - alert: VLLMProductionDeploymentChanged
+          expr: |
+            changes(kube_deployment_status_observed_generation{namespace="system", deployment=~".*-production"}[5m]) > 0
+          for: 1m
+          labels:
+            severity: info
+            component: vllm-deployment
+            category: change-tracking
+          annotations:
+            summary: "Production deployment {{ $labels.deployment }} was updated"
+            description: |
+              Deployment {{ $labels.deployment }} configuration changed.
+
+              Monitor for:
+              - Pod restarts
+              - Error rate changes
+              - Latency changes
+
+              Rollback if needed: helm rollback {{ $labels.deployment }} -n system
+
+        # Helm release failed
+        - alert: VLLMHelmReleaseFailed
+          expr: |
+            helm_release_info{namespace="system", release=~".*-(development|staging|production)", status="failed"} == 1
+          for: 2m
+          labels:
+            severity: critical
+            component: vllm-deployment
+            category: deployment
+          annotations:
+            summary: "Helm release {{ $labels.release }} failed"
+            description: |
+              Helm release {{ $labels.release }} is in failed state.
+              Deployment did not succeed.
+
+              Check: helm status {{ $labels.release }} -n system
+              Rollback: helm rollback {{ $labels.release }} -n system
+
+              Runbook: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/rollback-workflow.md
+
+    # =========================================================================
+    # Health Check Alerts
+    # =========================================================================
+    - name: vllm-health-checks
+      interval: 30s
+      rules:
+        # Liveness probe failures
+        - alert: VLLMLivenessProbeFailures
+          expr: |
+            rate(prober_probe_total{probe_type="Liveness", namespace="system", pod=~".*-(development|staging|production)-.*", result="failed"}[5m]) > 0
+          for: 5m
+          labels:
+            severity: high
+            component: vllm-deployment
+            category: health
+          annotations:
+            summary: "Liveness probe failures for {{ $labels.pod }}"
+            description: |
+              Pod {{ $labels.pod }} is failing liveness probes.
+              Pod will be restarted by Kubernetes.
+
+              Check pod logs for errors.
+
+        # Readiness probe failures
+        - alert: VLLMReadinessProbeFailures
+          expr: |
+            rate(prober_probe_total{probe_type="Readiness", namespace="system", pod=~".*-(development|staging|production)-.*", result="failed"}[5m]) > 0
+          for: 5m
+          labels:
+            severity: medium
+            component: vllm-deployment
+            category: health
+          annotations:
+            summary: "Readiness probe failures for {{ $labels.pod }}"
+            description: |
+              Pod {{ $labels.pod }} is failing readiness probes.
+              Pod will be removed from service endpoints.
+
+              Check: kubectl describe pod {{ $labels.pod }} -n system
+
+# ============================================================================
+# Alert Routing Configuration (for Alertmanager)
+# ============================================================================
+# Example Alertmanager configuration:
+#
+# route:
+#   group_by: ['alertname', 'environment', 'model']
+#   group_wait: 10s
+#   group_interval: 10s
+#   repeat_interval: 12h
+#   receiver: 'vllm-team'
+#   routes:
+#     - match:
+#         severity: critical
+#       receiver: 'vllm-oncall-pagerduty'
+#       continue: true
+#     - match:
+#         severity: high
+#       receiver: 'vllm-team-slack'
+#     - match:
+#         severity: medium
+#       receiver: 'vllm-team-slack'
+#
+# receivers:
+#   - name: 'vllm-oncall-pagerduty'
+#     pagerduty_configs:
+#       - service_key: '<pagerduty-key>'
+#   - name: 'vllm-team-slack'
+#     slack_configs:
+#       - channel: '#vllm-alerts'
+#         api_url: '<slack-webhook>'

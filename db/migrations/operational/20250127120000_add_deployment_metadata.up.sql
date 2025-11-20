@@ -31,8 +31,14 @@ ON model_registry_entries(deployment_status, model_name)
 WHERE deployment_status = 'ready';
 
 -- Create index for environment queries
-CREATE INDEX IF NOT EXISTS idx_model_registry_environment 
+CREATE INDEX IF NOT EXISTS idx_model_registry_environment
 ON model_registry_entries(deployment_environment, deployment_status);
+
+-- Create unique constraint for model_name + environment (for upsert in registration)
+-- This allows the same model to be deployed in different environments
+ALTER TABLE model_registry_entries
+ADD CONSTRAINT model_registry_entries_unique_deployment
+UNIQUE (model_name, deployment_environment);
 
 COMMIT;
 

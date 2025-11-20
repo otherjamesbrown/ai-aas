@@ -1,0 +1,177 @@
+# Direct vLLM deployment with manual GPU device mounts
+# Workaround for Linode LKE GPU operator issues
+#
+# This bypasses the GPU operator by directly mounting /dev/nvidia* devices
+# into the container, similar to how docker-compose works.
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: system
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vllm-model-cache
+  namespace: system
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-gpt-oss-20b
+  namespace: system
+  labels:
+    app: vllm
+    model: gpt-oss-20b
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm
+      model: gpt-oss-20b
+  template:
+    metadata:
+      labels:
+        app: vllm
+        model: gpt-oss-20b
+    spec:
+      nodeSelector:
+        node-type: gpu
+      tolerations:
+        - key: gpu-workload
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+
+      containers:
+      - name: vllm
+        image: vllm/vllm-openai:latest
+        command:
+          - python3
+          - -m
+          - vllm.entrypoints.openai.api_server
+        args:
+          - --model=unsloth/gpt-oss-20b
+          - --device=cuda
+          - --kv-cache-dtype=fp8
+          - --gpu-memory-utilization=0.9
+          - --max-model-len=16384
+          - --trust-remote-code
+          - --host=0.0.0.0
+          - --port=8000
+
+        env:
+          - name: HF_HOME
+            value: /root/.cache/huggingface
+          - name: NVIDIA_VISIBLE_DEVICES
+            value: all
+          - name: NVIDIA_DRIVER_CAPABILITIES
+            value: compute,utility
+          - name: VLLM_LOGGING_LEVEL
+            value: DEBUG
+          - name: CUDA_VISIBLE_DEVICES
+            value: "0"
+
+        ports:
+          - name: http
+            containerPort: 8000
+            protocol: TCP
+
+        volumeMounts:
+          - name: model-cache
+            mountPath: /root/.cache/huggingface
+          # Manual GPU device mounts
+          - name: nvidia0
+            mountPath: /dev/nvidia0
+          - name: nvidiactl
+            mountPath: /dev/nvidiactl
+          - name: nvidia-uvm
+            mountPath: /dev/nvidia-uvm
+          - name: nvidia-uvm-tools
+            mountPath: /dev/nvidia-uvm-tools
+
+        resources:
+          requests:
+            memory: "16Gi"
+            cpu: "4"
+          limits:
+            memory: "20Gi"
+            cpu: "8"
+
+        securityContext:
+          # WARNING: privileged mode is a MAJOR security risk in production
+          # This grants root access to the host and disables security mechanisms
+          # Use only for development/debugging. Production should use NVIDIA container runtime
+          # with proper device plugins and RBAC restrictions. See docs for secure alternatives.
+          privileged: true  # Required for GPU access (development/debugging only)
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 120
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /v1/models
+            port: http
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 0
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 30  # 15 minutes max
+
+      volumes:
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: vllm-model-cache
+        # Manual GPU device mounts from host
+        - name: nvidia0
+          hostPath:
+            path: /dev/nvidia0
+            type: CharDevice
+        - name: nvidiactl
+          hostPath:
+            path: /dev/nvidiactl
+            type: CharDevice
+        - name: nvidia-uvm
+          hostPath:
+            path: /dev/nvidia-uvm
+            type: CharDevice
+        - name: nvidia-uvm-tools
+          hostPath:
+            path: /dev/nvidia-uvm-tools
+            type: CharDevice
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-gpt-oss-20b
+  namespace: system
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app: vllm
+    model: gpt-oss-20b

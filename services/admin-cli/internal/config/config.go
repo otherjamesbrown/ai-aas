@@ -39,6 +39,9 @@ type Config struct {
 	// Authentication
 	APIKey string
 
+	// Database
+	DatabaseURL string
+
 	// Output Settings
 	OutputFormat string // table, json, csv
 	Verbose      bool
@@ -84,6 +87,7 @@ func Load() (*Config, error) {
 		UserOrgEndpoint:   v.GetString("api-endpoints.user-org-service"),
 		AnalyticsEndpoint: v.GetString("api-endpoints.analytics-service"),
 		APIKey:            v.GetString("auth.api-key"),
+		DatabaseURL:       v.GetString("database.url"),
 		OutputFormat:      v.GetString("defaults.output-format"),
 		Verbose:           v.GetBool("defaults.verbose"),
 		Quiet:             v.GetBool("defaults.quiet"),
