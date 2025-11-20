@@ -383,7 +383,16 @@ func main() {
 	// These routes will go through the middleware chain above in order
 	publicHandler.RegisterRoutes(appRouter)
 
+	// Register admin routes on sub-router (requires authentication)
+	adminHandler := admin.NewHandler(logger, loader, healthMonitor, routingEngine, backendRegistry)
+	adminHandler.RegisterRoutes(appRouter)
+
+	// Register audit routes on sub-router (requires authentication)
+	auditHandler := public.NewAuditHandler(logger, bufferStore)
+	auditHandler.RegisterRoutes(appRouter)
+
 	// Mount sub-router on main router at root path
+	// ALL routes must be registered on appRouter BEFORE this Mount() call
 	// All routes registered on appRouter will be accessible at their original paths
 	router.Mount("/", appRouter)
 
@@ -396,14 +405,6 @@ func main() {
 			}
 		}()
 	}
-
-	// Register admin routes on sub-router (requires authentication)
-	adminHandler := admin.NewHandler(logger, loader, healthMonitor, routingEngine, backendRegistry)
-	adminHandler.RegisterRoutes(appRouter)
-
-	// Register audit routes on sub-router (requires authentication)
-	auditHandler := public.NewAuditHandler(logger, bufferStore)
-	auditHandler.RegisterRoutes(appRouter)
 
 	// Metrics endpoint on main router (no auth required for Prometheus scraping)
 	// This must be registered on main router, not appRouter, to avoid authentication

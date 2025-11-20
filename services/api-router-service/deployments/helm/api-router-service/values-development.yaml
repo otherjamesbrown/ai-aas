@@ -1,0 +1,113 @@
+# Development environment values for API Router Service
+# Deploys to dev cluster with vLLM backend integration
+
+replicaCount: 1  # Single replica for dev
+
+image:
+  repository: ghcr.io/otherjamesbrown/api-router-service
+  tag: dev
+  pullPolicy: Always  # Pull from GHCR
+  pullSecrets: []
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"  # No SSL in dev
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+  hosts:
+    - host: api.dev.ai-aas.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []  # No TLS in dev
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: false  # Disable autoscaling in dev
+
+livenessProbe:
+  path: /v1/status/healthz
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  path: /v1/status/readyz
+  initialDelaySeconds: 15
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+env:
+  - name: SERVICE_NAME
+    value: api-router-service
+  - name: HTTP_PORT
+    value: "8080"
+  - name: ENVIRONMENT
+    value: development
+  - name: LOG_LEVEL
+    value: debug  # Debug logging in dev
+  - name: USER_ORG_SERVICE_URL
+    value: "http://localhost:8081"  # Stub for now - will use dev keys
+  - name: USER_ORG_SERVICE_TIMEOUT
+    value: "2s"
+
+# Backend endpoints - configure vLLM service
+backends:
+  # Format: backend-id:http://service-name.namespace.svc.cluster.local:port/path
+  endpoints: "vllm-gpt-oss-20b:http://vllm-gpt-oss-20b.system.svc.cluster.local:8000/v1/completions"
+
+# Redis configuration (optional for dev - stubbed if not available)
+redis:
+  address: ""  # Empty = use in-memory stub rate limiter
+  password: ""
+  db: 0
+
+# Kafka configuration (optional for dev - stubbed if not available)
+kafka:
+  brokers: ""  # Empty = use in-memory stub
+  topic: usage.records.v1
+  auditTopic: audit.router
+
+# Config service (optional for dev - use static config)
+configService:
+  endpoint: ""  # Empty = use static config
+  watchEnabled: false
+  cachePath: /tmp/api-router-config.db
+
+# Rate limiting configuration
+rateLimit:
+  defaultRPS: 100
+  burstSize: 200
+
+# Budget service (optional for dev)
+budget:
+  endpoint: ""  # Empty = allow all requests
+  timeout: 2s
+
+# Telemetry
+otel:
+  enabled: false  # Disable telemetry in dev
+  collectorEndpoint: ""
+  protocol: grpc
+  insecure: true
+
+prometheus:
+  enabled: false  # Disable Prometheus monitoring (CRDs not installed in dev)
+  port: 8080
+  path: /metrics
