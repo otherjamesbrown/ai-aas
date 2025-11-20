@@ -1,12 +1,50 @@
 # GPU Deployment Quickstart for Linode LKE
 
-**Status Date**: 2025-11-19
+**Status Date**: 2025-11-20
 **Cluster**: lke531921 (fr-par-2)
-**Current State**: 3 non-GPU nodes, 0 GPU nodes, 0 models deployed
+**Current State**: ✅ **GPU node active**, ✅ **vLLM deployed and running**
+
+---
+
+## 🎉 Already Deployed!
+
+**Good news**: The vLLM inference service is already deployed and running!
+
+### Quick Access
+
+```bash
+# Port-forward to the deployed service
+export KUBECONFIG=~/kubeconfigs/kubeconfig-development.yaml
+kubectl port-forward -n system svc/vllm-gpt-oss-20b 8000:8000
+
+# Test inference (in another terminal)
+curl -X POST http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "unsloth/gpt-oss-20b",
+    "messages": [{"role": "user", "content": "What is the capital of France?"}],
+    "max_tokens": 50,
+    "temperature": 0.1
+  }' | jq '.choices[0].message.content'
+```
+
+**Expected Response**: `"Paris"`
+
+### Current Deployment
+
+- **Service**: `vllm-gpt-oss-20b` in `system` namespace
+- **Model**: unsloth/gpt-oss-20b (20B parameters)
+- **GPU Node**: lke531921-776664-51386eeb0000 (Linode ID: 87352812)
+- **Status**: ✅ Healthy (21+ hours uptime)
+- **Internal IP**: 10.128.254.198:8000
+
+For more details, see [Deployed Endpoints](./DEPLOYED_ENDPOINTS.md)
+
+---
 
 ## Overview
 
-This guide walks you through adding a GPU node to your Linode LKE cluster and deploying your first vLLM model.
+This guide documents how to add GPU nodes to your Linode LKE cluster and deploy vLLM models.
 
 ## Prerequisites
 

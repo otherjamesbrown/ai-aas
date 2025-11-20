@@ -1,7 +1,7 @@
 # vLLM Deployment Testing Status
 
-**Date**: 2025-01-27  
-**Status**: Helm chart deployed, testing blocked by infrastructure requirements
+**Date**: 2025-11-20
+**Status**: ✅ Deployment successful and verified
 
 ## Current Status
 
@@ -11,93 +11,79 @@
 - Deployment scripts created (`deploy-with-retry.sh`, `verify-deployment.sh`, `test-helm-chart.sh`)
 - All PR review comments addressed
 - Merge conflicts resolved
+- **vLLM deployment running successfully in dev cluster**
+- **Inference endpoint verified and responding correctly**
 
-### ⚠️ Blocking Issues
+### ✅ Infrastructure Status
 
-#### 1. No GPU Nodes Available
-The development cluster does not have GPU nodes with the `node-type=gpu` label:
+#### GPU Node Available
+The development cluster HAS a GPU node:
 
 ```bash
-$ kubectl get nodes -l node-type=gpu
-No resources found
+$ kubectl get nodes -o custom-columns=NAME:.metadata.name,GPU:.status.allocatable.'nvidia\.com/gpu'
+NAME                            GPU
+lke531921-770211-1b59efcf0000   <none>
+lke531921-770211-3813f3520000   <none>
+lke531921-770211-611c01ef0000   <none>
+lke531921-776664-51386eeb0000   1
 ```
 
-**Impact**: Cannot deploy vLLM models without GPU resources.
+**Status**: ✅ GPU node available (lke531921-776664-51386eeb0000)
 
-**Required**: 
-- Add GPU nodes to the development cluster
-- Label nodes with `node-type=gpu`
-- Ensure nodes have `nvidia.com/gpu` resource available
-
-#### 2. API Router Service Not Ready
-The API Router Service pod is running but not ready:
-
+#### vLLM Deployment Running
 ```bash
-$ kubectl get pods -n development -l app.kubernetes.io/name=api-router-service
-NAME                                                              READY   STATUS    RESTARTS   AGE
-api-router-service-development-api-router-service-796fd6cc4dpt8   0/1     Running   0          8h
+$ kubectl get deployments,pods,services -n system | grep vllm
+deployment.apps/vllm-gpt-oss-20b   1/1     1            1           21h
+pod/vllm-gpt-oss-20b-7ccc4c947b-lg2h9   1/1     Running   0          21h
+service/vllm-gpt-oss-20b   ClusterIP   10.128.254.198   <none>        8000/TCP   21h
 ```
 
-The service is not listening on port 8080, preventing endpoint testing.
+**Status**: ✅ Deployment healthy and running
 
-**Impact**: Cannot test inference endpoint routing even if vLLM was deployed.
+## Completed Testing
 
-**Required**:
-- Investigate API Router Service startup issues
-- Ensure service is listening on port 8080
-- Verify readiness probes are passing
+### ✅ Step 1: Deployment Verified
 
-## Testing Plan (When Infrastructure Ready)
+Model `vllm-gpt-oss-20b` deployed successfully:
+- **Namespace**: `system`
+- **Model**: `unsloth/gpt-oss-20b` (20B parameters)
+- **Pod**: `vllm-gpt-oss-20b-7ccc4c947b-lg2h9`
+- **Service**: `vllm-gpt-oss-20b` (10.128.254.198:8000)
+- **GPU Node**: lke531921-776664-51386eeb0000
 
-### Step 1: Deploy vLLM Model Instance
+### ✅ Step 2: Inference Endpoint Tested
 
 ```bash
-# Set environment
+# Port-forward to service
 export KUBECONFIG=~/kubeconfigs/kubeconfig-development.yaml
+kubectl port-forward -n system svc/vllm-gpt-oss-20b 8000:8000
 
-# Deploy a test model
-./scripts/vllm/deploy-with-retry.sh \
-  test-llama-7b \
-  infra/helm/charts/vllm-deployment \
-  infra/helm/charts/vllm-deployment/values-development.yaml \
-  system \
-  10
-```
-
-### Step 2: Verify Deployment
-
-```bash
-# Check deployment status
-kubectl get pods -n system -l app.kubernetes.io/name=vllm-deployment
-
-# Verify service
-kubectl get svc -n system
-
-# Test health endpoints
-kubectl port-forward -n system svc/test-llama-7b 8000:8000 &
-curl http://localhost:8000/health
-curl http://localhost:8000/ready
-```
-
-### Step 3: Test Inference Endpoint
-
-```bash
-# Test vLLM endpoint directly
+# Test inference
 curl -X POST http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "test-llama-7b",
-    "messages": [{"role": "user", "content": "Hello!"}],
-    "max_tokens": 50
+    "model": "unsloth/gpt-oss-20b",
+    "messages": [{"role": "user", "content": "What is the capital of France? Answer in one word only."}],
+    "max_tokens": 50,
+    "temperature": 0.1
   }'
 ```
 
-### Step 4: Test via API Router
-
-```bash
-# Use the test script
-./scripts/vllm/test-inference-endpoint.sh dev-key-123 test-llama-7b
+**Result**: ✅ SUCCESS
+```json
+{
+  "role": "assistant",
+  "content": "Paris",
+  "reasoning": "The user asks: \"What is the capital of France? Answer in one word only.\" The answer is \"Paris\". So output \"Paris\"."
+}
 ```
+
+### Pending: API Router Integration
+
+API Router Service integration testing pending:
+- Model registration in model registry
+- Routing configuration
+- End-to-end inference through API Router
 
 ## Test Scripts Available
 

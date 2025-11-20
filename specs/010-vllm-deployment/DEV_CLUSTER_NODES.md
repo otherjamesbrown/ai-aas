@@ -1,24 +1,26 @@
 # Development Cluster Node Configuration
 
-**Date**: 2025-01-27  
-**Status**: Current state and recommendations
+**Date**: 2025-11-20
+**Status**: ✅ GPU node available and vLLM deployed successfully
 
 ## Current State
 
 ### Actual Nodes in Dev Cluster
 
-The development cluster currently has **3 standard CPU nodes**:
+The development cluster has **4 nodes** (3 CPU + 1 GPU):
 
-| Node Name | Instance Type | GPU | CPU | Memory | Labels |
+| Node Name | Instance Type | GPU | CPU | Memory | Status |
 |-----------|--------------|-----|-----|--------|--------|
-| lke531921-770211-1b59efcf0000 | `g6-standard-4` | ❌ None | 4 | ~8GB | `node-type=gpu` (manually added) |
-| lke531921-770211-3813f3520000 | `g6-standard-4` | ❌ None | 4 | ~8GB | `node-type=gpu` (manually added) |
-| lke531921-770211-611c01ef0000 | `g6-standard-4` | ❌ None | 4 | ~8GB | `node-type=gpu` (manually added) |
+| lke531921-770211-1b59efcf0000 | `g6-standard-4` | ❌ None | 4 | ~8GB | CPU node |
+| lke531921-770211-3813f3520000 | `g6-standard-4` | ❌ None | 4 | ~8GB | CPU node |
+| lke531921-770211-611c01ef0000 | `g6-standard-4` | ❌ None | 4 | ~8GB | CPU node |
+| lke531921-776664-51386eeb0000 | GPU instance | ✅ **1x NVIDIA** | ? | ? | **GPU node** (Linode ID: 87352812) |
 
 **Key Points**:
-- ✅ All nodes are `g6-standard-4` (4 vCPU, 8GB RAM)
-- ❌ **No GPU resources available** (`nvidia.com/gpu: none`)
-- ⚠️ Nodes are labeled `node-type=gpu` but **do not have actual GPUs**
+- ✅ GPU node available: `lke531921-776664-51386eeb0000`
+- ✅ **1x NVIDIA GPU allocatable** (`nvidia.com/gpu: 1`)
+- ✅ vLLM deployment `vllm-gpt-oss-20b` running successfully
+- ✅ Inference endpoint responding correctly
 
 ### Terraform Configuration
 
@@ -65,89 +67,71 @@ node_pools = [
 ]
 ```
 
-## The Problem
+## Current Deployments
 
-1. **Development cluster has NO GPU nodes** - only standard CPU nodes
-2. **GPU nodes are configured for the "system" cluster**, not development
-3. **vLLM requires actual GPU hardware** - cannot run on CPU-only nodes
-4. **I manually labeled dev nodes** with `node-type=gpu` to allow scheduling, but they don't have GPUs
+### vLLM Deployment
 
-## Impact
+**Status**: ✅ Running successfully
 
-- ❌ **vLLM deployments will fail** - pods will schedule but cannot actually run without GPUs
-- ❌ **Model loading will fail** - vLLM requires CUDA/GPU drivers
-- ⚠️ **Testing is blocked** - cannot test vLLM inference without GPU nodes
+- **Deployment**: `vllm-gpt-oss-20b` in `system` namespace
+- **Pod**: `vllm-gpt-oss-20b-7ccc4c947b-lg2h9` (Running, 1/1 ready)
+- **Service**: `vllm-gpt-oss-20b` (ClusterIP: 10.128.254.198:8000)
+- **Model**: `unsloth/gpt-oss-20b` (20B parameters)
+- **GPU Node**: Scheduled on `lke531921-776664-51386eeb0000`
+- **Uptime**: 21+ hours
 
-## Solutions
+### Access Instructions
 
-### Option 1: Add GPU Nodes to Development Cluster (Recommended for Testing)
+```bash
+# Set kubeconfig
+export KUBECONFIG=~/kubeconfigs/kubeconfig-development.yaml
 
-Update Terraform configuration to add GPU node pool to development:
+# Port-forward to service
+kubectl port-forward -n system svc/vllm-gpt-oss-20b 8000:8000
 
-```hcl
-development = {
-  node_pools = [
-    {
-      type  = "g6-standard-4"
-      count = 3
-      labels = { role = "general" }
-    },
-    {
-      type  = "g1-gpu-rtx6000"  # Add GPU nodes
-      count = 1  # Start with 1 for cost
-      autoscaler = {
-        min = 1
-        max = 2
-      }
-      labels = {
-        role = "gpu"
-        node-type = "gpu"  # Match vLLM chart requirement
-      }
-      taints = [
-        {
-          key    = "gpu-workload"
-          value  = "true"
-          effect = "NoSchedule"
-        }
-      ]
-    }
-  ]
-}
+# Test inference
+curl -X POST http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "unsloth/gpt-oss-20b",
+    "messages": [{"role": "user", "content": "What is the capital of France?"}],
+    "max_tokens": 50,
+    "temperature": 0.1
+  }'
 ```
 
-**Cost**: ~$1,200/month per GPU node (g1-gpu-rtx6000)
+**Expected response**: Model correctly answers "Paris"
 
-### Option 2: Deploy vLLM to System Cluster
+## Cluster Configuration
 
-Since GPU nodes exist in the system cluster:
+### Node Pool 770211 (CPU Nodes)
+- **Type**: g6-standard-4
+- **Count**: 3 nodes
+- **Purpose**: General workloads
+- **Labels**: `role=general`
 
-1. Update vLLM deployment to use `system` namespace
-2. Update node selector to match system cluster labels (`role: gpu`)
-3. Update tolerations to match system cluster taints (`workload: gpu`)
+### Node Pool 776664 (GPU Node)
+- **Type**: GPU instance (Linode)
+- **Count**: 1 node
+- **Linode ID**: 87352812
+- **GPU**: 1x NVIDIA GPU
+- **Purpose**: vLLM inference workloads
+- **Status**: ✅ Active and running vLLM
 
-**Pros**: No additional cost, GPU nodes already exist  
-**Cons**: Mixes development workloads with system infrastructure
+## Historical Context
 
-### Option 3: Use CPU-Only Testing (Not Recommended)
+This document was previously incorrect (dated 2025-01-27) and stated:
+- ❌ "Development cluster has NO GPU nodes"
+- ❌ "GPU nodes are configured for the system cluster"
+- ❌ "vLLM deployments will fail"
 
-- Use mock inference service for testing
-- Cannot test actual vLLM inference
-- Limited value for validation
+**Actual Reality (2025-11-20)**:
+- ✅ Development cluster **DOES** have a GPU node
+- ✅ vLLM deployment is running successfully
+- ✅ Inference endpoint is responding correctly
+- ✅ No "system cluster" - only the dev cluster (LKE 531921)
 
-## Recommendation
-
-For **development/testing**, add 1 GPU node to the development cluster:
-
-1. **Cost**: ~$1,200/month (acceptable for dev)
-2. **Flexibility**: Isolated from production/system workloads
-3. **Testing**: Can validate full vLLM deployment workflow
-4. **Scaling**: Can scale down to 0 when not in use (if autoscaling configured)
-
-## Next Steps
-
-1. **Immediate**: Remove `node-type=gpu` label from dev cluster nodes (they don't have GPUs)
-2. **Short-term**: Decide on Option 1 (add GPU to dev) or Option 2 (use system cluster)
-3. **Long-term**: Update Terraform to provision GPU nodes for development if needed
+The confusion arose from outdated documentation that didn't reflect the actual infrastructure state.
 
 ## Verification Commands
 
