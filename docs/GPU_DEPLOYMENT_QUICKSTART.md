@@ -10,28 +10,46 @@
 
 **Good news**: The vLLM inference service is already deployed and running!
 
-### Quick Access
+### 🌐 Test It Now (Public Endpoint)
+
+The inference API is accessible over the internet - **no setup required**:
 
 ```bash
-# Port-forward to the deployed service
-export KUBECONFIG=~/kubeconfigs/kubeconfig-development.yaml
-kubectl port-forward -n system svc/vllm-gpt-oss-20b 8000:8000
-
-# Test inference (in another terminal)
-curl -X POST http://localhost:8000/v1/chat/completions \
-  -H "Content-Type: application/json" \
+# Test from anywhere (replace with your question)
+curl -X POST http://172.232.58.222/v1/chat/completions \
+  -H 'Host: vllm.dev.ai-aas.local' \
+  -H 'Content-Type: application/json' \
   -d '{
     "model": "unsloth/gpt-oss-20b",
     "messages": [{"role": "user", "content": "What is the capital of France?"}],
     "max_tokens": 50,
     "temperature": 0.1
-  }' | jq '.choices[0].message.content'
+  }' | jq -r '.choices[0].message.content'
 ```
 
 **Expected Response**: `"Paris"`
 
+**Try More Examples**:
+
+```bash
+# Simple math
+curl -s -X POST http://172.232.58.222/v1/chat/completions \
+  -H 'Host: vllm.dev.ai-aas.local' \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"unsloth/gpt-oss-20b","messages":[{"role":"user","content":"What is 2+2?"}],"max_tokens":20}' \
+  | jq -r '.choices[0].message.content'
+
+# Explanation
+curl -s -X POST http://172.232.58.222/v1/chat/completions \
+  -H 'Host: vllm.dev.ai-aas.local' \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"unsloth/gpt-oss-20b","messages":[{"role":"user","content":"Explain quantum computing in simple terms."}],"max_tokens":200}' \
+  | jq -r '.choices[0].message.content'
+```
+
 ### Current Deployment
 
+- **🌐 Public Endpoint**: `http://172.232.58.222` (Host: `vllm.dev.ai-aas.local`)
 - **Service**: `vllm-gpt-oss-20b` in `system` namespace
 - **Model**: unsloth/gpt-oss-20b (20B parameters)
 - **GPU Node**: lke531921-776664-51386eeb0000 (Linode ID: 87352812)

@@ -26,55 +26,74 @@ This document provides quick reference for all deployed services and how to acce
 
 **Service**: `vllm-gpt-oss-20b`
 - **Namespace**: `system`
-- **Type**: ClusterIP
-- **Internal IP**: 10.128.254.198
-- **Port**: 8000
+- **Type**: ClusterIP (with Ingress)
+- **🌐 Public Endpoint**: `http://172.232.58.222` (Host: `vllm.dev.ai-aas.local`)
+- **Internal IP**: 10.128.254.198:8000
 - **Model**: unsloth/gpt-oss-20b (20B parameters)
 - **Status**: ✅ Running (21+ hours uptime)
 - **Pod**: vllm-gpt-oss-20b-7ccc4c947b-lg2h9
 
-**How to Access**:
+### 🌐 Public Access (Primary Method)
+
+The vLLM service is accessible over the internet via Ingress:
+
+**Endpoint**: `http://172.232.58.222`
+**Host Header**: `vllm.dev.ai-aas.local`
 
 ```bash
-# Set kubeconfig
-export KUBECONFIG=~/kubeconfigs/kubeconfig-development.yaml
-
-# Option 1: Port-forward (recommended for testing)
-kubectl port-forward -n system svc/vllm-gpt-oss-20b 8000:8000
-
-# Option 2: Direct pod access (debugging)
-kubectl port-forward -n system pod/vllm-gpt-oss-20b-7ccc4c947b-lg2h9 8000:8000
-```
-
-**Test the Endpoint**:
-
-```bash
-# Health check
-curl http://localhost:8000/health
-
-# Models endpoint
-curl http://localhost:8000/v1/models
-
-# Chat completion (simple)
-curl -X POST http://localhost:8000/v1/chat/completions \
-  -H "Content-Type: application/json" \
+# Test from anywhere on the internet (no kubectl needed!)
+curl -X POST http://172.232.58.222/v1/chat/completions \
+  -H 'Host: vllm.dev.ai-aas.local' \
+  -H 'Content-Type: application/json' \
   -d '{
     "model": "unsloth/gpt-oss-20b",
-    "messages": [{"role": "user", "content": "Hello!"}],
-    "max_tokens": 50
-  }'
-
-# Chat completion (test question - capital of France)
-curl -X POST http://localhost:8000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "unsloth/gpt-oss-20b",
-    "messages": [{"role": "user", "content": "What is the capital of France? Answer in one word only."}],
+    "messages": [{"role": "user", "content": "What is the capital of France?"}],
     "max_tokens": 50,
     "temperature": 0.1
   }' | jq '.choices[0].message.content'
 
 # Expected output: "Paris"
+```
+
+**More Examples**:
+
+```bash
+# Simple math question
+curl -s -X POST http://172.232.58.222/v1/chat/completions \
+  -H 'Host: vllm.dev.ai-aas.local' \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"unsloth/gpt-oss-20b","messages":[{"role":"user","content":"What is 2+2?"}],"max_tokens":20}' \
+  | jq -r '.choices[0].message.content'
+
+# Longer explanation
+curl -s -X POST http://172.232.58.222/v1/chat/completions \
+  -H 'Host: vllm.dev.ai-aas.local' \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"unsloth/gpt-oss-20b","messages":[{"role":"user","content":"Explain what a large language model is in simple terms."}],"max_tokens":300}' \
+  | jq -r '.choices[0].message.content'
+
+# Health check
+curl -s http://172.232.58.222/health -H 'Host: vllm.dev.ai-aas.local'
+
+# List models
+curl -s http://172.232.58.222/v1/models -H 'Host: vllm.dev.ai-aas.local' | jq .
+```
+
+### 🔧 Port-Forward Access (Alternative for Cluster Access)
+
+If you have kubectl access and want to test without the Host header:
+
+```bash
+# Set kubeconfig
+export KUBECONFIG=~/kubeconfigs/kubeconfig-development.yaml
+
+# Port-forward to service
+kubectl port-forward -n system svc/vllm-gpt-oss-20b 8000:8000
+
+# Test locally (in another terminal)
+curl -X POST http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"unsloth/gpt-oss-20b","messages":[{"role":"user","content":"Hello!"}],"max_tokens":50}'
 ```
 
 **OpenAI-Compatible API**:
