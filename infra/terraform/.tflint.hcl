@@ -2,9 +2,10 @@ config {
   call_module_type = "all"  # Replaced deprecated "module" attribute (removed in v0.54.0)
 }
 
-plugin "linode" {
-  enabled = true
-}
+# Linode plugin disabled - no Linode resources exist in this Terraform configuration
+# plugin "linode" {
+#   enabled = true
+# }
 
 plugin "terraform" {
   enabled = true
