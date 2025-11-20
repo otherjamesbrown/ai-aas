@@ -35,6 +35,10 @@ jobs:
         with:
           tflint_version: ${{ env.TFLINT_VERSION }}
 
+      - name: Initialize TFLint plugins
+        run: tflint --init
+        working-directory: ./infra/terraform
+
       - name: Set up tfsec
         uses: aquasecurity/tfsec-action@v1.0.0
         with:
