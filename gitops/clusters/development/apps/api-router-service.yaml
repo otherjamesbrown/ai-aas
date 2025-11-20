@@ -26,11 +26,15 @@ spec:
           - name: ENVIRONMENT
             value: development
           - name: LOG_LEVEL
-            value: info
+            value: debug
           - name: HTTP_PORT
             value: "8080"
           - name: SERVICE_NAME
             value: api-router-service
+          - name: USER_ORG_SERVICE_URL
+            value: "http://user-org-service-development-user-org-service.user-org-service.svc.cluster.local:8081"
+          - name: USER_ORG_SERVICE_TIMEOUT
+            value: "2s"
           - name: OTEL_EXPORTER_OTLP_ENDPOINT
             value: "otel-collector.monitoring.svc.cluster.local:4317"
           - name: OTEL_EXPORTER_OTLP_PROTOCOL
@@ -47,10 +51,10 @@ spec:
           topic: usage.records.v1
           auditTopic: audit.router
         configService:
-          endpoint: ""
-          watchEnabled: false
+          endpoint: "etcd-service:2379"
+          watchEnabled: true
         backends:
-          endpoints: ""
+          endpoints: "vllm-gpt-oss-20b:http://vllm-gpt-oss-20b.system.svc.cluster.local:8000/v1/chat/completions"
         resources:
           requests:
             cpu: 100m
