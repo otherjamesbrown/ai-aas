@@ -1,0 +1,177 @@
+# Unsloth GPT-OSS-20B optimized values for RTX 4000 Ada (20GB)
+# Based on working docker-compose configuration
+#
+# Model: unsloth/gpt-oss-20b (20B parameters)
+# GPU: RTX 4000 Ada (20GB VRAM)
+# Key: FP8 KV cache for memory efficiency
+#
+# Usage:
+#   helm install gpt-oss-20b vllm-deployment \
+#     -f values-unsloth-gpt-oss-20b.yaml
+
+environment: development
+namespace: system
+
+replicaCount: 1  # Single instance
+
+image:
+  repository: vllm/vllm-openai
+  tag: "latest"  # Use latest for best FP8 support
+  pullPolicy: IfNotPresent
+
+model:
+  path: "unsloth/gpt-oss-20b"
+  size: "medium"  # 20B model
+
+# GPU resource configuration for RTX 4000 Ada (20GB)
+resources:
+  limits:
+    nvidia.com/gpu: 1
+    memory: "18Gi"     # 18GB RAM
+    cpu: "8"
+  requests:
+    nvidia.com/gpu: 1
+    memory: "16Gi"
+    cpu: "4"
+
+# Node selector for GPU nodes
+nodeSelector:
+  node-type: gpu
+
+# Tolerations for GPU workloads
+tolerations:
+  - key: gpu-workload
+    operator: Equal
+    value: "true"
+    effect: NoSchedule
+
+# Health probes optimized for large model
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 120   # Model loading takes longer
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /v1/models
+    port: http
+  initialDelaySeconds: 60
+  periodSeconds: 15
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# Startup probe - 20B model takes time to load
+# First time: ~15 minutes (download + load)
+# Subsequent: ~3-5 minutes (load from cache)
+startupProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 0
+  periodSeconds: 30
+  timeoutSeconds: 10
+  failureThreshold: 30  # 30 * 30s = 15 minutes max
+
+# vLLM configuration for unsloth/gpt-oss-20b
+vllm:
+  host: "0.0.0.0"
+  port: 8000
+
+  # Environment variables
+  env:
+    # HuggingFace cache location
+    - name: HF_HOME
+      value: "/root/.cache/huggingface"
+
+    # GPU memory utilization (90% as per working config)
+    - name: VLLM_GPU_MEMORY_UTILIZATION
+      value: "0.9"
+
+    # No tensor parallelism (single GPU)
+    - name: VLLM_TENSOR_PARALLEL_SIZE
+      value: "1"
+
+  # vLLM command-line arguments (matching docker-compose config)
+  args:
+    # Model path
+    - --model=unsloth/gpt-oss-20b
+
+    # FP8 KV cache - CRITICAL for 20B model on 20GB GPU!
+    # This reduces KV cache memory usage by 50%
+    - --kv-cache-dtype=fp8
+
+    # GPU memory utilization
+    - --gpu-memory-utilization=0.9
+
+    # Context length (16K as per working config)
+    - --max-model-len=16384
+
+    # Trust remote code (some models require this)
+    - --trust-remote-code
+
+    # Disable custom CUDA kernels if needed
+    # - --disable-custom-all-reduce
+
+# Shared memory size (8GB as per docker-compose)
+podSecurityContext:
+  fsGroup: 0
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8000
+  name: http
+
+# Persistent volume for model cache
+# This avoids re-downloading the model on pod restart
+persistence:
+  enabled: true
+  storageClass: ""  # Use default storage class
+  accessMode: ReadWriteOnce
+  size: 50Gi  # 20B model is ~40GB
+  mountPath: /root/.cache/huggingface
+  annotations: {}
+
+# Network policy
+networkPolicy:
+  enabled: true
+  allowedSources:
+    - namespace: system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: api-router-service
+
+# Prometheus monitoring
+prometheus:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+
+# Service account
+serviceAccount:
+  create: true
+  name: ""
+
+# Pre-install checks
+preInstallChecks:
+  enabled: true
+
+# Labels
+labels:
+  gpu-type: rtx4000ada
+  model-size: "20b"
+  model-name: gpt-oss-20b
+
+# Annotations
+annotations:
+  description: "vLLM deployment for unsloth/gpt-oss-20b (20B) on RTX 4000 Ada"
+  model-url: "https://huggingface.co/unsloth/gpt-oss-20b"
+  memory-optimization: "fp8-kv-cache"
+  estimated-download-size: "40GB"
+  estimated-load-time: "15min-first-3min-cached"

@@ -1,0 +1,11 @@
+{
+  "allowedBashCommands": [
+    "gh:*",
+    "git:*",
+    "npm:*",
+    "pnpm:*",
+    "make:*",
+    "docker:*",
+    "kubectl:*"
+  ]
+}

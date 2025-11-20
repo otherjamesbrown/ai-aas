@@ -3,6 +3,9 @@
 
 BEGIN;
 
+-- Drop unique constraint
+ALTER TABLE model_registry_entries DROP CONSTRAINT IF EXISTS model_registry_entries_unique_deployment;
+
 DROP INDEX IF EXISTS idx_model_registry_environment;
 DROP INDEX IF EXISTS idx_model_registry_deployment_status;
 
