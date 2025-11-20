@@ -159,7 +159,10 @@ spec:
 #     # NO automated sync for production - manual approval required
 #     syncOptions:
 #       - CreateNamespace=true
+#       - PrunePropagationPolicy=foreground
 #       - PruneLast=true
+#       - RespectIgnoreDifferences=true
+#       - ServerSideApply=true
 #     retry:
 #       limit: 5
 #       backoff:

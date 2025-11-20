@@ -105,7 +105,11 @@ spec:
             cpu: "8"
 
         securityContext:
-          privileged: true  # Required for GPU access
+          # WARNING: privileged mode is a MAJOR security risk in production
+          # This grants root access to the host and disables security mechanisms
+          # Use only for development/debugging. Production should use NVIDIA container runtime
+          # with proper device plugins and RBAC restrictions. See docs for secure alternatives.
+          privileged: true  # Required for GPU access (development/debugging only)
 
         livenessProbe:
           httpGet:

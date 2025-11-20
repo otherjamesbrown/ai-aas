@@ -878,6 +878,12 @@ curl http://localhost:8000/health
 ```bash
 #!/bin/bash
 # collect-diagnostics.sh
+
+if [ -z "$1" ]; then
+  echo "Usage: $0 <release-name> [namespace]"
+  exit 1
+fi
+
 RELEASE_NAME=$1
 NAMESPACE=${2:-system}
 OUTPUT_DIR="diagnostics-$(date +%Y%m%d-%H%M%S)"

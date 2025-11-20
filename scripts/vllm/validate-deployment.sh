@@ -309,7 +309,7 @@ test_inference() {
 
     # Test inference with a simple request
     local test_request='{
-  "model": "test",
+  "model": "'"$model_name"'",
   "prompt": "Hello, ",
   "max_tokens": 5,
   "temperature": 0.7

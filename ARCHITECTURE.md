@@ -164,7 +164,7 @@ Models are deployed to three isolated environments:
 - **Production**: Live traffic, 2-3 replicas, strict SLOs
 
 Each environment has:
-- Separate service endpoints: `{model}-{env}.system.svc.cluster.local`
+- Separate service endpoints: `{model}-{env}.system.svc.cluster.local:8000`
 - Separate registry entries: `(model_name, environment)` unique constraint
 - Separate resource quotas and NetworkPolicies
 - Environment-specific monitoring and alerting

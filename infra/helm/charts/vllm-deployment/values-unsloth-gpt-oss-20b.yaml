@@ -16,7 +16,7 @@ replicaCount: 1  # Single instance
 
 image:
   repository: vllm/vllm-openai
-  tag: "latest"  # Use latest for best FP8 support
+  tag: "v0.6.3.post1"  # Pin to specific version for reproducible deployments
   pullPolicy: IfNotPresent
 
 model:
@@ -110,7 +110,11 @@ vllm:
     # Context length (16K as per working config)
     - --max-model-len=16384
 
-    # Trust remote code (some models require this)
+    # Trust remote code (required for unsloth models)
+    # ⚠️  SECURITY WARNING: This allows execution of arbitrary code from Hugging Face Hub
+    # Only enable for trusted models and audited code. DO NOT use in production without
+    # thorough security review of the model's custom code.
+    # See: https://huggingface.co/docs/hub/security-pickle
     - --trust-remote-code
 
     # Disable custom CUDA kernels if needed

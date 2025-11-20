@@ -365,10 +365,12 @@ spec:
 
 **✅ DO**:
 ```bash
-# Create secret for HuggingFace token
+# Create secret for HuggingFace token (secure method to avoid shell history)
+echo -n "hf_xxxxxxxxxxxxx" > /tmp/hf_token
 kubectl create secret generic hf-token \
-  --from-literal=token=hf_xxxxxxxxxxxxx \
+  --from-file=token=/tmp/hf_token \
   -n system
+rm /tmp/hf_token
 
 # Reference in deployment
 env:
@@ -688,8 +690,9 @@ avg(nvidia_gpu_utilization{pod=~".*-production-.*"}) < 50
 # Backup Helm values
 helm get values llama-2-7b-prod -n system > backup-values-$(date +%Y%m%d).yaml
 
-# Backup model registry
-kubectl exec -it postgres-0 -n system -- \
+# Backup model registry (use label selector for robustness)
+PG_POD=$(kubectl get pod -n system -l app.kubernetes.io/name=postgresql -o jsonpath='{.items[0].metadata.name}')
+kubectl exec -it $PG_POD -n system -- \
   pg_dump -U postgres -d ai_aas_operational -t model_registry_entries > registry-backup-$(date +%Y%m%d).sql
 ```
 

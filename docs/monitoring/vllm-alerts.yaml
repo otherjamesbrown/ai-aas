@@ -117,7 +117,7 @@ spec:
         # Excessive pod restarts (crash loops)
         - alert: VLLMPodRestarts
           expr: |
-            rate(kube_pod_container_status_restarts_total{namespace="system", pod=~".*-(development|staging|production)-.*"}[15m]) > 0.1
+            increase(kube_pod_container_status_restarts_total{namespace="system", pod=~"^vllm-.*-(development|staging|production)-.*"}[30m]) > 3
           for: 5m
           labels:
             severity: high
@@ -126,7 +126,7 @@ spec:
           annotations:
             summary: "vLLM pod {{ $labels.pod }} is restarting frequently"
             description: |
-              Pod {{ $labels.pod }} is restarting at {{ $value | humanize }} restarts/second.
+              Pod {{ $labels.pod }} has restarted {{ $value | humanize }} times in the last 30 minutes.
               Likely causes: OOM, health check failures, or application crashes.
 
               Check logs: kubectl logs {{ $labels.pod }} -n system --previous
@@ -360,23 +360,28 @@ spec:
               If unexpected, re-enable: admin-cli registry enable --model-name {{ $labels.model_name }} --environment production
 
         # Model not in registry (production deployment exists but not registered)
-        - alert: VLLMModelNotRegistered
-          expr: |
-            count(kube_deployment_created{namespace="system", deployment=~".*-production"}) by (deployment)
-            unless
-            count(model_registry_entries{environment="production"}) by (model_name)
-          for: 10m
-          labels:
-            severity: high
-            component: vllm-deployment
-            category: routing
-          annotations:
-            summary: "Deployment {{ $labels.deployment }} exists but model not registered"
-            description: |
-              Deployment {{ $labels.deployment }} is running but not registered in model registry.
-              Traffic will not route to this deployment.
-
-              Register: admin-cli registry register --model-name <model> --endpoint <endpoint> --environment production --namespace system
+        # NOTE: This alert is disabled until model_registry_entries metric is exposed
+        # The 'unless' operator requires matching label sets, but kube_deployment_created
+        # has 'deployment' label while model_registry_entries would need 'model_name' label
+        # TODO: Implement custom metric exporter that exposes model registry data with
+        # matching labels, or use a different approach like recording rules
+        # - alert: VLLMModelNotRegistered
+        #   expr: |
+        #     count(kube_deployment_created{namespace="system", deployment=~".*-production"}) by (deployment)
+        #     unless
+        #     count(model_registry_entries{environment="production"}) by (model_name)
+        #   for: 10m
+        #   labels:
+        #     severity: high
+        #     component: vllm-deployment
+        #     category: routing
+        #   annotations:
+        #     summary: "Deployment {{ $labels.deployment }} exists but model not registered"
+        #     description: |
+        #       Deployment {{ $labels.deployment }} is running but not registered in model registry.
+        #       Traffic will not route to this deployment.
+        #
+        #       Register: admin-cli registry register --model-name <model> --endpoint <endpoint> --environment production --namespace system
 
     # =========================================================================
     # Deployment Change Alerts

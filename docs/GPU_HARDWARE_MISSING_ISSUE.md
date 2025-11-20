@@ -348,10 +348,10 @@ curl http://169.254.169.254/v1/instance/specs
 
 ## SSH Access
 
-Root password set for direct debugging: `ThisismyLinode1!`
+Root password set for direct debugging.
 
 ```bash
-ssh root@172.232.49.84
+ssh root@<NODE_IP>
 # Then run: lspci, dmesg, etc.
 ```
 
