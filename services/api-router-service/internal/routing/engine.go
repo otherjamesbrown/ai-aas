@@ -41,11 +41,12 @@ type RoutingDecision struct {
 
 // Engine provides intelligent routing with weighted selection and failover.
 type Engine struct {
-	healthMonitor *HealthMonitor
+	healthMonitor   *HealthMonitor
 	backendRegistry *config.BackendRegistry
-	logger        *zap.Logger
-	decisions     []RoutingDecision // For metrics/debugging
-	mu            sync.RWMutex
+	modelRegistry   *Registry // Model registry for vLLM deployments
+	logger          *zap.Logger
+	decisions       []RoutingDecision // For metrics/debugging
+	mu              sync.RWMutex
 }
 
 // NewEngine creates a new routing engine.
@@ -53,9 +54,15 @@ func NewEngine(healthMonitor *HealthMonitor, backendRegistry *config.BackendRegi
 	return &Engine{
 		healthMonitor:   healthMonitor,
 		backendRegistry: backendRegistry,
+		modelRegistry:   nil, // Set via SetModelRegistry
 		logger:          logger,
 		decisions:       make([]RoutingDecision, 0),
 	}
+}
+
+// SetModelRegistry sets the model registry for dynamic vLLM routing.
+func (e *Engine) SetModelRegistry(registry *Registry) {
+	e.modelRegistry = registry
 }
 
 // SelectBackend selects a backend based on routing policy, weights, and health status.
@@ -174,6 +181,62 @@ func (e *Engine) RouteWithFailover(
 
 	// All backends failed
 	return nil, lastDecision, fmt.Errorf("all backends failed, last error: %w", lastErr)
+}
+
+// RouteToRegisteredModel routes a request to a model registered in the model registry.
+// This is used for vLLM deployments that are dynamically registered.
+// If the model is not found in the registry, it returns an error.
+func (e *Engine) RouteToRegisteredModel(
+	ctx context.Context,
+	modelName string,
+	request *BackendRequest,
+	client *BackendClient,
+) (*BackendResponse, *RoutingDecision, error) {
+	if e.modelRegistry == nil {
+		return nil, nil, fmt.Errorf("model registry not configured")
+	}
+
+	// Lookup model in registry
+	entry, err := e.modelRegistry.LookupModel(ctx, modelName)
+	if err != nil {
+		return nil, nil, fmt.Errorf("lookup model in registry: %w", err)
+	}
+
+	if entry == nil {
+		return nil, nil, fmt.Errorf("model not found in registry: %s", modelName)
+	}
+
+	// Check if model is ready
+	if entry.DeploymentStatus != "ready" {
+		return nil, nil, fmt.Errorf("model not ready: %s (status: %s)", modelName, entry.DeploymentStatus)
+	}
+
+	// Build backend endpoint from registry entry
+	endpoint := &BackendEndpoint{
+		ID:           fmt.Sprintf("vllm-%s-%s", entry.ModelName, entry.DeploymentEnvironment),
+		URI:          fmt.Sprintf("http://%s/v1/completions", entry.DeploymentEndpoint),
+		ModelVariant: entry.ModelName,
+		Timeout:      30 * time.Second,
+	}
+
+	decision := &RoutingDecision{
+		BackendID:     endpoint.ID,
+		DecisionType:  "REGISTRY",
+		Reason:        fmt.Sprintf("model registry lookup (environment: %s)", entry.DeploymentEnvironment),
+		Timestamp:     time.Now(),
+		AttemptNumber: 1,
+	}
+
+	// Forward request to the model endpoint
+	response, err := client.ForwardRequest(ctx, endpoint, request)
+	if err != nil {
+		decision.Reason = fmt.Sprintf("%s - error: %v", decision.Reason, err)
+		e.recordDecision(decision)
+		return nil, decision, fmt.Errorf("forward to registered model: %w", err)
+	}
+
+	e.recordDecision(decision)
+	return response, decision, nil
 }
 
 // getAvailableBackends returns available backends excluding degraded ones.

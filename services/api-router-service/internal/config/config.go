@@ -22,6 +22,9 @@ type Config struct {
 	TelemetryProtocol string `envconfig:"OTEL_EXPORTER_OTLP_PROTOCOL" default:"grpc"`
 	TelemetryInsecure bool   `envconfig:"OTEL_EXPORTER_OTLP_INSECURE" default:"true"`
 
+	// Database (PostgreSQL for model registry)
+	DatabaseURL string `envconfig:"DATABASE_URL" default:"postgres://postgres:postgres@localhost:5432/ai_aas_operational?sslmode=disable"`
+
 	// Redis
 	RedisAddr     string `envconfig:"REDIS_ADDR" default:"localhost:6379"`
 	RedisPassword string `envconfig:"REDIS_PASSWORD" default:""`
