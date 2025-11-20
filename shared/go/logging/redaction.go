@@ -12,7 +12,7 @@ var (
 	PasswordPattern = regexp.MustCompile(`(?i)(password[=:]\s*)([^\s"',}]+)`)
 
 	// TokenPattern matches API tokens and bearer tokens.
-	TokenPattern = regexp.MustCompile(`(?i)(Bearer\s+)([A-Za-z0-9\-_.]{20,})`)
+	TokenPattern = regexp.MustCompile(`(?i)(Bearer\s+)([A-Za-z0-9\-_.]+)`)
 
 	// ConnectionStringPattern matches database connection strings with credentials.
 	ConnectionStringPattern = regexp.MustCompile(`://[^:]+:[^@]+@`)
@@ -75,11 +75,7 @@ func RedactFields(fields map[string]interface{}) map[string]interface{} {
 		}
 
 		if isSensitive {
-			if str, ok := v.(string); ok {
-				redacted[k] = RedactString(str)
-			} else {
-				redacted[k] = "***REDACTED***"
-			}
+			redacted[k] = "***REDACTED***"
 		} else {
 			redacted[k] = v
 		}

@@ -1,15 +1,12 @@
 package logging
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"os"
 	"strings"
 	"testing"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -183,8 +180,6 @@ func TestLogger_WithOrgID(t *testing.T) {
 }
 
 func TestLogger_StructuredOutput(t *testing.T) {
-	var buf bytes.Buffer
-
 	cfg := Config{
 		ServiceName: "test-service",
 		Environment: "development",
