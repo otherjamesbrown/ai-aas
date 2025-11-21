@@ -118,3 +118,18 @@ annotations: {}
 preInstallChecks:
   enabled: true  # Enable GPU availability check before deployment
 
+# Persistent volume for model cache
+persistence:
+  enabled: false  # Disable by default
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 50Gi
+  mountPath: /root/.cache/huggingface
+  annotations: {}
+
+# Runtime class name (e.g., nvidia for NVIDIA GPU support)
+runtimeClassName: ""
+
+# Pod security context
+podSecurityContext: {}
+

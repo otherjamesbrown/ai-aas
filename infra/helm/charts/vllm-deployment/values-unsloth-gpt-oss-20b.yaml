@@ -45,6 +45,9 @@ tolerations:
     value: "true"
     effect: NoSchedule
 
+# Runtime class for NVIDIA GPU support
+runtimeClassName: nvidia
+
 # Health probes optimized for large model
 livenessProbe:
   httpGet:
@@ -100,6 +103,9 @@ vllm:
     # Model path
     - --model=unsloth/gpt-oss-20b
 
+    # Served model name (for API Router compatibility)
+    - --served-model-name=gpt-oss-20b
+
     # FP8 KV cache - CRITICAL for 20B model on 20GB GPU!
     # This reduces KV cache memory usage by 50%
     - --kv-cache-dtype=fp8
@@ -116,6 +122,10 @@ vllm:
     # thorough security review of the model's custom code.
     # See: https://huggingface.co/docs/hub/security-pickle
     - --trust-remote-code
+
+    # Bind to all interfaces
+    - --host=0.0.0.0
+    - --port=8000
 
     # Disable custom CUDA kernels if needed
     # - --disable-custom-all-reduce
