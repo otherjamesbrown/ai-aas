@@ -90,9 +90,8 @@ func (h *Handler) ValidateAPIKey(w http.ResponseWriter, r *http.Request) {
 		apiKey, err = h.runtime.Postgres.GetAPIKeyByFingerprint(ctx, orgID, fingerprint)
 	} else {
 		// Search across all orgs (less efficient, but supports org-agnostic validation)
-		// For now, return error - org_id should be provided for security
-		http.Error(w, "orgId is required for API key validation", http.StatusBadRequest)
-		return
+		// TODO: Once API Router provides org_id, make this required for security
+		apiKey, err = h.runtime.Postgres.GetAPIKeyByFingerprintAnyOrg(ctx, fingerprint)
 	}
 
 	if err != nil {

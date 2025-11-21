@@ -762,6 +762,27 @@ func (s *Store) GetAPIKeyByFingerprint(ctx context.Context, orgID uuid.UUID, fin
 	return out, err
 }
 
+// GetAPIKeyByFingerprintAnyOrg retrieves an API key by its fingerprint across all organizations.
+// This is less efficient than GetAPIKeyByFingerprint but supports org-agnostic validation.
+// Use this only when org_id is not available (e.g., API Router initial lookup).
+func (s *Store) GetAPIKeyByFingerprintAnyOrg(ctx context.Context, fingerprint string) (APIKey, error) {
+	row := s.pool.QueryRow(ctx, `
+		SELECT *
+		FROM api_keys
+		WHERE fingerprint = $1 AND deleted_at IS NULL
+		LIMIT 1
+	`, fingerprint)
+
+	key, err := scanAPIKey(row)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return APIKey{}, ErrNotFound
+		}
+		return APIKey{}, err
+	}
+	return key, nil
+}
+
 // ListAPIKeysForPrincipal lists all API keys for a given principal (user or service account) within an organization.
 func (s *Store) ListAPIKeysForPrincipal(ctx context.Context, orgID uuid.UUID, principalType PrincipalType, principalID uuid.UUID) ([]APIKey, error) {
 	var out []APIKey

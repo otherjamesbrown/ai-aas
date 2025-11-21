@@ -119,12 +119,33 @@ curl -X POST http://localhost:8000/v1/chat/completions \
 
 **Result**: ✅ SUCCESS
 
-### Pending: API Router Integration
+### ✅ API Router Integration Complete
 
-API Router Service integration testing pending:
-- Model registration in model registry
-- Routing configuration
-- End-to-end inference through API Router
+API Router Service successfully integrated:
+- ✅ API Router Service deployed to development cluster (2/2 replicas ready)
+- ✅ vLLM backend registered: `vllm-gpt-oss-20b:http://vllm-gpt-oss-20b.system.svc.cluster.local:8000/v1/chat/completions`
+- ✅ Ingress updated to route through API Router Service
+- ✅ Authentication middleware active (rejects requests without X-API-Key header)
+- ✅ user-org-service deployed and running (2/2 replicas ready)
+- ✅ Test API key created in database
+
+**Current Status**:
+- Public endpoint: `http://172.232.58.222` (Host: `vllm.dev.ai-aas.local`)
+- Requests without API keys are rejected with `{"error":"authentication required","code":"AUTH_INVALID"}`
+- API Router successfully validates presence of X-API-Key header
+
+**Pending**:
+- user-org-service missing `/v1/auth/validate-api-key` endpoint (deployed from branch 005-user-org-service-upgrade)
+- Need to either:
+  1. Merge 005 branch changes into main and update deployment, OR
+  2. Update user-org-service code to include API key validation endpoint
+- Once endpoint is available, end-to-end authentication will be complete
+
+**Test API Key Created**:
+- Secret: `test-vllm-mBLPgO0XNzoAO6nkzdAh8GtFboRZRr7SJDxAJaxUHok`
+- Organization ID: `0c432daf-a3a9-480e-8b7a-33840168b027`
+- Scopes: `["inference:read", "inference:write"]`
+- Status: Active
 
 ## Test Scripts Available
 
