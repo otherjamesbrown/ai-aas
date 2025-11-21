@@ -30,7 +30,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -211,7 +210,6 @@ func TestVLLMCompletionEndpoint(t *testing.T) {
 	assert.NotEmpty(t, choice.Message.Content, "message content should not be empty")
 	assert.NotEmpty(t, choice.FinishReason, "finish_reason should be set")
 
-	content := strings.ToLower(choice.Message.Content)
 	t.Logf("Model response: %s", choice.Message.Content)
 	t.Logf("Finish reason: %s", choice.FinishReason)
 

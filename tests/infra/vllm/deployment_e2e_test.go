@@ -120,7 +120,7 @@ func TestVLLMDeploymentE2E(t *testing.T) {
 
 	// Check if release already exists
 	checkCmd := exec.Command("helm", "list", "-n", namespace, "-o", "json")
-	output, err := checkCmd.CombinedOutput()
+	_, err = checkCmd.CombinedOutput()
 	if err != nil {
 		t.Logf("Warning: Failed to list helm releases: %v", err)
 	}
