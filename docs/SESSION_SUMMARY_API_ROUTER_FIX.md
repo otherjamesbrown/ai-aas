@@ -158,7 +158,7 @@ kubectl port-forward -n development svc/api-router-service-development-api-route
 
 # Test inference request with test API key
 curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "X-API-Key: test-vllm-key" \
+  -H "X-API-Key: <YOUR_TEST_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-oss-20b",

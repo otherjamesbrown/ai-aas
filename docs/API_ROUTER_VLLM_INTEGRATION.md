@@ -82,8 +82,8 @@ vLLM Service (system namespace)
 - **Slug**: test-org-vllm
 
 ### API Key
-- **Secret**: `test-vllm-mBLPgO0XNzoAO6nkzdAh8GtFboRZRr7SJDxAJaxUHok`
-- **Fingerprint**: `A-dJD6kxZf4Pvm2pKqyhdkA3I_E98EwCdVYbIiBHSwQ`
+- **Secret**: `<YOUR_TEST_API_KEY>`
+- **Fingerprint**: `<YOUR_API_KEY_FINGERPRINT>`
 - **Organization ID**: `0c432daf-a3a9-480e-8b7a-33840168b027`
 - **Scopes**: `["inference:read", "inference:write"]`
 - **Status**: Active
@@ -110,7 +110,7 @@ curl -X POST http://172.232.58.222/v1/chat/completions \
 ```bash
 curl -X POST http://172.232.58.222/v1/chat/completions \
   -H 'Host: vllm.dev.ai-aas.local' \
-  -H 'X-API-Key: test-vllm-mBLPgO0XNzoAO6nkzdAh8GtFboRZRr7SJDxAJaxUHok' \
+  -H 'X-API-Key: <YOUR_TEST_API_KEY>' \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "unsloth/gpt-oss-20b",

@@ -106,7 +106,7 @@ Register the model deployment using the admin CLI:
 
 ```bash
 # Set database connection
-export DATABASE_URL="postgresql://user:password@host:5432/operational"
+export DATABASE_URL="postgresql://<DB_USER>:<DB_PASSWORD>@<DB_HOST>:5432/<DB_NAME>"
 
 # Register the model
 admin-cli registry register \
