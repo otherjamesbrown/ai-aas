@@ -87,8 +87,8 @@ Deploy OTLP collector service to accept telemetry connections
 5. **/tmp/otel-collector.yaml** - OTLP collector deployment (created, not yet applied)
 
 ### Documentation Files (Created)
-6. **/home/dev/ai-aas/docs/API_ROUTER_POD_CRASH_INVESTIGATION.md** - Comprehensive investigation document
-7. **/home/dev/ai-aas/docs/SESSION_SUMMARY_API_ROUTER_FIX.md** - This file
+6. **docs/API_ROUTER_POD_CRASH_INVESTIGATION.md** - Comprehensive investigation document
+7. **docs/SESSION_SUMMARY_API_ROUTER_FIX.md** - This file
 
 ## Key Technical Discoveries
 
@@ -220,7 +220,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 ## References
 
-- Investigation Document: `/home/dev/ai-aas/docs/API_ROUTER_POD_CRASH_INVESTIGATION.md`
+- Investigation Document: `docs/API_ROUTER_POD_CRASH_INVESTIGATION.md`
 - Middleware Fix: `services/api-router-service/internal/api/public/middleware.go:264`
 - Observability Code: `shared/go/observability/otel.go`
 - OTLP Collector Manifest: `/tmp/otel-collector.yaml`

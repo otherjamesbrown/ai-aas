@@ -129,7 +129,7 @@ go test -v ./tests/infra/vllm -run TestVLLMDeploymentE2E
 Before running tests, deploy vLLM using the Helm chart:
 
 ```bash
-cd /home/dev/ai-aas/infra/helm/charts/vllm-deployment
+cd infra/helm/charts/vllm-deployment
 
 helm install gpt-oss-20b . \
   -f values-unsloth-gpt-oss-20b.yaml \

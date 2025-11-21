@@ -205,7 +205,7 @@ curl -X POST http://localhost:8000/v1/chat/completions \
 
 ## References
 
-- vLLM Deployment Spec: `/home/dev/ai-aas/specs/010-vllm-deployment/`
-- API Router Service: `/home/dev/ai-aas/services/api-router-service/`
-- user-org-service: `/home/dev/ai-aas/services/user-org-service/`
-- Testing Status: `/home/dev/ai-aas/specs/010-vllm-deployment/TESTING_STATUS.md`
+- vLLM Deployment Spec: `specs/010-vllm-deployment/`
+- API Router Service: `services/api-router-service/`
+- user-org-service: `services/user-org-service/`
+- Testing Status: `specs/010-vllm-deployment/TESTING_STATUS.md`
