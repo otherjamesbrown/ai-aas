@@ -49,8 +49,10 @@ type OpenAIChatCompletionRequest struct {
 
 // OpenAIMessage represents a chat message
 type OpenAIMessage struct {
-	Role    string `json:"role"`    // system, user, assistant
-	Content string `json:"content"`
+	Role             string `json:"role"`              // system, user, assistant
+	Content          string `json:"content"`
+	Reasoning        string `json:"reasoning"`         // Some models return reasoning instead of content
+	ReasoningContent string `json:"reasoning_content"` // Alternative reasoning field
 }
 
 // OpenAIChatCompletionResponse represents the response from /v1/chat/completions
@@ -207,14 +209,25 @@ func TestVLLMCompletionEndpoint(t *testing.T) {
 	choice := response.Choices[0]
 	assert.Equal(t, 0, choice.Index, "choice index should be 0")
 	assert.Equal(t, "assistant", choice.Message.Role, "message role should be assistant")
-	assert.NotEmpty(t, choice.Message.Content, "message content should not be empty")
 	assert.NotEmpty(t, choice.FinishReason, "finish_reason should be set")
 
-	t.Logf("Model response: %s", choice.Message.Content)
+	// Get the response text from any available field (content, reasoning, or reasoning_content)
+	responseText := choice.Message.Content
+	if responseText == "" {
+		responseText = choice.Message.Reasoning
+	}
+	if responseText == "" {
+		responseText = choice.Message.ReasoningContent
+	}
+
+	// At least one of these fields should contain text
+	assert.NotEmpty(t, responseText, "message should contain text in content, reasoning, or reasoning_content field")
+
+	t.Logf("Model response: %s", responseText)
 	t.Logf("Finish reason: %s", choice.FinishReason)
 
 	// Basic sanity check - response should contain some text
-	assert.Greater(t, len(choice.Message.Content), 0, "response should contain text")
+	assert.Greater(t, len(responseText), 0, "response should contain text")
 	t.Logf("✓ Response content is valid")
 
 	// SUCCESS
@@ -225,7 +238,7 @@ func TestVLLMCompletionEndpoint(t *testing.T) {
 	t.Logf("  Latency: %v", latency)
 	t.Logf("  Tokens: %d prompt + %d completion = %d total",
 		response.Usage.PromptTokens, response.Usage.CompletionTokens, response.Usage.TotalTokens)
-	t.Logf("  Response: %s", choice.Message.Content)
+	t.Logf("  Response: %s", responseText)
 	t.Log("═══════════════════════════════════════")
 }
 

@@ -237,8 +237,17 @@ func TestVLLMDeploymentE2E(t *testing.T) {
 		err = json.NewDecoder(completionResp.Body).Decode(&response)
 		require.NoError(t, err, "failed to decode response")
 
+		// Get the response text from any available field
+		responseText := response.Choices[0].Message.Content
+		if responseText == "" {
+			responseText = response.Choices[0].Message.Reasoning
+		}
+		if responseText == "" {
+			responseText = response.Choices[0].Message.ReasoningContent
+		}
+
 		t.Logf("  Response latency: %v", latency)
-		t.Logf("  Model response: %s", response.Choices[0].Message.Content)
+		t.Logf("  Model response: %s", responseText)
 		t.Logf("  Token usage: %d prompt + %d completion = %d total",
 			response.Usage.PromptTokens, response.Usage.CompletionTokens, response.Usage.TotalTokens)
 
@@ -246,7 +255,7 @@ func TestVLLMDeploymentE2E(t *testing.T) {
 		require.NotEmpty(t, response.ID, "response should have ID")
 		require.Equal(t, "chat.completion", response.Object, "object should be chat.completion")
 		require.Len(t, response.Choices, 1, "should have 1 choice")
-		require.NotEmpty(t, response.Choices[0].Message.Content, "response should have content")
+		require.NotEmpty(t, responseText, "response should have content")
 		require.Greater(t, response.Usage.TotalTokens, 0, "should have token usage")
 
 		// Check latency for simple query (may be slower on first request)
