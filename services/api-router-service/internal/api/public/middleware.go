@@ -42,7 +42,7 @@ func RateLimitMiddleware(rateLimiter *limiter.RateLimiter, auditLogger *usage.Au
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Get authenticated context (should be set by auth middleware)
-			authCtx := r.Context().Value("auth_context")
+			authCtx := r.Context().Value(authContextKey)
 			if authCtx == nil {
 				// No auth context, skip rate limiting (will fail in auth middleware)
 				next.ServeHTTP(w, r)
@@ -131,7 +131,7 @@ func BudgetMiddleware(budgetClient *limiter.BudgetClient, auditLogger *usage.Aud
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Get authenticated context
-			authCtx := r.Context().Value("auth_context")
+			authCtx := r.Context().Value(authContextKey)
 			if authCtx == nil {
 				next.ServeHTTP(w, r)
 				return
@@ -261,7 +261,7 @@ func AuthContextMiddleware(authenticator *auth.Authenticator, logger *zap.Logger
 				zap.String("api_key_id", authCtx.APIKeyID))
 
 			// Add auth context to request context
-			ctx := context.WithValue(r.Context(), "auth_context", authCtx)
+			ctx := context.WithValue(r.Context(), authContextKey, authCtx)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

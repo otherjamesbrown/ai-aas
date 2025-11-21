@@ -20,6 +20,9 @@ spec:
         app.kubernetes.io/environment: {{ .Values.environment | quote }}
     spec:
       serviceAccountName: {{ include "vllm-deployment.serviceAccountName" . }}
+      {{- if .Values.runtimeClassName }}
+      runtimeClassName: {{ .Values.runtimeClassName }}
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -28,22 +31,28 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: vllm
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
-            - python
+            - python3
             - -m
             - vllm.entrypoints.openai.api_server
           args:
-            - |
-              --model
-              {{ .Values.model.path | quote }}
-              --host
-              {{ .Values.vllm.host | quote }}
-              --port
-              {{ .Values.vllm.port | toString | quote }}
+            {{- if .Values.vllm.args }}
+            {{- range .Values.vllm.args }}
+            - {{ . | quote }}
+            {{- end }}
+            {{- else }}
+            - --model={{ .Values.model.path }}
+            - --host={{ .Values.vllm.host }}
+            - --port={{ .Values.vllm.port }}
+            {{- end }}
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}
@@ -86,14 +95,23 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
+            {{- if .Values.persistence.enabled }}
+            - name: model-cache
+              mountPath: {{ .Values.persistence.mountPath }}
+            {{- end }}
             {{- if .Values.configMap }}
             - name: config
               mountPath: /etc/vllm
             {{- end }}
-      {{- if .Values.configMap }}
       volumes:
+        {{- if .Values.persistence.enabled }}
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: {{ include "vllm-deployment.fullname" . }}-pvc
+        {{- end }}
+        {{- if .Values.configMap }}
         - name: config
           configMap:
             name: {{ include "vllm-deployment.fullname" . }}-config
-      {{- end }}
+        {{- end }}
 

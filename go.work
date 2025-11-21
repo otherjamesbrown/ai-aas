@@ -27,6 +27,7 @@ use (
 	./tests/infra/perf
 	./tests/infra/synthetics
 	./tests/infra/terratest
+	./tests/infra/vllm
 )
 
 replace github.com/ai-aas/shared-go v0.0.0 => ./shared/go

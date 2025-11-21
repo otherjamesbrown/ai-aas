@@ -1,0 +1,48 @@
+# Dockerfile for building user-org-service from monorepo root
+# Build context must be the repository root
+FROM golang:1.24-alpine AS builder
+
+WORKDIR /build
+
+# Copy workspace file and all module files
+COPY go.work ./
+COPY services/user-org-service/go.mod services/user-org-service/go.sum ./services/user-org-service/
+COPY shared/go/go.mod shared/go/go.sum ./shared/go/
+
+# Download dependencies
+WORKDIR /build/services/user-org-service
+RUN go mod download
+
+# Copy source code
+WORKDIR /build
+COPY services/user-org-service ./services/user-org-service/
+COPY shared/go ./shared/go/
+
+# Build both binaries
+WORKDIR /build/services/user-org-service
+RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/admin-api ./cmd/admin-api
+RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/reconciler ./cmd/reconciler
+
+# Install goose in builder stage
+RUN go install github.com/pressly/goose/v3/cmd/goose@latest
+
+# Final stage: minimal runtime image
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /app
+
+# Copy both binaries
+COPY --from=builder /bin/admin-api /app/admin-api
+COPY --from=builder /bin/reconciler /app/reconciler
+
+# Copy goose from builder
+COPY --from=builder /go/bin/goose /usr/local/bin/goose
+
+# Copy migrations directory for init container
+COPY services/user-org-service/migrations /app/migrations
+
+WORKDIR /app
+
+# No default entrypoint - each container specifies its own command/args
