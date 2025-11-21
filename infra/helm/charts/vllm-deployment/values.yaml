@@ -105,6 +105,13 @@ prometheus:
     enabled: true
     interval: 30s
     scrapeTimeout: 10s
+  alerts:
+    enabled: true
+    prometheusInstance: "kube-prometheus"
+    # Alert thresholds
+    latencyThreshold: 10  # seconds - P95 latency threshold
+    errorRateThreshold: 0.05  # 5% error rate threshold
+    cpuThreshold: 0.9  # 90% CPU usage threshold
 
 # Environment configuration
 environment: development
