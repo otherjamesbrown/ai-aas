@@ -8,9 +8,10 @@ The AI-AAS platform exposes a public HTTPS API that implements OpenAI-compatible
 
 ## Endpoint
 
-**Base URL**: `https://172.232.58.222`
-**Host Header**: `api.dev.ai-aas.local`
+**Base URL**: `https://api.dev.ai-aas.local`
 **Protocol**: HTTPS (TLS 1.2+)
+
+**Note**: For development environments where DNS is not configured, you can use the ingress IP address `172.232.58.222` with the `Host` header set to `api.dev.ai-aas.local`.
 
 ## Authentication
 
@@ -20,12 +21,7 @@ All API requests require authentication via API key:
 
 ### Development API Key
 
-For development/testing purposes:
-```
-X-API-Key: test-vllm-key
-```
-
-This key is pre-configured in the development environment for testing.
+For development/testing purposes, API keys can be obtained through the User-Org Service API or by querying the development database directly. Contact your platform administrator or refer to the platform setup documentation for instructions on creating test API keys in your development environment.
 
 ## Available Endpoints
 
@@ -37,9 +33,8 @@ OpenAI-compatible chat completions endpoint.
 
 **Example Request**:
 ```bash
-curl -k -X POST https://172.232.58.222/v1/chat/completions \
-  -H "Host: api.dev.ai-aas.local" \
-  -H "X-API-Key: test-vllm-key" \
+curl -X POST https://api.dev.ai-aas.local/v1/chat/completions \
+  -H "X-API-Key: <your-api-key>" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-oss-20b",
@@ -84,9 +79,8 @@ OpenAI-compatible text completions endpoint.
 
 **Example Request**:
 ```bash
-curl -k -X POST https://172.232.58.222/v1/completions \
-  -H "Host: api.dev.ai-aas.local" \
-  -H "X-API-Key: test-vllm-key" \
+curl -k -X POST https://api.dev.ai-aas.local/v1/completions \
+  -H "X-API-Key: <your-api-key>" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-oss-20b",
@@ -156,9 +150,8 @@ Messages must include `role` and `content`:
 
 To list available models:
 ```bash
-curl -k -X GET https://172.232.58.222/v1/models \
-  -H "Host: api.dev.ai-aas.local" \
-  -H "X-API-Key: test-vllm-key"
+curl -k -X GET https://api.dev.ai-aas.local/v1/models \
+  -H "X-API-Key: <your-api-key>"
 ```
 
 ## Error Responses
@@ -217,13 +210,10 @@ The API is OpenAI-compatible, so you can use official OpenAI client libraries:
 from openai import OpenAI
 
 client = OpenAI(
-    api_key="test-vllm-key",
-    base_url="https://172.232.58.222/v1",
-    default_headers={
-        "Host": "api.dev.ai-aas.local"
-    },
-    # For development with self-signed certs
-    http_client={"verify": False}
+    api_key="<your-api-key>",
+    base_url="https://api.dev.ai-aas.local/v1"
+    # For development with self-signed certs, add:
+    # http_client=httpx.Client(verify=False)
 )
 
 response = client.chat.completions.create(
@@ -241,16 +231,14 @@ print(response.choices[0].message.content)
 
 ```javascript
 import OpenAI from 'openai';
+// For development with self-signed certs
 import https from 'https';
 
 const client = new OpenAI({
-  apiKey: 'test-vllm-key',
-  baseURL: 'https://172.232.58.222/v1',
-  defaultHeaders: {
-    'Host': 'api.dev.ai-aas.local'
-  },
-  // For development with self-signed certs
-  httpAgent: new https.Agent({ rejectUnauthorized: false })
+  apiKey: '<your-api-key>',
+  baseURL: 'https://api.dev.ai-aas.local/v1'
+  // For development with self-signed certs, add:
+  // httpAgent: new https.Agent({ rejectUnauthorized: false })
 });
 
 const response = await client.chat.completions.create({
@@ -277,10 +265,13 @@ Rate limits are enforced per API key and are configurable per organization.
 ### 1. Always Use HTTPS
 The platform enforces HTTPS for security. HTTP requests will be redirected to HTTPS.
 
-### 2. Include Host Header
-When using IP addresses, always include the `Host` header:
+### 2. Using IP Addresses
+When DNS is not configured, you can use the ingress IP address with the `Host` header:
 ```bash
--H "Host: api.dev.ai-aas.local"
+curl -X POST https://172.232.58.222/v1/chat/completions \
+  -H "Host: api.dev.ai-aas.local" \
+  -H "X-API-Key: <your-api-key>" \
+  ...
 ```
 
 ### 3. Handle Rate Limits
@@ -321,7 +312,7 @@ X-RateLimit-Reset: 1732147260
 ### Certificate Errors
 For development environments with self-signed certificates, use `-k` flag in curl:
 ```bash
-curl -k https://172.232.58.222/v1/chat/completions ...
+curl -k https://api.dev.ai-aas.local/v1/chat/completions ...
 ```
 
 Or disable certificate verification in client libraries (development only).
@@ -335,9 +326,8 @@ kubectl get ingress -n development api-router-service-development-api-router-ser
 ### Authentication Errors
 Verify your API key is valid:
 ```bash
-curl -k -X POST https://172.232.58.222/v1/chat/completions \
-  -H "Host: api.dev.ai-aas.local" \
-  -H "X-API-Key: test-vllm-key" \
+curl -k -X POST https://api.dev.ai-aas.local/v1/chat/completions \
+  -H "X-API-Key: <your-api-key>" \
   -v
 ```
 
@@ -346,9 +336,8 @@ Check the response status code and error message.
 ### Model Not Available
 List available models to verify the model name:
 ```bash
-curl -k -X GET https://172.232.58.222/v1/models \
-  -H "Host: api.dev.ai-aas.local" \
-  -H "X-API-Key: test-vllm-key"
+curl -k -X GET https://api.dev.ai-aas.local/v1/models \
+  -H "X-API-Key: <your-api-key>"
 ```
 
 ## Architecture
