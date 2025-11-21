@@ -16,8 +16,8 @@ replicaCount: 1  # Single instance
 
 image:
   repository: vllm/vllm-openai
-  tag: "v0.6.3.post1"  # Pin to specific version for reproducible deployments
-  pullPolicy: IfNotPresent
+  tag: "latest"  # Use latest for unsloth/gpt-oss-20b compatibility
+  pullPolicy: Always
 
 model:
   path: "unsloth/gpt-oss-20b"
