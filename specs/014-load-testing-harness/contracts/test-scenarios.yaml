@@ -1,0 +1,672 @@
+# Test Scenarios Framework
+#
+# This document defines a pluggable, configuration-driven test scenario framework.
+# Test scenarios are defined in YAML/JSON templates loaded from ConfigMaps,
+# eliminating the need to rebuild binaries for new test types.
+#
+# Design Principles:
+# 1. NO CODE CHANGES for new scenarios - only config
+# 2. Template-based with variable substitution
+# 3. Weighted scenario mixing (e.g., 75% questions + 25% document analysis)
+# 4. Support for different API endpoints and request types
+# 5. Extensible without recompilation
+
+# ================================================================
+# SCENARIO DEFINITION
+# ================================================================
+
+# A scenario defines a type of test interaction with the platform
+# Examples: simple questions, document analysis, embeddings, chat sessions
+
+apiVersion: loadtest.ai-aas.dev/v1alpha1
+kind: TestScenario
+metadata:
+  name: simple-question-answering
+  description: "Basic question-and-answer interaction"
+
+spec:
+  # Scenario type determines the handler
+  # Built-in types: question, document-analysis, embedding, chat, mixed
+  type: question
+
+  # Endpoint to call
+  endpoint:
+    path: "/v1/chat/completions"
+    method: POST
+
+  # Request template with variable substitution
+  # Variables can use: {{.OrgID}}, {{.UserID}}, {{.Model}}, {{.Generated}}, etc.
+  requestTemplate: |
+    {
+      "model": "{{.Model}}",
+      "messages": [
+        {
+          "role": "user",
+          "content": "{{.GeneratedQuestion}}"
+        }
+      ],
+      "temperature": {{.Temperature}},
+      "max_tokens": {{.MaxTokens}}
+    }
+
+  # Variable definitions with generators
+  variables:
+    Model:
+      type: "selector"
+      values: ["gpt-4o", "gpt-3.5-turbo"]
+      weights: [70, 30]
+
+    Temperature:
+      type: "random_float"
+      min: 0.5
+      max: 0.9
+
+    MaxTokens:
+      type: "random_int"
+      min: 50
+      max: 200
+
+    GeneratedQuestion:
+      type: "question_generator"
+      strategy: "mixed"
+      seed: "{{.UserSeed}}"
+
+  # Response validation
+  validation:
+    - type: "status_code"
+      expected: 200
+
+    - type: "json_path"
+      path: "$.choices[0].message.content"
+      condition: "not_empty"
+
+    - type: "json_path"
+      path: "$.usage.total_tokens"
+      condition: "greater_than"
+      value: 0
+
+  # Metrics to extract from response
+  metrics:
+    - name: "completion_tokens"
+      jsonPath: "$.usage.completion_tokens"
+
+    - name: "prompt_tokens"
+      jsonPath: "$.usage.prompt_tokens"
+
+    - name: "model_used"
+      jsonPath: "$.model"
+
+---
+
+# ================================================================
+# DOCUMENT ANALYSIS SCENARIO
+# ================================================================
+
+apiVersion: loadtest.ai-aas.dev/v1alpha1
+kind: TestScenario
+metadata:
+  name: document-analysis
+  description: "Submit documents for analysis and summarization"
+
+spec:
+  type: document-analysis
+
+  endpoint:
+    path: "/v1/chat/completions"
+    method: POST
+
+  # Load documents from ConfigMap
+  documentSource:
+    type: "configmap"
+    name: "load-test-documents"
+    key: "documents.json"
+    # OR inline:
+    # type: "inline"
+    # documents:
+    #   - name: "sample.txt"
+    #     content: "..."
+
+  requestTemplate: |
+    {
+      "model": "{{.Model}}",
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are a helpful document analyzer."
+        },
+        {
+          "role": "user",
+          "content": "Please analyze this document:\n\n{{.DocumentContent}}\n\n{{.AnalysisPrompt}}"
+        }
+      ],
+      "temperature": 0.3,
+      "max_tokens": 500
+    }
+
+  variables:
+    Model:
+      type: "selector"
+      values: ["gpt-4o"]
+      weights: [100]
+
+    DocumentContent:
+      type: "document_selector"
+      source: "documentSource"
+      # Selection strategy: random, sequential, weighted
+      strategy: "random"
+
+    AnalysisPrompt:
+      type: "selector"
+      values:
+        - "Summarize the main points in 3 bullet points."
+        - "What are the key takeaways from this document?"
+        - "Identify any action items or recommendations."
+        - "What is the sentiment of this document?"
+      weights: [40, 30, 20, 10]
+
+  validation:
+    - type: "status_code"
+      expected: 200
+
+    - type: "json_path"
+      path: "$.choices[0].message.content"
+      condition: "min_length"
+      value: 50  # At least 50 characters
+
+    - type: "response_time"
+      max_milliseconds: 30000  # 30 seconds
+
+  metrics:
+    - name: "document_size_chars"
+      source: "variable"
+      variable: "DocumentContent"
+      transform: "length"
+
+    - name: "summary_length"
+      jsonPath: "$.choices[0].message.content"
+      transform: "length"
+
+    - name: "analysis_time"
+      source: "latency"
+
+---
+
+# ================================================================
+# EMBEDDING SCENARIO
+# ================================================================
+
+apiVersion: loadtest.ai-aas.dev/v1alpha1
+kind: TestScenario
+metadata:
+  name: text-embedding
+  description: "Generate embeddings for text chunks"
+
+spec:
+  type: embedding
+
+  endpoint:
+    path: "/v1/embeddings"
+    method: POST
+
+  requestTemplate: |
+    {
+      "model": "text-embedding-ada-002",
+      "input": "{{.TextChunk}}"
+    }
+
+  variables:
+    TextChunk:
+      type: "text_generator"
+      method: "lorem"  # Generate lorem ipsum
+      min_words: 50
+      max_words: 500
+
+  validation:
+    - type: "status_code"
+      expected: 200
+
+    - type: "json_path"
+      path: "$.data[0].embedding"
+      condition: "is_array"
+
+  metrics:
+    - name: "embedding_dimensions"
+      jsonPath: "$.data[0].embedding"
+      transform: "array_length"
+
+    - name: "text_length"
+      source: "variable"
+      variable: "TextChunk"
+      transform: "length"
+
+---
+
+# ================================================================
+# MULTI-TURN CHAT SCENARIO
+# ================================================================
+
+apiVersion: loadtest.ai-aas.dev/v1alpha1
+kind: TestScenario
+metadata:
+  name: multi-turn-conversation
+  description: "Engage in multi-turn conversations with context"
+
+spec:
+  type: chat
+
+  # Number of turns in conversation
+  conversationDepth:
+    min: 3
+    max: 10
+    distribution: "gaussian"
+
+  endpoint:
+    path: "/v1/chat/completions"
+    method: POST
+
+  # Initial message template
+  initialMessageTemplate: |
+    {
+      "model": "{{.Model}}",
+      "messages": [
+        {
+          "role": "user",
+          "content": "{{.InitialQuestion}}"
+        }
+      ],
+      "temperature": 0.7,
+      "max_tokens": 150
+    }
+
+  # Follow-up message template
+  followUpMessageTemplate: |
+    {
+      "model": "{{.Model}}",
+      "messages": {{.ConversationHistory}},
+      "temperature": 0.7,
+      "max_tokens": 150
+    }
+
+  variables:
+    Model:
+      type: "selector"
+      values: ["gpt-4o"]
+      weights: [100]
+
+    InitialQuestion:
+      type: "question_generator"
+      strategy: "mixed"
+      seed: "{{.UserSeed}}"
+
+    FollowUpQuestion:
+      type: "follow_up_generator"
+      based_on: "previous_response"
+      templates:
+        - "Can you elaborate on {{.ExtractedTopic}}?"
+        - "What else can you tell me about {{.ExtractedTopic}}?"
+        - "Why is that the case?"
+        - "Can you give me an example?"
+
+  validation:
+    - type: "status_code"
+      expected: 200
+
+  metrics:
+    - name: "conversation_length"
+      source: "conversation_depth"
+
+    - name: "total_tokens_in_conversation"
+      source: "accumulated"
+      jsonPath: "$.usage.total_tokens"
+
+---
+
+# ================================================================
+# SCENARIO MIX CONFIGURATION
+# ================================================================
+
+# Define how scenarios are mixed during load test
+
+apiVersion: loadtest.ai-aas.dev/v1
+kind: LoadTestScenario
+metadata:
+  name: mixed-workload-realistic
+  namespace: load-testing
+
+spec:
+  # ... (organizations, users, etc. as before) ...
+
+  # NEW: Scenario Mix Configuration
+  scenarioMix:
+    # Scenarios to use in this test
+    scenarios:
+      - name: "simple-question-answering"
+        weight: 75  # 75% of requests
+
+      - name: "document-analysis"
+        weight: 20  # 20% of requests
+
+      - name: "text-embedding"
+        weight: 5   # 5% of requests
+
+    # Selection strategy
+    # - weighted_random: Random selection based on weights
+    # - round_robin: Cycle through scenarios
+    # - per_user: Each user assigned one scenario type
+    selectionStrategy: "weighted_random"
+
+    # Optional: Scenarios loaded from ConfigMap
+    scenarioSource:
+      type: "configmap"
+      name: "load-test-scenarios"
+      namespace: "load-testing"
+
+  # ... (rest of config) ...
+
+---
+
+# ================================================================
+# SCENARIO CONFIGMAP STRUCTURE
+# ================================================================
+
+# Scenarios can be stored in ConfigMaps for easy updates
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: load-test-scenarios
+  namespace: load-testing
+data:
+  scenarios.yaml: |
+    scenarios:
+      - name: "simple-question-answering"
+        type: "question"
+        endpoint: { path: "/v1/chat/completions", method: "POST" }
+        requestTemplate: |
+          {
+            "model": "{{.Model}}",
+            "messages": [{"role": "user", "content": "{{.GeneratedQuestion}}"}],
+            "temperature": {{.Temperature}},
+            "max_tokens": {{.MaxTokens}}
+          }
+        variables:
+          Model:
+            type: "selector"
+            values: ["gpt-4o", "gpt-3.5-turbo"]
+            weights: [70, 30]
+          Temperature:
+            type: "random_float"
+            min: 0.5
+            max: 0.9
+          MaxTokens:
+            type: "random_int"
+            min: 50
+            max: 200
+          GeneratedQuestion:
+            type: "question_generator"
+            strategy: "mixed"
+            seed: "{{.UserSeed}}"
+        validation:
+          - { type: "status_code", expected: 200 }
+          - { type: "json_path", path: "$.choices[0].message.content", condition: "not_empty" }
+        metrics:
+          - { name: "completion_tokens", jsonPath: "$.usage.completion_tokens" }
+          - { name: "prompt_tokens", jsonPath: "$.usage.prompt_tokens" }
+
+      - name: "document-analysis"
+        # ... (as above) ...
+
+  documents.json: |
+    [
+      {
+        "name": "company-policy.txt",
+        "content": "Our company policy states that all employees must...",
+        "category": "policy",
+        "size": 1542
+      },
+      {
+        "name": "meeting-notes.txt",
+        "content": "Meeting notes from 2024-01-15:\n- Discussed Q1 goals...",
+        "category": "notes",
+        "size": 823
+      },
+      {
+        "name": "technical-spec.md",
+        "content": "# System Architecture\n\nThe platform consists of...",
+        "category": "technical",
+        "size": 4521
+      }
+    ]
+
+---
+
+# ================================================================
+# VARIABLE TYPES REFERENCE
+# ================================================================
+
+# Built-in variable types supported by the framework
+
+variableTypes:
+  # Selector: Pick from list with weights
+  selector:
+    values: ["option1", "option2", "option3"]
+    weights: [50, 30, 20]  # Optional, defaults to equal
+
+  # Random Integer
+  random_int:
+    min: 1
+    max: 100
+
+  # Random Float
+  random_float:
+    min: 0.0
+    max: 1.0
+    precision: 2  # Decimal places
+
+  # Question Generator (built-in strategies)
+  question_generator:
+    strategy: "mixed"  # mixed, technical, historical, etc.
+    seed: "{{.UserSeed}}"
+
+  # Document Selector
+  document_selector:
+    source: "documentSource"  # Reference to documentSource
+    strategy: "random"         # random, sequential, weighted
+
+  # Text Generator
+  text_generator:
+    method: "lorem"     # lorem, words, sentences, paragraphs
+    min_words: 50
+    max_words: 500
+
+  # Follow-up Generator (context-aware)
+  follow_up_generator:
+    based_on: "previous_response"
+    templates:
+      - "Tell me more about {{.ExtractedTopic}}"
+      - "Why is that?"
+
+  # File Loader
+  file_loader:
+    path: "data/sample.txt"
+    encoding: "utf-8"
+
+  # Template String
+  template:
+    value: "User {{.UserID}} from {{.OrgID}}"
+
+  # Current Timestamp
+  timestamp:
+    format: "2006-01-02T15:04:05Z"
+
+  # UUID Generator
+  uuid:
+    version: 4
+
+  # Counter (incremental)
+  counter:
+    start: 1
+    step: 1
+
+---
+
+# ================================================================
+# EXAMPLE: REALISTIC WORKLOAD MIX
+# ================================================================
+
+apiVersion: loadtest.ai-aas.dev/v1
+kind: LoadTestScenario
+metadata:
+  name: production-traffic-simulation
+  namespace: load-testing
+
+spec:
+  organizations:
+    count: 3
+    namingPattern: "prod-sim-org-{index}"
+
+  users:
+    perOrg: { min: 20, max: 30, distribution: "gaussian" }
+    namingPattern: "user-{org}-{index}"
+
+  apiKeys:
+    perUser: 1
+
+  # Scenario Mix: Simulate production traffic patterns
+  scenarioMix:
+    scenarios:
+      # Most users ask simple questions
+      - name: "simple-question-answering"
+        weight: 60
+
+      # Some users submit documents for analysis
+      - name: "document-analysis"
+        weight: 25
+
+      # Some engage in multi-turn conversations
+      - name: "multi-turn-conversation"
+        weight: 10
+
+      # Few users generate embeddings
+      - name: "text-embedding"
+        weight: 5
+
+    selectionStrategy: "weighted_random"
+
+    # Load scenarios from ConfigMap (no code changes needed!)
+    scenarioSource:
+      type: "configmap"
+      name: "production-scenarios"
+      namespace: "load-testing"
+
+  userBehavior:
+    # Think time still applies between requests
+    thinkTimeSeconds: { base: 7, variance: 3, distribution: "gaussian", min: 2, max: 20 }
+
+    # Session duration
+    sessionDuration: { min: "10m", max: "60m" }
+
+  loadPattern:
+    type: "ramp-up"
+    phases:
+      - { name: "warm-up", duration: "5m", targetActiveUsers: 20 }
+      - { name: "ramp", duration: "15m", targetActiveUsers: 200 }
+      - { name: "sustain", duration: "60m", targetActiveUsers: 200 }
+      - { name: "cool-down", duration: "10m", targetActiveUsers: 20 }
+
+  workers:
+    replicas: 10
+    usersPerWorker: 20
+    resources:
+      requests: { cpu: "500m", memory: "512Mi" }
+      limits: { cpu: "1000m", memory: "1Gi" }
+
+  targets:
+    apiRouterUrl: "http://api-router-service.production.svc.cluster.local:8080"
+    userOrgUrl: "http://user-org-service.production.svc.cluster.local:8081"
+
+  metrics:
+    pushgatewayUrl: "http://prometheus-pushgateway.observability.svc:9091"
+    exportInterval: "10s"
+    capture:
+      - latency_percentiles
+      - token_usage
+      - cost_per_user
+      - error_rate
+      - scenario_distribution  # NEW: Track which scenarios were used
+      - scenario_performance   # NEW: Performance by scenario type
+
+  limits:
+    maxCostUsd: 500.00
+    maxErrorRate: 0.05
+    maxDuration: "2h"
+
+  cleanup:
+    onCompletion: true
+    retainMetrics: true
+    exportResultsTo: "s3://loadtest-results/production-sim-{testRunId}/"
+
+---
+
+# ================================================================
+# WORKER IMPLEMENTATION NOTES
+# ================================================================
+
+# The worker binary implements a scenario executor that:
+#
+# 1. Loads scenario definitions from ConfigMap
+# 2. Parses templates and variable definitions
+# 3. For each user request:
+#    a. Selects scenario based on weights
+#    b. Generates variable values
+#    c. Renders request template
+#    d. Sends HTTP request
+#    e. Validates response
+#    f. Extracts metrics
+#    g. Records results
+#
+# 4. NO CODE CHANGES needed for new scenarios!
+#    Just update ConfigMap and restart workers
+
+# Pseudo-code for scenario execution:
+
+# func (w *Worker) simulateUser(ctx context.Context, user *User) {
+#   for !sessionComplete {
+#     // 1. Select scenario
+#     scenario := w.scenarioSelector.Select()
+#
+#     // 2. Generate variables
+#     vars := w.variableGenerator.Generate(scenario.Variables, user)
+#
+#     // 3. Render request
+#     request := scenario.RenderRequest(vars)
+#
+#     // 4. Send request
+#     response, latency := w.httpClient.Send(request)
+#
+#     // 5. Validate
+#     errs := scenario.Validate(response)
+#
+#     // 6. Extract metrics
+#     metrics := scenario.ExtractMetrics(response, latency)
+#
+#     // 7. Record
+#     w.metricsRecorder.Record(user, scenario, metrics)
+#
+#     // 8. Think time
+#     time.Sleep(w.calculateThinkTime())
+#   }
+# }
+
+# ================================================================
+# BENEFITS OF TEMPLATE-BASED APPROACH
+# ================================================================
+
+# 1. NO RECOMPILATION: Add new test types via ConfigMap updates
+# 2. RAPID ITERATION: Change scenarios without rebuilding images
+# 3. ENVIRONMENT-SPECIFIC: Different scenarios for dev/staging/prod
+# 4. FLEXIBLE MIXING: Adjust scenario weights dynamically
+# 5. CENTRALIZED CONFIG: All scenarios in one place
+# 6. VERSION CONTROLLED: Scenario definitions in Git
+# 7. A/B TESTING: Easy to compare different scenario mixes
+# 8. PRODUCTION REPLAY: Capture real traffic patterns as scenarios

@@ -1,0 +1,519 @@
+# LLM Performance Metrics Contract
+#
+# This document defines specialized metrics for evaluating real-world
+# LLM/vLLM performance characteristics including:
+# - Time to First Token (TTFT)
+# - Tokens per Second (TPS)
+# - Generation throughput
+# - Model-specific performance
+#
+# These metrics are critical for understanding production LLM behavior
+# and optimizing inference infrastructure.
+
+# ================================================================
+# TIME TO FIRST TOKEN (TTFT) METRICS
+# ================================================================
+
+# Time to first token latency
+# Type: Histogram
+# Value: Time from request sent to first token received (milliseconds)
+# This measures the "perceived latency" - how long users wait before
+# seeing the first response token.
+#
+# Buckets optimized for typical LLM response times:
+# - 50-200ms: Excellent (cached or very fast)
+# - 200-500ms: Good (typical warm model)
+# - 500-1000ms: Acceptable (larger models)
+# - 1000-2000ms: Slow (cold start or overloaded)
+# - 2000ms+: Poor (needs investigation)
+loadtest_llm_time_to_first_token_milliseconds:
+  type: histogram
+  help: "Time from request to first token received (TTFT)"
+  labels:
+    - test_run_id
+    - worker_id
+    - org_id
+    - user_id
+    - model           # gpt-4o, gpt-3.5-turbo, etc.
+    - backend_id      # Specific vLLM deployment
+    - prompt_tokens   # Bucketed: 0-100, 100-500, 500-1000, 1000+
+  buckets: [50, 100, 200, 300, 500, 750, 1000, 1500, 2000, 3000, 5000, 10000]
+
+  # Example measurements:
+  # - Empty prompt: ~100ms (minimal processing)
+  # - Short prompt (50 tokens): ~200ms
+  # - Medium prompt (500 tokens): ~500ms
+  # - Long prompt (2000 tokens): ~1000ms+
+
+# TTFT percentiles by model (pre-aggregated)
+# Type: Summary
+# Value: TTFT in milliseconds
+loadtest_llm_ttft_summary_milliseconds:
+  type: summary
+  help: "TTFT distribution summary for performance analysis"
+  labels:
+    - test_run_id
+    - model
+    - backend_id
+  quantiles:
+    - 0.5: 0.05    # p50 - median user experience
+    - 0.75: 0.03   # p75 - above average
+    - 0.9: 0.01    # p90 - slow users
+    - 0.95: 0.01   # p95 - very slow users
+    - 0.99: 0.001  # p99 - worst case
+
+# ================================================================
+# TOKENS PER SECOND (TPS) METRICS
+# ================================================================
+
+# Generation tokens per second
+# Type: Histogram
+# Value: Completion tokens generated per second for this request
+# Calculation: completion_tokens / generation_time_seconds
+#
+# Buckets based on typical vLLM performance:
+# - <10 TPS: Very slow (investigate)
+# - 10-30 TPS: Slow (overloaded or large model)
+# - 30-60 TPS: Good (typical GPU performance)
+# - 60-100 TPS: Excellent (optimized or smaller model)
+# - 100+ TPS: Outstanding (batched or cached)
+loadtest_llm_tokens_per_second:
+  type: histogram
+  help: "Generation speed in tokens per second"
+  labels:
+    - test_run_id
+    - worker_id
+    - org_id
+    - user_id
+    - model
+    - backend_id
+    - completion_tokens  # Bucketed: 0-50, 50-200, 200-500, 500+
+  buckets: [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 150, 200]
+
+  # Example measurements by model:
+  # gpt-3.5-turbo: ~60-80 TPS (fast)
+  # gpt-4o: ~40-60 TPS (medium)
+  # Large custom models: ~20-40 TPS (slower)
+
+# Average TPS by backend (real-time gauge)
+# Type: Gauge
+# Value: Current moving average TPS for this backend
+loadtest_llm_backend_avg_tps:
+  type: gauge
+  help: "Current average tokens per second for backend"
+  labels:
+    - test_run_id
+    - backend_id
+    - model
+    - window        # 1m, 5m, 15m moving average
+
+# TPS efficiency (actual vs theoretical max)
+# Type: Gauge
+# Value: Ratio of actual TPS to theoretical GPU max (0.0-1.0)
+# Helps identify if GPU is being fully utilized
+loadtest_llm_tps_efficiency_ratio:
+  type: gauge
+  help: "TPS efficiency ratio (actual / theoretical max)"
+  labels:
+    - test_run_id
+    - backend_id
+    - model
+    - gpu_type      # A100, V100, T4, etc.
+
+# ================================================================
+# GENERATION TIMING BREAKDOWN
+# ================================================================
+
+# Total generation time (end-to-end)
+# Type: Histogram
+# Value: Total time from request to final token (seconds)
+# This is different from TTFT - measures complete generation time
+loadtest_llm_generation_total_seconds:
+  type: histogram
+  help: "Total time to generate complete response"
+  labels:
+    - test_run_id
+    - worker_id
+    - model
+    - backend_id
+    - completion_tokens  # Bucketed
+  buckets: [0.1, 0.5, 1, 2, 5, 10, 20, 30, 60, 120]
+
+# Prompt processing time
+# Type: Histogram
+# Value: Time to process input prompt (milliseconds)
+# Includes tokenization and encoding
+loadtest_llm_prompt_processing_milliseconds:
+  type: histogram
+  help: "Time spent processing input prompt"
+  labels:
+    - test_run_id
+    - model
+    - backend_id
+    - prompt_tokens  # Bucketed
+  buckets: [10, 25, 50, 100, 200, 500, 1000, 2000, 5000]
+
+# Decoding time per token
+# Type: Histogram
+# Value: Average milliseconds per token during generation
+# Calculation: (generation_time - ttft) / completion_tokens
+loadtest_llm_decoding_time_per_token_milliseconds:
+  type: histogram
+  help: "Average decoding time per generated token"
+  labels:
+    - test_run_id
+    - model
+    - backend_id
+  buckets: [5, 10, 15, 20, 30, 50, 100, 200]
+
+# ================================================================
+# TOKEN USAGE METRICS (DETAILED)
+# ================================================================
+
+# Prompt tokens distribution
+# Type: Histogram
+# Value: Number of prompt tokens in request
+loadtest_llm_prompt_tokens:
+  type: histogram
+  help: "Distribution of prompt token counts"
+  labels:
+    - test_run_id
+    - model
+    - backend_id
+  buckets: [10, 50, 100, 200, 500, 1000, 2000, 4000, 8000, 16000]
+
+# Completion tokens distribution
+# Type: Histogram
+# Value: Number of completion tokens generated
+loadtest_llm_completion_tokens:
+  type: histogram
+  help: "Distribution of completion token counts"
+  labels:
+    - test_run_id
+    - model
+    - backend_id
+    - finish_reason  # stop, length, content_filter, error
+  buckets: [10, 25, 50, 100, 200, 500, 1000, 2000]
+
+# Token efficiency (completion / prompt ratio)
+# Type: Histogram
+# Value: Ratio of completion to prompt tokens
+# Useful for understanding response verbosity
+loadtest_llm_token_ratio:
+  type: histogram
+  help: "Ratio of completion tokens to prompt tokens"
+  labels:
+    - test_run_id
+    - model
+  buckets: [0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0, 10.0]
+
+# ================================================================
+# BACKEND PERFORMANCE METRICS
+# ================================================================
+
+# Backend requests in flight
+# Type: Gauge
+# Value: Current number of concurrent requests to this backend
+loadtest_llm_backend_requests_in_flight:
+  type: gauge
+  help: "Concurrent requests currently being processed by backend"
+  labels:
+    - test_run_id
+    - backend_id
+    - model
+
+# Backend queue time
+# Type: Histogram
+# Value: Time request spent queued before processing (milliseconds)
+# High queue time indicates backend is saturated
+loadtest_llm_backend_queue_time_milliseconds:
+  type: histogram
+  help: "Time request spent in backend queue"
+  labels:
+    - test_run_id
+    - backend_id
+    - model
+  buckets: [0, 10, 25, 50, 100, 250, 500, 1000, 2000, 5000]
+
+# Backend saturation indicator
+# Type: Gauge
+# Value: 0-1.0 representing backend load (0=idle, 1=saturated)
+loadtest_llm_backend_saturation_ratio:
+  type: gauge
+  help: "Backend saturation ratio (0=idle, 1=saturated)"
+  labels:
+    - test_run_id
+    - backend_id
+    - model
+
+# GPU memory utilization
+# Type: Gauge
+# Value: Percentage of GPU memory used (0-100)
+# Note: Requires backend to expose this metric
+loadtest_llm_gpu_memory_utilization_percent:
+  type: gauge
+  help: "GPU memory utilization percentage"
+  labels:
+    - test_run_id
+    - backend_id
+    - gpu_index     # 0, 1, 2, etc. for multi-GPU
+    - model
+
+# ================================================================
+# STREAMING RESPONSE METRICS
+# ================================================================
+
+# Streaming chunk latency
+# Type: Histogram
+# Value: Time between consecutive streaming chunks (milliseconds)
+# Measures consistency of streaming responses
+loadtest_llm_streaming_chunk_latency_milliseconds:
+  type: histogram
+  help: "Latency between consecutive streaming response chunks"
+  labels:
+    - test_run_id
+    - model
+    - backend_id
+  buckets: [5, 10, 20, 50, 100, 200, 500, 1000]
+
+# Streaming chunks per second
+# Type: Gauge
+# Value: Rate of streaming chunks being delivered
+loadtest_llm_streaming_chunks_per_second:
+  type: gauge
+  help: "Rate of streaming response chunks"
+  labels:
+    - test_run_id
+    - model
+    - backend_id
+
+# Streaming interruptions
+# Type: Counter
+# Value: Number of times streaming was interrupted
+loadtest_llm_streaming_interruptions_total:
+  type: counter
+  help: "Total streaming response interruptions"
+  labels:
+    - test_run_id
+    - model
+    - backend_id
+    - interruption_reason  # timeout, client_disconnect, error
+
+# ================================================================
+# MODEL-SPECIFIC PERFORMANCE
+# ================================================================
+
+# Model warmup detection
+# Type: Counter
+# Value: Number of requests that appeared to hit cold model
+# Detected by unusually high TTFT (>2x median)
+loadtest_llm_cold_start_detections_total:
+  type: counter
+  help: "Detected cold starts (unusually high TTFT)"
+  labels:
+    - test_run_id
+    - model
+    - backend_id
+
+# Context window utilization
+# Type: Histogram
+# Value: Percentage of max context window used (0-100)
+# Important for understanding if hitting context limits
+loadtest_llm_context_window_utilization_percent:
+  type: histogram
+  help: "Percentage of model context window utilized"
+  labels:
+    - test_run_id
+    - model
+    - backend_id
+  buckets: [10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 99, 100]
+
+# Finish reason distribution
+# Type: Counter
+# Value: Count of each finish reason
+# Helps identify if hitting length limits or content filters
+loadtest_llm_finish_reason_total:
+  type: counter
+  help: "Distribution of completion finish reasons"
+  labels:
+    - test_run_id
+    - model
+    - backend_id
+    - finish_reason  # stop, length, content_filter, tool_calls, error
+
+# ================================================================
+# COST PER PERFORMANCE METRICS
+# ================================================================
+
+# Cost per 1M tokens
+# Type: Gauge
+# Value: Actual cost per 1M tokens based on observed usage
+loadtest_llm_cost_per_million_tokens_usd:
+  type: gauge
+  help: "Actual cost per 1M tokens"
+  labels:
+    - test_run_id
+    - model
+    - token_type    # prompt, completion
+
+# Cost per second of generation
+# Type: Gauge
+# Value: Cost per second of GPU time
+# Useful for comparing efficiency across models
+loadtest_llm_cost_per_generation_second_usd:
+  type: gauge
+  help: "Cost per second of generation time"
+  labels:
+    - test_run_id
+    - model
+    - backend_id
+
+# Cost efficiency (TPS per dollar)
+# Type: Gauge
+# Value: Tokens per second per dollar spent
+# Higher is better
+loadtest_llm_cost_efficiency_tps_per_usd:
+  type: gauge
+  help: "Cost efficiency: tokens per second per dollar"
+  labels:
+    - test_run_id
+    - model
+    - backend_id
+
+# ================================================================
+# COMPARATIVE PERFORMANCE METRICS
+# ================================================================
+
+# Model performance ranking
+# Type: Gauge
+# Value: Normalized score (0-100) comparing models
+# Based on weighted combination of TTFT, TPS, and cost
+loadtest_llm_performance_score:
+  type: gauge
+  help: "Normalized performance score for model comparison"
+  labels:
+    - test_run_id
+    - model
+    - backend_id
+    - metric_type   # ttft, tps, cost, composite
+
+# Performance vs baseline
+# Type: Gauge
+# Value: Percentage difference from baseline (-100 to +100)
+# Negative = worse, Positive = better
+loadtest_llm_performance_vs_baseline_percent:
+  type: gauge
+  help: "Performance difference from baseline (%)"
+  labels:
+    - test_run_id
+    - model
+    - backend_id
+    - metric        # ttft, tps, cost
+    - baseline_id   # Reference test run
+
+# ================================================================
+# EXAMPLE PROMETHEUS QUERIES FOR LLM METRICS
+# ================================================================
+
+# Average time to first token by model:
+# avg(loadtest_llm_ttft_summary_milliseconds{quantile="0.5"}) by (model)
+
+# P95 TTFT for specific model:
+# loadtest_llm_ttft_summary_milliseconds{model="gpt-4o",quantile="0.95"}
+
+# Average tokens per second by backend:
+# avg(loadtest_llm_tokens_per_second) by (backend_id)
+
+# Backend saturation over time:
+# loadtest_llm_backend_saturation_ratio
+
+# Cost efficiency comparison across models:
+# loadtest_llm_cost_efficiency_tps_per_usd
+
+# Detect performance degradation:
+# (loadtest_llm_ttft_summary_milliseconds{quantile="0.95"}
+#  -
+#  loadtest_llm_ttft_summary_milliseconds{quantile="0.95"} offset 1h)
+#  / loadtest_llm_ttft_summary_milliseconds{quantile="0.95"} offset 1h * 100
+
+# Identify bottlenecks (queue time vs processing time):
+# loadtest_llm_backend_queue_time_milliseconds > loadtest_llm_time_to_first_token_milliseconds
+
+# Model with best TPS/$ ratio:
+# topk(1, loadtest_llm_cost_efficiency_tps_per_usd)
+
+# Streaming consistency:
+# stddev(loadtest_llm_streaming_chunk_latency_milliseconds) by (model)
+
+# Context window pressure:
+# avg(loadtest_llm_context_window_utilization_percent) by (model)
+
+# ================================================================
+# DASHBOARD PANELS
+# ================================================================
+
+# Recommended Grafana panels for LLM Performance dashboard:
+
+# 1. TTFT Distribution
+#    - Heatmap of TTFT over time
+#    - Grouped by model
+#    - Color scale: green (<500ms) to red (>2000ms)
+
+# 2. Tokens per Second
+#    - Time series of avg TPS
+#    - Multiple series per model/backend
+#    - Include baseline reference line
+
+# 3. Performance Comparison Table
+#    - Models as rows
+#    - Columns: p50 TTFT, p95 TTFT, avg TPS, cost/1M tokens, efficiency score
+#    - Sortable, with color coding
+
+# 4. Backend Health
+#    - Gauge of backend saturation
+#    - Requests in flight
+#    - Queue time trend
+
+# 5. Cost Analysis
+#    - Cost per model over time
+#    - Cost efficiency (TPS/$)
+#    - Projected daily/monthly spend
+
+# 6. Token Usage
+#    - Histogram of prompt sizes
+#    - Histogram of completion sizes
+#    - Token ratio distribution
+
+# 7. Streaming Performance
+#    - Chunk latency consistency
+#    - Interruption rate
+#    - Chunks per second
+
+# 8. Quality Metrics
+#    - Finish reason breakdown (pie chart)
+#    - Cold start detection rate
+#    - Context window utilization
+
+# ================================================================
+# ALERTING RULES
+# ================================================================
+
+# Alert if TTFT p95 exceeds 2 seconds:
+# alert: HighTimeToFirstToken
+# expr: loadtest_llm_ttft_summary_milliseconds{quantile="0.95"} > 2000
+# for: 5m
+
+# Alert if TPS drops below 20:
+# alert: LowTokensPerSecond
+# expr: avg(loadtest_llm_tokens_per_second) < 20
+# for: 5m
+
+# Alert if backend saturation exceeds 90%:
+# alert: BackendSaturated
+# expr: loadtest_llm_backend_saturation_ratio > 0.9
+# for: 5m
+
+# Alert if cost efficiency degrades by >25%:
+# alert: CostEfficiencyDegradation
+# expr: (loadtest_llm_cost_efficiency_tps_per_usd - loadtest_llm_cost_efficiency_tps_per_usd offset 1h) / loadtest_llm_cost_efficiency_tps_per_usd offset 1h < -0.25
+# for: 15m

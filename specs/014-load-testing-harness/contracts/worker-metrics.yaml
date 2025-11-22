@@ -1,0 +1,374 @@
+# Worker Metrics Contract
+#
+# This document defines the metrics exported by load test workers
+# to Prometheus Pushgateway.
+
+# ================================================================
+# METRIC NAMING CONVENTION
+# ================================================================
+#
+# All metrics follow the pattern: loadtest_{category}_{metric}_{unit}
+#
+# Categories:
+#   - worker: Worker pod level metrics
+#   - user: Individual user simulation metrics
+#   - test: Aggregate test run metrics
+#   - question: Question generation metrics
+#
+# Units:
+#   - _total: Counter (cumulative)
+#   - _seconds: Duration/latency
+#   - _bytes: Size in bytes
+#   - _ratio: Percentage (0.0-1.0)
+#   - (no suffix): Gauge (current value)
+
+# ================================================================
+# WORKER-LEVEL METRICS
+# ================================================================
+
+# Worker status indicator
+# Type: Gauge
+# Values: 0 (failed), 1 (healthy), 2 (degraded), 3 (completed)
+loadtest_worker_status:
+  type: gauge
+  help: "Current status of the worker pod"
+  labels:
+    - test_run_id    # Unique test run identifier
+    - worker_id      # Worker pod identifier
+    - phase          # Current phase: initializing, bootstrapping, simulating, completing, cleanup, completed, failed
+
+# Active user simulations
+# Type: Gauge
+# Value: Number of currently active user goroutines
+loadtest_worker_users_active:
+  type: gauge
+  help: "Number of active user simulations in this worker"
+  labels:
+    - test_run_id
+    - worker_id
+
+# Organizations created
+# Type: Counter
+# Value: Number of organizations successfully created
+loadtest_worker_orgs_created_total:
+  type: counter
+  help: "Total organizations created by this worker"
+  labels:
+    - test_run_id
+    - worker_id
+
+# Bootstrap duration
+# Type: Histogram
+# Value: Time taken to bootstrap (org + users + keys creation) in seconds
+# Buckets: 1, 5, 10, 30, 60, 120, 300 seconds
+loadtest_worker_bootstrap_seconds:
+  type: histogram
+  help: "Time taken for worker to complete bootstrap phase"
+  labels:
+    - test_run_id
+    - worker_id
+  buckets: [1, 5, 10, 30, 60, 120, 300]
+
+# Worker memory usage
+# Type: Gauge
+# Value: Current memory usage in bytes
+loadtest_worker_memory_bytes:
+  type: gauge
+  help: "Current memory usage of worker process"
+  labels:
+    - test_run_id
+    - worker_id
+
+# ================================================================
+# USER-LEVEL METRICS
+# ================================================================
+
+# Total requests per user
+# Type: Counter
+# Value: Cumulative request count
+loadtest_user_requests_total:
+  type: counter
+  help: "Total requests made by a simulated user"
+  labels:
+    - test_run_id
+    - worker_id
+    - org_id         # Organization ID
+    - user_id        # User ID
+    - status         # success, error, timeout
+    - model          # Model name requested (gpt-4o, gpt-3.5-turbo, etc.)
+
+# Request latency distribution
+# Type: Summary
+# Value: Request latency in seconds
+# Quantiles: 0.5 (p50), 0.9 (p90), 0.95 (p95), 0.99 (p99)
+loadtest_user_latency_seconds:
+  type: summary
+  help: "Request latency distribution for user requests"
+  labels:
+    - test_run_id
+    - worker_id
+    - org_id
+    - user_id
+    - model
+  quantiles:
+    - 0.5: 0.05   # p50 with 5% error
+    - 0.9: 0.01   # p90 with 1% error
+    - 0.95: 0.01  # p95 with 1% error
+    - 0.99: 0.001 # p99 with 0.1% error
+
+# Tokens consumed
+# Type: Counter
+# Value: Total tokens (prompt + completion)
+loadtest_user_tokens_total:
+  type: counter
+  help: "Total tokens consumed by user"
+  labels:
+    - test_run_id
+    - worker_id
+    - org_id
+    - user_id
+    - token_type     # prompt, completion, total
+    - model
+
+# Cost incurred
+# Type: Gauge (updated with cumulative value)
+# Value: Total cost in USD
+loadtest_user_cost_usd:
+  type: gauge
+  help: "Total cost incurred by user in USD"
+  labels:
+    - test_run_id
+    - worker_id
+    - org_id
+    - user_id
+    - model
+
+# Errors encountered
+# Type: Counter
+# Value: Error count by type
+loadtest_user_errors_total:
+  type: counter
+  help: "Total errors encountered by user"
+  labels:
+    - test_run_id
+    - worker_id
+    - org_id
+    - user_id
+    - error_type     # http_error, timeout, auth_error, budget_exceeded, etc.
+    - http_status    # 400, 401, 429, 500, etc. (or "N/A")
+
+# Think time actual vs configured
+# Type: Histogram
+# Value: Actual think time in seconds
+# Buckets: 0.5, 1, 2, 5, 10, 20, 30, 60 seconds
+loadtest_user_think_time_seconds:
+  type: histogram
+  help: "Actual think time between requests"
+  labels:
+    - test_run_id
+    - worker_id
+    - org_id
+    - user_id
+  buckets: [0.5, 1, 2, 5, 10, 20, 30, 60]
+
+# Session completion status
+# Type: Gauge
+# Value: 1 if completed, 0 if active/failed
+loadtest_user_session_completed:
+  type: gauge
+  help: "Indicates if user session completed successfully"
+  labels:
+    - test_run_id
+    - worker_id
+    - org_id
+    - user_id
+    - completion_reason  # questions_completed, session_timeout, error_limit, test_stopped
+
+# ================================================================
+# TEST-LEVEL AGGREGATE METRICS
+# ================================================================
+
+# Test run duration
+# Type: Gauge
+# Value: Elapsed time since test start in seconds
+loadtest_run_duration_seconds:
+  type: gauge
+  help: "Total duration of the test run"
+  labels:
+    - test_run_id
+
+# Total cost across all users
+# Type: Gauge
+# Value: Aggregate cost in USD
+loadtest_run_cost_total_usd:
+  type: gauge
+  help: "Total cost across all users in test run"
+  labels:
+    - test_run_id
+
+# Aggregate requests per second
+# Type: Gauge
+# Value: Current throughput (requests/second)
+loadtest_run_requests_per_second:
+  type: gauge
+  help: "Aggregate throughput across all workers"
+  labels:
+    - test_run_id
+    - phase          # Current load pattern phase
+
+# Aggregate error rate
+# Type: Gauge
+# Value: Error percentage (0.0-1.0)
+loadtest_run_error_rate:
+  type: gauge
+  help: "Aggregate error rate across all users"
+  labels:
+    - test_run_id
+
+# Active users across all workers
+# Type: Gauge
+# Value: Total number of active user simulations
+loadtest_run_active_users:
+  type: gauge
+  help: "Total active users across all workers"
+  labels:
+    - test_run_id
+    - phase
+
+# Total tokens consumed
+# Type: Counter
+# Value: Aggregate tokens across all users
+loadtest_run_tokens_total:
+  type: counter
+  help: "Total tokens consumed in test run"
+  labels:
+    - test_run_id
+    - token_type     # prompt, completion, total
+    - model
+
+# ================================================================
+# QUESTION GENERATION METRICS
+# ================================================================
+
+# Question generation time
+# Type: Histogram
+# Value: Time to generate a batch of questions in milliseconds
+# Buckets: 0.1, 0.5, 1, 5, 10, 50, 100 milliseconds
+loadtest_question_generation_milliseconds:
+  type: histogram
+  help: "Time taken to generate questions"
+  labels:
+    - test_run_id
+    - worker_id
+    - strategy       # mixed, technical, historical, etc.
+    - batch_size     # Number of questions generated
+  buckets: [0.1, 0.5, 1, 5, 10, 50, 100]
+
+# Question uniqueness rate
+# Type: Gauge
+# Value: Percentage of unique questions (0.0-1.0)
+loadtest_question_uniqueness_ratio:
+  type: gauge
+  help: "Ratio of unique questions to total questions generated"
+  labels:
+    - test_run_id
+    - worker_id
+    - strategy
+
+# Questions generated per strategy
+# Type: Counter
+# Value: Total questions generated
+loadtest_question_generated_total:
+  type: counter
+  help: "Total questions generated by strategy"
+  labels:
+    - test_run_id
+    - worker_id
+    - strategy
+
+# ================================================================
+# LIMIT ENFORCEMENT METRICS
+# ================================================================
+
+# Cost limit status
+# Type: Gauge
+# Value: Current cost as percentage of limit (0.0-1.0+)
+loadtest_limit_cost_utilization_ratio:
+  type: gauge
+  help: "Cost utilization as ratio of configured limit"
+  labels:
+    - test_run_id
+
+# Error rate limit status
+# Type: Gauge
+# Value: Current error rate as percentage of limit (0.0-1.0+)
+loadtest_limit_error_rate_utilization_ratio:
+  type: gauge
+  help: "Error rate utilization as ratio of configured limit"
+  labels:
+    - test_run_id
+
+# Limit breach indicator
+# Type: Gauge
+# Value: 1 if limit breached, 0 otherwise
+loadtest_limit_breached:
+  type: gauge
+  help: "Indicates if a configured limit has been breached"
+  labels:
+    - test_run_id
+    - limit_type     # cost, error_rate, duration
+
+# ================================================================
+# EXPORT FORMAT
+# ================================================================
+
+# Metrics are exported to Prometheus Pushgateway in the following format:
+#
+# Example metric push (HTTP POST to Pushgateway):
+#
+# POST /metrics/job/loadtest-worker/instance/{worker_id}
+# Content-Type: text/plain
+#
+# # HELP loadtest_user_requests_total Total requests made by a simulated user
+# # TYPE loadtest_user_requests_total counter
+# loadtest_user_requests_total{test_run_id="test-123",worker_id="worker-1",org_id="org-a",user_id="user-1",status="success",model="gpt-4o"} 42
+# loadtest_user_requests_total{test_run_id="test-123",worker_id="worker-1",org_id="org-a",user_id="user-1",status="error",model="gpt-4o"} 3
+#
+# # HELP loadtest_user_latency_seconds Request latency distribution
+# # TYPE loadtest_user_latency_seconds summary
+# loadtest_user_latency_seconds{test_run_id="test-123",worker_id="worker-1",org_id="org-a",user_id="user-1",model="gpt-4o",quantile="0.5"} 0.245
+# loadtest_user_latency_seconds{test_run_id="test-123",worker_id="worker-1",org_id="org-a",user_id="user-1",model="gpt-4o",quantile="0.9"} 0.512
+# loadtest_user_latency_seconds{test_run_id="test-123",worker_id="worker-1",org_id="org-a",user_id="user-1",model="gpt-4o",quantile="0.95"} 0.678
+# loadtest_user_latency_seconds{test_run_id="test-123",worker_id="worker-1",org_id="org-a",user_id="user-1",model="gpt-4o",quantile="0.99"} 1.234
+# loadtest_user_latency_seconds_sum{test_run_id="test-123",worker_id="worker-1",org_id="org-a",user_id="user-1",model="gpt-4o"} 12.45
+# loadtest_user_latency_seconds_count{test_run_id="test-123",worker_id="worker-1",org_id="org-a",user_id="user-1",model="gpt-4o"} 45
+
+# ================================================================
+# PROMETHEUS QUERIES
+# ================================================================
+
+# Example PromQL queries for dashboards:
+
+# Average latency across all users:
+# avg(loadtest_user_latency_seconds{quantile="0.5"})
+
+# Requests per second by model:
+# rate(loadtest_user_requests_total[1m]) * 60
+
+# Error rate percentage:
+# (sum(rate(loadtest_user_requests_total{status="error"}[1m])) / sum(rate(loadtest_user_requests_total[1m]))) * 100
+
+# Total cost by organization:
+# sum(loadtest_user_cost_usd) by (org_id)
+
+# p95 latency by worker:
+# loadtest_user_latency_seconds{quantile="0.95"} by (worker_id)
+
+# Active users over time:
+# loadtest_run_active_users
+
+# Cost utilization vs limit:
+# loadtest_limit_cost_utilization_ratio
+
+# Top 10 slowest users:
+# topk(10, loadtest_user_latency_seconds{quantile="0.99"})

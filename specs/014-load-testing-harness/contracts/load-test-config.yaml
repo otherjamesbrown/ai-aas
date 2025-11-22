@@ -1,0 +1,491 @@
+# Load Test Configuration Contract
+#
+# This file defines the complete schema for load test configurations.
+# All fields support variable/randomized values where appropriate.
+
+apiVersion: loadtest.ai-aas.dev/v1
+kind: LoadTestScenario
+
+metadata:
+  # Required: Unique name for this test scenario
+  name: example-realistic-load-test
+
+  # Required: Kubernetes namespace for execution
+  namespace: load-testing
+
+  # Optional: Explicit test run ID (auto-generated if omitted)
+  # Format: test-{timestamp} or custom string
+  testRunId: "test-20250127-example"
+
+spec:
+  # ================================================================
+  # ORGANIZATION CONFIGURATION
+  # ================================================================
+  organizations:
+    # Required: Number of organizations to create
+    # Each worker pod creates one organization
+    count: 3
+
+    # Required: Naming pattern with placeholders
+    # Placeholders: {index} (1-based), {timestamp}, {random}
+    namingPattern: "loadtest-org-{index}"
+
+    # Optional: How to distribute orgs across workers
+    # Values: "even" (default), "weighted", "random"
+    distribution: "even"
+
+  # ================================================================
+  # USER CONFIGURATION
+  # ================================================================
+  users:
+    # Required: Users per organization range
+    perOrg:
+      # Minimum users per org
+      min: 10
+
+      # Maximum users per org
+      max: 20
+
+      # How to select count within range
+      # Values: "random", "gaussian", "uniform"
+      # - random: Pick random int between min-max
+      # - gaussian: Normal distribution centered at (min+max)/2
+      # - uniform: All orgs get same count (avg of min/max)
+      distribution: "random"
+
+    # Required: User naming pattern
+    # Placeholders: {org} (org name), {index} (1-based), {random}
+    namingPattern: "user-{org}-{index}"
+
+  # ================================================================
+  # API KEY CONFIGURATION
+  # ================================================================
+  apiKeys:
+    # Required: Number of API keys per user
+    # Typical: 1 (primary) or 2 (primary + backup)
+    perUser: 2
+
+  # ================================================================
+  # USER BEHAVIOR SIMULATION
+  # ================================================================
+  userBehavior:
+    # How many questions each user asks per session
+    questionsPerSession:
+      min: 10
+      max: 50
+
+      # Distribution of question counts
+      # Values: "gaussian", "uniform", "poisson"
+      # - gaussian: Most users ask ~30 questions (bell curve)
+      # - uniform: Even distribution across range
+      # - poisson: Exponential decay from min
+      distribution: "gaussian"
+
+    # Think time between questions (in seconds)
+    # SUPPORTS VARIANCE: base ± variance
+    thinkTimeSeconds:
+      # Base think time (center value)
+      base: 5
+
+      # Variance: Random offset added/subtracted
+      # Actual think time: base ± random(0, variance)
+      # Example: base=5, variance=2 → range [3, 7] seconds
+      variance: 2
+
+      # Distribution for the variance
+      # Values: "uniform", "gaussian"
+      # - uniform: Even chance anywhere in ±variance range
+      # - gaussian: More likely near base, less at extremes
+      distribution: "uniform"
+
+      # Optional: Hard min/max bounds (overrides variance if needed)
+      # Ensures think time never goes below/above these values
+      min: 1
+      max: 30
+
+    # Alternative think time configuration (more explicit):
+    # thinkTimeSeconds:
+    #   min: 3      # Minimum think time
+    #   max: 7      # Maximum think time
+    #   distribution: "exponential"  # Most quick, some slow
+
+    # Question generation strategies with weights
+    questionStrategies:
+      - name: "mixed"
+        weight: 50  # 50% of users use mixed strategy
+
+      - name: "technical"
+        weight: 30  # 30% technical
+
+      - name: "historical"
+        weight: 20  # 20% historical
+
+    # Session duration range
+    sessionDuration:
+      # Minimum session length
+      min: "5m"
+
+      # Maximum session length
+      max: "60m"
+
+      # Optional: Distribution
+      # Values: "uniform", "gaussian"
+      distribution: "gaussian"
+
+    # Model preferences (which models users request)
+    modelPreferences:
+      - model: "gpt-4o"
+        weight: 70  # 70% of requests
+
+      - model: "gpt-3.5-turbo"
+        weight: 30  # 30% of requests
+
+    # Optional: Token limits with variance
+    maxTokensPerRequest:
+      base: 100       # Base token limit
+      variance: 50    # ±50 tokens
+      distribution: "gaussian"
+      min: 20         # Never less than 20
+      max: 500        # Never more than 500
+
+    # Optional: Temperature with variance
+    temperature:
+      base: 0.7       # Base temperature
+      variance: 0.2   # ±0.2
+      distribution: "uniform"
+      min: 0.1
+      max: 1.0
+
+  # ================================================================
+  # LOAD PATTERN CONFIGURATION
+  # ================================================================
+  loadPattern:
+    # Load pattern type
+    # Values: "ramp-up", "steady", "spike", "wave", "custom"
+    type: "ramp-up"
+
+    # Sequential phases of the load test
+    phases:
+      # Phase 1: Warm-up
+      - name: "warm-up"
+        duration: "2m"
+        targetActiveUsers: 10
+
+      # Phase 2: Ramp up to full load
+      - name: "ramp-up"
+        duration: "10m"
+        targetActiveUsers: 60  # All users active
+
+        # Optional: Ramp-up strategy
+        # Values: "linear" (default), "exponential", "step"
+        rampStrategy: "linear"
+
+      # Phase 3: Sustained load
+      - name: "sustained-load"
+        duration: "30m"
+        targetActiveUsers: 60
+
+      # Phase 4: Cool-down
+      - name: "cool-down"
+        duration: "5m"
+        targetActiveUsers: 10
+
+  # ================================================================
+  # WORKER POD CONFIGURATION
+  # ================================================================
+  workers:
+    # Number of worker pods to create
+    # Recommendation: 1 worker per org for simple scenarios
+    replicas: 3
+
+    # Maximum users simulated per worker pod
+    # Should align with: (total orgs × avg users per org) / replicas
+    usersPerWorker: 20
+
+    # Kubernetes resource requirements
+    resources:
+      requests:
+        cpu: "500m"      # 0.5 CPU cores
+        memory: "512Mi"  # 512 megabytes
+      limits:
+        cpu: "1000m"     # 1 CPU core max
+        memory: "1Gi"    # 1 gigabyte max
+
+    # Optional: Image override
+    # image: "your-registry/load-test-worker:v1.0.0"
+
+    # Optional: Environment variables
+    # env:
+    #   - name: LOG_LEVEL
+    #     value: "debug"
+
+  # ================================================================
+  # TARGET PLATFORM ENDPOINTS
+  # ================================================================
+  targets:
+    # Required: API Router Service endpoint
+    apiRouterUrl: "http://api-router-service.development.svc.cluster.local:8080"
+
+    # Required: User/Org Service endpoint (for bootstrap)
+    userOrgUrl: "http://user-org-service.development.svc.cluster.local:8081"
+
+    # Optional: Override default endpoints
+    # budgetServiceUrl: "http://budget-service.development.svc.cluster.local:8082"
+    # analyticsServiceUrl: "http://analytics-service.development.svc.cluster.local:8083"
+
+  # ================================================================
+  # METRICS AND OBSERVABILITY
+  # ================================================================
+  metrics:
+    # Required: Prometheus Pushgateway for metrics export
+    pushgatewayUrl: "http://prometheus-pushgateway.observability.svc.cluster.local:9091"
+
+    # Optional: Prometheus for querying (used by orchestrator)
+    prometheusUrl: "http://prometheus.observability.svc.cluster.local:9090"
+
+    # Required: How often workers export metrics
+    exportInterval: "10s"
+
+    # Required: Which metrics to capture
+    capture:
+      - latency_percentiles  # p50, p90, p95, p99
+      - token_usage          # Tokens consumed
+      - cost_per_user        # USD cost per user
+      - error_rate           # Error percentage
+      - concurrent_users     # Active users over time
+      - questions_per_second # Throughput
+
+    # Optional: Custom labels for all metrics
+    # labels:
+    #   environment: "development"
+    #   team: "platform"
+
+  # ================================================================
+  # TEST LIMITS (SAFETY BOUNDARIES)
+  # ================================================================
+  limits:
+    # Maximum cost in USD before test stops
+    # Prevents runaway spending
+    maxCostUsd: 50.00
+
+    # Maximum error rate before test stops
+    # Value: 0.0 to 1.0 (e.g., 0.10 = 10%)
+    maxErrorRate: 0.10
+
+    # Maximum test duration (hard timeout)
+    # Format: Go duration string (e.g., "2h", "30m")
+    maxDuration: "2h"
+
+    # Optional: Max requests per user
+    # maxRequestsPerUser: 1000
+
+    # Optional: Rate limits
+    # maxRequestsPerSecond: 100
+
+  # ================================================================
+  # CLEANUP CONFIGURATION
+  # ================================================================
+  cleanup:
+    # Delete test data (orgs, users, keys) after completion
+    # Values: true (default), false
+    onCompletion: true
+
+    # Retain metrics in Prometheus
+    # Values: true (default), false
+    retainMetrics: true
+
+    # Export final results to object storage
+    # Format: s3://bucket/path/{testRunId}/
+    # Placeholders: {testRunId}, {timestamp}, {name}
+    exportResultsTo: "s3://loadtest-results/{testRunId}/"
+
+    # Optional: Keep logs for debugging
+    # retainLogs: true
+    # logExportPath: "s3://loadtest-logs/{testRunId}/"
+
+  # ================================================================
+  # ADVANCED OPTIONS (OPTIONAL)
+  # ================================================================
+  advanced:
+    # Enable debug mode (verbose logging)
+    debug: false
+
+    # Dry run mode (bootstrap but don't send requests)
+    dryRun: false
+
+    # Correlation ID for distributed tracing
+    # correlationId: "trace-abc123"
+
+    # Custom question templates (alternative to built-in strategies)
+    # questionTemplates:
+    #   - template: "What is the weather in {city} on {date}?"
+    #     variables:
+    #       city: ["New York", "London", "Tokyo", "Sydney"]
+    #       date: ["2024-01-01", "2024-06-15", "2024-12-31"]
+
+    # Chaos testing options
+    # chaos:
+    #   enabled: false
+    #   failureRate: 0.05  # Inject 5% random failures
+    #   networkLatency:
+    #     base: 100ms      # Add 100ms ± 50ms latency
+    #     variance: 50ms
+
+# ================================================================
+# CONFIGURATION EXAMPLES
+# ================================================================
+
+---
+# Example 1: Quick smoke test
+apiVersion: loadtest.ai-aas.dev/v1
+kind: LoadTestScenario
+metadata:
+  name: smoke-test
+  namespace: load-testing
+spec:
+  organizations:
+    count: 1
+    namingPattern: "smoke-test-org"
+  users:
+    perOrg: { min: 5, max: 5, distribution: "uniform" }
+    namingPattern: "smoke-user-{index}"
+  apiKeys:
+    perUser: 1
+  userBehavior:
+    questionsPerSession: { min: 3, max: 5, distribution: "uniform" }
+    thinkTimeSeconds: { base: 2, variance: 1, distribution: "uniform", min: 1, max: 5 }
+    questionStrategies: [{ name: "mixed", weight: 100 }]
+    sessionDuration: { min: "1m", max: "3m" }
+    modelPreferences: [{ model: "gpt-3.5-turbo", weight: 100 }]
+  loadPattern:
+    type: "steady"
+    phases: [{ name: "test", duration: "5m", targetActiveUsers: 5 }]
+  workers:
+    replicas: 1
+    usersPerWorker: 5
+    resources:
+      requests: { cpu: "250m", memory: "256Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+  targets:
+    apiRouterUrl: "http://api-router-service.development.svc.cluster.local:8080"
+    userOrgUrl: "http://user-org-service.development.svc.cluster.local:8081"
+  metrics:
+    pushgatewayUrl: "http://prometheus-pushgateway.observability.svc:9091"
+    exportInterval: "30s"
+    capture: ["latency_percentiles", "error_rate"]
+  limits:
+    maxCostUsd: 5.00
+    maxErrorRate: 0.20
+    maxDuration: "10m"
+  cleanup:
+    onCompletion: true
+    retainMetrics: true
+
+---
+# Example 2: Aggressive stress test
+apiVersion: loadtest.ai-aas.dev/v1
+kind: LoadTestScenario
+metadata:
+  name: stress-test-1000-users
+  namespace: load-testing
+spec:
+  organizations:
+    count: 10
+    namingPattern: "stress-org-{index}"
+  users:
+    perOrg: { min: 95, max: 105, distribution: "gaussian" }
+    namingPattern: "user-{org}-{index}"
+  apiKeys:
+    perUser: 1
+  userBehavior:
+    questionsPerSession: { min: 20, max: 100, distribution: "gaussian" }
+    thinkTimeSeconds: { base: 3, variance: 2, distribution: "gaussian", min: 0.5, max: 10 }
+    questionStrategies:
+      - { name: "mixed", weight: 40 }
+      - { name: "technical", weight: 40 }
+      - { name: "historical", weight: 20 }
+    sessionDuration: { min: "10m", max: "90m" }
+    modelPreferences:
+      - { model: "gpt-4o", weight: 80 }
+      - { model: "gpt-3.5-turbo", weight: 20 }
+  loadPattern:
+    type: "ramp-up"
+    phases:
+      - { name: "warm-up", duration: "5m", targetActiveUsers: 100 }
+      - { name: "ramp", duration: "15m", targetActiveUsers: 1000 }
+      - { name: "sustain", duration: "60m", targetActiveUsers: 1000 }
+      - { name: "cool-down", duration: "10m", targetActiveUsers: 100 }
+  workers:
+    replicas: 50  # 50 workers × 20 users = 1000 users
+    usersPerWorker: 20
+    resources:
+      requests: { cpu: "500m", memory: "512Mi" }
+      limits: { cpu: "1000m", memory: "1Gi" }
+  targets:
+    apiRouterUrl: "http://api-router-service.development.svc.cluster.local:8080"
+    userOrgUrl: "http://user-org-service.development.svc.cluster.local:8081"
+  metrics:
+    pushgatewayUrl: "http://prometheus-pushgateway.observability.svc:9091"
+    prometheusUrl: "http://prometheus.observability.svc:9090"
+    exportInterval: "10s"
+    capture:
+      - latency_percentiles
+      - token_usage
+      - cost_per_user
+      - error_rate
+      - concurrent_users
+      - questions_per_second
+  limits:
+    maxCostUsd: 200.00
+    maxErrorRate: 0.10
+    maxDuration: "2h"
+  cleanup:
+    onCompletion: true
+    retainMetrics: true
+    exportResultsTo: "s3://loadtest-results/stress-{testRunId}/"
+
+---
+# Example 3: Budget exhaustion test
+apiVersion: loadtest.ai-aas.dev/v1
+kind: LoadTestScenario
+metadata:
+  name: budget-test
+  namespace: load-testing
+spec:
+  organizations:
+    count: 3
+    namingPattern: "budget-test-org-{index}"
+  users:
+    perOrg: { min: 10, max: 10, distribution: "uniform" }
+    namingPattern: "user-{org}-{index}"
+  apiKeys:
+    perUser: 1
+  userBehavior:
+    questionsPerSession: { min: 100, max: 200, distribution: "uniform" }
+    thinkTimeSeconds: { base: 1, variance: 0.5, distribution: "uniform", min: 0.5, max: 2 }
+    questionStrategies: [{ name: "technical", weight: 100 }]
+    sessionDuration: { min: "30m", max: "60m" }
+    modelPreferences: [{ model: "gpt-4o", weight: 100 }]  # Expensive model
+  loadPattern:
+    type: "steady"
+    phases: [{ name: "hammer", duration: "60m", targetActiveUsers: 30 }]
+  workers:
+    replicas: 3
+    usersPerWorker: 10
+    resources:
+      requests: { cpu: "500m", memory: "512Mi" }
+      limits: { cpu: "1000m", memory: "1Gi" }
+  targets:
+    apiRouterUrl: "http://api-router-service.development.svc.cluster.local:8080"
+    userOrgUrl: "http://user-org-service.development.svc.cluster.local:8081"
+  metrics:
+    pushgatewayUrl: "http://prometheus-pushgateway.observability.svc:9091"
+    exportInterval: "10s"
+    capture: ["cost_per_user", "error_rate"]
+  limits:
+    maxCostUsd: 20.00  # Low limit to trigger budget exhaustion
+    maxErrorRate: 0.50 # Allow higher errors (expected due to budget limits)
+    maxDuration: "90m"
+  cleanup:
+    onCompletion: true
+    retainMetrics: true
