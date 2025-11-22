@@ -1,0 +1,5 @@
+module github.com/ai-aas/tests/e2e
+
+go 1.24.10
+
+require github.com/google/uuid v1.6.0

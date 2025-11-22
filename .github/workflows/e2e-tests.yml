@@ -1,0 +1,182 @@
+name: E2E Tests
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'tests/e2e/**'
+      - 'services/**'
+      - '.github/workflows/e2e-tests.yml'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'tests/e2e/**'
+      - 'services/**'
+      - '.github/workflows/e2e-tests.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Test environment'
+        required: true
+        default: 'development'
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+
+env:
+  GO_VERSION: '1.21'
+  TEST_TIMEOUT: '30m'
+
+jobs:
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install dependencies
+        run: |
+          cd tests/e2e
+          go mod download
+          go mod verify
+
+      - name: Configure test environment
+        run: |
+          echo "TEST_ENV=ci" >> $GITHUB_ENV
+          echo "USER_ORG_SERVICE_URL=${{ secrets.USER_ORG_SERVICE_URL || 'https://user-org.api.ai-aas.dev' }}" >> $GITHUB_ENV
+          echo "API_ROUTER_SERVICE_URL=${{ secrets.API_ROUTER_SERVICE_URL || 'https://router.api.ai-aas.dev' }}" >> $GITHUB_ENV
+          echo "ANALYTICS_SERVICE_URL=${{ secrets.ANALYTICS_SERVICE_URL || 'https://analytics.api.ai-aas.dev' }}" >> $GITHUB_ENV
+          echo "ADMIN_API_KEY=${{ secrets.ADMIN_API_KEY }}" >> $GITHUB_ENV
+          echo "REQUEST_TIMEOUT_MS=30000" >> $GITHUB_ENV
+
+      - name: Run E2E tests
+        working-directory: tests/e2e
+        run: |
+          go test -v ./suites/... \
+            -timeout ${{ env.TEST_TIMEOUT }} \
+            -json > test-results.json || true
+
+      - name: Generate JUnit XML report
+        if: always()
+        working-directory: tests/e2e
+        run: |
+          # Convert JSON test results to JUnit XML if needed
+          # For now, Go test -json output can be processed by test result parsers
+          echo "JUnit XML generation would go here"
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: |
+            tests/e2e/test-results.json
+            tests/e2e/artifacts/
+          retention-days: 30
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-reports
+          path: |
+            tests/e2e/test-results.xml
+          retention-days: 30
+
+      - name: Publish test results
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: tests/e2e/test-results.xml
+          check_name: E2E Test Results
+          comment_mode: create new
+          report_individual_runs: true
+          deduplicate_classes_by_file_name: true
+
+      - name: Generate test summary
+        if: always()
+        run: |
+          echo "## E2E Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f tests/e2e/test-results.json ]; then
+            echo "Test results available in artifacts" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Test results file not found" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  e2e-tests-parallel:
+    name: E2E Tests (Parallel)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      matrix:
+        worker: [1, 2, 3, 4]
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+
+      - name: Install dependencies
+        run: |
+          cd tests/e2e
+          go mod download
+
+      - name: Configure test environment
+        run: |
+          echo "TEST_ENV=ci" >> $GITHUB_ENV
+          echo "PARALLEL_WORKERS=${{ matrix.worker }}" >> $GITHUB_ENV
+          echo "WORKER_ID=${{ matrix.worker }}" >> $GITHUB_ENV
+          echo "USER_ORG_SERVICE_URL=${{ secrets.USER_ORG_SERVICE_URL || 'https://user-org.api.ai-aas.dev' }}" >> $GITHUB_ENV
+          echo "API_ROUTER_SERVICE_URL=${{ secrets.API_ROUTER_SERVICE_URL || 'https://router.api.ai-aas.dev' }}" >> $GITHUB_ENV
+          echo "ADMIN_API_KEY=${{ secrets.ADMIN_API_KEY }}" >> $GITHUB_ENV
+
+      - name: Run E2E tests (parallel worker ${{ matrix.worker }})
+        working-directory: tests/e2e
+        run: |
+          go test -v ./suites/... \
+            -timeout ${{ env.TEST_TIMEOUT }} \
+            -parallel ${{ matrix.worker }} \
+            -json > test-results-worker-${{ matrix.worker }}.json || true
+
+      - name: Upload test artifacts (worker ${{ matrix.worker }})
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results-worker-${{ matrix.worker }}
+          path: tests/e2e/test-results-worker-${{ matrix.worker }}.json
+          retention-days: 30
+

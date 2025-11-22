@@ -32,14 +32,6 @@ This file highlights the most relevant specifications, plans, and external refer
 - [003 Research & Data Model](./specs/003-database-schemas/research.md), (./specs/003-database-schemas/data-model.md): Migration tool evaluation, entity catalog (organizations, usage events, rollups, audit log).
 - [003 Contracts](./specs/003-database-schemas/contracts/schema-management.yaml): Schema management API surface for automation.
 - [DB Migrations Runbook](./docs/runbooks/migrations.md): Operational playbook for approvals, telemetry, smoke tests, remote DB usage.
-- [002 Local Dev Environment Spec](./specs/002-local-dev-environment/spec.md): Local and remote development environment setup, TTL enforcement, lifecycle management, and component health checks.
-- [002 Local Dev Environment Plan](./specs/002-local-dev-environment/plan.md): Terraform module architecture, Docker Compose stack design, lifecycle scripts, and tooling decisions for dev environments.
-- [002 Local Dev Environment Quickstart](./specs/002-local-dev-environment/quickstart.md): Step-by-step setup for remote workspace provisioning, local stack fallback, TTL automation, secrets rotation, and lifecycle troubleshooting.
-- [002 Local Dev Environment Tasks](./specs/002-local-dev-environment/tasks.md): Phase-by-phase implementation backlog covering setup through polish (Phases 1-7).
-- [002 Local Dev Environment Contracts](./specs/002-local-dev-environment/contracts/dev-environment-contracts.md): Dev environment API surface for automation and tooling integration.
-- [Dev Environment CI Workflow](./.github/workflows/dev-environment-ci.yml): CI validation for Go formatting/tests, Terraform fmt/validate, shell linting, and startup measurement scripts.
-- [Service Dev Connect Runbook](./docs/runbooks/service-dev-connect.md): Detailed connectivity troubleshooting, port conflict remediation, and service configuration guide.
-- [Data Classification Policy](./docs/platform/data-classification.md): Data retention policies for dev environments (90-day logs, 24-hour workspace TTL).
 - [Shared Libraries Quickstart](./specs/004-shared-libraries/quickstart.md): Integration flow for Go/TS consumers, verification scripts, performance benchmark commands.
 - [Shared Libraries Tasks](./specs/004-shared-libraries/tasks.md): Phase backlog covering setup through pilot adoption.
 - [Shared Libraries Runbook](./docs/runbooks/shared-libraries.md): Telemetry/health troubleshooting, version skew guidance, pilot follow-ups.
@@ -54,12 +46,45 @@ This file highlights the most relevant specifications, plans, and external refer
 - [007 Analytics Service Handoff P6](./services/analytics-service/handoff-007-P06.md): Phase 6 handoff document for RBAC middleware, audit logging, and performance benchmarks.
 - [Analytics Service Runbook](./docs/runbooks/analytics-incident-response.md): Incident response procedures for error rates, latency, freshness lag, and export job troubleshooting.
 - [Analytics Service Performance Benchmarks](./services/analytics-service/test/perf/freshness_benchmark_test.go): Performance benchmarks for rollup queries, CSV generation, and freshness cache operations.
-- [009 Admin CLI Spec](./specs/009-admin-cli/spec.md): Command-line tool for platform administrators to perform privileged operations (bootstrap, org/user management, credential rotation, sync triggers, exports) with dry-run, confirmations, and structured output.
-- [009 Admin CLI Plan](./specs/009-admin-cli/plan.md): Go-based CLI using Cobra framework, service API clients (user-org-service, analytics-service), audit logging, and health checks for service dependencies.
-- [009 Admin CLI Quickstart](./specs/009-admin-cli/quickstart.md): CLI installation, bootstrap procedures, daily operations (org/user management, batch operations, exports), scripting integration, and troubleshooting guide.
+- [005 User & Organization Service Spec](./specs/005-user-org-service/spec.md): Identity, authorization, service accounts, declarative reconciliation, audit/compliance service with OAuth2, OPA policies, budget enforcement, and API key lifecycle.
+- [005 User & Organization Service Plan](./specs/005-user-org-service/plan.md): Technical architecture decisions (Fosite OAuth2, OPA policies, Kafka audit, Vault Transit), project structure, and constitution compliance.
+- [005 User & Organization Service Quickstart](./specs/005-user-org-service/quickstart.md): Local development setup, API usage examples, OAuth2 flows, service account management, and integration guidance.
+- [005 User & Organization Service Tasks](./specs/005-user-org-service/tasks.md): Phase-by-phase implementation backlog covering setup through polish (Phases 1-7).
+- [005 User & Organization Service Data Model](./specs/005-user-org-service/data-model.md): Entity definitions (organizations, users, roles, service accounts, API keys, budgets, audit events).
+- [005 User & Organization Service Contracts](./specs/005-user-org-service/contracts/user-org-service.openapi.yaml): OpenAPI specification for all endpoints.
+- [005 User & Organization Service Analysis](./specs/005-user-org-service/ANALYSIS.md): Spec completeness analysis, traceability matrix, constitution compliance check.
+- [005 User & Organization Service Implementation Gap Analysis](./specs/005-user-org-service/IMPLEMENTATION-GAP-ANALYSIS.md): Current implementation status, completed tasks, and remaining gaps.
+- [User-Org Service Observability Dashboards](./dashboards/grafana/user-org-service-compliance.json): Compliance dashboard with SOC2/ISO27001 panels.
+- [User-Org Service Alerts](./dashboards/alerts/user-org-service.yaml): PrometheusRule definitions for service health, backup failures, and RPO violations.
+- [User-Org Service Audit Runbook](./services/user-org-service/docs/runbooks/user-org-audit.md): Audit event handling, export troubleshooting, compliance verification, and incident response.
+- [User-Org Service DR Runbook](./services/user-org-service/docs/runbooks/user-org-dr.md): Disaster recovery procedures, backup verification, and failover scenarios.
+- [User-Org Service Policy Runbook](./services/user-org-service/docs/runbooks/user-org-policy.md): Policy configuration, budget override workflows, and troubleshooting.
+- [User-Org Service Drift Triage Runbook](./services/user-org-service/docs/runbooks/user-org-drift-triage.md): Declarative reconciliation drift detection, triage, and remediation procedures.
+- [User-Org Service MFA Recovery Runbook](./services/user-org-service/docs/runbooks/user-org-mfa-recovery.md): MFA recovery procedures for lost devices, backup codes, and account lockouts.
 - [Remote CI Runbook](./docs/runbooks/ci-remote.md): Step-by-step guide for `make ci-remote`, expected SLA, troubleshooting.
 - [Service Automation Guide](./docs/services/customizing.md): Shared Make template hooks, flags, and customization patterns.
 - Sample services: `hello-service` (CLI greeting) and `world-service` (HTTP JSON endpoint) demonstrate build/test/check workflows.
+- [002 Local Development Environment Spec](./specs/002-local-dev-environment/spec.md): Secure remote workspace provisioning and local development stack with parity commands.
+- [002 Local Development Environment Plan](./specs/002-local-dev-environment/plan.md): Terraform + StackScript architecture, Docker Compose parity, secrets sync, and lifecycle management.
+- [002 Local Development Environment Quickstart](./specs/002-local-dev-environment/quickstart.md): Remote workspace provisioning, local stack setup, TTL automation, secrets rotation, and troubleshooting.
+- [002 Local Development Environment Tasks](./specs/002-local-dev-environment/tasks.md): Phase-by-phase implementation backlog covering setup through polish (Phases 1-7, 44 tasks).
+- [002 Local Development Environment Contracts](./specs/002-local-dev-environment/contracts/): Development environment API contracts and interfaces.
+- [Service Development Connectivity Runbook](./docs/runbooks/service-dev-connect.md): Guide for connecting services to local/remote development dependencies.
+- [Data Classification Policy](./docs/platform/data-classification.md): Data classification levels, retention policies, and compliance guidelines for development environments.
+- [011 Observability Spec](./specs/011-observability/spec.md): Unified observability platform with Prometheus/Grafana metrics, Loki logs, Tempo traces, dashboards, and alerts.
+- [011 Observability Plan](./specs/011-observability/plan.md): Observability stack architecture, instrumentation strategy, multi-tenancy, and cost optimization.
+- [011 Observability Quickstart](./specs/011-observability/quickstart.md): Accessing Grafana, querying metrics/logs/traces, creating dashboards/alerts, and troubleshooting.
+- [011 Observability Tasks](./specs/011-observability/tasks.md): Phase-by-phase implementation backlog covering infrastructure through documentation (Phases 0-7, 47 tasks).
+- [011 Observability Data Model](./specs/011-observability/data-model.md): Metrics, logs, and traces data models with standard labels and correlation IDs.
+- [011 Observability Contracts](./specs/011-observability/contracts/): OpenAPI specifications for Prometheus, Loki, and Tempo query APIs.
+- [012 E2E Tests Spec](./specs/012-e2e-tests/spec.md): End-to-end test harness validating critical flows across services (auth, routing, budget enforcement, audit logging, declarative convergence).
+- [012 E2E Tests Plan](./specs/012-e2e-tests/plan.md): Test harness architecture, Go testing framework, fixture management, parallel execution, and CI/CD integration.
+- [012 E2E Tests Quickstart](./specs/012-e2e-tests/quickstart.md): Running e2e tests locally and in CI, test configuration, troubleshooting, and best practices.
+- [012 E2E Tests Tasks](./specs/012-e2e-tests/tasks.md): Phase-by-phase implementation backlog covering setup through polish (Phases 1-8, 67 tasks).
+- [012 E2E Tests Data Model](./specs/012-e2e-tests/data-model.md): Test fixtures, test context, test results, and artifact data models.
+- [012 E2E Tests Research](./specs/012-e2e-tests/research.md): Test framework evaluation, patterns, best practices, and implementation recommendations.
+- [E2E Test Harness README](./tests/e2e/README.md): Test harness usage, API reference, configuration options, test patterns, and best practices.
+- [E2E Test Troubleshooting](./tests/e2e/TROUBLESHOOTING.md): Common issues, debugging tips, and solutions for E2E test execution.
 - [Constitution](./memory/constitution.md): Non-negotiable architecture principles (API-first, LKE Kubernetes, GitOps, security gates).
 
 ## External References
