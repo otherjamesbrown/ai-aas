@@ -2,6 +2,18 @@
 
 This directory contains cross-service tests, shared library tests, and test utilities for the AI-AAS platform. Service-specific tests are located within each service directory.
 
+## E2E Testing Credentials
+
+For E2E tests that require authentication against the development cluster, use the admin API key documented in:
+- **[E2E Admin API Key](../docs/e2e/E2E_ADMIN_API_KEY.md)** - Current credentials and usage
+- **[Setup Guide](../docs/e2e/SETUP_E2E_ADMIN_KEY.md)** - How to recreate or rotate the key
+
+```bash
+# Use in tests
+export E2E_API_KEY="1z_V2QVOJJt0d2f2aQI9PUwQfudAugmOs4issi96jv0"
+export E2E_ORG_ID="aa6f9015-132a-4694-8b10-7d4d4550faed"
+```
+
 ## Test Organization
 
 ### Root-Level Tests (`tests/`)
