@@ -5,9 +5,10 @@ This document provides a set of rules and guidelines for interacting with the AI
 ## Core Principles
 
 1.  **Spec-Driven Development**: This is a spec-driven repository. Always refer to the `specs/` directory for the relevant feature specification before making any changes.
-2.  **Makefile is the Entry Point**: All automation is handled through the root `Makefile`. Use `make help` to see a list of available commands.
-3.  **Microservices Architecture**: The platform is composed of multiple Go-based microservices located in the `services/` directory. The `api-router-service` is the central gateway.
-4.  **Shared Libraries**: Common code is located in the `shared/` directory.
+2.  **GitOps-First Deployment**: ALWAYS use GitOps for infrastructure and deployment changes. Never make direct changes to Kubernetes clusters. All changes must go through: edit → commit → push → ArgoCD sync.
+3.  **Makefile is the Entry Point**: All automation is handled through the root `Makefile`. Use `make help` to see a list of available commands.
+4.  **Microservices Architecture**: The platform is composed of multiple Go-based microservices located in the `services/` directory. The `api-router-service` is the central gateway.
+5.  **Shared Libraries**: Common code is located in the `shared/` directory.
 
 ## Key Files and Directories
 
@@ -25,6 +26,38 @@ This document provides a set of rules and guidelines for interacting with the AI
 2.  **Start the local stack**: `make up`
 3.  **Run checks**: `make check`
 4.  **Run tests**: `make test SERVICE=<service-name>`
+
+## GitOps Deployment Workflow
+
+**CRITICAL**: All infrastructure and Kubernetes resource changes MUST follow this workflow. Never use `kubectl apply`, `kubectl edit`, or `kubectl patch` for permanent changes.
+
+### Correct Workflow:
+
+1.  **Make changes locally**: Edit Helm charts, Kubernetes manifests, or ArgoCD applications in the git repository
+2.  **Test locally** (optional): Validate with `helm template`, `kubectl diff`, or `make check`
+3.  **Commit changes**: `git add . && git commit -m "description"`
+4.  **Push to repository**: `git push origin main` (or feature branch)
+5.  **ArgoCD syncs automatically** (development) or **manually sync** (production): `argocd app sync <app-name>`
+6.  **Verify deployment**: Check application status with `kubectl get pods` or `argocd app get <app-name>`
+
+### What Gets Managed by GitOps:
+
+- ✅ Kubernetes Deployments, Services, ConfigMaps, Secrets
+- ✅ Helm chart values and releases
+- ✅ Ingress configurations
+- ✅ Resource limits and scaling
+- ✅ Any infrastructure-as-code
+
+### What Can Use Direct Tools:
+
+- ✅ **Application runtime data**: Routing policies, user records (use `admin-cli` or APIs)
+- ✅ **Debugging**: `kubectl logs`, `kubectl describe`, `kubectl port-forward`
+- ✅ **Temporary testing**: Quick validation before committing (must be followed by git commit)
+
+### Reference Documentation:
+
+- `docs/runbooks/deploy-to-environments.md`: Complete deployment runbook
+- ArgoCD endpoints: `argocd.dev.ai-aas.local`, `argocd.prod.ai-aas.local`
 
 ## Important Commands
 
