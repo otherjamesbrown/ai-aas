@@ -20,7 +20,7 @@ spec:
       # Development-specific overrides
       values: |
         image:
-          repository: ghcr.io/otherjamesbrown/user-org-service
+          repository: ghcr.io/otherjamesbrown/ai-aas/user-org-service
           tag: latest
           pullPolicy: Always
         env:
