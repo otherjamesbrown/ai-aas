@@ -25,16 +25,11 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/usage"
 )
 
-// Context key types to avoid collisions
-type contextKey string
-
+// Context key constants (using string type for compatibility with handlers)
 const (
-	authContextKey contextKey = "auth_context"
-)
-
-const (
-	bufferedBodyKey contextKey = "buffered_body"
-	modelKey        contextKey = "model"
+	authContextKey  = "auth_context"
+	bufferedBodyKey = "buffered_body"
+	modelKey        = "model"
 )
 
 // RateLimitMiddleware creates middleware for rate limiting.
