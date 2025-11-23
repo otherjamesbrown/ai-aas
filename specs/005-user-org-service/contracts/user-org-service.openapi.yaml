@@ -8,6 +8,13 @@ info:
 servers:
   - url: https://user-org-service.{env}.platform.internal
     description: Cluster-scoped service endpoint (dev/staging/prod)
+    variables:
+      env:
+        default: dev
+        enum:
+          - dev
+          - staging
+          - prod
   - url: http://localhost:8081
     description: Local development (admin API)
 tags:
