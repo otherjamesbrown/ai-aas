@@ -1,5 +1,17 @@
 # Development environment values for API Router Service
 # Deploys to dev cluster with vLLM backend integration
+#
+# For AI Coding Assistants:
+# -------------------------
+# This file contains development-specific overrides. Note the ingress configuration
+# includes BOTH hostname-based and IP-based (nip.io) access patterns.
+#
+# IMPORTANT: Update the nip.io hostname (api.172.232.58.222.nip.io) if the
+# LoadBalancer IP changes. Find the current IP with:
+#   kubectl get svc -n ingress-nginx ingress-nginx-controller \
+#     -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+#
+# See docs/ingress-best-practices.md for complete documentation
 
 replicaCount: 1  # Single replica for dev
 
@@ -17,7 +29,7 @@ ingress:
   enabled: true
   className: nginx
   annotations:
-    nginx.ingress.kubernetes.io/ssl-redirect: "false"  # No SSL in dev
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"  # Force HTTPS
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
@@ -26,7 +38,17 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
-  tls: []  # No TLS in dev
+    # IP-based access using nip.io for development/testing
+    # This allows accessing the API via https://api.<LOAD_BALANCER_IP>.nip.io
+    - host: api.172.232.58.222.nip.io
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: ai-aas-tls
+      hosts:
+        - api.dev.ai-aas.local
+        - api.172.232.58.222.nip.io
 
 resources:
   limits:

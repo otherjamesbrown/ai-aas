@@ -6,9 +6,11 @@ import (
 
 // ApplyDefaults sets default configuration values in the provided Viper instance.
 func ApplyDefaults(v *viper.Viper) {
-	// API Endpoints (defaults to localhost for local development)
-	v.SetDefault("api-endpoints.user-org-service", "http://localhost:8081")
+	// API Endpoints (defaults to nip.io for easy remote access without kubectl)
+	// Users can override these with environment variables or config file
+	v.SetDefault("api-endpoints.user-org-service", "https://user-org.172.232.58.222.nip.io")
 	v.SetDefault("api-endpoints.analytics-service", "http://localhost:8084")
+	v.SetDefault("api-endpoints.config-service", "localhost:2379") // etcd gRPC endpoint (requires port-forward)
 
 	// Database (default to local PostgreSQL for development)
 	v.SetDefault("database.url", "postgres://postgres:postgres@localhost:5432/ai_aas_operational?sslmode=disable")

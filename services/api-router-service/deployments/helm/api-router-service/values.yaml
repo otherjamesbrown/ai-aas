@@ -1,3 +1,38 @@
+# API Router Service - Helm Chart Values
+# =====================================
+#
+# For AI Coding Assistants:
+# ------------------------
+# When deploying services with ingress, follow these best practices:
+#
+# 1. ALWAYS include both hostname-based AND IP-based (nip.io) access in development
+#    - Hostname: For proper DNS/hosts file setup (e.g., api.dev.ai-aas.local)
+#    - IP-based: For easy testing without DNS configuration (e.g., api.<IP>.nip.io)
+#
+# 2. ALWAYS use HTTPS (force-ssl-redirect: "true") even in development
+#    - Self-signed certificates are acceptable for dev
+#    - Use cert-manager with Let's Encrypt for staging/production
+#
+# 3. LoadBalancer IP Discovery:
+#    To find the current LoadBalancer IP for nip.io configuration:
+#    kubectl get svc -n ingress-nginx ingress-nginx-controller \
+#      -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+#
+# 4. Testing API Access:
+#    # Via nip.io (no /etc/hosts needed):
+#    curl -k -H "X-API-Key: YOUR_KEY" https://api.<IP>.nip.io/v1/status/healthz
+#
+#    # Via hostname (requires /etc/hosts entry):
+#    curl -k -H "X-API-Key: YOUR_KEY" https://api.dev.ai-aas.local/v1/status/healthz
+#
+# 5. NEVER deploy services to the 'system' namespace via manual Helm installs
+#    - System namespace is for infrastructure only
+#    - Application services belong in 'development', 'staging', or 'production' namespaces
+#    - All deployments MUST go through ArgoCD
+#
+# See docs/ingress-best-practices.md for complete documentation
+#
+
 replicaCount: 2
 
 image:
@@ -28,11 +63,18 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
+    # IP-based access using nip.io for development/testing
+    # Override this in production to use proper DNS
+    - host: api.172.232.58.222.nip.io
+      paths:
+        - path: /
+          pathType: Prefix
   tls:
     - secretName: ai-aas-tls
       hosts:
         - api.dev.ai-aas.local
         - api.prod.ai-aas.local
+        - api.172.232.58.222.nip.io
 
 resources:
   limits:
