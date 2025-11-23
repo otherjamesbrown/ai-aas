@@ -30,27 +30,27 @@ password_hash = "$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi"
 
 print(f"""
 -- ========================================
--- E2E Admin Setup for AI-AAS Dev Cluster
+-- Master Admin Setup for AI-AAS Dev Cluster
 -- ========================================
 -- Generated: {datetime.utcnow().isoformat()}Z
 --
 -- SAVE THIS INFORMATION SECURELY:
 --
--- Organization: e2e-admin-org (slug)
--- Email: e2e-admin@ai-aas.dev
--- Password: e2e-admin-password
+-- Organization: master-admin-org (slug)
+-- Email: master-admin@ai-aas.dev
+-- Password: master-admin-password
 -- API Key Secret: {secret}
 --
 -- ========================================
 
 BEGIN;
 
--- Create E2E Admin Organization
+-- Create Master Admin Organization
 INSERT INTO orgs (org_id, slug, name, status, declarative_mode, mfa_required_roles, metadata, created_at, updated_at)
 VALUES (
     '{org_id}',
-    'e2e-admin-org',
-    'E2E Test Admin Organization',
+    'master-admin-org',
+    'Master Admin Organization',
     'active',
     'disabled',
     '[]'::jsonb,
@@ -61,13 +61,13 @@ VALUES (
 ON CONFLICT (slug) DO UPDATE
 SET status = 'active';
 
--- Create E2E Admin User
+-- Create Master Admin User
 INSERT INTO users (user_id, org_id, email, display_name, password_hash, status, mfa_enrolled, mfa_methods, recovery_tokens, metadata, created_at, updated_at)
 VALUES (
     '{user_id}',
     '{org_id}',
-    'e2e-admin@ai-aas.dev',
-    'E2E Admin User',
+    'master-admin@ai-aas.dev',
+    'Master Admin User',
     '{password_hash}',
     'active',
     false,
@@ -80,7 +80,7 @@ VALUES (
 ON CONFLICT (org_id, email) DO UPDATE
 SET status = 'active', password_hash = '{password_hash}';
 
--- Create E2E Admin API Key
+-- Create Master Admin API Key
 INSERT INTO api_keys (api_key_id, org_id, principal_type, principal_id, fingerprint, status, scopes, issued_at, expires_at, annotations, created_at, updated_at)
 VALUES (
     '{api_key_id}',
@@ -92,7 +92,7 @@ VALUES (
     '["*"]'::jsonb,
     NOW(),
     NOW() + INTERVAL '365 days',
-    '{{"purpose": "e2e-tests", "created_by": "script"}}'::jsonb,
+    '{{"purpose": "master-admin", "created_by": "script"}}'::jsonb,
     NOW(),
     NOW()
 )
@@ -106,14 +106,14 @@ COMMIT;
 -- ========================================
 -- Run these to verify the setup:
 --
--- SELECT * FROM orgs WHERE slug = 'e2e-admin-org';
--- SELECT * FROM users WHERE email = 'e2e-admin@ai-aas.dev';
+-- SELECT * FROM orgs WHERE slug = 'master-admin-org';
+-- SELECT * FROM users WHERE email = 'master-admin@ai-aas.dev';
 -- SELECT * FROM api_keys WHERE principal_id = '{user_id}';
 """)
 
 # Also print the API key secret separately for easy copying
 print("\n" + "="*60)
-print("E2E ADMIN API KEY (Save this securely!):")
+print("MASTER ADMIN API KEY (Save this securely!):")
 print("="*60)
 print(f"API Key Secret: {secret}")
 print(f"Org ID: {org_id}")

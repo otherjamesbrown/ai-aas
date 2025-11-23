@@ -41,9 +41,12 @@ package middleware
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/ory/fosite"
@@ -73,10 +76,11 @@ type AuthenticatedUser struct {
 }
 
 // RequireAuth creates middleware that validates Bearer tokens and extracts user context.
+// Supports both API key authentication and OAuth2/Fosite authentication.
 // Returns 401 Unauthorized if token is missing, invalid, or expired.
 func RequireAuth(rt *bootstrap.Runtime, logger *zap.Logger) func(http.Handler) http.Handler {
-	if rt == nil || rt.Provider == nil {
-		logger.Warn("OAuth provider not available, auth middleware will reject all requests")
+	if rt == nil {
+		logger.Warn("Runtime not available, auth middleware will reject all requests")
 		return func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "authentication not configured", http.StatusInternalServerError)
@@ -147,6 +151,25 @@ func RequireAuth(rt *bootstrap.Runtime, logger *zap.Logger) func(http.Handler) h
 				zap.Int("token_length", len(token)),
 				zap.String("token_prefix", tokenPrefix))
 
+			// Try API key authentication first (check api_keys table)
+			authenticated, authCtx := tryAPIKeyAuth(ctx, rt, token, requestID, logger, r.URL.Path)
+			if authenticated {
+				logger.Debug("RequireAuth: API key authentication successful",
+					zap.String("path", r.URL.Path),
+					zap.String("request_id", requestID))
+				next.ServeHTTP(w, r.WithContext(authCtx))
+				return
+			}
+
+			// Fall back to OAuth2/Fosite authentication
+			if rt.Provider == nil {
+				logger.Warn("RequireAuth: OAuth provider not available and API key auth failed",
+					zap.String("path", r.URL.Path),
+					zap.String("request_id", requestID))
+				http.Error(w, "invalid or expired token", http.StatusUnauthorized)
+				return
+			}
+
 			// Validate token using Fosite's introspection
 			// IntrospectToken validates the token signature and returns session info
 			_, accessRequester, err := rt.Provider.IntrospectToken(ctx, token, fosite.AccessToken, &oauth.Session{})
@@ -169,7 +192,7 @@ func RequireAuth(rt *bootstrap.Runtime, logger *zap.Logger) func(http.Handler) h
 				return
 			}
 
-			logger.Debug("RequireAuth: token validated, extracting session",
+			logger.Debug("RequireAuth: OAuth token validated, extracting session",
 				zap.String("path", r.URL.Path),
 				zap.String("request_id", requestID))
 
@@ -294,4 +317,94 @@ func GetAuthenticatedUser(ctx context.Context) *AuthenticatedUser {
 		OrgID:  GetOrgID(ctx),
 		Scopes: scopes,
 	}
+}
+
+// tryAPIKeyAuth attempts to authenticate using the API key from the api_keys table.
+// Returns (true, context) if authentication succeeds, (false, nil) otherwise.
+func tryAPIKeyAuth(ctx context.Context, rt *bootstrap.Runtime, token string, requestID string, logger *zap.Logger, path string) (bool, context.Context) {
+	if rt.Postgres == nil {
+		return false, nil
+	}
+
+	// Compute SHA-256 fingerprint of the API key
+	hash := sha256.Sum256([]byte(token))
+	fingerprint := base64.URLEncoding.EncodeToString(hash[:])
+	fingerprint = strings.TrimRight(fingerprint, "=")
+
+	logger.Debug("RequireAuth: trying API key authentication",
+		zap.String("path", path),
+		zap.String("request_id", requestID),
+		zap.String("fingerprint", fingerprint[:min(20, len(fingerprint))]+"..."))
+
+	// Look up API key in database by fingerprint
+	var apiKeyID uuid.UUID
+	var orgID uuid.UUID
+	var userID uuid.UUID
+	var status string
+	var expiresAt *time.Time
+	var scopes []string
+
+	err := rt.Postgres.DB().QueryRow(ctx, `
+		SELECT api_key_id, org_id, principal_id, status, expires_at, scopes
+		FROM api_keys
+		WHERE fingerprint = $1 AND principal_type = 'user' AND active = true
+	`, fingerprint).Scan(&apiKeyID, &orgID, &userID, &status, &expiresAt, &scopes)
+
+	if err != nil {
+		if err.Error() != "no rows in result set" {
+			logger.Debug("RequireAuth: API key lookup failed",
+				zap.Error(err),
+				zap.String("path", path),
+				zap.String("request_id", requestID))
+		}
+		return false, nil
+	}
+
+	// Check if API key is active
+	if status != "active" {
+		logger.Debug("RequireAuth: API key not active",
+			zap.String("path", path),
+			zap.String("request_id", requestID),
+			zap.String("status", status))
+		return false, nil
+	}
+
+	// Check if API key has expired
+	if expiresAt != nil && expiresAt.Before(time.Now()) {
+		logger.Debug("RequireAuth: API key expired",
+			zap.String("path", path),
+			zap.String("request_id", requestID),
+			zap.Time("expires_at", *expiresAt))
+		return false, nil
+	}
+
+	// Store authenticated context in request
+	ctx = context.WithValue(ctx, UserIDKey, userID)
+	ctx = context.WithValue(ctx, OrgIDKey, orgID)
+
+	// Create a session for compatibility with existing code
+	session := &oauth.Session{
+		UserID:        userID.String(),
+		OrgID:         orgID.String(),
+		Subject:       userID.String(),
+		GrantedScopes: scopes,
+	}
+	ctx = context.WithValue(ctx, SessionKey, session)
+
+	logger.Info("RequireAuth: API key authentication successful",
+		zap.String("path", path),
+		zap.String("request_id", requestID),
+		zap.String("user_id", userID.String()),
+		zap.String("org_id", orgID.String()),
+		zap.String("api_key_id", apiKeyID.String()),
+		zap.Strings("scopes", scopes))
+
+	return true, ctx
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

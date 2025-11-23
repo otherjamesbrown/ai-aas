@@ -120,9 +120,15 @@ func runBootstrap(cmd *cobra.Command, args []string, flagEmail, flagOrgName, fla
 		}
 	}
 
+	// Create HTTP client with optional CA cert
+	httpClient, err := config.CreateHTTPClient(cfg.CACertFile)
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP client: %w", err)
+	}
+
 	// Health check
 	if !flagDryRun {
-		checker := health.NewChecker(5 * time.Second)
+		checker := health.NewCheckerWithClient(5*time.Second, httpClient)
 		requiredServices := map[string]string{
 			"user-org-service": cfg.UserOrgEndpoint,
 		}
@@ -135,7 +141,7 @@ func runBootstrap(cmd *cobra.Command, args []string, flagEmail, flagOrgName, fla
 	executing := !flagDryRun && flagConfirm
 
 	// Check for existing admin
-	userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
+	userOrgClient := userorg.NewClientWithHTTPClient(cfg.UserOrgEndpoint, cfg.APIKey, httpClient)
 	existingAdmin, err := userOrgClient.CheckExistingAdmin(cmd.Context())
 	if err != nil {
 		// Log warning but continue - service might not support this check
