@@ -344,7 +344,7 @@ func tryAPIKeyAuth(ctx context.Context, rt *bootstrap.Runtime, token string, req
 	var expiresAt *time.Time
 	var scopes []string
 
-	err := rt.Postgres.DB().QueryRow(ctx, `
+	err := rt.Postgres.Pool().QueryRow(ctx, `
 		SELECT api_key_id, org_id, principal_id, status, expires_at, scopes
 		FROM api_keys
 		WHERE fingerprint = $1 AND principal_type = 'user' AND active = true
@@ -386,7 +386,6 @@ func tryAPIKeyAuth(ctx context.Context, rt *bootstrap.Runtime, token string, req
 	session := &oauth.Session{
 		UserID:        userID.String(),
 		OrgID:         orgID.String(),
-		Subject:       userID.String(),
 		GrantedScopes: scopes,
 	}
 	ctx = context.WithValue(ctx, SessionKey, session)
