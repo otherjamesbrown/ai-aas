@@ -85,6 +85,7 @@ func (h *Handler) SetBackendURI(backendID, uri string) {
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/v1/inference", h.HandleInference)
 	// OpenAI-compatible endpoints
+	r.Get("/v1/models", h.HandleModels)
 	r.Post("/v1/chat/completions", h.HandleOpenAIChatCompletions)
 	r.Post("/v1/completions", h.HandleOpenAICompletions)
 }
