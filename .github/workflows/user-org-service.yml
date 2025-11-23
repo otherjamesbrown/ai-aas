@@ -120,11 +120,10 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and Push Docker Image
-        working-directory: services/user-org-service
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: ./Dockerfile
+          context: services/user-org-service
+          file: services/user-org-service/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -154,12 +153,11 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build E2E Test Image
-        working-directory: services/user-org-service
         run: |
-          docker build -f Dockerfile.e2e-test \
+          docker build -f services/user-org-service/Dockerfile.e2e-test \
             -t ghcr.io/${{ github.repository_owner }}/user-org-service-e2e-test:${{ github.sha }} \
             -t ghcr.io/${{ github.repository_owner }}/user-org-service-e2e-test:latest \
-            .
+            services/user-org-service
 
       - name: Push E2E Test Image
         run: |
@@ -182,7 +180,6 @@ jobs:
 
       - name: Deploy and Run E2E Test Job
         if: env.DEV_KUBECONFIG_B64 != ''
-        working-directory: services/user-org-service
         env:
           REGISTRY: ghcr.io/${{ github.repository_owner }}
           IMAGE_TAG: ${{ github.sha }}
@@ -306,12 +303,11 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build E2E Test Image
-        working-directory: services/user-org-service
         run: |
-          docker build -f Dockerfile.e2e-test \
+          docker build -f services/user-org-service/Dockerfile.e2e-test \
             -t ghcr.io/${{ github.repository_owner }}/user-org-service-e2e-test:${{ github.sha }} \
             -t ghcr.io/${{ github.repository_owner }}/user-org-service-e2e-test:latest \
-            .
+            services/user-org-service
 
       - name: Push E2E Test Image
         run: |
@@ -334,7 +330,6 @@ jobs:
 
       - name: Deploy and Run E2E Test Job (Staging)
         if: env.STAGING_KUBECONFIG_B64 != ''
-        working-directory: services/user-org-service
         env:
           STAGING_KUBECONFIG_B64: ${{ secrets.STAGING_KUBECONFIG_B64 }}
           REGISTRY: ghcr.io/${{ github.repository_owner }}
@@ -461,12 +456,11 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build E2E Test Image
-        working-directory: services/user-org-service
         run: |
-          docker build -f Dockerfile.e2e-test \
+          docker build -f services/user-org-service/Dockerfile.e2e-test \
             -t ghcr.io/${{ github.repository_owner }}/user-org-service-e2e-test:${{ github.sha }} \
             -t ghcr.io/${{ github.repository_owner }}/user-org-service-e2e-test:latest \
-            .
+            services/user-org-service
 
       - name: Push E2E Test Image
         run: |
@@ -489,7 +483,6 @@ jobs:
 
       - name: Deploy and Run E2E Test Job (Production)
         if: env.PROD_KUBECONFIG_B64 != ''
-        working-directory: services/user-org-service
         env:
           PROD_KUBECONFIG_B64: ${{ secrets.PROD_KUBECONFIG_B64 }}
           REGISTRY: ghcr.io/${{ github.repository_owner }}
