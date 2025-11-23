@@ -65,8 +65,9 @@ As a platform engineer, I can configure realistic user behavior patterns includi
 1. **Given** user behavior config with 5-30s think time, **When** simulated users run, **Then** actual think times follow the configured distribution (exponential/gaussian) and requests are properly spaced.
 2. **Given** random short test type configuration, **When** users generate questions, **Then** each user produces highly unique, short questions that avoid KVCache hits, enabling measurement of cold-start performance.
 3. **Given** cached test type configuration, **When** users generate questions, **Then** questions are designed to hit KVCache (repeated prompts or similar patterns) to model warm cache scenarios and measure cache performance.
-4. **Given** long test type configuration, **When** users generate questions, **Then** questions are longer and more complex, testing token generation limits and extended inference scenarios.
+4. **Given** long test type configuration, **When** users generate questions, **Then** questions are longer and more complex, using randomly selected documents from the library to test token generation limits and extended inference scenarios.
 5. **Given** multi-turn conversations enabled, **When** users ask follow-up questions, **Then** conversation context is maintained and each question builds on previous answers.
+6. **Given** continuous looping enabled, **When** a test session completes its configured sets, **Then** the test automatically restarts with a new random seed, ensuring test diversity across loop iterations.
 
 ---
 
@@ -123,7 +124,7 @@ As a platform engineer, I can observe real-time and historical metrics from load
 - Worker pod crashes during test execution; orchestrator detects and optionally respawns or marks as failed.
 - Platform services unavailable during bootstrap; workers retry with exponential backoff and timeout appropriately.
 - Budget exhaustion mid-test; affected users stop gracefully and report final state without cascading failures.
-- Question generator produces identical questions; seeding strategy ensures uniqueness based on org + user + timestamp (for random_short type).
+- Question generator produces identical questions; seeding strategy ensures uniqueness based on org + user + timestamp (for random_short type), with seed recalculation on each loop iteration.
 - KVCache misses when cached test type is configured; question generator uses consistent patterns to ensure cache hits.
 - Model targeting mismatch (SLM receives complex query or medium LLM receives simple query); test configuration validation prevents mismatches.
 - Network partitions between workers and platform; workers detect and report connectivity issues in metrics.
@@ -131,6 +132,9 @@ As a platform engineer, I can observe real-time and historical metrics from load
 - Concurrent tests interfering; namespace isolation and unique test run IDs prevent cross-test contamination.
 - Large-scale tests (1000+ users) exceeding K8s resource quotas; clear pre-flight checks and resource estimation.
 - KVCache eviction during cached test type; test detects cache misses and reports cache performance metrics.
+- Continuous looping causing resource exhaustion; tests respect configured maximum duration and loop count limits.
+- Document library unavailable or empty; long test type falls back to generated long-form questions with clear error reporting.
+- Document selection out of bounds (requesting document X+1 when only X documents exist); validation ensures random selection stays within valid range (1-X).
 
 ## Requirements *(mandatory)*
 
@@ -155,6 +159,8 @@ As a platform engineer, I can observe real-time and historical metrics from load
 - **FR-017**: Provide model targeting configuration to route short queries to SLMs (Small Language Models) and complex queries to medium-sized LLMs, enabling realistic workload modeling.
 - **FR-018**: Provide KVCache-aware question generation that can either avoid cache hits (random_short) or intentionally hit cache (cached) based on test type.
 - **FR-019**: Provide model selection logic that matches test complexity to appropriate model size (SLM for short queries, medium LLM for complex queries).
+- **FR-020**: Provide continuous looping capability where all tests automatically restart after completing their configured sets, with random seeds recalculated on each loop iteration to ensure test diversity.
+- **FR-021**: Provide document library integration for long test types, where documents are stored in an object store (S3/MinIO), numbered sequentially (1-X), and randomly selected during test execution to generate realistic long-form queries.
 
 ### Non-Functional Requirements
 
@@ -166,6 +172,8 @@ As a platform engineer, I can observe real-time and historical metrics from load
 - **NFR-006**: Configuration changes must not require rebuilding container images (use ConfigMaps).
 - **NFR-007**: Test results must be exportable to S3/MinIO for long-term retention and analysis.
 - **NFR-008**: Worker failures must not cause cascading failures in other workers or platform services.
+- **NFR-009**: Continuous looping must support infinite loops (until stopped) or configurable maximum loop count/duration, with seed recalculation overhead <10ms per loop iteration.
+- **NFR-010**: Document library access must have <500ms latency for document retrieval from object store, with support for at least 10,000 documents (numbered 1-10000).
 
 ## Success Criteria *(mandatory)*
 
@@ -185,6 +193,8 @@ As a platform engineer, I can observe real-time and historical metrics from load
 - **SC-012**: Cache miss accuracy: Random short test type achieves <5% KVCache hit rate, ensuring cold-start performance measurement.
 - **SC-013**: Model targeting: Short queries are routed to SLMs and complex queries to medium LLMs with >95% accuracy based on query complexity.
 - **SC-014**: Test type distribution: Configured test type distribution (e.g., 40% random_short, 30% long, 30% cached) is followed within ±5% variance.
+- **SC-015**: Continuous looping: Tests automatically restart after completing configured sets, with random seeds recalculated on each loop iteration, maintaining test diversity across loops.
+- **SC-016**: Document library integration: Long test type successfully retrieves and uses randomly selected documents from object store (S3/MinIO) with <1% retrieval failure rate.
 
 ## Architecture Overview
 
@@ -227,16 +237,20 @@ As a platform engineer, I can observe real-time and historical metrics from load
 │  │ 3. Create users  │  │ 3. Create users  │  │ 3. Create users│ │
 │  │ 4. Create keys   │  │ 4. Create keys   │  │ 4. Create keys │ │
 │  │ 5. Simulate users│  │ 5. Simulate users│  │ 5. Simulate    │ │
+│  │    (with loops)  │  │    (with loops)  │  │    (with loops)│ │
 │  │ 6. Export metrics│  │ 6. Export metrics│  │ 6. Export      │ │
 │  │ 7. Cleanup       │  │ 7. Cleanup       │  │ 7. Cleanup     │ │
 │  │                  │  │                  │  │                │ │
 │  │ Per-user sim:    │  │ Per-user sim:    │  │ Per-user sim:  │ │
 │  │ - Get API key    │  │ - Get API key    │  │ - Get API key  │ │
 │  │ - Generate Q     │  │ - Generate Q     │  │ - Generate Q   │ │
+│  │   (select doc    │  │   (select doc    │  │   (select doc  │ │
+│  │    for long)     │  │    for long)     │  │    for long)   │ │
 │  │ - Send request   │  │ - Send request   │  │ - Send request │ │
 │  │ - Measure latency│  │ - Measure latency│  │ - Measure      │ │
 │  │ - Think (wait)   │  │ - Think (wait)   │  │ - Think (wait) │ │
-│  │ - Repeat         │  │ - Repeat         │  │ - Repeat       │ │
+│  │ - Loop (repeat)  │  │ - Loop (repeat)  │  │ - Loop (repeat)│ │
+│  │   with new seed  │  │   with new seed  │  │   with new seed│ │
 │  └────────┬─────────┘  └────────┬─────────┘  └────────┬───────┘ │
 │           │                     │                      │         │
 │           └─────────────────────┴──────────────────────┘         │
@@ -251,6 +265,15 @@ As a platform engineer, I can observe real-time and historical metrics from load
 │                    │  - user_id                │                 │
 │                    │  - worker_pod             │                 │
 │                    │  - phase                  │                 │
+│                    └───────────────────────────┘                 │
+│                                                                   │
+│                    ┌────────────▼──────────────┐                 │
+│                    │  Object Store (S3/MinIO) │                 │
+│                    │                           │                 │
+│                    │  - Document Library      │                 │
+│                    │  - Numbered Documents     │                 │
+│                    │    (1, 2, ..., X)        │                 │
+│                    │  - Random Selection      │                 │
 │                    └───────────────────────────┘                 │
 │                                                                   │
 └───────────────────────────────────────────────────────────────────┘
@@ -302,11 +325,17 @@ As a platform engineer, I can observe real-time and historical metrics from load
 │  │     │ - Think Time Manager            │    │        │
 │  │     │ - Cache Hit Tracker             │    │        │
 │  │     │                                 │    │        │
-│  │     │ Loop:                           │    │        │
+│  │     │ Outer Loop (Continuous):        │    │        │
+│  │     │   - Recalculate random seed     │    │        │
+│  │     │   - Reset session state         │    │        │
+│  │     │                                 │    │        │
+│  │     │ Inner Loop (Session):           │    │        │
 │  │     │   1. Select test type           │    │        │
 │  │     │   2. Select target model        │    │        │
 │  │     │   3. Generate question          │    │        │
 │  │     │      (unique/cached/long)       │    │        │
+│  │     │      * For long: select random  │    │        │
+│  │     │        doc from library (1-X)   │    │        │
 │  │     │   4. Build HTTP request         │    │        │
 │  │     │   5. Send to API Router         │    │        │
 │  │     │   6. Measure latency            │    │        │
@@ -314,6 +343,7 @@ As a platform engineer, I can observe real-time and historical metrics from load
 │  │     │   8. Record tokens/cost         │    │        │
 │  │     │   9. Wait (think time)          │    │        │
 │  │     │  10. Repeat until session done  │    │        │
+│  │     │  11. Restart outer loop         │    │        │
 │  │     └─────────────────────────────────┘    │        │
 │  │     ... (User 2, User 3, ... User N)       │        │
 │  │                                             │        │
@@ -340,6 +370,17 @@ As a platform engineer, I can observe real-time and historical metrics from load
 │  │  - Mixed strategy                           │        │
 │  │                                             │        │
 │  │  Seeding: hash(org_id + user_id + time)    │        │
+│  │  (Recalculated on each loop iteration)     │        │
+│  └────────────────────────────────────────────┘        │
+│                                                         │
+│  ┌────────────────────────────────────────────┐        │
+│  │  Document Library Client                   │        │
+│  │                                             │        │
+│  │  - Object Store (S3/MinIO)                 │        │
+│  │  - Document enumeration (1, 2, ..., X)     │        │
+│  │  - Random document selection                │        │
+│  │  - Document content retrieval              │        │
+│  │  - Used for long test type                 │        │
 │  └────────────────────────────────────────────┘        │
 │                                                         │
 └─────────────────────────────────────────────────────────┘
@@ -502,12 +543,16 @@ The load testing harness supports three test types to model different scenarios:
 - **Characteristics**:
   - Complex, multi-part questions (>200 tokens)
   - Extended prompts requiring detailed responses
-  - Tests token generation limits and extended inference
+  - Uses randomly selected documents from a document library stored in an object store (S3/MinIO)
+  - Documents are numbered sequentially (1, 2, ..., X) in a single folder
+  - Random document selection: generates random number between 1-X to select document
+  - Tests token generation limits and extended inference with realistic document content
 - **Use Cases**:
   - Token generation capacity testing
   - Extended inference performance
   - Memory and resource utilization under long queries
-- **Expected Cache Hit Rate**: Variable (depends on prompt similarity)
+  - Realistic document-based query scenarios
+- **Expected Cache Hit Rate**: Variable (depends on prompt similarity and document reuse)
 
 #### 3. Cached (`cached`)
 - **Purpose**: Model warm cache scenarios and measure KVCache performance
@@ -585,6 +630,26 @@ cache_strategy:
     cache_key_consistency: true
   long:
     cache_behavior: "natural"  # No specific cache targeting
+
+# Continuous looping configuration
+looping:
+  enabled: true  # All tests automatically loop
+  max_loops: null  # null = infinite, or set max number of loops
+  max_duration: "24h"  # Maximum total test duration across all loops
+  seed_recalculation: true  # Recalculate random seed on each loop iteration
+
+# Document library for long test type
+document_library:
+  enabled: true
+  storage:
+    type: "s3"  # or "minio"
+    endpoint: "s3.amazonaws.com"  # or MinIO endpoint
+    bucket: "load-test-documents"
+    folder: "documents"  # Single folder containing numbered documents
+    access_key: "${S3_ACCESS_KEY}"  # From Secret
+    secret_key: "${S3_SECRET_KEY}"  # From Secret
+  document_count: 100  # Total number of documents (1-X)
+  selection_strategy: "random"  # Random selection between 1 and document_count
 ```
 
 ## Future Enhancements
@@ -598,3 +663,6 @@ cache_strategy:
 - **Cost optimization**: Recommend configuration changes to reduce cost
 - **Advanced cache modeling**: Simulate cache eviction, cache warming strategies
 - **Model-specific test profiles**: Predefined test profiles optimized for specific model types
+- **Document library management**: UI/CLI for managing document library (upload, enumerate, validate)
+- **Adaptive looping**: Dynamic loop duration based on test performance metrics
+- **Document caching**: Local caching of frequently accessed documents to reduce object store latency
