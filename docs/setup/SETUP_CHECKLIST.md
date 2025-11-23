@@ -272,7 +272,56 @@ cp configs/migrate.example.env migrate.env
 # Update with your database connection strings
 ```
 
-### 8. Start Local Databases (if needed)
+### 8. Trust Self-Signed Certificates (for local development)
+
+**Trust the CA Certificate** (one-time per machine):
+
+**Linux (Debian/Ubuntu):**
+```bash
+sudo cp infra/secrets/certs/ai-aas-ca.crt /usr/local/share/ca-certificates/ai-aas-ca.crt
+sudo update-ca-certificates
+```
+
+**macOS:**
+```bash
+sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain infra/secrets/certs/ai-aas-ca.crt
+```
+
+**Windows:**
+1. Open `infra/secrets/certs/ai-aas-ca.crt`
+2. Click "Install Certificate"
+3. Choose "Local Machine" → "Trusted Root Certification Authorities"
+4. Click OK and Finish
+
+**Note**: The certificate files (`.crt`) are in the repository. The private keys (`.key`) are in `secrets/` and were synced via git-crypt.
+
+See `infra/secrets/certs/README.md` and `docs/platform/tls-ssl-setup.md` for complete details.
+
+### 9. Update Hosts File (for local development)
+
+Add local DNS entries to access services via domain names:
+
+```bash
+# Auto-detect ingress IP and update /etc/hosts
+sudo ./scripts/infra/update-hosts-file.sh
+
+# Or specify IP manually
+sudo ./scripts/infra/update-hosts-file.sh --ingress-ip 192.168.1.100
+```
+
+**Domains added**:
+- `api.dev.ai-aas.local` - API Router Service
+- `portal.dev.ai-aas.local` - Web Portal
+- `grafana.dev.ai-aas.local` - Grafana
+- `argocd.dev.ai-aas.local` - ArgoCD
+
+**Verify**:
+```bash
+ping api.dev.ai-aas.local
+curl -k https://api.dev.ai-aas.local/healthz
+```
+
+### 10. Start Local Databases (if needed)
 ```bash
 # Services may have docker-compose files for local development
 # Example for services with dev dependencies:
@@ -283,7 +332,7 @@ cd services/analytics-service
 make dev-up  # Starts Postgres (TimescaleDB), Redis, RabbitMQ
 ```
 
-### 9. Run Database Migrations (if needed)
+### 11. Run Database Migrations (if needed)
 ```bash
 # Set environment variables
 export DB_URL=postgres://postgres:postgres@localhost:5432/ai_aas?sslmode=disable
@@ -452,5 +501,7 @@ gh auth login
 - [ ] TypeScript dependencies installed (`make shared-ts-install`)
 - [ ] Playwright browsers installed (`cd web/portal && pnpm exec playwright install --with-deps`)
 - [ ] Environment files created (build.env, migrate.env if needed)
+- [ ] CA certificate trusted (for local HTTPS)
+- [ ] Hosts file updated with local domains
 - [ ] Docker containers started (if using local databases)
 - [ ] Verified with `make check` or `make build SERVICE=<name>`
