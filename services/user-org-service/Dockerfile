@@ -1,15 +1,19 @@
 # Dockerfile for building the user-org-service container image.
 # This creates a container with both admin-api and reconciler binaries.
+# Build context must be repository root to access shared/go module
 FROM golang:1.24-alpine AS builder
 
 WORKDIR /build
 
-# Copy go.mod and go.sum first for better caching
-COPY go.mod go.sum ./
+# Copy shared module first (dependency)
+COPY shared/go /shared/go
+
+# Copy service files
+COPY services/user-org-service/go.mod services/user-org-service/go.sum ./
 RUN go mod download
 
-# Copy source code
-COPY . .
+# Copy service source code
+COPY services/user-org-service .
 
 # Build both binaries
 RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/admin-api ./cmd/admin-api
@@ -33,7 +37,7 @@ RUN go install github.com/pressly/goose/v3/cmd/goose@latest
 RUN cp /root/go/bin/goose /usr/local/bin/goose
 
 # Copy migrations directory for init container
-COPY migrations /app/migrations
+COPY services/user-org-service/migrations /app/migrations
 
 WORKDIR /app
 
