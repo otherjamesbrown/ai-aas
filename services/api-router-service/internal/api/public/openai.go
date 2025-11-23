@@ -97,7 +97,7 @@ func (h *Handler) HandleOpenAIChatCompletions(w http.ResponseWriter, r *http.Req
 	startTime := time.Now()
 
 	// Get authenticated context from middleware
-	authCtxValue := r.Context().Value("auth_context")
+	authCtxValue := r.Context().Value(AuthContextKey)
 	if authCtxValue == nil {
 		h.writeError(w, r, fmt.Errorf("authentication required"), api.ErrCodeAuthInvalid)
 		return
@@ -199,7 +199,7 @@ func (h *Handler) HandleOpenAICompletions(w http.ResponseWriter, r *http.Request
 	startTime := time.Now()
 
 	// Get authenticated context from middleware
-	authCtxValue := r.Context().Value("auth_context")
+	authCtxValue := r.Context().Value(AuthContextKey)
 	if authCtxValue == nil {
 		h.writeError(w, r, fmt.Errorf("authentication required"), api.ErrCodeAuthInvalid)
 		return

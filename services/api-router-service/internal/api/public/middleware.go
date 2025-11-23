@@ -25,11 +25,14 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/usage"
 )
 
-// Context key constants (using string type for compatibility with handlers)
+// Context key type to avoid collisions with other packages
+type contextKey string
+
+// Exported context keys for use by handlers
 const (
-	authContextKey  = "auth_context"
-	bufferedBodyKey = "buffered_body"
-	modelKey        = "model"
+	AuthContextKey  contextKey = "auth_context"
+	BufferedBodyKey contextKey = "buffered_body"
+	ModelKey        contextKey = "model"
 )
 
 // RateLimitMiddleware creates middleware for rate limiting.
@@ -37,7 +40,7 @@ func RateLimitMiddleware(rateLimiter *limiter.RateLimiter, auditLogger *usage.Au
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Get authenticated context (should be set by auth middleware)
-			authCtx := r.Context().Value(authContextKey)
+			authCtx := r.Context().Value(AuthContextKey)
 			if authCtx == nil {
 				// No auth context, skip rate limiting (will fail in auth middleware)
 				next.ServeHTTP(w, r)
@@ -126,7 +129,7 @@ func BudgetMiddleware(budgetClient *limiter.BudgetClient, auditLogger *usage.Aud
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Get authenticated context
-			authCtx := r.Context().Value(authContextKey)
+			authCtx := r.Context().Value(AuthContextKey)
 			if authCtx == nil {
 				next.ServeHTTP(w, r)
 				return
