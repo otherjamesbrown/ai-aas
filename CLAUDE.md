@@ -20,6 +20,30 @@ This document provides a set of rules and guidelines for interacting with the AI
 *   `docs/`: Detailed documentation, including runbooks and setup guides.
 *   `specs/`: The feature specifications and design documents.
 
+## Environment Access & Credentials
+
+**CRITICAL**: Before searching for credentials or environment access information, ALWAYS check this document first:
+
+📖 **[docs/platform/environment-access.md](docs/platform/environment-access.md)** - Complete environment access guide
+
+This document contains:
+- Kubernetes cluster access (kubeconfigs, contexts)
+- ArgoCD URLs and credentials
+- Database connection strings
+- API endpoints and ingress IPs
+- API keys and authentication tokens
+- Admin CLI configuration
+- SSH keys and infrastructure tokens
+- Port-forwarding commands
+- Troubleshooting common access issues
+
+**Quick Access Examples:**
+- Kubernetes: `kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-development.yaml`
+- Database: Connection string in `secrets/env/.env` as `DATABASE_URL`
+- API Router: `https://api.172.232.58.222.nip.io` or `https://api.dev.ai-aas.local`
+- Master Admin API Key: Found in `secrets/env/.env` as `MASTER_ADMIN_API_KEY`
+- ArgoCD: `https://argocd.dev.ai-aas.local` (password retrieved from k8s secret)
+
 ## Development Workflow
 
 1.  **Bootstrap the environment**: `make bootstrap`
