@@ -347,7 +347,7 @@ func tryAPIKeyAuth(ctx context.Context, rt *bootstrap.Runtime, token string, req
 	err := rt.Postgres.Pool().QueryRow(ctx, `
 		SELECT api_key_id, org_id, principal_id, status, expires_at, scopes
 		FROM api_keys
-		WHERE fingerprint = $1 AND principal_type = 'user' AND active = true
+		WHERE fingerprint = $1 AND principal_type = 'user'
 	`, fingerprint).Scan(&apiKeyID, &orgID, &userID, &status, &expiresAt, &scopes)
 
 	if err != nil {
