@@ -39,6 +39,9 @@ type Config struct {
 	// Authentication
 	APIKey string
 
+	// TLS Configuration
+	CACertFile string // Path to CA certificate file for TLS verification
+
 	// Database
 	DatabaseURL string
 
@@ -87,6 +90,7 @@ func Load() (*Config, error) {
 		UserOrgEndpoint:   v.GetString("api-endpoints.user-org-service"),
 		AnalyticsEndpoint: v.GetString("api-endpoints.analytics-service"),
 		APIKey:            v.GetString("auth.api-key"),
+		CACertFile:        v.GetString("tls.ca-cert-file"),
 		DatabaseURL:       v.GetString("database.url"),
 		OutputFormat:      v.GetString("defaults.output-format"),
 		Verbose:           v.GetBool("defaults.verbose"),
@@ -120,6 +124,10 @@ func LoadWithFlags(flagOverrides map[string]interface{}) (*Config, error) {
 		case "api-key":
 			if v, ok := value.(string); ok {
 				cfg.APIKey = v
+			}
+		case "ca-cert-file":
+			if v, ok := value.(string); ok {
+				cfg.CACertFile = v
 			}
 		case "format":
 			if v, ok := value.(string); ok {

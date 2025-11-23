@@ -12,6 +12,9 @@ func ApplyDefaults(v *viper.Viper) {
 	v.SetDefault("api-endpoints.analytics-service", "http://localhost:8084")
 	v.SetDefault("api-endpoints.config-service", "localhost:2379") // etcd gRPC endpoint (requires port-forward)
 
+	// TLS Configuration
+	v.SetDefault("tls.ca-cert-file", "") // Empty by default, use system certs
+
 	// Database (default to local PostgreSQL for development)
 	v.SetDefault("database.url", "postgres://postgres:postgres@localhost:5432/ai_aas_operational?sslmode=disable")
 

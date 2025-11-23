@@ -14,10 +14,18 @@ DOMAINS=(
   "portal.dev.ai-aas.local"
   "grafana.dev.ai-aas.local"
   "argocd.dev.ai-aas.local"
+  "user-org.dev.ai-aas.local"
+  "etcd.dev.ai-aas.local"
   "api.prod.ai-aas.local"
   "portal.prod.ai-aas.local"
   "grafana.prod.ai-aas.local"
   "argocd.prod.ai-aas.local"
+  "user-org.172.232.58.222.nip.io"
+  "api.172.232.58.222.nip.io"
+  "portal.172.232.58.222.nip.io"
+  "etcd.172.232.58.222.nip.io"
+  "argocd.172.232.58.222.nip.io"
+  "grafana.172.232.58.222.nip.io"
 )
 
 while [[ $# -gt 0 ]]; do

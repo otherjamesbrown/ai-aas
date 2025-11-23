@@ -108,8 +108,17 @@ func runOrgList(cmd *cobra.Command, args []string, flagFormat string, flagVerbos
 		)
 	}
 
+	// Create HTTP client with optional CA cert
+	httpClient, err := config.CreateHTTPClient(cfg.CACertFile)
+	if err != nil {
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to create HTTP client: %v", err),
+			"Verify the CA certificate file path is correct and the file is readable.",
+		)
+	}
+
 	// Health check
-	checker := health.NewChecker(5 * time.Second)
+	checker := health.NewCheckerWithClient(5*time.Second, httpClient)
 	requiredServices := map[string]string{
 		"user-org-service": cfg.UserOrgEndpoint,
 	}
@@ -118,7 +127,7 @@ func runOrgList(cmd *cobra.Command, args []string, flagFormat string, flagVerbos
 	}
 
 	// Create client and list orgs
-	userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
+	userOrgClient := userorg.NewClientWithHTTPClient(cfg.UserOrgEndpoint, cfg.APIKey, httpClient)
 	orgs, err := userOrgClient.ListOrgs(cmd.Context())
 	if err != nil {
 		cliErr := errors.NewOperationError(

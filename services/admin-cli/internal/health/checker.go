@@ -40,6 +40,22 @@ func NewChecker(timeout time.Duration) *Checker {
 	}
 }
 
+// NewCheckerWithClient creates a new health checker with a custom HTTP client.
+func NewCheckerWithClient(timeout time.Duration, httpClient *http.Client) *Checker {
+	if timeout == 0 {
+		timeout = 5 * time.Second // Default 5 seconds per NFR-007
+	}
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: timeout}
+	} else {
+		httpClient.Timeout = timeout
+	}
+	return &Checker{
+		client:  httpClient,
+		timeout: timeout,
+	}
+}
+
 // ServiceHealth represents the health status of a service.
 type ServiceHealth struct {
 	Service string

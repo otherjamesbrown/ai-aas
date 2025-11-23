@@ -45,6 +45,19 @@ func NewClient(baseURL, apiKey string) *Client {
 	}
 }
 
+// NewClientWithHTTPClient creates a new user-org-service API client with a custom HTTP client.
+func NewClientWithHTTPClient(baseURL, apiKey string, httpClient *http.Client) *Client {
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: 30 * time.Second}
+	}
+	return &Client{
+		baseURL:    baseURL,
+		apiKey:     apiKey,
+		httpClient: httpClient,
+		retryCfg:   client.DefaultRetryConfig(),
+	}
+}
+
 // Bootstrap creates the first admin account (bootstrap operation).
 // This creates an org, invites a user, and generates an API key for that user.
 func (c *Client) Bootstrap(ctx context.Context, req BootstrapRequest) (*BootstrapResponse, error) {
