@@ -54,17 +54,19 @@ As a platform engineer, I can execute a load test that simulates 2-3 organizatio
 
 ### User Story 3 - Realistic user behavior simulation (Priority: P1)
 
-As a platform engineer, I can configure realistic user behavior patterns including variable think times, conversation context, and diverse question strategies to accurately simulate production workloads.
+As a platform engineer, I can configure realistic user behavior patterns including variable think times, conversation context, diverse question strategies, and test types (random short, long, cached) to accurately simulate production workloads.
 
-**Why this priority**: Ensures load tests reflect actual user behavior rather than artificial hammering, providing realistic performance data.
+**Why this priority**: Ensures load tests reflect actual user behavior rather than artificial hammering, providing realistic performance data across different scenarios including KVCache utilization.
 
-**Independent Test**: Can be tested by reviewing generated questions for uniqueness, measuring actual think times between requests, and validating conversation context is maintained.
+**Independent Test**: Can be tested by reviewing generated questions for uniqueness, measuring actual think times between requests, validating conversation context is maintained, and verifying test types produce expected cache behavior.
 
 **Acceptance Scenarios**:
 
 1. **Given** user behavior config with 5-30s think time, **When** simulated users run, **Then** actual think times follow the configured distribution (exponential/gaussian) and requests are properly spaced.
-2. **Given** question strategy configuration, **When** users generate questions, **Then** each user produces unique questions based on their seed (org_id + user_id) with no cache hits across users.
-3. **Given** multi-turn conversations enabled, **When** users ask follow-up questions, **Then** conversation context is maintained and each question builds on previous answers.
+2. **Given** random short test type configuration, **When** users generate questions, **Then** each user produces highly unique, short questions that avoid KVCache hits, enabling measurement of cold-start performance.
+3. **Given** cached test type configuration, **When** users generate questions, **Then** questions are designed to hit KVCache (repeated prompts or similar patterns) to model warm cache scenarios and measure cache performance.
+4. **Given** long test type configuration, **When** users generate questions, **Then** questions are longer and more complex, testing token generation limits and extended inference scenarios.
+5. **Given** multi-turn conversations enabled, **When** users ask follow-up questions, **Then** conversation context is maintained and each question builds on previous answers.
 
 ---
 
@@ -121,11 +123,14 @@ As a platform engineer, I can observe real-time and historical metrics from load
 - Worker pod crashes during test execution; orchestrator detects and optionally respawns or marks as failed.
 - Platform services unavailable during bootstrap; workers retry with exponential backoff and timeout appropriately.
 - Budget exhaustion mid-test; affected users stop gracefully and report final state without cascading failures.
-- Question generator produces identical questions; seeding strategy ensures uniqueness based on org + user + timestamp.
+- Question generator produces identical questions; seeding strategy ensures uniqueness based on org + user + timestamp (for random_short type).
+- KVCache misses when cached test type is configured; question generator uses consistent patterns to ensure cache hits.
+- Model targeting mismatch (SLM receives complex query or medium LLM receives simple query); test configuration validation prevents mismatches.
 - Network partitions between workers and platform; workers detect and report connectivity issues in metrics.
 - Excessive load causing platform degradation; tests honor configured limits (max cost, max error rate) and stop automatically.
 - Concurrent tests interfering; namespace isolation and unique test run IDs prevent cross-test contamination.
 - Large-scale tests (1000+ users) exceeding K8s resource quotas; clear pre-flight checks and resource estimation.
+- KVCache eviction during cached test type; test detects cache misses and reports cache performance metrics.
 
 ## Requirements *(mandatory)*
 
@@ -137,7 +142,7 @@ As a platform engineer, I can observe real-time and historical metrics from load
 - **FR-004**: Provide multi-turn conversation support where users maintain context across multiple questions.
 - **FR-005**: Provide configurable load patterns (ramp-up, sustained, spike, cool-down) with phase-based user scaling.
 - **FR-006**: Provide Kubernetes-native deployment using Jobs with configurable parallelism for horizontal scaling.
-- **FR-007**: Provide metrics export to Prometheus Pushgateway with standardized labels (test_run, org_id, user_id, worker_pod).
+- **FR-007**: Provide metrics export to Prometheus Pushgateway with standardized labels (test_run, org_id, user_id, worker_pod, test_type, model_target).
 - **FR-008**: Provide real-time observability via Grafana dashboards showing latency, throughput, errors, tokens, and cost.
 - **FR-009**: Provide test orchestrator that manages worker lifecycle, aggregates results, and enforces limits (max cost, max errors).
 - **FR-010**: Provide configurable cleanup strategy to optionally delete test data or retain for analysis.
@@ -146,6 +151,10 @@ As a platform engineer, I can observe real-time and historical metrics from load
 - **FR-013**: Provide pre-flight validation to check platform availability and resource capacity before launching tests.
 - **FR-014**: Provide support for testing different API endpoints (chat completions, embeddings, org management).
 - **FR-015**: Provide worker pod resource limits and requests appropriate for simulating 10-50 users per pod.
+- **FR-016**: Provide test type configuration (random_short, long, cached) to model different KVCache scenarios and system performance characteristics.
+- **FR-017**: Provide model targeting configuration to route short queries to SLMs (Small Language Models) and complex queries to medium-sized LLMs, enabling realistic workload modeling.
+- **FR-018**: Provide KVCache-aware question generation that can either avoid cache hits (random_short) or intentionally hit cache (cached) based on test type.
+- **FR-019**: Provide model selection logic that matches test complexity to appropriate model size (SLM for short queries, medium LLM for complex queries).
 
 ### Non-Functional Requirements
 
@@ -164,14 +173,18 @@ As a platform engineer, I can observe real-time and historical metrics from load
 
 - **SC-001**: Single-org load test (50 users) completes successfully with <5% error rate and reports metrics within 10 minutes.
 - **SC-002**: Multi-org load test (3 orgs, 60 total users) completes with proper isolation and independent budget enforcement.
-- **SC-003**: Question uniqueness: 99.9%+ of questions are unique across all users in a 1000-user test run.
+- **SC-003**: Question uniqueness: 99.9%+ of questions are unique across all users in a 1000-user test run (for random_short test type).
 - **SC-004**: Think time accuracy: Actual think times are within ±10% of configured distribution parameters.
 - **SC-005**: Worker self-bootstrap: 95%+ of workers successfully initialize without manual intervention.
-- **SC-006**: Metrics availability: All defined metrics (latency, throughput, tokens, cost, errors) are queryable in Prometheus within 30 seconds of test start.
+- **SC-006**: Metrics availability: All defined metrics (latency, throughput, tokens, cost, errors, cache hits/misses) are queryable in Prometheus within 30 seconds of test start.
 - **SC-007**: Scalability: System can support 1000 concurrent simulated users with stable performance and <10% error rate.
-- **SC-008**: Observability: Grafana dashboards provide real-time visibility into test progress and platform health during load tests.
+- **SC-008**: Observability: Grafana dashboards provide real-time visibility into test progress and platform health during load tests, including test type and model target breakdowns.
 - **SC-009**: Cost control: Tests automatically stop when configured cost limit is reached with <5% overspend.
 - **SC-010**: Cleanup: Test data is cleanly removed (or retained based on config) within 5 minutes of test completion.
+- **SC-011**: Cache hit accuracy: Cached test type achieves >80% KVCache hit rate when configured with repeated prompts.
+- **SC-012**: Cache miss accuracy: Random short test type achieves <5% KVCache hit rate, ensuring cold-start performance measurement.
+- **SC-013**: Model targeting: Short queries are routed to SLMs and complex queries to medium LLMs with >95% accuracy based on query complexity.
+- **SC-014**: Test type distribution: Configured test type distribution (e.g., 40% random_short, 30% long, 30% cached) is followed within ±5% variance.
 
 ## Architecture Overview
 
@@ -280,18 +293,27 @@ As a platform engineer, I can observe real-time and historical metrics from load
 │  │     ┌─────────────────────────────────┐    │        │
 │  │     │ User Goroutine 1                │    │        │
 │  │     │ - Question Generator (embedded) │    │        │
+│  │     │   * Test Type Selector          │    │        │
+│  │     │     (random_short/long/cached)  │    │        │
+│  │     │   * Model Target Selector       │    │        │
+│  │     │     (SLM vs medium LLM)        │    │        │
 │  │     │ - HTTP Client (keep-alive)      │    │        │
 │  │     │ - Metrics Collector             │    │        │
 │  │     │ - Think Time Manager            │    │        │
+│  │     │ - Cache Hit Tracker             │    │        │
 │  │     │                                 │    │        │
 │  │     │ Loop:                           │    │        │
-│  │     │   1. Generate unique question   │    │        │
-│  │     │   2. Build HTTP request         │    │        │
-│  │     │   3. Send to API Router         │    │        │
-│  │     │   4. Measure latency            │    │        │
-│  │     │   5. Record tokens/cost         │    │        │
-│  │     │   6. Wait (think time)          │    │        │
-│  │     │   7. Repeat until session done  │    │        │
+│  │     │   1. Select test type           │    │        │
+│  │     │   2. Select target model        │    │        │
+│  │     │   3. Generate question          │    │        │
+│  │     │      (unique/cached/long)       │    │        │
+│  │     │   4. Build HTTP request         │    │        │
+│  │     │   5. Send to API Router         │    │        │
+│  │     │   6. Measure latency            │    │        │
+│  │     │   7. Detect cache hit/miss      │    │        │
+│  │     │   8. Record tokens/cost         │    │        │
+│  │     │   9. Wait (think time)          │    │        │
+│  │     │  10. Repeat until session done  │    │        │
 │  │     └─────────────────────────────────┘    │        │
 │  │     ... (User 2, User 3, ... User N)       │        │
 │  │                                             │        │
@@ -415,9 +437,11 @@ See `tasks.md` for phased implementation plan.
 
 **Grafana dashboards:**
 1. **Load Test Overview** - Real-time test progress, active users, throughput, error rate
-2. **Performance Analysis** - Latency percentiles, response times, bottleneck identification
-3. **Cost Tracking** - Cost per org, per user, total spend, budget utilization
+2. **Performance Analysis** - Latency percentiles, response times, bottleneck identification, breakdown by test type and model target
+3. **Cost Tracking** - Cost per org, per user, total spend, budget utilization, cost by test type and model
 4. **Error Analysis** - Error breakdown by type, affected users, correlation with load phases
+5. **Cache Performance** - KVCache hit/miss rates by test type, cache utilization, cache performance impact on latency
+6. **Model Performance Comparison** - SLM vs medium LLM performance metrics, latency comparison, throughput comparison
 
 ### Logging
 
@@ -449,6 +473,115 @@ See `tasks.md` for phased implementation plan.
 - Cost limit enforcement
 - Error threshold enforcement
 
+## Test Type Configuration
+
+### Test Types
+
+The load testing harness supports three test types to model different scenarios:
+
+#### 1. Random Short (`random_short`)
+- **Purpose**: Measure cold-start performance and avoid KVCache hits
+- **Characteristics**:
+  - Highly unique, short questions (<50 tokens)
+  - Each question is generated with maximum randomness
+  - Seeding ensures uniqueness: `hash(org_id + user_id + timestamp + random)`
+  - Designed to bypass KVCache to measure uncached performance
+- **Use Cases**:
+  - Baseline performance measurement
+  - Cold-start latency analysis
+  - Cache miss scenario modeling
+- **Expected Cache Hit Rate**: <5%
+
+#### 2. Long (`long`)
+- **Purpose**: Test extended inference scenarios and token generation limits
+- **Characteristics**:
+  - Complex, multi-part questions (>200 tokens)
+  - Extended prompts requiring detailed responses
+  - Tests token generation limits and extended inference
+- **Use Cases**:
+  - Token generation capacity testing
+  - Extended inference performance
+  - Memory and resource utilization under long queries
+- **Expected Cache Hit Rate**: Variable (depends on prompt similarity)
+
+#### 3. Cached (`cached`)
+- **Purpose**: Model warm cache scenarios and measure KVCache performance
+- **Characteristics**:
+  - Repeated or similar prompts designed to hit KVCache
+  - Consistent question patterns across users
+  - Measures warm cache performance and cache utilization
+- **Use Cases**:
+  - Cache performance measurement
+  - Warm cache latency analysis
+  - Cache utilization optimization
+- **Expected Cache Hit Rate**: >80%
+
+### Model Targeting
+
+The harness supports intelligent model targeting to route queries to appropriate model sizes:
+
+#### Small Language Models (SLMs)
+- **Target Queries**: Short, simple queries
+- **Characteristics**:
+  - Fast response times
+  - Low token usage
+  - Suitable for simple Q&A, classification, short completions
+- **Example Models**: phi-3-mini, gemma-2b, qwen2-0.5b
+- **Query Characteristics**:
+  - <100 tokens input
+  - Single-turn conversations
+  - Factual questions
+  - Simple classification tasks
+
+#### Medium Language Models
+- **Target Queries**: Complex, multi-step queries
+- **Characteristics**:
+  - Higher token usage
+  - Reasoning capabilities
+  - Suitable for complex tasks, multi-step reasoning, extended conversations
+- **Example Models**: llama-3-8b, mistral-7b, qwen2-7b
+- **Query Characteristics**:
+  - >100 tokens input
+  - Multi-turn conversations
+  - Reasoning tasks
+  - Complex problem-solving
+
+### Configuration Example
+
+```yaml
+test_types:
+  distribution:
+    random_short: 0.4  # 40% of requests
+    long: 0.3          # 30% of requests
+    cached: 0.3        # 30% of requests
+
+model_targeting:
+  enabled: true
+  slm_models:
+    - "phi-3-mini"
+    - "gemma-2b"
+  medium_llm_models:
+    - "llama-3-8b"
+    - "mistral-7b"
+  
+  routing_rules:
+    - query_complexity: "simple"  # <100 tokens, single-turn
+      target: "slm"
+    - query_complexity: "complex"  # >100 tokens, multi-turn
+      target: "medium_llm"
+
+cache_strategy:
+  random_short:
+    avoid_cache: true
+    uniqueness_seed: "org_id + user_id + timestamp + random"
+  cached:
+    ensure_cache_hit: true
+    repeat_patterns: true
+    cache_key_consistency: true
+  long:
+    cache_behavior: "natural"  # No specific cache targeting
+```
+
 ## Future Enhancements
 
 - **Dynamic question strategies**: Support for custom question templates
@@ -458,3 +591,5 @@ See `tasks.md` for phased implementation plan.
 - **Auto-tuning**: Automatically find optimal load levels
 - **Chaos engineering**: Inject failures during load tests
 - **Cost optimization**: Recommend configuration changes to reduce cost
+- **Advanced cache modeling**: Simulate cache eviction, cache warming strategies
+- **Model-specific test profiles**: Predefined test profiles optimized for specific model types
