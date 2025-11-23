@@ -9,7 +9,6 @@ secrets/** filter=git-crypt diff=git-crypt
 # Encrypt all .env files except .env.example
 **/.env filter=git-crypt diff=git-crypt
 **/.env.* filter=git-crypt diff=git-crypt
-!**/.env.example
 
 # Encrypt private keys
 **/*.key filter=git-crypt diff=git-crypt
