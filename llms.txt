@@ -71,6 +71,7 @@ This file highlights the most relevant specifications, plans, and external refer
 - [002 Local Development Environment Contracts](./specs/002-local-dev-environment/contracts/): Development environment API contracts and interfaces.
 - [Service Development Connectivity Runbook](./docs/runbooks/service-dev-connect.md): Guide for connecting services to local/remote development dependencies.
 - [Data Classification Policy](./docs/platform/data-classification.md): Data classification levels, retention policies, and compliance guidelines for development environments.
+- [Cache Salt Security Documentation](./docs/platform/cache-salt-security.md): Comprehensive explanation of cache_salt parameter, timing attack mitigation, multi-tenant isolation, and cache salting mechanism for LLM serving security.
 - [011 Observability Spec](./specs/011-observability/spec.md): Unified observability platform with Prometheus/Grafana metrics, Loki logs, Tempo traces, dashboards, and alerts.
 - [011 Observability Plan](./specs/011-observability/plan.md): Observability stack architecture, instrumentation strategy, multi-tenancy, and cost optimization.
 - [011 Observability Quickstart](./specs/011-observability/quickstart.md): Accessing Grafana, querying metrics/logs/traces, creating dashboards/alerts, and troubleshooting.
