@@ -421,11 +421,14 @@ See `tasks.md` for phased implementation plan.
 - `loadtest_worker_orgs_created{test_run, worker_pod}` - Organizations successfully created
 
 **User-level metrics:**
-- `loadtest_user_requests_total{test_run, org_id, user_id, status}` - Total requests (counter)
-- `loadtest_user_latency_seconds{test_run, org_id, user_id, quantile}` - Request latency (summary)
-- `loadtest_user_tokens_total{test_run, org_id, user_id, type}` - Tokens consumed (counter)
-- `loadtest_user_cost_usd{test_run, org_id, user_id}` - Cost incurred (gauge)
-- `loadtest_user_errors_total{test_run, org_id, user_id, error_type}` - Errors encountered (counter)
+- `loadtest_user_requests_total{test_run, org_id, user_id, status, test_type, model_target}` - Total requests (counter)
+- `loadtest_user_latency_seconds{test_run, org_id, user_id, test_type, model_target, quantile}` - Request latency (summary)
+- `loadtest_user_tokens_total{test_run, org_id, user_id, type, test_type, model_target}` - Tokens consumed (counter)
+- `loadtest_user_cost_usd{test_run, org_id, user_id, test_type, model_target}` - Cost incurred (gauge)
+- `loadtest_user_errors_total{test_run, org_id, user_id, error_type, test_type, model_target}` - Errors encountered (counter)
+- `loadtest_user_cache_hits_total{test_run, org_id, user_id, test_type}` - KVCache hits (counter)
+- `loadtest_user_cache_misses_total{test_run, org_id, user_id, test_type}` - KVCache misses (counter)
+- `loadtest_user_cache_hit_ratio{test_run, org_id, user_id, test_type}` - Cache hit ratio (gauge, 0.0-1.0)
 
 **Test-level metrics:**
 - `loadtest_run_duration_seconds{test_run}` - Total test duration
