@@ -119,6 +119,23 @@ As a platform engineer, I can observe real-time and historical metrics from load
 
 ---
 
+### User Story 7 - Cache salt isolation testing (Priority: P3)
+
+As a platform engineer, I can configure and test cache salt isolation to validate multi-tenant security, ensuring that KV cache is properly partitioned by organization or user to prevent timing side-channel attacks.
+
+**Why this priority**: Validates critical security isolation mechanism that prevents cross-tenant cache leakage and timing-based inference attacks in multi-tenant LLM serving environments.
+
+**Independent Test**: Can be tested by configuring different cache salt values (org_id, user_id) and verifying that cache hits only occur within the same salt boundary, with no cross-tenant cache reuse.
+
+**Acceptance Scenarios**:
+
+1. **Given** cache salt configured per organization, **When** two different organizations submit identical prompts, **Then** their requests are treated as distinct cache contexts with no cross-org cache hits, preventing timing side-channel attacks.
+2. **Given** cache salt configured per user, **When** two different users in the same organization submit identical prompts, **Then** their requests are isolated with no cross-user cache hits, ensuring strict user-level isolation.
+3. **Given** cache salt testing enabled, **When** I review metrics, **Then** I can verify cache hit rates are correctly partitioned by salt value (org_id or user_id) with no cross-boundary cache reuse.
+4. **Given** identical prompts with different cache salts, **When** requests are made, **Then** response latencies are consistent (no cache benefit for different salts), validating proper cache partitioning.
+
+---
+
 ### Edge Cases
 
 - Worker pod crashes during test execution; orchestrator detects and optionally respawns or marks as failed.
@@ -135,6 +152,9 @@ As a platform engineer, I can observe real-time and historical metrics from load
 - Continuous looping causing resource exhaustion; tests respect configured maximum duration and loop count limits.
 - Document library unavailable or empty; long test type falls back to generated long-form questions with clear error reporting.
 - Document selection out of bounds (requesting document X+1 when only X documents exist); validation ensures random selection stays within valid range (1-X).
+- Cache salt misconfiguration (missing or invalid salt value); tests validate salt presence and format, with clear error reporting for security-critical failures.
+- Cross-tenant cache leakage despite cache salt; tests detect and report any cache hits across different salt boundaries as security violations.
+- Cache salt collision (same salt value used by different tenants); tests validate salt uniqueness or document collisions in test configuration.
 
 ## Requirements *(mandatory)*
 
@@ -161,6 +181,8 @@ As a platform engineer, I can observe real-time and historical metrics from load
 - **FR-019**: Provide model selection logic that matches test complexity to appropriate model size (SLM for short queries, medium LLM for complex queries).
 - **FR-020**: Provide continuous looping capability where all tests automatically restart after completing their configured sets, with random seeds recalculated on each loop iteration to ensure test diversity.
 - **FR-021**: Provide document library integration for long test types, where documents are stored in an object store (S3/MinIO), numbered sequentially (1-X), and randomly selected during test execution to generate realistic long-form queries.
+- **FR-022**: Provide cache salt configuration support to test multi-tenant security isolation, where `cache_salt` parameter is passed via `extra_body` in API requests to partition KV cache by organization or user.
+- **FR-023**: Provide cache salt isolation validation to verify that cache hits only occur within the same salt boundary, with metrics tracking cache performance per salt value (org_id or user_id).
 
 ### Non-Functional Requirements
 
@@ -195,6 +217,8 @@ As a platform engineer, I can observe real-time and historical metrics from load
 - **SC-014**: Test type distribution: Configured test type distribution (e.g., 40% random_short, 30% long, 30% cached) is followed within ±5% variance.
 - **SC-015**: Continuous looping: Tests automatically restart after completing configured sets, with random seeds recalculated on each loop iteration, maintaining test diversity across loops.
 - **SC-016**: Document library integration: Long test type successfully retrieves and uses randomly selected documents from object store (S3/MinIO) with <1% retrieval failure rate.
+- **SC-017**: Cache salt isolation: When cache salt is configured, identical prompts with different salt values (different orgs/users) show no cross-boundary cache hits, with cache hit rates correctly partitioned by salt value.
+- **SC-018**: Cache salt security validation: Response latencies for identical prompts with different cache salts are consistent (no cache benefit), confirming proper cache partitioning and preventing timing side-channel attacks.
 
 ## Architecture Overview
 
@@ -337,6 +361,9 @@ As a platform engineer, I can observe real-time and historical metrics from load
 │  │     │      * For long: select random  │    │        │
 │  │     │        doc from library (1-X)   │    │        │
 │  │     │   4. Build HTTP request         │    │        │
+│  │     │      * Include cache_salt in     │    │        │
+│  │     │        extra_body (org_id/      │    │        │
+│  │     │        user_id)                 │    │        │
 │  │     │   5. Send to API Router         │    │        │
 │  │     │   6. Measure latency            │    │        │
 │  │     │   7. Detect cache hit/miss      │    │        │
@@ -451,6 +478,7 @@ See `tasks.md` for phased implementation plan.
 - **Cleanup**: Test data (orgs, users, keys) is deleted by default unless retention is explicitly configured.
 - **Cost Controls**: Hard limits on max cost per test run to prevent runaway spending.
 - **Access Control**: Only authorized users can create/execute load tests (RBAC enforced).
+- **Cache Salt Security**: Cache salt configuration ensures multi-tenant isolation, preventing timing side-channel attacks. Tests validate that cache hits only occur within the same salt boundary, with violations reported as security events.
 
 ## Observability
 
@@ -462,14 +490,15 @@ See `tasks.md` for phased implementation plan.
 - `loadtest_worker_orgs_created{test_run, worker_pod}` - Organizations successfully created
 
 **User-level metrics:**
-- `loadtest_user_requests_total{test_run, org_id, user_id, status, test_type, model_target}` - Total requests (counter)
-- `loadtest_user_latency_seconds{test_run, org_id, user_id, test_type, model_target, quantile}` - Request latency (summary)
-- `loadtest_user_tokens_total{test_run, org_id, user_id, type, test_type, model_target}` - Tokens consumed (counter)
-- `loadtest_user_cost_usd{test_run, org_id, user_id, test_type, model_target}` - Cost incurred (gauge)
-- `loadtest_user_errors_total{test_run, org_id, user_id, error_type, test_type, model_target}` - Errors encountered (counter)
-- `loadtest_user_cache_hits_total{test_run, org_id, user_id, test_type}` - KVCache hits (counter)
-- `loadtest_user_cache_misses_total{test_run, org_id, user_id, test_type}` - KVCache misses (counter)
-- `loadtest_user_cache_hit_ratio{test_run, org_id, user_id, test_type}` - Cache hit ratio (gauge, 0.0-1.0)
+- `loadtest_user_requests_total{test_run, org_id, user_id, status, test_type, model_target, cache_salt}` - Total requests (counter)
+- `loadtest_user_latency_seconds{test_run, org_id, user_id, test_type, model_target, cache_salt, quantile}` - Request latency (summary)
+- `loadtest_user_tokens_total{test_run, org_id, user_id, type, test_type, model_target, cache_salt}` - Tokens consumed (counter)
+- `loadtest_user_cost_usd{test_run, org_id, user_id, test_type, model_target, cache_salt}` - Cost incurred (gauge)
+- `loadtest_user_errors_total{test_run, org_id, user_id, error_type, test_type, model_target, cache_salt}` - Errors encountered (counter)
+- `loadtest_user_cache_hits_total{test_run, org_id, user_id, test_type, cache_salt}` - KVCache hits (counter)
+- `loadtest_user_cache_misses_total{test_run, org_id, user_id, test_type, cache_salt}` - KVCache misses (counter)
+- `loadtest_user_cache_hit_ratio{test_run, org_id, user_id, test_type, cache_salt}` - Cache hit ratio (gauge, 0.0-1.0)
+- `loadtest_user_cache_salt_violations_total{test_run, org_id, user_id, cache_salt}` - Cache salt isolation violations (counter, security metric)
 
 **Test-level metrics:**
 - `loadtest_run_duration_seconds{test_run}` - Total test duration
@@ -484,10 +513,9 @@ See `tasks.md` for phased implementation plan.
 2. **Performance Analysis** - Latency percentiles, response times, bottleneck identification, breakdown by test type and model target
 3. **Cost Tracking** - Cost per org, per user, total spend, budget utilization, cost by test type and model
 4. **Error Analysis** - Error breakdown by type, affected users, correlation with load phases
-5. **Cache Performance** - KVCache hit/miss rates by test type, cache utilization, cache performance impact on latency
+5. **Cache Performance** - KVCache hit/miss rates by test type, cache utilization, cache performance impact on latency, breakdown by cache salt
 6. **Model Performance Comparison** - SLM vs medium LLM performance metrics, latency comparison, throughput comparison
-5. **Cache Performance** - KVCache hit/miss rates by test type, cache utilization, cache performance impact on latency
-6. **Model Performance Comparison** - SLM vs medium LLM performance metrics, latency comparison, throughput comparison
+7. **Cache Salt Isolation** - Cache salt isolation validation, cross-salt cache hit violations, isolation effectiveness by salt strategy (org_id vs user_id), security violation alerts
 
 ### Logging
 
@@ -565,6 +593,34 @@ The load testing harness supports three test types to model different scenarios:
   - Warm cache latency analysis
   - Cache utilization optimization
 - **Expected Cache Hit Rate**: >80%
+
+### Cache Salt Isolation
+
+The harness supports cache salt configuration to test and validate multi-tenant security isolation in LLM serving frameworks.
+
+#### Purpose and Security
+
+The `cache_salt` parameter is a critical security mechanism used in LLM serving frameworks (such as vLLM OpenAI-compatible API) to manage security and isolation in multi-tenant environments:
+
+1. **Security Mitigation**: The primary role of `cache_salt` is to act as a defense mechanism against **timing side-channel attacks**. These attacks exploit the performance benefits of shared KV (Key-Value) cache reuse across different users to infer sensitive prompt content based on variations in response latency (Time-to-First-Token).
+
+2. **Cache Partitioning**: The process, known as **Cache Salting**, involves **injecting a unique, user-specific or tenant-specific value (the "salt")** into the internal hashing calculation used for KV cache blocks. This hash calculation determines if cached context can be reused: `BlockHash = Hash(TokenIDs + ParentHash + Salt)`.
+
+3. **Isolation Effect**: By including the salt in the hash, cache reuse is strictly **restricted to requests providing the same salt**. This ensures that even if two different users submit identical prompts, the system treats their contexts as distinct sequences if their salts differ, effectively partitioning the cache and preventing cross-tenant leakage.
+
+4. **Implementation**: The `cache_salt` parameter is passed as an extra field in the API request, within the **`extra_body`** parameter of the client, to transmit the required isolation identity to the serving engine. The specific salt value chosen (e.g., Organization ID or User ID) dictates the level of desired sharing versus strict isolation within the platform.
+
+#### Cache Salt Strategies
+
+- **Organization-level (`org_id`)**: All users within the same organization share cache, providing performance benefits while maintaining org-level isolation.
+- **User-level (`user_id`)**: Strict user-level isolation, where each user has their own cache partition, providing maximum security but reduced cache efficiency.
+- **Custom**: Allows specifying custom salt values for specialized testing scenarios.
+
+#### Testing Scenarios
+
+- **Isolation Validation**: Verify that identical prompts with different cache salts show no cross-boundary cache hits.
+- **Security Testing**: Confirm that response latencies are consistent for identical prompts with different salts (no cache benefit), preventing timing side-channel attacks.
+- **Performance Impact**: Measure the performance trade-off between isolation level (org vs user) and cache efficiency.
 
 ### Model Targeting
 
@@ -650,6 +706,20 @@ document_library:
     secret_key: "${S3_SECRET_KEY}"  # From Secret
   document_count: 100  # Total number of documents (1-X)
   selection_strategy: "random"  # Random selection between 1 and document_count
+
+# Cache salt configuration for multi-tenant security isolation
+cache_salt:
+  enabled: true
+  strategy: "org_id"  # Options: "org_id", "user_id", "custom"
+  # When strategy is "org_id": uses organization ID as salt
+  # When strategy is "user_id": uses user ID as salt (stricter isolation)
+  # When strategy is "custom": uses custom_salt_value
+  custom_salt_value: null  # Only used when strategy is "custom"
+  validation:
+    enabled: true  # Validate cache isolation (no cross-salt cache hits)
+    report_violations: true  # Report security violations if cross-salt cache hits detected
+  # Cache salt is passed via extra_body parameter in API requests:
+  # extra_body: { "cache_salt": "<org_id or user_id or custom>" }
 ```
 
 ## Future Enhancements
