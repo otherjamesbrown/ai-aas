@@ -284,7 +284,15 @@ sudo update-ca-certificates
 
 **macOS:**
 ```bash
+# Trust for browsers and system apps
 sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain infra/secrets/certs/ai-aas-ca.crt
+
+# IMPORTANT: For Go applications (like admin-cli), also set environment variable
+# Add this to your ~/.zshrc or ~/.bash_profile:
+export SSL_CERT_FILE="$HOME/ai-aas/infra/secrets/certs/ai-aas-ca.crt"
+
+# Then reload your shell or run:
+source ~/.zshrc  # or source ~/.bash_profile
 ```
 
 **Windows:**
