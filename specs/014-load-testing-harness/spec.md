@@ -445,6 +445,8 @@ See `tasks.md` for phased implementation plan.
 4. **Error Analysis** - Error breakdown by type, affected users, correlation with load phases
 5. **Cache Performance** - KVCache hit/miss rates by test type, cache utilization, cache performance impact on latency
 6. **Model Performance Comparison** - SLM vs medium LLM performance metrics, latency comparison, throughput comparison
+5. **Cache Performance** - KVCache hit/miss rates by test type, cache utilization, cache performance impact on latency
+6. **Model Performance Comparison** - SLM vs medium LLM performance metrics, latency comparison, throughput comparison
 
 ### Logging
 
