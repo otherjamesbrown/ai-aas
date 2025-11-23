@@ -1,0 +1,20 @@
+# Git-crypt encryption rules
+# All files in secrets/ directory will be encrypted
+secrets/** filter=git-crypt diff=git-crypt
+
+# Encrypt kubeconfig files
+**/kubeconfig* filter=git-crypt diff=git-crypt
+**/*kubeconfig*.yaml filter=git-crypt diff=git-crypt
+
+# Encrypt all .env files except .env.example
+**/.env filter=git-crypt diff=git-crypt
+**/.env.* filter=git-crypt diff=git-crypt
+!**/.env.example
+
+# Encrypt private keys
+**/*.key filter=git-crypt diff=git-crypt
+**/*.pem filter=git-crypt diff=git-crypt
+
+# Encrypt credential files
+**/credentials.json filter=git-crypt diff=git-crypt
+**/service-account*.json filter=git-crypt diff=git-crypt

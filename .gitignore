@@ -2,7 +2,17 @@
 /tmp_md/*.tar.gz
 
 # Environment files with secrets
+# Note: .env files in secrets/env/ are encrypted with git-crypt
 .env
 .env.local
 .env.e2e
 .env.*.local
+
+# Git-crypt key file (NEVER commit this!)
+secrets/ai-aas-git-crypt.key
+*.key.bak
+
+# Unencrypted kubeconfigs (the encrypted ones are in secrets/kubeconfigs/)
+kubeconfig*
+*.kubeconfig
+!secrets/kubeconfigs/
