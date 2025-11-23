@@ -41,20 +41,28 @@ This document outlines all components, tools, keys, and configuration needed to 
   - Linux: https://cli.github.com/manual/install_linux
 - **Authentication**: `gh auth login` (requires scopes: `repo`, `read:actions`, `workflow`)
 
+### 6. git-crypt
+- **Required**: For decrypting secrets in the repository
+- **Purpose**: Encrypts sensitive files (.env, kubeconfigs, certificates) in git
+- **Installation**:
+  - macOS: `brew install git-crypt`
+  - Linux: `sudo apt-get install git-crypt`
+- **Setup**: Run `./scripts/unlock-git-crypt.sh` after cloning (requires encryption key)
+
 ## Required Node.js Environment (for TypeScript/Web Components)
 
-### 6. Node.js
+### 7. Node.js
 - **Version**: `>=20` (see `web/portal/package.json` and `shared/ts/package.json`)
 - **Installation**: https://nodejs.org/
 - **Verify**: `node --version`
 
-### 7. pnpm
+### 8. pnpm
 - **Required**: Package manager for TypeScript workspaces
 - **Installation**: `npm install -g pnpm` or via package manager
 - **Purpose**: Manages dependencies for `web/portal` and `shared/ts`
 - **Verify**: `pnpm --version`
 
-### 8. Playwright Browsers
+### 9. Playwright Browsers
 - **Required**: For end-to-end UI testing of the web portal
 - **Installation**: After installing TypeScript dependencies, run:
   ```bash
@@ -66,14 +74,14 @@ This document outlines all components, tools, keys, and configuration needed to 
 
 ## Optional but Recommended Tools
 
-### 9. act (Local GitHub Actions)
+### 10. act (Local GitHub Actions)
 - **Version**: `0.2.61` (see `configs/tool-versions.mk`)
 - **Purpose**: Run GitHub Actions workflows locally
 - **Installation**:
   - macOS: `brew install act`
   - Linux: https://github.com/nektos/act/releases
 
-### 10. AWS CLI or MinIO Client
+### 11. AWS CLI or MinIO Client
 - **AWS CLI Version**: `2.17.0`
 - **MinIO Client**: For S3-compatible storage (metrics uploads)
 - **Purpose**: Upload build metrics to S3-compatible storage
@@ -81,12 +89,12 @@ This document outlines all components, tools, keys, and configuration needed to 
   - macOS: `brew install awscli` or `brew install minio/stable/mc`
   - Linux: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
 
-### 11. Development Database Tools
+### 12. Development Database Tools
 - **golang-migrate** CLI: For database migrations
 - **psql**: PostgreSQL client (usually comes with PostgreSQL)
 - **Purpose**: Database schema management and migrations
 
-### 12. Additional Development Tools
+### 13. Additional Development Tools
 - **buf** CLI: For protobuf contract validation (API Router Service)
 - **vegeta**: Load testing tool (API Router Service)
 - **sqlc**: Generate typed DB accessors (some services)
@@ -216,7 +224,41 @@ pnpm exec playwright --version
 go work sync
 ```
 
-### 6. Set Up Environment Files
+### 6. Unlock Encrypted Secrets (git-crypt)
+
+**On Your Primary Machine** (already set up):
+```bash
+# Secrets are already decrypted and available
+```
+
+**On Additional Dev Machines**:
+```bash
+# 1. Clone the repository
+git clone git@github.com:otherjamesbrown/ai-aas.git
+cd ai-aas
+
+# 2. Copy the encryption key from your primary machine
+# Option A: Using scp
+scp user@primary-machine:~/ai-aas/secrets/ai-aas-git-crypt.key ./secrets/
+
+# Option B: Get from password manager or secure location
+
+# 3. Unlock the repository
+./scripts/unlock-git-crypt.sh
+
+# 4. Verify secrets are decrypted
+cat secrets/env/.env
+cat secrets/kubeconfigs/kubeconfig-development.yaml
+```
+
+**What's Encrypted**:
+- Environment files: `secrets/env/.env*`
+- Kubeconfigs: `secrets/kubeconfigs/*.yaml`
+- TLS certificates: `secrets/*.crt`, `secrets/*.key`
+
+See `secrets/README.md` for complete documentation.
+
+### 7. Set Up Environment Files
 
 **For Build/Test**:
 ```bash
@@ -230,7 +272,7 @@ cp configs/migrate.example.env migrate.env
 # Update with your database connection strings
 ```
 
-### 7. Start Local Databases (if needed)
+### 8. Start Local Databases (if needed)
 ```bash
 # Services may have docker-compose files for local development
 # Example for services with dev dependencies:
@@ -241,7 +283,7 @@ cd services/analytics-service
 make dev-up  # Starts Postgres (TimescaleDB), Redis, RabbitMQ
 ```
 
-### 8. Run Database Migrations (if needed)
+### 9. Run Database Migrations (if needed)
 ```bash
 # Set environment variables
 export DB_URL=postgres://postgres:postgres@localhost:5432/ai_aas?sslmode=disable
@@ -400,9 +442,11 @@ gh auth login
 - [ ] GNU Make 4.x+ installed
 - [ ] Docker & Docker Compose installed
 - [ ] GitHub CLI installed and authenticated
+- [ ] git-crypt installed
 - [ ] Node.js 20+ installed
 - [ ] pnpm installed
 - [ ] Repository cloned
+- [ ] Encrypted secrets unlocked (`./scripts/unlock-git-crypt.sh`)
 - [ ] Bootstrap script run successfully
 - [ ] Go workspace synced (`go work sync`)
 - [ ] TypeScript dependencies installed (`make shared-ts-install`)
