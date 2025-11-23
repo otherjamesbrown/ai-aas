@@ -26,8 +26,6 @@ type ModelsResponse struct {
 // HandleModels handles GET /v1/models requests (OpenAI-compatible).
 // Returns a list of available models based on registered backends.
 func (h *Handler) HandleModels(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
 	h.logger.Debug("handling models list request",
 		zap.String("method", r.Method),
 		zap.String("path", r.URL.Path))
@@ -69,7 +67,6 @@ func (h *Handler) HandleModels(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("failed to encode models response",
 			zap.Error(err),
 			zap.Int("model_count", len(models)))
-		h.errorBuilder.WriteError(ctx, w, http.StatusInternalServerError, "failed to encode response", err)
 		return
 	}
 
