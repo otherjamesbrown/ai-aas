@@ -1,6 +1,6 @@
 module github.com/ai-aas/tests/shared-go-integration
 
-go 1.21
+go 1.24
 
 require github.com/ai-aas/shared-go v0.0.0
 
