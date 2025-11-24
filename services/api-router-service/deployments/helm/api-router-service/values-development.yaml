@@ -94,7 +94,7 @@ env:
 # Backend endpoints - configure vLLM service
 backends:
   # Format: backend-id:http://service-name.namespace.svc.cluster.local:port/path
-  endpoints: "vllm-gpt-oss-20b:http://vllm-gpt-oss-20b.system.svc.cluster.local:8000/v1/completions"
+  endpoints: "vllm-gpt-oss-20b:http://gpt-oss-20b-vllm-deployment.system.svc.cluster.local:8000/v1/chat/completions"
 
 # Redis configuration (optional for dev - stubbed if not available)
 redis:
