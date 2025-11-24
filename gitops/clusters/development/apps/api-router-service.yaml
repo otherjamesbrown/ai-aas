@@ -69,7 +69,7 @@ spec:
           endpoint: "etcd-service:2379"
           watchEnabled: true
         backends:
-          endpoints: "vllm-gpt-oss-20b:http://vllm-gpt-oss-20b.system.svc.cluster.local:8000/v1/chat/completions"
+          endpoints: "vllm-gpt-oss-20b:http://gpt-oss-20b-vllm-deployment.system.svc.cluster.local:8000/v1/chat/completions"
         resources:
           requests:
             cpu: 100m
