@@ -8,8 +8,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/ai-aas/shared-go/config"
-	"github.com/ai-aas/shared-go/observability"
+	"github.com/otherjamesbrown/ai-aas/shared/go/config"
+	"github.com/otherjamesbrown/ai-aas/shared/go/observability"
 )
 
 func BenchmarkRequestContextMiddleware(b *testing.B) {
