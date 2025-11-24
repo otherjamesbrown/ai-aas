@@ -12,7 +12,7 @@ spec:
   project: platform-development
   source:
     repoURL: https://github.com/otherjamesbrown/ai-aas
-    targetRevision: main  # Update this to your branch name if not on main
+    targetRevision: develop  # Update this to your branch name if not on main
     path: services/user-org-service/configs/helm
     helm:
       valueFiles:
