@@ -44,6 +44,72 @@ This document contains:
 - Master Admin API Key: Found in `secrets/env/.env` as `MASTER_ADMIN_API_KEY`
 - ArgoCD: `https://argocd.dev.ai-aas.local` (password retrieved from k8s secret)
 
+## Endpoint URL Management Strategy
+
+**CRITICAL**: All Kubernetes service endpoints must be managed consistently across the platform.
+
+### Internal Cluster Services (vLLM, Redis, etcd, etc.)
+
+**DO commit to source control** - These are infrastructure definitions that should be versioned.
+
+**Best Practices:**
+1. **Use Kubernetes DNS patterns**: `service-name.namespace.svc.cluster.local`
+2. **Define in ONE place**: Use Helm chart `values-<environment>.yaml` files only
+3. **Avoid inline values in ArgoCD Applications**: Remove `values:` section from ArgoCD Application manifests
+4. **Reference via valueFiles**: Let ArgoCD load from `valueFiles: [values-development.yaml]`
+
+**Example - Correct approach:**
+```yaml
+# services/api-router-service/deployments/helm/api-router-service/values-development.yaml
+backends:
+  - name: vllm-gpt-oss-20b
+    serviceName: gpt-oss-20b-vllm-deployment  # Matches actual Kubernetes Service name
+    namespace: system
+    port: 8000
+    path: /v1/chat/completions
+```
+
+**Example - Avoid this:**
+```yaml
+# gitops/clusters/development/apps/api-router-service.yaml
+spec:
+  source:
+    helm:
+      valueFiles:
+        - values-development.yaml
+      values: |  # ❌ Avoid inline values - creates duplication
+        backends:
+          endpoints: "..."
+```
+
+### External Endpoints (LoadBalancer IPs, Third-party APIs)
+
+**DO NOT commit to source control** - These change on redeployment or provider updates.
+
+**Recommended approaches:**
+1. **ConfigMaps created imperatively:**
+   ```bash
+   kubectl create configmap external-endpoints \
+     --from-literal=loadbalancer-ip=172.232.58.222
+   ```
+2. **External secret management**: Use tools like Sealed Secrets, External Secrets Operator, or Vault
+3. **Reference in Helm charts:**
+   ```yaml
+   envFrom:
+     - configMapRef:
+         name: external-endpoints
+   ```
+
+### Verification Commands
+
+```bash
+# Find actual Kubernetes service names
+kubectl get svc -A | grep <service-pattern>
+
+# Verify deployed configuration
+kubectl get deployment <name> -n <namespace> -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="BACKEND_ENDPOINTS")].value}'
+```
+
 ## Development Workflow
 
 1.  **Bootstrap the environment**: `make bootstrap`
