@@ -163,3 +163,54 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64
 
+  validate-deployment:
+    name: Validate Deployment
+    runs-on: ubuntu-latest
+    needs: [build-image]
+    if: github.ref == 'refs/heads/develop'
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install openai httpx urllib3
+
+      - name: Wait for ArgoCD sync
+        run: |
+          echo "Waiting 90 seconds for ArgoCD to sync and deploy new image..."
+          sleep 90
+
+      - name: Validate public endpoint (unauthenticated)
+        run: |
+          echo "Testing public /v1/models endpoint (no auth required)..."
+          python3 scripts/validate-api.py \
+            --base-url https://api.172.232.58.222.nip.io/v1 \
+            --api-key "dummy-key-for-public-test" \
+            --skip-inference
+
+      - name: Validate authenticated endpoints
+        env:
+          API_KEY: ${{ secrets.API_ROUTER_DEV_TEST_KEY }}
+        run: |
+          echo "Testing authenticated /v1/chat/completions endpoint..."
+          python3 scripts/validate-api.py \
+            --base-url https://api.172.232.58.222.nip.io/v1 \
+            --api-key "$API_KEY"
+
+      - name: Report validation results
+        if: always()
+        run: |
+          echo "## Deployment Validation Results" >> $GITHUB_STEP_SUMMARY
+          echo "Environment: Development" >> $GITHUB_STEP_SUMMARY
+          echo "Base URL: https://api.172.232.58.222.nip.io/v1" >> $GITHUB_STEP_SUMMARY
+          echo "Branch: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+
