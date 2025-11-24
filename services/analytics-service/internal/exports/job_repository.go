@@ -133,7 +133,6 @@ func (r *ExportJobRepository) ListExportJobs(ctx context.Context, orgID uuid.UUI
 	if statusFilter != nil {
 		query += fmt.Sprintf(" AND status = $%d", argIdx)
 		args = append(args, *statusFilter)
-		argIdx++
 	}
 
 	query += " ORDER BY initiated_at DESC LIMIT 100"

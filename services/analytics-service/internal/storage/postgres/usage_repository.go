@@ -70,7 +70,6 @@ func (s *Store) GetUsageSeries(ctx context.Context, orgID uuid.UUID, start, end 
 	if modelID != nil {
 		query += fmt.Sprintf(" AND model_id = $%d", argIdx)
 		args = append(args, *modelID)
-		argIdx++
 	}
 
 	query += fmt.Sprintf(" ORDER BY bucket_start DESC, %s", bucketFormat)

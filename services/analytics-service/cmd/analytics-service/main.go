@@ -96,7 +96,11 @@ func main() {
 		logger.Fatal("failed to parse Redis URL", zap.Error(err))
 	}
 	redisClient := redis.NewClient(redisOpts)
-	defer redisClient.Close()
+	defer func() {
+		if err := redisClient.Close(); err != nil {
+			logger.Error("failed to close Redis client", zap.Error(err))
+		}
+	}()
 
 	// Verify Redis connection
 	pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)

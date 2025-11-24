@@ -15,8 +15,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/otherjamesbrown/ai-aas/shared/go/auth"
 	"go.uber.org/zap"
+
+	"github.com/otherjamesbrown/ai-aas/shared/go/auth"
 )
 
 // RBACConfig holds configuration for RBAC middleware.

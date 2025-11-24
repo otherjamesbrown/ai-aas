@@ -22,3 +22,8 @@ dev-down: ## Stop local development dependencies
 dev-logs: ## View logs from local development dependencies
 	@docker compose -f $(SERVICE_ROOT)/dev/docker-compose.yml logs -f
 
+.PHONY: integration-test
+integration-test: ## Run integration tests (requires dev dependencies to be running)
+	@echo "Running integration tests..."
+	@$(GO) test -v -tags=integration ./...
+
