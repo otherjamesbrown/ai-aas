@@ -20,7 +20,7 @@ spec:
       values: |
         image:
           repository: ghcr.io/otherjamesbrown/api-router-service
-          tag: latest
+          tag: dev
           pullPolicy: Always
         env:
           - name: ENVIRONMENT
