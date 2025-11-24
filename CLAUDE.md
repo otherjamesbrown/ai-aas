@@ -112,10 +112,21 @@ kubectl get deployment <name> -n <namespace> -o jsonpath='{.spec.template.spec.c
 
 ## Development Workflow
 
+### Local Development
+
 1.  **Bootstrap the environment**: `make bootstrap`
 2.  **Start the local stack**: `make up`
 3.  **Run checks**: `make check`
 4.  **Run tests**: `make test SERVICE=<service-name>`
+
+### Feature Development & PRs
+
+This repository uses an environment-based branch workflow:
+- `feature/*` → `develop` (auto-deploys to dev) → `main` (auto-deploys to prod)
+- All feature branches target `develop` for PRs
+- Production releases are promoted from `develop` to `main`
+
+See `docs/runbooks/gitops-pr-workflow.md` for complete workflow documentation.
 
 ## GitOps Deployment Workflow
 
