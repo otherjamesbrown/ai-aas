@@ -13,12 +13,12 @@ func TestApplyDefaults(t *testing.T) {
 	v := viper.New()
 	ApplyDefaults(v)
 
-	if v.GetString("api-endpoints.user-org-service") != "http://localhost:8081" {
-		t.Errorf("expected default user-org-service endpoint")
+	if v.GetString("api-endpoints.user-org-service") != "https://user-org.172.232.58.222.nip.io" {
+		t.Errorf("expected default user-org-service endpoint, got %s", v.GetString("api-endpoints.user-org-service"))
 	}
 
 	if v.GetString("defaults.output-format") != "table" {
-		t.Errorf("expected default output format 'table'")
+		t.Errorf("expected default output format 'table', got %s", v.GetString("defaults.output-format"))
 	}
 }
 
@@ -33,7 +33,7 @@ func TestLoad(t *testing.T) {
 	}
 
 	// Verify defaults are applied
-	if cfg.UserOrgEndpoint != "http://localhost:8081" {
+	if cfg.UserOrgEndpoint != "https://user-org.172.232.58.222.nip.io" {
 		t.Errorf("expected default endpoint, got %s", cfg.UserOrgEndpoint)
 	}
 }
