@@ -237,25 +237,9 @@ func BodyBufferMiddleware(maxSize int64) func(http.Handler) http.Handler {
 }
 
 // AuthContextMiddleware extracts auth context and adds it to request context.
-// Public endpoints that don't require authentication will skip auth and proceed without an auth context.
 func AuthContextMiddleware(authenticator *auth.Authenticator, logger *zap.Logger, tracer trace.Tracer) func(http.Handler) http.Handler {
-	// Public endpoints that don't require authentication
-	publicEndpoints := map[string]bool{
-		"GET /v1/models": true,
-	}
-
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Check if this is a public endpoint
-			endpointKey := r.Method + " " + r.URL.Path
-			if publicEndpoints[endpointKey] {
-				logger.Debug("skipping authentication for public endpoint",
-					zap.String("path", r.URL.Path),
-					zap.String("method", r.Method))
-				next.ServeHTTP(w, r)
-				return
-			}
-
 			authCtx, err := authenticator.Authenticate(r)
 			if err != nil {
 				logger.Debug("authentication failed in middleware",
