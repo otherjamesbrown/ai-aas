@@ -221,14 +221,14 @@ func BodyBufferMiddleware(maxSize int64) func(http.Handler) http.Handler {
 			r.Body = io.NopCloser(bytes.NewReader(body))
 
 			// Store buffered body in context for HMAC verification
-			ctx := context.WithValue(r.Context(), bufferedBodyKey, body)
+			ctx := context.WithValue(r.Context(), BufferedBodyKey, body)
 
 			// Try to extract model from body and store in context
 			var req struct {
 				Model string `json:"model"`
 			}
 			if err := json.Unmarshal(body, &req); err == nil && req.Model != "" {
-				ctx = context.WithValue(ctx, modelKey, req.Model)
+				ctx = context.WithValue(ctx, ModelKey, req.Model)
 			}
 
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -259,7 +259,7 @@ func AuthContextMiddleware(authenticator *auth.Authenticator, logger *zap.Logger
 				zap.String("api_key_id", authCtx.APIKeyID))
 
 			// Add auth context to request context
-			ctx := context.WithValue(r.Context(), authContextKey, authCtx)
+			ctx := context.WithValue(r.Context(), AuthContextKey, authCtx)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
