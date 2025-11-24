@@ -46,7 +46,7 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          version: v1.62
           working-directory: services/analytics-service
           args: --config ../../configs/golangci.yml
 
