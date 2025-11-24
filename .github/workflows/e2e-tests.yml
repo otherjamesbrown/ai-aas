@@ -111,7 +111,7 @@ jobs:
         with:
           files: tests/e2e/test-results.xml
           check_name: E2E Test Results
-          comment_mode: create new
+          comment_mode: off
           report_individual_runs: true
           deduplicate_classes_by_file_name: true
 

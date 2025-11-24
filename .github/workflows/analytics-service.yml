@@ -49,6 +49,7 @@ jobs:
           version: v1.62
           working-directory: services/analytics-service
           args: --config ../../configs/golangci.yml
+          skip-go-installation: true
 
       - name: Run gosec security scan
         uses: securego/gosec@master
