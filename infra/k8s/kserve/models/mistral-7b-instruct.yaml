@@ -1,0 +1,46 @@
+# KServe InferenceService for Mistral-7B-Instruct-v0.2
+# Public model - no HuggingFace token required
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: mistral-7b-instruct
+  namespace: development
+  labels:
+    app: vllm-inference
+    model: mistral-7b-instruct
+    version: v0.2
+    environment: development
+  annotations:
+    serving.kserve.io/deploymentMode: "Serverless"
+spec:
+  predictor:
+    # Keep 1 replica warm for testing
+    minReplicas: 1
+    maxReplicas: 3
+
+    containers:
+      - name: kserve-container
+        image: vllm/vllm-openai:v0.6.3
+        args:
+          - --model=mistralai/Mistral-7B-Instruct-v0.2
+          - --dtype=float16
+          - --max-model-len=4096
+          - --gpu-memory-utilization=0.9
+          - --trust-remote-code
+          - --served-model-name=mistral-7b-instruct
+        env:
+          - name: HF_HOME
+            value: /tmp/hf_home
+        resources:
+          requests:
+            cpu: "4"
+            memory: "16Gi"
+            nvidia.com/gpu: 1
+          limits:
+            cpu: "8"
+            memory: "32Gi"
+            nvidia.com/gpu: 1
+        ports:
+          - containerPort: 8000
+            name: http1
+            protocol: TCP
