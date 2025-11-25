@@ -1,0 +1,292 @@
+{{- if .Values.prometheus.alerts.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "vllm-deployment.fullname" . }}-alerts
+  labels:
+    {{- include "vllm-deployment.labels" . | nindent 4 }}
+    prometheus: {{ .Values.prometheus.alerts.prometheusInstance | default "kube-prometheus" }}
+data:
+  vllm-alerts.yaml: |
+    groups:
+      - name: vllm_deployment_alerts
+        interval: 30s
+        rules:
+          # Pod Health Alerts
+          - alert: VLLMPodNotReady
+            expr: |
+              kube_pod_status_ready{
+                namespace="{{ .Release.Namespace }}",
+                pod=~"{{ include "vllm-deployment.fullname" . }}-.*",
+                condition="true"
+              } == 0
+            for: 5m
+            labels:
+              severity: critical
+              component: vllm
+              model: "{{ .Values.model.name }}"
+              environment: "{{ .Values.environment }}"
+            annotations:
+              summary: "vLLM pod is not ready"
+              description: |
+                Pod {{`{{ $labels.pod }}`}} in namespace {{`{{ $labels.namespace }}`}} has been not ready for more than 5 minutes.
+                Model: {{ .Values.model.name }}
+                Environment: {{ .Values.environment }}
+
+          - alert: VLLMPodCrashLooping
+            expr: |
+              rate(kube_pod_container_status_restarts_total{
+                namespace="{{ .Release.Namespace }}",
+                pod=~"{{ include "vllm-deployment.fullname" . }}-.*"
+              }[15m]) > 0
+            for: 5m
+            labels:
+              severity: warning
+              component: vllm
+              model: "{{ .Values.model.name }}"
+              environment: "{{ .Values.environment }}"
+            annotations:
+              summary: "vLLM pod is crash looping"
+              description: |
+                Pod {{`{{ $labels.pod }}`}} has restarted {{`{{ printf "%.2f" $value }}`}} times in the last 15 minutes.
+                Model: {{ .Values.model.name }}
+                Check pod logs: kubectl logs -n {{ .Release.Namespace }} {{`{{ $labels.pod }}`}}
+
+          - alert: VLLMPodHighRestartRate
+            expr: |
+              increase(kube_pod_container_status_restarts_total{
+                namespace="{{ .Release.Namespace }}",
+                pod=~"{{ include "vllm-deployment.fullname" . }}-.*"
+              }[1h]) > 5
+            labels:
+              severity: critical
+              component: vllm
+              model: "{{ .Values.model.name }}"
+              environment: "{{ .Values.environment }}"
+            annotations:
+              summary: "vLLM pod has high restart rate"
+              description: |
+                Pod {{`{{ $labels.pod }}`}} has restarted more than 5 times in the last hour.
+                This indicates persistent stability issues.
+
+          # GPU Resource Alerts
+          - alert: VLLMGPUMemoryHigh
+            expr: |
+              (
+                nvidia_gpu_memory_used_bytes{
+                  pod=~"{{ include "vllm-deployment.fullname" . }}-.*"
+                }
+                /
+                nvidia_gpu_memory_total_bytes{
+                  pod=~"{{ include "vllm-deployment.fullname" . }}-.*"
+                }
+              ) > 0.95
+            for: 5m
+            labels:
+              severity: critical
+              component: vllm
+              model: "{{ .Values.model.name }}"
+              environment: "{{ .Values.environment }}"
+            annotations:
+              summary: "vLLM GPU memory usage is critically high"
+              description: |
+                GPU memory usage for pod {{`{{ $labels.pod }}`}} is at {{`{{ printf "%.1f" (mul $value 100) }}`}}%.
+                Risk of OOM errors. Consider reducing batch size or max_num_seqs.
+
+          - alert: VLLMGPUMemoryWarning
+            expr: |
+              (
+                nvidia_gpu_memory_used_bytes{
+                  pod=~"{{ include "vllm-deployment.fullname" . }}-.*"
+                }
+                /
+                nvidia_gpu_memory_total_bytes{
+                  pod=~"{{ include "vllm-deployment.fullname" . }}-.*"
+                }
+              ) > 0.85
+            for: 10m
+            labels:
+              severity: warning
+              component: vllm
+              model: "{{ .Values.model.name }}"
+              environment: "{{ .Values.environment }}"
+            annotations:
+              summary: "vLLM GPU memory usage is high"
+              description: |
+                GPU memory usage for pod {{`{{ $labels.pod }}`}} is at {{`{{ printf "%.1f" (mul $value 100) }}`}}%.
+                Monitor for potential OOM conditions.
+
+          - alert: VLLMGPUUtilizationLow
+            expr: |
+              avg_over_time(nvidia_gpu_utilization{
+                pod=~"{{ include "vllm-deployment.fullname" . }}-.*"
+              }[30m]) < 10
+            for: 1h
+            labels:
+              severity: info
+              component: vllm
+              model: "{{ .Values.model.name }}"
+              environment: "{{ .Values.environment }}"
+            annotations:
+              summary: "vLLM GPU utilization is very low"
+              description: |
+                GPU utilization for pod {{`{{ $labels.pod }}`}} has been below 10% for the last hour.
+                Current: {{`{{ printf "%.1f" $value }}`}}%
+                Consider scaling down if low traffic is expected.
+
+          # Performance Alerts (vLLM metrics)
+          - alert: VLLMHighRequestLatency
+            expr: |
+              histogram_quantile(0.95,
+                sum(rate(vllm_request_duration_seconds_bucket{
+                  model="{{ .Values.model.name }}",
+                  environment="{{ .Values.environment }}"
+                }[5m])) by (le)
+              ) > {{ .Values.prometheus.alerts.latencyThreshold | default 10 }}
+            for: 10m
+            labels:
+              severity: warning
+              component: vllm
+              model: "{{ .Values.model.name }}"
+              environment: "{{ .Values.environment }}"
+            annotations:
+              summary: "vLLM request latency is high"
+              description: |
+                P95 request latency is {{`{{ printf "%.2f" $value }}`}}s (threshold: {{ .Values.prometheus.alerts.latencyThreshold | default 10 }}s).
+                Model: {{ .Values.model.name }}
+                Check GPU utilization and model load.
+
+          - alert: VLLMHighErrorRate
+            expr: |
+              (
+                sum(rate(vllm_errors_total{
+                  model="{{ .Values.model.name }}",
+                  environment="{{ .Values.environment }}"
+                }[5m]))
+                /
+                sum(rate(vllm_requests_total{
+                  model="{{ .Values.model.name }}",
+                  environment="{{ .Values.environment }}"
+                }[5m]))
+              ) > {{ .Values.prometheus.alerts.errorRateThreshold | default 0.05 }}
+            for: 5m
+            labels:
+              severity: critical
+              component: vllm
+              model: "{{ .Values.model.name }}"
+              environment: "{{ .Values.environment }}"
+            annotations:
+              summary: "vLLM error rate is high"
+              description: |
+                Error rate is {{`{{ printf "%.2f" (mul $value 100) }}`}}% (threshold: {{ mul (.Values.prometheus.alerts.errorRateThreshold | default 0.05) 100 }}%).
+                Check pod logs and health endpoints.
+
+          - alert: VLLMNoRequests
+            expr: |
+              rate(vllm_requests_total{
+                model="{{ .Values.model.name }}",
+                environment="{{ .Values.environment }}"
+              }[15m]) == 0
+            for: 30m
+            labels:
+              severity: warning
+              component: vllm
+              model: "{{ .Values.model.name }}"
+              environment: "{{ .Values.environment }}"
+            annotations:
+              summary: "vLLM is not receiving requests"
+              description: |
+                No requests received for model {{ .Values.model.name }} in the last 30 minutes.
+                Verify model registration and routing configuration.
+
+          # Health Check Alerts
+          - alert: VLLMHealthCheckFailing
+            expr: |
+              probe_success{
+                job="vllm-{{ .Values.model.name }}-{{ .Values.environment }}"
+              } == 0
+            for: 5m
+            labels:
+              severity: critical
+              component: vllm
+              model: "{{ .Values.model.name }}"
+              environment: "{{ .Values.environment }}"
+            annotations:
+              summary: "vLLM health check is failing"
+              description: |
+                Health check endpoint for {{ .Values.model.name }} has been failing for 5 minutes.
+                Check /health and /v1/models endpoints.
+
+          # Resource Alerts
+          - alert: VLLMHighCPUUsage
+            expr: |
+              sum(rate(container_cpu_usage_seconds_total{
+                namespace="{{ .Release.Namespace }}",
+                pod=~"{{ include "vllm-deployment.fullname" . }}-.*",
+                container!=""
+              }[5m])) by (pod) > {{ .Values.prometheus.alerts.cpuThreshold | default 0.9 }}
+            for: 15m
+            labels:
+              severity: warning
+              component: vllm
+              model: "{{ .Values.model.name }}"
+              environment: "{{ .Values.environment }}"
+            annotations:
+              summary: "vLLM CPU usage is high"
+              description: |
+                CPU usage for pod {{`{{ $labels.pod }}`}} is {{`{{ printf "%.1f" (mul $value 100) }}`}}%.
+                Consider CPU resource limits.
+
+          - alert: VLLMHighMemoryUsage
+            expr: |
+              (
+                sum(container_memory_working_set_bytes{
+                  namespace="{{ .Release.Namespace }}",
+                  pod=~"{{ include "vllm-deployment.fullname" . }}-.*",
+                  container!=""
+                }) by (pod)
+                /
+                sum(kube_pod_container_resource_limits{
+                  namespace="{{ .Release.Namespace }}",
+                  pod=~"{{ include "vllm-deployment.fullname" . }}-.*",
+                  resource="memory"
+                }) by (pod)
+              ) > 0.9
+            for: 15m
+            labels:
+              severity: warning
+              component: vllm
+              model: "{{ .Values.model.name }}"
+              environment: "{{ .Values.environment }}"
+            annotations:
+              summary: "vLLM memory usage is high"
+              description: |
+                Memory usage for pod {{`{{ $labels.pod }}`}} is at {{`{{ printf "%.1f" (mul $value 100) }}`}}% of limit.
+                Risk of OOM kill.
+
+          # Deployment Alerts
+          - alert: VLLMDeploymentReplicasMismatch
+            expr: |
+              kube_deployment_spec_replicas{
+                namespace="{{ .Release.Namespace }}",
+                deployment="{{ include "vllm-deployment.fullname" . }}"
+              }
+              !=
+              kube_deployment_status_replicas_available{
+                namespace="{{ .Release.Namespace }}",
+                deployment="{{ include "vllm-deployment.fullname" . }}"
+              }
+            for: 15m
+            labels:
+              severity: warning
+              component: vllm
+              model: "{{ .Values.model.name }}"
+              environment: "{{ .Values.environment }}"
+            annotations:
+              summary: "vLLM deployment replicas mismatch"
+              description: |
+                Deployment {{ include "vllm-deployment.fullname" . }} has a mismatch between desired and available replicas.
+                Desired: {{`{{ $labels.spec_replicas }}`}}, Available: {{`{{ $labels.status_replicas_available }}`}}
+                Check pod events and resource availability.
+
+{{- end }}

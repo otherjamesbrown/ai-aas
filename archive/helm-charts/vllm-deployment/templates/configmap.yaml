@@ -1,0 +1,13 @@
+{{- if .Values.configMap }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "vllm-deployment.fullname" . }}-config
+  labels:
+    {{- include "vllm-deployment.labels" . | nindent 4 }}
+data:
+  {{- range $key, $value := .Values.configMap }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+{{- end }}
+

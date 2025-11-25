@@ -1,0 +1,7 @@
+apiVersion: v2
+name: vllm-deployment
+description: Helm chart for deploying vLLM model inference engines on GPU nodes
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+

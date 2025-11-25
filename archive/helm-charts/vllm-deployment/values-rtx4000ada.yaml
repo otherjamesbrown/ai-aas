@@ -1,0 +1,151 @@
+# RTX 4000 Ada (20GB) optimized values
+# Use this for cost-efficient single-GPU deployment
+#
+# GPU Specs:
+#   - Memory: 20GB GDDR6
+#   - Architecture: Ada Lovelace
+#   - CUDA Cores: 6,144
+#   - Perfect for: 7B-13B models
+#
+# Usage:
+#   helm install my-model vllm-deployment \
+#     -f values-rtx4000ada.yaml \
+#     --set model.path=meta-llama/Llama-2-7b-chat-hf
+
+environment: development
+namespace: system
+
+replicaCount: 1  # Single instance for cost efficiency
+
+image:
+  repository: vllm/vllm-openai
+  tag: "v0.6.3.post1"  # Latest stable with Ada Lovelace support
+  pullPolicy: IfNotPresent
+
+model:
+  # Model path - set via --set or override
+  path: ""
+  # Model size determines timeouts
+  size: "small"  # small (7B-13B), medium (30B-40B), large (70B+)
+
+# GPU resource configuration optimized for RTX 4000 Ada
+resources:
+  limits:
+    nvidia.com/gpu: 1
+    memory: "18Gi"     # Leave 2GB headroom for system
+    cpu: "8"
+  requests:
+    nvidia.com/gpu: 1
+    memory: "16Gi"     # Request less for scheduling flexibility
+    cpu: "4"
+
+# Node selector for GPU nodes
+nodeSelector:
+  node-type: gpu
+
+# Tolerations for GPU workloads
+tolerations:
+  - key: gpu-workload
+    operator: Equal
+    value: "true"
+    effect: NoSchedule
+
+# Health probes optimized for RTX 4000 Ada
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# Startup probe - RTX 4000 Ada is fast, but allow time for model loading
+# 7B models: ~2-3 minutes
+# 13B models: ~4-6 minutes
+startupProbe:
+  httpGet:
+    path: /ready
+    port: http
+  initialDelaySeconds: 0
+  periodSeconds: 30
+  timeoutSeconds: 10
+  failureThreshold: 15  # 15 * 30s = 7.5 minutes max
+
+# vLLM configuration optimized for RTX 4000 Ada
+vllm:
+  host: "0.0.0.0"
+  port: 8000
+  # Additional environment variables for RTX 4000 Ada
+  env:
+    # GPU memory utilization (0.9 = use 90% of 20GB = 18GB for model)
+    - name: VLLM_GPU_MEMORY_UTILIZATION
+      value: "0.85"  # Conservative: 17GB for model, 3GB for KV cache/overhead
+
+    # Enable tensor parallelism if needed (1 = no parallelism for single GPU)
+    - name: VLLM_TENSOR_PARALLEL_SIZE
+      value: "1"
+
+    # Enable chunked prefill for better memory efficiency
+    - name: VLLM_ENABLE_CHUNKED_PREFILL
+      value: "true"
+
+    # Max model length (adjust based on model)
+    - name: VLLM_MAX_MODEL_LEN
+      value: "4096"  # 4K context, adjust as needed
+
+    # Disable CUDA graphs to save memory (trade memory for speed)
+    # Uncomment if running out of memory
+    # - name: VLLM_DISABLE_CUDA_GRAPH
+    #   value: "true"
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8000
+  name: http
+
+# Network policy
+networkPolicy:
+  enabled: true
+  allowedSources:
+    - namespace: system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: api-router-service
+
+# Prometheus monitoring
+prometheus:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+
+# Service account
+serviceAccount:
+  create: true
+  name: ""
+
+# Pre-install checks
+preInstallChecks:
+  enabled: true
+
+# Labels
+labels:
+  gpu-type: rtx4000ada
+  cost-tier: small
+
+# Annotations
+annotations:
+  description: "vLLM deployment optimized for RTX 4000 Ada (20GB)"
+  cost-optimization: "single-gpu"

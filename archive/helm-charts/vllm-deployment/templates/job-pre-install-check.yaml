@@ -1,0 +1,67 @@
+{{- if .Values.preInstallChecks.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "vllm-deployment.fullname" . }}-pre-install-check
+  labels:
+    {{- include "vllm-deployment.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  template:
+    metadata:
+      labels:
+        {{- include "vllm-deployment.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "vllm-deployment.serviceAccountName" . }}
+      containers:
+        - name: pre-install-check
+          image: bitnami/kubectl:1.28
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "Checking GPU node availability..."
+              
+              # Check for GPU nodes
+              GPU_NODES=$(kubectl get nodes -l node-type=gpu --no-headers | wc -l)
+              if [ "$GPU_NODES" -eq 0 ]; then
+                echo "ERROR: No GPU nodes found with label 'node-type=gpu'"
+                exit 1
+              fi
+              
+              echo "Found $GPU_NODES GPU node(s)"
+              
+              # Check available GPU resources
+              # Note: Kubernetes doesn't track allocated GPUs directly, so we check allocatable
+              TOTAL_GPUS=0
+              for node in $(kubectl get nodes -l node-type=gpu -o name); do
+                NODE_GPUS=$(kubectl get $node -o jsonpath='{.status.allocatable.nvidia\.com/gpu}' || echo "0")
+                if [ -z "$NODE_GPUS" ] || [ "$NODE_GPUS" = "null" ] || [ "$NODE_GPUS" = "" ]; then
+                  NODE_GPUS=0
+                fi
+                TOTAL_GPUS=$((TOTAL_GPUS + NODE_GPUS))
+              done
+              
+              REQUIRED_GPUS={{ index .Values.resources.requests "nvidia.com/gpu" | default 1 }}
+              if [ "$TOTAL_GPUS" -lt "$REQUIRED_GPUS" ]; then
+                echo "ERROR: Insufficient GPU resources. Required: $REQUIRED_GPUS, Total allocatable: $TOTAL_GPUS"
+                echo "Note: This check verifies allocatable GPUs. Actual availability may be lower if GPUs are in use."
+                exit 1
+              fi
+              
+              echo "GPU resources check passed: Total allocatable: $TOTAL_GPUS (required: $REQUIRED_GPUS)"
+              echo "Pre-install checks passed"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+{{- end }}
+

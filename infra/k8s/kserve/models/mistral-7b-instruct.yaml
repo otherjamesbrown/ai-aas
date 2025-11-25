@@ -12,6 +12,11 @@ metadata:
     environment: development
   annotations:
     serving.kserve.io/deploymentMode: "Serverless"
+    # Knative autoscaling configuration
+    autoscaling.knative.dev/target: "5"  # Target 5 concurrent requests per pod
+    autoscaling.knative.dev/scaleDownDelay: "5m"  # Wait 5 minutes before scaling down
+    autoscaling.knative.dev/window: "60s"  # 60s window for autoscaling decisions
+    autoscaling.knative.dev/panicThreshold: "200"  # Panic at 200% of target (10 concurrent)
 spec:
   predictor:
     # Keep 1 replica warm for testing
