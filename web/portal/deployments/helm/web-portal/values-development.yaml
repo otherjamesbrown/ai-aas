@@ -15,10 +15,17 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
+    # IP-based access using nip.io for development/testing
+    # This allows accessing the portal via https://portal.<LOAD_BALANCER_IP>.nip.io
+    - host: portal.172.232.58.222.nip.io
+      paths:
+        - path: /
+          pathType: Prefix
   tls:
     - secretName: web-portal-tls-dev
       hosts:
         - portal.dev.ai-aas.local
+        - portal.172.232.58.222.nip.io
 
 env:
   - name: VITE_API_BASE_URL
