@@ -30,6 +30,7 @@ The AI-AAS platform uses a comprehensive observability stack built on:
 - Per-model inference performance metrics
 - Per-GPU-type performance comparison
 - Node and cluster-level infrastructure monitoring
+- API-level request rate and latency monitoring
 - Correlation between GPU hardware metrics and model performance
 
 ## Architecture
@@ -305,6 +306,45 @@ sum by (model_name) (
 - Pod placement optimization
 - Infrastructure cost analysis
 - Identifying underutilized nodes
+
+### 5. API Performance Dashboard
+
+**File**: `api-performance.json`
+**UID**: `ai-aas-api-performance`
+**Purpose**: API-level request monitoring and latency analysis
+
+#### Panels
+
+- **Request Rate (RPS)**: Current requests per second across all services
+- **P95 Latency**: 95th percentile response time (milliseconds)
+- **Success Rate**: Percentage of successful requests (2xx status codes)
+- **Concurrent Requests**: Number of active requests being processed
+- **Request Rate Over Time**: Timeseries graph of requests per second
+- **Request Latency Percentiles**: p50, p95, p99 latency trends
+- **Requests by Status Code**: Breakdown of 2xx, 4xx, 5xx responses over time
+- **Concurrent Requests Over Time**: Concurrency trends
+- **Service Performance Summary**: Table showing RPS, P95 Latency, and Success Rate per service
+
+#### Data Source
+
+This dashboard uses **Knative Serving metrics** (not Istio) since KServe InferenceServices are deployed in Serverless mode:
+
+- `revision_app_request_count`: Request counts with status code labels
+- `revision_app_request_latencies_bucket`: Request latency histograms
+- `activator_request_concurrency`: Concurrent request tracking
+
+#### Template Variables
+
+- `$namespace`: Select namespace (default: development)
+
+#### Use Cases
+
+- API gateway performance monitoring
+- Request rate and latency tracking during load tests
+- Identifying error rate spikes (4xx, 5xx responses)
+- Understanding system response characteristics at the API level
+- Troubleshooting slow response times
+- Monitoring autoscaling behavior via concurrency metrics
 
 ## Querying Prometheus
 
