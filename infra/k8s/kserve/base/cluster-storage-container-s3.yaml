@@ -1,0 +1,43 @@
+# ClusterStorageContainer for S3-compatible storage
+apiVersion: serving.kserve.io/v1alpha1
+kind: ClusterStorageContainer
+metadata:
+  name: s3-storage
+spec:
+  container:
+    name: storage-initializer
+    image: kserve/storage-initializer:v0.11.0
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "256Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+
+  supportedUriFormats:
+    - regex: "s3://.*"
+      prefix:
+        - s3://
+
+  env:
+    - name: AWS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: s3-credentials
+          key: access_key
+          optional: true
+    - name: AWS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: s3-credentials
+          key: secret_key
+          optional: true
+    - name: AWS_REGION
+      value: us-east-1
+    - name: S3_ENDPOINT
+      value: ""  # Leave empty for AWS S3, set for MinIO or other S3-compatible storage
+    - name: S3_USE_HTTPS
+      value: "1"
+    - name: S3_VERIFY_SSL
+      value: "1"

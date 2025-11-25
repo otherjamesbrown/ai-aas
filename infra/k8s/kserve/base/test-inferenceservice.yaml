@@ -1,0 +1,38 @@
+# Test InferenceService for Phase 1 validation
+# Uses a small public model (distilgpt2) to validate the infrastructure
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: test-distilgpt2
+  namespace: development
+  labels:
+    app: kserve-test
+    model: distilgpt2
+    environment: development
+  annotations:
+    serving.kserve.io/deploymentMode: "Serverless"
+spec:
+  predictor:
+    model:
+      modelFormat:
+        name: pytorch
+      storageUri: hf://distilgpt2
+      protocolVersion: v2
+
+    # Minimal resources for testing
+    minReplicas: 0  # Allow scale-to-zero
+    maxReplicas: 2
+    scaleTarget: 1  # 1 concurrent request per pod
+    scaleMetric: concurrency
+
+    resources:
+      requests:
+        cpu: "1"
+        memory: "2Gi"
+      limits:
+        cpu: "2"
+        memory: "4Gi"
+
+    # No GPU required for this small test model
+    nodeSelector: {}
+    tolerations: []
