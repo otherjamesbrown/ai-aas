@@ -74,7 +74,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "vllm:avg_generation_throughput_toks_per_s{model_name=\"$model\"}",
+          "expr": "vllm:avg_generation_throughput_toks_per_s{model_name=\"$model\",pod=~\"$pod\"}",
           "refId": "A"
         }
       ],
@@ -142,7 +142,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, rate(vllm:time_to_first_token_seconds_bucket{model_name=\"$model\"}[5m]))",
+          "expr": "histogram_quantile(0.95, rate(vllm:time_to_first_token_seconds_bucket{model_name=\"$model\",pod=~\"$pod\"}[5m]))",
           "refId": "A"
         }
       ],
@@ -212,7 +212,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "vllm:gpu_cache_usage_perc{model_name=\"$model\"}",
+          "expr": "vllm:gpu_cache_usage_perc{model_name=\"$model\",pod=~\"$pod\"}",
           "refId": "A"
         }
       ],
@@ -271,7 +271,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(vllm:prompt_tokens_total{model_name=\"$model\"}[5m])) + sum(rate(vllm:generation_tokens_total{model_name=\"$model\"}[5m]))",
+          "expr": "sum(rate(vllm:prompt_tokens_total{model_name=\"$model\",pod=~\"$pod\"}[5m])) + sum(rate(vllm:generation_tokens_total{model_name=\"$model\",pod=~\"$pod\"}[5m]))",
           "refId": "A"
         }
       ],
@@ -359,8 +359,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.50, rate(vllm:time_to_first_token_seconds_bucket{model_name=\"$model\"}[5m]))",
-          "legendFormat": "p50",
+          "expr": "histogram_quantile(0.50, sum(rate(vllm:time_to_first_token_seconds_bucket{model_name=\"$model\",pod=~\"$pod\"}[5m])) by (le,pod))",
+          "legendFormat": "p50 - {{pod}}",
           "refId": "A"
         },
         {
@@ -368,8 +368,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, rate(vllm:time_to_first_token_seconds_bucket{model_name=\"$model\"}[5m]))",
-          "legendFormat": "p95",
+          "expr": "histogram_quantile(0.95, sum(rate(vllm:time_to_first_token_seconds_bucket{model_name=\"$model\",pod=~\"$pod\"}[5m])) by (le,pod))",
+          "legendFormat": "p95 - {{pod}}",
           "refId": "B"
         },
         {
@@ -377,8 +377,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.99, rate(vllm:time_to_first_token_seconds_bucket{model_name=\"$model\"}[5m]))",
-          "legendFormat": "p99",
+          "expr": "histogram_quantile(0.99, sum(rate(vllm:time_to_first_token_seconds_bucket{model_name=\"$model\",pod=~\"$pod\"}[5m])) by (le,pod))",
+          "legendFormat": "p99 - {{pod}}",
           "refId": "C"
         }
       ],
@@ -466,8 +466,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "vllm:avg_generation_throughput_toks_per_s{model_name=\"$model\"}",
-          "legendFormat": "Generation",
+          "expr": "vllm:avg_generation_throughput_toks_per_s{model_name=\"$model\",pod=~\"$pod\"}",
+          "legendFormat": "Generation - {{pod}}",
           "refId": "A"
         },
         {
@@ -475,8 +475,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "vllm:avg_prompt_throughput_toks_per_s{model_name=\"$model\"}",
-          "legendFormat": "Prompt",
+          "expr": "vllm:avg_prompt_throughput_toks_per_s{model_name=\"$model\",pod=~\"$pod\"}",
+          "legendFormat": "Prompt - {{pod}}",
           "refId": "B"
         }
       ],
@@ -577,7 +577,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.50, sum(rate(vllm:request_prompt_tokens_bucket{model_name=\"$model\"}[5m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(vllm:request_prompt_tokens_bucket{model_name=\"$model\",pod=~\"$pod\"}[5m])) by (le))",
           "legendFormat": "p50 Prompt Tokens",
           "refId": "A"
         },
@@ -586,7 +586,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.50, sum(rate(vllm:request_generation_tokens_bucket{model_name=\"$model\"}[5m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(vllm:request_generation_tokens_bucket{model_name=\"$model\",pod=~\"$pod\"}[5m])) by (le))",
           "legendFormat": "p50 Generation Tokens",
           "refId": "B"
         }
@@ -675,8 +675,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "vllm:num_requests_running{model_name=\"$model\"}",
-          "legendFormat": "Running",
+          "expr": "vllm:num_requests_running{model_name=\"$model\",pod=~\"$pod\"}",
+          "legendFormat": "Running - {{pod}}",
           "refId": "A"
         },
         {
@@ -684,8 +684,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "vllm:num_requests_waiting{model_name=\"$model\"}",
-          "legendFormat": "Waiting",
+          "expr": "vllm:num_requests_waiting{model_name=\"$model\",pod=~\"$pod\"}",
+          "legendFormat": "Waiting - {{pod}}",
           "refId": "B"
         },
         {
@@ -693,8 +693,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "vllm:num_requests_swapped{model_name=\"$model\"}",
-          "legendFormat": "Swapped",
+          "expr": "vllm:num_requests_swapped{model_name=\"$model\",pod=~\"$pod\"}",
+          "legendFormat": "Swapped - {{pod}}",
           "refId": "C"
         }
       ],
@@ -732,6 +732,35 @@
         "regex": "",
         "skipUrlSync": false,
         "sort": 0,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(vllm:prompt_tokens_total{model_name=\"$model\"}, pod)",
+        "hide": 0,
+        "includeAll": true,
+        "allValue": ".*",
+        "label": "Pod",
+        "multi": true,
+        "name": "pod",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(vllm:prompt_tokens_total{model_name=\"$model\"}, pod)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
         "type": "query"
       }
     ]
