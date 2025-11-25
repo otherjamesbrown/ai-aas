@@ -399,7 +399,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "Tokens/sec",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
@@ -439,7 +439,26 @@
           },
           "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Total - {{pod}}"
+            },
+            "properties": [
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "solid"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
@@ -478,9 +497,18 @@
           "expr": "vllm:avg_prompt_throughput_toks_per_s{model_name=\"$model\",pod=~\"$pod\"}",
           "legendFormat": "Prompt - {{pod}}",
           "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "vllm:avg_generation_throughput_toks_per_s{model_name=\"$model\",pod=~\"$pod\"} + vllm:avg_prompt_throughput_toks_per_s{model_name=\"$model\",pod=~\"$pod\"}",
+          "legendFormat": "Total - {{pod}}",
+          "refId": "C"
         }
       ],
-      "title": "Throughput Over Time",
+      "title": "Throughput Over Time (Tokens/sec)",
       "type": "timeseries"
     },
     {
