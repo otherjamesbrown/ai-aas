@@ -14,18 +14,16 @@ spec:
       limits:
         cpu: "1"
         memory: "1Gi"
+    # Optional: credentials for private models
+    env:
+      - name: HF_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: huggingface-secret
+            key: token
+            optional: true
+      - name: HF_HOME
+        value: /tmp/hf_home
 
   supportedUriFormats:
     - regex: "hf://.*"
-      prefix:
-        - hf://
-
-  # Optional: credentials for private models
-  env:
-    - name: HF_TOKEN
-      valueFrom:
-        secretKeyRef:
-          name: huggingface-secret
-          key: token
-    - name: HF_HOME
-      value: /tmp/hf_home

@@ -14,30 +14,27 @@ spec:
       limits:
         cpu: "1"
         memory: "1Gi"
+    env:
+      - name: AWS_ACCESS_KEY_ID
+        valueFrom:
+          secretKeyRef:
+            name: s3-credentials
+            key: access_key
+            optional: true
+      - name: AWS_SECRET_ACCESS_KEY
+        valueFrom:
+          secretKeyRef:
+            name: s3-credentials
+            key: secret_key
+            optional: true
+      - name: AWS_REGION
+        value: us-east-1
+      - name: S3_ENDPOINT
+        value: ""  # Leave empty for AWS S3, set for MinIO or other S3-compatible storage
+      - name: S3_USE_HTTPS
+        value: "1"
+      - name: S3_VERIFY_SSL
+        value: "1"
 
   supportedUriFormats:
     - regex: "s3://.*"
-      prefix:
-        - s3://
-
-  env:
-    - name: AWS_ACCESS_KEY_ID
-      valueFrom:
-        secretKeyRef:
-          name: s3-credentials
-          key: access_key
-          optional: true
-    - name: AWS_SECRET_ACCESS_KEY
-      valueFrom:
-        secretKeyRef:
-          name: s3-credentials
-          key: secret_key
-          optional: true
-    - name: AWS_REGION
-      value: us-east-1
-    - name: S3_ENDPOINT
-      value: ""  # Leave empty for AWS S3, set for MinIO or other S3-compatible storage
-    - name: S3_USE_HTTPS
-      value: "1"
-    - name: S3_VERIFY_SSL
-      value: "1"
