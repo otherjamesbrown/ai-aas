@@ -241,7 +241,12 @@ func BodyBufferMiddleware(maxSize int64) func(http.Handler) http.Handler {
 func AuthContextMiddleware(authenticator *auth.Authenticator, logger *zap.Logger, tracer trace.Tracer) func(http.Handler) http.Handler {
 	// Public endpoints that don't require authentication
 	publicEndpoints := map[string]bool{
-		"GET /v1/models": true,
+		"GET /v1/models":         true,
+		"POST /v1/auth/login":    true, // Password-based login
+		"GET /v1/auth/userinfo":  true, // User info endpoint (requires Bearer token, not API key)
+		"POST /v1/auth/token":    true, // Token exchange/refresh
+		"POST /v1/auth/logout":   true, // Logout endpoint
+		"GET /v1/auth/callback":  true, // OAuth callback
 	}
 
 	return func(next http.Handler) http.Handler {
