@@ -1,0 +1,87 @@
+# PodMonitor for scraping vLLM metrics from KServe InferenceServices
+#
+# This PodMonitor automatically discovers and scrapes metrics from all
+# vLLM-based InferenceServices in the cluster. It targets the vLLM container
+# directly on port 8000 where Prometheus metrics are exposed.
+#
+# The metrics include:
+# - vllm:time_to_first_token_seconds - TTFT latency histogram
+# - vllm:avg_generation_throughput_toks_per_s - Generation throughput
+# - vllm:gpu_cache_usage_perc - KV cache utilization
+# - vllm:prompt_tokens_total - Total tokens processed
+# - And many more (see vLLM documentation)
+#
+# Labels preserved for correlation:
+# - model_name: The model being served (from vLLM)
+# - serving_kserve_io_inferenceservice: The InferenceService name
+# - model: Model label from pod metadata
+# - version: Model version from pod metadata
+# - namespace: Kubernetes namespace
+# - pod: Pod name (links to DCGM metrics)
+# - node: Node name (for GPU correlation)
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: kserve-vllm-metrics
+  namespace: development
+  labels:
+    app: vllm-inference
+    monitoring: prometheus
+spec:
+  # Select all pods with KServe InferenceService label
+  selector:
+    matchLabels:
+      app: vllm-inference
+
+  # Scrape pods from any namespace (allows multi-namespace deployments)
+  namespaceSelector:
+    any: true
+
+  # Pod metrics endpoints configuration
+  podMetricsEndpoints:
+    - port: user-port  # Port 8000 named "user-port" in vLLM container
+      path: /metrics
+      scheme: http
+      interval: 30s  # Scrape every 30 seconds
+      scrapeTimeout: 10s
+
+      # Relabel configurations to enrich metrics
+      relabelings:
+        # Preserve the pod name as a label (critical for DCGM correlation)
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+          action: replace
+
+        # Preserve the namespace
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+          action: replace
+
+        # Preserve the node name for GPU correlation
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+          action: replace
+
+        # Add InferenceService name from pod label
+        - sourceLabels: [__meta_kubernetes_pod_label_serving_kserve_io_inferenceservice]
+          targetLabel: inferenceservice
+          action: replace
+
+        # Add model name from pod label (our custom label)
+        - sourceLabels: [__meta_kubernetes_pod_label_model]
+          targetLabel: model_label
+          action: replace
+
+        # Add model version from pod label
+        - sourceLabels: [__meta_kubernetes_pod_label_version]
+          targetLabel: model_version
+          action: replace
+
+        # Add environment label
+        - sourceLabels: [__meta_kubernetes_pod_label_environment]
+          targetLabel: environment
+          action: replace
+
+      # No metric relabeling - accept all metrics from vLLM pods
+      # vLLM exports metrics with colons (vllm:*) which Prometheus converts to underscores (vllm_*)
