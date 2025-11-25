@@ -85,7 +85,7 @@ env:
   - name: LOG_LEVEL
     value: debug  # Debug logging in dev
   - name: USER_ORG_SERVICE_URL
-    value: "http://localhost:8081"  # Stub for now - will use dev keys
+    value: "http://user-org-service-development-user-org-service.user-org-service.svc.cluster.local:8081"
   - name: USER_ORG_SERVICE_TIMEOUT
     value: "2s"
   - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -94,7 +94,8 @@ env:
 # Backend endpoints - configure vLLM service
 backends:
   # Format: backend-id:http://service-name.namespace.svc.cluster.local:port/path
-  endpoints: "vllm-gpt-oss-20b:http://gpt-oss-20b-vllm-deployment.system.svc.cluster.local:8000/v1/chat/completions"
+  # KServe InferenceServices are exposed via Knative Services
+  endpoints: "mistral-7b-instruct:http://mistral-7b-instruct-predictor.development.svc.cluster.local/v1/chat/completions"
 
 # Redis configuration (optional for dev - stubbed if not available)
 redis:
