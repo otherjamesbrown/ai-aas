@@ -1,0 +1,35 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: kserve-queue-proxy-metrics
+  namespace: development
+  labels:
+    app: kserve-inference
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      serving.knative.dev/service: mistral-7b-instruct-predictor
+  podMetricsEndpoints:
+    - port: http-usermetric
+      interval: 30s
+      path: /metrics
+      relabelings:
+        # Add pod name
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        # Add node name
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+        # Add namespace
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        # Add service name from label
+        - sourceLabels: [__meta_kubernetes_pod_label_serving_knative_dev_service]
+          targetLabel: service_name
+        # Add revision name from label
+        - sourceLabels: [__meta_kubernetes_pod_label_serving_knative_dev_revision]
+          targetLabel: revision_name
+        # Add configuration name from label
+        - sourceLabels: [__meta_kubernetes_pod_label_serving_knative_dev_configuration]
+          targetLabel: configuration_name
