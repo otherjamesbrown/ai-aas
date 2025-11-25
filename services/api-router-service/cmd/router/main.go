@@ -118,10 +118,10 @@ func main() {
 		logger.Warn("failed to load initial configuration, using cache fallback", zap.Error(err))
 	}
 
-	// Bootstrap default routing policies for development
-	// This ensures mistral-7b-instruct model has a routing policy even without etcd
+	// Bootstrap default routing policy for development
+	// Only support the actual deployed model - don't silently alias other model names
 	if cfg.Environment == "development" {
-		defaultPolicy := &config.RoutingPolicy{
+		policy := &config.RoutingPolicy{
 			PolicyID:       "*-mistral-7b-instruct",
 			OrganizationID: "*", // Global policy
 			Model:          "mistral-7b-instruct",
@@ -135,10 +135,13 @@ func main() {
 			UpdatedAt:         time.Now(),
 			Version:           1,
 		}
-		if err := cache.StorePolicy(ctx, defaultPolicy); err != nil {
-			logger.Error("failed to bootstrap default routing policy", zap.Error(err))
+		if err := cache.StorePolicy(ctx, policy); err != nil {
+			logger.Error("failed to bootstrap routing policy",
+				zap.String("model", "mistral-7b-instruct"),
+				zap.Error(err),
+			)
 		} else {
-			logger.Info("bootstrapped default routing policy",
+			logger.Info("bootstrapped routing policy",
 				zap.String("model", "mistral-7b-instruct"),
 				zap.String("backend", "mistral-7b-instruct"),
 			)

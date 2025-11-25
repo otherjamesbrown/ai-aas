@@ -95,8 +95,9 @@ env:
 backends:
   # Format: backend-id:http://service-name.namespace.svc.cluster.local:port
   # KServe InferenceServices are exposed via Knative Services
+  # Use the -private service for internal cluster access (bypasses Istio gateway)
   # Note: Don't include path - it's added by the router based on request type
-  endpoints: "mistral-7b-instruct:http://mistral-7b-instruct-predictor.development.svc.cluster.local"
+  endpoints: "mistral-7b-instruct:http://mistral-7b-instruct-predictor-00001-private.development.svc.cluster.local"
 
 # Redis configuration (optional for dev - stubbed if not available)
 redis:
