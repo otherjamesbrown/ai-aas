@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/subtle"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -34,8 +35,8 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 	r.Get("/readyz", healthHandler.Readyz)
 	r.Handle("/metrics", handlers.MetricsHandler())
 
-	// API key validator (placeholder - will be implemented with repository)
-	validator := &placeholderValidator{}
+	// API key validator using master admin key from config
+	validator := &masterKeyValidator{masterKey: cfg.MasterAdminAPIKey}
 
 	// Protected API routes
 	r.Route("/v1", func(r chi.Router) {
@@ -98,15 +99,22 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 	return r
 }
 
-// placeholderValidator is a temporary implementation until repository is complete
-type placeholderValidator struct{}
+// masterKeyValidator validates API keys against the master admin key
+type masterKeyValidator struct {
+	masterKey string
+}
 
-func (v *placeholderValidator) ValidateKey(ctx context.Context, key string) (string, bool, error) {
-	// TODO: Implement actual validation against database
-	// For now, accept any non-empty key
-	if key != "" {
-		return "placeholder-key-id", true, nil
+func (v *masterKeyValidator) ValidateKey(ctx context.Context, key string) (string, bool, error) {
+	// Use constant-time comparison to prevent timing attacks
+	if key == "" {
+		return "", false, nil
 	}
+
+	// Validate against master admin API key
+	if subtle.ConstantTimeCompare([]byte(key), []byte(v.masterKey)) == 1 {
+		return "master-admin-key", true, nil
+	}
+
 	return "", false, nil
 }
 

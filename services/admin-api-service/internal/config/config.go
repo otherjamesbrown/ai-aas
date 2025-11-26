@@ -21,7 +21,8 @@ type Config struct {
 	DBIdleTimeout   time.Duration
 
 	// Authentication
-	APIKeyHashSalt string
+	APIKeyHashSalt    string
+	MasterAdminAPIKey string  // Master API key for admin access (required)
 
 	// Rate limiting
 	RateLimitPerMin int
@@ -45,7 +46,8 @@ func Load() (*Config, error) {
 		DBMinConns:      getEnvInt("DB_MIN_CONNS", 10),
 		DBConnTimeout:   getEnvDuration("DB_CONN_TIMEOUT", 5*time.Second),
 		DBIdleTimeout:   getEnvDuration("DB_IDLE_TIMEOUT", 5*time.Minute),
-		APIKeyHashSalt:  getEnv("API_KEY_HASH_SALT", ""),
+		APIKeyHashSalt:    getEnv("API_KEY_HASH_SALT", ""),
+		MasterAdminAPIKey: getEnv("MASTER_ADMIN_API_KEY", ""),
 		RateLimitPerMin: getEnvInt("RATE_LIMIT_PER_MIN", 100),
 		LogLevel:        getEnv("LOG_LEVEL", "info"),
 		MetricsEnabled:  getEnvBool("METRICS_ENABLED", true),
@@ -55,6 +57,10 @@ func Load() (*Config, error) {
 
 	if cfg.DatabaseURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required")
+	}
+
+	if cfg.MasterAdminAPIKey == "" {
+		return nil, fmt.Errorf("MASTER_ADMIN_API_KEY is required")
 	}
 
 	return cfg, nil

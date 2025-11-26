@@ -3,7 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS routing_policies (
     policy_id VARCHAR(255) PRIMARY KEY,
-    organization_id UUID NOT NULL,
+    organization_id VARCHAR(255) NOT NULL,  -- VARCHAR to support '*' for global policies
     model VARCHAR(255) NOT NULL,
     backends JSONB NOT NULL,
     fallback_backends JSONB DEFAULT '[]'::jsonb,

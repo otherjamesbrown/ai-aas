@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/api/handlers"
 )
 
@@ -22,7 +23,7 @@ func Metrics() func(http.Handler) http.Handler {
 
 			// Record metrics
 			duration := time.Since(start).Seconds()
-			endpoint := normalizeEndpoint(r.URL.Path)
+			endpoint := normalizeEndpoint(r)
 
 			handlers.HTTPRequestsTotal.WithLabelValues(
 				r.Method,
@@ -48,14 +49,15 @@ func (w *metricsResponseWriter) WriteHeader(status int) {
 	w.ResponseWriter.WriteHeader(status)
 }
 
-// normalizeEndpoint removes dynamic path segments for consistent metric labels
-func normalizeEndpoint(path string) string {
-	// Normalize common patterns
-	// /v1/registry/models/some-model -> /v1/registry/models/{model_name}
-	// /v1/organizations/uuid -> /v1/organizations/{org_id}
-	// etc.
-
-	// Simple implementation - in production would use route patterns
-	return path
+// normalizeEndpoint uses chi's route pattern for low-cardinality metric labels
+func normalizeEndpoint(r *http.Request) string {
+	// Use chi's routing pattern to get a low-cardinality endpoint label
+	routeCtx := chi.RouteContext(r.Context())
+	if routeCtx != nil {
+		if pattern := routeCtx.RoutePattern(); pattern != "" {
+			return pattern
+		}
+	}
+	// Fallback for routes not found, to prevent high cardinality
+	return "unknown"
 }
-
