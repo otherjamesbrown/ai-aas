@@ -246,7 +246,7 @@ func TestFormatPrompt(t *testing.T) {
 			}
 
 			// Verify all messages are included
-			for _, msg := range tt.messages {
+			for range tt.messages {
 				// Content should be in the prompt
 				// (Simple check - in reality prompt format varies by model)
 			}

@@ -31,7 +31,9 @@ spec:
 
     # Scaling configuration
     # Adjust based on expected traffic and cost requirements
-    minReplicas: {{MIN_REPLICAS}}  # 0 for scale-to-zero (dev), 1+ for production
+    # IMPORTANT: Set minReplicas: 1 (minimum) for production to avoid cold boot delays
+    # Large models take 5-15 minutes to load into GPU memory on cold start
+    minReplicas: {{MIN_REPLICAS}}  # 1+ for production (avoid cold starts), 0 for dev/testing only
     maxReplicas: {{MAX_REPLICAS}}  # Maximum pods under load (e.g., 5-10)
     scaleTarget: {{SCALE_TARGET}}  # Target concurrent requests per pod (e.g., 5)
     scaleMetric: concurrency       # Scale based on concurrent requests
@@ -71,9 +73,37 @@ spec:
           - name: HF_HOME
             value: /tmp/hf_home
         ports:
-          - containerPort: 8080
+          - containerPort: {{PORT}}  # e.g., 8000 (newer vLLM) or 8080 (older vLLM)
             name: h2c
             protocol: TCP
+        # Health probes to prevent traffic before model is loaded
+        # Adjust failureThreshold based on model size:
+        # - 7B models: failureThreshold: 36 (6 min)
+        # - 13B models: failureThreshold: 60 (10 min)
+        # - 20B models: failureThreshold: 90 (15 min)
+        # - 70B+ models: failureThreshold: 180 (30 min)
+        startupProbe:
+          httpGet:
+            path: /health
+            port: {{PORT}}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: {{STARTUP_FAILURE_THRESHOLD}}  # Adjust based on model size
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: {{PORT}}
+          periodSeconds: 10
+          failureThreshold: 3
+          timeoutSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{PORT}}
+          periodSeconds: 30
+          failureThreshold: 3
+          timeoutSeconds: 5
 
     # GPU node scheduling
     # Uncomment and adjust if you need to target specific GPU types
