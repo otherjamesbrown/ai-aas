@@ -132,14 +132,16 @@ As a developer, I can reference documentation that explains how to configure rea
 - **FR-005**: Provide probe configuration guidelines based on model size (7B, 13B, 20B, 70B+).
 - **FR-006**: Ensure probe configurations are compatible with Knative Serving and queue-proxy sidecar.
 - **FR-007**: Document probe configuration in runbooks and InferenceService templates.
+- **FR-008**: Configure `minReplicas: 1` (minimum) for all production models to prevent scale-to-zero and avoid cold boot delays (5-15 minutes for large models).
 
 ### Non-Functional Requirements
 
 - **NFR-001**: Readiness probe must detect model readiness within 30 seconds of vLLM becoming ready to serve.
-- **NFR-002**: Liveness probe must not falsely trigger during normal heavy load (<1% false positive rate).
-- **NFR-003**: Startup probe timeout must accommodate 95th percentile model loading times without premature pod kills.
-- **NFR-004**: Probe HTTP requests must add <100ms overhead to model serving.
-- **NFR-005**: Rolling updates with probes enabled must complete without service degradation or dropped requests.
+- **NFR-002**: With `minReplicas: 1`, first request latency must be <5 seconds (no cold start delay). Cold boot prevention is mandatory for production models.
+- **NFR-003**: Liveness probe must not falsely trigger during normal heavy load (<1% false positive rate).
+- **NFR-004**: Startup probe timeout must accommodate 95th percentile model loading times without premature pod kills.
+- **NFR-005**: Probe HTTP requests must add <100ms overhead to model serving.
+- **NFR-006**: Rolling updates with probes enabled must complete without service degradation or dropped requests.
 
 ## Success Criteria *(mandatory)*
 

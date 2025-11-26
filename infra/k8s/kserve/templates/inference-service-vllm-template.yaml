@@ -31,7 +31,9 @@ spec:
 
     # Scaling configuration
     # Adjust based on expected traffic and cost requirements
-    minReplicas: {{MIN_REPLICAS}}  # 0 for scale-to-zero (dev), 1+ for production
+    # IMPORTANT: Set minReplicas: 1 (minimum) for production to avoid cold boot delays
+    # Large models take 5-15 minutes to load into GPU memory on cold start
+    minReplicas: {{MIN_REPLICAS}}  # 1+ for production (avoid cold starts), 0 for dev/testing only
     maxReplicas: {{MAX_REPLICAS}}  # Maximum pods under load (e.g., 5-10)
     scaleTarget: {{SCALE_TARGET}}  # Target concurrent requests per pod (e.g., 5)
     scaleMetric: concurrency       # Scale based on concurrent requests
