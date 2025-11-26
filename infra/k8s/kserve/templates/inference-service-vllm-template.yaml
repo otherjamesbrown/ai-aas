@@ -71,7 +71,7 @@ spec:
           - name: HF_HOME
             value: /tmp/hf_home
         ports:
-          - containerPort: 8080
+          - containerPort: {{PORT}}  # e.g., 8000 (newer vLLM) or 8080 (older vLLM)
             name: h2c
             protocol: TCP
         # Health probes to prevent traffic before model is loaded
@@ -83,7 +83,7 @@ spec:
         startupProbe:
           httpGet:
             path: /health
-            port: 8080
+            port: {{PORT}}
           initialDelaySeconds: 30
           periodSeconds: 10
           failureThreshold: {{STARTUP_FAILURE_THRESHOLD}}  # Adjust based on model size
@@ -91,14 +91,14 @@ spec:
         readinessProbe:
           httpGet:
             path: /health
-            port: 8080
+            port: {{PORT}}
           periodSeconds: 10
           failureThreshold: 3
           timeoutSeconds: 5
         livenessProbe:
           httpGet:
             path: /health
-            port: 8080
+            port: {{PORT}}
           periodSeconds: 30
           failureThreshold: 3
           timeoutSeconds: 5

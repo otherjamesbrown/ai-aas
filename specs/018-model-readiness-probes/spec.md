@@ -125,7 +125,7 @@ As a developer, I can reference documentation that explains how to configure rea
 
 ### Functional Requirements
 
-- **FR-001**: Provide readiness probe configuration for vLLM InferenceService containers checking `/health` endpoint on port 8000.
+- **FR-001**: Provide readiness probe configuration for vLLM InferenceService containers checking `/health` endpoint on the container's application port (8000 for newer vLLM versions, 8080 for older versions).
 - **FR-002**: Provide liveness probe configuration for vLLM InferenceService containers to detect and restart unhealthy pods.
 - **FR-003**: Provide startup probe configuration for large models (20B+) with extended timeouts to accommodate long loading times.
 - **FR-004**: Update all existing InferenceService manifests (gpt-oss-20b, mistral-7b-instruct, llama-2-7b) with probe configurations.
