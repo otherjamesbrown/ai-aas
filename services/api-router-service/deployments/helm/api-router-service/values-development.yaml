@@ -33,6 +33,12 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    # CORS configuration for portal access
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://portal.172.232.58.222.nip.io,https://portal.dev.ai-aas.local"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, PUT, POST, DELETE, PATCH, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,X-Api-Key,Authorization"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
   hosts:
     - host: api.dev.ai-aas.local
       paths:
@@ -97,7 +103,8 @@ backends:
   # KServe InferenceServices are exposed via Knative Services
   # Use the -private service for internal cluster access (bypasses Istio gateway)
   # Note: Don't include path - it's added by the router based on request type
-  endpoints: "mistral-7b-instruct:http://mistral-7b-instruct-predictor-00001-private.development.svc.cluster.local,gpt-oss-20b:http://gpt-oss-20b-predictor-00001-private.development.svc.cluster.local"
+  # Using revision-specific private services for direct pod access (bypasses Istio)
+  endpoints: "mistral-7b-instruct:http://mistral-7b-instruct-predictor-00002-private.development.svc.cluster.local,gpt-oss-20b:http://gpt-oss-20b-predictor-00001-private.development.svc.cluster.local"
 
 # Redis configuration (optional for dev - stubbed if not available)
 redis:
