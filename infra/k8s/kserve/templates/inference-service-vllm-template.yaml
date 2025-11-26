@@ -74,6 +74,34 @@ spec:
           - containerPort: 8080
             name: h2c
             protocol: TCP
+        # Health probes to prevent traffic before model is loaded
+        # Adjust failureThreshold based on model size:
+        # - 7B models: failureThreshold: 36 (6 min)
+        # - 13B models: failureThreshold: 60 (10 min)
+        # - 20B models: failureThreshold: 90 (15 min)
+        # - 70B+ models: failureThreshold: 180 (30 min)
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: {{STARTUP_FAILURE_THRESHOLD}}  # Adjust based on model size
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          periodSeconds: 10
+          failureThreshold: 3
+          timeoutSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          periodSeconds: 30
+          failureThreshold: 3
+          timeoutSeconds: 5
 
     # GPU node scheduling
     # Uncomment and adjust if you need to target specific GPU types

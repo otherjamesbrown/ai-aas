@@ -62,6 +62,29 @@ spec:
           - containerPort: 8080
             name: h2c
             protocol: TCP
+        # Health probes to prevent traffic before model is loaded
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 36  # 30s + 36×10s = 6 min max for 7B model
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          periodSeconds: 10
+          failureThreshold: 3
+          timeoutSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          periodSeconds: 30
+          failureThreshold: 3
+          timeoutSeconds: 5
 
     # GPU node scheduling
     nodeSelector:
