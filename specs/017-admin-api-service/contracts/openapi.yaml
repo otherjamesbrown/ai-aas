@@ -1,0 +1,1008 @@
+openapi: 3.0.3
+info:
+  title: Admin API Service
+  description: |
+    HTTP API for administrative operations on the AI-AAS platform.
+    Provides model registry management, organization management, routing policies, and audit logging.
+  version: 1.0.0
+  contact:
+    name: Platform Team
+
+servers:
+  - url: http://admin-api-service.{namespace}.svc.cluster.local:8080
+    description: Kubernetes internal
+    variables:
+      namespace:
+        default: development
+        enum: [development, staging, production]
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Models
+    description: Model registry operations
+  - name: Organizations
+    description: Organization management
+  - name: Policies
+    description: Routing policy management
+  - name: Audit
+    description: Audit log queries
+  - name: System
+    description: Health and metrics
+
+paths:
+  /healthz:
+    get:
+      tags: [System]
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /metrics:
+    get:
+      tags: [System]
+      summary: Prometheus metrics
+      security: []
+      responses:
+        '200':
+          description: Prometheus format metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /v1/registry/models:
+    post:
+      tags: [Models]
+      summary: Register or update a model
+      operationId: registerModel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelRegistration'
+      responses:
+        '201':
+          description: Model created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Model'
+        '200':
+          description: Model updated (upsert)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Model'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    get:
+      tags: [Models]
+      summary: List models
+      operationId: listModels
+      parameters:
+        - name: environment
+          in: query
+          schema:
+            type: string
+            enum: [development, staging, production]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ready, degraded, offline, pending]
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: List of models
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /v1/registry/models/{model_name}:
+    get:
+      tags: [Models]
+      summary: Get model by name
+      operationId: getModel
+      parameters:
+        - name: model_name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: environment
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Model details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Model'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Models]
+      summary: Update model
+      operationId: updateModel
+      parameters:
+        - name: model_name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: environment
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelUpdate'
+      responses:
+        '200':
+          description: Model updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Model'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Models]
+      summary: Delete model
+      operationId: deleteModel
+      parameters:
+        - name: model_name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: environment
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Model deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/organizations:
+    post:
+      tags: [Organizations]
+      summary: Create organization
+      operationId: createOrganization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationCreate'
+      responses:
+        '201':
+          description: Organization created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    get:
+      tags: [Organizations]
+      summary: List organizations
+      operationId: listOrganizations
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: List of organizations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationList'
+
+  /v1/organizations/{org_id}:
+    get:
+      tags: [Organizations]
+      summary: Get organization
+      operationId: getOrganization
+      parameters:
+        - name: org_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Organization details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/routing/policies:
+    post:
+      tags: [Policies]
+      summary: Create routing policy
+      operationId: createPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyCreate'
+      responses:
+        '201':
+          description: Policy created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    get:
+      tags: [Policies]
+      summary: List routing policies
+      operationId: listPolicies
+      parameters:
+        - name: model
+          in: query
+          schema:
+            type: string
+        - name: organization_id
+          in: query
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: List of policies
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyList'
+
+  /v1/routing/policies/{policy_id}:
+    get:
+      tags: [Policies]
+      summary: Get routing policy
+      operationId: getPolicy
+      parameters:
+        - name: policy_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Policy details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Policies]
+      summary: Update routing policy
+      operationId: updatePolicy
+      parameters:
+        - name: policy_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyUpdate'
+      responses:
+        '200':
+          description: Policy updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    delete:
+      tags: [Policies]
+      summary: Delete routing policy
+      operationId: deletePolicy
+      parameters:
+        - name: policy_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: force
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '204':
+          description: Policy deleted
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /v1/routing/policies/{policy_id}/activate:
+    post:
+      tags: [Policies]
+      summary: Activate policy
+      operationId: activatePolicy
+      parameters:
+        - name: policy_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Policy activated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyActivationResponse'
+
+  /v1/routing/policies/{policy_id}/deactivate:
+    post:
+      tags: [Policies]
+      summary: Deactivate policy
+      operationId: deactivatePolicy
+      parameters:
+        - name: policy_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Policy deactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyActivationResponse'
+
+  /v1/routing/policies/sync:
+    get:
+      tags: [Policies]
+      summary: Sync policies (for api-router-service)
+      operationId: syncPolicies
+      parameters:
+        - name: since_version
+          in: query
+          schema:
+            type: integer
+        - name: environment
+          in: query
+          schema:
+            type: string
+        - name: If-Modified-Since
+          in: header
+          schema:
+            type: string
+            format: date-time
+        - name: X-Router-Instance-ID
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Changed policies
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicySyncResponse'
+        '304':
+          description: No changes
+
+  /v1/routing/policies/validate:
+    post:
+      tags: [Policies]
+      summary: Validate policy configuration
+      operationId: validatePolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyCreate'
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyValidationResponse'
+
+  /v1/audit-logs:
+    get:
+      tags: [Audit]
+      summary: Query audit logs
+      operationId: listAuditLogs
+      parameters:
+        - name: actor
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: resource_type
+          in: query
+          schema:
+            type: string
+        - name: resource_id
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Audit log entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogList'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+      description: Admin API key
+
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 100
+        maximum: 500
+    Offset:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        default: 0
+
+  responses:
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Conflict:
+      description: Resource conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+  schemas:
+    ProblemDetail:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+
+    Pagination:
+      type: object
+      properties:
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+        next_offset:
+          type: integer
+          nullable: true
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        version:
+          type: string
+        database:
+          type: string
+          enum: [connected, disconnected]
+        timestamp:
+          type: string
+          format: date-time
+
+    ModelRegistration:
+      type: object
+      required: [model_name, deployment_endpoint, deployment_environment, deployment_namespace]
+      properties:
+        model_name:
+          type: string
+          maxLength: 255
+        deployment_endpoint:
+          type: string
+          maxLength: 512
+        deployment_environment:
+          type: string
+          enum: [development, staging, production]
+        deployment_namespace:
+          type: string
+        deployment_status:
+          type: string
+          enum: [ready, degraded, offline, pending]
+          default: pending
+        deployment_target:
+          type: string
+          default: managed
+        revision:
+          type: integer
+          default: 1
+        cost_per_1k_tokens:
+          type: number
+        metadata:
+          type: object
+        auto_create_policy:
+          type: boolean
+          default: false
+        policy_config:
+          $ref: '#/components/schemas/PolicyConfig'
+
+    PolicyConfig:
+      type: object
+      properties:
+        organization_id:
+          type: string
+        weight:
+          type: integer
+          default: 100
+        failover_threshold:
+          type: integer
+          default: 3
+        metadata:
+          type: object
+
+    ModelUpdate:
+      type: object
+      properties:
+        deployment_endpoint:
+          type: string
+        deployment_status:
+          type: string
+          enum: [ready, degraded, offline, pending]
+        deployment_target:
+          type: string
+        revision:
+          type: integer
+        cost_per_1k_tokens:
+          type: number
+        metadata:
+          type: object
+
+    Model:
+      type: object
+      properties:
+        model_id:
+          type: string
+          format: uuid
+        model_name:
+          type: string
+        deployment_endpoint:
+          type: string
+        deployment_environment:
+          type: string
+        deployment_namespace:
+          type: string
+        deployment_status:
+          type: string
+        deployment_target:
+          type: string
+        revision:
+          type: integer
+        cost_per_1k_tokens:
+          type: number
+        metadata:
+          type: object
+        routing_policy_created:
+          type: boolean
+        routing_policy_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ModelList:
+      type: object
+      properties:
+        models:
+          type: array
+          items:
+            $ref: '#/components/schemas/Model'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    OrganizationCreate:
+      type: object
+      required: [slug, display_name]
+      properties:
+        slug:
+          type: string
+          maxLength: 100
+          pattern: '^[a-z][a-z0-9-]*$'
+        display_name:
+          type: string
+          maxLength: 255
+        plan_tier:
+          type: string
+          enum: [free, starter, enterprise]
+          default: free
+        budget_limit_tokens:
+          type: integer
+
+    Organization:
+      type: object
+      properties:
+        organization_id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        display_name:
+          type: string
+        plan_tier:
+          type: string
+        status:
+          type: string
+        budget_limit_tokens:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    OrganizationList:
+      type: object
+      properties:
+        organizations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Organization'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    Backend:
+      type: object
+      required: [backend_id, weight]
+      properties:
+        backend_id:
+          type: string
+        weight:
+          type: integer
+          minimum: 1
+          maximum: 100
+        health_status:
+          type: string
+          enum: [healthy, degraded, unhealthy, unknown]
+        endpoint:
+          type: string
+        last_health_check:
+          type: string
+          format: date-time
+
+    PolicyCreate:
+      type: object
+      required: [model, backends]
+      properties:
+        policy_id:
+          type: string
+        organization_id:
+          type: string
+          default: '*'
+        model:
+          type: string
+          maxLength: 255
+        backends:
+          type: array
+          items:
+            $ref: '#/components/schemas/Backend'
+          minItems: 1
+          maxItems: 10
+        fallback_backends:
+          type: array
+          items:
+            $ref: '#/components/schemas/Backend'
+        failover_threshold:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 3
+        enabled:
+          type: boolean
+          default: true
+        metadata:
+          type: object
+          properties:
+            description:
+              type: string
+            owner:
+              type: string
+            tags:
+              type: array
+              items:
+                type: string
+
+    PolicyUpdate:
+      type: object
+      properties:
+        backends:
+          type: array
+          items:
+            $ref: '#/components/schemas/Backend'
+        fallback_backends:
+          type: array
+          items:
+            $ref: '#/components/schemas/Backend'
+        failover_threshold:
+          type: integer
+        enabled:
+          type: boolean
+        metadata:
+          type: object
+
+    Policy:
+      type: object
+      properties:
+        policy_id:
+          type: string
+        organization_id:
+          type: string
+        model:
+          type: string
+        backends:
+          type: array
+          items:
+            $ref: '#/components/schemas/Backend'
+        fallback_backends:
+          type: array
+          items:
+            $ref: '#/components/schemas/Backend'
+        failover_threshold:
+          type: integer
+        enabled:
+          type: boolean
+        version:
+          type: integer
+        metadata:
+          type: object
+        sync_info:
+          type: object
+          properties:
+            instances_synced:
+              type: integer
+            instances_total:
+              type: integer
+        usage_stats:
+          type: object
+          properties:
+            requests_last_hour:
+              type: integer
+            errors_last_hour:
+              type: integer
+            avg_latency_ms:
+              type: number
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+        updated_by:
+          type: string
+
+    PolicyList:
+      type: object
+      properties:
+        policies:
+          type: array
+          items:
+            $ref: '#/components/schemas/Policy'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    PolicyActivationResponse:
+      type: object
+      properties:
+        policy_id:
+          type: string
+        enabled:
+          type: boolean
+        updated_at:
+          type: string
+          format: date-time
+        message:
+          type: string
+
+    PolicySyncResponse:
+      type: object
+      properties:
+        policies:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/Policy'
+              - type: object
+                properties:
+                  deleted:
+                    type: boolean
+        sync_metadata:
+          type: object
+          properties:
+            server_time:
+              type: string
+              format: date-time
+            max_version:
+              type: integer
+            next_sync_recommended_at:
+              type: string
+              format: date-time
+
+    PolicyValidationResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+        warnings:
+          type: array
+          items:
+            type: string
+        estimated_impact:
+          type: object
+          properties:
+            affected_organizations:
+              type: array
+              items:
+                type: string
+            estimated_requests_per_hour:
+              type: integer
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        actor:
+          type: string
+        action:
+          type: string
+        resource_type:
+          type: string
+        resource_id:
+          type: string
+        outcome:
+          type: string
+          enum: [success, failure]
+        changes:
+          type: object
+        error_detail:
+          type: string
+        client_ip:
+          type: string
+        user_agent:
+          type: string
+        request_id:
+          type: string
+          format: uuid
+
+    AuditLogList:
+      type: object
+      properties:
+        audit_logs:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLog'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+

@@ -27,18 +27,19 @@ import (
 
 // Handler handles public API requests.
 type Handler struct {
-	logger          *zap.Logger
-	authenticator   *auth.Authenticator
-	configLoader    *config.Loader
-	backendClient   *routing.BackendClient
-	backendRegistry *config.BackendRegistry
-	routingEngine   *routing.Engine
-	routingMetrics  *telemetry.RoutingMetrics
-	usageHook       *UsageHook
-	tracer          trace.Tracer
-	errorBuilder    *api.ErrorBuilder
-	backendURIs     map[string]string // Map of backend ID to URI (for testing/configuration - overrides registry)
-	httpClient      *http.Client      // Shared HTTP client for OpenAI requests (PR#16 Issue#4)
+	logger            *zap.Logger
+	authenticator     *auth.Authenticator
+	configLoader      *config.Loader
+	backendClient     *routing.BackendClient
+	backendRegistry   *config.BackendRegistry
+	routingEngine     *routing.Engine
+	routingMetrics    *telemetry.RoutingMetrics
+	usageHook         *UsageHook
+	tracer            trace.Tracer
+	errorBuilder      *api.ErrorBuilder
+	backendURIs       map[string]string // Map of backend ID to URI (for testing/configuration - overrides registry)
+	httpClient        *http.Client      // Shared HTTP client for OpenAI requests (PR#16 Issue#4)
+	userOrgServiceURL string            // URL for user-org-service (for auth proxy)
 }
 
 // NewHandler creates a new public API handler.
@@ -88,6 +89,12 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/v1/models", h.HandleModels)
 	r.Post("/v1/chat/completions", h.HandleOpenAIChatCompletions)
 	r.Post("/v1/completions", h.HandleOpenAICompletions)
+	// Authentication endpoints (proxied to user-org-service)
+	r.Post("/v1/auth/login", h.HandleAuthProxy)
+	r.Get("/v1/auth/userinfo", h.HandleAuthProxy)
+	r.Post("/v1/auth/token", h.HandleAuthProxy)
+	r.Post("/v1/auth/logout", h.HandleAuthProxy)
+	r.Get("/v1/auth/callback", h.HandleAuthProxy)
 }
 
 // HandleInference handles POST /v1/inference requests.
