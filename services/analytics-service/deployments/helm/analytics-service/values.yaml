@@ -1,0 +1,161 @@
+# Analytics Service - Helm Chart Values
+# =====================================
+#
+# For AI Coding Assistants:
+# ------------------------
+# When deploying services with ingress, follow these best practices:
+#
+# 1. ALWAYS include both hostname-based AND IP-based (nip.io) access in development
+#    - Hostname: For proper DNS/hosts file setup (e.g., analytics.dev.ai-aas.local)
+#    - IP-based: For easy testing without DNS configuration (e.g., analytics.<IP>.nip.io)
+#
+# 2. ALWAYS use HTTPS (force-ssl-redirect: "true") even in development
+#    - Self-signed certificates are acceptable for dev
+#    - Use cert-manager with Let's Encrypt for staging/production
+#
+# 3. LoadBalancer IP Discovery:
+#    To find the current LoadBalancer IP for nip.io configuration:
+#    kubectl get svc -n ingress-nginx ingress-nginx-controller \
+#      -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+#
+# 4. Testing API Access:
+#    # Via nip.io (no /etc/hosts needed):
+#    curl -k https://analytics.<IP>.nip.io/analytics/v1/status/healthz
+#
+#    # Via hostname (requires /etc/hosts entry):
+#    curl -k https://analytics.dev.ai-aas.local/analytics/v1/status/healthz
+#
+# 5. NEVER deploy services to the 'system' namespace via manual Helm installs
+#    - System namespace is for infrastructure only
+#    - Application services belong in 'development', 'staging', or 'production' namespaces
+#    - All deployments MUST go through ArgoCD
+#
+# See docs/ingress-best-practices.md for complete documentation
+#
+
+replicaCount: 2
+
+image:
+  repository: ghcr.io/otherjamesbrown/analytics-service
+  tag: latest
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+service:
+  type: ClusterIP
+  port: 8084
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+  hosts:
+    - host: analytics.dev.ai-aas.local
+      paths:
+        - path: /analytics
+          pathType: Prefix
+    # IP-based access using nip.io for development/testing
+    # Override this in production to use proper DNS
+    - host: analytics.172.232.58.222.nip.io
+      paths:
+        - path: /analytics
+          pathType: Prefix
+  tls:
+    - secretName: ai-aas-tls
+      hosts:
+        - analytics.dev.ai-aas.local
+        - analytics.prod.ai-aas.local
+        - analytics.172.232.58.222.nip.io
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+livenessProbe:
+  path: /analytics/v1/status/healthz
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  path: /analytics/v1/status/readyz
+  initialDelaySeconds: 15
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+env:
+  - name: SERVICE_NAME
+    value: analytics-service
+  - name: HTTP_PORT
+    value: "8084"
+  - name: ENVIRONMENT
+    value: development
+  - name: LOG_LEVEL
+    value: info
+
+extraEnv: []
+extraVolumes: []
+extraVolumeMounts: []
+
+# Telemetry configuration
+otel:
+  enabled: false
+  collectorEndpoint: ""
+  protocol: grpc
+  insecure: true
+
+# Prometheus metrics
+prometheus:
+  enabled: true
+  port: 8084
+  path: /metrics
+
+# Database configuration for analytics data
+database:
+  url: ""
+  urlSecretName: ""
+
+# Redis configuration for caching
+redis:
+  url: ""
+  urlSecretName: ""
+
+# RabbitMQ configuration for event ingestion
+rabbitmq:
+  url: ""
+  stream: usage.events.v1
+  consumer: analytics-service
+  urlSecretName: ""
+
+# S3 configuration for data exports (optional)
+s3:
+  enabled: false
+  endpoint: ""
+  accessKey: ""
+  secretKey: ""
+  bucket: analytics-exports
+  endpointSecretName: ""
+  accessKeySecretName: ""
+  secretKeySecretName: ""

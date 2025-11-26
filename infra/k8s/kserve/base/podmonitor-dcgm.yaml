@@ -1,0 +1,68 @@
+# PodMonitor for NVIDIA DCGM Exporter GPU Metrics
+#
+# This PodMonitor scrapes GPU hardware metrics from NVIDIA DCGM (Data Center GPU Manager)
+# exporter pods. DCGM provides detailed GPU utilization, memory, power, temperature,
+# and performance metrics.
+#
+# Key GPU Metrics Available:
+# - DCGM_FI_DEV_GPU_UTIL - GPU utilization percentage
+# - DCGM_FI_DEV_FB_USED / DCGM_FI_DEV_FB_FREE - GPU memory usage
+# - DCGM_FI_DEV_POWER_USAGE - Power consumption in watts
+# - DCGM_FI_DEV_GPU_TEMP - GPU temperature
+# - DCGM_FI_DEV_SM_CLOCK - SM clock frequency
+# - DCGM_FI_DEV_MEM_CLOCK - Memory clock frequency
+# - DCGM_FI_PROF_SM_ACTIVE - SM active percentage
+# - DCGM_FI_PROF_PIPE_TENSOR_ACTIVE - Tensor core utilization
+# - DCGM_FI_PROF_DRAM_ACTIVE - Memory bandwidth utilization
+#
+# Critical Labels for Correlation:
+# - pod: Name of the pod using the GPU (links to vLLM metrics)
+# - namespace: Namespace of the workload
+# - modelName: GPU hardware type (e.g., "NVIDIA RTX 4000 Ada Generation")
+# - Hostname: Node name (links to Kubernetes node)
+# - UUID: GPU unique identifier
+#
+# These labels enable per-GPU-type and per-model performance analysis.
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: nvidia-dcgm-exporter
+  namespace: gpu-operator
+  labels:
+    app: nvidia-dcgm-exporter
+    monitoring: prometheus
+    release: kube-prometheus-stack  # Required for Prometheus operator to discover this
+spec:
+  # Select DCGM exporter pods
+  selector:
+    matchLabels:
+      app: nvidia-dcgm-exporter
+
+  # Only scrape from gpu-operator namespace
+  namespaceSelector:
+    matchNames:
+      - gpu-operator
+
+  # Pod metrics endpoints configuration
+  podMetricsEndpoints:
+    - port: metrics  # Port 9400 named "metrics" in DCGM pod
+      path: /metrics
+      scheme: http
+      interval: 30s  # Scrape every 30 seconds
+      scrapeTimeout: 10s
+
+      # Relabel configurations to enrich metrics
+      relabelings:
+        # Preserve the DCGM exporter pod name
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: dcgm_pod
+          action: replace
+
+        # Preserve the node name where DCGM is running
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+          action: replace
+
+      # No metric relabeling - accept all DCGM metrics
+      # DCGM exports extensive GPU telemetry that's all valuable for performance analysis

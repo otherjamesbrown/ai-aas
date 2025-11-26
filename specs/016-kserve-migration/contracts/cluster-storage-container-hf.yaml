@@ -1,0 +1,31 @@
+# ClusterStorageContainer for Hugging Face Model Hub
+apiVersion: serving.kserve.io/v1alpha1
+kind: ClusterStorageContainer
+metadata:
+  name: huggingface
+spec:
+  container:
+    name: storage-initializer
+    image: kserve/storage-initializer:v0.11.0
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "256Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+
+  supportedUriFormats:
+    - regex: "hf://.*"
+      prefix:
+        - hf://
+
+  # Optional: credentials for private models
+  env:
+    - name: HF_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: huggingface-secret
+          key: token
+    - name: HF_HOME
+      value: /tmp/hf_home

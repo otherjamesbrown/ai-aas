@@ -12,8 +12,9 @@ package audit
 import (
 	"time"
 
-	"github.com/otherjamesbrown/ai-aas/shared/go/auth"
 	"go.uber.org/zap"
+
+	"github.com/otherjamesbrown/ai-aas/shared/go/auth"
 )
 
 // Logger provides audit logging functionality.

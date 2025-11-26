@@ -30,12 +30,15 @@ import (
 
 // Server wraps the HTTP server and router.
 type Server struct {
-	router      *chi.Mux
-	logger      *zap.Logger
-	port        int
-	rbacCfg     rbacmiddleware.RBACConfig
-	store       *postgres.Store
-	redisClient *redis.Client
+	router             *chi.Mux
+	logger             *zap.Logger
+	port               int
+	rbacCfg            rbacmiddleware.RBACConfig
+	store              *postgres.Store
+	redisClient        *redis.Client
+	usageHandler       *UsageHandler
+	reliabilityHandler *ReliabilityHandler
+	exportsHandler     *ExportsHandler
 }
 
 // Config holds server configuration.
@@ -104,35 +107,43 @@ func (s *Server) Router() *chi.Mux {
 
 // RegisterUsageRoutes registers usage API routes.
 func (s *Server) RegisterUsageRoutes(handler *UsageHandler) {
-	s.router.Route("/analytics/v1", func(r chi.Router) {
-		r.Use(rbacmiddleware.RBAC(s.rbacCfg)) // Apply RBAC middleware
-		r.Route("/orgs/{orgId}", func(r chi.Router) {
-			r.Get("/usage", handler.GetOrgUsage)
-		})
-	})
+	s.usageHandler = handler
 }
 
 // RegisterReliabilityRoutes registers reliability API routes.
 func (s *Server) RegisterReliabilityRoutes(handler *ReliabilityHandler) {
-	s.router.Route("/analytics/v1", func(r chi.Router) {
-		r.Use(rbacmiddleware.RBAC(s.rbacCfg)) // Apply RBAC middleware
-		r.Route("/orgs/{orgId}", func(r chi.Router) {
-			r.Get("/reliability", handler.GetOrgReliability)
-		})
-	})
+	s.reliabilityHandler = handler
 }
 
 // RegisterExportsRoutes registers export job management API routes.
 func (s *Server) RegisterExportsRoutes(handler *ExportsHandler) {
+	s.exportsHandler = handler
+	// Now that all handlers are registered, set up the routes
+	s.setupRoutes()
+}
+
+// setupRoutes consolidates all API routes under a single /analytics/v1 path
+func (s *Server) setupRoutes() {
 	s.router.Route("/analytics/v1", func(r chi.Router) {
 		r.Use(rbacmiddleware.RBAC(s.rbacCfg)) // Apply RBAC middleware
 		r.Route("/orgs/{orgId}", func(r chi.Router) {
-			r.Route("/exports", func(r chi.Router) {
-				r.Post("/", handler.CreateExportJob)
-				r.Get("/", handler.ListExportJobs)
-				r.Get("/{jobId}", handler.GetExportJob)
-				r.Get("/{jobId}/download", handler.GetExportDownloadUrl)
-			})
+			// Usage routes
+			if s.usageHandler != nil {
+				r.Get("/usage", s.usageHandler.GetOrgUsage)
+			}
+			// Reliability routes
+			if s.reliabilityHandler != nil {
+				r.Get("/reliability", s.reliabilityHandler.GetOrgReliability)
+			}
+			// Export routes
+			if s.exportsHandler != nil {
+				r.Route("/exports", func(r chi.Router) {
+					r.Post("/", s.exportsHandler.CreateExportJob)
+					r.Get("/", s.exportsHandler.ListExportJobs)
+					r.Get("/{jobId}", s.exportsHandler.GetExportJob)
+					r.Get("/{jobId}/download", s.exportsHandler.GetExportDownloadUrl)
+				})
+			}
 		})
 	})
 }
@@ -145,7 +156,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // healthzHandler returns a simple health check.
 func healthzHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
+	_, _ = w.Write([]byte("OK"))
 }
 
 // readyzHandler checks readiness of dependencies.
@@ -204,5 +215,8 @@ func (s *Server) readyzHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		// Error already logged, status already sent
+		return
+	}
 }

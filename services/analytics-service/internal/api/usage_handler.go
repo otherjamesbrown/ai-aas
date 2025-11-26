@@ -214,10 +214,12 @@ func (h *UsageHandler) respondError(w http.ResponseWriter, status int, message s
 	h.logger.Warn(message, zap.Error(err), zap.Int("status", status))
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"status": status,
 		"title":  http.StatusText(status),
 		"detail": message,
-	})
+	}); err != nil {
+		h.logger.Error("failed to encode error response", zap.Error(err))
+	}
 }
 

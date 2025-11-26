@@ -1,0 +1,145 @@
+# Analytics Service - Development Environment Values
+# =================================================
+#
+# This file overrides values.yaml for the development environment.
+# Deployed automatically via ArgoCD when changes are pushed to the develop branch.
+#
+# Key characteristics of development environment:
+# - Uses 'dev' image tag (built from develop branch)
+# - pullPolicy: Always (ensures latest dev image is pulled)
+# - Debug logging enabled
+# - Connects to development-namespace services
+# - Auto-scaling configured for load testing
+#
+
+image:
+  repository: ghcr.io/otherjamesbrown/analytics-service
+  tag: dev
+  pullPolicy: Always
+
+replicaCount: 1
+
+env:
+  - name: SERVICE_NAME
+    value: analytics-service
+  - name: HTTP_PORT
+    value: "8084"
+  - name: ENVIRONMENT
+    value: development
+  - name: LOG_LEVEL
+    value: debug
+  - name: DATABASE_URL
+    valueFrom:
+      secretKeyRef:
+        name: analytics-service-secrets
+        key: database-url
+  - name: REDIS_URL
+    value: redis://redis.development.svc.cluster.local:6379
+  - name: RABBITMQ_URL
+    valueFrom:
+      secretKeyRef:
+        name: analytics-service-secrets
+        key: rabbitmq-url
+        optional: true
+  - name: RABBITMQ_STREAM
+    value: usage.events.v1
+  - name: RABBITMQ_CONSUMER
+    value: analytics-service-development
+  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+    value: otel-collector.monitoring.svc.cluster.local:4317
+  - name: OTEL_EXPORTER_OTLP_PROTOCOL
+    value: grpc
+  - name: OTEL_EXPORTER_OTLP_INSECURE
+    value: "true"
+
+service:
+  type: ClusterIP
+  port: 8084
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+  hosts:
+    - host: analytics.dev.ai-aas.local
+      paths:
+        - path: /analytics
+          pathType: Prefix
+    - host: analytics.172.232.58.222.nip.io
+      paths:
+        - path: /analytics
+          pathType: Prefix
+  tls:
+    - secretName: ai-aas-tls
+      hosts:
+        - analytics.dev.ai-aas.local
+        - analytics.172.232.58.222.nip.io
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+livenessProbe:
+  path: /analytics/v1/status/healthz
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  path: /analytics/v1/status/readyz
+  initialDelaySeconds: 15
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# Telemetry configuration
+otel:
+  enabled: true
+  collectorEndpoint: otel-collector.monitoring.svc.cluster.local:4317
+  protocol: grpc
+  insecure: true
+
+# Prometheus metrics
+prometheus:
+  enabled: true
+  port: 8084
+  path: /metrics
+
+# Database configuration
+database:
+  urlSecretName: analytics-service-secrets
+
+# Redis configuration
+redis:
+  url: redis://redis.development.svc.cluster.local:6379
+
+# RabbitMQ configuration
+rabbitmq:
+  urlSecretName: analytics-service-secrets
+  stream: usage.events.v1
+  consumer: analytics-service-development
+
+# S3 configuration (disabled for development)
+s3:
+  enabled: false
+  endpoint: ""
+  accessKey: ""
+  secretKey: ""
+  bucket: analytics-exports

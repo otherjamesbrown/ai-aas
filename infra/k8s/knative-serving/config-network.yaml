@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-network
+  namespace: knative-serving
+  labels:
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/name: knative-serving
+data:
+  # Use Istio as the ingress
+  ingress-class: "istio.ingress.networking.knative.dev"
+
+  # Enable auto TLS
+  auto-tls: "Disabled"
+
+  # HTTP protocol
+  http-protocol: "HTTP1"

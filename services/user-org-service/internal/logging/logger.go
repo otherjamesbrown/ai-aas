@@ -1,7 +1,7 @@
 package logging
 
 import (
-	"github.com/ai-aas/shared-go/logging"
+	"github.com/otherjamesbrown/ai-aas/shared/go/logging"
 	"go.uber.org/zap"
 )
 

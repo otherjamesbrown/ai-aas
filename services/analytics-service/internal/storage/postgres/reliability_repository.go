@@ -51,7 +51,6 @@ func (s *Store) GetReliabilitySeries(ctx context.Context, orgID uuid.UUID, start
 	if modelID != nil {
 		query += fmt.Sprintf(" AND model_id = $%d", argIdx)
 		args = append(args, *modelID)
-		argIdx++
 	}
 
 	query += fmt.Sprintf(" GROUP BY %s, model_id ORDER BY bucket_start DESC", bucketExpr)

@@ -118,6 +118,36 @@ func main() {
 		logger.Warn("failed to load initial configuration, using cache fallback", zap.Error(err))
 	}
 
+	// Bootstrap default routing policy for development
+	// Only support the actual deployed model - don't silently alias other model names
+	if cfg.Environment == "development" {
+		policy := &config.RoutingPolicy{
+			PolicyID:       "*-mistral-7b-instruct",
+			OrganizationID: "*", // Global policy
+			Model:          "mistral-7b-instruct",
+			Backends: []config.BackendWeight{
+				{
+					BackendID: "mistral-7b-instruct",
+					Weight:    100,
+				},
+			},
+			FailoverThreshold: 3,
+			UpdatedAt:         time.Now(),
+			Version:           1,
+		}
+		if err := cache.StorePolicy(ctx, policy); err != nil {
+			logger.Error("failed to bootstrap routing policy",
+				zap.String("model", "mistral-7b-instruct"),
+				zap.Error(err),
+			)
+		} else {
+			logger.Info("bootstrapped routing policy",
+				zap.String("model", "mistral-7b-instruct"),
+				zap.String("backend", "mistral-7b-instruct"),
+			)
+		}
+	}
+
 	watchCtx := context.Background()
 	if err := loader.Watch(watchCtx); err != nil {
 		logger.Warn("failed to start config watch", zap.Error(err))

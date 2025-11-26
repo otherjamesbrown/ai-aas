@@ -1,0 +1,40 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: monitoring
+
+configMapGenerator:
+  - name: grafana-dashboard-per-model-performance
+    files:
+      - per-model-performance.json
+    options:
+      labels:
+        grafana_dashboard: "1"
+
+  - name: grafana-dashboard-api-performance
+    files:
+      - api-performance.json
+    options:
+      labels:
+        grafana_dashboard: "1"
+
+  - name: grafana-dashboard-fleet-overview
+    files:
+      - fleet-overview.json
+    options:
+      labels:
+        grafana_dashboard: "1"
+
+  - name: grafana-dashboard-node-cluster-view
+    files:
+      - node-cluster-view.json
+    options:
+      labels:
+        grafana_dashboard: "1"
+
+  - name: grafana-dashboard-per-gpu-type
+    files:
+      - per-gpu-type-analysis.json
+    options:
+      labels:
+        grafana_dashboard: "1"

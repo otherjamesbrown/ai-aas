@@ -1,0 +1,129 @@
+name: API Router Deployment Validation
+
+# Continuously validate that deployed API Router service is working correctly
+# Tests OpenAI compatibility using the official OpenAI Python SDK
+
+on:
+  # Manual trigger for any environment
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to validate'
+        required: true
+        default: 'development'
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+      skip_inference:
+        description: 'Skip inference test (only validate /v1/models)'
+        required: false
+        default: false
+        type: boolean
+
+  # Scheduled validation - runs every 2 hours for development
+  schedule:
+    - cron: '0 */2 * * *'  # Every 2 hours
+
+jobs:
+  validate-deployment:
+    name: Validate ${{ inputs.environment || 'development' }} Deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install openai httpx urllib3
+
+      - name: Set environment configuration
+        id: config
+        run: |
+          ENV="${{ inputs.environment || 'development' }}"
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+
+          if [ "$ENV" = "development" ]; then
+            echo "api_base_url=https://api.172.232.58.222.nip.io/v1" >> $GITHUB_OUTPUT
+            echo "secret_name=API_ROUTER_DEV_TEST_KEY" >> $GITHUB_OUTPUT
+          elif [ "$ENV" = "staging" ]; then
+            echo "api_base_url=https://api.staging.ai-aas.local/v1" >> $GITHUB_OUTPUT
+            echo "secret_name=API_ROUTER_STAGING_TEST_KEY" >> $GITHUB_OUTPUT
+          elif [ "$ENV" = "production" ]; then
+            echo "api_base_url=https://api.ai-aas.com/v1" >> $GITHUB_OUTPUT
+            echo "secret_name=API_ROUTER_PROD_TEST_KEY" >> $GITHUB_OUTPUT
+          else
+            echo "Unknown environment: $ENV"
+            exit 1
+          fi
+
+      - name: Validate public endpoint (unauthenticated)
+        run: |
+          echo "Testing public /v1/models endpoint (no auth required)..."
+          python3 scripts/validate-api.py \
+            --base-url "${{ steps.config.outputs.api_base_url }}" \
+            --api-key "dummy-key-for-public-test" \
+            --skip-inference
+
+      - name: Validate authenticated endpoints
+        if: ${{ !inputs.skip_inference }}
+        env:
+          # Use environment-specific test key
+          API_KEY_DEV: ${{ secrets.API_ROUTER_DEV_TEST_KEY }}
+          API_KEY_STAGING: ${{ secrets.API_ROUTER_STAGING_TEST_KEY }}
+          API_KEY_PROD: ${{ secrets.API_ROUTER_PROD_TEST_KEY }}
+        run: |
+          ENV="${{ steps.config.outputs.environment }}"
+
+          # Select the correct API key based on environment
+          if [ "$ENV" = "development" ]; then
+            API_KEY="$API_KEY_DEV"
+          elif [ "$ENV" = "staging" ]; then
+            API_KEY="$API_KEY_STAGING"
+          elif [ "$ENV" = "production" ]; then
+            API_KEY="$API_KEY_PROD"
+          fi
+
+          if [ -z "$API_KEY" ]; then
+            echo "⚠️ API key not configured for $ENV environment"
+            echo "Set secret: ${{ steps.config.outputs.secret_name }}"
+            exit 0  # Don't fail on missing key - just skip
+          fi
+
+          echo "Testing authenticated /v1/chat/completions endpoint..."
+          python3 scripts/validate-api.py \
+            --base-url "${{ steps.config.outputs.api_base_url }}" \
+            --api-key "$API_KEY"
+
+      - name: Report validation results
+        if: always()
+        run: |
+          echo "## Deployment Validation Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ steps.config.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Base URL:** ${{ steps.config.outputs.api_base_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ All validation tests passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Validation tests failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Notify on failure
+        if: failure() && github.event_name == 'schedule'
+        run: |
+          echo "⚠️ Scheduled validation failed for ${{ steps.config.outputs.environment }}"
+          echo "This indicates a potential issue with the deployed service."
+          echo ""
+          echo "Check the logs above for details."
+          # Future: Add Slack/PagerDuty notification here

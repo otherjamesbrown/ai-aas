@@ -1,0 +1,140 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: istio-base-development
+  namespace: argocd
+  labels:
+    environment: development
+    app: istio
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform-development
+  source:
+    repoURL: https://istio-release.storage.googleapis.com/charts
+    targetRevision: 1.19.0
+    chart: base
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: istio-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: istiod-development
+  namespace: argocd
+  labels:
+    environment: development
+    app: istio
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform-development
+  source:
+    repoURL: https://istio-release.storage.googleapis.com/charts
+    targetRevision: 1.19.0
+    chart: istiod
+    helm:
+      values: |
+        # Minimal profile for reduced overhead
+        pilot:
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 2Gi
+
+        # Enable telemetry and metrics
+        telemetry:
+          enabled: true
+          v2:
+            enabled: true
+
+        meshConfig:
+          accessLogFile: /dev/stdout
+          enableTracing: true
+          defaultConfig:
+            tracing:
+              sampling: 1.0
+
+        # Resource configuration
+        global:
+          proxy:
+            resources:
+              requests:
+                cpu: 50m
+                memory: 128Mi
+              limits:
+                cpu: 200m
+                memory: 256Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: istio-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: istio-ingressgateway-development
+  namespace: argocd
+  labels:
+    environment: development
+    app: istio
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform-development
+  source:
+    repoURL: https://istio-release.storage.googleapis.com/charts
+    targetRevision: 1.19.0
+    chart: gateway
+    helm:
+      values: |
+        service:
+          type: LoadBalancer
+          ports:
+            - name: http
+              port: 80
+              targetPort: 8080
+            - name: https
+              port: 443
+              targetPort: 8443
+
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: istio-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
