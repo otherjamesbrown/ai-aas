@@ -60,6 +60,10 @@ export function ServiceHealthCheck() {
   const [expanded, setExpanded] = useState(false);
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
 
+  // Guard to prevent concurrent health checks
+  const isCheckingRef = useRef(false);
+  const mountedRef = useRef(true);
+
   // Dynamically determine API base URL based on current hostname
   // Memoized to prevent unnecessary re-renders
   const baseUrl = useMemo(() => {
@@ -75,6 +79,10 @@ export function ServiceHealthCheck() {
   }, []); // Empty deps - hostname doesn't change during session
 
   const checkHealth = useCallback(async () => {
+    // Prevent concurrent checks and checks after unmount
+    if (isCheckingRef.current || !mountedRef.current) return;
+    isCheckingRef.current = true;
+
     const startTime = Date.now();
     const newServices: ServiceHealth[] = [];
 
@@ -269,8 +277,11 @@ export function ServiceHealthCheck() {
       });
     }
 
-    setServices(newServices);
-    setLastChecked(new Date());
+    if (mountedRef.current) {
+      setServices(newServices);
+      setLastChecked(new Date());
+    }
+    isCheckingRef.current = false;
   }, [baseUrl]);
 
   // Use ref to avoid re-render loop while keeping checkHealth up-to-date
@@ -278,12 +289,18 @@ export function ServiceHealthCheck() {
   checkHealthRef.current = checkHealth;
 
   useEffect(() => {
+    mountedRef.current = true;
+
     // Initial check
     checkHealthRef.current();
 
     // Refresh every 30 seconds
     const interval = setInterval(() => checkHealthRef.current(), 30000);
-    return () => clearInterval(interval);
+
+    return () => {
+      mountedRef.current = false;
+      clearInterval(interval);
+    };
   }, []); // Empty deps - only run once on mount
 
   const overallStatus = services.reduce<ServiceStatus>((worst, service) => {
