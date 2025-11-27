@@ -71,9 +71,20 @@ export function ServiceHealthCheck() {
   const [expanded, setExpanded] = useState(false);
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
 
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
-  // Extract base URL without /api suffix for status endpoints
-  const baseUrl = apiBaseUrl.replace(/\/api\/?$/, '');
+  // Dynamically determine API base URL based on current hostname
+  // If accessing via nip.io, use the corresponding API nip.io URL
+  const getBaseUrl = () => {
+    const hostname = window.location.hostname;
+    // Check if accessing via nip.io (e.g., portal.172.232.58.222.nip.io)
+    const nipioMatch = hostname.match(/^portal\.(.+\.nip\.io)$/);
+    if (nipioMatch) {
+      return `https://api.${nipioMatch[1]}`;
+    }
+    // Otherwise use configured URL or default
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
+    return apiBaseUrl.replace(/\/api\/?$/, '');
+  };
+  const baseUrl = getBaseUrl();
 
   const checkHealth = useCallback(async () => {
     const startTime = Date.now();
