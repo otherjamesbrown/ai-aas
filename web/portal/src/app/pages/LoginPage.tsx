@@ -1,13 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useAuth } from '@/providers/AuthProvider';
-import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useToast } from '@/providers/ToastProvider';
 import { ServiceHealthCheck } from '@/components/ServiceHealthCheck';
+import { Button, Input, LoadingSpinner, TabNav } from '@/components/ui';
+
+const LOGIN_TABS = [
+  { id: 'password', label: 'Email & Password' },
+  { id: 'oauth', label: 'OAuth / SSO' },
+];
 
 /**
  * Login page with OAuth2/OIDC and password-based authentication
- * Supports both OAuth2/OIDC flow and username/password login
+ * Rebuilt with unified UI components and system-aware theming
  */
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -15,28 +20,43 @@ export default function LoginPage() {
   const search = useSearch({ from: '/auth/login', strict: false }) as { redirect?: string };
   const { login, loginWithPassword, isAuthenticated, isLoading: authLoading } = useAuth();
   const { showError, showSuccess } = useToast();
+
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [loginMethod, setLoginMethod] = useState<'oauth' | 'password'>('password');
+  const [loginMethod, setLoginMethod] = useState<'password' | 'oauth'>('password');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [orgId, setOrgId] = useState('');
+  const [formErrors, setFormErrors] = useState<{ email?: string; password?: string }>({});
 
   useEffect(() => {
-    // Redirect if already authenticated
     if (isAuthenticated && !authLoading) {
       const redirect = search?.redirect;
-      navigate({
-        to: redirect || '/',
-      });
+      navigate({ to: redirect || '/' });
     }
   }, [isAuthenticated, authLoading, navigate, search]);
+
+  const validateForm = () => {
+    const errors: { email?: string; password?: string } = {};
+
+    if (!email.trim()) {
+      errors.email = 'Email is required';
+    } else if (!/\S+@\S+\.\S+/.test(email)) {
+      errors.email = 'Please enter a valid email address';
+    }
+
+    if (!password) {
+      errors.password = 'Password is required';
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const handleOAuthLogin = async () => {
     setIsLoggingIn(true);
     try {
       await login();
       showSuccess('Login successful', 'Redirecting...');
-      // Navigation will happen via useEffect
     } catch (error) {
       showError(
         'Login failed',
@@ -49,52 +69,20 @@ export default function LoginPage() {
 
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Login form submitted', { email: email.trim(), hasPassword: !!password, orgId });
-    
-    if (!email.trim() || !password) {
-      console.warn('Validation failed: missing email or password');
-      showError('Validation failed', 'Please enter both email and password');
+
+    if (!validateForm()) {
       return;
     }
 
     setIsLoggingIn(true);
-    console.log('Starting login process...');
     try {
       await loginWithPassword(email, password, orgId || undefined);
-      console.log('Login successful');
       showSuccess('Login successful', 'Redirecting...');
-      // Navigation will happen via useEffect
     } catch (error) {
-      console.error('Login error caught in LoginPage:', error);
-      
-      // Extract error message with fallbacks
-      let errorMessage = 'Invalid email or password';
-      if (error instanceof Error) {
-        errorMessage = error.message || 'An unexpected error occurred';
-      } else if (typeof error === 'string') {
-        errorMessage = error;
-      } else {
-        errorMessage = 'An unexpected error occurred during login';
-      }
-      
-      // Always show error toast
-      console.log('Attempting to show error toast:', { title: 'Login failed', message: errorMessage });
-      try {
-        showError('Login failed', errorMessage);
-        console.log('showError called successfully');
-      } catch (toastError) {
-        // Fallback if toast fails - use alert
-        console.error('Failed to show toast, using alert:', toastError);
-        alert(`Login failed: ${errorMessage}`);
-      }
-      
-      // Also log to console for debugging
-      console.error('Full error details:', {
-        error,
-        errorType: typeof error,
-        errorConstructor: error?.constructor?.name,
-        stack: error instanceof Error ? error.stack : undefined,
-      });
+      const errorMessage = error instanceof Error
+        ? error.message
+        : 'Invalid email or password';
+      showError('Login failed', errorMessage);
     } finally {
       setIsLoggingIn(false);
     }
@@ -102,157 +90,164 @@ export default function LoginPage() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <LoadingSpinner size="lg" aria-label="Loading authentication" />
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4 py-12">
+      <div className="max-w-md w-full">
+        {/* Logo/Brand */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Sign In
+          <div className="inline-flex items-center justify-center w-12 h-12 bg-primary rounded-lg mb-4">
+            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            AI-AAS Portal
           </h1>
-          <p className="text-gray-600">
-            Sign in to access the AI-AAS Portal
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+            Sign in to your account to continue
           </p>
         </div>
 
-        {/* Login method selector */}
-        <div className="mb-6">
-          <div className="flex rounded-lg border border-gray-300 p-1">
-            <button
-              type="button"
-              onClick={() => setLoginMethod('password')}
-              className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                loginMethod === 'password'
-                  ? 'bg-primary text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              Email & Password
-            </button>
-            <button
-              type="button"
-              onClick={() => setLoginMethod('oauth')}
-              className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                loginMethod === 'oauth'
-                  ? 'bg-primary text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              OAuth
-            </button>
+        {/* Login Card */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+          {/* Tab Navigation */}
+          <div className="px-6 pt-6">
+            <TabNav
+              tabs={LOGIN_TABS}
+              activeTab={loginMethod}
+              onTabChange={(id) => setLoginMethod(id as 'password' | 'oauth')}
+              variant="pills"
+            />
           </div>
-        </div>
 
-        <div className="space-y-4">
-          {loginMethod === 'password' ? (
-            <form onSubmit={handlePasswordLogin} className="space-y-4">
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                  Email
-                </label>
-                <input
-                  id="email"
+          {/* Form Content */}
+          <div className="p-6">
+            {loginMethod === 'password' ? (
+              <form onSubmit={handlePasswordLogin} className="space-y-4">
+                <Input
+                  label="Email"
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  disabled={isLoggingIn}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (formErrors.email) setFormErrors(prev => ({ ...prev, email: undefined }));
+                  }}
+                  error={formErrors.email}
                   placeholder="admin@example.com"
                   autoComplete="email"
+                  disabled={isLoggingIn}
+                  leftIcon={
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
+                    </svg>
+                  }
                 />
-              </div>
 
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                  Password
-                </label>
-                <input
-                  id="password"
+                <Input
+                  label="Password"
                   type="password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  disabled={isLoggingIn}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (formErrors.password) setFormErrors(prev => ({ ...prev, password: undefined }));
+                  }}
+                  error={formErrors.password}
                   placeholder="Enter your password"
                   autoComplete="current-password"
+                  disabled={isLoggingIn}
+                  leftIcon={
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                  }
                 />
-              </div>
 
-              <div>
-                <label htmlFor="orgId" className="block text-sm font-medium text-gray-700 mb-1">
-                  Organization ID (optional)
-                </label>
-                <input
-                  id="orgId"
+                <Input
+                  label="Organization ID"
                   type="text"
                   value={orgId}
                   onChange={(e) => setOrgId(e.target.value)}
+                  placeholder="Leave empty for default"
+                  hint="Optional: Specify if you belong to multiple organizations"
                   disabled={isLoggingIn}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  placeholder="Leave empty to use default"
+                  leftIcon={
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                  }
                 />
-                <p className="mt-1 text-xs text-gray-500">
-                  Optional: Specify organization slug or ID if you belong to multiple organizations
-                </p>
-              </div>
 
-              <button
-                type="submit"
-                disabled={isLoggingIn}
-                className="w-full px-4 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-              >
-                {isLoggingIn ? (
-                  <span className="flex items-center justify-center">
-                    <LoadingSpinner size="sm" className="mr-2" />
-                    Signing in...
-                  </span>
-                ) : (
-                  'Sign In'
-                )}
-              </button>
-            </form>
-          ) : (
-            <>
-              <button
-                onClick={handleOAuthLogin}
-                disabled={isLoggingIn}
-                className="w-full px-4 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-              >
-                {isLoggingIn ? (
-                  <span className="flex items-center justify-center">
-                    <LoadingSpinner size="sm" className="mr-2" />
-                    Signing in...
-                  </span>
-                ) : (
-                  'Sign In with OAuth'
-                )}
-              </button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  loading={isLoggingIn}
+                >
+                  Sign In
+                </Button>
+              </form>
+            ) : (
+              <div className="space-y-4">
+                <Button
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  loading={isLoggingIn}
+                  onClick={handleOAuthLogin}
+                  leftIcon={
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                    </svg>
+                  }
+                >
+                  Sign In with OAuth
+                </Button>
 
-              <div className="text-center text-sm text-gray-500">
-                <p className="mb-2">Additional authentication methods:</p>
-                <ul className="list-disc list-inside space-y-1 text-left">
-                  <li>SAML SSO (coming soon)</li>
-                  <li>MFA (if enabled for your organization)</li>
-                </ul>
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-200 dark:border-gray-700" />
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                      Additional options
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
+                  <div className="flex items-center">
+                    <svg className="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    SAML SSO (coming soon)
+                  </div>
+                  <div className="flex items-center">
+                    <svg className="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    MFA (if enabled)
+                  </div>
+                </div>
               </div>
-            </>
-          )}
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 rounded-b-lg">
+            <p className="text-xs text-center text-gray-500 dark:text-gray-400">
+              By signing in, you agree to our Terms of Service and Privacy Policy.
+            </p>
+          </div>
         </div>
 
-        <div className="mt-8 pt-6 border-t border-gray-200">
-          <p className="text-xs text-center text-gray-500">
-            By signing in, you agree to our Terms of Service and Privacy Policy.
-          </p>
-        </div>
-
-        {/* Service Health Status */}
+        {/* Service Health */}
         <div className="mt-6">
           <ServiceHealthCheck />
         </div>
@@ -260,4 +255,3 @@ export default function LoginPage() {
     </div>
   );
 }
-
