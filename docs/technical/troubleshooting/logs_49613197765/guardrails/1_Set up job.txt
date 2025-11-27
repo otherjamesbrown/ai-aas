@@ -1,0 +1,42 @@
+﻿2025-11-11T10:49:23.6616010Z Current runner version: '2.329.0'
+2025-11-11T10:49:23.6640193Z ##[group]Runner Image Provisioner
+2025-11-11T10:49:23.6641303Z Hosted Compute Agent
+2025-11-11T10:49:23.6641992Z Version: 20251016.436
+2025-11-11T10:49:23.6642556Z Commit: 8ab8ac8bfd662a3739dab9fe09456aba92132568
+2025-11-11T10:49:23.6643255Z Build Date: 2025-10-15T20:44:12Z
+2025-11-11T10:49:23.6643889Z ##[endgroup]
+2025-11-11T10:49:23.6644402Z ##[group]Operating System
+2025-11-11T10:49:23.6644960Z Ubuntu
+2025-11-11T10:49:23.6645499Z 24.04.3
+2025-11-11T10:49:23.6645955Z LTS
+2025-11-11T10:49:23.6646421Z ##[endgroup]
+2025-11-11T10:49:23.6646993Z ##[group]Runner Image
+2025-11-11T10:49:23.6647568Z Image: ubuntu-24.04
+2025-11-11T10:49:23.6648068Z Version: 20251102.99.1
+2025-11-11T10:49:23.6649071Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20251102.99/images/ubuntu/Ubuntu2404-Readme.md
+2025-11-11T10:49:23.6650427Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20251102.99
+2025-11-11T10:49:23.6651870Z ##[endgroup]
+2025-11-11T10:49:23.6654321Z ##[group]GITHUB_TOKEN Permissions
+2025-11-11T10:49:23.6656512Z Actions: write
+2025-11-11T10:49:23.6657091Z Attestations: write
+2025-11-11T10:49:23.6657608Z Checks: write
+2025-11-11T10:49:23.6658144Z Contents: write
+2025-11-11T10:49:23.6658625Z Deployments: write
+2025-11-11T10:49:23.6659123Z Discussions: write
+2025-11-11T10:49:23.6659649Z Issues: write
+2025-11-11T10:49:23.6660101Z Metadata: read
+2025-11-11T10:49:23.6660982Z Models: read
+2025-11-11T10:49:23.6661440Z Packages: write
+2025-11-11T10:49:23.6662033Z Pages: write
+2025-11-11T10:49:23.6662484Z PullRequests: write
+2025-11-11T10:49:23.6662992Z RepositoryProjects: write
+2025-11-11T10:49:23.6663587Z SecurityEvents: write
+2025-11-11T10:49:23.6664231Z Statuses: write
+2025-11-11T10:49:23.6664708Z ##[endgroup]
+2025-11-11T10:49:23.6666838Z Secret source: Actions
+2025-11-11T10:49:23.6667548Z Prepare workflow directory
+2025-11-11T10:49:23.7102101Z Prepare all required actions
+2025-11-11T10:49:23.7139067Z Getting action download info
+2025-11-11T10:49:24.0738510Z Download action repository 'actions/checkout@v4' (SHA:08eba0b27e820071cde6df949e0beb9ba4906955)
+2025-11-11T10:49:24.1668322Z Download action repository 'actions/setup-go@v5' (SHA:d35c59abb061a4a6fb18e82ac0862c26744d6ab5)
+2025-11-11T10:49:25.0035891Z Complete job name: guardrails

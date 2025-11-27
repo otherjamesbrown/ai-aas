@@ -1,0 +1,15 @@
+﻿2025-11-11T10:50:18.6420505Z ##[group]Run scripts/db/apply.sh --env migrate.env --component analytics --yes
+2025-11-11T10:50:18.6421817Z [36;1mscripts/db/apply.sh --env migrate.env --component analytics --yes[0m
+2025-11-11T10:50:18.6469409Z shell: /usr/bin/bash -e {0}
+2025-11-11T10:50:18.6469798Z env:
+2025-11-11T10:50:18.6470074Z   GO111MODULE: on
+2025-11-11T10:50:18.6470480Z   MIGRATION_APPROVED_BY: ci-guardrail
+2025-11-11T10:50:18.6471265Z ##[endgroup]
+2025-11-11T10:50:18.7592512Z 2025/11/11 10:50:18 telemetry disabled: OTEL_EXPORTER_OTLP_ENDPOINT not set
+2025-11-11T10:50:18.7593481Z 2025/11/11 10:50:18 migration_start component=analytics direction=up version= dry_run=false
+2025-11-11T10:50:18.7594389Z 2025/11/11 10:50:18 migration_pre_checks component=analytics direction=up version= dry_run=false
+2025-11-11T10:50:18.7769120Z 2025/11/11 10:50:18 [WARN] unable to count rows for usage_events: ERROR: relation "usage_events" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.8772101Z 2025/11/11 10:50:18 migration_post_checks component=analytics direction=up version= dry_run=false duration_ms=117
+2025-11-11T10:50:18.8817957Z 2025/11/11 10:50:18 [WARN] unable to count rows for usage_events after migration: ERROR: relation "usage_events" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.8860795Z 2025/11/11 10:50:18 [WARN] audit log recording failed: audit insert: ERROR: relation "audit_log_entries" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.8871912Z 2025/11/11 10:50:18 migration_finish component=analytics direction=up version= dry_run=false status=success duration_ms=122

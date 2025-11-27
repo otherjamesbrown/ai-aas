@@ -16,3 +16,4 @@ secrets/ai-aas-git-crypt.key
 kubeconfig*
 *.kubeconfig
 !secrets/kubeconfigs/
+.DS_Store

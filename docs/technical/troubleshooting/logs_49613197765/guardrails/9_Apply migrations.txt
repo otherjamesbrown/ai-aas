@@ -1,0 +1,47 @@
+﻿2025-11-11T10:50:01.7851424Z ##[group]Run scripts/db/apply.sh --env migrate.env --component operational --yes
+2025-11-11T10:50:01.7851976Z [36;1mscripts/db/apply.sh --env migrate.env --component operational --yes[0m
+2025-11-11T10:50:01.7884262Z shell: /usr/bin/bash -e {0}
+2025-11-11T10:50:01.7884508Z env:
+2025-11-11T10:50:01.7884665Z   GO111MODULE: on
+2025-11-11T10:50:01.7884859Z   MIGRATION_APPROVED_BY: ci-guardrail
+2025-11-11T10:50:01.7885086Z ##[endgroup]
+2025-11-11T10:50:01.8018624Z go: downloading go.opentelemetry.io/otel v1.24.0
+2025-11-11T10:50:01.8023430Z go: downloading go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.24.0
+2025-11-11T10:50:01.8837147Z go: downloading go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.24.0
+2025-11-11T10:50:02.0209814Z go: downloading go.opentelemetry.io/otel/sdk v1.24.0
+2025-11-11T10:50:02.0211182Z go: downloading go.opentelemetry.io/otel/trace v1.24.0
+2025-11-11T10:50:02.0212929Z go: downloading google.golang.org/grpc v1.63.2
+2025-11-11T10:50:02.0754941Z go: downloading github.com/jackc/pgx/v5 v5.7.6
+2025-11-11T10:50:02.0794971Z go: downloading github.com/go-logr/logr v1.4.1
+2025-11-11T10:50:02.1217633Z go: downloading go.opentelemetry.io/otel/metric v1.24.0
+2025-11-11T10:50:02.1673220Z go: downloading go.opentelemetry.io/proto/otlp v1.1.0
+2025-11-11T10:50:02.2057756Z go: downloading google.golang.org/genproto/googleapis/rpc v0.0.0-20240227224415-6ceb2ff114de
+2025-11-11T10:50:02.2900191Z go: downloading golang.org/x/sys v0.32.0
+2025-11-11T10:50:02.2949412Z go: downloading github.com/go-logr/stdr v1.2.2
+2025-11-11T10:50:02.3018596Z go: downloading github.com/cenkalti/backoff/v4 v4.2.1
+2025-11-11T10:50:02.3124169Z go: downloading github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.0
+2025-11-11T10:50:02.3300296Z go: downloading google.golang.org/protobuf v1.33.0
+2025-11-11T10:50:02.5366728Z go: downloading golang.org/x/net v0.21.0
+2025-11-11T10:50:02.5688505Z go: downloading github.com/jackc/pgpassfile v1.0.0
+2025-11-11T10:50:02.6027714Z go: downloading github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761
+2025-11-11T10:50:02.6290801Z go: downloading golang.org/x/crypto v0.37.0
+2025-11-11T10:50:02.7530233Z go: downloading golang.org/x/text v0.24.0
+2025-11-11T10:50:03.2463901Z go: downloading google.golang.org/genproto/googleapis/api v0.0.0-20240227224415-6ceb2ff114de
+2025-11-11T10:50:18.4475429Z 2025/11/11 10:50:18 telemetry disabled: OTEL_EXPORTER_OTLP_ENDPOINT not set
+2025-11-11T10:50:18.4476372Z 2025/11/11 10:50:18 migration_start component=operational direction=up version= dry_run=false
+2025-11-11T10:50:18.4477302Z 2025/11/11 10:50:18 migration_pre_checks component=operational direction=up version= dry_run=false
+2025-11-11T10:50:18.4656240Z 2025/11/11 10:50:18 [WARN] unable to count rows for organizations: ERROR: relation "organizations" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.4658931Z 2025/11/11 10:50:18 [WARN] unable to count rows for users: ERROR: relation "users" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.4662153Z 2025/11/11 10:50:18 [WARN] unable to count rows for api_keys: ERROR: relation "api_keys" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.4665514Z 2025/11/11 10:50:18 [WARN] unable to count rows for model_registry_entries: ERROR: relation "model_registry_entries" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.4668047Z 2025/11/11 10:50:18 [WARN] unable to count rows for usage_events: ERROR: relation "usage_events" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.4671256Z 2025/11/11 10:50:18 [WARN] unable to count rows for audit_log_entries: ERROR: relation "audit_log_entries" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.5674494Z 2025/11/11 10:50:18 migration_post_checks component=operational direction=up version= dry_run=false duration_ms=120
+2025-11-11T10:50:18.5722146Z 2025/11/11 10:50:18 [WARN] unable to count rows for organizations after migration: ERROR: relation "organizations" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.5724617Z 2025/11/11 10:50:18 [WARN] unable to count rows for users after migration: ERROR: relation "users" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.5727376Z 2025/11/11 10:50:18 [WARN] unable to count rows for api_keys after migration: ERROR: relation "api_keys" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.5732181Z 2025/11/11 10:50:18 [WARN] unable to count rows for model_registry_entries after migration: ERROR: relation "model_registry_entries" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.5733805Z 2025/11/11 10:50:18 [WARN] unable to count rows for usage_events after migration: ERROR: relation "usage_events" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.5736356Z 2025/11/11 10:50:18 [WARN] unable to count rows for audit_log_entries after migration: ERROR: relation "audit_log_entries" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.5781329Z 2025/11/11 10:50:18 [WARN] audit log recording failed: audit insert: ERROR: relation "audit_log_entries" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:18.5782579Z 2025/11/11 10:50:18 migration_finish component=operational direction=up version= dry_run=false status=success duration_ms=126

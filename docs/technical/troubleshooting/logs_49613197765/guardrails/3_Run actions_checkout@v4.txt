@@ -1,0 +1,87 @@
+﻿2025-11-11T10:49:46.5816479Z ##[group]Run actions/checkout@v4
+2025-11-11T10:49:46.5817012Z with:
+2025-11-11T10:49:46.5817221Z   repository: otherjamesbrown/ai-aas
+2025-11-11T10:49:46.5817606Z   token: ***
+2025-11-11T10:49:46.5817778Z   ssh-strict: true
+2025-11-11T10:49:46.5817956Z   ssh-user: git
+2025-11-11T10:49:46.5818146Z   persist-credentials: true
+2025-11-11T10:49:46.5818365Z   clean: true
+2025-11-11T10:49:46.5818547Z   sparse-checkout-cone-mode: true
+2025-11-11T10:49:46.5818778Z   fetch-depth: 1
+2025-11-11T10:49:46.5818944Z   fetch-tags: false
+2025-11-11T10:49:46.5819124Z   show-progress: true
+2025-11-11T10:49:46.5819304Z   lfs: false
+2025-11-11T10:49:46.5819455Z   submodules: false
+2025-11-11T10:49:46.5819636Z   set-safe-directory: true
+2025-11-11T10:49:46.5819992Z env:
+2025-11-11T10:49:46.5820152Z   GO111MODULE: on
+2025-11-11T10:49:46.5820319Z ##[endgroup]
+2025-11-11T10:49:46.6883219Z Syncing repository: otherjamesbrown/ai-aas
+2025-11-11T10:49:46.6884494Z ##[group]Getting Git version info
+2025-11-11T10:49:46.6884844Z Working directory is '/home/runner/work/ai-aas/ai-aas'
+2025-11-11T10:49:46.6885396Z [command]/usr/bin/git version
+2025-11-11T10:49:46.6949463Z git version 2.51.2
+2025-11-11T10:49:46.6976227Z ##[endgroup]
+2025-11-11T10:49:46.6991472Z Temporarily overriding HOME='/home/runner/work/_temp/f23e14bd-c3f0-43a6-b91f-05627c632d37' before making global git config changes
+2025-11-11T10:49:46.6992747Z Adding repository directory to the temporary git global config as a safe directory
+2025-11-11T10:49:46.6997676Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/ai-aas/ai-aas
+2025-11-11T10:49:46.7033972Z Deleting the contents of '/home/runner/work/ai-aas/ai-aas'
+2025-11-11T10:49:46.7037568Z ##[group]Initializing the repository
+2025-11-11T10:49:46.7041997Z [command]/usr/bin/git init /home/runner/work/ai-aas/ai-aas
+2025-11-11T10:49:46.7144442Z hint: Using 'master' as the name for the initial branch. This default branch name
+2025-11-11T10:49:46.7145300Z hint: is subject to change. To configure the initial branch name to use in all
+2025-11-11T10:49:46.7146036Z hint: of your new repositories, which will suppress this warning, call:
+2025-11-11T10:49:46.7146377Z hint:
+2025-11-11T10:49:46.7146642Z hint: 	git config --global init.defaultBranch <name>
+2025-11-11T10:49:46.7146916Z hint:
+2025-11-11T10:49:46.7147177Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2025-11-11T10:49:46.7148366Z hint: 'development'. The just-created branch can be renamed via this command:
+2025-11-11T10:49:46.7148846Z hint:
+2025-11-11T10:49:46.7149042Z hint: 	git branch -m <name>
+2025-11-11T10:49:46.7149244Z hint:
+2025-11-11T10:49:46.7149681Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2025-11-11T10:49:46.7150744Z Initialized empty Git repository in /home/runner/work/ai-aas/ai-aas/.git/
+2025-11-11T10:49:46.7160799Z [command]/usr/bin/git remote add origin https://github.com/otherjamesbrown/ai-aas
+2025-11-11T10:49:46.7192756Z ##[endgroup]
+2025-11-11T10:49:46.7193357Z ##[group]Disabling automatic garbage collection
+2025-11-11T10:49:46.7197739Z [command]/usr/bin/git config --local gc.auto 0
+2025-11-11T10:49:46.7225220Z ##[endgroup]
+2025-11-11T10:49:46.7225812Z ##[group]Setting up auth
+2025-11-11T10:49:46.7233039Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-11-11T10:49:46.7263574Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-11-11T10:49:46.7587492Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-11-11T10:49:46.7616512Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-11-11T10:49:46.7838351Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2025-11-11T10:49:46.7880480Z ##[endgroup]
+2025-11-11T10:49:46.7881327Z ##[group]Fetching the repository
+2025-11-11T10:49:46.7890089Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +8bcc82af099509110c7a3003b512980a3a56a73c:refs/remotes/pull/5/merge
+2025-11-11T10:49:47.3128368Z From https://github.com/otherjamesbrown/ai-aas
+2025-11-11T10:49:47.3129240Z  * [new ref]         8bcc82af099509110c7a3003b512980a3a56a73c -> pull/5/merge
+2025-11-11T10:49:47.3166552Z ##[endgroup]
+2025-11-11T10:49:47.3167123Z ##[group]Determining the checkout info
+2025-11-11T10:49:47.3169209Z ##[endgroup]
+2025-11-11T10:49:47.3175016Z [command]/usr/bin/git sparse-checkout disable
+2025-11-11T10:49:47.3216393Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2025-11-11T10:49:47.3245515Z ##[group]Checking out the ref
+2025-11-11T10:49:47.3249874Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/5/merge
+2025-11-11T10:49:47.3472060Z Note: switching to 'refs/remotes/pull/5/merge'.
+2025-11-11T10:49:47.3472899Z 
+2025-11-11T10:49:47.3473385Z You are in 'detached HEAD' state. You can look around, make experimental
+2025-11-11T10:49:47.3475274Z changes and commit them, and you can discard any commits you make in this
+2025-11-11T10:49:47.3476149Z state without impacting any branches by switching back to a branch.
+2025-11-11T10:49:47.3476636Z 
+2025-11-11T10:49:47.3477105Z If you want to create a new branch to retain commits you create, you may
+2025-11-11T10:49:47.3477788Z do so (now or later) by using -c with the switch command. Example:
+2025-11-11T10:49:47.3478186Z 
+2025-11-11T10:49:47.3478371Z   git switch -c <new-branch-name>
+2025-11-11T10:49:47.3478637Z 
+2025-11-11T10:49:47.3478788Z Or undo this operation with:
+2025-11-11T10:49:47.3479044Z 
+2025-11-11T10:49:47.3479167Z   git switch -
+2025-11-11T10:49:47.3479363Z 
+2025-11-11T10:49:47.3479684Z Turn off this advice by setting config variable advice.detachedHead to false
+2025-11-11T10:49:47.3480178Z 
+2025-11-11T10:49:47.3481178Z HEAD is now at 8bcc82a Merge 7b27f49a8c7f6e2b0e87c7797c217204afa0abad into 39433bd02c3b26a68618819a46f5c9c23712294a
+2025-11-11T10:49:47.3482490Z ##[endgroup]
+2025-11-11T10:49:47.3517420Z [command]/usr/bin/git log -1 --format=%H
+2025-11-11T10:49:47.3539842Z 8bcc82af099509110c7a3003b512980a3a56a73c

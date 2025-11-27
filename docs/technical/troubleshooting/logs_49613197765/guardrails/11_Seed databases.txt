@@ -1,0 +1,17 @@
+﻿2025-11-11T10:50:18.8921633Z ##[group]Run scripts/db/seed.sh --env migrate.env --component operational
+2025-11-11T10:50:18.8922124Z [36;1mscripts/db/seed.sh --env migrate.env --component operational[0m
+2025-11-11T10:50:18.8922531Z [36;1mscripts/db/seed.sh --env migrate.env --component analytics[0m
+2025-11-11T10:50:18.8954419Z shell: /usr/bin/bash -e {0}
+2025-11-11T10:50:18.8954642Z env:
+2025-11-11T10:50:18.8954800Z   GO111MODULE: on
+2025-11-11T10:50:18.8954977Z ##[endgroup]
+2025-11-11T10:50:18.9097085Z go: downloading github.com/google/uuid v1.5.0
+2025-11-11T10:50:18.9098837Z go: downloading github.com/jackc/pgx/v5 v5.5.4
+2025-11-11T10:50:18.9099413Z go: downloading golang.org/x/crypto v0.17.0
+2025-11-11T10:50:19.1182776Z go: downloading github.com/jackc/puddle/v2 v2.2.1
+2025-11-11T10:50:19.1193534Z go: downloading github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a
+2025-11-11T10:50:19.1445043Z go: downloading golang.org/x/text v0.14.0
+2025-11-11T10:50:19.1501440Z go: downloading golang.org/x/sync v0.1.0
+2025-11-11T10:50:23.7669993Z 2025/11/11 10:50:23 seed organization: ERROR: relation "organizations" does not exist (SQLSTATE 42P01)
+2025-11-11T10:50:23.7675537Z exit status 1
+2025-11-11T10:50:23.7817070Z ##[error]Process completed with exit code 1.
