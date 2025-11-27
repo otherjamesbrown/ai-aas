@@ -12,10 +12,8 @@ interface ServiceHealth {
 
 interface ReadinessResponse {
   status: string;
-  components?: Record<string, {
-    status: string;
-    message?: string;
-  }>;
+  // Components can be either a string status or an object with status/message
+  components?: Record<string, string | { status: string; message?: string }>;
 }
 
 interface HealthzResponse {
@@ -143,22 +141,35 @@ export function ServiceHealthCheck() {
         // Add individual component statuses
         if (data.components) {
           for (const [componentName, componentData] of Object.entries(data.components)) {
+            // Handle both string and object formats
+            const statusValue = typeof componentData === 'string'
+              ? componentData
+              : componentData.status;
+            const messageValue = typeof componentData === 'string'
+              ? componentData
+              : (componentData.message || componentData.status);
+
+            // Skip not_configured services - they're intentionally disabled in dev
+            if (statusValue === 'not_configured') {
+              continue;
+            }
+
             const displayName = componentName
               .split('_')
               .map(word => word.charAt(0).toUpperCase() + word.slice(1))
               .join(' ');
 
             let status: ServiceStatus = 'healthy';
-            if (componentData.status === 'degraded' || componentData.status === 'not_configured') {
+            if (statusValue === 'degraded') {
               status = 'degraded';
-            } else if (componentData.status !== 'ready' && componentData.status !== 'healthy') {
+            } else if (statusValue !== 'ready' && statusValue !== 'healthy') {
               status = 'unhealthy';
             }
 
             newServices.push({
               name: displayName,
               status,
-              message: componentData.message || componentData.status,
+              message: messageValue,
               responseTime: readyzTime,
             });
           }
