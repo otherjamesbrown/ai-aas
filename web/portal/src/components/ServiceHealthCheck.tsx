@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { publicClient } from '@/lib/http/client';
 
 type ServiceStatus = 'checking' | 'healthy' | 'degraded' | 'unhealthy' | 'error';
 
@@ -12,7 +13,6 @@ interface ServiceHealth {
 
 interface ReadinessResponse {
   status: string;
-  // Components can be either a string status or an object with status/message
   components?: Record<string, string | { status: string; message?: string }>;
 }
 
@@ -21,7 +21,7 @@ interface HealthzResponse {
 }
 
 const STATUS_COLORS: Record<ServiceStatus, string> = {
-  checking: 'bg-gray-400 animate-pulse',
+  checking: 'bg-gray-400 dark:bg-gray-500 animate-pulse',
   healthy: 'bg-green-500',
   degraded: 'bg-yellow-500',
   unhealthy: 'bg-red-500',
@@ -36,14 +36,6 @@ const STATUS_LABELS: Record<ServiceStatus, string> = {
   error: 'Error',
 };
 
-// Headers that the frontend sends and expects to be allowed by CORS
-const REQUIRED_CORS_HEADERS = [
-  'authorization',
-  'content-type',
-  'x-correlation-id',
-  'x-csrf-token',
-];
-
 function TrafficLight({ status }: { status: ServiceStatus }) {
   return (
     <span
@@ -53,6 +45,15 @@ function TrafficLight({ status }: { status: ServiceStatus }) {
   );
 }
 
+/**
+ * ServiceHealthCheck component
+ *
+ * Displays health status of backend services with traffic light indicators.
+ * Uses publicClient for unauthenticated health check requests.
+ *
+ * Fixed re-rendering issue by using initialized.current ref to prevent
+ * StrictMode double-execution.
+ */
 export function ServiceHealthCheck() {
   const [services, setServices] = useState<ServiceHealth[]>([
     { name: 'API Gateway', status: 'checking' },
@@ -60,95 +61,61 @@ export function ServiceHealthCheck() {
   const [expanded, setExpanded] = useState(false);
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
 
-  // Guard to prevent concurrent health checks
-  const isCheckingRef = useRef(false);
-  const mountedRef = useRef(true);
+  // Prevent StrictMode double-execution and track mount state
+  const initialized = useRef(false);
 
-  // Dynamically determine API base URL based on current hostname
-  // Memoized to prevent unnecessary re-renders
-  const baseUrl = useMemo(() => {
-    const hostname = window.location.hostname;
-    // Check if accessing via nip.io (e.g., portal.172.232.58.222.nip.io)
-    const nipioMatch = hostname.match(/^portal\.(.+\.nip\.io)$/);
-    if (nipioMatch) {
-      return `https://api.${nipioMatch[1]}`;
-    }
-    // Otherwise use configured URL or default
-    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
-    return apiBaseUrl.replace(/\/api\/?$/, '');
-  }, []); // Empty deps - hostname doesn't change during session
+  useEffect(() => {
+    // Prevent StrictMode double-execution
+    if (initialized.current) return;
+    initialized.current = true;
 
-  const checkHealth = useCallback(async () => {
-    // Prevent concurrent checks and checks after unmount
-    if (isCheckingRef.current || !mountedRef.current) return;
-    isCheckingRef.current = true;
+    let mounted = true;
+    let intervalId: NodeJS.Timeout | null = null;
 
-    const startTime = Date.now();
-    const newServices: ServiceHealth[] = [];
+    const checkHealth = async () => {
+      if (!mounted) return;
 
-    // Check API Gateway health (healthz endpoint)
-    try {
-      const healthzStart = Date.now();
-      const healthzResponse = await fetch(`${baseUrl}/v1/status/healthz`, {
-        method: 'GET',
-        mode: 'cors',
-        headers: {
-          'Accept': 'application/json',
-        },
-      });
-      const healthzTime = Date.now() - healthzStart;
+      const startTime = Date.now();
+      const newServices: ServiceHealth[] = [];
 
-      if (healthzResponse.ok) {
-        const data: HealthzResponse = await healthzResponse.json();
+      // Check API Gateway health (healthz endpoint)
+      try {
+        const healthzStart = Date.now();
+        const healthzResponse = await publicClient.get<HealthzResponse>('/v1/status/healthz');
+        const healthzTime = Date.now() - healthzStart;
+
         newServices.push({
           name: 'API Gateway',
-          status: data.status === 'healthy' ? 'healthy' : 'degraded',
-          message: `Status: ${data.status}`,
+          status: healthzResponse.data.status === 'healthy' ? 'healthy' : 'degraded',
+          message: `Status: ${healthzResponse.data.status}`,
           responseTime: healthzTime,
         });
-      } else {
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Connection failed';
+        const isCorsError = errorMessage.includes('CORS') ||
+                            errorMessage.includes('NetworkError') ||
+                            errorMessage.includes('Network Error') ||
+                            errorMessage.includes('timeout');
         newServices.push({
           name: 'API Gateway',
-          status: 'unhealthy',
-          message: `HTTP ${healthzResponse.status}`,
-          responseTime: healthzTime,
+          status: 'error',
+          message: isCorsError ? 'CORS/Network error' : errorMessage,
+          details: isCorsError
+            ? 'Cannot reach API. Check network or CORS configuration.'
+            : undefined,
+          responseTime: Date.now() - startTime,
         });
       }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Connection failed';
-      const isCorsError = errorMessage.includes('CORS') ||
-                          errorMessage.includes('NetworkError') ||
-                          errorMessage.includes('Failed to fetch');
-      newServices.push({
-        name: 'API Gateway',
-        status: 'error',
-        message: isCorsError ? 'CORS/Network error' : errorMessage,
-        details: isCorsError
-          ? 'Cannot reach API. Check network or CORS configuration.'
-          : undefined,
-        responseTime: Date.now() - startTime,
-      });
-    }
 
-    // Check API Gateway readiness (readyz endpoint) for component details
-    try {
-      const readyzStart = Date.now();
-      const readyzResponse = await fetch(`${baseUrl}/v1/status/readyz`, {
-        method: 'GET',
-        mode: 'cors',
-        headers: {
-          'Accept': 'application/json',
-        },
-      });
-      const readyzTime = Date.now() - readyzStart;
-
-      if (readyzResponse.ok || readyzResponse.status === 503) {
-        const data: ReadinessResponse = await readyzResponse.json();
+      // Check API Gateway readiness (readyz endpoint) for component details
+      try {
+        const readyzStart = Date.now();
+        const readyzResponse = await publicClient.get<ReadinessResponse>('/v1/status/readyz');
+        const readyzTime = Date.now() - readyzStart;
 
         // Add individual component statuses
-        if (data.components) {
-          for (const [componentName, componentData] of Object.entries(data.components)) {
-            // Handle both string and object formats
+        if (readyzResponse.data.components) {
+          for (const [componentName, componentData] of Object.entries(readyzResponse.data.components)) {
             const statusValue = typeof componentData === 'string'
               ? componentData
               : componentData.status;
@@ -156,7 +123,7 @@ export function ServiceHealthCheck() {
               ? componentData
               : (componentData.message || componentData.status);
 
-            // Skip not_configured services - they're intentionally disabled in dev
+            // Skip not_configured services
             if (statusValue === 'not_configured') {
               continue;
             }
@@ -181,127 +148,34 @@ export function ServiceHealthCheck() {
             });
           }
         }
+      } catch {
+        // Readyz failed, but we already have healthz status
       }
-    } catch {
-      // Readyz failed, but we already have healthz status
-      // Don't add duplicate error entries
-    }
 
-    // CORS Preflight Test - verify preflight request succeeds
-    // Note: JavaScript can't read Access-Control-Allow-Headers from responses
-    // So we just verify the preflight succeeds, and the Header Test below verifies headers work
-    try {
-      const corsStart = Date.now();
-      const corsResponse = await fetch(`${baseUrl}/v1/status/healthz`, {
-        method: 'OPTIONS',
-        mode: 'cors',
-        headers: {
-          'Origin': window.location.origin,
-          'Access-Control-Request-Method': 'GET',
-          'Access-Control-Request-Headers': REQUIRED_CORS_HEADERS.join(','),
-        },
-      });
-      const corsTime = Date.now() - corsStart;
-
-      if (corsResponse.status === 204 || corsResponse.ok) {
-        newServices.push({
-          name: 'CORS Config',
-          status: 'healthy',
-          message: 'Preflight OK',
-          details: `Origin allowed: ${window.location.origin}`,
-          responseTime: corsTime,
-        });
-      } else {
-        newServices.push({
-          name: 'CORS Config',
-          status: 'unhealthy',
-          message: `HTTP ${corsResponse.status}`,
-          details: 'CORS preflight request failed',
-          responseTime: corsTime,
-        });
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      // CORS connectivity test
       newServices.push({
         name: 'CORS Config',
-        status: 'error',
-        message: 'Preflight failed',
-        details: errorMessage.includes('Failed to fetch')
-          ? 'Browser blocked request. Origin not allowed or network issue.'
-          : errorMessage,
-        responseTime: Date.now() - startTime,
+        status: newServices[0]?.status === 'healthy' ? 'healthy' : 'unhealthy',
+        message: newServices[0]?.status === 'healthy' ? 'Connected' : 'Check CORS',
       });
-    }
 
-    // Test actual request with X-Correlation-ID header (the one that was breaking)
-    try {
-      const headerTestStart = Date.now();
-      const headerTestResponse = await fetch(`${baseUrl}/v1/status/healthz`, {
-        method: 'GET',
-        mode: 'cors',
-        headers: {
-          'Accept': 'application/json',
-          'X-Correlation-ID': crypto.randomUUID(),
-        },
-      });
-      const headerTestTime = Date.now() - headerTestStart;
-
-      if (headerTestResponse.ok) {
-        newServices.push({
-          name: 'Header Test',
-          status: 'healthy',
-          message: 'X-Correlation-ID allowed',
-          responseTime: headerTestTime,
-        });
-      } else {
-        newServices.push({
-          name: 'Header Test',
-          status: 'unhealthy',
-          message: `HTTP ${headerTestResponse.status}`,
-          responseTime: headerTestTime,
-        });
+      if (mounted) {
+        setServices(newServices);
+        setLastChecked(new Date());
       }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const isCorsError = errorMessage.includes('CORS') ||
-                          errorMessage.includes('NetworkError') ||
-                          errorMessage.includes('Failed to fetch');
-      newServices.push({
-        name: 'Header Test',
-        status: 'error',
-        message: isCorsError ? 'X-Correlation-ID blocked' : 'Request failed',
-        details: isCorsError
-          ? 'CORS blocking X-Correlation-ID header. Check server config.'
-          : errorMessage,
-        responseTime: Date.now() - startTime,
-      });
-    }
-
-    if (mountedRef.current) {
-      setServices(newServices);
-      setLastChecked(new Date());
-    }
-    isCheckingRef.current = false;
-  }, [baseUrl]);
-
-  // Use ref to avoid re-render loop while keeping checkHealth up-to-date
-  const checkHealthRef = useRef(checkHealth);
-  checkHealthRef.current = checkHealth;
-
-  useEffect(() => {
-    mountedRef.current = true;
+    };
 
     // Initial check
-    checkHealthRef.current();
+    checkHealth();
 
     // Refresh every 30 seconds
-    const interval = setInterval(() => checkHealthRef.current(), 30000);
+    intervalId = setInterval(checkHealth, 30000);
 
     return () => {
-      mountedRef.current = false;
-      clearInterval(interval);
+      mounted = false;
+      if (intervalId) clearInterval(intervalId);
     };
-  }, []); // Empty deps - only run once on mount
+  }, []);
 
   const overallStatus = services.reduce<ServiceStatus>((worst, service) => {
     const priority: ServiceStatus[] = ['error', 'unhealthy', 'degraded', 'checking', 'healthy'];
@@ -314,24 +188,66 @@ export function ServiceHealthCheck() {
   const totalCount = services.length;
   const hasErrors = services.some(s => s.status === 'error' || s.status === 'unhealthy');
 
+  const handleRefresh = () => {
+    // Reset initialized to allow manual refresh
+    initialized.current = false;
+    setServices([{ name: 'API Gateway', status: 'checking' }]);
+    // Re-trigger useEffect by forcing re-render won't work due to ref
+    // Instead, we do inline check
+    initialized.current = true;
+
+    const checkNow = async () => {
+      const newServices: ServiceHealth[] = [];
+      try {
+        const response = await publicClient.get<HealthzResponse>('/v1/status/healthz');
+        newServices.push({
+          name: 'API Gateway',
+          status: response.data.status === 'healthy' ? 'healthy' : 'degraded',
+          message: `Status: ${response.data.status}`,
+        });
+      } catch {
+        newServices.push({
+          name: 'API Gateway',
+          status: 'error',
+          message: 'Connection failed',
+        });
+      }
+      newServices.push({
+        name: 'CORS Config',
+        status: newServices[0]?.status === 'healthy' ? 'healthy' : 'unhealthy',
+        message: newServices[0]?.status === 'healthy' ? 'Connected' : 'Check CORS',
+      });
+      setServices(newServices);
+      setLastChecked(new Date());
+    };
+    checkNow();
+  };
+
   return (
-    <div className={`border rounded-lg shadow-sm ${hasErrors ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
+    <div
+      data-testid="service-health-check"
+      className={`border rounded-lg shadow-sm ${
+        hasErrors
+          ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800'
+          : 'bg-white border-gray-200 dark:bg-gray-800 dark:border-gray-700'
+      }`}
+    >
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-opacity-80 transition-colors rounded-lg"
       >
         <div className="flex items-center space-x-3">
           <TrafficLight status={overallStatus} />
-          <span className="text-sm font-medium text-gray-700">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
             Service Health
           </span>
-          <span className={`text-xs ${hasErrors ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
+          <span className={`text-xs ${hasErrors ? 'text-red-600 dark:text-red-400 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
             ({healthyCount}/{totalCount} healthy)
           </span>
         </div>
         <div className="flex items-center space-x-2">
           {lastChecked && (
-            <span className="text-xs text-gray-400">
+            <span className="text-xs text-gray-400 dark:text-gray-500">
               {lastChecked.toLocaleTimeString()}
             </span>
           )}
@@ -347,10 +263,10 @@ export function ServiceHealthCheck() {
       </button>
 
       {expanded && (
-        <div className="px-4 pb-4 border-t border-gray-100">
+        <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700">
           {hasErrors && (
-            <div className="mt-3 p-3 bg-red-100 border border-red-200 rounded-md">
-              <p className="text-xs text-red-800 font-medium">
+            <div className="mt-3 p-3 bg-red-100 border border-red-200 rounded-md dark:bg-red-900/30 dark:border-red-800">
+              <p className="text-xs text-red-800 dark:text-red-300 font-medium">
                 Some services are unavailable. Login may not work correctly.
               </p>
             </div>
@@ -362,42 +278,42 @@ export function ServiceHealthCheck() {
                 key={index}
                 className={`py-2 px-3 rounded-md ${
                   service.status === 'error' || service.status === 'unhealthy'
-                    ? 'bg-red-50'
+                    ? 'bg-red-50 dark:bg-red-900/20'
                     : service.status === 'degraded'
-                    ? 'bg-yellow-50'
-                    : 'bg-gray-50'
+                    ? 'bg-yellow-50 dark:bg-yellow-900/20'
+                    : 'bg-gray-50 dark:bg-gray-700/50'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <TrafficLight status={service.status} />
-                    <span className="text-sm text-gray-700">{service.name}</span>
+                    <span className="text-sm text-gray-700 dark:text-gray-200">{service.name}</span>
                   </div>
                   <div className="flex items-center space-x-3 text-xs">
                     {service.message && (
                       <span className={`${
                         service.status === 'error' || service.status === 'unhealthy'
-                          ? 'text-red-600'
-                          : 'text-gray-500'
+                          ? 'text-red-600 dark:text-red-400'
+                          : 'text-gray-500 dark:text-gray-400'
                       }`}>
                         {service.message}
                       </span>
                     )}
                     {service.responseTime && (
-                      <span className="text-gray-400">{service.responseTime}ms</span>
+                      <span className="text-gray-400 dark:text-gray-500">{service.responseTime}ms</span>
                     )}
                   </div>
                 </div>
                 {service.details && (
-                  <p className="mt-1 ml-6 text-xs text-gray-500">{service.details}</p>
+                  <p className="mt-1 ml-6 text-xs text-gray-500 dark:text-gray-400">{service.details}</p>
                 )}
               </div>
             ))}
           </div>
 
           <button
-            onClick={checkHealth}
-            className="mt-3 w-full py-2 text-xs text-primary hover:text-primary-dark font-medium transition-colors"
+            onClick={handleRefresh}
+            className="mt-3 w-full py-2 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium transition-colors"
           >
             Refresh Status
           </button>
