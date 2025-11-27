@@ -41,6 +41,7 @@ var (
 // BootstrapCommand creates the bootstrap command.
 func BootstrapCommand() *cobra.Command {
 	var flagEmail string
+	var flagPassword string
 	var flagOrgName string
 	var flagOrgSlug string
 	var flagDryRunLocal bool
@@ -60,7 +61,7 @@ This command requires the user-org-service to be running and accessible.
 By default, this command runs in dry-run mode to preview changes.
 Use --confirm to execute the bootstrap operation.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runBootstrap(cmd, args, flagEmail, flagOrgName, flagOrgSlug, flagDryRunLocal, flagConfirmLocal, flagFormatLocal, flagVerboseLocal, flagQuietLocal, flagUserOrgEndpointLocal, flagAPIKeyLocal)
+			return runBootstrap(cmd, args, flagEmail, flagPassword, flagOrgName, flagOrgSlug, flagDryRunLocal, flagConfirmLocal, flagFormatLocal, flagVerboseLocal, flagQuietLocal, flagUserOrgEndpointLocal, flagAPIKeyLocal)
 		},
 	}
 
@@ -72,13 +73,14 @@ Use --confirm to execute the bootstrap operation.`,
 	cmd.Flags().StringVar(&flagUserOrgEndpointLocal, "user-org-endpoint", "", "User-org-service endpoint (overrides config)")
 	cmd.Flags().StringVar(&flagAPIKeyLocal, "api-key", "", "API key for authentication (overrides config)")
 	cmd.Flags().StringVar(&flagEmail, "email", "", "Email for admin user (required)")
+	cmd.Flags().StringVar(&flagPassword, "password", "", "Password for admin user (required)")
 	cmd.Flags().StringVar(&flagOrgName, "org-name", "", "Organization name (default: 'Platform Admin Organization')")
 	cmd.Flags().StringVar(&flagOrgSlug, "org-slug", "", "Organization slug (default: 'platform-admin')")
 
 	return cmd
 }
 
-func runBootstrap(cmd *cobra.Command, args []string, flagEmail, flagOrgName, flagOrgSlug string, flagDryRun, flagConfirm bool, flagFormat string, flagVerbose, flagQuiet bool, flagUserOrgEndpoint, flagAPIKey string) error {
+func runBootstrap(cmd *cobra.Command, args []string, flagEmail, flagPassword, flagOrgName, flagOrgSlug string, flagDryRun, flagConfirm bool, flagFormat string, flagVerbose, flagQuiet bool, flagUserOrgEndpoint, flagAPIKey string) error {
 	startTime := time.Now()
 
 	// Load configuration
@@ -117,6 +119,16 @@ func runBootstrap(cmd *cobra.Command, args []string, flagEmail, flagOrgName, fla
 		}
 		if !cfg.Quiet {
 			fmt.Println("Note: --email is required when executing. Dry-run continuing without email.")
+		}
+	}
+
+	// Validate password if executing
+	if flagPassword == "" {
+		if !flagDryRun {
+			return fmt.Errorf("--password is required for bootstrap operation")
+		}
+		if !cfg.Quiet {
+			fmt.Println("Note: --password is required when executing. Dry-run continuing without password.")
 		}
 	}
 
@@ -200,6 +212,7 @@ func runBootstrap(cmd *cobra.Command, args []string, flagEmail, flagOrgName, fla
 
 	bootstrapReq := userorg.BootstrapRequest{
 		Email:       flagEmail,
+		Password:    flagPassword,
 		DisplayName: "Platform Admin",
 		OrgName:     flagOrgName,
 		OrgSlug:     flagOrgSlug,
