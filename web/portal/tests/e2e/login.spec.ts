@@ -6,8 +6,8 @@ test.describe('Login Page', () => {
   });
 
   test('should display login page with password form by default', async ({ page }) => {
-    // Check for main heading
-    await expect(page.getByRole('heading', { name: /sign in/i })).toBeVisible();
+    // Check for main heading - the page title is "AI-AAS Portal"
+    await expect(page.getByRole('heading', { name: /ai-aas portal/i })).toBeVisible();
 
     // Check that password form is visible by default
     await expect(page.getByLabel(/email/i)).toBeVisible();
@@ -23,8 +23,8 @@ test.describe('Login Page', () => {
     await expect(emailPasswordTab).toBeVisible();
     await expect(oauthTab).toBeVisible();
 
-    // Password tab should be active by default
-    await expect(emailPasswordTab).toHaveClass(/bg-primary/);
+    // Password tab should be active by default (has white background in pills variant)
+    await expect(emailPasswordTab).toHaveClass(/bg-white/);
   });
 
   test('should switch between login methods', async ({ page }) => {
@@ -44,12 +44,12 @@ test.describe('Login Page', () => {
   });
 
   test('should validate required fields', async ({ page }) => {
-    // Try to submit empty form
+    // Fill email but leave password empty, then submit
+    await page.getByLabel(/email/i).fill('test@example.com');
     await page.getByRole('button', { name: /sign in$/i }).click();
 
-    // Form validation should prevent submission
-    const emailInput = page.getByLabel(/email/i);
-    await expect(emailInput).toBeInvalid();
+    // Should show validation error for password
+    await expect(page.getByText(/password is required/i)).toBeVisible();
   });
 
   test('should show error on invalid credentials', async ({ page }) => {

@@ -5,7 +5,7 @@ test.describe('Homepage', () => {
     await page.goto('/');
 
     // Check for main heading
-    await expect(page.getByRole('heading', { name: /welcome to ai-aas portal/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /ai-aas portal/i })).toBeVisible();
 
     // Check for feature sections
     await expect(page.getByText(/organization management/i)).toBeVisible();
@@ -16,14 +16,14 @@ test.describe('Homepage', () => {
   test('should show login button when not authenticated', async ({ page }) => {
     await page.goto('/');
 
-    const loginLink = page.getByRole('link', { name: /get started/i });
-    await expect(loginLink).toBeVisible();
-    await expect(loginLink).toHaveAttribute('href', '/auth/login');
+    // Button is inside a link - find the button with Get Started text
+    const getStartedButton = page.getByRole('button', { name: /get started/i });
+    await expect(getStartedButton).toBeVisible();
   });
 
   test('should navigate to login page', async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('link', { name: /get started/i }).click();
+    await page.getByRole('button', { name: /get started/i }).click();
 
     await expect(page).toHaveURL(/\/auth\/login/);
   });
@@ -33,7 +33,7 @@ test.describe('Homepage', () => {
     await page.goto('/');
 
     // Check that content is still visible and readable
-    await expect(page.getByRole('heading', { name: /welcome/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /ai-aas portal/i })).toBeVisible();
   });
 });
 
