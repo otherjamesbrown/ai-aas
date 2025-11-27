@@ -415,6 +415,7 @@ func main() {
 
 	// Initialize public API handler with routing engine and usage hook
 	publicHandler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, routingEngine, routingMetrics, usageHook)
+	publicHandler.SetUserOrgServiceURL(cfg.UserOrgServiceURL)
 
 	// Create tracer for middleware
 	tracer := otel.Tracer("api-router-service")
