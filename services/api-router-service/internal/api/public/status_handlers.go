@@ -39,26 +39,29 @@ type BuildMetadata struct {
 
 // StatusHandlers provides health and readiness endpoint handlers.
 type StatusHandlers struct {
-	redisClient    *redis.Client
-	kafkaPublisher *usage.Publisher
-	configLoader   *config.Loader
-	backendRegistry *config.BackendRegistry
-	buildMetadata  BuildMetadata
-	logger         *zap.Logger
-	healthTimeout  time.Duration
-	readyTimeout   time.Duration
+	redisClient       *redis.Client
+	kafkaPublisher    *usage.Publisher
+	configLoader      *config.Loader
+	backendRegistry   *config.BackendRegistry
+	userOrgServiceURL string
+	httpClient        *http.Client
+	buildMetadata     BuildMetadata
+	logger            *zap.Logger
+	healthTimeout     time.Duration
+	readyTimeout      time.Duration
 }
 
 // StatusHandlersConfig configures the status handlers.
 type StatusHandlersConfig struct {
-	RedisClient    *redis.Client
-	KafkaPublisher *usage.Publisher
-	ConfigLoader   *config.Loader
-	BackendRegistry *config.BackendRegistry
-	BuildMetadata  BuildMetadata
-	Logger         *zap.Logger
-	HealthTimeout  time.Duration
-	ReadyTimeout   time.Duration
+	RedisClient       *redis.Client
+	KafkaPublisher    *usage.Publisher
+	ConfigLoader      *config.Loader
+	BackendRegistry   *config.BackendRegistry
+	UserOrgServiceURL string
+	BuildMetadata     BuildMetadata
+	Logger            *zap.Logger
+	HealthTimeout     time.Duration
+	ReadyTimeout      time.Duration
 }
 
 // NewStatusHandlers creates a new status handlers instance.
@@ -74,10 +77,14 @@ func NewStatusHandlers(cfg StatusHandlersConfig) *StatusHandlers {
 	}
 
 	return &StatusHandlers{
-		redisClient:    cfg.RedisClient,
-		kafkaPublisher: cfg.KafkaPublisher,
-		configLoader:   cfg.ConfigLoader,
-		backendRegistry: cfg.BackendRegistry,
+		redisClient:       cfg.RedisClient,
+		kafkaPublisher:    cfg.KafkaPublisher,
+		configLoader:      cfg.ConfigLoader,
+		backendRegistry:   cfg.BackendRegistry,
+		userOrgServiceURL: cfg.UserOrgServiceURL,
+		httpClient: &http.Client{
+			Timeout: cfg.HealthTimeout,
+		},
 		buildMetadata:  cfg.BuildMetadata,
 		logger:         cfg.Logger,
 		healthTimeout:  cfg.HealthTimeout,
@@ -190,6 +197,37 @@ func (h *StatusHandlers) Readyz(w http.ResponseWriter, r *http.Request) {
 		components["backend_registry"] = "unhealthy"
 		allHealthy = false
 		h.logger.Debug("Backend registry not available")
+	}
+
+	// Check user-org-service connectivity (authentication dependency)
+	if h.userOrgServiceURL != "" {
+		userOrgHealthURL := h.userOrgServiceURL + "/healthz"
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, userOrgHealthURL, nil)
+		if err != nil {
+			components["user_org_service"] = "unhealthy"
+			allHealthy = false
+			h.logger.Debug("Failed to create user-org-service health request", zap.Error(err))
+		} else {
+			resp, err := h.httpClient.Do(req)
+			if err != nil {
+				components["user_org_service"] = "unhealthy"
+				allHealthy = false
+				h.logger.Debug("user-org-service health check failed", zap.Error(err))
+			} else {
+				defer resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					components["user_org_service"] = "healthy"
+				} else {
+					components["user_org_service"] = "degraded"
+					h.logger.Debug("user-org-service returned non-OK status",
+						zap.Int("status_code", resp.StatusCode))
+				}
+			}
+		}
+	} else {
+		components["user_org_service"] = "not_configured"
+		// user-org-service is required for authentication
+		h.logger.Debug("user-org-service URL not configured")
 	}
 
 	// Build metadata

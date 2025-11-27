@@ -20,6 +20,12 @@ interface HealthzResponse {
   status: string;
 }
 
+interface PlatformHealthResponse {
+  status: string;
+  services?: Record<string, { status: string; message?: string; response_ms?: number }>;
+  functional_tests?: Record<string, { status: string; message?: string }>;
+}
+
 const STATUS_COLORS: Record<ServiceStatus, string> = {
   checking: 'bg-gray-400 dark:bg-gray-500 animate-pulse',
   healthy: 'bg-green-500',
@@ -150,6 +156,65 @@ export function ServiceHealthCheck() {
         }
       } catch {
         // Readyz failed, but we already have healthz status
+      }
+
+      // Try to get platform health (includes functional tests)
+      try {
+        const platformResponse = await publicClient.get<PlatformHealthResponse>('/v1/platform/health');
+
+        // Add service statuses from platform health
+        if (platformResponse.data.services) {
+          for (const [serviceName, serviceData] of Object.entries(platformResponse.data.services)) {
+            // Skip if we already have this service
+            const displayName = serviceName
+              .split('_')
+              .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+              .join(' ');
+
+            if (newServices.some(s => s.name === displayName)) continue;
+
+            let status: ServiceStatus = 'healthy';
+            if (serviceData.status === 'degraded') {
+              status = 'degraded';
+            } else if (serviceData.status !== 'healthy') {
+              status = 'unhealthy';
+            }
+
+            newServices.push({
+              name: displayName,
+              status,
+              message: serviceData.message,
+              responseTime: serviceData.response_ms,
+            });
+          }
+        }
+
+        // Add functional test results
+        if (platformResponse.data.functional_tests) {
+          for (const [testName, testData] of Object.entries(platformResponse.data.functional_tests)) {
+            const displayName = testName
+              .split('_')
+              .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+              .join(' ') + ' Test';
+
+            let status: ServiceStatus = 'healthy';
+            if (testData.status === 'failed') {
+              status = 'error';
+            } else if (testData.status === 'skipped') {
+              status = 'degraded';
+            } else if (testData.status !== 'passed') {
+              status = 'unhealthy';
+            }
+
+            newServices.push({
+              name: displayName,
+              status,
+              message: testData.message,
+            });
+          }
+        }
+      } catch {
+        // Platform health endpoint not available - this is fine for older deployments
       }
 
       // CORS connectivity test
