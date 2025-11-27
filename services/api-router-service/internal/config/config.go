@@ -63,6 +63,15 @@ type Config struct {
 
 	// Usage Accounting
 	UsageBufferDir string `envconfig:"USAGE_BUFFER_DIR" default:"/tmp/api-router-usage-buffer"`
+
+	// CORS Configuration
+	CORSEnabled        bool   `envconfig:"CORS_ENABLED" default:"true"`
+	CORSAllowedOrigins string `envconfig:"CORS_ALLOWED_ORIGINS" default:"http://localhost:5173,https://localhost:5173"`
+	CORSAllowedMethods string `envconfig:"CORS_ALLOWED_METHODS" default:"GET,POST,PUT,PATCH,DELETE,OPTIONS"`
+	CORSAllowedHeaders string `envconfig:"CORS_ALLOWED_HEADERS" default:"Authorization,Content-Type,X-API-Key,X-Correlation-ID,X-CSRF-Token,X-Requested-With"`
+	CORSExposedHeaders string `envconfig:"CORS_EXPOSED_HEADERS" default:"X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Reset,X-Correlation-ID"`
+	CORSMaxAge         int    `envconfig:"CORS_MAX_AGE" default:"3600"`
+	CORSAllowCredentials bool `envconfig:"CORS_ALLOW_CREDENTIALS" default:"true"`
 }
 
 // BackendEndpointConfig represents a configured backend endpoint.

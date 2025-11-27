@@ -213,6 +213,28 @@ func main() {
 	// Set up HTTP server with middleware
 	router := chi.NewRouter()
 
+	// CORS middleware (MUST be first to handle preflight OPTIONS requests)
+	// This is configured via environment variables for flexibility across environments
+	if cfg.CORSEnabled {
+		corsConfig := public.CORSConfig{
+			Enabled:          true,
+			AllowedOrigins:   public.ParseCORSOrigins(cfg.CORSAllowedOrigins),
+			AllowedMethods:   public.ParseCORSMethods(cfg.CORSAllowedMethods),
+			AllowedHeaders:   public.ParseCORSHeaders(cfg.CORSAllowedHeaders),
+			ExposedHeaders:   public.ParseCORSHeaders(cfg.CORSExposedHeaders),
+			MaxAge:           cfg.CORSMaxAge,
+			AllowCredentials: cfg.CORSAllowCredentials,
+			Logger:           logger,
+		}
+		router.Use(public.CORSMiddleware(corsConfig))
+		logger.Info("CORS middleware enabled",
+			zap.Strings("allowed_origins", corsConfig.AllowedOrigins),
+			zap.Strings("allowed_headers", corsConfig.AllowedHeaders),
+		)
+	} else {
+		logger.Info("CORS middleware disabled")
+	}
+
 	// Base middleware stack (applies to all routes including health endpoints)
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)

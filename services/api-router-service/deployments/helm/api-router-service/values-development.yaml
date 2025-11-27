@@ -33,12 +33,8 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
-    # CORS configuration for portal access
-    nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://portal.172.232.58.222.nip.io,https://portal.dev.ai-aas.local"
-    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, PUT, POST, DELETE, PATCH, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,X-Api-Key,Authorization,X-Correlation-ID,X-CSRF-Token"
-    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    # CORS is now handled at the application layer (see env vars below)
+    # This provides better logging, flexibility, and single source of truth
   hosts:
     - host: api.dev.ai-aas.local
       paths:
@@ -96,6 +92,21 @@ env:
     value: "2s"
   - name: OTEL_EXPORTER_OTLP_ENDPOINT
     value: "otel-collector.monitoring.svc.cluster.local:4317"
+  # CORS Configuration (handled at application layer for better control)
+  - name: CORS_ENABLED
+    value: "true"
+  - name: CORS_ALLOWED_ORIGINS
+    value: "https://portal.172.232.58.222.nip.io,https://portal.dev.ai-aas.local,http://localhost:5173,https://localhost:5173"
+  - name: CORS_ALLOWED_METHODS
+    value: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+  - name: CORS_ALLOWED_HEADERS
+    value: "Authorization,Content-Type,X-API-Key,X-Correlation-ID,X-CSRF-Token,X-Requested-With,Accept,Origin,Cache-Control"
+  - name: CORS_EXPOSED_HEADERS
+    value: "X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Reset,X-Correlation-ID"
+  - name: CORS_MAX_AGE
+    value: "3600"
+  - name: CORS_ALLOW_CREDENTIALS
+    value: "true"
 
 # Backend endpoints - configure vLLM service
 backends:

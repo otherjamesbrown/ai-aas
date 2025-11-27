@@ -6,6 +6,7 @@ interface ServiceHealth {
   name: string;
   status: ServiceStatus;
   message?: string;
+  details?: string;
   responseTime?: number;
 }
 
@@ -37,12 +38,31 @@ const STATUS_LABELS: Record<ServiceStatus, string> = {
   error: 'Error',
 };
 
+// Headers that the frontend sends and expects to be allowed by CORS
+const REQUIRED_CORS_HEADERS = [
+  'authorization',
+  'content-type',
+  'x-correlation-id',
+  'x-csrf-token',
+];
+
 function TrafficLight({ status }: { status: ServiceStatus }) {
   return (
     <span
       className={`inline-block w-3 h-3 rounded-full ${STATUS_COLORS[status]}`}
       title={STATUS_LABELS[status]}
     />
+  );
+}
+
+function parseCorsAllowedHeaders(headerValue: string | null): string[] {
+  if (!headerValue) return [];
+  return headerValue.split(',').map(h => h.trim().toLowerCase());
+}
+
+function checkMissingHeaders(allowedHeaders: string[]): string[] {
+  return REQUIRED_CORS_HEADERS.filter(
+    required => !allowedHeaders.some(allowed => allowed === required)
   );
 }
 
@@ -98,6 +118,9 @@ export function ServiceHealthCheck() {
         name: 'API Gateway',
         status: 'error',
         message: isCorsError ? 'CORS/Network error' : errorMessage,
+        details: isCorsError
+          ? 'Cannot reach API. Check network or CORS configuration.'
+          : undefined,
         responseTime: Date.now() - startTime,
       });
     }
@@ -126,7 +149,7 @@ export function ServiceHealthCheck() {
               .join(' ');
 
             let status: ServiceStatus = 'healthy';
-            if (componentData.status === 'degraded') {
+            if (componentData.status === 'degraded' || componentData.status === 'not_configured') {
               status = 'degraded';
             } else if (componentData.status !== 'ready' && componentData.status !== 'healthy') {
               status = 'unhealthy';
@@ -141,47 +164,111 @@ export function ServiceHealthCheck() {
           }
         }
       }
-    } catch (error) {
+    } catch {
       // Readyz failed, but we already have healthz status
       // Don't add duplicate error entries
     }
 
-    // Check Auth endpoint (CORS test)
+    // CORS Preflight Test - Check that all required headers are allowed
     try {
-      const authStart = Date.now();
-      // Use a simple OPTIONS request to test CORS
-      const authResponse = await fetch(`${baseUrl}/v1/auth/userinfo`, {
+      const corsStart = Date.now();
+      const corsResponse = await fetch(`${baseUrl}/v1/status/healthz`, {
         method: 'OPTIONS',
         mode: 'cors',
         headers: {
-          'Accept': 'application/json',
+          'Origin': window.location.origin,
           'Access-Control-Request-Method': 'GET',
-          'Access-Control-Request-Headers': 'authorization,x-correlation-id',
+          'Access-Control-Request-Headers': REQUIRED_CORS_HEADERS.join(','),
         },
       });
-      const authTime = Date.now() - authStart;
+      const corsTime = Date.now() - corsStart;
 
-      // OPTIONS returning 2xx or 204 means CORS is configured
-      if (authResponse.ok || authResponse.status === 204) {
+      // Check the Access-Control-Allow-Headers response
+      const allowedHeadersStr = corsResponse.headers.get('Access-Control-Allow-Headers');
+      const allowedOrigin = corsResponse.headers.get('Access-Control-Allow-Origin');
+      const allowedHeaders = parseCorsAllowedHeaders(allowedHeadersStr);
+      const missingHeaders = checkMissingHeaders(allowedHeaders);
+
+      if (corsResponse.status === 204 || corsResponse.ok) {
+        if (missingHeaders.length === 0) {
+          newServices.push({
+            name: 'CORS Config',
+            status: 'healthy',
+            message: 'All headers allowed',
+            details: allowedOrigin ? `Origin: ${allowedOrigin}` : undefined,
+            responseTime: corsTime,
+          });
+        } else {
+          newServices.push({
+            name: 'CORS Config',
+            status: 'degraded',
+            message: `Missing: ${missingHeaders.join(', ')}`,
+            details: 'Some headers not in Access-Control-Allow-Headers',
+            responseTime: corsTime,
+          });
+        }
+      } else {
         newServices.push({
-          name: 'Auth CORS',
+          name: 'CORS Config',
+          status: 'unhealthy',
+          message: `HTTP ${corsResponse.status}`,
+          details: 'CORS preflight request failed',
+          responseTime: corsTime,
+        });
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      newServices.push({
+        name: 'CORS Config',
+        status: 'error',
+        message: 'Preflight failed',
+        details: errorMessage.includes('Failed to fetch')
+          ? 'Browser blocked request. Origin not allowed or network issue.'
+          : errorMessage,
+        responseTime: Date.now() - startTime,
+      });
+    }
+
+    // Test actual request with X-Correlation-ID header (the one that was breaking)
+    try {
+      const headerTestStart = Date.now();
+      const headerTestResponse = await fetch(`${baseUrl}/v1/status/healthz`, {
+        method: 'GET',
+        mode: 'cors',
+        headers: {
+          'Accept': 'application/json',
+          'X-Correlation-ID': crypto.randomUUID(),
+        },
+      });
+      const headerTestTime = Date.now() - headerTestStart;
+
+      if (headerTestResponse.ok) {
+        newServices.push({
+          name: 'Header Test',
           status: 'healthy',
-          message: 'CORS configured',
-          responseTime: authTime,
+          message: 'X-Correlation-ID allowed',
+          responseTime: headerTestTime,
         });
       } else {
         newServices.push({
-          name: 'Auth CORS',
-          status: 'degraded',
-          message: `HTTP ${authResponse.status}`,
-          responseTime: authTime,
+          name: 'Header Test',
+          status: 'unhealthy',
+          message: `HTTP ${headerTestResponse.status}`,
+          responseTime: headerTestTime,
         });
       }
-    } catch {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const isCorsError = errorMessage.includes('CORS') ||
+                          errorMessage.includes('NetworkError') ||
+                          errorMessage.includes('Failed to fetch');
       newServices.push({
-        name: 'Auth CORS',
+        name: 'Header Test',
         status: 'error',
-        message: 'CORS not configured',
+        message: isCorsError ? 'X-Correlation-ID blocked' : 'Request failed',
+        details: isCorsError
+          ? 'CORS blocking X-Correlation-ID header. Check server config.'
+          : errorMessage,
         responseTime: Date.now() - startTime,
       });
     }
@@ -207,19 +294,20 @@ export function ServiceHealthCheck() {
 
   const healthyCount = services.filter(s => s.status === 'healthy').length;
   const totalCount = services.length;
+  const hasErrors = services.some(s => s.status === 'error' || s.status === 'unhealthy');
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+    <div className={`border rounded-lg shadow-sm ${hasErrors ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 transition-colors rounded-lg"
+        className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-opacity-80 transition-colors rounded-lg"
       >
         <div className="flex items-center space-x-3">
           <TrafficLight status={overallStatus} />
           <span className="text-sm font-medium text-gray-700">
             Service Health
           </span>
-          <span className="text-xs text-gray-500">
+          <span className={`text-xs ${hasErrors ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
             ({healthyCount}/{totalCount} healthy)
           </span>
         </div>
@@ -242,24 +330,49 @@ export function ServiceHealthCheck() {
 
       {expanded && (
         <div className="px-4 pb-4 border-t border-gray-100">
+          {hasErrors && (
+            <div className="mt-3 p-3 bg-red-100 border border-red-200 rounded-md">
+              <p className="text-xs text-red-800 font-medium">
+                Some services are unavailable. Login may not work correctly.
+              </p>
+            </div>
+          )}
+
           <div className="mt-3 space-y-2">
             {services.map((service, index) => (
               <div
                 key={index}
-                className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-md"
+                className={`py-2 px-3 rounded-md ${
+                  service.status === 'error' || service.status === 'unhealthy'
+                    ? 'bg-red-50'
+                    : service.status === 'degraded'
+                    ? 'bg-yellow-50'
+                    : 'bg-gray-50'
+                }`}
               >
-                <div className="flex items-center space-x-3">
-                  <TrafficLight status={service.status} />
-                  <span className="text-sm text-gray-700">{service.name}</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <TrafficLight status={service.status} />
+                    <span className="text-sm text-gray-700">{service.name}</span>
+                  </div>
+                  <div className="flex items-center space-x-3 text-xs">
+                    {service.message && (
+                      <span className={`${
+                        service.status === 'error' || service.status === 'unhealthy'
+                          ? 'text-red-600'
+                          : 'text-gray-500'
+                      }`}>
+                        {service.message}
+                      </span>
+                    )}
+                    {service.responseTime && (
+                      <span className="text-gray-400">{service.responseTime}ms</span>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center space-x-3 text-xs">
-                  {service.message && (
-                    <span className="text-gray-500">{service.message}</span>
-                  )}
-                  {service.responseTime && (
-                    <span className="text-gray-400">{service.responseTime}ms</span>
-                  )}
-                </div>
+                {service.details && (
+                  <p className="mt-1 ml-6 text-xs text-gray-500">{service.details}</p>
+                )}
               </div>
             ))}
           </div>
