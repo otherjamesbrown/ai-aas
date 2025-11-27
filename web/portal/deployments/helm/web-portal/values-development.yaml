@@ -2,7 +2,7 @@
 replicaCount: 2
 
 image:
-  tag: develop-health-check
+  tag: dev
   pullPolicy: Always
 
 ingress:
