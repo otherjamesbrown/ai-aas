@@ -29,17 +29,21 @@ spec:
 
     containers:
       - name: kserve-container
-        image: vllm/vllm-openai:v0.6.3
+        image: vllm/vllm-openai:v0.10.2
         args:
-          - --model=unsloth/gpt-oss-20b
-          - --dtype=bfloat16  # Use bfloat16 for better memory efficiency
-          - --max-model-len=2048  # Reduced context length to fit in 20GB VRAM
-          - --gpu-memory-utilization=0.85  # Conservative for 20GB card
-          - --trust-remote-code
+          - --model=openai/gpt-oss-20b
           - --served-model-name=gpt-oss-20b
-          # Additional memory optimization flags
-          - --disable-custom-all-reduce  # Disable for single GPU
-          - --enforce-eager  # Use eager mode to save memory during compilation
+          # WARNING: SECURITY RISK - --trust-remote-code allows arbitrary code execution
+          # from the model repository. Only use with models from trusted sources.
+          # This flag is required for certain model architectures that include custom code.
+          - --trust-remote-code
+          # GPT-OSS specific optimizations
+          - --async-scheduling  # Recommended for Ampere GPUs (RTX 4000 Ada)
+          - --no-enable-prefix-caching  # Recommended for GPT-OSS
+          # Resource configuration
+          - --max-model-len=8192  # GPT-OSS supports longer context
+          - --gpu-memory-utilization=0.9
+          - --max-num-seqs=256  # Batch size for throughput
         env:
           - name: HF_HOME
             value: /tmp/hf_home
@@ -51,14 +55,37 @@ spec:
           #       key: token
         resources:
           requests:
-            cpu: "8"  # Higher CPU for 20B model
-            memory: "24Gi"  # 20B models need more RAM
+            cpu: "3"  # Reduced to fit available cluster resources
+            memory: "14Gi"  # Reduced to fit available cluster resources
             nvidia.com/gpu: 1
           limits:
-            cpu: "16"
-            memory: "48Gi"
+            cpu: "6"
+            memory: "28Gi"
             nvidia.com/gpu: 1
         ports:
           - containerPort: 8000
             name: http1
             protocol: TCP
+        # Health probes to prevent traffic before model is loaded
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 90  # 30s + 90×10s = 15 min max for 20B model
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          periodSeconds: 10
+          failureThreshold: 3
+          timeoutSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          periodSeconds: 30
+          failureThreshold: 3
+          timeoutSeconds: 5

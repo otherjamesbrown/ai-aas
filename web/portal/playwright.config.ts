@@ -1,8 +1,28 @@
 import { defineConfig, devices } from '@playwright/test';
-import path from 'path';
 
 /**
- * See https://playwright.dev/docs/test-configuration.
+ * Playwright E2E Test Configuration
+ *
+ * Projects:
+ * - smoke: Fast tests (< 2 min), Chromium only, critical paths
+ * - chromium/firefox/webkit: Full test suite, all browsers
+ * - accessibility: A11y tests with axe-core
+ *
+ * Environment Variables:
+ * - PLAYWRIGHT_BASE_URL: Target URL (default: https://localhost:5173)
+ * - SKIP_WEBSERVER: Set to 'true' for remote testing
+ * - PLAYWRIGHT_HEADLESS: Set to 'false' to see browser
+ * - CI: Enables CI-specific settings (retries, workers)
+ *
+ * Usage:
+ *   # Local smoke tests
+ *   pnpm playwright test --project=smoke
+ *
+ *   # Remote smoke tests
+ *   PLAYWRIGHT_BASE_URL=https://portal.172.232.58.222.nip.io SKIP_WEBSERVER=true pnpm playwright test --project=smoke
+ *
+ *   # Full test suite
+ *   pnpm playwright test
  */
 export default defineConfig({
   testDir: './tests/e2e',
@@ -10,61 +30,81 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: process.env.CI 
+  timeout: 30000,
+
+  reporter: process.env.CI
     ? [
-        ['html'],
+        ['html', { outputFolder: 'playwright-report' }],
         ['list'],
         ['json', { outputFile: 'test-results/results.json' }],
       ]
     : [
         ['list'],
         ['json', { outputFile: 'test-results/results.json' }],
-        ['html', { open: 'never' }], // Generate HTML report but don't open server
+        ['html', { open: 'never' }],
       ],
+
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || (process.env.VITE_USE_HTTPS === 'false' ? 'http://localhost:5173' : 'https://localhost:5173'),
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'https://localhost:5173',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
     ignoreHTTPSErrors: true,
-    headless: process.env.PLAYWRIGHT_HEADLESS !== 'false', // Default to headless unless explicitly disabled
+    headless: process.env.PLAYWRIGHT_HEADLESS !== 'false',
   },
 
   projects: [
+    // Smoke tests - fast, Chromium only, critical paths
+    {
+      name: 'smoke',
+      testMatch: /smoke\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+      timeout: 60000, // 1 minute per test max
+    },
+
+    // Full test suite - all browsers
     {
       name: 'chromium',
+      testIgnore: /smoke\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] },
     },
     {
       name: 'firefox',
+      testIgnore: /smoke\.spec\.ts/,
       use: { ...devices['Desktop Firefox'] },
     },
     {
       name: 'webkit',
+      testIgnore: /smoke\.spec\.ts/,
       use: { ...devices['Desktop Safari'] },
     },
+
     // Mobile viewports
     {
-      name: 'Mobile Chrome',
+      name: 'mobile-chrome',
+      testIgnore: /smoke\.spec\.ts/,
       use: { ...devices['Pixel 5'] },
     },
     {
-      name: 'Mobile Safari',
+      name: 'mobile-safari',
+      testIgnore: /smoke\.spec\.ts/,
       use: { ...devices['iPhone 12'] },
     },
+
     // Accessibility testing
     {
       name: 'accessibility',
-      use: { ...devices['Desktop Chrome'] },
       testMatch: /.*\.a11y\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
     },
   ],
 
-  webServer: process.env.SKIP_WEBSERVER ? undefined : {
-    command: 'pnpm dev',
-    url: process.env.VITE_USE_HTTPS === 'false' ? 'http://localhost:5173' : 'https://localhost:5173',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
-  },
+  webServer: process.env.SKIP_WEBSERVER
+    ? undefined
+    : {
+        command: 'pnpm dev',
+        url: 'https://localhost:5173',
+        reuseExistingServer: !process.env.CI,
+        timeout: 120 * 1000,
+      },
 });
-

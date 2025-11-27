@@ -146,6 +146,33 @@ func main() {
 				zap.String("backend", "mistral-7b-instruct"),
 			)
 		}
+
+		// Bootstrap routing policy for gpt-oss-20b
+		policyGptOss20b := &config.RoutingPolicy{
+			PolicyID:       "*-gpt-oss-20b",
+			OrganizationID: "*", // Global policy
+			Model:          "gpt-oss-20b",
+			Backends: []config.BackendWeight{
+				{
+					BackendID: "gpt-oss-20b",
+					Weight:    100,
+				},
+			},
+			FailoverThreshold: 3,
+			UpdatedAt:         time.Now(),
+			Version:           1,
+		}
+		if err := cache.StorePolicy(ctx, policyGptOss20b); err != nil {
+			logger.Error("failed to bootstrap routing policy",
+				zap.String("model", "gpt-oss-20b"),
+				zap.Error(err),
+			)
+		} else {
+			logger.Info("bootstrapped routing policy",
+				zap.String("model", "gpt-oss-20b"),
+				zap.String("backend", "gpt-oss-20b"),
+			)
+		}
 	}
 
 	watchCtx := context.Background()
@@ -185,6 +212,28 @@ func main() {
 
 	// Set up HTTP server with middleware
 	router := chi.NewRouter()
+
+	// CORS middleware (MUST be first to handle preflight OPTIONS requests)
+	// This is configured via environment variables for flexibility across environments
+	if cfg.CORSEnabled {
+		corsConfig := public.CORSConfig{
+			Enabled:          true,
+			AllowedOrigins:   public.ParseCORSOrigins(cfg.CORSAllowedOrigins),
+			AllowedMethods:   public.ParseCORSMethods(cfg.CORSAllowedMethods),
+			AllowedHeaders:   public.ParseCORSHeaders(cfg.CORSAllowedHeaders),
+			ExposedHeaders:   public.ParseCORSHeaders(cfg.CORSExposedHeaders),
+			MaxAge:           cfg.CORSMaxAge,
+			AllowCredentials: cfg.CORSAllowCredentials,
+			Logger:           logger,
+		}
+		router.Use(public.CORSMiddleware(corsConfig))
+		logger.Info("CORS middleware enabled",
+			zap.Strings("allowed_origins", corsConfig.AllowedOrigins),
+			zap.Strings("allowed_headers", corsConfig.AllowedHeaders),
+		)
+	} else {
+		logger.Info("CORS middleware disabled")
+	}
 
 	// Base middleware stack (applies to all routes including health endpoints)
 	router.Use(middleware.RequestID)

@@ -2,11 +2,19 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { membersApi } from '../api/members';
 import { ConfirmDestructiveModal } from '@/components/ConfirmDestructiveModal';
-// InviteMemberModal is defined inline below
+import { Button, DataTable, StatusBadge, IconButton, Modal, Input, Select } from '@/components/ui';
+import type { Column } from '@/components/ui';
 import type { MemberAccount, MemberRole } from '../types';
 
+const ROLE_OPTIONS = [
+  { value: 'owner', label: 'Owner' },
+  { value: 'admin', label: 'Admin' },
+  { value: 'manager', label: 'Manager' },
+  { value: 'analyst', label: 'Analyst' },
+];
+
 /**
- * Member management page with invite/resend/remove/role flows
+ * Member management page - rebuilt with unified components
  */
 export default function MemberManagementPage() {
   const queryClient = useQueryClient();
@@ -61,133 +69,158 @@ export default function MemberManagementPage() {
     },
   });
 
-  if (isLoading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
-  }
+  const columns: Column<MemberAccount>[] = [
+    {
+      key: 'email',
+      header: 'Email',
+      sortable: true,
+      render: (item) => (
+        <span className="font-medium text-gray-900 dark:text-white">{item.email}</span>
+      ),
+    },
+    {
+      key: 'role',
+      header: 'Role',
+      render: (item) => (
+        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300">
+          {item.role}
+        </span>
+      ),
+    },
+    {
+      key: 'invite_status',
+      header: 'Status',
+      render: (item) => (
+        <StatusBadge
+          status={
+            item.invite_status === 'accepted' ? 'success' :
+            item.invite_status === 'pending' ? 'warning' : 'error'
+          }
+        >
+          {item.invite_status}
+        </StatusBadge>
+      ),
+    },
+    {
+      key: 'last_active_at',
+      header: 'Last Active',
+      sortable: true,
+      render: (item) => (
+        <span className="text-gray-500 dark:text-gray-400">
+          {item.last_active_at ? new Date(item.last_active_at).toLocaleDateString() : 'Never'}
+        </span>
+      ),
+    },
+  ];
 
-  const handleRemove = (member: MemberAccount) => {
-    setSelectedMember(member);
-    setShowRemoveModal(true);
-  };
-
-  const handleUpdateRole = (member: MemberAccount) => {
-    setSelectedMember(member);
-    setShowRoleModal(true);
-  };
+  const renderActions = (member: MemberAccount) => (
+    <div className="flex items-center space-x-1">
+      {member.invite_status === 'pending' && (
+        <>
+          <IconButton
+            icon={
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            }
+            label="Resend invite"
+            variant="ghost"
+            size="sm"
+            onClick={() => resendMutation.mutate(member.member_id)}
+            disabled={resendMutation.isPending}
+          />
+          <IconButton
+            icon={
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+              </svg>
+            }
+            label="Revoke invite"
+            variant="ghost"
+            size="sm"
+            className="text-yellow-600 dark:text-yellow-400"
+            onClick={() => revokeMutation.mutate(member.member_id)}
+            disabled={revokeMutation.isPending}
+          />
+        </>
+      )}
+      <IconButton
+        icon={
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+          </svg>
+        }
+        label="Change role"
+        variant="ghost"
+        size="sm"
+        onClick={() => {
+          setSelectedMember(member);
+          setShowRoleModal(true);
+        }}
+      />
+      {member.role !== 'owner' && (
+        <IconButton
+          icon={
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          }
+          label="Remove member"
+          variant="ghost"
+          size="sm"
+          className="text-red-600 hover:text-red-700 dark:text-red-400"
+          onClick={() => {
+            setSelectedMember(member);
+            setShowRemoveModal(true);
+          }}
+        />
+      )}
+    </div>
+  );
 
   return (
-    <div className="max-w-7xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Members</h1>
-        <button
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Members</h1>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            Manage team members and their roles
+          </p>
+        </div>
+        <Button
           onClick={() => setShowInviteModal(true)}
-          className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+          leftIcon={
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+            </svg>
+          }
         >
           Invite Member
-        </button>
+        </Button>
       </div>
 
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Email
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Role
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Last Active
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {members?.map((member) => (
-              <tr key={member.member_id}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {member.email}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                    {member.role}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <span
-                    className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                      member.invite_status === 'accepted'
-                        ? 'bg-green-100 text-green-800'
-                        : member.invite_status === 'pending'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-red-100 text-red-800'
-                    }`}
-                  >
-                    {member.invite_status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {member.last_active_at
-                    ? new Date(member.last_active_at).toLocaleDateString()
-                    : 'Never'}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <div className="flex justify-end space-x-2">
-                    {member.invite_status === 'pending' && (
-                      <>
-                        <button
-                          onClick={() => resendMutation.mutate(member.member_id)}
-                          disabled={resendMutation.isPending}
-                          className="text-primary hover:text-primary-dark disabled:opacity-50"
-                        >
-                          Resend
-                        </button>
-                        <button
-                          onClick={() => revokeMutation.mutate(member.member_id)}
-                          disabled={revokeMutation.isPending}
-                          className="text-yellow-600 hover:text-yellow-900 disabled:opacity-50"
-                        >
-                          Revoke
-                        </button>
-                      </>
-                    )}
-                    <button
-                      onClick={() => handleUpdateRole(member)}
-                      className="text-primary hover:text-primary-dark"
-                    >
-                      Change Role
-                    </button>
-                    {member.role !== 'owner' && (
-                      <button
-                        onClick={() => handleRemove(member)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Table */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+        <DataTable
+          columns={columns}
+          data={members || []}
+          keyExtractor={(item) => item.member_id}
+          loading={isLoading}
+          emptyMessage="No members found. Invite your first team member."
+          actions={renderActions}
+        />
       </div>
 
+      {/* Invite Modal */}
       <InviteMemberModal
         isOpen={showInviteModal}
         onClose={() => setShowInviteModal(false)}
-        onInvite={(email, role, scopes) =>
-          inviteMutation.mutate({ email, role, scopes })
-        }
+        onInvite={(email, role, scopes) => inviteMutation.mutate({ email, role, scopes })}
         isLoading={inviteMutation.isPending}
       />
 
+      {/* Role & Remove Modals */}
       {selectedMember && (
         <>
           <ConfirmDestructiveModal
@@ -227,7 +260,7 @@ export default function MemberManagementPage() {
   );
 }
 
-// Invite Member Modal Component
+// Invite Member Modal
 function InviteMemberModal({
   isOpen,
   onClose,
@@ -241,78 +274,53 @@ function InviteMemberModal({
 }) {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<MemberRole>('manager');
-  const [scopes, setScopes] = useState<string[]>([]);
-
-  if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onInvite(email, role, scopes.length > 0 ? scopes : undefined);
+    onInvite(email, role, undefined);
     setEmail('');
     setRole('manager');
-    setScopes([]);
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto" aria-modal="true">
-      <div className="flex min-h-screen items-center justify-center p-4">
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75" onClick={onClose} />
-        <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-          <h2 className="text-xl font-bold mb-4">Invite Member</h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="invite-email" className="block text-sm font-medium text-gray-700">
-                Email
-              </label>
-              <input
-                type="email"
-                id="invite-email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-              />
-            </div>
-            <div>
-              <label htmlFor="invite-role" className="block text-sm font-medium text-gray-700">
-                Role
-              </label>
-              <select
-                id="invite-role"
-                value={role}
-                onChange={(e) => setRole(e.target.value as MemberRole)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-              >
-                <option value="owner">Owner</option>
-                <option value="admin">Admin</option>
-                <option value="manager">Manager</option>
-                <option value="analyst">Analyst</option>
-              </select>
-            </div>
-            <div className="flex justify-end space-x-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50"
-              >
-                {isLoading ? 'Sending...' : 'Send Invite'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Invite Member"
+      description="Send an invitation to join your organization"
+      size="sm"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={isLoading}>
+            Cancel
+          </Button>
+          <Button type="submit" form="invite-form" loading={isLoading}>
+            Send Invite
+          </Button>
+        </>
+      }
+    >
+      <form id="invite-form" onSubmit={handleSubmit} className="space-y-4">
+        <Input
+          label="Email"
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="colleague@example.com"
+        />
+        <Select
+          label="Role"
+          value={role}
+          onChange={(e) => setRole(e.target.value as MemberRole)}
+          options={ROLE_OPTIONS}
+        />
+      </form>
+    </Modal>
   );
 }
 
-// Update Role Modal Component
+// Update Role Modal
 function UpdateRoleModal({
   isOpen,
   onClose,
@@ -327,58 +335,38 @@ function UpdateRoleModal({
   isLoading: boolean;
 }) {
   const [role, setRole] = useState<MemberRole>(member.role);
-  const [scopes] = useState<string[]>(member.scopes);
-
-  if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onUpdate(role, scopes.length > 0 ? scopes : undefined);
+    onUpdate(role, undefined);
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto" aria-modal="true">
-      <div className="flex min-h-screen items-center justify-center p-4">
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75" onClick={onClose} />
-        <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-          <h2 className="text-xl font-bold mb-4">Update Role for {member.email}</h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="update-role" className="block text-sm font-medium text-gray-700">
-                Role
-              </label>
-              <select
-                id="update-role"
-                value={role}
-                onChange={(e) => setRole(e.target.value as MemberRole)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-              >
-                <option value="owner">Owner</option>
-                <option value="admin">Admin</option>
-                <option value="manager">Manager</option>
-                <option value="analyst">Analyst</option>
-              </select>
-            </div>
-            <div className="flex justify-end space-x-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50"
-              >
-                {isLoading ? 'Updating...' : 'Update Role'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Update Role"
+      description={`Change role for ${member.email}`}
+      size="sm"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={isLoading}>
+            Cancel
+          </Button>
+          <Button type="submit" form="role-form" loading={isLoading}>
+            Update Role
+          </Button>
+        </>
+      }
+    >
+      <form id="role-form" onSubmit={handleSubmit} className="space-y-4">
+        <Select
+          label="Role"
+          value={role}
+          onChange={(e) => setRole(e.target.value as MemberRole)}
+          options={ROLE_OPTIONS}
+        />
+      </form>
+    </Modal>
   );
 }
-

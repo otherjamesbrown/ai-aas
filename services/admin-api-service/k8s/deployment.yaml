@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-api-service
+  labels:
+    app: admin-api-service
+    app.kubernetes.io/name: admin-api-service
+    app.kubernetes.io/component: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: admin-api-service
+  template:
+    metadata:
+      labels:
+        app: admin-api-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: admin-api-service
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: admin-api
+          image: admin-api-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: PORT
+              value: "8080"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: admin-api-secrets
+                  key: database-url
+            - name: API_KEY_HASH_SALT
+              valueFrom:
+                secretKeyRef:
+                  name: admin-api-secrets
+                  key: api-key-hash-salt
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: admin-api-config
+                  key: log-level
+            - name: RATE_LIMIT_PER_MIN
+              valueFrom:
+                configMapKeyRef:
+                  name: admin-api-config
+                  key: rate-limit-per-min
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      terminationGracePeriodSeconds: 30
+

@@ -33,8 +33,10 @@ import (
 // Config holds all CLI configuration.
 type Config struct {
 	// API Endpoints
-	UserOrgEndpoint   string
-	AnalyticsEndpoint string
+	UserOrgEndpoint       string
+	AnalyticsEndpoint     string
+	AdminAPIEndpoint      string // Admin API Service endpoint for routing policies
+	ConfigServiceEndpoint string // etcd endpoint (deprecated - use AdminAPIEndpoint)
 
 	// Authentication
 	APIKey string
@@ -87,17 +89,19 @@ func Load() (*Config, error) {
 	}
 
 	cfg := &Config{
-		UserOrgEndpoint:   v.GetString("api-endpoints.user-org-service"),
-		AnalyticsEndpoint: v.GetString("api-endpoints.analytics-service"),
-		APIKey:            v.GetString("auth.api-key"),
-		CACertFile:        v.GetString("tls.ca-cert-file"),
-		DatabaseURL:       v.GetString("database.url"),
-		OutputFormat:      v.GetString("defaults.output-format"),
-		Verbose:           v.GetBool("defaults.verbose"),
-		Quiet:             v.GetBool("defaults.quiet"),
-		MaxRetries:        v.GetInt("retry.max-attempts"),
-		Timeout:           v.GetInt("retry.timeout"),
-		ConfigFile:        v.ConfigFileUsed(),
+		UserOrgEndpoint:       v.GetString("api-endpoints.user-org-service"),
+		AnalyticsEndpoint:     v.GetString("api-endpoints.analytics-service"),
+		AdminAPIEndpoint:      v.GetString("api-endpoints.admin-api-service"),
+		ConfigServiceEndpoint: v.GetString("api-endpoints.config-service"),
+		APIKey:                v.GetString("auth.api-key"),
+		CACertFile:            v.GetString("tls.ca-cert-file"),
+		DatabaseURL:           v.GetString("database.url"),
+		OutputFormat:          v.GetString("defaults.output-format"),
+		Verbose:               v.GetBool("defaults.verbose"),
+		Quiet:                 v.GetBool("defaults.quiet"),
+		MaxRetries:            v.GetInt("retry.max-attempts"),
+		Timeout:               v.GetInt("retry.timeout"),
+		ConfigFile:            v.ConfigFileUsed(),
 	}
 
 	return cfg, nil

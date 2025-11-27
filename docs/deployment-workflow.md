@@ -215,16 +215,37 @@ curl -X POST http://localhost:8000/v1/chat/completions \
 
 After successful deployment:
 
-1. **Register Model** (User Story 2):
-   - Register model in `model_registry_entries` table
-   - Enable routing via API Router Service
+1. **Create Routing Policy**:
+   - Create a global routing policy to enable all organizations to access the model
+   - Use the admin-CLI to create the policy:
+   ```bash
+   admin-cli routing policy create \
+     --global \
+     --model <model-name> \
+     --backends <backend-id>:100
+   ```
+   - Example:
+   ```bash
+   admin-cli routing policy create \
+     --global \
+     --model gpt-oss-20b \
+     --backends gpt-oss-20b-vllm-deployment:100
+   ```
+   - Verify the policy was created:
+   ```bash
+   admin-cli routing policy list
+   ```
 
-2. **Monitor Deployment**:
+2. **Register Model** (User Story 2):
+   - Register model in `model_registry_entries` table
+   - Note: Model registration will automatically create a global routing policy in future versions
+
+3. **Monitor Deployment**:
    - Set up Grafana dashboards
    - Configure Prometheus alerts
    - Monitor initialization times
 
-3. **Document Configuration**:
+4. **Document Configuration**:
    - Record model path and version
    - Document resource requirements
    - Note any custom configurations

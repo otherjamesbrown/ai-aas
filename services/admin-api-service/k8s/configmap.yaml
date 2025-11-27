@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: admin-api-config
+  labels:
+    app: admin-api-service
+data:
+  log-level: "info"
+  rate-limit-per-min: "100"
+  db-max-conns: "50"
+  db-min-conns: "10"
+  metrics-enabled: "true"
+  tracing-enabled: "false"
+

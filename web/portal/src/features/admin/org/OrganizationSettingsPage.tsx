@@ -3,10 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { organizationApi } from '../api/organization';
 import { StaleDataBanner } from '../components/StaleDataBanner';
 import { ConfirmDestructiveModal } from '@/components/ConfirmDestructiveModal';
+import { Button, Input, LoadingSpinner } from '@/components/ui';
 import type { UpdateOrganizationRequest } from '../types';
 
 /**
- * Organization settings page with optimistic updates
+ * Organization settings page - rebuilt with unified components
  */
 export default function OrganizationSettingsPage() {
   const queryClient = useQueryClient();
@@ -22,22 +23,15 @@ export default function OrganizationSettingsPage() {
     mutationFn: (updates: UpdateOrganizationRequest) =>
       organizationApi.updateProfile(updates),
     onMutate: async (updates) => {
-      // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: ['organization', 'profile'] });
-
-      // Snapshot previous value
       const previousProfile = queryClient.getQueryData(['organization', 'profile']);
-
-      // Optimistically update
       queryClient.setQueryData(['organization', 'profile'], (old: any) => ({
         ...old,
         ...updates,
       }));
-
       return { previousProfile };
     },
     onError: (_err, _updates, context) => {
-      // Rollback on error
       if (context?.previousProfile) {
         queryClient.setQueryData(['organization', 'profile'], context.previousProfile);
       }
@@ -76,17 +70,32 @@ export default function OrganizationSettingsPage() {
   };
 
   if (isLoading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
   }
 
   if (!profile) {
-    return <div>Organization profile not found</div>;
+    return (
+      <div className="text-center py-12">
+        <p className="text-gray-500 dark:text-gray-400">Organization profile not found</p>
+      </div>
+    );
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold text-gray-900 mb-6">Organization Settings</h1>
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Organization Settings</h1>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          Manage your organization profile and billing information
+        </p>
+      </div>
 
+      {/* Stale Data Banner */}
       {dataUpdatedAt && (
         <StaleDataBanner
           lastUpdated={new Date(dataUpdatedAt).toISOString()}
@@ -95,141 +104,101 @@ export default function OrganizationSettingsPage() {
         />
       )}
 
-      <form onSubmit={handleSubmit} className="bg-white shadow rounded-lg p-6 space-y-6">
-        <div>
-          <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-            Organization Name
-          </label>
-          <input
-            type="text"
-            id="name"
+      {/* Form */}
+      <form onSubmit={handleSubmit} className="space-y-8">
+        {/* Organization Name */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+            Organization Details
+          </h2>
+          <Input
+            label="Organization Name"
             name="name"
             defaultValue={profile.name}
             required
             maxLength={120}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
           />
         </div>
 
-        <div>
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Billing Contact</h2>
+        {/* Billing Contact */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+            Billing Contact
+          </h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="billing_name" className="block text-sm font-medium text-gray-700">
-                Name
-              </label>
-              <input
-                type="text"
-                id="billing_name"
-                name="billing_name"
-                defaultValue={profile.billing_contact.name}
-                required
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-              />
-            </div>
-            <div>
-              <label htmlFor="billing_email" className="block text-sm font-medium text-gray-700">
-                Email
-              </label>
-              <input
-                type="email"
-                id="billing_email"
-                name="billing_email"
-                defaultValue={profile.billing_contact.email}
-                required
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-              />
-            </div>
-            <div>
-              <label htmlFor="billing_phone" className="block text-sm font-medium text-gray-700">
-                Phone
-              </label>
-              <input
-                type="tel"
-                id="billing_phone"
-                name="billing_phone"
-                defaultValue={profile.billing_contact.phone}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-              />
-            </div>
+            <Input
+              label="Name"
+              name="billing_name"
+              defaultValue={profile.billing_contact.name}
+              required
+            />
+            <Input
+              label="Email"
+              type="email"
+              name="billing_email"
+              defaultValue={profile.billing_contact.email}
+              required
+            />
+            <Input
+              label="Phone"
+              type="tel"
+              name="billing_phone"
+              defaultValue={profile.billing_contact.phone}
+            />
           </div>
         </div>
 
-        <div>
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Address</h2>
+        {/* Address */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+            Address
+          </h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="country" className="block text-sm font-medium text-gray-700">
-                Country
-              </label>
-              <input
-                type="text"
-                id="country"
-                name="country"
-                defaultValue={profile.address.country}
-                required
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-              />
-            </div>
-            <div>
-              <label htmlFor="region" className="block text-sm font-medium text-gray-700">
-                Region/State
-              </label>
-              <input
-                type="text"
-                id="region"
-                name="region"
-                defaultValue={profile.address.region}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-              />
-            </div>
-            <div>
-              <label htmlFor="postal_code" className="block text-sm font-medium text-gray-700">
-                Postal Code
-              </label>
-              <input
-                type="text"
-                id="postal_code"
-                name="postal_code"
-                defaultValue={profile.address.postal_code}
-                required
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-              />
-            </div>
-            <div>
-              <label htmlFor="street" className="block text-sm font-medium text-gray-700">
-                Street Address
-              </label>
-              <input
-                type="text"
-                id="street"
-                name="street"
-                defaultValue={profile.address.street_lines[0]}
-                required
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-              />
-            </div>
+            <Input
+              label="Country"
+              name="country"
+              defaultValue={profile.address.country}
+              required
+            />
+            <Input
+              label="Region/State"
+              name="region"
+              defaultValue={profile.address.region}
+            />
+            <Input
+              label="Postal Code"
+              name="postal_code"
+              defaultValue={profile.address.postal_code}
+              required
+            />
+            <Input
+              label="Street Address"
+              name="street"
+              defaultValue={profile.address.street_lines[0]}
+              required
+            />
           </div>
         </div>
 
+        {/* Actions */}
         <div className="flex justify-end space-x-3">
-          <button
+          <Button
             type="button"
+            variant="secondary"
             onClick={() => window.history.back()}
-            className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
-            disabled={updateMutation.isPending}
-            className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50"
+            loading={updateMutation.isPending}
           >
-            {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
-          </button>
+            Save Changes
+          </Button>
         </div>
       </form>
 
+      {/* Confirmation Modal */}
       <ConfirmDestructiveModal
         isOpen={showConfirm}
         onClose={() => {
@@ -246,4 +215,3 @@ export default function OrganizationSettingsPage() {
     </div>
   );
 }
-
