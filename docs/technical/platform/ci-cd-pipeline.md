@@ -28,7 +28,7 @@ Feature Branch → main (development) → tag vX.Y.Z (production)
 
 Our CI pipeline is powered by GitHub Actions and consists of multiple workflows:
 
-### Go Services CI (`.github/workflows/ci.yml`)
+### Go Services CI (`.github/workflows/service-ci.yml`)
 
 The main CI pipeline for Go microservices is triggered on every push to `main` and on every pull request. It consists of the following stages:
 

@@ -6,30 +6,24 @@ This guide documents best practices and common pitfalls when working with GitHub
 
 ```
 .github/workflows/
-├── ci.yml                    # Main CI on push/PR (Go services)
-├── web-portal.yml           # Web portal CI (lint, test, e2e, build)
-├── ci-remote.yml            # Manual dispatch workflow
-├── reusable-build.yml       # Reusable workflow for build/test
+├── service-ci.yml            # Main CI on push/PR for Go services
+├── remote-ci.yml             # Manual dispatch workflow for remote CI
+├── e2e.yml                   # E2E tests
+├── reusable/
+│   └── build.yml             # Reusable workflow for build/test
 └── (other workflows)
 ```
-
-**CRITICAL**: Reusable workflows MUST be at the top level of `.github/workflows/`. GitHub does not support subdirectories for reusable workflows.
 
 ## Common Pitfalls & Solutions
 
 ### 1. Reusable Workflow Paths
 
-❌ **WRONG** - Subdirectories don't work:
-```yaml
-uses: ./.github/workflows/reusable/build.yml  # Will fail!
-```
+Workflows in subdirectories must be referenced with the full path.
 
-✅ **CORRECT** - Top-level only:
+✅ **CORRECT**:
 ```yaml
-uses: ./.github/workflows/reusable-build.yml
+uses: ./.github/workflows/reusable/build.yml
 ```
-
-**Error Message**: `invalid value workflow reference: workflows must be defined at the top level`
 
 ### 2. Environment Context in Reusable Workflows
 
@@ -37,7 +31,7 @@ uses: ./.github/workflows/reusable-build.yml
 ```yaml
 jobs:
   build:
-    uses: ./.github/workflows/reusable-build.yml
+    uses: ./.github/workflows/reusable/build.yml
     with:
       go-version: ${{ env.GO_VERSION }}  # Will fail!
 ```
@@ -45,13 +39,13 @@ jobs:
 ✅ **CORRECT** - Use hardcoded values or pass via inputs:
 ```yaml
 env:
-  GO_VERSION: "1.21.x"
+  GO_VERSION: "1.24.x"
 
 jobs:
   build:
-    uses: ./.github/workflows/reusable-build.yml
+    uses: ./.github/workflows/reusable/build.yml
     with:
-      go-version: "1.21.x"  # Hardcoded in call
+      go-version: "1.24.x"  # Hardcoded in call
 ```
 
 **Note**: The `env` context IS available within job steps, just not in the `with:` parameters of a workflow call.
@@ -96,7 +90,7 @@ jobs:
 
 ```bash
 # This works once workflow exists on main
-gh workflow run ci-remote.yml --ref feature-branch -f service=my-service
+gh workflow run remote-ci.yml --ref feature-branch -f service=my-service
 ```
 
 ### 5. Script Permissions
@@ -128,7 +122,7 @@ make ci-local SERVICE=hello-service
 make ci-remote SERVICE=world-service NOTES="testing fix"
 
 # Or use gh CLI directly
-gh workflow run ci-remote.yml --ref $(git branch --show-current) \
+gh workflow run remote-ci.yml --ref $(git branch --show-current) \
   -f service=hello-service \
   -f notes="manual test"
 ```
@@ -136,7 +130,7 @@ gh workflow run ci-remote.yml --ref $(git branch --show-current) \
 ### Debugging Failed Runs
 ```bash
 # View run details
-gh run list --workflow ci-remote.yml -L 5
+gh run list --workflow remote-ci.yml -L 5
 gh run view RUN_ID
 
 # View failed logs
@@ -146,73 +140,24 @@ gh run view RUN_ID --log-failed
 gh run watch RUN_ID
 ```
 
-## Web Portal Workflow Pattern
-
-The web portal workflow (`.github/workflows/web-portal.yml`) demonstrates a critical pattern: **test before build**.
-
-```yaml
-jobs:
-  lint:
-    name: Lint
-    # Runs ESLint
-  
-  test:
-    name: Unit Tests
-    # Runs Vitest unit tests
-  
-  test-e2e:
-    name: E2E Tests
-    # Runs Playwright E2E tests (including critical user workflows)
-  
-  build:
-    name: Build and Push Docker Image
-    needs: [lint, test, test-e2e]  # ⚠️ CRITICAL: Build depends on all tests
-    # Only builds if all tests pass
-```
-
-**Why This Matters**: Without this dependency, broken code (like a non-functional sign-in button) could be deployed if it compiles successfully. By making `build` depend on test jobs, we ensure:
-- ✅ All tests must pass before building images
-- ✅ Broken functionality cannot reach production
-- ✅ PRs are blocked if tests fail
-
-**Best Practice**: Always make build/deploy jobs depend on test jobs. Never build or deploy code that hasn't passed all tests.
-
 ## Workflow Design Patterns
-
-### Pattern: Dispatch Info Collection
-```yaml
-jobs:
-  dispatch-info:
-    runs-on: ubuntu-latest
-    outputs:
-      service: ${{ steps.collect.outputs.service }}
-    steps:
-      - id: collect
-        run: |
-          SERVICE="${{ inputs.service }}"
-          if [ -z "$SERVICE" ]; then
-            SERVICE="all"
-          fi
-          echo "service=$SERVICE" >> "$GITHUB_OUTPUT"
-```
 
 ### Pattern: Reusable Workflow Call
 ```yaml
 jobs:
   build:
-    needs: dispatch-info  # Declare dependency
-    uses: ./.github/workflows/reusable-build.yml
+    uses: ./.github/workflows/reusable/build.yml
     with:
-      service: ${{ needs.dispatch-info.outputs.service }}
+      service: my-service
       target: build
-      go-version: "1.21.x"  # Hardcoded, not from env
+      go-version: "1.24.x"  # Hardcoded, not from env
 ```
 
 ### Pattern: Conditional Execution
 ```yaml
 jobs:
   metrics:
-    needs: [lint, dispatch-info]
+    needs: [lint]
     if: ${{ always() }}  # Run even if previous jobs fail
     runs-on: ubuntu-latest
 ```
@@ -226,11 +171,8 @@ jobs:
   test:
     # Run unit tests
   
-  test-e2e:
-    # Run E2E tests
-  
   build:
-    needs: [lint, test, test-e2e]  # Build only if all tests pass
+    needs: [lint, test]  # Build only if all tests pass
     # Build and push Docker image
 ```
 
@@ -241,7 +183,7 @@ jobs:
 When `workflow_dispatch` doesn't create runs:
 
 1. ✓ Is the workflow file on the default branch (`main`)?
-2. ✓ Are all reusable workflows at top level of `.github/workflows/`?
+2. ✓ Are all reusable workflows referenced with the correct path?
 3. ✓ Are job dependencies correctly declared in `needs:`?
 4. ✓ Is `env` context used only in job steps, not workflow call parameters?
 5. ✓ Are scripts executable (`chmod +x`)?
