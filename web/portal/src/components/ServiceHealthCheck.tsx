@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 type ServiceStatus = 'checking' | 'healthy' | 'degraded' | 'unhealthy' | 'error';
 
@@ -277,13 +277,18 @@ export function ServiceHealthCheck() {
     setLastChecked(new Date());
   }, [baseUrl]);
 
+  // Use ref to avoid re-render loop while keeping checkHealth up-to-date
+  const checkHealthRef = useRef(checkHealth);
+  checkHealthRef.current = checkHealth;
+
   useEffect(() => {
-    checkHealth();
+    // Initial check
+    checkHealthRef.current();
 
     // Refresh every 30 seconds
-    const interval = setInterval(checkHealth, 30000);
+    const interval = setInterval(() => checkHealthRef.current(), 30000);
     return () => clearInterval(interval);
-  }, [checkHealth]);
+  }, []); // Empty deps - only run once on mount
 
   const overallStatus = services.reduce<ServiceStatus>((worst, service) => {
     const priority: ServiceStatus[] = ['error', 'unhealthy', 'degraded', 'checking', 'healthy'];
