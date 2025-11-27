@@ -9,9 +9,10 @@ import { defineConfig, devices } from '@playwright/test';
  * - accessibility: A11y tests with axe-core
  *
  * Environment Variables:
- * - PLAYWRIGHT_BASE_URL: Target URL (default: https://localhost:5173)
+ * - PLAYWRIGHT_BASE_URL: Target URL (default: https://localhost:5173 or http if VITE_USE_HTTPS=false)
  * - SKIP_WEBSERVER: Set to 'true' for remote testing
  * - PLAYWRIGHT_HEADLESS: Set to 'false' to see browser
+ * - VITE_USE_HTTPS: Set to 'false' to use HTTP (default: true/HTTPS)
  * - CI: Enables CI-specific settings (retries, workers)
  *
  * Usage:
@@ -24,6 +25,11 @@ import { defineConfig, devices } from '@playwright/test';
  *   # Full test suite
  *   pnpm playwright test
  */
+
+// Determine protocol based on VITE_USE_HTTPS env var
+const useHttps = process.env.VITE_USE_HTTPS !== 'false';
+const baseUrl = process.env.PLAYWRIGHT_BASE_URL || (useHttps ? 'https://localhost:5173' : 'http://localhost:5173');
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
@@ -45,7 +51,7 @@ export default defineConfig({
       ],
 
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'https://localhost:5173',
+    baseURL: baseUrl,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -103,7 +109,7 @@ export default defineConfig({
     ? undefined
     : {
         command: 'pnpm dev',
-        url: 'https://localhost:5173',
+        url: baseUrl,
         reuseExistingServer: !process.env.CI,
         timeout: 120 * 1000,
       },

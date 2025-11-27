@@ -124,7 +124,8 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browsers
-        run: pnpm --filter @ai-aas/web-portal exec playwright install --with-deps chromium
+        working-directory: web/portal
+        run: npx playwright install --with-deps chromium
 
       - name: Run E2E tests
         env:
@@ -132,7 +133,8 @@ jobs:
           PLAYWRIGHT_HEADLESS: true
           VITE_USE_HTTPS: 'false'
           VITE_USER_ORG_SERVICE_URL: ${{ secrets.VITE_USER_ORG_SERVICE_URL_E2E || 'http://localhost:8081' }}
-        run: pnpm --filter @ai-aas/web-portal exec playwright test --project=chromium
+        working-directory: web/portal
+        run: npx playwright test --project=chromium
 
   build:
     name: Build and Push Docker Image
