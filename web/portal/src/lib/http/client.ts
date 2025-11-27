@@ -54,11 +54,15 @@ export class HttpClient {
 
           if (error.response?.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;
-            // Clear auth and redirect to login
+            // Clear auth tokens
             sessionStorage.removeItem('auth_token');
             sessionStorage.removeItem('refresh_token');
             sessionStorage.removeItem('auth_user');
-            window.location.href = '/auth/login';
+
+            // Only redirect if not already on the login page to prevent infinite loop
+            if (!window.location.pathname.startsWith('/auth/login')) {
+              window.location.href = '/auth/login';
+            }
           }
 
           return Promise.reject(error);
