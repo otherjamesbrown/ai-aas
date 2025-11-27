@@ -2,17 +2,21 @@ import { Page, BrowserContext } from '@playwright/test';
 
 /**
  * Test user credentials
- * These are seeded users in the development environment
+ * These are seeded users in the development environment.
+ * Password can be overridden via TEST_USER_PASSWORD env var for deployed environments
+ * where the seeded password may differ.
  */
+const testPassword = process.env.TEST_USER_PASSWORD || 'TestPass123';
+
 export const TEST_USERS = {
   admin: {
     email: 'admin@example-acme.com',
-    password: 'AcmeAdmin2024!Secure',
+    password: testPassword,
     role: 'admin',
   },
   member: {
     email: 'member@example-acme.com',
-    password: 'AcmeMember2024!Secure',
+    password: testPassword,
     role: 'member',
   },
 } as const;
