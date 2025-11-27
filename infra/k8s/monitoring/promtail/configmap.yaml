@@ -1,0 +1,135 @@
+# Promtail Configuration
+# Log shipping agent that collects logs from pods and sends to Loki
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: promtail-config
+  namespace: monitoring
+  labels:
+    app: promtail
+data:
+  promtail.yaml: |
+    server:
+      http_listen_port: 9080
+      grpc_listen_port: 0
+
+    positions:
+      filename: /run/promtail/positions.yaml
+
+    clients:
+      - url: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
+        tenant_id: ""
+        batchwait: 1s
+        batchsize: 1048576
+        timeout: 10s
+
+    scrape_configs:
+      # Scrape logs from all pods
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          # Only scrape pods with logging.enabled annotation
+          - source_labels: [__meta_kubernetes_pod_annotation_logging_enabled]
+            action: keep
+            regex: "true"
+
+          # Set namespace label
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+
+          # Set pod label
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+
+          # Set container label
+          - source_labels: [__meta_kubernetes_pod_container_name]
+            target_label: container
+
+          # Set app label from pod label
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            target_label: app
+
+          # Set service label from pod label (if exists)
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            target_label: service
+            regex: (.+)
+
+          # Fallback service label from app label
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            target_label: service
+            regex: (.+)
+
+          # Set node label
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
+
+          # Set log file path
+          - source_labels: [__meta_kubernetes_pod_uid, __meta_kubernetes_pod_container_name]
+            target_label: __path__
+            separator: /
+            replacement: /var/log/pods/*$1/*.log
+
+        pipeline_stages:
+          # Try to parse JSON logs
+          - match:
+              selector: '{namespace=~".+"}'
+              stages:
+                - json:
+                    expressions:
+                      level: level
+                      msg: msg
+                      service: service
+                      trace_id: trace_id
+                      request_id: request_id
+                      user_id: user_id
+                      org_id: org_id
+                      error: error
+                      duration: duration
+
+                # Extract level as label for filtering
+                - labels:
+                    level:
+
+                # If service was extracted from JSON, use it
+                - labels:
+                    service:
+
+                # Add timestamp from JSON if present
+                - timestamp:
+                    source: ts
+                    format: RFC3339Nano
+                    fallback_formats:
+                      - RFC3339
+                      - UnixMs
+
+      # Scrape all pods (fallback for pods without annotation)
+      - job_name: kubernetes-pods-all
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          # Skip pods with logging.enabled annotation (already handled above)
+          - source_labels: [__meta_kubernetes_pod_annotation_logging_enabled]
+            action: drop
+            regex: "true"
+
+          # Skip system namespaces
+          - source_labels: [__meta_kubernetes_namespace]
+            action: drop
+            regex: (kube-system|kube-public|kube-node-lease)
+
+          # Set labels
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - source_labels: [__meta_kubernetes_pod_container_name]
+            target_label: container
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            target_label: app
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
+          - source_labels: [__meta_kubernetes_pod_uid, __meta_kubernetes_pod_container_name]
+            target_label: __path__
+            separator: /
+            replacement: /var/log/pods/*$1/*.log

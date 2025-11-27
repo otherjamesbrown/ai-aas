@@ -44,6 +44,11 @@ image:
 nameOverride: ""
 fullnameOverride: ""
 
+# Pod annotations
+# logging.enabled: "true" enables Promtail log collection
+podAnnotations:
+  logging.enabled: "true"
+
 serviceAccount:
   create: true
   name: ""

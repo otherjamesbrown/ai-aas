@@ -9,6 +9,11 @@ serviceAccount:
   create: true
   name: ""
 
+# Pod annotations
+# logging.enabled: "true" enables Promtail log collection
+podAnnotations:
+  logging.enabled: "true"
+
 service:
   type: ClusterIP
   port: 8081
