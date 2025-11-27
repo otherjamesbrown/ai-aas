@@ -1,34 +1,50 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
+import { logger } from '@/lib/logger';
 
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
   onError?: (error: Error, errorInfo: ErrorInfo) => void;
+  /** Component name for logging context */
+  component?: string;
 }
 
 interface State {
   hasError: boolean;
   error: Error | null;
+  errorInfo: ErrorInfo | null;
 }
 
 /**
  * Error boundary component to catch React errors
- * Provides fallback UI and error reporting
+ * Provides fallback UI, structured error logging, and error reporting
  */
 export class ErrorBoundary extends Component<Props, State> {
+  private componentLogger = logger.withContext({ component: 'ErrorBoundary' });
+
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, errorInfo: null };
   }
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log error to telemetry/error tracking service
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
-    
+    // Update state with error info
+    this.setState({ errorInfo });
+
+    // Log error with structured context
+    this.componentLogger.error(
+      'React error boundary caught error',
+      {
+        errorBoundary: this.props.component || 'unknown',
+        componentStack: errorInfo.componentStack,
+      },
+      error
+    );
+
     // Call optional error handler
     this.props.onError?.(error, errorInfo);
 

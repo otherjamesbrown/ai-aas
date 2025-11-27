@@ -5,20 +5,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/ai-aas/shared-go/logging"
+	"go.uber.org/zap"
 )
 
 func TestRequestLogger(t *testing.T) {
-	// Create a test logger
-	logger, err := logging.New(logging.Config{
-		ServiceName: "test-service",
-		Environment: "test",
-		LogLevel:    "debug",
-		OutputPath:  "stdout",
-	})
-	if err != nil {
-		t.Fatalf("failed to create logger: %v", err)
-	}
+	// Create a test logger (nop logger for quiet tests)
+	logger := zap.NewNop()
 	defer logger.Sync()
 
 	tests := []struct {

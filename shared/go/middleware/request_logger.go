@@ -2,13 +2,13 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/ai-aas/shared-go/logging"
 	"github.com/ai-aas/shared-go/observability"
-
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -47,8 +47,9 @@ func DefaultRequestLoggerConfig() RequestLoggerConfig {
 }
 
 // RequestLogger returns middleware that logs HTTP requests and responses.
-// It integrates with the shared logging package and observability middleware.
-func RequestLogger(logger *logging.Logger, config RequestLoggerConfig) func(http.Handler) http.Handler {
+// It integrates with OpenTelemetry trace context and the observability middleware.
+// Accepts *zap.Logger directly for flexibility with different logging setups.
+func RequestLogger(logger *zap.Logger, config RequestLoggerConfig) func(http.Handler) http.Handler {
 	// Build skip path set for O(1) lookup
 	skipSet := make(map[string]bool)
 	for _, p := range config.SkipPaths {
@@ -74,8 +75,8 @@ func RequestLogger(logger *logging.Logger, config RequestLoggerConfig) func(http
 			// Extract request ID from context (set by RequestContextMiddleware)
 			requestID, _ := observability.RequestIDFromContext(r.Context())
 
-			// Create logger with context
-			reqLogger := logger.WithContext(r.Context())
+			// Create logger with trace context
+			reqLogger := loggerWithContext(logger, r.Context())
 			if requestID != "" {
 				reqLogger = reqLogger.With(zap.String("request_id", requestID))
 			}
@@ -192,4 +193,18 @@ func (rw *responseWriter) Flush() {
 // Unwrap returns the underlying ResponseWriter for compatibility with middleware.
 func (rw *responseWriter) Unwrap() http.ResponseWriter {
 	return rw.ResponseWriter
+}
+
+// loggerWithContext returns a logger with OpenTelemetry trace context fields added.
+func loggerWithContext(logger *zap.Logger, ctx context.Context) *zap.Logger {
+	span := trace.SpanFromContext(ctx)
+	if !span.SpanContext().IsValid() {
+		return logger
+	}
+
+	spanCtx := span.SpanContext()
+	return logger.With(
+		zap.String("trace_id", spanCtx.TraceID().String()),
+		zap.String("span_id", spanCtx.SpanID().String()),
+	)
 }
