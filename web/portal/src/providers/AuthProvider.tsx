@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { publicClient, httpClient } from '@/lib/http/client';
+import { publicClient } from '@/lib/http/client';
 import { tokenManager } from '@/services/tokenManager';
 import { oauthConfig } from '@/config/api';
 
@@ -53,8 +53,7 @@ interface UserInfoResponse {
  * Auth provider - manages OAuth2/OIDC authentication state
  *
  * Uses centralized services:
- * - publicClient for unauthenticated auth requests
- * - httpClient for authenticated requests
+ * - publicClient for auth requests (with manual auth header for authenticated calls)
  * - tokenManager for token lifecycle
  */
 export function AuthProvider({
@@ -113,7 +112,11 @@ export function AuthProvider({
 
   const verifyToken = async (): Promise<void> => {
     try {
-      const response = await httpClient.get<UserInfoResponse>('/auth/userinfo');
+      const token = tokenManager.getAccessToken();
+      // Use publicClient with manual auth header - auth endpoints are at /v1/auth, not /api
+      const response = await publicClient.get<UserInfoResponse>('/v1/auth/userinfo', {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
 
       if (response.data) {
         const userInfo: User = {
@@ -184,9 +187,11 @@ export function AuthProvider({
           response.data.expires_in
         );
 
-        // Fetch user info
+        // Fetch user info - use publicClient since auth endpoints are at /v1/auth, not /api
         try {
-          const userInfoResponse = await httpClient.get<UserInfoResponse>('/auth/userinfo');
+          const userInfoResponse = await publicClient.get<UserInfoResponse>('/v1/auth/userinfo', {
+            headers: { Authorization: `Bearer ${response.data.access_token}` },
+          });
 
           const userInfo: User = {
             id: userInfoResponse.data.sub || userInfoResponse.data.id || '',
@@ -248,7 +253,10 @@ export function AuthProvider({
           response.data.expires_in
         );
 
-        const userInfoResponse = await httpClient.get<UserInfoResponse>('/auth/userinfo');
+        // Use publicClient since auth endpoints are at /v1/auth, not /api
+        const userInfoResponse = await publicClient.get<UserInfoResponse>('/v1/auth/userinfo', {
+          headers: { Authorization: `Bearer ${response.data.access_token}` },
+        });
 
         const userInfo: User = {
           id: userInfoResponse.data.sub || userInfoResponse.data.id || '',
@@ -276,7 +284,10 @@ export function AuthProvider({
   const logout = () => {
     const token = tokenManager.getAccessToken();
     if (token) {
-      httpClient.post('/auth/logout', {}).catch(() => {
+      // Use publicClient since auth endpoints are at /v1/auth, not /api
+      publicClient.post('/v1/auth/logout', {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {
         // Ignore errors on logout
       });
     }

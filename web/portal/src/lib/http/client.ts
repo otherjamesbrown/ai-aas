@@ -46,25 +46,13 @@ export class HttpClient {
     );
 
     // Response interceptor: Handle 401 errors
+    // NOTE: We don't do hard redirects here - let the app handle auth state changes
+    // This prevents issues where non-critical 401s (like feature flags) redirect away from valid sessions
     if (withAuth) {
       this.client.interceptors.response.use(
         (response) => response,
         async (error) => {
-          const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
-
-          if (error.response?.status === 401 && !originalRequest._retry) {
-            originalRequest._retry = true;
-            // Clear auth tokens
-            sessionStorage.removeItem('auth_token');
-            sessionStorage.removeItem('refresh_token');
-            sessionStorage.removeItem('auth_user');
-
-            // Only redirect if not already on the login page to prevent infinite loop
-            if (!window.location.pathname.startsWith('/auth/login')) {
-              window.location.href = '/auth/login';
-            }
-          }
-
+          // Just propagate the error - AuthProvider and ProtectedRoute handle auth redirects
           return Promise.reject(error);
         }
       );
