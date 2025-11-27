@@ -240,9 +240,18 @@ export function AuthProvider({
       }
 
       // Use API router for authentication endpoints
-      // Extract base URL from VITE_API_BASE_URL (remove /api suffix if present)
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
-      const baseUrl = apiBaseUrl.replace(/\/api\/?$/, '');
+      // Dynamically determine API base URL based on current hostname
+      // If accessing via nip.io, use the corresponding API nip.io URL
+      const getBaseUrl = () => {
+        const hostname = window.location.hostname;
+        const nipioMatch = hostname.match(/^portal\.(.+\.nip\.io)$/);
+        if (nipioMatch) {
+          return `https://api.${nipioMatch[1]}`;
+        }
+        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
+        return apiBaseUrl.replace(/\/api\/?$/, '');
+      };
+      const baseUrl = getBaseUrl();
       const loginUrl = `${baseUrl}/v1/auth/login`;
       console.log('Attempting login to:', loginUrl);
       console.log('Login payload:', { email: loginPayload.email, hasPassword: !!loginPayload.password, orgId: loginPayload.org_id || 'none' });

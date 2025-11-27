@@ -77,6 +77,17 @@ export class HttpClient {
   }
 }
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
+// Dynamically determine API base URL based on current hostname
+// If accessing via nip.io, use the corresponding API nip.io URL
+const getApiBaseUrl = () => {
+  const hostname = window.location.hostname;
+  const nipioMatch = hostname.match(/^portal\.(.+\.nip\.io)$/);
+  if (nipioMatch) {
+    return `https://api.${nipioMatch[1]}/api`;
+  }
+  return import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
+};
+
+const apiBaseUrl = getApiBaseUrl();
 export const httpClient = new HttpClient(apiBaseUrl);
 

@@ -6,9 +6,17 @@ import type {
 } from '../types';
 
 // Use API router for API key operations
-// Extract base URL from VITE_API_BASE_URL (remove /api suffix if present)
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
-const userOrgServiceUrl = apiBaseUrl.replace(/\/api\/?$/, '');
+// Dynamically determine API base URL based on current hostname
+const getBaseUrl = () => {
+  const hostname = window.location.hostname;
+  const nipioMatch = hostname.match(/^portal\.(.+\.nip\.io)$/);
+  if (nipioMatch) {
+    return `https://api.${nipioMatch[1]}`;
+  }
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
+  return apiBaseUrl.replace(/\/api\/?$/, '');
+};
+const userOrgServiceUrl = getBaseUrl();
 
 /**
  * API key lifecycle management API client
