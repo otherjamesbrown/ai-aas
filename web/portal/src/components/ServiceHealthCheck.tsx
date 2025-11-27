@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 
 type ServiceStatus = 'checking' | 'healthy' | 'degraded' | 'unhealthy' | 'error';
 
@@ -61,8 +61,8 @@ export function ServiceHealthCheck() {
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
 
   // Dynamically determine API base URL based on current hostname
-  // If accessing via nip.io, use the corresponding API nip.io URL
-  const getBaseUrl = () => {
+  // Memoized to prevent unnecessary re-renders
+  const baseUrl = useMemo(() => {
     const hostname = window.location.hostname;
     // Check if accessing via nip.io (e.g., portal.172.232.58.222.nip.io)
     const nipioMatch = hostname.match(/^portal\.(.+\.nip\.io)$/);
@@ -72,8 +72,7 @@ export function ServiceHealthCheck() {
     // Otherwise use configured URL or default
     const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
     return apiBaseUrl.replace(/\/api\/?$/, '');
-  };
-  const baseUrl = getBaseUrl();
+  }, []); // Empty deps - hostname doesn't change during session
 
   const checkHealth = useCallback(async () => {
     const startTime = Date.now();
