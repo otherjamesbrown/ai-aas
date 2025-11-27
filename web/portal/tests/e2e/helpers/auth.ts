@@ -6,13 +6,13 @@ import { Page, BrowserContext } from '@playwright/test';
  */
 export const TEST_USERS = {
   admin: {
-    email: 'dev@example.com',
-    password: 'dev-password',
+    email: 'admin@example-acme.com',
+    password: 'AcmeAdmin2024!Secure',
     role: 'admin',
   },
   member: {
-    email: 'dev@example.com',
-    password: 'dev-password',
+    email: 'member@example-acme.com',
+    password: 'AcmeMember2024!Secure',
     role: 'member',
   },
 } as const;
