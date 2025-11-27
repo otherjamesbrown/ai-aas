@@ -3,20 +3,27 @@
 // Purpose:
 //
 //	Routing policy lifecycle commands: create, list, delete
-//	with etcd backend integration.
+//	via the Admin API Service REST endpoints.
+//
+// Architecture:
+//
+//	The admin-cli acts as a client to the admin-api-service, which provides
+//	a centralized API for managing routing policies. This ensures all business
+//	logic, validation, and auditing happens in one place.
 //
 package commands
 
 import (
-	"context"
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
-	clientv3 "go.etcd.io/etcd/client/v3"
 
 	"github.com/otherjamesbrown/ai-aas/services/admin-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/admin-cli/internal/errors"
@@ -24,9 +31,51 @@ import (
 )
 
 const (
-	etcdKeyPrefix   = "/ai-aas/routing/policies/"
-	etcdGlobalOrgID = "*"
+	globalOrgID = "*"
 )
+
+// Policy represents a routing policy from the Admin API Service
+type Policy struct {
+	PolicyID          string          `json:"policy_id"`
+	OrganizationID    string          `json:"organization_id"`
+	Model             string          `json:"model"`
+	Backends          []BackendWeight `json:"backends"`
+	FailoverThreshold int             `json:"failover_threshold"`
+	Enabled           bool            `json:"enabled"`
+	CreatedAt         time.Time       `json:"created_at"`
+	UpdatedAt         time.Time       `json:"updated_at"`
+	Version           int64           `json:"version"`
+}
+
+// BackendWeight defines a backend with its routing weight
+type BackendWeight struct {
+	BackendID string `json:"backend_id"`
+	Weight    int    `json:"weight"` // Percentage (0-100)
+}
+
+// PolicyCreateRequest is the request body for creating a policy
+type PolicyCreateRequest struct {
+	OrganizationID    string          `json:"organization_id,omitempty"`
+	Model             string          `json:"model"`
+	Backends          []BackendWeight `json:"backends"`
+	FailoverThreshold int             `json:"failover_threshold,omitempty"`
+}
+
+// PolicyListResponse is the response from listing policies
+type PolicyListResponse struct {
+	Policies   []Policy `json:"policies"`
+	TotalCount int      `json:"total_count"`
+}
+
+// APIError represents an error from the Admin API Service
+type APIError struct {
+	Error struct {
+		Type    string `json:"type"`
+		Title   string `json:"title"`
+		Detail  string `json:"detail"`
+		TraceID string `json:"trace_id"`
+	} `json:"error"`
+}
 
 // RoutingCommand creates the routing command group.
 func RoutingCommand() *cobra.Command {
@@ -55,23 +104,6 @@ func routingPolicyCommand() *cobra.Command {
 	return cmd
 }
 
-// RoutingPolicy represents a routing policy structure matching the API router config
-type RoutingPolicy struct {
-	PolicyID         string          `json:"policy_id"`
-	OrganizationID   string          `json:"organization_id"` // "*" for global
-	Model            string          `json:"model"`
-	Backends         []BackendWeight `json:"backends"`
-	FailoverThreshold int            `json:"failover_threshold"`
-	UpdatedAt        time.Time       `json:"updated_at"`
-	Version          int64           `json:"version"`
-}
-
-// BackendWeight defines a backend with its routing weight
-type BackendWeight struct {
-	BackendID string `json:"backend_id"`
-	Weight    int    `json:"weight"` // Percentage (0-100)
-}
-
 func routingPolicyCreateCommand() *cobra.Command {
 	var flagOrgID string
 	var flagModel string
@@ -87,7 +119,9 @@ func routingPolicyCreateCommand() *cobra.Command {
 		Long: `Create or update a routing policy that defines how requests are routed to backends.
 
 By default, creates an organization-specific policy. Use --global to create a policy
-that applies to all organizations (organization_id: "*").`,
+that applies to all organizations (organization_id: "*").
+
+This command calls the Admin API Service at /v1/routing/policies.`,
 		Example: `  # Create a global policy for qwen2-7b-instruct
   admin-cli routing policy create \
     --global \
@@ -121,7 +155,7 @@ that applies to all organizations (organization_id: "*").`,
 func runRoutingPolicyCreate(orgID, model, backends string, global bool, flagFormat string, quiet, dryRun bool) error {
 	// Determine organization ID
 	if global {
-		orgID = etcdGlobalOrgID
+		orgID = globalOrgID
 	} else if orgID == "" {
 		return errors.NewValidationError(
 			"organization ID required",
@@ -148,7 +182,7 @@ func runRoutingPolicyCreate(orgID, model, backends string, global bool, flagForm
 	}
 
 	if !quiet {
-		fmt.Fprintf(os.Stderr, "Creating routing policy...\n")
+		fmt.Fprintf(os.Stderr, "Creating routing policy via Admin API Service...\n")
 		fmt.Fprintf(os.Stderr, "  Organization: %s\n", orgID)
 		fmt.Fprintf(os.Stderr, "  Model: %s\n", model)
 		fmt.Fprintf(os.Stderr, "  Backends: %d configured\n", len(backendWeights))
@@ -177,57 +211,86 @@ func runRoutingPolicyCreate(orgID, model, backends string, global bool, flagForm
 		)
 	}
 
-	// Connect to etcd
-	etcdClient, err := clientv3.New(clientv3.Config{
-		Endpoints:   []string{cfg.ConfigServiceEndpoint},
-		DialTimeout: 5 * time.Second,
-	})
-	if err != nil {
+	if cfg.AdminAPIEndpoint == "" {
 		return errors.NewOperationError(
-			fmt.Sprintf("failed to connect to etcd: %v", err),
-			"Check your CONFIG_SERVICE_ENDPOINT configuration.",
+			"Admin API Service endpoint not configured",
+			"Set ADMIN_CLI_API_ENDPOINTS_ADMIN_API_SERVICE or configure api-endpoints.admin-api-service in config file.",
 		)
 	}
-	defer etcdClient.Close()
 
-	// Create policy object
-	policyID := fmt.Sprintf("%s:%s", orgID, model)
-	policy := RoutingPolicy{
-		PolicyID:          policyID,
+	if cfg.APIKey == "" {
+		return errors.NewOperationError(
+			"API key not configured",
+			"Set ADMIN_CLI_AUTH_API_KEY or configure auth.api-key in config file.",
+		)
+	}
+
+	// Create request body
+	reqBody := PolicyCreateRequest{
 		OrganizationID:    orgID,
 		Model:             model,
 		Backends:          backendWeights,
 		FailoverThreshold: 3, // Default failover threshold
-		UpdatedAt:         time.Now(),
-		Version:           time.Now().Unix(),
 	}
 
-	// Serialize to JSON
-	policyJSON, err := json.Marshal(policy)
+	reqJSON, err := json.Marshal(reqBody)
 	if err != nil {
 		return errors.NewOperationError(
-			fmt.Sprintf("failed to serialize policy: %v", err),
+			fmt.Sprintf("failed to serialize request: %v", err),
 			"Internal error",
 		)
 	}
 
-	// Store in etcd
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	key := etcdKeyPrefix + policyID
-	_, err = etcdClient.Put(ctx, key, string(policyJSON))
+	// Call Admin API Service
+	url := fmt.Sprintf("%s/v1/routing/policies", cfg.AdminAPIEndpoint)
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(reqJSON))
 	if err != nil {
 		return errors.NewOperationError(
-			fmt.Sprintf("failed to store policy in etcd: %v", err),
-			"Check etcd connectivity and permissions.",
+			fmt.Sprintf("failed to create request: %v", err),
+			"Internal error",
+		)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cfg.APIKey))
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to call Admin API Service: %v", err),
+			"Check your ADMIN_CLI_API_ENDPOINTS_ADMIN_API_SERVICE configuration and network connectivity.",
+		)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode >= 400 {
+		var apiErr APIError
+		if err := json.Unmarshal(body, &apiErr); err == nil && apiErr.Error.Detail != "" {
+			return errors.NewOperationError(
+				fmt.Sprintf("%s: %s", apiErr.Error.Title, apiErr.Error.Detail),
+				"Check your request parameters.",
+			)
+		}
+		return errors.NewOperationError(
+			fmt.Sprintf("API request failed with status %d: %s", resp.StatusCode, string(body)),
+			"Check your request parameters and API key.",
+		)
+	}
+
+	var policy Policy
+	if err := json.Unmarshal(body, &policy); err != nil {
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to parse response: %v", err),
+			"Internal error",
 		)
 	}
 
 	if !quiet {
 		fmt.Fprintf(os.Stderr, "✓ Routing policy created successfully\n")
-		fmt.Fprintf(os.Stderr, "  Policy ID: %s\n", policyID)
-		fmt.Fprintf(os.Stderr, "  Key: %s\n", key)
+		fmt.Fprintf(os.Stderr, "  Policy ID: %s\n", policy.PolicyID)
 	}
 
 	// Output structured data
@@ -240,27 +303,34 @@ func runRoutingPolicyCreate(orgID, model, backends string, global bool, flagForm
 
 func routingPolicyListCommand() *cobra.Command {
 	var flagFormat string
+	var flagModel string
+	var flagOrgID string
 
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all routing policies",
-		Long:  "List all routing policies stored in etcd",
+		Long:  "List all routing policies via the Admin API Service",
 		Example: `  # List all policies
   admin-cli routing policy list
 
   # List policies in JSON format
-  admin-cli routing policy list --format json`,
+  admin-cli routing policy list --format json
+
+  # Filter by model
+  admin-cli routing policy list --model gpt-4`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runRoutingPolicyList(flagFormat)
+			return runRoutingPolicyList(flagFormat, flagModel, flagOrgID)
 		},
 	}
 
 	cmd.Flags().StringVar(&flagFormat, "format", "table", "Output format: table, json")
+	cmd.Flags().StringVar(&flagModel, "model", "", "Filter by model name")
+	cmd.Flags().StringVar(&flagOrgID, "org-id", "", "Filter by organization ID")
 
 	return cmd
 }
 
-func runRoutingPolicyList(flagFormat string) error {
+func runRoutingPolicyList(flagFormat, filterModel, filterOrgID string) error {
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
@@ -270,56 +340,92 @@ func runRoutingPolicyList(flagFormat string) error {
 		)
 	}
 
-	// Connect to etcd
-	etcdClient, err := clientv3.New(clientv3.Config{
-		Endpoints:   []string{cfg.ConfigServiceEndpoint},
-		DialTimeout: 5 * time.Second,
-	})
-	if err != nil {
+	if cfg.AdminAPIEndpoint == "" {
 		return errors.NewOperationError(
-			fmt.Sprintf("failed to connect to etcd: %v", err),
-			"Check your CONFIG_SERVICE_ENDPOINT configuration.",
-		)
-	}
-	defer etcdClient.Close()
-
-	// Get all policies
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	resp, err := etcdClient.Get(ctx, etcdKeyPrefix, clientv3.WithPrefix())
-	if err != nil {
-		return errors.NewOperationError(
-			fmt.Sprintf("failed to list policies: %v", err),
-			"Check etcd connectivity.",
+			"Admin API Service endpoint not configured",
+			"Set ADMIN_CLI_API_ENDPOINTS_ADMIN_API_SERVICE or configure api-endpoints.admin-api-service in config file.",
 		)
 	}
 
-	policies := make([]RoutingPolicy, 0, len(resp.Kvs))
-	for _, kv := range resp.Kvs {
-		var policy RoutingPolicy
-		if err := json.Unmarshal(kv.Value, &policy); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to parse policy %s: %v\n", string(kv.Key), err)
-			continue
+	if cfg.APIKey == "" {
+		return errors.NewOperationError(
+			"API key not configured",
+			"Set ADMIN_CLI_AUTH_API_KEY or configure auth.api-key in config file.",
+		)
+	}
+
+	// Build URL with query parameters
+	url := fmt.Sprintf("%s/v1/routing/policies", cfg.AdminAPIEndpoint)
+	params := []string{}
+	if filterModel != "" {
+		params = append(params, fmt.Sprintf("model=%s", filterModel))
+	}
+	if filterOrgID != "" {
+		params = append(params, fmt.Sprintf("organization_id=%s", filterOrgID))
+	}
+	if len(params) > 0 {
+		url += "?" + strings.Join(params, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to create request: %v", err),
+			"Internal error",
+		)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cfg.APIKey))
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to call Admin API Service: %v", err),
+			"Check your ADMIN_CLI_API_ENDPOINTS_ADMIN_API_SERVICE configuration and network connectivity.",
+		)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode >= 400 {
+		var apiErr APIError
+		if err := json.Unmarshal(body, &apiErr); err == nil && apiErr.Error.Detail != "" {
+			return errors.NewOperationError(
+				fmt.Sprintf("%s: %s", apiErr.Error.Title, apiErr.Error.Detail),
+				"Check your API key and permissions.",
+			)
 		}
-		policies = append(policies, policy)
+		return errors.NewOperationError(
+			fmt.Sprintf("API request failed with status %d: %s", resp.StatusCode, string(body)),
+			"Check your API key.",
+		)
+	}
+
+	var listResp PolicyListResponse
+	if err := json.Unmarshal(body, &listResp); err != nil {
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to parse response: %v", err),
+			"Internal error",
+		)
 	}
 
 	if flagFormat == "json" {
-		return output.PrintJSON(policies)
+		return output.PrintJSON(listResp.Policies)
 	}
 
 	// Table output
-	if len(policies) == 0 {
+	if len(listResp.Policies) == 0 {
 		fmt.Println("No routing policies found.")
 		return nil
 	}
 
-	fmt.Printf("Found %d routing policies:\n\n", len(policies))
-	fmt.Printf("%-40s %-50s %-30s %s\n", "ORGANIZATION ID", "MODEL", "BACKENDS", "UPDATED")
-	fmt.Printf("%-40s %-50s %-30s %s\n", strings.Repeat("-", 40), strings.Repeat("-", 50), strings.Repeat("-", 30), strings.Repeat("-", 20))
+	fmt.Printf("Found %d routing policies:\n\n", len(listResp.Policies))
+	fmt.Printf("%-40s %-36s %-30s %-8s %s\n", "MODEL", "ORGANIZATION ID", "BACKENDS", "ENABLED", "UPDATED")
+	fmt.Printf("%-40s %-36s %-30s %-8s %s\n", strings.Repeat("-", 40), strings.Repeat("-", 36), strings.Repeat("-", 30), strings.Repeat("-", 8), strings.Repeat("-", 20))
 
-	for _, policy := range policies {
+	for _, policy := range listResp.Policies {
 		backendSummary := ""
 		for i, bw := range policy.Backends {
 			if i > 0 {
@@ -331,10 +437,15 @@ func runRoutingPolicyList(flagFormat string) error {
 				break
 			}
 		}
-		fmt.Printf("%-40s %-50s %-30s %s\n",
-			policy.OrganizationID,
+		enabledStr := "No"
+		if policy.Enabled {
+			enabledStr = "Yes"
+		}
+		fmt.Printf("%-40s %-36s %-30s %-8s %s\n",
 			policy.Model,
+			policy.OrganizationID,
 			backendSummary,
+			enabledStr,
 			policy.UpdatedAt.Format("2006-01-02 15:04:05"),
 		)
 	}
@@ -343,48 +454,29 @@ func runRoutingPolicyList(flagFormat string) error {
 }
 
 func routingPolicyDeleteCommand() *cobra.Command {
-	var flagOrgID string
-	var flagModel string
-	var flagGlobal bool
+	var flagPolicyID string
 	var flagQuiet bool
 
 	cmd := &cobra.Command{
 		Use:   "delete",
 		Short: "Delete a routing policy",
-		Long:  "Delete a routing policy from etcd",
-		Example: `  # Delete global policy
-  admin-cli routing policy delete --global --model qwen2-7b-instruct
-
-  # Delete org-specific policy
-  admin-cli routing policy delete \
-    --org-id aa6f9015-132a-4694-8b10-7d4d4550faed \
-    --model gpt-4`,
+		Long:  "Delete a routing policy via the Admin API Service",
+		Example: `  # Delete a policy by ID
+  admin-cli routing policy delete --policy-id <policy-uuid>`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runRoutingPolicyDelete(flagOrgID, flagModel, flagGlobal, flagQuiet)
+			return runRoutingPolicyDelete(flagPolicyID, flagQuiet)
 		},
 	}
 
-	cmd.Flags().StringVar(&flagOrgID, "org-id", "", "Organization ID (optional if --global is used)")
-	cmd.Flags().StringVar(&flagModel, "model", "", "Model name (required)")
-	cmd.Flags().BoolVar(&flagGlobal, "global", false, "Delete the global policy")
+	cmd.Flags().StringVar(&flagPolicyID, "policy-id", "", "Policy ID to delete (required)")
 	cmd.Flags().BoolVar(&flagQuiet, "quiet", false, "Suppress non-error output")
 
-	cmd.MarkFlagRequired("model")
+	cmd.MarkFlagRequired("policy-id")
 
 	return cmd
 }
 
-func runRoutingPolicyDelete(orgID, model string, global bool, quiet bool) error {
-	// Determine organization ID
-	if global {
-		orgID = etcdGlobalOrgID
-	} else if orgID == "" {
-		return errors.NewValidationError(
-			"organization ID required",
-			"Provide --org-id or use --global flag",
-		)
-	}
-
+func runRoutingPolicyDelete(policyID string, quiet bool) error {
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
@@ -394,37 +486,61 @@ func runRoutingPolicyDelete(orgID, model string, global bool, quiet bool) error 
 		)
 	}
 
-	// Connect to etcd
-	etcdClient, err := clientv3.New(clientv3.Config{
-		Endpoints:   []string{cfg.ConfigServiceEndpoint},
-		DialTimeout: 5 * time.Second,
-	})
-	if err != nil {
+	if cfg.AdminAPIEndpoint == "" {
 		return errors.NewOperationError(
-			fmt.Sprintf("failed to connect to etcd: %v", err),
-			"Check your CONFIG_SERVICE_ENDPOINT configuration.",
-		)
-	}
-	defer etcdClient.Close()
-
-	// Delete from etcd
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	policyID := fmt.Sprintf("%s:%s", orgID, model)
-	key := etcdKeyPrefix + policyID
-	resp, err := etcdClient.Delete(ctx, key)
-	if err != nil {
-		return errors.NewOperationError(
-			fmt.Sprintf("failed to delete policy: %v", err),
-			"Check etcd connectivity.",
+			"Admin API Service endpoint not configured",
+			"Set ADMIN_CLI_API_ENDPOINTS_ADMIN_API_SERVICE or configure api-endpoints.admin-api-service in config file.",
 		)
 	}
 
-	if resp.Deleted == 0 {
+	if cfg.APIKey == "" {
+		return errors.NewOperationError(
+			"API key not configured",
+			"Set ADMIN_CLI_AUTH_API_KEY or configure auth.api-key in config file.",
+		)
+	}
+
+	// Call Admin API Service
+	url := fmt.Sprintf("%s/v1/routing/policies/%s", cfg.AdminAPIEndpoint, policyID)
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	if err != nil {
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to create request: %v", err),
+			"Internal error",
+		)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cfg.APIKey))
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to call Admin API Service: %v", err),
+			"Check your ADMIN_CLI_API_ENDPOINTS_ADMIN_API_SERVICE configuration and network connectivity.",
+		)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
 		return errors.NewValidationError(
 			fmt.Sprintf("policy not found: %s", policyID),
-			"Check the organization ID and model name",
+			"Check the policy ID. Use 'admin-cli routing policy list' to see available policies.",
+		)
+	}
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		var apiErr APIError
+		if err := json.Unmarshal(body, &apiErr); err == nil && apiErr.Error.Detail != "" {
+			return errors.NewOperationError(
+				fmt.Sprintf("%s: %s", apiErr.Error.Title, apiErr.Error.Detail),
+				"Check your API key and permissions.",
+			)
+		}
+		return errors.NewOperationError(
+			fmt.Sprintf("API request failed with status %d: %s", resp.StatusCode, string(body)),
+			"Check your API key.",
 		)
 	}
 

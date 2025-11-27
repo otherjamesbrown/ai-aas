@@ -4,15 +4,31 @@ set -e
 # Simplified Open WebUI deployment using Linode REST API
 # No linode-cli required - uses curl directly
 
+# Required environment variables (no defaults for sensitive values)
 LINODE_TOKEN="${LINODE_TOKEN:-}"
+AI_AAS_API_KEY="${AI_AAS_API_KEY:-}"
+AI_AAS_API_IP="${AI_AAS_API_IP:-}"
+
+# Optional configuration with defaults
 LINODE_DEFAULT_FIREWALL="${LINODE_DEFAULT_FIREWALL:-akamai-home}"
-INSTANCE_LABEL="openwebui-dev"
-INSTANCE_TYPE="g6-nanode-1"
-REGION="fr-par"  # Paris region for proximity to AI-AAS cluster
-AI_AAS_API_URL="https://api.dev.ai-aas.local"
-AI_AAS_API_IP="172.232.58.222"
-AI_AAS_API_KEY="${E2E_API_KEY:-1z_V2QVOJJt0d2f2aQI9PUwQfudAugmOs4issi96jv0}"
-SSH_KEY_PATH="$HOME/.ssh/id_ed25519.pub"
+INSTANCE_LABEL="${INSTANCE_LABEL:-openwebui-dev}"
+INSTANCE_TYPE="${INSTANCE_TYPE:-g6-nanode-1}"
+REGION="${REGION:-fr-par}"  # Paris region for proximity to AI-AAS cluster
+AI_AAS_API_URL="${AI_AAS_API_URL:-https://api.dev.ai-aas.local}"
+SSH_KEY_PATH="${SSH_KEY_PATH:-$HOME/.ssh/id_ed25519.pub}"
+
+# Validate required variables
+if [[ -z "$AI_AAS_API_KEY" ]]; then
+  echo "ERROR: AI_AAS_API_KEY environment variable is required"
+  echo "Usage: AI_AAS_API_KEY=<your-key> AI_AAS_API_IP=<cluster-ip> $0"
+  exit 1
+fi
+
+if [[ -z "$AI_AAS_API_IP" ]]; then
+  echo "ERROR: AI_AAS_API_IP environment variable is required"
+  echo "Usage: AI_AAS_API_KEY=<your-key> AI_AAS_API_IP=<cluster-ip> $0"
+  exit 1
+fi
 
 # Colors
 GREEN='\033[0;32m'

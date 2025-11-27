@@ -33,6 +33,9 @@ spec:
         args:
           - --model=openai/gpt-oss-20b
           - --served-model-name=gpt-oss-20b
+          # WARNING: SECURITY RISK - --trust-remote-code allows arbitrary code execution
+          # from the model repository. Only use with models from trusted sources.
+          # This flag is required for certain model architectures that include custom code.
           - --trust-remote-code
           # GPT-OSS specific optimizations
           - --async-scheduling  # Recommended for Ampere GPUs (RTX 4000 Ada)

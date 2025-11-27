@@ -35,7 +35,8 @@ type Config struct {
 	// API Endpoints
 	UserOrgEndpoint       string
 	AnalyticsEndpoint     string
-	ConfigServiceEndpoint string // etcd endpoint for routing policies
+	AdminAPIEndpoint      string // Admin API Service endpoint for routing policies
+	ConfigServiceEndpoint string // etcd endpoint (deprecated - use AdminAPIEndpoint)
 
 	// Authentication
 	APIKey string
@@ -90,6 +91,7 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		UserOrgEndpoint:       v.GetString("api-endpoints.user-org-service"),
 		AnalyticsEndpoint:     v.GetString("api-endpoints.analytics-service"),
+		AdminAPIEndpoint:      v.GetString("api-endpoints.admin-api-service"),
 		ConfigServiceEndpoint: v.GetString("api-endpoints.config-service"),
 		APIKey:                v.GetString("auth.api-key"),
 		CACertFile:            v.GetString("tls.ca-cert-file"),

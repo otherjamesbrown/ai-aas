@@ -126,17 +126,18 @@ func (h *Handler) HandleAuthProxy(w http.ResponseWriter, r *http.Request) {
 }
 
 // getUserOrgServiceURL returns the URL for the user-org-service.
-// This can be configured via environment variable or handler field.
+// This MUST be configured via environment variable USER_ORG_SERVICE_URL or handler field.
 func (h *Handler) getUserOrgServiceURL() string {
-	// Check if explicitly configured in handler (for testing)
+	// Check if explicitly configured in handler (for testing or explicit config)
 	if h.userOrgServiceURL != "" {
 		return h.userOrgServiceURL
 	}
 
-	// Default to Kubernetes service DNS name
-	// This is set via USER_ORG_SERVICE_URL environment variable in values-development.yaml
+	// No hardcoded fallback - configuration is required
+	// The URL should be set via USER_ORG_SERVICE_URL environment variable
+	// in the Helm values file (values-development.yaml, values-production.yaml)
 	// Format: http://service-name.namespace.svc.cluster.local:port
-	return "http://user-org-service-development-user-org-service.user-org-service.svc.cluster.local:8081"
+	return ""
 }
 
 // isHopByHopHeader checks if a header is hop-by-hop and should not be proxied.
