@@ -13,47 +13,29 @@ on:
         default: ""
 
 env:
-  GO_VERSION: "1.21.x"
+  GO_VERSION: "1.24.x"
 
 jobs:
-  dispatch-info:
-    name: Dispatch Info
-    runs-on: ubuntu-latest
-    outputs:
-      service: ${{ steps.collect.outputs.service }}
-      notes: ${{ steps.collect.outputs.notes }}
-    steps:
-      - id: collect
-        run: |
-          SERVICE="${{ inputs.service }}"
-          if [ -z "$SERVICE" ]; then
-            SERVICE="all"
-          fi
-          echo "service=$SERVICE" >> "$GITHUB_OUTPUT"
-          echo "notes=${{ inputs.notes }}" >> "$GITHUB_OUTPUT"
-          echo "Remote CI requested for ${SERVICE} on ${GITHUB_REF}"
-
   build:
     name: Build
-    needs: dispatch-info
-    uses: ./.github/workflows/reusable-build.yml
+    uses: ./.github/workflows/reusable/build.yml
     with:
-      service: ${{ needs.dispatch-info.outputs.service }}
+      service: ${{ github.event.inputs.service }}
       target: build
-      go-version: "1.21.x"
+      go-version: "1.24.x"
 
   test:
     name: Test
-    needs: [build, dispatch-info]
-    uses: ./.github/workflows/reusable-build.yml
+    needs: build
+    uses: ./.github/workflows/reusable/build.yml
     with:
-      service: ${{ needs.dispatch-info.outputs.service }}
+      service: ${{ github.event.inputs.service }}
       target: test
-      go-version: "1.21.x"
+      go-version: "1.24.x"
 
   lint:
     name: Lint
-    needs: [test, dispatch-info]
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -65,11 +47,11 @@ jobs:
           curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
             sh -s -- -b "$(go env GOPATH)"/bin v1.55.2
       - name: Run golangci-lint
-        run: make lint SERVICE=${{ needs.dispatch-info.outputs.service }}
+        run: make lint SERVICE=${{ github.event.inputs.service }}
 
   metrics:
     name: Metrics Upload
-    needs: [lint, dispatch-info]
+    needs: lint
     runs-on: ubuntu-latest
     if: ${{ always() }}
     steps:
@@ -83,7 +65,7 @@ jobs:
             sh -s -- -b "$(go env GOPATH)"/bin v1.55.2
           go install github.com/securego/gosec/v2/cmd/gosec@v2.19.0
       - name: Run make check with metrics
-        run: make check METRICS=true SERVICE=${{ needs.dispatch-info.outputs.service }}
+        run: make check METRICS=true SERVICE=${{ github.event.inputs.service }}
       - name: Upload metrics artifact (dry run)
         env:
           METRICS_BUCKET: ai-aas-build-metrics
@@ -99,9 +81,7 @@ jobs:
 
   notify:
     name: Notify
-    needs:
-      - dispatch-info
-      - metrics
+    needs: metrics
     runs-on: ubuntu-latest
     outputs:
       run_url: ${{ steps.meta.outputs.run_url }}
@@ -115,9 +95,9 @@ jobs:
         uses: actions/github-script@v7
         env:
           RUN_URL: ${{ steps.meta.outputs.run_url }}
-          SERVICE: ${{ needs.dispatch-info.outputs.service }}
+          SERVICE: ${{ github.event.inputs.service }}
           STATUS: ${{ needs.metrics.result }}
-          NOTES: ${{ needs.dispatch-info.outputs.notes }}
+          NOTES: ${{ github.event.inputs.notes }}
         with:
           script: |
             const runUrl = process.env.RUN_URL;
@@ -145,7 +125,7 @@ jobs:
             const commentLines = [
               `🚀 Remote CI completed for **${service}**`,
               ``,
-              `- Status: **${status || 'UNKNOWN'}**`,
+      - Status: **${STATUS || 'UNKNOWN'}**`,
               `- Workflow: [Run Log](${runUrl})`
             ];
             if (notes) {
@@ -157,4 +137,3 @@ jobs:
               issue_number: prs.data[0].number,
               body: commentLines.join('\n')
             });
-
