@@ -10,6 +10,16 @@ The platform provides a scalable and reliable way to serve AI models for inferen
 
 For a detailed explanation of the system's architecture, please see the [ARCHITECTURE.md](./ARCHITECTURE.md) file.
 
+---
+
+**👋 Note for AI Assistants:**
+
+This project is designed with AI assistance in mind. For a comprehensive guide tailored to AI coding assistants, covering architectural concepts, development workflows, key documents, and specific operational guidelines, please refer to:
+
+➡️ **[AI Assistant Guide](./AI_ASSISTANT_GUIDE.md)**
+
+---
+
 ## Getting Started
 
 To get started with the project, follow these steps:
@@ -42,30 +52,22 @@ For more detailed instructions on setting up your development environment, pleas
 Here is a high-level overview of the key directories in this repository:
 
 | Path | Description |
-|---|---|
-| `ARCHITECTURE.md` | A high-level overview of the system architecture. |
-| `CONTRIBUTING.md` | Guidelines for contributing to the project. |
+|---|
 | `Makefile` | The main entry point for all automation (build, test, etc.). |
 | `services/` | The source code for each of the microservices. |
 | `shared/` | Shared libraries used by multiple services. |
 | `docs/` | Detailed documentation, including runbooks and setup guides. |
 | `specs/` | The feature specifications and design documents. |
+| `infra/` | Infrastructure-as-code for the platform (Terraform, Helm). |
+| `AI_ASSISTANT_GUIDE.md` | Comprehensive guide tailored for AI coding assistants. |
+| `ARCHITECTURE.md` | High-level overview of the system architecture. |
+| `CONTRIBUTING.md` | Guidelines for contributing to the project. |
 | `usage-guide/` | Documentation for end-users of the platform, organized by role. |
+
 
 ## CI/CD
 
 Our CI/CD pipeline is powered by GitHub Actions and ArgoCD. For a detailed explanation of the pipeline, please see the [CI/CD Pipeline document](./docs/platform/ci-cd-pipeline.md).
-
-## Key Commands
-
-Here are some of the most common commands you will use during development:
-
-*   `make help`: Display all available `make` targets.
-*   `make check`: Run all checks (format, lint, security, test).
-*   `make build`: Build the services.
-*   `make test`: Run unit tests.
-*   `make up`: Start the local development environment.
-*   `make stop`: Stop the local development environment.
 
 ## Contributing
 
