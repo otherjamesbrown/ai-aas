@@ -39,6 +39,11 @@ git-crypt unlock
 - User Org Service: http://172.232.58.222 (via ingress) or `kubectl port-forward -n user-org-service svc/user-org-service-development-user-org-service 18081:8081`
 - Ingress IP: `172.232.58.222`
 
+**Monitoring & Observability**
+- Grafana: http://grafana.172.232.58.222.nip.io or http://grafana.dev.ai-aas.local
+- Loki (Log Aggregation): http://loki.172.232.58.222.nip.io or http://loki.dev.ai-aas.local
+- Loki API: `http://loki.172.232.58.222.nip.io/loki/api/v1/query_range`
+
 **API Keys**
 - Master Admin API Key: Found in `secrets/env/.env` as `MASTER_ADMIN_API_KEY`
 - API Key ID: Found in `secrets/env/.env` as `MASTER_ADMIN_API_KEY_ID`
@@ -90,7 +95,49 @@ git-crypt status
 
 ## Service Access Patterns
 
-### Port Forwarding (Development)
+### Log Access (Development)
+
+**Via Loki HTTP API (Recommended - No port-forward needed):**
+```bash
+# Query all errors in last 15 minutes
+curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+  --data-urlencode 'query={level="error"}' \
+  --data-urlencode 'limit=50' \
+  --data-urlencode 'since=15m' | jq '.data.result'
+
+# Query specific service
+curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+  --data-urlencode 'query={service="api-router-service"}' \
+  --data-urlencode 'limit=100' | jq '.data.result'
+
+# Search by request_id across all services
+curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+  --data-urlencode 'query={} |= "<request-id>"' \
+  --data-urlencode 'limit=50' | jq '.data.result'
+
+# Query with multiple filters
+curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+  --data-urlencode 'query={service="user-org-service", level=~"error|warn"}' \
+  --data-urlencode 'limit=100' | jq '.data.result'
+```
+
+**Via kubectl logs (Real-time streaming):**
+```bash
+# Stream logs from a service
+kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-development.yaml \
+  logs -f deployment/api-router-service -n default --tail=100
+
+# Check previous container logs (after restart)
+kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-development.yaml \
+  logs deployment/api-router-service -n default --previous
+```
+
+**Via Grafana (Visual exploration):**
+- Open http://grafana.172.232.58.222.nip.io
+- Navigate to Explore → Select Loki datasource
+- Use LogQL queries: `{service="api-router-service", level="error"}`
+
+### Port Forwarding (Fallback)
 ```bash
 # User Org Service
 kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-development.yaml \
@@ -168,6 +215,24 @@ psql -h ${DATABASE_HOST} -p ${DATABASE_PORT} -U ${DATABASE_USER} -d ${DATABASE_N
 2. Verify status is 'active'
 3. Check expiration date
 
+### Cannot Access Loki/Grafana
+1. Check if monitoring namespace exists: `kubectl get ns monitoring`
+2. Check if pods are running: `kubectl get pods -n monitoring`
+3. Check ingress is configured: `kubectl get ingress -n monitoring`
+4. Verify nip.io DNS resolves: `nslookup loki.172.232.58.222.nip.io`
+5. Test direct service access (fallback):
+   ```bash
+   kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-development.yaml \
+     port-forward -n monitoring svc/loki 3100:3100
+   curl http://localhost:3100/ready
+   ```
+
+### No Logs Appearing in Loki
+1. Check Promtail is running: `kubectl get pods -n monitoring -l app=promtail`
+2. Check Promtail logs: `kubectl logs -n monitoring -l app=promtail --tail=50`
+3. Verify pod annotations: `kubectl get pods -o yaml | grep logging.enabled`
+4. Check Loki is receiving data: `curl http://loki.172.232.58.222.nip.io/ready`
+
 ## Important Notes
 
 - **NEVER commit unencrypted credentials** to git
@@ -183,3 +248,5 @@ psql -h ${DATABASE_HOST} -p ${DATABASE_PORT} -U ${DATABASE_USER} -d ${DATABASE_N
 - Database Setup: `docs/runbooks/migrations.md`
 - Infrastructure: `docs/platform/infrastructure-overview.md`
 - Service Deployment: `docs/runbooks/deploy-to-environments.md`
+- Debugging with Logs: `docs/ai-assistant/debugging-with-logs.md`
+- Observability Overview: `docs/platform/observability.md`
