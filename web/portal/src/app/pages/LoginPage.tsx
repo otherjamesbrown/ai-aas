@@ -3,6 +3,7 @@ import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useAuth } from '@/providers/AuthProvider';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useToast } from '@/providers/ToastProvider';
+import { ServiceHealthCheck } from '@/components/ServiceHealthCheck';
 
 /**
  * Login page with OAuth2/OIDC and password-based authentication
@@ -249,6 +250,11 @@ export default function LoginPage() {
           <p className="text-xs text-center text-gray-500">
             By signing in, you agree to our Terms of Service and Privacy Policy.
           </p>
+        </div>
+
+        {/* Service Health Status */}
+        <div className="mt-6">
+          <ServiceHealthCheck />
         </div>
       </div>
     </div>
