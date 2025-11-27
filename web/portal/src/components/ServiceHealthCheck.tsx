@@ -53,17 +53,6 @@ function TrafficLight({ status }: { status: ServiceStatus }) {
   );
 }
 
-function parseCorsAllowedHeaders(headerValue: string | null): string[] {
-  if (!headerValue) return [];
-  return headerValue.split(',').map(h => h.trim().toLowerCase());
-}
-
-function checkMissingHeaders(allowedHeaders: string[]): string[] {
-  return REQUIRED_CORS_HEADERS.filter(
-    required => !allowedHeaders.some(allowed => allowed === required)
-  );
-}
-
 export function ServiceHealthCheck() {
   const [services, setServices] = useState<ServiceHealth[]>([
     { name: 'API Gateway', status: 'checking' },
@@ -191,7 +180,9 @@ export function ServiceHealthCheck() {
       // Don't add duplicate error entries
     }
 
-    // CORS Preflight Test - Check that all required headers are allowed
+    // CORS Preflight Test - verify preflight request succeeds
+    // Note: JavaScript can't read Access-Control-Allow-Headers from responses
+    // So we just verify the preflight succeeds, and the Header Test below verifies headers work
     try {
       const corsStart = Date.now();
       const corsResponse = await fetch(`${baseUrl}/v1/status/healthz`, {
@@ -205,30 +196,14 @@ export function ServiceHealthCheck() {
       });
       const corsTime = Date.now() - corsStart;
 
-      // Check the Access-Control-Allow-Headers response
-      const allowedHeadersStr = corsResponse.headers.get('Access-Control-Allow-Headers');
-      const allowedOrigin = corsResponse.headers.get('Access-Control-Allow-Origin');
-      const allowedHeaders = parseCorsAllowedHeaders(allowedHeadersStr);
-      const missingHeaders = checkMissingHeaders(allowedHeaders);
-
       if (corsResponse.status === 204 || corsResponse.ok) {
-        if (missingHeaders.length === 0) {
-          newServices.push({
-            name: 'CORS Config',
-            status: 'healthy',
-            message: 'All headers allowed',
-            details: allowedOrigin ? `Origin: ${allowedOrigin}` : undefined,
-            responseTime: corsTime,
-          });
-        } else {
-          newServices.push({
-            name: 'CORS Config',
-            status: 'degraded',
-            message: `Missing: ${missingHeaders.join(', ')}`,
-            details: 'Some headers not in Access-Control-Allow-Headers',
-            responseTime: corsTime,
-          });
-        }
+        newServices.push({
+          name: 'CORS Config',
+          status: 'healthy',
+          message: 'Preflight OK',
+          details: `Origin allowed: ${window.location.origin}`,
+          responseTime: corsTime,
+        });
       } else {
         newServices.push({
           name: 'CORS Config',
