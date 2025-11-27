@@ -2,8 +2,8 @@
 replicaCount: 2
 
 image:
-  tag: dev
-  pullPolicy: IfNotPresent
+  tag: develop-health-check
+  pullPolicy: Always
 
 ingress:
   enabled: true
