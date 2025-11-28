@@ -135,3 +135,14 @@ type APIKeyResponse struct {
 	ExpiresAt   string                 `json:"expiresAt,omitempty"`
 }
 
+// BudgetStatusResponse represents budget status for an organization.
+type BudgetStatusResponse struct {
+	OrgID             string `json:"orgId"`
+	BudgetLimitCents  int64  `json:"budgetLimitCents"`
+	CurrentUsageCents int64  `json:"currentUsageCents"`
+	RemainingCents    int64  `json:"remainingCents"`
+	Status            string `json:"status"` // "ok", "warning", "exceeded", "unknown"
+	PeriodStart       string `json:"periodStart,omitempty"`
+	PeriodEnd         string `json:"periodEnd,omitempty"`
+}
+

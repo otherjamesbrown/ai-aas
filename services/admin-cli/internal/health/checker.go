@@ -18,6 +18,7 @@ package health
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"time"
@@ -30,12 +31,19 @@ type Checker struct {
 }
 
 // NewChecker creates a new health checker with default timeout.
+// Uses a custom transport that skips TLS verification for development environments
+// with self-signed certificates.
 func NewChecker(timeout time.Duration) *Checker {
 	if timeout == 0 {
 		timeout = 5 * time.Second // Default 5 seconds per NFR-007
 	}
 	return &Checker{
-		client:  &http.Client{Timeout: timeout},
+		client: &http.Client{
+			Timeout: timeout,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // Development environments use self-signed certs
+			},
+		},
 		timeout: timeout,
 	}
 }

@@ -200,6 +200,13 @@ func New(opts Options) *http.Server {
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
+	// /health is an alias for /healthz for compatibility with various health checkers
+	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+
 	router.Get("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
