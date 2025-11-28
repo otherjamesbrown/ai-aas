@@ -22,6 +22,8 @@ spec:
           repository: ghcr.io/otherjamesbrown/ai-aas/admin-api-service
           tag: latest
           pullPolicy: Always
+          pullSecrets:
+            - ghcr-pull-secret
 
         replicaCount: 1
 
