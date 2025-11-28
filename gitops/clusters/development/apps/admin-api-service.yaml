@@ -51,6 +51,21 @@ spec:
           limits:
             cpu: 500m
             memory: 512Mi
+
+        ingress:
+          enabled: true
+          className: nginx
+          annotations:
+            nginx.ingress.kubernetes.io/ssl-redirect: "true"
+          hosts:
+            - host: admin-api.172.232.58.222.nip.io
+              paths:
+                - path: /
+                  pathType: Prefix
+          tls:
+            - hosts:
+                - admin-api.172.232.58.222.nip.io
+              secretName: ai-aas-tls
   destination:
     server: https://kubernetes.default.svc
     namespace: admin-api-service

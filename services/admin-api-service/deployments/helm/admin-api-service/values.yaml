@@ -80,3 +80,14 @@ containerSecurityContext:
   capabilities:
     drop:
       - ALL
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: admin-api.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
