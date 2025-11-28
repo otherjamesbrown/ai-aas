@@ -19,7 +19,7 @@ data:
 
     [security]
     admin_user = admin
-    admin_password = admin
+    # admin_password is injected via GF_SECURITY_ADMIN_PASSWORD env var from secret
     disable_gravatar = true
 
     [users]
@@ -28,7 +28,7 @@ data:
     auto_assign_org_role = Viewer
 
     [auth.anonymous]
-    enabled = true
+    enabled = false
     org_name = Main Org.
     org_role = Viewer
 

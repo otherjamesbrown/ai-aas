@@ -155,3 +155,173 @@ func TestFilterHeaders(t *testing.T) {
 		t.Errorf("expected Accept to be */*, got %s", result["Accept"])
 	}
 }
+
+func TestResponseWriter_WriteHeaderOnce(t *testing.T) {
+	rec := httptest.NewRecorder()
+	rw := &responseWriter{ResponseWriter: rec, statusCode: http.StatusOK}
+
+	// First call should set status
+	rw.WriteHeader(http.StatusCreated)
+	if rw.statusCode != http.StatusCreated {
+		t.Errorf("expected status %d, got %d", http.StatusCreated, rw.statusCode)
+	}
+
+	// Second call should be ignored
+	rw.WriteHeader(http.StatusBadRequest)
+	if rw.statusCode != http.StatusCreated {
+		t.Errorf("expected status to remain %d, got %d", http.StatusCreated, rw.statusCode)
+	}
+}
+
+func TestResponseWriter_Flush(t *testing.T) {
+	rec := httptest.NewRecorder()
+	rw := &responseWriter{ResponseWriter: rec, statusCode: http.StatusOK}
+
+	// Flush should not panic - httptest.ResponseRecorder implements Flusher
+	rw.Flush()
+}
+
+func TestResponseWriter_Unwrap(t *testing.T) {
+	rec := httptest.NewRecorder()
+	rw := &responseWriter{ResponseWriter: rec, statusCode: http.StatusOK}
+
+	unwrapped := rw.Unwrap()
+	if unwrapped != rec {
+		t.Error("Unwrap() did not return the underlying ResponseWriter")
+	}
+}
+
+func TestRequestLogger_StatusCodeLevels(t *testing.T) {
+	logger := zap.NewNop()
+	defer logger.Sync()
+
+	tests := []struct {
+		name       string
+		statusCode int
+	}{
+		{"5xx error", http.StatusInternalServerError},
+		{"4xx error", http.StatusBadRequest},
+		{"2xx success", http.StatusOK},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tt.statusCode)
+			})
+
+			middleware := RequestLogger(logger, DefaultRequestLoggerConfig())
+			wrapped := middleware(handler)
+
+			req := httptest.NewRequest("GET", "/api/test", nil)
+			rec := httptest.NewRecorder()
+
+			wrapped.ServeHTTP(rec, req)
+
+			if rec.Code != tt.statusCode {
+				t.Errorf("expected status %d, got %d", tt.statusCode, rec.Code)
+			}
+		})
+	}
+}
+
+func TestRequestLogger_WithQueryString(t *testing.T) {
+	logger := zap.NewNop()
+	defer logger.Sync()
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	middleware := RequestLogger(logger, DefaultRequestLoggerConfig())
+	wrapped := middleware(handler)
+
+	req := httptest.NewRequest("GET", "/api/test?foo=bar&baz=qux", nil)
+	rec := httptest.NewRecorder()
+
+	wrapped.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+}
+
+func TestRequestLogger_WithRequestHeaders(t *testing.T) {
+	logger := zap.NewNop()
+	defer logger.Sync()
+
+	config := DefaultRequestLoggerConfig()
+	config.LogRequestHeaders = true
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	middleware := RequestLogger(logger, config)
+	wrapped := middleware(handler)
+
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	req.Header.Set("X-Custom-Header", "custom-value")
+	req.Header.Set("Authorization", "Bearer secret-token")
+	rec := httptest.NewRecorder()
+
+	wrapped.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+}
+
+func TestDefaultRequestLoggerConfig(t *testing.T) {
+	config := DefaultRequestLoggerConfig()
+
+	// Check skip paths
+	if len(config.SkipPaths) == 0 {
+		t.Error("expected SkipPaths to be non-empty")
+	}
+
+	// Check sensitive headers
+	if len(config.SensitiveHeaders) == 0 {
+		t.Error("expected SensitiveHeaders to be non-empty")
+	}
+
+	// Verify specific defaults
+	foundHealthz := false
+	for _, p := range config.SkipPaths {
+		if p == "/healthz" {
+			foundHealthz = true
+			break
+		}
+	}
+	if !foundHealthz {
+		t.Error("expected /healthz in SkipPaths")
+	}
+
+	foundAuth := false
+	for _, h := range config.SensitiveHeaders {
+		if h == "Authorization" {
+			foundAuth = true
+			break
+		}
+	}
+	if !foundAuth {
+		t.Error("expected Authorization in SensitiveHeaders")
+	}
+}
+
+func TestFilterHeaders_EmptyHeader(t *testing.T) {
+	sensitiveSet := map[string]bool{
+		"authorization": true,
+	}
+
+	headers := http.Header{
+		"Empty-Header": []string{},
+	}
+
+	result := filterHeaders(headers, sensitiveSet)
+
+	// Empty header should not be included
+	if _, ok := result["Empty-Header"]; ok {
+		t.Error("expected empty header to not be included")
+	}
+}

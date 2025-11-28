@@ -50,13 +50,13 @@ data:
           - source_labels: [__meta_kubernetes_pod_label_app]
             target_label: app
 
-          # Set service label from pod label (if exists)
-          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+          # Set service label from pod label (prefer app.kubernetes.io/name, fallback to app)
+          # First, set service from app label as a fallback
+          - source_labels: [__meta_kubernetes_pod_label_app]
             target_label: service
             regex: (.+)
-
-          # Fallback service label from app label
-          - source_labels: [__meta_kubernetes_pod_label_app]
+          # Then override with more specific app.kubernetes.io/name if it exists
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
             target_label: service
             regex: (.+)
 

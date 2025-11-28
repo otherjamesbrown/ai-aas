@@ -4,6 +4,8 @@ kind: Kustomization
 namespace: monitoring
 
 resources:
+  - secret.yaml
+  - pvc.yaml
   - configmap.yaml
   - dashboards.yaml
   - deployment.yaml

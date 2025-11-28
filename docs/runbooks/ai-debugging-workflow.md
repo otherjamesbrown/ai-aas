@@ -80,11 +80,21 @@ For programmatic access (useful in scripts):
 
 ```bash
 # Query Loki directly
+# Note: Use GNU date syntax (-d) for Linux, BSD date syntax (-v) for macOS
+
+# Linux (GNU date):
 curl -k "https://loki.172.232.58.222.nip.io/loki/api/v1/query_range" \
   --data-urlencode 'query={namespace="development"}' \
   --data-urlencode 'limit=100' \
-  --data-urlencode 'start='$(date -u -v-5M +%s)000000000 \
+  --data-urlencode 'start='$(date -u -d '5 minutes ago' +%s)000000000 \
   --data-urlencode 'end='$(date -u +%s)000000000
+
+# macOS (BSD date):
+# curl -k "https://loki.172.232.58.222.nip.io/loki/api/v1/query_range" \
+#   --data-urlencode 'query={namespace="development"}' \
+#   --data-urlencode 'limit=100' \
+#   --data-urlencode 'start='$(date -u -v-5M +%s)000000000 \
+#   --data-urlencode 'end='$(date -u +%s)000000000
 ```
 
 ### Step 5: Correlate with Traces
