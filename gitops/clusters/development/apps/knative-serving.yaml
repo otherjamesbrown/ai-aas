@@ -68,9 +68,9 @@ metadata:
 spec:
   project: platform-development
   source:
-    repoURL: https://github.com/knative-sandbox/net-istio
-    targetRevision: knative-v1.11.0
-    path: config
+    repoURL: https://github.com/otherjamesbrown/ai-aas
+    targetRevision: 020-model-management  # Change to main after merge
+    path: infra/k8s/knative/net-istio
   destination:
     server: https://kubernetes.default.svc
     namespace: knative-serving
