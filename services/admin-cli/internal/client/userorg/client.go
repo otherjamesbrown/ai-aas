@@ -632,3 +632,17 @@ func (c *Client) DeleteAPIKey(ctx context.Context, orgID, apiKeyID string) error
 	return nil
 }
 
+// GetBudgetStatus retrieves budget status for an organization.
+// This is a stub implementation - backend endpoint not yet available.
+func (c *Client) GetBudgetStatus(ctx context.Context, orgID string) (*BudgetStatusResponse, error) {
+	// TODO: Implement when budget-service or user-org-service budget endpoint is available
+	// For now, return a placeholder response indicating budget tracking is not configured
+	return &BudgetStatusResponse{
+		OrgID:             orgID,
+		BudgetLimitCents:  0,
+		CurrentUsageCents: 0,
+		RemainingCents:    0,
+		Status:            "not_configured",
+	}, nil
+}
+

@@ -16,10 +16,41 @@
 //
 package analytics
 
-// Client is a placeholder for the analytics-service API client.
-// This file is created as part of Phase 2 foundational infrastructure.
-// Full implementation will be completed in Phase 5 (User Story 3).
+import (
+	"context"
+	"net/http"
+	"time"
+)
+
+// Client provides access to analytics-service APIs.
 type Client struct {
-	// TODO: Implement in Phase 5
+	baseURL    string
+	apiKey     string
+	httpClient *http.Client
+}
+
+// NewClient creates a new analytics-service API client.
+func NewClient(baseURL, apiKey string) *Client {
+	return &Client{
+		baseURL:    baseURL,
+		apiKey:     apiKey,
+		httpClient: &http.Client{Timeout: 30 * time.Second},
+	}
+}
+
+// QueryUsage retrieves usage data for an organization.
+// This is a stub implementation - backend endpoint not yet available.
+func (c *Client) QueryUsage(ctx context.Context, params UsageQueryParams) (*UsageDataResponse, error) {
+	// TODO: Implement when analytics-service usage endpoint is available
+	// For now, return empty response indicating no data
+	return &UsageDataResponse{
+		OrgID:       params.OrgID,
+		Start:       params.Start,
+		End:         params.End,
+		Granularity: params.Granularity,
+		Series:      []UsageSeriesPoint{},
+		Totals:      UsageTotals{},
+		Freshness:   DataFreshness{Status: "stub", LagSeconds: 0},
+	}, nil
 }
 
