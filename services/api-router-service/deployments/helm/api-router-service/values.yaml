@@ -172,3 +172,9 @@ budget:
   timeout: 2s
   endpointSecretName: ""
 
+# Pod Disruption Budget - ensures availability during upgrades/maintenance
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1  # At least 1 pod must remain available
+  # maxUnavailable: 1  # Alternative: allow max 1 pod unavailable
+

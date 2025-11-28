@@ -1,0 +1,32 @@
+# Default Deny Policy for Development Namespace
+# ==============================================
+# This policy denies all ingress traffic by default.
+# Specific NetworkPolicies must explicitly allow traffic.
+#
+# NOTE: This is commented out for development. Enable for production.
+# Uncomment to enforce strict network isolation.
+
+# ---
+# apiVersion: networking.k8s.io/v1
+# kind: NetworkPolicy
+# metadata:
+#   name: default-deny-ingress
+#   namespace: development
+# spec:
+#   podSelector: {}
+#   policyTypes:
+#     - Ingress
+
+# Allow all traffic within development namespace (for easier debugging)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: development
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}

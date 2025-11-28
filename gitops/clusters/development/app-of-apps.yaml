@@ -1,0 +1,45 @@
+# App-of-Apps Pattern for Development Cluster
+# ============================================
+# This Application manages all other ArgoCD Applications in the development cluster.
+# Changes to any Application YAML in gitops/clusters/development/apps/ will be
+# automatically synced without manual kubectl apply.
+#
+# Bootstrap: kubectl apply -f gitops/clusters/development/app-of-apps.yaml
+# After bootstrap, all changes flow through git commits.
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: development-apps
+  namespace: argocd
+  labels:
+    environment: development
+    app: app-of-apps
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/otherjamesbrown/ai-aas
+    targetRevision: main
+    path: gitops/clusters/development/apps
+    directory:
+      recurse: true
+      exclude: '{network/**,observability/**,secrets/**}'
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=false
+      - PrunePropagationPolicy=foreground
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

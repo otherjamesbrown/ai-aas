@@ -1,0 +1,30 @@
+# Network Policies for Development Namespace
+# ==========================================
+# These policies control traffic flow between services for security isolation.
+# Default: deny all ingress, allow specific paths.
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: development-network-policies
+  namespace: argocd
+  labels:
+    environment: development
+    app: network-policies
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform-development
+  source:
+    repoURL: https://github.com/otherjamesbrown/ai-aas
+    targetRevision: main
+    path: infra/k8s/network-policies/development
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: development
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
