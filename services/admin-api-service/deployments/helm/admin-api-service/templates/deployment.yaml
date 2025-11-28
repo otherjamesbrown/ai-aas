@@ -72,6 +72,13 @@ spec:
                   name: {{ .Values.secrets.apiKeyHashSaltSecretName }}
                   key: {{ .Values.secrets.apiKeyHashSaltSecretKey }}
             {{- end }}
+            {{- if .Values.secrets.masterAdminApiKeySecretName }}
+            - name: MASTER_ADMIN_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.masterAdminApiKeySecretName }}
+                  key: {{ .Values.secrets.masterAdminApiKeySecretKey }}
+            {{- end }}
             - name: LOG_LEVEL
               valueFrom:
                 configMapKeyRef:

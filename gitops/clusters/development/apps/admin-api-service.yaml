@@ -40,6 +40,8 @@ spec:
           databaseUrlSecretKey: database-url
           apiKeyHashSaltSecretName: admin-api-secrets
           apiKeyHashSaltSecretKey: api-key-hash-salt
+          masterAdminApiKeySecretName: admin-api-secrets
+          masterAdminApiKeySecretKey: master-admin-api-key
 
         userOrgService:
           endpoint: "http://user-org-service-development-user-org-service.user-org-service.svc.cluster.local:8081"
