@@ -1,0 +1,46 @@
+# Grafana Ingress
+# Exposes Grafana dashboard via HTTPS
+#
+# Access URLs:
+# - Hostname: https://grafana.dev.ai-aas.local (requires /etc/hosts entry)
+# - IP-based: https://grafana.172.232.58.222.nip.io (works without DNS)
+#
+# Default credentials: admin / admin
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana-ingress
+  namespace: monitoring
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: grafana.dev.ai-aas.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 3000
+    - host: grafana.172.232.58.222.nip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 3000
+  tls:
+    - secretName: ai-aas-tls
+      hosts:
+        - grafana.dev.ai-aas.local
+        - grafana.172.232.58.222.nip.io

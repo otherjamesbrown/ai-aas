@@ -1,0 +1,49 @@
+# Loki Ingress
+# Exposes Loki API via HTTPS
+#
+# Access URLs:
+# - Hostname: https://loki.dev.ai-aas.local (requires /etc/hosts entry)
+# - IP-based: https://loki.172.232.58.222.nip.io (works without DNS)
+#
+# Example queries:
+# curl -s 'https://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+#   --data-urlencode 'query={level="error"}' \
+#   --data-urlencode 'limit=50'
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: loki-ingress
+  namespace: monitoring
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: loki.dev.ai-aas.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: loki
+                port:
+                  number: 3100
+    - host: loki.172.232.58.222.nip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: loki
+                port:
+                  number: 3100
+  tls:
+    - secretName: ai-aas-tls
+      hosts:
+        - loki.dev.ai-aas.local
+        - loki.172.232.58.222.nip.io

@@ -13,10 +13,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/otherjamesbrown/ai-aas/shared/go/auth"
-	"github.com/otherjamesbrown/ai-aas/shared/go/config"
-	"github.com/otherjamesbrown/ai-aas/shared/go/dataaccess"
-	"github.com/otherjamesbrown/ai-aas/shared/go/observability"
+	"github.com/ai-aas/shared-go/auth"
+	"github.com/ai-aas/shared-go/config"
+	"github.com/ai-aas/shared-go/dataaccess"
+	"github.com/ai-aas/shared-go/observability"
 )
 
 func main() {
