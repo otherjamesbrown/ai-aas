@@ -1,0 +1,209 @@
+# Probe Configuration Templates for vLLM InferenceServices
+# Feature: 018-model-readiness-probes
+# Date: 2025-11-28
+#
+# These templates provide copy-paste probe configurations for different model sizes.
+# Use the appropriate template based on your model's parameter count.
+
+---
+# ============================================================================
+# TEMPLATE: 7B Model Probes (e.g., mistral-7b, llama-2-7b)
+# Total Startup Timeout: ~6 minutes (30s + 36×10s)
+# ============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: probe-config-7b-template
+  labels:
+    app.kubernetes.io/name: probe-config
+    model-size: "7b"
+data:
+  probe-config.yaml: |
+    # Copy this into your InferenceService containers section
+    startupProbe:
+      httpGet:
+        path: /health
+        port: 8000
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      failureThreshold: 36
+      timeoutSeconds: 5
+    readinessProbe:
+      httpGet:
+        path: /health
+        port: 8000
+      periodSeconds: 10
+      failureThreshold: 3
+      timeoutSeconds: 5
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: 8000
+      periodSeconds: 30
+      failureThreshold: 3
+      timeoutSeconds: 5
+
+---
+# ============================================================================
+# TEMPLATE: 13B Model Probes (e.g., llama-2-13b, codellama-13b)
+# Total Startup Timeout: ~10 minutes (30s + 60×10s)
+# ============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: probe-config-13b-template
+  labels:
+    app.kubernetes.io/name: probe-config
+    model-size: "13b"
+data:
+  probe-config.yaml: |
+    # Copy this into your InferenceService containers section
+    startupProbe:
+      httpGet:
+        path: /health
+        port: 8000
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      failureThreshold: 60
+      timeoutSeconds: 5
+    readinessProbe:
+      httpGet:
+        path: /health
+        port: 8000
+      periodSeconds: 10
+      failureThreshold: 3
+      timeoutSeconds: 5
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: 8000
+      periodSeconds: 30
+      failureThreshold: 3
+      timeoutSeconds: 5
+
+---
+# ============================================================================
+# TEMPLATE: 20B Model Probes (e.g., gpt-oss-20b)
+# Total Startup Timeout: ~15 minutes (30s + 90×10s)
+# ============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: probe-config-20b-template
+  labels:
+    app.kubernetes.io/name: probe-config
+    model-size: "20b"
+data:
+  probe-config.yaml: |
+    # Copy this into your InferenceService containers section
+    startupProbe:
+      httpGet:
+        path: /health
+        port: 8000
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      failureThreshold: 90
+      timeoutSeconds: 5
+    readinessProbe:
+      httpGet:
+        path: /health
+        port: 8000
+      periodSeconds: 10
+      failureThreshold: 3
+      timeoutSeconds: 5
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: 8000
+      periodSeconds: 30
+      failureThreshold: 3
+      timeoutSeconds: 5
+
+---
+# ============================================================================
+# TEMPLATE: 70B+ Model Probes (e.g., llama-2-70b, mixtral-8x7b)
+# Total Startup Timeout: ~30 minutes (60s + 180×10s)
+# ============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: probe-config-70b-template
+  labels:
+    app.kubernetes.io/name: probe-config
+    model-size: "70b"
+data:
+  probe-config.yaml: |
+    # Copy this into your InferenceService containers section
+    startupProbe:
+      httpGet:
+        path: /health
+        port: 8000
+      initialDelaySeconds: 60
+      periodSeconds: 10
+      failureThreshold: 180
+      timeoutSeconds: 5
+    readinessProbe:
+      httpGet:
+        path: /health
+        port: 8000
+      periodSeconds: 15
+      failureThreshold: 3
+      timeoutSeconds: 5
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: 8000
+      periodSeconds: 60
+      failureThreshold: 3
+      timeoutSeconds: 5
+
+---
+# ============================================================================
+# REFERENCE: Complete InferenceService Example with Probes
+# ============================================================================
+# This shows the full context of where probes are configured
+#
+# apiVersion: serving.kserve.io/v1beta1
+# kind: InferenceService
+# metadata:
+#   name: my-model
+#   namespace: development
+# spec:
+#   predictor:
+#     minReplicas: 1
+#     maxReplicas: 3
+#     containers:
+#       - name: kserve-container
+#         image: vllm/vllm-openai:v0.10.2
+#         args:
+#           - --model=my-org/my-model
+#           - --served-model-name=my-model
+#         ports:
+#           - containerPort: 8000
+#             name: http1
+#             protocol: TCP
+#         # ↓↓↓ PROBES GO HERE ↓↓↓
+#         startupProbe:
+#           httpGet:
+#             path: /health
+#             port: 8000
+#           initialDelaySeconds: 30
+#           periodSeconds: 10
+#           failureThreshold: 36  # Adjust based on model size
+#           timeoutSeconds: 5
+#         readinessProbe:
+#           httpGet:
+#             path: /health
+#             port: 8000
+#           periodSeconds: 10
+#           failureThreshold: 3
+#           timeoutSeconds: 5
+#         livenessProbe:
+#           httpGet:
+#             path: /health
+#             port: 8000
+#           periodSeconds: 30
+#           failureThreshold: 3
+#           timeoutSeconds: 5
+#         # ↑↑↑ PROBES GO HERE ↑↑↑
+
