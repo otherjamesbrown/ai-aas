@@ -12,6 +12,3 @@ data:
 
   # Enable auto TLS
   auto-tls: "Disabled"
-
-  # HTTP protocol
-  http-protocol: "HTTP1"

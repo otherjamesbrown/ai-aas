@@ -107,8 +107,8 @@ readinessProbe:
   path: /v1/status/readyz
   initialDelaySeconds: 15
   periodSeconds: 10
-  timeoutSeconds: 5
-  failureThreshold: 3
+  timeoutSeconds: 10  # Increased to accommodate multiple health checks
+  failureThreshold: 6  # More tolerant of intermittent failures
 
 env:
   - name: SERVICE_NAME
@@ -171,4 +171,10 @@ budget:
   endpoint: ""
   timeout: 2s
   endpointSecretName: ""
+
+# Pod Disruption Budget - ensures availability during upgrades/maintenance
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1  # At least 1 pod must remain available
+  # maxUnavailable: 1  # Alternative: allow max 1 pod unavailable
 

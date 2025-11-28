@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/api"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/domain"
+	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/httputil"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/service"
 	"go.uber.org/zap"
 )
@@ -39,7 +39,7 @@ func (h *AuditHandler) List(w http.ResponseWriter, r *http.Request) {
 		if t, err := time.Parse(time.RFC3339, fromStr); err == nil {
 			params.From = &t
 		} else {
-			api.WriteValidationError(w, r, []api.ValidationError{
+			httputil.WriteValidationError(w, r, []httputil.ValidationError{
 				{Field: "from", Message: "Invalid timestamp format. Use RFC3339 (e.g., 2025-11-26T10:00:00Z)"},
 			})
 			return
@@ -50,7 +50,7 @@ func (h *AuditHandler) List(w http.ResponseWriter, r *http.Request) {
 		if t, err := time.Parse(time.RFC3339, toStr); err == nil {
 			params.To = &t
 		} else {
-			api.WriteValidationError(w, r, []api.ValidationError{
+			httputil.WriteValidationError(w, r, []httputil.ValidationError{
 				{Field: "to", Message: "Invalid timestamp format. Use RFC3339 (e.g., 2025-11-26T10:00:00Z)"},
 			})
 			return
@@ -60,10 +60,10 @@ func (h *AuditHandler) List(w http.ResponseWriter, r *http.Request) {
 	response, err := h.svc.List(r.Context(), params)
 	if err != nil {
 		h.logger.Error("failed to list audit logs", zap.Error(err))
-		api.WriteInternalError(w, r)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
-	api.WriteJSON(w, http.StatusOK, response)
+	httputil.WriteJSON(w, http.StatusOK, response)
 }
 

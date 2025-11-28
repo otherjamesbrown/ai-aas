@@ -1,0 +1,186 @@
+# Platform-wide Prometheus Alerting Rules
+# ========================================
+# These rules provide alerting for all platform services
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: platform-alerts
+  namespace: monitoring
+  labels:
+    app: prometheus
+    release: prometheus
+spec:
+  groups:
+    # API Router Service Alerts
+    - name: api-router-service
+      rules:
+        - alert: APIRouterHighErrorRate
+          expr: |
+            (
+              sum(rate(http_requests_total{job="api-router-service", status=~"5.."}[5m]))
+              /
+              sum(rate(http_requests_total{job="api-router-service"}[5m]))
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+            service: api-router-service
+          annotations:
+            summary: "High error rate on API Router"
+            description: "API Router error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+            runbook_url: "https://docs.ai-aas.local/runbooks/api-router-errors"
+
+        - alert: APIRouterHighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket{job="api-router-service"}[5m])) by (le)
+            ) > 2
+          for: 5m
+          labels:
+            severity: warning
+            service: api-router-service
+          annotations:
+            summary: "High latency on API Router"
+            description: "API Router p95 latency is {{ $value | humanizeDuration }} (threshold: 2s)"
+
+        - alert: APIRouterPodNotReady
+          expr: |
+            kube_deployment_status_replicas_ready{deployment=~".*api-router.*", namespace="development"}
+            /
+            kube_deployment_status_replicas{deployment=~".*api-router.*", namespace="development"}
+            < 0.5
+          for: 5m
+          labels:
+            severity: critical
+            service: api-router-service
+          annotations:
+            summary: "API Router has insufficient ready replicas"
+            description: "Less than 50% of API Router pods are ready"
+
+    # Admin API Service Alerts
+    - name: admin-api-service
+      rules:
+        - alert: AdminAPIHighErrorRate
+          expr: |
+            (
+              sum(rate(http_requests_total{job="admin-api-service", status=~"5.."}[5m]))
+              /
+              sum(rate(http_requests_total{job="admin-api-service"}[5m]))
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+            service: admin-api-service
+          annotations:
+            summary: "High error rate on Admin API"
+            description: "Admin API error rate is {{ $value | humanizePercentage }}"
+
+        - alert: AdminAPIDatabaseConnectionFailure
+          expr: |
+            admin_api_database_connection_errors_total > 0
+          for: 2m
+          labels:
+            severity: critical
+            service: admin-api-service
+          annotations:
+            summary: "Admin API database connection failures"
+            description: "Admin API is experiencing database connection errors"
+
+    # User-Org Service Alerts
+    - name: user-org-service
+      rules:
+        - alert: UserOrgServiceHighErrorRate
+          expr: |
+            (
+              sum(rate(http_requests_total{job="user-org-service", status=~"5.."}[5m]))
+              /
+              sum(rate(http_requests_total{job="user-org-service"}[5m]))
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+            service: user-org-service
+          annotations:
+            summary: "High error rate on User-Org Service"
+            description: "User-Org Service error rate is {{ $value | humanizePercentage }}"
+
+    # Infrastructure Alerts
+    - name: infrastructure
+      rules:
+        - alert: EtcdUnhealthy
+          expr: |
+            up{job="etcd"} == 0
+          for: 2m
+          labels:
+            severity: critical
+            service: etcd
+          annotations:
+            summary: "etcd is down"
+            description: "etcd service is not responding to health checks"
+
+        - alert: RedisUnhealthy
+          expr: |
+            up{job="redis"} == 0
+          for: 2m
+          labels:
+            severity: critical
+            service: redis
+          annotations:
+            summary: "Redis is down"
+            description: "Redis service is not responding to health checks"
+
+        - alert: HighMemoryUsage
+          expr: |
+            (
+              container_memory_usage_bytes{namespace="development"}
+              /
+              container_spec_memory_limit_bytes{namespace="development"}
+            ) > 0.9
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High memory usage detected"
+            description: "Container {{ $labels.container }} in pod {{ $labels.pod }} is using {{ $value | humanizePercentage }} of memory limit"
+
+        - alert: HighCPUUsage
+          expr: |
+            (
+              rate(container_cpu_usage_seconds_total{namespace="development"}[5m])
+              /
+              container_spec_cpu_quota{namespace="development"} * 100000
+            ) > 0.9
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High CPU usage detected"
+            description: "Container {{ $labels.container }} in pod {{ $labels.pod }} is using {{ $value | humanizePercentage }} of CPU limit"
+
+    # vLLM/Inference Alerts
+    - name: inference
+      rules:
+        - alert: VLLMHighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(vllm_request_duration_seconds_bucket[5m])) by (le)
+            ) > 30
+          for: 5m
+          labels:
+            severity: warning
+            service: vllm
+          annotations:
+            summary: "High inference latency"
+            description: "vLLM p95 latency is {{ $value | humanizeDuration }} (threshold: 30s)"
+
+        - alert: VLLMGPUMemoryHigh
+          expr: |
+            (vllm_gpu_memory_used_bytes / vllm_gpu_memory_total_bytes) > 0.95
+          for: 5m
+          labels:
+            severity: warning
+            service: vllm
+          annotations:
+            summary: "vLLM GPU memory usage high"
+            description: "GPU memory usage is {{ $value | humanizePercentage }}"

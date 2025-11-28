@@ -3,8 +3,8 @@ package service
 import (
 	"context"
 
-	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/api/handlers"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/domain"
+	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/metrics"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/repository"
 	"go.uber.org/zap"
 )
@@ -33,7 +33,7 @@ func (s *AuditService) Log(ctx context.Context, create *domain.AuditLogCreate) {
 			zap.Error(err),
 		)
 		// Increment failure metric
-		handlers.AuditLogFailures.Inc()
+		metrics.AuditLogFailures.Inc()
 	}
 }
 

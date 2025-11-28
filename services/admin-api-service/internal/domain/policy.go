@@ -4,6 +4,12 @@ import (
 	"time"
 )
 
+// ValidationError represents a field-level validation error
+type ValidationError struct {
+	Field   string `json:"field"`
+	Message string `json:"message"`
+}
+
 // RoutingPolicy represents a routing policy for model traffic distribution
 type RoutingPolicy struct {
 	PolicyID          string                 `json:"policy_id"`

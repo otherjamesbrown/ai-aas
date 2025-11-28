@@ -17,6 +17,14 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: istio-system
+  # Ignore differences in ValidatingWebhookConfiguration modified by istiod
+  ignoreDifferences:
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      name: istiod-default-validator
+      jsonPointers:
+        - /webhooks/0/clientConfig/caBundle
+        - /webhooks/0/failurePolicy
   syncPolicy:
     automated:
       prune: true

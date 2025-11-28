@@ -1,0 +1,96 @@
+# Network Policy for API Router Service
+# ======================================
+# Allows:
+# - Ingress from nginx ingress controller
+# - Ingress from monitoring (Prometheus scraping)
+# - Egress to user-org-service, etcd, redis, kafka, vLLM backends
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-router-service
+  namespace: development
+  labels:
+    app.kubernetes.io/name: api-router-service
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: api-router-service
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow from nginx ingress controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Allow Prometheus scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Allow from other pods in same namespace (for internal calls)
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow to user-org-service
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: user-org-service
+      ports:
+        - protocol: TCP
+          port: 8081
+    # Allow to etcd (config service)
+    - to:
+        - podSelector:
+            matchLabels:
+              app: etcd
+      ports:
+        - protocol: TCP
+          port: 2379
+    # Allow to redis (rate limiting, caching)
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    # Allow to vLLM backends in system namespace
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: system
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Allow to OTEL collector
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 4317

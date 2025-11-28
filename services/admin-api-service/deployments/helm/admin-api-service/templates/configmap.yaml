@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "admin-api-service.fullname" . }}-config
+  labels:
+    {{- include "admin-api-service.labels" . | nindent 4 }}
+data:
+  log-level: {{ .Values.config.logLevel | quote }}
+  rate-limit-per-min: {{ .Values.config.rateLimitPerMin | quote }}
+  db-max-conns: {{ .Values.config.dbMaxConns | quote }}
+  db-min-conns: {{ .Values.config.dbMinConns | quote }}
+  metrics-enabled: {{ .Values.config.metricsEnabled | quote }}
+  tracing-enabled: {{ .Values.config.tracingEnabled | quote }}
