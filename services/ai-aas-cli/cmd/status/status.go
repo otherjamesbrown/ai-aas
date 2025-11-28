@@ -100,6 +100,7 @@ func runStatus(ctx context.Context, verbose, jsonOutput bool) error {
 		endpoint string
 		authReq  bool
 	}{
+		// Core Platform Services
 		{
 			name:     "Admin API",
 			url:      fmt.Sprintf("https://admin-api.%s", baseDomain),
@@ -123,6 +124,32 @@ func runStatus(ctx context.Context, verbose, jsonOutput bool) error {
 			url:      fmt.Sprintf("https://api.%s", baseDomain),
 			endpoint: "/v1/models",
 			authReq:  true,
+		},
+		// Frontend
+		{
+			name:     "Web Portal",
+			url:      fmt.Sprintf("https://portal.%s", baseDomain),
+			endpoint: "/",
+			authReq:  false,
+		},
+		// Analytics & Observability
+		{
+			name:     "Analytics",
+			url:      fmt.Sprintf("https://analytics.%s", baseDomain),
+			endpoint: "/analytics/v1/status/healthz",
+			authReq:  false,
+		},
+		{
+			name:     "Grafana",
+			url:      fmt.Sprintf("https://grafana.%s", baseDomain),
+			endpoint: "/api/health",
+			authReq:  false,
+		},
+		{
+			name:     "ArgoCD",
+			url:      fmt.Sprintf("https://argocd.%s", baseDomain),
+			endpoint: "/healthz",
+			authReq:  false,
 		},
 	}
 
