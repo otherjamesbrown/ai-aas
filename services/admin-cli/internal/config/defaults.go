@@ -10,7 +10,8 @@ func ApplyDefaults(v *viper.Viper) {
 	// Users can override these with environment variables or config file
 	v.SetDefault("api-endpoints.user-org-service", "https://user-org.172.232.58.222.nip.io")
 	v.SetDefault("api-endpoints.analytics-service", "http://localhost:8084")
-	v.SetDefault("api-endpoints.config-service", "localhost:2379") // etcd gRPC endpoint (requires port-forward)
+	v.SetDefault("api-endpoints.config-service", "localhost:2379")       // etcd gRPC endpoint (requires port-forward)
+	v.SetDefault("api-endpoints.inference-service", "https://api.172.232.58.222.nip.io") // API Router for inference
 
 	// TLS Configuration
 	v.SetDefault("tls.ca-cert-file", "") // Empty by default, use system certs

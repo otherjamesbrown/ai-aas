@@ -9,6 +9,7 @@ This CLI provides a convenient way to perform administrative tasks, such as:
 - Managing API keys
 - Configuring routing policies for model inference
 - Managing model registry entries
+- Interacting with the inference API (list models, send requests)
 - Performing credential rotation
 - Triggering data synchronization
 - Exporting analytics data
@@ -79,6 +80,53 @@ admin-cli routing policy delete --global --model gpt-oss-20b
 admin-cli routing policy delete --org-id <org-uuid> --model gpt-4-turbo
 ```
 
+### Inference API
+
+Interact with the inference API to list available models and send chat completion requests.
+
+#### List Available Models
+
+```bash
+admin-cli inference get-models --api-key="YOUR_API_KEY"
+```
+
+Options:
+- `--format`: Output format (`table`, `json`)
+- `--inference-endpoint`: Override the inference API endpoint
+- `--api-key`: API key for authentication
+
+#### Send a Chat Request
+
+```bash
+admin-cli inference send-request "What is 2+2?" --api-key="YOUR_API_KEY"
+```
+
+Options:
+- `--model`: Model to use (defaults to first available model)
+- `--max-tokens`: Maximum tokens in response (default: 256)
+- `--temperature`: Sampling temperature 0.0-1.0 (default: 0.7)
+- `--system`: System prompt (default: "You are a helpful assistant.")
+- `--format`: Output format (`table`, `json`)
+- `--inference-endpoint`: Override the inference API endpoint
+- `--api-key`: API key for authentication
+
+Example with all options:
+
+```bash
+admin-cli inference send-request "Explain quantum computing" \
+  --model vllm-gpt-oss-20b \
+  --max-tokens 512 \
+  --temperature 0.5 \
+  --system "You are a physics professor." \
+  --api-key="YOUR_API_KEY"
+```
+
+Output includes:
+- Model used
+- Response time (seconds)
+- Token usage (prompt, completion, total)
+- Model response content
+
 ### Other Commands
 
 See full command documentation:
@@ -101,6 +149,7 @@ The admin-cli is pre-configured with sensible defaults for the development envir
 
 **Default Service Endpoints:**
 - **User-Org Service**: `https://user-org.172.232.58.222.nip.io` (public HTTPS, no setup needed)
+- **Inference Service (API Router)**: `https://api.172.232.58.222.nip.io` (public HTTPS, no setup needed)
 - **Config Service (etcd)**: `localhost:2379` (requires kubectl port-forward)
 - **Analytics Service**: `http://localhost:8084` (not yet exposed)
 
@@ -136,6 +185,7 @@ If you need to override the defaults, create `~/.admin-cli/config.yaml`:
 api-endpoints:
   # Override defaults only if needed
   user-org-service: "https://user-org.172.232.58.222.nip.io"
+  inference-service: "https://api.172.232.58.222.nip.io"
   analytics-service: "http://localhost:8084"
   config-service: "localhost:2379"  # etcd gRPC endpoint (requires port-forward)
 
@@ -157,6 +207,7 @@ Override specific endpoints as needed:
 
 ```bash
 export ADMIN_CLI_API_ENDPOINTS_USER_ORG_SERVICE="https://user-org.172.232.58.222.nip.io"
+export ADMIN_CLI_API_ENDPOINTS_INFERENCE_SERVICE="https://api.172.232.58.222.nip.io"
 export ADMIN_CLI_API_ENDPOINTS_ANALYTICS_SERVICE="http://localhost:8084"
 export ADMIN_CLI_API_ENDPOINTS_CONFIG_SERVICE="localhost:2379"
 export ADMIN_CLI_AUTH_API_KEY="your-admin-api-key"
