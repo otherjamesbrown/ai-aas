@@ -74,10 +74,17 @@ spec:
           topic: usage.records.v1
           auditTopic: audit.router
         configService:
-          endpoint: "etcd-service:2379"
+          endpoint: "etcd-service.development.svc.cluster.local:2379"
           watchEnabled: true
         backends:
           endpoints: "vllm-gpt-oss-20b:http://gpt-oss-20b-vllm-deployment.system.svc.cluster.local:8000/v1/chat/completions"
+        # Improved probe configuration for resilience
+        readinessProbe:
+          path: /v1/status/readyz
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 10
+          failureThreshold: 6
         resources:
           requests:
             cpu: 100m

@@ -107,8 +107,8 @@ readinessProbe:
   path: /v1/status/readyz
   initialDelaySeconds: 15
   periodSeconds: 10
-  timeoutSeconds: 5
-  failureThreshold: 3
+  timeoutSeconds: 10  # Increased to accommodate multiple health checks
+  failureThreshold: 6  # More tolerant of intermittent failures
 
 env:
   - name: SERVICE_NAME
