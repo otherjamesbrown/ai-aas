@@ -17,3 +17,5 @@ kubeconfig*
 *.kubeconfig
 !secrets/kubeconfigs/
 .DS_Store
+services/ai-aas-cli/ai-aas-cli
+services/admin-cli/admin-cli
