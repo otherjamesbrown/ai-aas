@@ -16,77 +16,7 @@ spec:
     path: services/api-router-service/deployments/helm/api-router-service
     helm:
       valueFiles:
-        - values.yaml
-      values: |
-        image:
-          repository: ghcr.io/otherjamesbrown/api-router-service
-          tag: dev
-          pullPolicy: Always
-        env:
-          - name: ENVIRONMENT
-            value: development
-          - name: LOG_LEVEL
-            value: debug
-          - name: HTTP_PORT
-            value: "8080"
-          - name: SERVICE_NAME
-            value: api-router-service
-          - name: USER_ORG_SERVICE_URL
-            value: "http://user-org-service-development-user-org-service.user-org-service.svc.cluster.local:8081"
-          - name: USER_ORG_SERVICE_TIMEOUT
-            value: "2s"
-          - name: OTEL_EXPORTER_OTLP_ENDPOINT
-            value: "otel-collector.monitoring.svc.cluster.local:4317"
-          - name: OTEL_EXPORTER_OTLP_PROTOCOL
-            value: "grpc"
-          - name: OTEL_EXPORTER_OTLP_INSECURE
-            value: "true"
-        service:
-          type: ClusterIP
-          port: 8080
-        ingress:
-          enabled: true
-          className: nginx
-          annotations:
-            nginx.ingress.kubernetes.io/ssl-redirect: "true"
-            nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-            nginx.ingress.kubernetes.io/proxy-body-size: "50m"
-            nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
-            nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
-          hosts:
-            - host: api.dev.ai-aas.local
-              paths:
-                - path: /
-                  pathType: Prefix
-            - host: api.172.232.58.222.nip.io
-              paths:
-                - path: /
-                  pathType: Prefix
-          tls:
-            - secretName: ai-aas-tls
-              hosts:
-                - api.dev.ai-aas.local
-                - api.172.232.58.222.nip.io
-        redis:
-          address: redis.development.svc.cluster.local:6379
-        kafka:
-          brokers: ""
-          topic: usage.records.v1
-          auditTopic: audit.router
-        configService:
-          endpoint: "etcd-service:2379"
-          watchEnabled: true
-        backends:
-          endpoints: "vllm-gpt-oss-20b:http://gpt-oss-20b-vllm-deployment.system.svc.cluster.local:8000/v1/chat/completions"
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 500m
-            memory: 512Mi
-        prometheus:
-          enabled: false
+        - values-development.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: development

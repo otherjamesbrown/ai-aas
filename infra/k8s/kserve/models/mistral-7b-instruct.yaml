@@ -12,6 +12,9 @@ metadata:
     environment: development
   annotations:
     serving.kserve.io/deploymentMode: "Serverless"
+    # CRITICAL: Allow 6 minutes for model to load into GPU memory
+    # Without this, Knative kills the pod after ~2 minutes (default progress deadline)
+    serving.knative.dev/progress-deadline: "360s"
     # Knative autoscaling configuration - optimized for GPU inference
     autoscaling.knative.dev/class: "kpa.autoscaling.knative.dev"  # Use Knative Pod Autoscaler
     autoscaling.knative.dev/metric: "concurrency"  # Scale based on concurrent requests
