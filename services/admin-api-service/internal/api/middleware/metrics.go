@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/api/handlers"
+	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/metrics"
 )
 
 // Metrics creates a middleware that records RED metrics
@@ -25,13 +25,13 @@ func Metrics() func(http.Handler) http.Handler {
 			duration := time.Since(start).Seconds()
 			endpoint := normalizeEndpoint(r)
 
-			handlers.HTTPRequestsTotal.WithLabelValues(
+			metrics.HTTPRequestsTotal.WithLabelValues(
 				r.Method,
 				endpoint,
 				strconv.Itoa(wrapped.status),
 			).Inc()
 
-			handlers.HTTPRequestDuration.WithLabelValues(
+			metrics.HTTPRequestDuration.WithLabelValues(
 				r.Method,
 				endpoint,
 			).Observe(duration)

@@ -9,6 +9,7 @@ import (
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/api/handlers"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/api/middleware"
+	modelsHandler "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/handlers/models"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/repository"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/service"
@@ -94,6 +95,12 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 			r.Post("/{policy_id}/activate", policyHandler.Activate)
 			r.Post("/{policy_id}/deactivate", policyHandler.Deactivate)
 		})
+
+		// Model management routes for ai-aas-cli (spec 020)
+		modelsSvc := modelsHandler.CreateModelsService(db.Pool())
+		modelsAdapter := modelsHandler.NewServiceAdapter(modelsSvc)
+		modelsHdlr := modelsHandler.NewHandler(modelsAdapter)
+		modelsHdlr.RegisterRoutes(r)
 	})
 
 	return r

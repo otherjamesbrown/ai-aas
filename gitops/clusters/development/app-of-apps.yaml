@@ -21,7 +21,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/otherjamesbrown/ai-aas
-    targetRevision: 020-model-management  # Change to main after merge
+    targetRevision: develop  # Change to main after merge
     path: gitops/clusters/development/apps
     directory:
       recurse: true

@@ -1,0 +1,42 @@
+package config
+
+import (
+	"github.com/spf13/viper"
+)
+
+// ApplyDefaults sets default configuration values in the provided Viper instance.
+func ApplyDefaults(v *viper.Viper) {
+	// API Endpoints (defaults to nip.io for easy remote access without kubectl)
+	// Users can override these with environment variables or config file
+	v.SetDefault("api-endpoints.user-org-service", "https://user-org.172.232.58.222.nip.io")
+	v.SetDefault("api-endpoints.analytics-service", "http://localhost:8084")
+	v.SetDefault("api-endpoints.config-service", "localhost:2379")       // etcd gRPC endpoint (requires port-forward)
+	v.SetDefault("api-endpoints.inference-service", "https://api.172.232.58.222.nip.io") // API Router for inference
+
+	// TLS Configuration
+	v.SetDefault("tls.ca-cert-file", "") // Empty by default, use system certs
+
+	// Database (default to local PostgreSQL for development)
+	v.SetDefault("database.url", "postgres://postgres:postgres@localhost:5432/ai_aas_operational?sslmode=disable")
+
+	// Output Settings
+	v.SetDefault("defaults.output-format", "table") // table, json, csv
+	v.SetDefault("defaults.verbose", false)
+	v.SetDefault("defaults.quiet", false)
+	v.SetDefault("defaults.confirm", false) // Require explicit --confirm for destructive ops
+
+	// Retry Settings
+	v.SetDefault("retry.max-attempts", 3)
+	v.SetDefault("retry.timeout", 30) // seconds
+	v.SetDefault("retry.initial-delay", 1) // seconds
+	v.SetDefault("retry.max-delay", 4) // seconds
+
+	// Timeouts
+	v.SetDefault("timeouts.health-check", 5) // seconds
+	v.SetDefault("timeouts.operation", 300) // seconds (5 minutes)
+
+	// Progress Indicators
+	v.SetDefault("progress.enabled", true)
+	v.SetDefault("progress.min-duration", 30) // Show progress for operations >30s
+}
+

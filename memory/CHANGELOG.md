@@ -2,6 +2,27 @@
 
 All notable changes to the constitution are recorded here. Detailed narratives live under `memory/updates/`.
 
+## [1.5.0] - 2025-11-28
+
+### Added
+- **Service Deployment Requirements** (under Declarative Infrastructure & GitOps):
+  - Every deployable service MUST have a Helm chart at `services/<service-name>/deployments/helm/<service-name>/`
+  - Every deployable service MUST have an ArgoCD Application at `gitops/clusters/<env>/apps/<service-name>.yaml`
+  - Raw Kubernetes manifests in `k8s/` directories are NOT sufficient for production deployment
+  - Services without ArgoCD Applications will NOT be deployed and will NOT be persistent
+- **Health Probe Requirements** (under Observability, Testing, and Performance SLOs):
+  - All Helm charts MUST configure Kubernetes liveness and readiness probes
+  - Probes MUST use the service's `/health` or `/ready` endpoints
+  - Startup probes SHOULD be used for services with slow initialization
+- **Deployment gate** added to Constitution Gates:
+  - Helm chart + ArgoCD Application defined; health probes configured; service auto-recovers
+
+### Changed
+- Incremented version to 1.5.0 (MINOR: new requirements for service deployment)
+
+### Removed
+- None.
+
 ## [1.4.1] - 2025-01-27
 
 ### Added

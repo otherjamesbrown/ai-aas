@@ -10,12 +10,14 @@ use (
 	./db/tools/sqlrunner
 	./samples/service-template/go
 	./services/_template
+	./services/admin-api-service
+	./services/admin-cli
+	./services/ai-aas-cli
 	./services/analytics-service
 	./services/analytics-service/test/integration-phase5
 	./services/analytics-service/test/perf
 	./services/api-router-service
 	./services/hello-service
-	./services/admin-cli
 	./services/user-org-service
 	./services/world-service
 	./shared/go

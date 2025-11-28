@@ -17,11 +17,11 @@
 
 **Purpose**: Project initialization and CLI service structure
 
-- [ ] T-S020-P01-001 Create CLI service directory structure per plan.md in `services/ai-aas-cli/`
-- [ ] T-S020-P01-002 Initialize Go module with dependencies in `services/ai-aas-cli/go.mod`
-- [ ] T-S020-P01-003 [P] Create main.go entry point in `services/ai-aas-cli/main.go`
-- [ ] T-S020-P01-004 [P] Create Makefile with build/test/lint targets in `services/ai-aas-cli/Makefile`
-- [ ] T-S020-P01-005 [P] Configure golangci-lint for CLI service in `services/ai-aas-cli/.golangci.yml`
+- [x] T-S020-P01-001 Create CLI service directory structure per plan.md in `services/ai-aas-cli/`
+- [x] T-S020-P01-002 Initialize Go module with dependencies in `services/ai-aas-cli/go.mod`
+- [x] T-S020-P01-003 [P] Create main.go entry point in `services/ai-aas-cli/main.go`
+- [x] T-S020-P01-004 [P] Create Makefile with build/test/lint targets in `services/ai-aas-cli/Makefile`
+- [x] T-S020-P01-005 [P] Configure golangci-lint for CLI service in `services/ai-aas-cli/.golangci.yml`
 
 ---
 
@@ -33,35 +33,35 @@
 
 ### Database Migrations
 
-- [ ] T-S020-P02-006 Create model_registry table migration in `db/migrations/20251128_001_create_model_registry.sql`
-- [ ] T-S020-P02-007 [P] Create model_cache table migration in `db/migrations/20251128_002_create_model_cache.sql`
-- [ ] T-S020-P02-008 [P] Create model_deployments table migration in `db/migrations/20251128_003_create_model_deployments.sql`
-- [ ] T-S020-P02-009 [P] Create model_aliases table migration in `db/migrations/20251128_004_create_model_aliases.sql`
-- [ ] T-S020-P02-010 [P] Create model_state_history table migration in `db/migrations/20251128_005_create_model_state_history.sql`
-- [ ] T-S020-P02-011 [P] Create model_validations table migration in `db/migrations/20251128_006_create_model_validations.sql`
-- [ ] T-S020-P02-012 [P] Create platform_credentials table migration in `db/migrations/20251128_007_create_platform_credentials.sql`
+- [x] T-S020-P02-006 Create model_registry table migration in `db/migrations/20251128_001_create_model_registry.sql`
+- [x] T-S020-P02-007 [P] Create model_cache table migration in `db/migrations/20251128_002_create_model_cache.sql`
+- [x] T-S020-P02-008 [P] Create model_deployments table migration in `db/migrations/20251128_003_create_model_deployments.sql`
+- [x] T-S020-P02-009 [P] Create model_aliases table migration in `db/migrations/20251128_004_create_model_aliases.sql`
+- [x] T-S020-P02-010 [P] Create model_state_history table migration in `db/migrations/20251128_005_create_model_state_history.sql`
+- [x] T-S020-P02-011 [P] Create model_validations table migration in `db/migrations/20251128_006_create_model_validations.sql`
+- [x] T-S020-P02-012 [P] Create platform_credentials table migration in `db/migrations/20251128_007_create_platform_credentials.sql`
 
 ### Admin API Extensions
 
-- [ ] T-S020-P02-013 Create models handler package structure in `services/admin-api-service/internal/handlers/models/`
-- [ ] T-S020-P02-014 Create models service package structure in `services/admin-api-service/internal/services/models/`
-- [ ] T-S020-P02-015 Register model management routes in admin-api-service router
-- [ ] T-S020-P02-015A [P] Create OpenAPI contract for model management API in `specs/020-model-management/contracts/admin-api.yaml`
+- [x] T-S020-P02-013 Create models handler package structure in `services/admin-api-service/internal/handlers/models/`
+- [x] T-S020-P02-014 Create models service package structure in `services/admin-api-service/internal/services/models/`
+- [x] T-S020-P02-015 Register model management routes in admin-api-service router
+- [x] T-S020-P02-015A [P] Create OpenAPI contract for model management API in `specs/020-model-management/contracts/admin-api.yaml`
 
 ### CLI Core Infrastructure
 
-- [ ] T-S020-P02-016 Create root command with --init, --version, --help in `services/ai-aas-cli/cmd/root.go`
-- [ ] T-S020-P02-017 [P] Create output formatter package in `services/ai-aas-cli/internal/output/table.go`
-- [ ] T-S020-P02-018 [P] Create JSON output formatter in `services/ai-aas-cli/internal/output/json.go`
-- [ ] T-S020-P02-019 [P] Create progress bar helper in `services/ai-aas-cli/internal/output/progress.go`
-- [ ] T-S020-P02-020 Create Admin API client base in `services/ai-aas-cli/internal/api/client.go`
-- [ ] T-S020-P02-020A [P] Configure shared/go/logging with zap backend in `services/ai-aas-cli/internal/logging/logger.go`
+- [x] T-S020-P02-016 Create root command with --init, --version, --help in `services/ai-aas-cli/cmd/root.go`
+- [x] T-S020-P02-017 [P] Create output formatter package in `services/ai-aas-cli/internal/output/table.go`
+- [x] T-S020-P02-018 [P] Create JSON output formatter in `services/ai-aas-cli/internal/output/json.go`
+- [x] T-S020-P02-019 [P] Create progress bar helper in `services/ai-aas-cli/internal/output/progress.go`
+- [x] T-S020-P02-020 Create Admin API client base in `services/ai-aas-cli/internal/api/client.go`
+- [x] T-S020-P02-020A [P] Configure shared/go/logging with zap backend in `services/ai-aas-cli/internal/logging/logger.go`
 
-**Checkpoint**: Foundation ready - user story implementation can now begin
+**Checkpoint**: ✅ Foundation ready - user story implementation can now begin
 
 ---
 
-## Phase 3: US-000 - CLI Initialization (Priority: P1) 🎯 MVP
+## Phase 3: US-000 - CLI Initialization (Priority: P1) 🎯 MVP ✅
 
 **Goal**: Platform admins can initialize CLI with API key, endpoint, and credentials
 
@@ -69,22 +69,22 @@
 
 ### Tests for US-000
 
-- [ ] T-S020-P03-021 [P] [US0] Unit test for PATH detection in `services/ai-aas-cli/internal/config/path_test.go`
-- [ ] T-S020-P03-022 [P] [US0] Unit test for config management in `services/ai-aas-cli/internal/config/config_test.go`
-- [ ] T-S020-P03-023 [P] [US0] Integration test for init wizard in `services/ai-aas-cli/tests/integration/init_test.go`
+- [x] T-S020-P03-021 [P] [US0] Unit test for PATH detection in `services/ai-aas-cli/internal/config/path_test.go`
+- [x] T-S020-P03-022 [P] [US0] Unit test for config management in `services/ai-aas-cli/internal/config/config_test.go`
+- [x] T-S020-P03-023 [P] [US0] Integration test for init wizard in `services/ai-aas-cli/tests/integration/init_test.go`
 
 ### Implementation for US-000
 
-- [ ] T-S020-P03-024 [P] [US0] Implement PATH detection logic in `services/ai-aas-cli/internal/config/path.go`
-- [ ] T-S020-P03-025 [P] [US0] Implement config file management in `services/ai-aas-cli/internal/config/config.go`
-- [ ] T-S020-P03-026 [US0] Implement interactive init wizard in `services/ai-aas-cli/internal/config/init.go`
-- [ ] T-S020-P03-027 [US0] Implement config show command in `services/ai-aas-cli/cmd/config.go`
-- [ ] T-S020-P03-028 [US0] Implement config set command in `services/ai-aas-cli/cmd/config.go`
-- [ ] T-S020-P03-029 [US0] Implement config test command in `services/ai-aas-cli/cmd/config.go`
-- [ ] T-S020-P03-030 [US0] Implement config check-path command in `services/ai-aas-cli/cmd/config.go`
-- [ ] T-S020-P03-031 [US0] Wire --init flag to init wizard in root command
+- [x] T-S020-P03-024 [P] [US0] Implement PATH detection logic in `services/ai-aas-cli/internal/config/path.go`
+- [x] T-S020-P03-025 [P] [US0] Implement config file management in `services/ai-aas-cli/internal/config/config.go`
+- [x] T-S020-P03-026 [US0] Implement interactive init wizard in `services/ai-aas-cli/internal/config/init.go`
+- [x] T-S020-P03-027 [US0] Implement config show command in `services/ai-aas-cli/cmd/ai-aas-cli/root.go`
+- [x] T-S020-P03-028 [US0] Implement config set command in `services/ai-aas-cli/cmd/ai-aas-cli/root.go`
+- [x] T-S020-P03-029 [US0] Implement config test command in `services/ai-aas-cli/cmd/ai-aas-cli/root.go`
+- [x] T-S020-P03-030 [US0] Implement config check-path command in `services/ai-aas-cli/cmd/ai-aas-cli/root.go`
+- [x] T-S020-P03-031 [US0] Wire --init flag to init wizard in root command
 
-**Checkpoint**: CLI can be initialized and configured independently
+**Checkpoint**: ✅ CLI can be initialized and configured independently
 
 ---
 
@@ -98,27 +98,27 @@
 
 - [ ] T-S020-P04-032 [P] [US1] Contract test for POST /models in `services/ai-aas-cli/tests/contract/models_test.go`
 - [ ] T-S020-P04-033 [P] [US1] Contract test for GET /models in `services/ai-aas-cli/tests/contract/models_test.go`
-- [ ] T-S020-P04-034 [P] [US1] Unit test for HF license detection in `services/ai-aas-cli/internal/huggingface/license_test.go`
+- [x] T-S020-P04-034 [P] [US1] Unit test for HF license detection in `services/ai-aas-cli/internal/huggingface/license_test.go`
 
 ### Admin API Implementation for US-001
 
-- [ ] T-S020-P04-035 [P] [US1] Implement model registry service in `services/admin-api-service/internal/services/models/registry.go`
-- [ ] T-S020-P04-036 [P] [US1] Implement POST /models handler in `services/admin-api-service/internal/handlers/models/add.go`
-- [ ] T-S020-P04-037 [P] [US1] Implement GET /models handler in `services/admin-api-service/internal/handlers/models/list.go`
-- [ ] T-S020-P04-038 [P] [US1] Implement GET /models/{name} handler in `services/admin-api-service/internal/handlers/models/get.go`
-- [ ] T-S020-P04-039 [P] [US1] Implement DELETE /models/{name} handler in `services/admin-api-service/internal/handlers/models/delete.go`
+- [x] T-S020-P04-035 [P] [US1] Implement model registry service in `services/admin-api-service/internal/services/models/service.go`
+- [x] T-S020-P04-036 [P] [US1] Implement POST /models handler in `services/admin-api-service/internal/handlers/models/handler.go`
+- [x] T-S020-P04-037 [P] [US1] Implement GET /models handler in `services/admin-api-service/internal/handlers/models/handler.go`
+- [x] T-S020-P04-038 [P] [US1] Implement GET /models/{name} handler in `services/admin-api-service/internal/handlers/models/handler.go`
+- [x] T-S020-P04-039 [P] [US1] Implement DELETE /models/{name} handler in `services/admin-api-service/internal/handlers/models/handler.go`
 
 ### CLI Implementation for US-001
 
-- [ ] T-S020-P04-040 [P] [US1] Implement HF Hub API client in `services/ai-aas-cli/internal/huggingface/client.go`
-- [ ] T-S020-P04-041 [P] [US1] Implement license/gating detection in `services/ai-aas-cli/internal/huggingface/license.go`
-- [ ] T-S020-P04-042 [US1] Implement model add command in `services/ai-aas-cli/cmd/model/add.go`
-- [ ] T-S020-P04-043 [US1] Implement model list command in `services/ai-aas-cli/cmd/model/list.go`
-- [ ] T-S020-P04-044 [US1] Implement model info command in `services/ai-aas-cli/cmd/model/info.go`
-- [ ] T-S020-P04-045 [US1] Implement model remove command in `services/ai-aas-cli/cmd/model/remove.go`
-- [ ] T-S020-P04-046 [US1] Implement model status command in `services/ai-aas-cli/cmd/model/status.go`
+- [x] T-S020-P04-040 [P] [US1] Implement HF Hub API client in `services/ai-aas-cli/internal/huggingface/client.go`
+- [x] T-S020-P04-041 [P] [US1] Implement license/gating detection in `services/ai-aas-cli/internal/huggingface/license.go`
+- [x] T-S020-P04-042 [US1] Implement model add command in `services/ai-aas-cli/cmd/model/add.go`
+- [x] T-S020-P04-043 [US1] Implement model list command in `services/ai-aas-cli/cmd/model/list.go`
+- [x] T-S020-P04-044 [US1] Implement model info command in `services/ai-aas-cli/cmd/model/info.go`
+- [x] T-S020-P04-045 [US1] Implement model remove command in `services/ai-aas-cli/cmd/model/remove.go`
+- [x] T-S020-P04-046 [US1] Implement model status command in `services/ai-aas-cli/cmd/model/status.go`
 
-**Checkpoint**: Models can be registered, listed, and queried independently
+**Checkpoint**: ✅ Phase 4 complete - models can be registered, listed, and queried via Admin API and CLI
 
 ---
 
@@ -135,19 +135,19 @@
 
 ### Admin API Implementation for US-002
 
-- [ ] T-S020-P05-049 [P] [US2] Implement credentials service with encryption in `services/admin-api-service/internal/services/models/credentials.go`
-- [ ] T-S020-P05-050 [P] [US2] Implement POST /credentials handler in `services/admin-api-service/internal/handlers/models/credentials.go`
-- [ ] T-S020-P05-051 [P] [US2] Implement GET /credentials handler in `services/admin-api-service/internal/handlers/models/credentials.go`
-- [ ] T-S020-P05-052 [P] [US2] Implement POST /credentials/{type}/test handler in `services/admin-api-service/internal/handlers/models/credentials.go`
+- [x] T-S020-P05-049 [P] [US2] Implement credentials service with encryption in `services/admin-api-service/internal/services/models/service.go`
+- [x] T-S020-P05-050 [P] [US2] Implement POST /credentials handler in `services/admin-api-service/internal/handlers/models/handler.go`
+- [x] T-S020-P05-051 [P] [US2] Implement GET /credentials handler in `services/admin-api-service/internal/handlers/models/handler.go`
+- [x] T-S020-P05-052 [P] [US2] Implement POST /credentials/{type}/test handler in `services/admin-api-service/internal/handlers/models/handler.go`
 
 ### CLI Implementation for US-002
 
-- [ ] T-S020-P05-053 [US2] Implement credentials set command in `services/ai-aas-cli/cmd/credentials.go`
-- [ ] T-S020-P05-054 [US2] Implement credentials list command in `services/ai-aas-cli/cmd/credentials.go`
-- [ ] T-S020-P05-055 [US2] Implement credentials test command in `services/ai-aas-cli/cmd/credentials.go`
-- [ ] T-S020-P05-056 [US2] Implement credentials delete command in `services/ai-aas-cli/cmd/credentials.go`
+- [x] T-S020-P05-053 [US2] Implement credentials set command in `services/ai-aas-cli/cmd/ai-aas-cli/root.go`
+- [x] T-S020-P05-054 [US2] Implement credentials list command in `services/ai-aas-cli/cmd/ai-aas-cli/root.go`
+- [x] T-S020-P05-055 [US2] Implement credentials test command in `services/ai-aas-cli/cmd/ai-aas-cli/root.go`
+- [x] T-S020-P05-056 [US2] Implement credentials delete command in `services/ai-aas-cli/cmd/ai-aas-cli/root.go`
 
-**Checkpoint**: Credentials can be stored and validated independently
+**Checkpoint**: ✅ Phase 5 complete - credentials can be stored and validated via CLI and Admin API
 
 ---
 
@@ -172,16 +172,16 @@
 
 ### CLI Implementation for US-003
 
-- [ ] T-S020-P06-064 [P] [US3] Implement HF model download with resume in `services/ai-aas-cli/internal/huggingface/download.go`
-- [ ] T-S020-P06-065 [P] [US3] Implement S3 client with multipart upload in `services/ai-aas-cli/internal/storage/s3.go`
-- [ ] T-S020-P06-066 [P] [US3] Implement manifest generation/verification in `services/ai-aas-cli/internal/storage/manifest.go`
-- [ ] T-S020-P06-067 [US3] Implement model pull command with progress in `services/ai-aas-cli/cmd/model/pull.go`
-- [ ] T-S020-P06-068 [US3] Implement model cache list command in `services/ai-aas-cli/cmd/model/cache.go`
-- [ ] T-S020-P06-069 [US3] Implement model cache verify command in `services/ai-aas-cli/cmd/model/cache.go`
-- [ ] T-S020-P06-070 [US3] Implement model cache delete command in `services/ai-aas-cli/cmd/model/cache.go`
-- [ ] T-S020-P06-071 [US3] Implement model cache gc command in `services/ai-aas-cli/cmd/model/cache.go`
+- [x] T-S020-P06-064 [P] [US3] Implement HF model download with resume in `services/ai-aas-cli/internal/huggingface/download.go`
+- [x] T-S020-P06-065 [P] [US3] Implement S3 client with multipart upload in `services/ai-aas-cli/internal/storage/s3.go`
+- [x] T-S020-P06-066 [P] [US3] Implement manifest generation/verification in `services/ai-aas-cli/internal/storage/manifest.go`
+- [x] T-S020-P06-067 [US3] Implement model pull command with progress in `services/ai-aas-cli/cmd/model/pull.go`
+- [x] T-S020-P06-068 [US3] Implement model cache list command in `services/ai-aas-cli/cmd/model/cache.go`
+- [x] T-S020-P06-069 [US3] Implement model cache verify command in `services/ai-aas-cli/cmd/model/cache.go`
+- [x] T-S020-P06-070 [US3] Implement model cache delete command in `services/ai-aas-cli/cmd/model/cache.go`
+- [x] T-S020-P06-071 [US3] Implement model cache gc command in `services/ai-aas-cli/cmd/model/cache.go`
 
-**Checkpoint**: Models can be pulled from HF and cached in S3 independently
+**Checkpoint**: ✅ Phase 6 CLI complete - models can be pulled from HF and cached in S3 independently
 
 ---
 
@@ -205,15 +205,15 @@
 
 ### CLI Implementation for US-004
 
-- [ ] T-S020-P07-078 [P] [US4] Implement K8s client wrapper in `services/ai-aas-cli/internal/kubernetes/client.go`
-- [ ] T-S020-P07-079 [P] [US4] Implement InferenceService operations in `services/ai-aas-cli/internal/kubernetes/inference.go`
-- [ ] T-S020-P07-080 [P] [US4] Implement wait-for-ready helpers in `services/ai-aas-cli/internal/kubernetes/wait.go`
-- [ ] T-S020-P07-081 [US4] Implement model deploy command in `services/ai-aas-cli/cmd/model/deploy.go`
-- [ ] T-S020-P07-082 [US4] Implement model undeploy command in `services/ai-aas-cli/cmd/model/undeploy.go`
-- [ ] T-S020-P07-083 [US4] Implement model restart command in `services/ai-aas-cli/cmd/model/deploy.go`
-- [ ] T-S020-P07-084 [US4] Implement model scale command in `services/ai-aas-cli/cmd/model/deploy.go`
+- [x] T-S020-P07-078 [P] [US4] Implement K8s client wrapper in `services/ai-aas-cli/internal/kubernetes/client.go`
+- [x] T-S020-P07-079 [P] [US4] Implement InferenceService operations in `services/ai-aas-cli/internal/kubernetes/inference.go`
+- [x] T-S020-P07-080 [P] [US4] Implement wait-for-ready helpers in `services/ai-aas-cli/internal/kubernetes/wait.go`
+- [x] T-S020-P07-081 [US4] Implement model deploy command in `services/ai-aas-cli/cmd/model/deploy.go`
+- [x] T-S020-P07-082 [US4] Implement model undeploy command in `services/ai-aas-cli/cmd/model/deploy.go`
+- [x] T-S020-P07-083 [US4] Implement model restart command in `services/ai-aas-cli/cmd/model/deploy.go`
+- [x] T-S020-P07-084 [US4] Implement model scale command in `services/ai-aas-cli/cmd/model/deploy.go`
 
-**Checkpoint**: Models can be deployed to K8s and managed independently
+**Checkpoint**: ✅ Phase 7 CLI complete - models can be deployed to K8s and managed independently
 
 ---
 
@@ -235,15 +235,15 @@
 
 ### CLI Implementation for US-005
 
-- [ ] T-S020-P08-089 [P] [US5] Implement validation framework in `services/ai-aas-cli/internal/validation/validator.go`
-- [ ] T-S020-P08-090 [P] [US5] Implement registry checks in `services/ai-aas-cli/internal/validation/registry.go`
-- [ ] T-S020-P08-091 [P] [US5] Implement cache checks in `services/ai-aas-cli/internal/validation/cache.go`
-- [ ] T-S020-P08-092 [P] [US5] Implement deployment checks in `services/ai-aas-cli/internal/validation/deployment.go`
-- [ ] T-S020-P08-093 [P] [US5] Implement endpoint checks in `services/ai-aas-cli/internal/validation/endpoint.go`
+- [x] T-S020-P08-089 [P] [US5] Implement validation framework in `services/ai-aas-cli/internal/validation/validator.go`
+- [x] T-S020-P08-090 [P] [US5] Implement registry checks in `services/ai-aas-cli/cmd/model/validate.go` (checkRegistry)
+- [x] T-S020-P08-091 [P] [US5] Implement cache checks in `services/ai-aas-cli/cmd/model/validate.go` (checkCache)
+- [x] T-S020-P08-092 [P] [US5] Implement deployment checks in `services/ai-aas-cli/cmd/model/validate.go` (checkDeployment)
+- [x] T-S020-P08-093 [P] [US5] Implement endpoint checks in `services/ai-aas-cli/cmd/model/validate.go` (checkEndpoint)
 - [ ] T-S020-P08-094 [P] [US5] Implement router checks in `services/ai-aas-cli/internal/validation/router.go`
-- [ ] T-S020-P08-095 [US5] Implement model validate command in `services/ai-aas-cli/cmd/model/validate.go`
+- [x] T-S020-P08-095 [US5] Implement model validate command in `services/ai-aas-cli/cmd/model/validate.go`
 
-**Checkpoint**: Full-stack validation works independently
+**Checkpoint**: ✅ Phase 8 CLI core complete - full-stack validation works independently (router check deferred)
 
 ---
 
@@ -265,13 +265,13 @@
 
 ### CLI Implementation for US-008
 
-- [ ] T-S020-P09-100 [US8] Implement model enable command in `services/ai-aas-cli/cmd/model/enable.go`
-- [ ] T-S020-P09-101 [US8] Implement model disable command in `services/ai-aas-cli/cmd/model/enable.go`
-- [ ] T-S020-P09-102 [US8] Implement model library command in `services/ai-aas-cli/cmd/model/library.go`
+- [x] T-S020-P09-100 [US8] Implement model enable command in `services/ai-aas-cli/cmd/model/enable.go`
+- [x] T-S020-P09-101 [US8] Implement model disable command in `services/ai-aas-cli/cmd/model/enable.go`
+- [x] T-S020-P09-102 [US8] Implement model library command in `services/ai-aas-cli/cmd/model/enable.go`
 - [ ] T-S020-P09-103 [US8] Implement model swap command in `services/ai-aas-cli/cmd/model/swap.go`
 - [ ] T-S020-P09-104 [US8] Implement model history command in `services/ai-aas-cli/cmd/model/history.go`
 
-**Checkpoint**: Library management works independently
+**Checkpoint**: ✅ Phase 9 CLI core complete - enable/disable/library commands work independently (swap, history deferred)
 
 ---
 

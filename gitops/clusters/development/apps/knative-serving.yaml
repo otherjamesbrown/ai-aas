@@ -69,7 +69,7 @@ spec:
   project: platform-development
   source:
     repoURL: https://github.com/otherjamesbrown/ai-aas
-    targetRevision: 020-model-management  # Change to main after merge
+    targetRevision: develop  # Change to main after merge
     path: infra/k8s/knative/net-istio
   destination:
     server: https://kubernetes.default.svc
