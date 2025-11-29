@@ -40,11 +40,19 @@ func WithHTTPClient(httpClient *http.Client) ClientOption {
 // WithInsecureSkipVerify disables TLS certificate verification
 func WithInsecureSkipVerify() ClientOption {
 	return func(c *Client) {
-		transport := &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true, //nolint:gosec // User-requested for dev environments
-			},
+		// Get the existing transport or use DefaultTransport
+		customTransport, ok := c.httpClient.Transport.(*http.Transport)
+		if !ok || customTransport == nil {
+			customTransport = http.DefaultTransport.(*http.Transport)
 		}
+
+		// Clone the transport to avoid modifying a shared instance
+		// This preserves connection pooling, HTTP/2, and proxy settings
+		transport := customTransport.Clone()
+		if transport.TLSClientConfig == nil {
+			transport.TLSClientConfig = &tls.Config{}
+		}
+		transport.TLSClientConfig.InsecureSkipVerify = true //nolint:gosec // User-requested for dev environments
 		c.httpClient.Transport = transport
 	}
 }
