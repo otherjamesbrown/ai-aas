@@ -455,6 +455,7 @@ pnpm test:all
 
 ## Related Documentation
 
+- **[Test Coverage Tracking](../docs/testing/TEST-COVERAGE.md)** - Centralized test coverage matrix
 - [Testing Guidelines](../.cursorrules#testing-guidelines)
 - [Contributing Guide](../CONTRIBUTING.md#testing)
 - [E2E Test Spec](../specs/012-e2e-tests/spec.md)
