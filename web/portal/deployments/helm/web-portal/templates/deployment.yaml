@@ -1,3 +1,7 @@
+{{- $baseDomain := .Values.global.domain.base -}}
+{{- $protocol := .Values.global.domain.protocol | default "https" -}}
+{{- $apiHost := printf "%s.%s" (.Values.global.services.api | default "api") $baseDomain -}}
+{{- $portalHost := printf "%s.%s" (.Values.global.services.portal | default "portal") $baseDomain -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -30,6 +34,21 @@ spec:
               name: http
               protocol: TCP
           env:
+            # Computed VITE_ variables from global domain configuration
+            - name: VITE_API_BASE_URL
+              value: {{ printf "%s://%s" $protocol $apiHost | quote }}
+            - name: VITE_OAUTH_ISSUER_URL
+              value: {{ printf "%s://%s" $protocol $apiHost | quote }}
+            - name: VITE_OAUTH_REDIRECT_URI
+              value: {{ printf "%s://%s/auth/callback" $protocol $portalHost | quote }}
+            - name: VITE_FEATURE_FLAGS_API_URL
+              value: "http://api-router-service.{{ .Release.Namespace }}.svc.cluster.local:8080/api"
+            # Static env vars from values
+            {{- range .Values.staticEnv }}
+            - name: {{ .name }}
+              value: {{ .value | quote }}
+            {{- end }}
+            # Additional env vars
             {{- range .Values.env }}
             {{- if .valueFrom }}
             - name: {{ .name }}

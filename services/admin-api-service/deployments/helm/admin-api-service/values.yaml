@@ -1,3 +1,43 @@
+# Admin API Service - Helm Chart Values
+# =====================================
+#
+# Domain Configuration:
+# --------------------
+# This chart uses centralized domain configuration. Override `global.domain.base`
+# in environment-specific values files (values-development.yaml, values-production.yaml).
+#
+# All ingress hostnames are derived from global.domain.base:
+#   - admin-api.{global.domain.base} -> admin-api.dev.otherjamesbrown.com
+#
+# See configs/environments/*.yaml for environment-specific domain settings.
+#
+# For AI Coding Assistants:
+# ------------------------
+# 1. NEVER hardcode domain names - use global.domain.base
+# 2. ALWAYS use HTTPS (force-ssl-redirect: "true")
+# 3. Use cert-manager with Let's Encrypt for TLS certificates
+# 4. All deployments MUST go through ArgoCD
+#
+
+# Global configuration - shared across all services
+# Override in values-{environment}.yaml
+global:
+  domain:
+    # Base domain for this environment (override per environment)
+    base: "dev.otherjamesbrown.com"
+    # Local hostname for /etc/hosts access (optional)
+    local: "dev.ai-aas.local"
+    # Protocol for URLs
+    protocol: "https"
+  tls:
+    # Enable TLS with cert-manager
+    enabled: true
+    # ClusterIssuer to use for certificates
+    clusterIssuer: "letsencrypt-prod"
+  # Service subdomains - used to construct full hostnames
+  services:
+    adminApi: "admin-api"
+
 replicaCount: 2
 
 image:
@@ -84,13 +124,16 @@ containerSecurityContext:
 ingress:
   enabled: false
   className: nginx
-  annotations: {}
-  hosts:
-    - host: admin-api.example.com
-      paths:
-        - path: /
-          pathType: Prefix
-  tls: []
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # cert-manager annotation will be added by template when tls.enabled
+  # Service subdomain - combined with global.domain.base
+  subdomain: admin-api
+  # hosts is now computed from global.domain.base in the template
+  # Override with explicit hosts array only if needed
+  hosts: []
+  # TLS secret name - will be auto-generated if empty
+  tlsSecretName: ""
 
 # Pod Disruption Budget - ensures availability during upgrades/maintenance
 podDisruptionBudget:

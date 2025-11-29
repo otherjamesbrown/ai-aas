@@ -63,10 +63,14 @@ jobs:
           ENV="${{ inputs.environment || 'development' }}"
           echo "environment=$ENV" >> $GITHUB_OUTPUT
 
+          # Domain configuration from GitHub repository variables
+          # Set these in Settings > Secrets and variables > Actions > Variables:
+          # - DEV_BASE_DOMAIN: dev.otherjamesbrown.com
+          # - PROD_BASE_DOMAIN: prod.otherjamesbrown.com
           if [ "$ENV" = "development" ]; then
-            echo "base_domain=172.232.58.222.nip.io" >> $GITHUB_OUTPUT
+            echo "base_domain=${{ vars.DEV_BASE_DOMAIN || 'dev.otherjamesbrown.com' }}" >> $GITHUB_OUTPUT
           elif [ "$ENV" = "production" ]; then
-            echo "base_domain=ai-aas.com" >> $GITHUB_OUTPUT
+            echo "base_domain=${{ vars.PROD_BASE_DOMAIN || 'prod.otherjamesbrown.com' }}" >> $GITHUB_OUTPUT
           fi
 
       - name: Check Admin API Health

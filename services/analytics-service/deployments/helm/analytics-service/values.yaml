@@ -1,37 +1,44 @@
 # Analytics Service - Helm Chart Values
 # =====================================
 #
+# Domain Configuration:
+# --------------------
+# This chart uses centralized domain configuration. Override `global.domain.base`
+# in environment-specific values files (values-development.yaml, values-production.yaml).
+#
+# All ingress hostnames are derived from global.domain.base:
+#   - analytics.{global.domain.base} -> analytics.dev.otherjamesbrown.com
+#
+# See configs/environments/*.yaml for environment-specific domain settings.
+#
 # For AI Coding Assistants:
 # ------------------------
-# When deploying services with ingress, follow these best practices:
-#
-# 1. ALWAYS include both hostname-based AND IP-based (nip.io) access in development
-#    - Hostname: For proper DNS/hosts file setup (e.g., analytics.dev.ai-aas.local)
-#    - IP-based: For easy testing without DNS configuration (e.g., analytics.<IP>.nip.io)
-#
-# 2. ALWAYS use HTTPS (force-ssl-redirect: "true") even in development
-#    - Self-signed certificates are acceptable for dev
-#    - Use cert-manager with Let's Encrypt for staging/production
-#
-# 3. LoadBalancer IP Discovery:
-#    To find the current LoadBalancer IP for nip.io configuration:
-#    kubectl get svc -n ingress-nginx ingress-nginx-controller \
-#      -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
-#
-# 4. Testing API Access:
-#    # Via nip.io (no /etc/hosts needed):
-#    curl -k https://analytics.<IP>.nip.io/analytics/v1/status/healthz
-#
-#    # Via hostname (requires /etc/hosts entry):
-#    curl -k https://analytics.dev.ai-aas.local/analytics/v1/status/healthz
-#
-# 5. NEVER deploy services to the 'system' namespace via manual Helm installs
-#    - System namespace is for infrastructure only
-#    - Application services belong in 'development', 'staging', or 'production' namespaces
-#    - All deployments MUST go through ArgoCD
+# 1. NEVER hardcode domain names - use global.domain.base
+# 2. ALWAYS use HTTPS (force-ssl-redirect: "true")
+# 3. Use cert-manager with Let's Encrypt for TLS certificates
+# 4. All deployments MUST go through ArgoCD
 #
 # See docs/ingress-best-practices.md for complete documentation
 #
+
+# Global configuration - shared across all services
+# Override in values-{environment}.yaml
+global:
+  domain:
+    # Base domain for this environment (override per environment)
+    base: "dev.otherjamesbrown.com"
+    # Local hostname for /etc/hosts access (optional)
+    local: "dev.ai-aas.local"
+    # Protocol for URLs
+    protocol: "https"
+  tls:
+    # Enable TLS with cert-manager
+    enabled: true
+    # ClusterIssuer to use for certificates
+    clusterIssuer: "letsencrypt-prod"
+  # Service subdomains - used to construct full hostnames
+  services:
+    analytics: "analytics"
 
 replicaCount: 2
 
@@ -63,23 +70,17 @@ ingress:
   className: nginx
   annotations:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-  hosts:
-    - host: analytics.dev.ai-aas.local
-      paths:
-        - path: /analytics
-          pathType: Prefix
-    # IP-based access using nip.io for development/testing
-    # Override this in production to use proper DNS
-    - host: analytics.172.232.58.222.nip.io
-      paths:
-        - path: /analytics
-          pathType: Prefix
-  tls:
-    - secretName: ai-aas-tls
-      hosts:
-        - analytics.dev.ai-aas.local
-        - analytics.prod.ai-aas.local
-        - analytics.172.232.58.222.nip.io
+    # cert-manager annotation will be added by template when tls.enabled
+  # Service subdomain - combined with global.domain.base
+  subdomain: analytics
+  # Path prefix for this service
+  path: /analytics
+  pathType: Prefix
+  # hosts is now computed from global.domain.base in the template
+  # Override with explicit hosts array only if needed
+  hosts: []
+  # TLS secret name - will be auto-generated if empty
+  tlsSecretName: ""
 
 resources:
   limits:
