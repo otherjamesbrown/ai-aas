@@ -370,8 +370,25 @@ func extractBaseDomain(endpoint string) (string, error) {
 	}
 
 	host := parsed.Hostname()
-	// Remove "api." prefix if present
-	host = strings.TrimPrefix(host, "api.")
+	// Remove known service prefixes to get base domain
+	// Supports: api., admin-api., user-org., portal., analytics., grafana., argocd., etc.
+	servicePrefixes := []string{
+		"api.",
+		"admin-api.",
+		"user-org.",
+		"portal.",
+		"analytics.",
+		"grafana.",
+		"argocd.",
+		"etcd.",
+		"loki.",
+	}
+	for _, prefix := range servicePrefixes {
+		if strings.HasPrefix(host, prefix) {
+			host = strings.TrimPrefix(host, prefix)
+			break
+		}
+	}
 	return host, nil
 }
 
