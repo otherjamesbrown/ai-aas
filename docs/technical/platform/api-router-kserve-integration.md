@@ -56,10 +56,10 @@ To test the integration, you can send a request to the API Router with a valid A
 curl -X POST https://api.dev.ai-aas.local/v1/chat/completions \
   -H 'Authorization: Bearer <your-api-key>' \
   -H 'Content-Type: application/json' \
-  -d 
+  -d '{
     "model": "my-kserve-model",
     "messages": [{"role": "user", "content": "What is the capital of France?"}]
-  
+  }'
 ```
 
 ## Troubleshooting
