@@ -154,10 +154,16 @@ func runStatus(ctx context.Context, verbose, jsonOutput bool) error {
 	}
 
 	// Create HTTP client with TLS skip for self-signed certs
+	// Configure transport for better concurrent performance
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+			MaxIdleConns:        20,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     30 * time.Second,
+			DisableKeepAlives:   false,
+			ForceAttemptHTTP2:   true,
 		},
 	}
 
