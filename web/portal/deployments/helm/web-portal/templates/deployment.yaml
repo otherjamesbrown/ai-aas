@@ -42,7 +42,7 @@ spec:
             - name: VITE_OAUTH_REDIRECT_URI
               value: {{ printf "%s://%s/auth/callback" $protocol $portalHost | quote }}
             - name: VITE_FEATURE_FLAGS_API_URL
-              value: "http://api-router-service.development.svc.cluster.local:8080/api"
+              value: "http://api-router-service.{{ .Release.Namespace }}.svc.cluster.local:8080/api"
             # Static env vars from values
             {{- range .Values.staticEnv }}
             - name: {{ .name }}
