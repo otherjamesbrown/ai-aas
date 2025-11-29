@@ -121,8 +121,8 @@ func (w *InitWizard) checkPath() {
 func (w *InitWizard) collectAPIEndpoint() error {
 	fmt.Println("Platform Domain or API Endpoint")
 	fmt.Println("  You can provide either:")
-	fmt.Println("    - Base domain:  172.232.58.222.nip.io")
-	fmt.Println("    - Full API URL: https://api.172.232.58.222.nip.io")
+	fmt.Println("    - Base domain:  dev.otherjamesbrown.com")
+	fmt.Println("    - Full API URL: https://api.dev.otherjamesbrown.com")
 	fmt.Println()
 	fmt.Println("  If you provide a base domain, endpoints will be constructed as:")
 	fmt.Println("    api.<domain>, user-org.<domain>, etc.")

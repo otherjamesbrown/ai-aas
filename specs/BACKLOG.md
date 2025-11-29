@@ -29,6 +29,20 @@ A scratch list of tasks, ideas, and improvements to tackle. Add items here so we
   - Updated CLI default config
   - Updated docs/platform/environment-access.md
 
+- [x] **Centralize domain configuration** (2024-11-29 - PR #47)
+  - Created `configs/environments/development.yaml` and `production.yaml` as canonical domain source
+  - Updated all Helm charts to use `global.domain.base` templating
+  - Updated ingress templates to auto-compute hosts from global domain
+  - CLI uses `AI_AAS_BASE_DOMAIN` environment variable
+  - GitHub workflows use repository variables
+
+### Model Deployment
+- [ ] **Deploy vLLM model to development cluster**
+  - Register model in model registry
+  - Configure vLLM deployment via Knative/Istio
+  - Verify inference endpoint via API Router
+  - Test with `ai-aas-cli inference` commands
+
 ### Pipeline & CI/CD
 - [ ] Enable GitHub branch protection on `main` (require PR review, status checks)
 - [ ] Add Slack/PagerDuty notifications for workflow failures
@@ -87,6 +101,7 @@ A scratch list of tasks, ideas, and improvements to tackle. Add items here so we
 
 ## Notes
 
-- nip.io DNS is slow (3+ seconds sometimes) - root cause of "slow" API health checks
-- Internal API Router responds in ~34 microseconds, slowness is external network path
+- Using real DNS now (`*.dev.otherjamesbrown.com`) - much faster than nip.io
+- Internal API Router responds in ~34 microseconds, external latency depends on network path
 - Production RBAC was too permissive with wildcards - now fixed
+- All TLS certificates managed by cert-manager with Let's Encrypt (auto-renewal)

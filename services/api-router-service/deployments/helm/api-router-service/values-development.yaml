@@ -3,13 +3,8 @@
 #
 # For AI Coding Assistants:
 # -------------------------
-# This file contains development-specific overrides. Note the ingress configuration
-# includes BOTH hostname-based and IP-based (nip.io) access patterns.
-#
-# IMPORTANT: Update the nip.io hostname (api.172.232.58.222.nip.io) if the
-# LoadBalancer IP changes. Find the current IP with:
-#   kubectl get svc -n ingress-nginx ingress-nginx-controller \
-#     -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+# This file contains development-specific overrides.
+# Domain: api.dev.otherjamesbrown.com (via global.domain.base)
 #
 # See docs/ingress-best-practices.md for complete documentation
 
@@ -129,7 +124,8 @@ backends:
   #
   # Port 80 is the Knative gateway port which handles routing.
   # Note: Don't include path - it's added by the router based on request type
-  endpoints: "mistral-7b-instruct:http://mistral-7b-instruct-predictor.development.svc.cluster.local:80,gpt-oss-20b:http://gpt-oss-20b-predictor.development.svc.cluster.local:80"
+  # Example: "model-name:http://model-name-predictor.development.svc.cluster.local:80"
+  endpoints: ""  # Empty - no models deployed. Add via CLI or Admin API
 
 # Redis configuration
 redis:
