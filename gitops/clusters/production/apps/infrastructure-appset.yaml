@@ -25,7 +25,7 @@ spec:
       project: platform-production
       source:
         repoURL: https://github.com/otherjamesbrown/ai-aas
-        targetRevision: 001-infrastructure
+        targetRevision: main
         path: '{{path}}'
         directory:
           recurse: true
@@ -36,3 +36,14 @@ spec:
         automated:
           prune: true
           selfHeal: true
+          allowEmpty: false
+        syncOptions:
+          - CreateNamespace=true
+          - PrunePropagationPolicy=foreground
+          - PruneLast=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
