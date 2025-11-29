@@ -5,10 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // ErrAliasNotFound indicates the requested alias was not found
@@ -143,8 +145,9 @@ func (s *Service) CreateAlias(ctx context.Context, req CreateAliasRequest) (*Ali
 	).Scan(&a.ID, &a.CreatedAt, &a.UpdatedAt)
 
 	if err != nil {
-		// Check for unique constraint violation
-		if err.Error() == `ERROR: duplicate key value violates unique constraint "model_aliases_alias_name_key" (SQLSTATE 23505)` {
+		// Check for unique constraint violation using PostgreSQL error code
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" { // 23505 is unique_violation
 			return nil, ErrAliasExists
 		}
 		return nil, fmt.Errorf("insert alias: %w", err)
@@ -197,7 +200,7 @@ func (s *Service) UpdateAlias(ctx context.Context, aliasName string, req UpdateA
 		UPDATE model_aliases
 		SET %s
 		WHERE id = $1
-	`, joinStrings(updates, ", "))
+	`, strings.Join(updates, ", "))
 
 	_, err = s.pool.Exec(ctx, query, args...)
 	if err != nil {
@@ -258,14 +261,3 @@ func (s *Service) GetAliasesForModel(ctx context.Context, modelName string) ([]A
 	return aliases, rows.Err()
 }
 
-// Helper function to join strings
-func joinStrings(strs []string, sep string) string {
-	if len(strs) == 0 {
-		return ""
-	}
-	result := strs[0]
-	for i := 1; i < len(strs); i++ {
-		result += sep + strs[i]
-	}
-	return result
-}

@@ -109,52 +109,88 @@ func (s *Service) GetStateHistory(ctx context.Context, modelName, environment st
 	return entries, rows.Err()
 }
 
-// EnableDeploymentWithHistory enables a deployment and records the action
+// EnableDeploymentWithHistory enables a deployment and records the action atomically
 func (s *Service) EnableDeploymentWithHistory(ctx context.Context, modelName, environment, enabledBy, reason string) error {
-	// Get the deployment first
-	deployment, err := s.GetDeployment(ctx, modelName, environment)
+	// Use a transaction to ensure atomicity
+	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) // Rollback is a no-op if tx is committed
+
+	// Get the deployment first
+	var deploymentID uuid.UUID
+	err = tx.QueryRow(ctx, `
+		SELECT d.id FROM model_deployments d
+		JOIN model_registry r ON d.model_id = r.id
+		WHERE r.name = $1 AND d.environment = $2
+	`, modelName, environment).Scan(&deploymentID)
+	if err != nil {
+		return fmt.Errorf("get deployment: %w", err)
 	}
 
 	// Enable the deployment
-	if err := s.EnableDeployment(ctx, modelName, environment, enabledBy); err != nil {
-		return err
+	_, err = tx.Exec(ctx, `
+		UPDATE model_deployments
+		SET enabled = true, enabled_by = $1, enabled_at = NOW(), updated_at = NOW()
+		WHERE id = $2
+	`, enabledBy, deploymentID)
+	if err != nil {
+		return fmt.Errorf("enable deployment: %w", err)
 	}
 
 	// Record the state change
-	_, err = s.RecordStateChange(ctx, RecordStateChangeRequest{
-		DeploymentID: deployment.ID,
-		Action:       StateActionEnabled,
-		PerformedBy:  enabledBy,
-		Reason:       reason,
-	})
+	_, err = tx.Exec(ctx, `
+		INSERT INTO model_state_history (deployment_id, action, performed_by, reason)
+		VALUES ($1, $2, $3, $4)
+	`, deploymentID, StateActionEnabled, enabledBy, reason)
+	if err != nil {
+		return fmt.Errorf("record state change: %w", err)
+	}
 
-	return err
+	return tx.Commit(ctx)
 }
 
-// DisableDeploymentWithHistory disables a deployment and records the action
+// DisableDeploymentWithHistory disables a deployment and records the action atomically
 func (s *Service) DisableDeploymentWithHistory(ctx context.Context, modelName, environment, disabledBy, reason string) error {
-	// Get the deployment first
-	deployment, err := s.GetDeployment(ctx, modelName, environment)
+	// Use a transaction to ensure atomicity
+	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) // Rollback is a no-op if tx is committed
+
+	// Get the deployment first
+	var deploymentID uuid.UUID
+	err = tx.QueryRow(ctx, `
+		SELECT d.id FROM model_deployments d
+		JOIN model_registry r ON d.model_id = r.id
+		WHERE r.name = $1 AND d.environment = $2
+	`, modelName, environment).Scan(&deploymentID)
+	if err != nil {
+		return fmt.Errorf("get deployment: %w", err)
 	}
 
 	// Disable the deployment
-	if err := s.DisableDeployment(ctx, modelName, environment, disabledBy); err != nil {
-		return err
+	_, err = tx.Exec(ctx, `
+		UPDATE model_deployments
+		SET enabled = false, disabled_by = $1, disabled_at = NOW(), updated_at = NOW()
+		WHERE id = $2
+	`, disabledBy, deploymentID)
+	if err != nil {
+		return fmt.Errorf("disable deployment: %w", err)
 	}
 
 	// Record the state change
-	_, err = s.RecordStateChange(ctx, RecordStateChangeRequest{
-		DeploymentID: deployment.ID,
-		Action:       StateActionDisabled,
-		PerformedBy:  disabledBy,
-		Reason:       reason,
-	})
+	_, err = tx.Exec(ctx, `
+		INSERT INTO model_state_history (deployment_id, action, performed_by, reason)
+		VALUES ($1, $2, $3, $4)
+	`, deploymentID, StateActionDisabled, disabledBy, reason)
+	if err != nil {
+		return fmt.Errorf("record state change: %w", err)
+	}
 
-	return err
+	return tx.Commit(ctx)
 }
 
 // GetAllStateHistory returns recent state changes across all deployments
