@@ -74,12 +74,17 @@ Examples:
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 			defer cancel()
 
-			// Get model from registry
+			// Get model from registry via Admin API
+			adminEndpoint := cfg.AdminAPIEndpoint
+			if adminEndpoint == "" {
+				adminEndpoint = cfg.APIEndpoint // fallback for backward compatibility
+			}
+
 			opts := []api.ClientOption{}
 			if cfg.TLSInsecure {
 				opts = append(opts, api.WithInsecureSkipVerify())
 			}
-			apiClient := api.NewClient(cfg.APIEndpoint, cfg.APIKey, opts...)
+			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
 			regClient := registry.NewClient(apiClient)
 
 			fmt.Printf("Looking up model: %s\n", modelName)
@@ -94,7 +99,14 @@ Examples:
 			}
 
 			// Build storage URI
-			storageURI := fmt.Sprintf("s3://%s/models/%s/%s/", s3Bucket, modelName, revision)
+			// If S3 bucket is configured, use S3. Otherwise, use HuggingFace directly.
+			var storageURI string
+			if s3Bucket != "" {
+				storageURI = fmt.Sprintf("s3://%s/models/%s/%s/", s3Bucket, modelName, revision)
+			} else {
+				// Use HuggingFace storage URI for direct model loading
+				storageURI = fmt.Sprintf("hf://%s", model.HFModelID)
+			}
 
 			// Create InferenceService config
 			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
@@ -105,6 +117,7 @@ Examples:
 				Namespace:   namespace,
 				ModelName:   modelName,
 				StorageURI:  storageURI,
+				Runtime:     "vllm-runtime", // Explicit runtime to avoid autoSelect issues
 				GPUCount:    gpuCount,
 				MemoryGB:    memoryGB,
 				MinReplicas: minReplicas,
@@ -142,8 +155,8 @@ Examples:
 				return nil
 			}
 
-			// Validate cache exists if not skipping validation
-			if !skipValidation {
+			// Validate cache exists if not skipping validation and using S3
+			if !skipValidation && s3Bucket != "" {
 				fmt.Println("\nValidating model cache...")
 				s3Client, err := getS3Client(ctx)
 				if err != nil {
@@ -158,6 +171,8 @@ Examples:
 					return fmt.Errorf("model not cached. Run 'ai-aas-cli model pull %s' first", modelName)
 				}
 				fmt.Println("Cache validated.")
+			} else if s3Bucket == "" {
+				fmt.Println("\nUsing HuggingFace direct loading (no S3 cache configured)")
 			}
 
 			// Get kubeconfig for environment
@@ -571,6 +586,18 @@ func generateInferenceServiceYAML(cfg kubernetes.InferenceServiceConfig) ([]byte
 		annotations[k] = v
 	}
 
+	// Build model spec
+	modelSpec := map[string]interface{}{
+		"modelFormat": map[string]interface{}{
+			"name": "vllm",
+		},
+		"storageUri": cfg.StorageURI,
+		"resources":  resources,
+	}
+	if cfg.Runtime != "" {
+		modelSpec["runtime"] = cfg.Runtime
+	}
+
 	isvc := map[string]interface{}{
 		"apiVersion": "serving.kserve.io/v1beta1",
 		"kind":       "InferenceService",
@@ -582,13 +609,7 @@ func generateInferenceServiceYAML(cfg kubernetes.InferenceServiceConfig) ([]byte
 		},
 		"spec": map[string]interface{}{
 			"predictor": map[string]interface{}{
-				"model": map[string]interface{}{
-					"modelFormat": map[string]interface{}{
-						"name": "vllm",
-					},
-					"storageUri": cfg.StorageURI,
-					"resources":  resources,
-				},
+				"model":       modelSpec,
 				"minReplicas": cfg.MinReplicas,
 				"maxReplicas": cfg.MaxReplicas,
 			},

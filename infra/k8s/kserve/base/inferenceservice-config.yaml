@@ -47,3 +47,14 @@ data:
       "cpuRequest": "100m",
       "cpuLimit": "1"
     }
+
+  # Logger configuration (optional, but needs valid resources if present)
+  logger: |-
+    {
+      "image": "kserve/agent:v0.11.0",
+      "memoryRequest": "100Mi",
+      "memoryLimit": "1Gi",
+      "cpuRequest": "100m",
+      "cpuLimit": "1",
+      "defaultUrl": ""
+    }

@@ -27,6 +27,7 @@ type InferenceServiceConfig struct {
 	Namespace      string
 	ModelName      string
 	StorageURI     string // S3 path to model files
+	Runtime        string // ClusterServingRuntime name (e.g., "vllm-runtime")
 	RuntimeVersion string
 	GPUCount       int
 	MemoryGB       int
@@ -196,6 +197,20 @@ func buildInferenceServiceManifest(cfg InferenceServiceConfig) *unstructured.Uns
 		resources["requests"].(map[string]interface{})["nvidia.com/gpu"] = cfg.GPUCount
 	}
 
+	// Build model spec
+	modelSpec := map[string]interface{}{
+		"modelFormat": map[string]interface{}{
+			"name": "vllm",
+		},
+		"storageUri": cfg.StorageURI,
+		"resources":  resources,
+	}
+
+	// Add explicit runtime if specified
+	if cfg.Runtime != "" {
+		modelSpec["runtime"] = cfg.Runtime
+	}
+
 	isvc := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "serving.kserve.io/v1beta1",
@@ -208,13 +223,7 @@ func buildInferenceServiceManifest(cfg InferenceServiceConfig) *unstructured.Uns
 			},
 			"spec": map[string]interface{}{
 				"predictor": map[string]interface{}{
-					"model": map[string]interface{}{
-						"modelFormat": map[string]interface{}{
-							"name": "vllm",
-						},
-						"storageUri": cfg.StorageURI,
-						"resources":  resources,
-					},
+					"model":       modelSpec,
 					"minReplicas": cfg.MinReplicas,
 					"maxReplicas": cfg.MaxReplicas,
 				},
