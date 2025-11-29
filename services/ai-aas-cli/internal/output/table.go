@@ -32,6 +32,7 @@ func NewTableWriterTo(w io.Writer) *TableWriter {
 	table.SetHeaderLine(false)
 	table.SetTablePadding("  ")
 	table.SetNoWhiteSpace(true)
+	table.SetAutoWrapText(false) // Disable wrapping to support ANSI colors
 
 	return &TableWriter{
 		table:  table,
