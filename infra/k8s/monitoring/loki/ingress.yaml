@@ -46,5 +46,4 @@ spec:
   tls:
     - secretName: loki-tls
       hosts:
-        - loki.dev.ai-aas.local
         - loki.dev.otherjamesbrown.com

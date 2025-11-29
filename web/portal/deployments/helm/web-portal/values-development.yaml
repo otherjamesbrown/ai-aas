@@ -24,7 +24,6 @@ ingress:
   tls:
     - secretName: web-portal-tls
       hosts:
-        - portal.dev.ai-aas.local
         - portal.dev.otherjamesbrown.com
 
 env:

@@ -40,5 +40,4 @@ spec:
   tls:
   - secretName: user-org-tls
     hosts:
-    - user-org.dev.ai-aas.local
     - user-org.dev.otherjamesbrown.com

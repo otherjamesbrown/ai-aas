@@ -41,5 +41,4 @@ spec:
   tls:
   - secretName: etcd-tls
     hosts:
-    - etcd.dev.ai-aas.local
     - etcd.dev.otherjamesbrown.com

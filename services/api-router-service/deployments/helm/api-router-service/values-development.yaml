@@ -49,7 +49,6 @@ ingress:
   tls:
     - secretName: api-router-tls
       hosts:
-        - api.dev.ai-aas.local
         - api.dev.otherjamesbrown.com
 
 resources:

@@ -78,7 +78,6 @@ ingress:
   tls:
     - secretName: analytics-tls
       hosts:
-        - analytics.dev.ai-aas.local
         - analytics.dev.otherjamesbrown.com
 
 resources:

@@ -52,6 +52,5 @@ ingress:
           pathType: Prefix
   tls:
     - hosts:
-        - admin-api.dev.ai-aas.local
         - admin-api.dev.otherjamesbrown.com
       secretName: admin-api-tls

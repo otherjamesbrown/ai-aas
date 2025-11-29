@@ -43,5 +43,4 @@ spec:
   tls:
     - secretName: grafana-tls
       hosts:
-        - grafana.dev.ai-aas.local
         - grafana.dev.otherjamesbrown.com
