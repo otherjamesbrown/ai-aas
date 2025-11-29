@@ -8,6 +8,21 @@ For a general overview of the architecture, development workflow, and key docume
 
 After reading the main guide, adhere to the following critical rules below.
 
+## Backlog & Task Tracking
+
+**IMPORTANT**: We maintain a project backlog to track ideas, improvements, and tasks.
+
+📋 **[specs/BACKLOG.md](specs/BACKLOG.md)** - Platform backlog and scratch list
+
+**When ending a session or completing work:**
+- Ask the user: "Would you like to add anything to the backlog before we finish?"
+- If the user mentions something to do "later" or "eventually", offer to add it to the backlog
+- When discovering issues or improvement opportunities, suggest adding them to the backlog
+
+**When starting a session:**
+- If relevant to the task, check the backlog for related items
+- Offer to pick up items from the backlog if the user is looking for things to work on
+
 ## Core Principles
 
 In addition to the principles outlined in the main guide, always adhere to:
