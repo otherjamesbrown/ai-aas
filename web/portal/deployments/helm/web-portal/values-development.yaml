@@ -1,48 +1,26 @@
 # Development environment overrides
+# Domain configuration is computed from global.domain.base
+# See values.yaml for defaults and configs/environments/development.yaml for canonical source
+
 replicaCount: 2
 
 image:
   tag: dev
   pullPolicy: Always
 
+# Ingress configuration - hosts computed from global.domain.base
 ingress:
   enabled: true
-  className: nginx
-  annotations:
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-  hosts:
-    - host: portal.dev.ai-aas.local
-      paths:
-        - path: /
-          pathType: Prefix
-    # Public DNS access via otherjamesbrown.com
-    - host: portal.dev.otherjamesbrown.com
-      paths:
-        - path: /
-          pathType: Prefix
-  tls:
-    - secretName: web-portal-tls
-      hosts:
-        - portal.dev.otherjamesbrown.com
+  # subdomain: portal (default from values.yaml)
+  # Hosts are computed automatically:
+  #   - portal.dev.ai-aas.local (local domain)
+  #   - portal.dev.otherjamesbrown.com (public domain)
 
-env:
-  - name: VITE_API_BASE_URL
-    value: "https://api.dev.otherjamesbrown.com"
-  - name: VITE_OAUTH_CLIENT_ID
-    value: ""
-  - name: VITE_OAUTH_ISSUER_URL
-    value: "https://api.dev.otherjamesbrown.com"
-  - name: VITE_OAUTH_REDIRECT_URI
-    value: "https://portal.dev.otherjamesbrown.com/auth/callback"
-  - name: VITE_FEATURE_FLAGS_API_URL
-    value: "http://api-router-service.development.svc.cluster.local:8080/api"
-  - name: VITE_OTEL_EXPORTER_OTLP_ENDPOINT
-    value: ""
-  - name: VITE_OTEL_SERVICE_NAME
-    value: "web-portal"
-  - name: VITE_OTEL_SERVICE_VERSION
-    value: "0.1.0"
+# VITE_ environment variables are computed from global.domain in the deployment template
+# See templates/deployment.yaml for computed values:
+#   - VITE_API_BASE_URL: https://api.dev.otherjamesbrown.com
+#   - VITE_OAUTH_ISSUER_URL: https://api.dev.otherjamesbrown.com
+#   - VITE_OAUTH_REDIRECT_URI: https://portal.dev.otherjamesbrown.com/auth/callback
 
 resources:
   limits:

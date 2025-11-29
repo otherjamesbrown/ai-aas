@@ -1,3 +1,44 @@
+# Web Portal - Helm Chart Values
+# =====================================
+#
+# Domain Configuration:
+# --------------------
+# This chart uses centralized domain configuration. Override `global.domain.base`
+# in environment-specific values files (values-development.yaml, values-production.yaml).
+#
+# All ingress hostnames are derived from global.domain.base:
+#   - portal.{global.domain.base} -> portal.dev.otherjamesbrown.com
+#
+# See configs/environments/*.yaml for environment-specific domain settings.
+#
+# For AI Coding Assistants:
+# ------------------------
+# 1. NEVER hardcode domain names - use global.domain.base
+# 2. ALWAYS use HTTPS (force-ssl-redirect: "true")
+# 3. Use cert-manager with Let's Encrypt for TLS certificates
+# 4. All deployments MUST go through ArgoCD
+#
+
+# Global configuration - shared across all services
+# Override in values-{environment}.yaml
+global:
+  domain:
+    # Base domain for this environment (override per environment)
+    base: "dev.otherjamesbrown.com"
+    # Local hostname for /etc/hosts access (optional)
+    local: "dev.ai-aas.local"
+    # Protocol for URLs
+    protocol: "https"
+  tls:
+    # Enable TLS with cert-manager
+    enabled: true
+    # ClusterIssuer to use for certificates
+    clusterIssuer: "letsencrypt-prod"
+  # Service subdomains - used to construct full hostnames
+  services:
+    portal: "portal"
+    api: "api"
+
 replicaCount: 2
 
 image:
@@ -23,16 +64,14 @@ ingress:
   className: nginx
   annotations:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-  hosts:
-    - host: portal.dev.ai-aas.local
-      paths:
-        - path: /
-          pathType: Prefix
-  tls:
-    - secretName: ai-aas-tls
-      hosts:
-        - portal.dev.ai-aas.local
-        - portal.prod.ai-aas.local
+    # cert-manager annotation will be added by template when tls.enabled
+  # Service subdomain - combined with global.domain.base
+  subdomain: portal
+  # hosts is now computed from global.domain.base in the template
+  # Override with explicit hosts array only if needed
+  hosts: []
+  # TLS secret name - will be auto-generated if empty
+  tlsSecretName: ""
 
 resources:
   limits:
@@ -50,17 +89,14 @@ autoscaling:
   targetMemoryUtilizationPercentage: 80
 
 # Environment variables for the web portal
-env:
-  - name: VITE_API_BASE_URL
-    value: "https://api.dev.ai-aas.local/api"
+# Note: These VITE_ variables are computed in the deployment template from global.domain.base
+# See templates/deployment.yaml for computed values
+env: []
+
+# Static environment variables (non-domain related)
+staticEnv:
   - name: VITE_OAUTH_CLIENT_ID
     value: ""
-  - name: VITE_OAUTH_ISSUER_URL
-    value: "https://api.dev.ai-aas.local"
-  - name: VITE_OAUTH_REDIRECT_URI
-    value: "https://portal.dev.ai-aas.local/auth/callback"
-  - name: VITE_FEATURE_FLAGS_API_URL
-    value: "https://api.dev.ai-aas.local/api"
   - name: VITE_OTEL_EXPORTER_OTLP_ENDPOINT
     value: ""
   - name: VITE_OTEL_SERVICE_NAME

@@ -1,7 +1,14 @@
 # Grafana Ingress
 # Exposes Grafana dashboard via HTTPS
 #
-# Access URLs:
+# Domain Configuration:
+# ---------------------
+# This file uses environment-specific domain values. When creating for a new environment:
+# 1. Reference configs/environments/{env}.yaml for the correct baseDomain
+# 2. Replace "dev.otherjamesbrown.com" with the environment's baseDomain
+# 3. Replace "dev.ai-aas.local" with the environment's localDomain
+#
+# Access URLs (Development):
 # - Hostname: https://grafana.dev.ai-aas.local (requires /etc/hosts entry)
 # - Public DNS: https://grafana.dev.otherjamesbrown.com
 #

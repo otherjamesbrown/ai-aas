@@ -1,7 +1,14 @@
 # User-Org Service Ingress
 # Exposes the user-org-service via HTTPS with both hostname and public DNS access
 #
-# Access URLs:
+# Domain Configuration:
+# ---------------------
+# This file uses environment-specific domain values. When creating for a new environment:
+# 1. Reference configs/environments/{env}.yaml for the correct baseDomain
+# 2. Replace "dev.otherjamesbrown.com" with the environment's baseDomain
+# 3. Replace "dev.ai-aas.local" with the environment's localDomain
+#
+# Access URLs (Development):
 # - Hostname: https://user-org.dev.ai-aas.local (requires /etc/hosts entry)
 # - Public DNS: https://user-org.dev.otherjamesbrown.com
 #

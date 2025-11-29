@@ -4,6 +4,9 @@
 # This file overrides values.yaml for the development environment.
 # Deployed automatically via ArgoCD when changes are pushed to the develop branch.
 #
+# Domain configuration is computed from global.domain.base
+# See values.yaml for defaults and configs/environments/development.yaml for canonical source
+#
 # Key characteristics of development environment:
 # - Uses 'dev' image tag (built from develop branch)
 # - pullPolicy: Always (ensures latest dev image is pulled)
@@ -56,29 +59,20 @@ service:
   type: ClusterIP
   port: 8084
 
+# Ingress configuration - hosts computed from global.domain.base
 ingress:
   enabled: true
-  className: nginx
+  # subdomain: analytics (default from values.yaml)
+  # path: /analytics (default from values.yaml)
+  # Hosts are computed automatically:
+  #   - analytics.dev.ai-aas.local (local domain)
+  #   - analytics.dev.otherjamesbrown.com (public domain)
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-  hosts:
-    - host: analytics.dev.ai-aas.local
-      paths:
-        - path: /analytics
-          pathType: Prefix
-    - host: analytics.dev.otherjamesbrown.com
-      paths:
-        - path: /analytics
-          pathType: Prefix
-  tls:
-    - secretName: analytics-tls
-      hosts:
-        - analytics.dev.otherjamesbrown.com
 
 resources:
   requests:

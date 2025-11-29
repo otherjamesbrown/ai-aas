@@ -51,14 +51,22 @@ jobs:
           ENV="${{ inputs.environment || 'development' }}"
           echo "environment=$ENV" >> $GITHUB_OUTPUT
 
+          # Domain configuration from GitHub repository variables
+          # Set these in Settings > Secrets and variables > Actions > Variables:
+          # - DEV_BASE_DOMAIN: dev.otherjamesbrown.com
+          # - STAGING_BASE_DOMAIN: staging.otherjamesbrown.com
+          # - PROD_BASE_DOMAIN: prod.otherjamesbrown.com
           if [ "$ENV" = "development" ]; then
-            echo "api_base_url=https://api.172.232.58.222.nip.io/v1" >> $GITHUB_OUTPUT
+            BASE_DOMAIN="${{ vars.DEV_BASE_DOMAIN || 'dev.otherjamesbrown.com' }}"
+            echo "api_base_url=https://api.${BASE_DOMAIN}/v1" >> $GITHUB_OUTPUT
             echo "secret_name=API_ROUTER_DEV_TEST_KEY" >> $GITHUB_OUTPUT
           elif [ "$ENV" = "staging" ]; then
-            echo "api_base_url=https://api.staging.ai-aas.local/v1" >> $GITHUB_OUTPUT
+            BASE_DOMAIN="${{ vars.STAGING_BASE_DOMAIN || 'staging.otherjamesbrown.com' }}"
+            echo "api_base_url=https://api.${BASE_DOMAIN}/v1" >> $GITHUB_OUTPUT
             echo "secret_name=API_ROUTER_STAGING_TEST_KEY" >> $GITHUB_OUTPUT
           elif [ "$ENV" = "production" ]; then
-            echo "api_base_url=https://api.ai-aas.com/v1" >> $GITHUB_OUTPUT
+            BASE_DOMAIN="${{ vars.PROD_BASE_DOMAIN || 'prod.otherjamesbrown.com' }}"
+            echo "api_base_url=https://api.${BASE_DOMAIN}/v1" >> $GITHUB_OUTPUT
             echo "secret_name=API_ROUTER_PROD_TEST_KEY" >> $GITHUB_OUTPUT
           else
             echo "Unknown environment: $ENV"
