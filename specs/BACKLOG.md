@@ -6,10 +6,28 @@ A scratch list of tasks, ideas, and improvements to tackle. Add items here so we
 
 ## High Priority
 
-### Infrastructure
-- [ ] Set up proper domain (replace nip.io with real DNS for faster resolution)
-- [ ] Configure cert-manager for automated TLS certificates
-- [ ] Add `analytics.172.232.58.222.nip.io` to TLS certificate SANs
+### Infrastructure - DNS & TLS Setup
+
+**Domain:** `otherjamesbrown.com` (GoDaddy)
+
+- [ ] **Set up DNS for development cluster**
+  - Domain: `*.dev.otherjamesbrown.com` → `172.232.58.222`
+  - Create wildcard A record in GoDaddy DNS
+  - Services will be: `api.dev.otherjamesbrown.com`, `portal.dev.otherjamesbrown.com`, etc.
+
+- [ ] **Set up DNS for production cluster** (when ready)
+  - Domain: `*.otherjamesbrown.com` or `*.prod.otherjamesbrown.com`
+  - Point to production LoadBalancer IP
+
+- [ ] **Configure valid TLS certificates**
+  - Option A: Let's Encrypt with cert-manager (free, auto-renewal)
+  - Option B: Purchase wildcard cert from GoDaddy
+  - Update all ingress resources to use new certs
+
+- [ ] **Update all ingress hostnames**
+  - Replace `*.172.232.58.222.nip.io` with `*.dev.otherjamesbrown.com`
+  - Update CLI default config
+  - Update docs/environment-access.md
 
 ### Pipeline & CI/CD
 - [ ] Enable GitHub branch protection on `main` (require PR review, status checks)
