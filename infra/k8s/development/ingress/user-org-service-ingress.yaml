@@ -1,9 +1,9 @@
 # User-Org Service Ingress
-# Exposes the user-org-service via HTTPS with both hostname and IP-based access
+# Exposes the user-org-service via HTTPS with both hostname and public DNS access
 #
 # Access URLs:
 # - Hostname: https://user-org.dev.ai-aas.local (requires /etc/hosts entry)
-# - IP-based: https://user-org.172.232.58.222.nip.io (works without DNS)
+# - Public DNS: https://user-org.dev.otherjamesbrown.com
 #
 # Apply with: kubectl apply -f infra/k8s/development/ingress/user-org-service-ingress.yaml
 apiVersion: networking.k8s.io/v1
@@ -13,6 +13,7 @@ metadata:
   namespace: user-org-service
   annotations:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: nginx
   rules:
@@ -26,7 +27,7 @@ spec:
             name: user-org-service-development-user-org-service
             port:
               number: 8081
-  - host: user-org.172.232.58.222.nip.io
+  - host: user-org.dev.otherjamesbrown.com
     http:
       paths:
       - path: /
@@ -37,7 +38,7 @@ spec:
             port:
               number: 8081
   tls:
-  - secretName: ai-aas-tls
+  - secretName: user-org-tls
     hosts:
     - user-org.dev.ai-aas.local
-    - user-org.172.232.58.222.nip.io
+    - user-org.dev.otherjamesbrown.com

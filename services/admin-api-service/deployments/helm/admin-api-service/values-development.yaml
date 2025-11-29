@@ -40,17 +40,18 @@ ingress:
   className: nginx
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
   hosts:
     - host: admin-api.dev.ai-aas.local
       paths:
         - path: /
           pathType: Prefix
-    - host: admin-api.172.232.58.222.nip.io
+    - host: admin-api.dev.otherjamesbrown.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
         - admin-api.dev.ai-aas.local
-        - admin-api.172.232.58.222.nip.io
-      secretName: ai-aas-tls
+        - admin-api.dev.otherjamesbrown.com
+      secretName: admin-api-tls

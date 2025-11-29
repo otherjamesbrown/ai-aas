@@ -65,20 +65,21 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
   hosts:
     - host: analytics.dev.ai-aas.local
       paths:
         - path: /analytics
           pathType: Prefix
-    - host: analytics.172.232.58.222.nip.io
+    - host: analytics.dev.otherjamesbrown.com
       paths:
         - path: /analytics
           pathType: Prefix
   tls:
-    - secretName: ai-aas-tls
+    - secretName: analytics-tls
       hosts:
         - analytics.dev.ai-aas.local
-        - analytics.172.232.58.222.nip.io
+        - analytics.dev.otherjamesbrown.com
 
 resources:
   requests:

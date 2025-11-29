@@ -33,6 +33,7 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    cert-manager.io/cluster-issuer: letsencrypt-prod  # Auto-provision TLS cert
     # CORS is now handled at the application layer (see env vars below)
     # This provides better logging, flexibility, and single source of truth
   hosts:
@@ -40,17 +41,16 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
-    # IP-based access using nip.io for development/testing
-    # This allows accessing the API via https://api.<LOAD_BALANCER_IP>.nip.io
-    - host: api.172.232.58.222.nip.io
+    # Public DNS access via otherjamesbrown.com
+    - host: api.dev.otherjamesbrown.com
       paths:
         - path: /
           pathType: Prefix
   tls:
-    - secretName: ai-aas-tls
+    - secretName: api-router-tls
       hosts:
         - api.dev.ai-aas.local
-        - api.172.232.58.222.nip.io
+        - api.dev.otherjamesbrown.com
 
 resources:
   limits:
@@ -106,7 +106,7 @@ env:
   - name: CORS_ENABLED
     value: "true"
   - name: CORS_ALLOWED_ORIGINS
-    value: "https://portal.172.232.58.222.nip.io,https://portal.dev.ai-aas.local,http://localhost:5173,https://localhost:5173"
+    value: "https://portal.dev.otherjamesbrown.com,https://portal.dev.ai-aas.local,http://localhost:5173,https://localhost:5173"
   - name: CORS_ALLOWED_METHODS
     value: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
   - name: CORS_ALLOWED_HEADERS

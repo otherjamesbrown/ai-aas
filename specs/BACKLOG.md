@@ -10,24 +10,24 @@ A scratch list of tasks, ideas, and improvements to tackle. Add items here so we
 
 **Domain:** `otherjamesbrown.com` (GoDaddy)
 
-- [ ] **Set up DNS for development cluster**
+- [x] **Set up DNS for development cluster** (2024-11-29)
   - Domain: `*.dev.otherjamesbrown.com` → `172.232.58.222`
-  - Create wildcard A record in GoDaddy DNS
-  - Services will be: `api.dev.otherjamesbrown.com`, `portal.dev.otherjamesbrown.com`, etc.
+  - Created wildcard A record in GoDaddy DNS
+  - Services available at: `api.dev.otherjamesbrown.com`, `portal.dev.otherjamesbrown.com`, etc.
 
 - [ ] **Set up DNS for production cluster** (when ready)
   - Domain: `*.otherjamesbrown.com` or `*.prod.otherjamesbrown.com`
   - Point to production LoadBalancer IP
 
-- [ ] **Configure valid TLS certificates**
-  - Option A: Let's Encrypt with cert-manager (free, auto-renewal)
-  - Option B: Purchase wildcard cert from GoDaddy
-  - Update all ingress resources to use new certs
+- [x] **Configure valid TLS certificates** (2024-11-29)
+  - Implemented Let's Encrypt with cert-manager (free, auto-renewal)
+  - Created letsencrypt-prod and letsencrypt-staging ClusterIssuers
+  - All ingresses configured for automatic certificate provisioning
 
-- [ ] **Update all ingress hostnames**
-  - Replace `*.172.232.58.222.nip.io` with `*.dev.otherjamesbrown.com`
-  - Update CLI default config
-  - Update docs/environment-access.md
+- [x] **Update all ingress hostnames** (2024-11-29)
+  - Replaced `*.172.232.58.222.nip.io` with `*.dev.otherjamesbrown.com`
+  - Updated CLI default config
+  - Updated docs/platform/environment-access.md
 
 ### Pipeline & CI/CD
 - [ ] Enable GitHub branch protection on `main` (require PR review, status checks)

@@ -6,12 +6,12 @@ import (
 
 // ApplyDefaults sets default configuration values in the provided Viper instance.
 func ApplyDefaults(v *viper.Viper) {
-	// API Endpoints (defaults to nip.io for easy remote access without kubectl)
+	// API Endpoints (defaults to public DNS for easy remote access)
 	// Users can override these with environment variables or config file
-	v.SetDefault("api-endpoints.user-org-service", "https://user-org.172.232.58.222.nip.io")
+	v.SetDefault("api-endpoints.user-org-service", "https://user-org.dev.otherjamesbrown.com")
 	v.SetDefault("api-endpoints.analytics-service", "http://localhost:8084")
 	v.SetDefault("api-endpoints.config-service", "localhost:2379")       // etcd gRPC endpoint (requires port-forward)
-	v.SetDefault("api-endpoints.inference-service", "https://api.172.232.58.222.nip.io") // API Router for inference
+	v.SetDefault("api-endpoints.inference-service", "https://api.dev.otherjamesbrown.com") // API Router for inference
 
 	// TLS Configuration
 	v.SetDefault("tls.ca-cert-file", "") // Empty by default, use system certs
