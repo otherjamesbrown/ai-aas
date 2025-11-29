@@ -559,247 +559,26 @@ func newModelCommand() *cobra.Command {
 	cmd.AddCommand(model.NewEnableCommand())
 	cmd.AddCommand(model.NewDisableCommand())
 	cmd.AddCommand(model.NewLibraryCommand())
-	cmd.AddCommand(newModelSwapCommand())
-	cmd.AddCommand(newModelHistoryCommand())
+	cmd.AddCommand(model.NewSwapCommand())
+	cmd.AddCommand(model.NewHistoryCommand())
 
 	// Validation - use implementation from cmd/model package
 	cmd.AddCommand(model.NewValidateCommand())
 
-	// Updates
-	cmd.AddCommand(newModelCheckUpdatesCommand())
-	cmd.AddCommand(newModelUpdateCommand())
-	cmd.AddCommand(newModelPinCommand())
-	cmd.AddCommand(newModelUnpinCommand())
+	// Updates - use implementations from cmd/model package
+	cmd.AddCommand(model.NewCheckUpdatesCommand())
+	cmd.AddCommand(model.NewUpdateCommand())
+	cmd.AddCommand(model.NewPinCommand())
+	cmd.AddCommand(model.NewUnpinCommand())
 
 	// Troubleshooting
-	cmd.AddCommand(newModelLogsCommand())
-	cmd.AddCommand(newModelEventsCommand())
-	cmd.AddCommand(newModelDescribeCommand())
-	cmd.AddCommand(newModelTestCommand())
+	cmd.AddCommand(model.NewLogsCommand())
+	cmd.AddCommand(model.NewEventsCommand())
+	cmd.AddCommand(model.NewDescribeCommand())
+	cmd.AddCommand(model.NewTestCommand())
 
 	// Aliases
-	cmd.AddCommand(newModelAliasCommand())
-
-	return cmd
-}
-
-// Model subcommand implementations
-// Core commands (add, list, info, remove, status, pull, cache, deploy, undeploy, restart, scale) are in cmd/model package
-
-func newModelSwapCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "swap <disable-model> <enable-model>",
-		Short: "Atomically swap models",
-		Args:  cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			env, _ := cmd.Flags().GetString("environment")
-			fmt.Printf("Swapping %s -> %s in %s\n", args[0], args[1], env)
-			return nil
-		},
-	}
-	cmd.Flags().StringP("environment", "e", "", "target environment (required)")
-	cmd.MarkFlagRequired("environment")
-	return cmd
-}
-
-func newModelHistoryCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "history <model-name>",
-		Short: "Show enable/disable history",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Printf("History for %s:\n", args[0])
-			fmt.Println("  2024-01-15 10:00  enabled   by admin@example.com")
-			fmt.Println("  2024-01-10 08:00  disabled  by admin@example.com  (maintenance)")
-			return nil
-		},
-	}
-	cmd.Flags().StringP("environment", "e", "", "filter by environment")
-	cmd.Flags().Int("limit", 20, "max entries to show")
-	return cmd
-}
-
-func newModelCheckUpdatesCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "check-updates [model-name]",
-		Short: "Check for model updates from HuggingFace",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) > 0 {
-				fmt.Printf("Checking updates for %s: up-to-date\n", args[0])
-			} else {
-				fmt.Println("Checking all models for updates...")
-				fmt.Println("  llama-3-8b: up-to-date")
-			}
-			return nil
-		},
-	}
-}
-
-func newModelUpdateCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "update <model-name>",
-		Short: "Update model to latest version",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			env, _ := cmd.Flags().GetString("environment")
-			canary, _ := cmd.Flags().GetString("canary")
-			fmt.Printf("Updating %s in %s (canary: %s)\n", args[0], env, canary)
-			return nil
-		},
-	}
-	cmd.Flags().StringP("environment", "e", "", "target environment")
-	cmd.Flags().String("canary", "", "canary rollout percentage (e.g., 10%)")
-	return cmd
-}
-
-func newModelPinCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "pin <model-name>",
-		Short: "Pin model to specific version",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			version, _ := cmd.Flags().GetString("version")
-			fmt.Printf("Pinning %s to version %s\n", args[0], version)
-			return nil
-		},
-	}
-	cmd.Flags().String("version", "", "version to pin (required)")
-	cmd.MarkFlagRequired("version")
-	return cmd
-}
-
-func newModelUnpinCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "unpin <model-name>",
-		Short: "Unpin model version",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Printf("Unpinning %s\n", args[0])
-			return nil
-		},
-	}
-}
-
-func newModelLogsCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "logs <model-name>",
-		Short: "Stream model pod logs",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			env, _ := cmd.Flags().GetString("environment")
-			follow, _ := cmd.Flags().GetBool("follow")
-			fmt.Printf("Logs for %s in %s (follow: %v)\n", args[0], env, follow)
-			return nil
-		},
-	}
-	cmd.Flags().StringP("environment", "e", "", "target environment")
-	cmd.Flags().BoolP("follow", "f", false, "follow log output")
-	cmd.Flags().Int("tail", 100, "lines to show")
-	return cmd
-}
-
-func newModelEventsCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "events <model-name>",
-		Short: "Show Kubernetes events",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			env, _ := cmd.Flags().GetString("environment")
-			fmt.Printf("Events for %s in %s\n", args[0], env)
-			return nil
-		},
-	}
-	cmd.Flags().StringP("environment", "e", "", "target environment")
-	return cmd
-}
-
-func newModelDescribeCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "describe <model-name>",
-		Short: "Show full deployment details",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			env, _ := cmd.Flags().GetString("environment")
-			fmt.Printf("Description for %s in %s\n", args[0], env)
-			return nil
-		},
-	}
-	cmd.Flags().StringP("environment", "e", "", "target environment")
-	return cmd
-}
-
-func newModelTestCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "test <model-name>",
-		Short: "Run inference test",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			env, _ := cmd.Flags().GetString("environment")
-			prompt, _ := cmd.Flags().GetString("prompt")
-			fmt.Printf("Testing %s in %s with prompt: %s\n", args[0], env, prompt)
-			return nil
-		},
-	}
-	cmd.Flags().StringP("environment", "e", "", "target environment")
-	cmd.Flags().StringP("prompt", "p", "Hello, how are you?", "test prompt")
-	return cmd
-}
-
-func newModelAliasCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "alias",
-		Short: "Manage model aliases",
-	}
-
-	createCmd := &cobra.Command{
-		Use:   "create <alias-name>",
-		Short: "Create a model alias",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			target, _ := cmd.Flags().GetString("target")
-			desc, _ := cmd.Flags().GetString("description")
-			fmt.Printf("Creating alias %s -> %s (%s)\n", args[0], target, desc)
-			return nil
-		},
-	}
-	createCmd.Flags().String("target", "", "target model name (required)")
-	createCmd.Flags().String("description", "", "alias description")
-	createCmd.MarkFlagRequired("target")
-	cmd.AddCommand(createCmd)
-
-	cmd.AddCommand(&cobra.Command{
-		Use:   "list",
-		Short: "List all aliases",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("ALIAS            TARGET           DESCRIPTION")
-			fmt.Println("llama-latest     llama-3-8b       Latest stable LLaMA")
-			return nil
-		},
-	})
-
-	updateCmd := &cobra.Command{
-		Use:   "update <alias-name>",
-		Short: "Update alias target",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			target, _ := cmd.Flags().GetString("target")
-			fmt.Printf("Updating alias %s -> %s\n", args[0], target)
-			return nil
-		},
-	}
-	updateCmd.Flags().String("target", "", "new target model (required)")
-	updateCmd.MarkFlagRequired("target")
-	cmd.AddCommand(updateCmd)
-
-	cmd.AddCommand(&cobra.Command{
-		Use:   "delete <alias-name>",
-		Short: "Delete an alias",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Printf("Deleting alias %s\n", args[0])
-			return nil
-		},
-	})
+	cmd.AddCommand(model.NewAliasCommand())
 
 	return cmd
 }
