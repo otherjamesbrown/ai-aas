@@ -249,7 +249,11 @@ func newConfigCommand() *cobra.Command {
 
 			// Test API connection
 			fmt.Print("  API connection: testing... ")
-			client := api.NewClient(cfg.APIEndpoint, cfg.APIKey)
+			opts := []api.ClientOption{}
+			if cfg.TLSInsecure {
+				opts = append(opts, api.WithInsecureSkipVerify())
+			}
+			client := api.NewClient(cfg.APIEndpoint, cfg.APIKey, opts...)
 			ctx := context.Background()
 
 			if err := client.Ping(ctx); err != nil {

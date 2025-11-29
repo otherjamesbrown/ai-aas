@@ -51,7 +51,7 @@ type ListOptions struct {
 
 // List returns all registered models
 func (c *Client) List(ctx context.Context, opts ListOptions) ([]Model, error) {
-	path := "/models"
+	path := "/v1/models"
 	params := make([]string, 0)
 	
 	if opts.Cached {
@@ -88,7 +88,7 @@ func (c *Client) List(ctx context.Context, opts ListOptions) ([]Model, error) {
 // Get retrieves a model by name
 func (c *Client) Get(ctx context.Context, name string) (*Model, error) {
 	var model Model
-	if err := c.api.Get(ctx, "/models/"+name, &model); err != nil {
+	if err := c.api.Get(ctx, "/v1/models/"+name, &model); err != nil {
 		return nil, fmt.Errorf("get model %s: %w", name, err)
 	}
 	return &model, nil
@@ -108,7 +108,7 @@ type AddRequest struct {
 // Add registers a new model
 func (c *Client) Add(ctx context.Context, req AddRequest) (*Model, error) {
 	var model Model
-	if err := c.api.Post(ctx, "/models", req, &model); err != nil {
+	if err := c.api.Post(ctx, "/v1/models", req, &model); err != nil {
 		return nil, fmt.Errorf("add model: %w", err)
 	}
 	return &model, nil
@@ -116,7 +116,7 @@ func (c *Client) Add(ctx context.Context, req AddRequest) (*Model, error) {
 
 // Remove deletes a model from the registry
 func (c *Client) Remove(ctx context.Context, name string, force bool) error {
-	path := "/models/" + name
+	path := "/v1/models/" + name
 	if force {
 		path += "?force=true"
 	}
@@ -150,7 +150,7 @@ type DeploymentInfo struct {
 
 // Status retrieves the status of a model
 func (c *Client) Status(ctx context.Context, name string, environment string) (*ModelStatus, error) {
-	path := "/models/" + name + "/status"
+	path := "/v1/models/" + name + "/status"
 	if environment != "" {
 		path += "?environment=" + environment
 	}
@@ -181,7 +181,7 @@ type CacheEntry struct {
 // GetCache retrieves cache information for a model
 func (c *Client) GetCache(ctx context.Context, name string) ([]CacheEntry, error) {
 	var entries []CacheEntry
-	if err := c.api.Get(ctx, "/models/"+name+"/cache", &entries); err != nil {
+	if err := c.api.Get(ctx, "/v1/models/"+name+"/cache", &entries); err != nil {
 		return nil, fmt.Errorf("get cache for %s: %w", name, err)
 	}
 	return entries, nil
