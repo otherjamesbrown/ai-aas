@@ -2,6 +2,7 @@
 package status
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -120,7 +121,7 @@ func runStatus(ctx context.Context, verbose, jsonOutput bool) error {
 			authReq:  false,
 		},
 		{
-			name:     "Inference API",
+			name:     "Model Registry",
 			url:      fmt.Sprintf("https://api.%s", baseDomain),
 			endpoint: "/v1/models",
 			authReq:  true,
@@ -154,10 +155,16 @@ func runStatus(ctx context.Context, verbose, jsonOutput bool) error {
 	}
 
 	// Create HTTP client with TLS skip for self-signed certs
+	// Configure transport for better concurrent performance
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+			MaxIdleConns:        20,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     30 * time.Second,
+			DisableKeepAlives:   false,
+			ForceAttemptHTTP2:   true,
 		},
 	}
 
@@ -179,6 +186,12 @@ func runStatus(ctx context.Context, verbose, jsonOutput bool) error {
 	}
 
 	wg.Wait()
+
+	// Test actual inference backend connectivity (only if API key is configured)
+	if cfg.APIKey != "" {
+		inferenceResult := checkInferenceBackend(ctx, client, baseDomain, cfg.APIKey)
+		results = append(results, inferenceResult)
+	}
 
 	// Determine overall health
 	allHealthy := true
@@ -383,9 +396,165 @@ func getStatusIcon(status string) string {
 		return colorRed + "✗" + colorReset
 	case "endpoint_not_found":
 		return colorYellow + "?" + colorReset
-	case "server_error":
+	case "server_error", "backend_error":
 		return colorRed + "!" + colorReset
+	case "no_models":
+		return colorYellow + "○" + colorReset
 	default:
 		return colorYellow + "?" + colorReset
 	}
+}
+
+// checkInferenceBackend tests actual inference by making a minimal chat completion request
+func checkInferenceBackend(ctx context.Context, client *http.Client, baseDomain, apiKey string) ServiceStatus {
+	baseURL := fmt.Sprintf("https://api.%s", baseDomain)
+	modelsURL := baseURL + "/v1/models"
+	completionsURL := baseURL + "/v1/chat/completions"
+
+	result := ServiceStatus{
+		Name: "Inference Backend",
+		URL:  completionsURL,
+	}
+
+	start := time.Now()
+
+	// First, get available models
+	modelsReq, err := http.NewRequestWithContext(ctx, "GET", modelsURL, nil)
+	if err != nil {
+		result.Status = "error"
+		result.Latency = "-"
+		result.Error = err.Error()
+		return result
+	}
+	// Set both headers for compatibility - API router accepts either X-API-Key or Authorization Bearer
+	modelsReq.Header.Set("X-API-Key", apiKey)
+	modelsReq.Header.Set("Authorization", "Bearer "+apiKey)
+
+	modelsResp, err := client.Do(modelsReq)
+	if err != nil {
+		result.Status = "unreachable"
+		result.Latency = "-"
+		result.Error = err.Error()
+		return result
+	}
+	defer modelsResp.Body.Close()
+
+	if modelsResp.StatusCode == 401 || modelsResp.StatusCode == 403 {
+		result.Status = "auth_required"
+		result.Latency = time.Since(start).Round(time.Millisecond).String()
+		result.Details = "API key invalid or missing permissions"
+		return result
+	}
+
+	modelsBody, err := io.ReadAll(modelsResp.Body)
+	if err != nil {
+		result.Status = "error"
+		result.Latency = time.Since(start).Round(time.Millisecond).String()
+		result.Error = fmt.Sprintf("failed to read models response: %v", err)
+		return result
+	}
+	var modelsData struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(modelsBody, &modelsData); err != nil || len(modelsData.Data) == 0 {
+		result.Status = "no_models"
+		result.Latency = time.Since(start).Round(time.Millisecond).String()
+		result.Details = "No models available"
+		return result
+	}
+
+	// Make a minimal inference request with the first model
+	modelID := modelsData.Data[0].ID
+	reqBody := map[string]interface{}{
+		"model": modelID,
+		"messages": []map[string]string{
+			{"role": "user", "content": "hi"},
+		},
+		"max_tokens": 1, // Minimal tokens to reduce cost/latency
+	}
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		result.Status = "error"
+		result.Latency = time.Since(start).Round(time.Millisecond).String()
+		result.Error = fmt.Sprintf("failed to marshal request: %v", err)
+		return result
+	}
+
+	inferReq, err := http.NewRequestWithContext(ctx, "POST", completionsURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		result.Status = "error"
+		result.Latency = "-"
+		result.Error = err.Error()
+		return result
+	}
+	// Set both headers for compatibility - API router accepts either X-API-Key or Authorization Bearer
+	inferReq.Header.Set("X-API-Key", apiKey)
+	inferReq.Header.Set("Authorization", "Bearer "+apiKey)
+	inferReq.Header.Set("Content-Type", "application/json")
+
+	inferResp, err := client.Do(inferReq)
+	latency := time.Since(start)
+	result.Latency = latency.Round(time.Millisecond).String()
+
+	if err != nil {
+		result.Status = "backend_error"
+		if strings.Contains(err.Error(), "connection refused") {
+			result.Error = "Backend connection refused"
+			result.Details = "vLLM backend not reachable - check Knative/Istio routing"
+		} else if strings.Contains(err.Error(), "timeout") {
+			result.Status = "timeout"
+			result.Error = "Request timed out"
+		} else {
+			result.Error = err.Error()
+		}
+		return result
+	}
+	defer inferResp.Body.Close()
+
+	respBody, err := io.ReadAll(io.LimitReader(inferResp.Body, 2048))
+	if err != nil {
+		result.Status = "error"
+		result.Error = fmt.Sprintf("failed to read inference response: %v", err)
+		return result
+	}
+
+	switch {
+	case inferResp.StatusCode == 200:
+		if latency > 10*time.Second {
+			result.Status = "slow"
+			result.Details = fmt.Sprintf("Model: %s (response > 10s)", modelID)
+		} else {
+			result.Status = "healthy"
+			result.Details = fmt.Sprintf("Model: %s", modelID)
+		}
+	case inferResp.StatusCode == 401 || inferResp.StatusCode == 403:
+		result.Status = "auth_required"
+		result.Details = "Inference requires valid API key"
+	case inferResp.StatusCode == 503:
+		result.Status = "backend_error"
+		result.Error = "Backend unavailable (503)"
+		// Try to extract error details
+		var errResp map[string]interface{}
+		if json.Unmarshal(respBody, &errResp) == nil {
+			if errMsg, ok := errResp["error"].(map[string]interface{}); ok {
+				if msg, ok := errMsg["message"].(string); ok {
+					result.Details = msg
+				}
+			}
+		}
+		if result.Details == "" {
+			result.Details = "Check vLLM backend and Knative routing"
+		}
+	case inferResp.StatusCode >= 500:
+		result.Status = "server_error"
+		result.Error = fmt.Sprintf("HTTP %d", inferResp.StatusCode)
+	default:
+		result.Status = "unknown"
+		result.StatusCode = inferResp.StatusCode
+		result.Details = fmt.Sprintf("HTTP %d", inferResp.StatusCode)
+	}
+
+	return result
 }
