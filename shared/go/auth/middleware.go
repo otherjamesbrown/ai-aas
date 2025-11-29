@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/otherjamesbrown/ai-aas/shared/go/errors"
+	"github.com/ai-aas/shared-go/errors"
 )
 
 type contextKey string

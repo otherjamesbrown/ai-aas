@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/api/handlers"
+	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/metrics"
 )
 
 // WithMetrics wraps a repository operation with duration metrics
@@ -13,7 +13,7 @@ func WithMetrics(operation, table string, fn func() error) error {
 	err := fn()
 	duration := time.Since(start).Seconds()
 
-	handlers.DBQueryDuration.WithLabelValues(operation, table).Observe(duration)
+	metrics.DBQueryDuration.WithLabelValues(operation, table).Observe(duration)
 
 	return err
 }
@@ -25,7 +25,7 @@ func (db *DB) UpdateConnectionMetrics() {
 	}
 
 	stats := db.pool.Stat()
-	handlers.DBConnectionsActive.Set(float64(stats.AcquiredConns()))
+	metrics.DBConnectionsActive.Set(float64(stats.AcquiredConns()))
 }
 
 // StartMetricsUpdater starts a goroutine that periodically updates connection metrics

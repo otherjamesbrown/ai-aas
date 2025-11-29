@@ -102,6 +102,8 @@ func snapshotEnv(t *testing.T, keys []string) func() {
 		} else {
 			values[key] = nil
 		}
+		// Unset the variable so tests can use defaults
+		os.Unsetenv(key)
 	}
 	return func() {
 		for key, val := range values {

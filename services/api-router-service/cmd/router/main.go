@@ -353,14 +353,15 @@ func main() {
 
 	// Initialize status handlers
 	statusHandlers := public.NewStatusHandlers(public.StatusHandlersConfig{
-		RedisClient:    redisClient,
-		KafkaPublisher: kafkaPublisher,
-		ConfigLoader:   loader,
-		BackendRegistry: backendRegistry,
-		BuildMetadata:  buildMetadata,
-		Logger:         logger,
-		HealthTimeout:  2 * time.Second,
-		ReadyTimeout:   5 * time.Second,
+		RedisClient:       redisClient,
+		KafkaPublisher:    kafkaPublisher,
+		ConfigLoader:      loader,
+		BackendRegistry:   backendRegistry,
+		UserOrgServiceURL: cfg.UserOrgServiceURL,
+		BuildMetadata:     buildMetadata,
+		Logger:            logger,
+		HealthTimeout:     2 * time.Second,
+		ReadyTimeout:      5 * time.Second,
 	})
 
 	// Register health endpoints on main router (before sub-router mounting)
@@ -369,6 +370,15 @@ func main() {
 	// Kubernetes liveness/readiness probes to work correctly.
 	router.Get("/v1/status/healthz", statusHandlers.Healthz)
 	router.Get("/v1/status/readyz", statusHandlers.Readyz)
+
+	// Initialize platform health handler for comprehensive health checks
+	platformHealthHandler := public.NewPlatformHealthHandler(public.PlatformHealthConfig{
+		StatusHandlers:    statusHandlers,
+		UserOrgServiceURL: cfg.UserOrgServiceURL,
+		BuildMetadata:     buildMetadata,
+		Logger:            logger,
+	})
+	router.Get("/v1/platform/health", platformHealthHandler.PlatformHealth)
 
 	// Initialize backend client
 	backendClient := routing.NewBackendClient(logger, 30*time.Second)
@@ -405,6 +415,7 @@ func main() {
 
 	// Initialize public API handler with routing engine and usage hook
 	publicHandler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, routingEngine, routingMetrics, usageHook)
+	publicHandler.SetUserOrgServiceURL(cfg.UserOrgServiceURL)
 
 	// Create tracer for middleware
 	tracer := otel.Tracer("api-router-service")

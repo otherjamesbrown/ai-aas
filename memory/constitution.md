@@ -1,16 +1,13 @@
 <!--
 Sync Impact Report
-- Version change: Template → 1.4.0
+- Version change: 1.4.2 → 1.5.0
 - Modified principles:
-  - New: API‑First Interfaces
-  - New: Stateless Microservices & Async Non‑Critical Paths
-  - New: Security by Default
-  - New: Declarative Infrastructure & GitOps
-  - New: Observability, Testing, and Performance SLOs
+  - Updated: Declarative Infrastructure & GitOps - Added explicit Service Deployment Requirements
+  - Updated: Observability - Added Health Probe Requirements
 - Added sections:
-  - Technology Standards & Non‑Negotiables
-  - Development Workflow & Quality Gates (incl. Constitution Gates)
-  - Governance (versioning, amendments, compliance review)
+  - Service Deployment Requirements (under GitOps principle)
+  - Health Probe Requirements (under Observability principle)
+  - Deployment gate in Constitution Gates
 - Removed sections: none
 - Templates requiring updates:
   - .specify/templates/plan-template.md → Constitution Check gates (⚠ pending)
@@ -53,6 +50,11 @@ Rationale: A secure default posture reduces blast radius and operational risk.
 - Cloud infra via Terraform; apps via Helm; ArgoCD manages cluster state.
 - Git is the source of truth. No manual `kubectl apply`/`terraform apply` in production.
 - **Environment profiles** (`configs/environments/*.yaml`) centralize configuration management across environments (local-dev, remote-dev, production) ensuring consistency and preventing misconfiguration. No hardcoded environment-specific values in service configs.
+- **Service Deployment Requirements**:
+  - Every deployable service MUST have a Helm chart at `services/<service-name>/deployments/helm/<service-name>/`.
+  - Every deployable service MUST have an ArgoCD Application at `gitops/clusters/<env>/apps/<service-name>.yaml`.
+  - Raw Kubernetes manifests in `services/<service-name>/k8s/` are NOT sufficient for production deployment.
+  - Services without ArgoCD Applications will NOT be deployed and will NOT be persistent.
 - Hybrid GitOps:
   - Git‑managed: org policies (budgets, rate limits, allowed models, memberships), observability config, model deployments.
   - API‑managed: secrets and runtime data (API keys, logs, audit records).
@@ -63,6 +65,10 @@ Rationale: Declarative ops improve repeatability, auditability, and recovery.
 ### 5. Observability, Testing, and Performance SLOs
 - Logs (Loki), metrics (Prometheus/Mimir), traces (OpenTelemetry→Tempo), dashboards (Grafana) are mandatory.
 - Health endpoints: `/health`, `/ready`; metrics at `/metrics`.
+- **Health Probe Requirements**:
+  - All Helm charts MUST configure Kubernetes liveness and readiness probes.
+  - Probes MUST use the service's `/health` or `/ready` endpoints.
+  - Startup probes SHOULD be used for services with slow initialization.
 - Testing discipline:
   - Unit tests for business logic (≥80% coverage target).
   - Integration tests with real deps via Testcontainers (no DB mocks).
@@ -113,6 +119,7 @@ All implementation plans MUST explicitly pass these gates:
 - Async Non‑Critical: analytics/logging off critical path; idempotent consumers.
 - Security: authN/Z, secrets handling, SAST/DAST, NetworkPolicies, TLS/Ingress.
 - GitOps/Declarative: Terraform/Helm/ArgoCD with Git as source of truth.
+- **Deployment**: Helm chart + ArgoCD Application defined; health probes configured; service auto-recovers.
 - Observability: health, metrics, logs, traces, dashboards defined.
 - Testing: unit/integration/E2E coverage appropriate; no DB mocks.
 - Performance: demonstrate SLO adherence or provide profiling plan.
@@ -133,5 +140,5 @@ All implementation plans MUST explicitly pass these gates:
   - Keep specs aligned via targeted spec bumps and CHANGELOGs when contracts change.
 - Reviews: Periodic compliance reviews ensure gates remain testable, enforced, and automated where possible.
 
-**Version**: 1.4.2 | **Ratified**: 2025-11-06 | **Last Amended**: 2025-01-27
+**Version**: 1.5.0 | **Ratified**: 2025-11-06 | **Last Amended**: 2025-11-28
 

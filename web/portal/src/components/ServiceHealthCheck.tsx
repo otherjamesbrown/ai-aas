@@ -20,6 +20,12 @@ interface HealthzResponse {
   status: string;
 }
 
+interface PlatformHealthResponse {
+  status: string;
+  services?: Record<string, { status: string; message?: string; response_ms?: number }>;
+  functional_tests?: Record<string, { status: string; message?: string }>;
+}
+
 const STATUS_COLORS: Record<ServiceStatus, string> = {
   checking: 'bg-gray-400 dark:bg-gray-500 animate-pulse',
   healthy: 'bg-green-500',
@@ -43,6 +49,157 @@ function TrafficLight({ status }: { status: ServiceStatus }) {
       title={STATUS_LABELS[status]}
     />
   );
+}
+
+/**
+ * Performs health checks against all service endpoints.
+ * Returns array of service health statuses.
+ */
+async function performHealthCheck(): Promise<ServiceHealth[]> {
+  const startTime = Date.now();
+  const newServices: ServiceHealth[] = [];
+
+  // Check API Gateway health (healthz endpoint)
+  try {
+    const healthzStart = Date.now();
+    const healthzResponse = await publicClient.get<HealthzResponse>('/v1/status/healthz');
+    const healthzTime = Date.now() - healthzStart;
+
+    newServices.push({
+      name: 'API Gateway',
+      status: healthzResponse.data.status === 'healthy' ? 'healthy' : 'degraded',
+      message: `Status: ${healthzResponse.data.status}`,
+      responseTime: healthzTime,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Connection failed';
+    const isCorsError = errorMessage.includes('CORS') ||
+                        errorMessage.includes('NetworkError') ||
+                        errorMessage.includes('Network Error') ||
+                        errorMessage.includes('timeout');
+    newServices.push({
+      name: 'API Gateway',
+      status: 'error',
+      message: isCorsError ? 'CORS/Network error' : errorMessage,
+      details: isCorsError
+        ? 'Cannot reach API. Check network or CORS configuration.'
+        : undefined,
+      responseTime: Date.now() - startTime,
+    });
+  }
+
+  // Check API Gateway readiness (readyz endpoint) for component details
+  try {
+    const readyzStart = Date.now();
+    const readyzResponse = await publicClient.get<ReadinessResponse>('/v1/status/readyz');
+    const readyzTime = Date.now() - readyzStart;
+
+    // Add individual component statuses
+    if (readyzResponse.data.components) {
+      for (const [componentName, componentData] of Object.entries(readyzResponse.data.components)) {
+        const statusValue = typeof componentData === 'string'
+          ? componentData
+          : componentData.status;
+        const messageValue = typeof componentData === 'string'
+          ? componentData
+          : (componentData.message || componentData.status);
+
+        // Skip not_configured services
+        if (statusValue === 'not_configured') {
+          continue;
+        }
+
+        const displayName = componentName
+          .split('_')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+
+        let status: ServiceStatus = 'healthy';
+        if (statusValue === 'degraded') {
+          status = 'degraded';
+        } else if (statusValue !== 'ready' && statusValue !== 'healthy') {
+          status = 'unhealthy';
+        }
+
+        newServices.push({
+          name: displayName,
+          status,
+          message: messageValue,
+          responseTime: readyzTime,
+        });
+      }
+    }
+  } catch {
+    // Readyz failed, but we already have healthz status
+  }
+
+  // Try to get platform health (includes functional tests)
+  try {
+    const platformResponse = await publicClient.get<PlatformHealthResponse>('/v1/platform/health');
+
+    // Add service statuses from platform health
+    if (platformResponse.data.services) {
+      for (const [serviceName, serviceData] of Object.entries(platformResponse.data.services)) {
+        // Skip if we already have this service
+        const displayName = serviceName
+          .split('_')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+
+        if (newServices.some(s => s.name === displayName)) continue;
+
+        let status: ServiceStatus = 'healthy';
+        if (serviceData.status === 'degraded') {
+          status = 'degraded';
+        } else if (serviceData.status !== 'healthy') {
+          status = 'unhealthy';
+        }
+
+        newServices.push({
+          name: displayName,
+          status,
+          message: serviceData.message,
+          responseTime: serviceData.response_ms,
+        });
+      }
+    }
+
+    // Add functional test results
+    if (platformResponse.data.functional_tests) {
+      for (const [testName, testData] of Object.entries(platformResponse.data.functional_tests)) {
+        const displayName = testName
+          .split('_')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ') + ' Test';
+
+        let status: ServiceStatus = 'healthy';
+        if (testData.status === 'failed') {
+          status = 'error';
+        } else if (testData.status === 'skipped') {
+          status = 'degraded';
+        } else if (testData.status !== 'passed') {
+          status = 'unhealthy';
+        }
+
+        newServices.push({
+          name: displayName,
+          status,
+          message: testData.message,
+        });
+      }
+    }
+  } catch {
+    // Platform health endpoint not available - this is fine for older deployments
+  }
+
+  // CORS connectivity test
+  newServices.push({
+    name: 'CORS Config',
+    status: newServices[0]?.status === 'healthy' ? 'healthy' : 'unhealthy',
+    message: newServices[0]?.status === 'healthy' ? 'Connected' : 'Check CORS',
+  });
+
+  return newServices;
 }
 
 /**
@@ -74,91 +231,7 @@ export function ServiceHealthCheck() {
 
     const checkHealth = async () => {
       if (!mounted) return;
-
-      const startTime = Date.now();
-      const newServices: ServiceHealth[] = [];
-
-      // Check API Gateway health (healthz endpoint)
-      try {
-        const healthzStart = Date.now();
-        const healthzResponse = await publicClient.get<HealthzResponse>('/v1/status/healthz');
-        const healthzTime = Date.now() - healthzStart;
-
-        newServices.push({
-          name: 'API Gateway',
-          status: healthzResponse.data.status === 'healthy' ? 'healthy' : 'degraded',
-          message: `Status: ${healthzResponse.data.status}`,
-          responseTime: healthzTime,
-        });
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Connection failed';
-        const isCorsError = errorMessage.includes('CORS') ||
-                            errorMessage.includes('NetworkError') ||
-                            errorMessage.includes('Network Error') ||
-                            errorMessage.includes('timeout');
-        newServices.push({
-          name: 'API Gateway',
-          status: 'error',
-          message: isCorsError ? 'CORS/Network error' : errorMessage,
-          details: isCorsError
-            ? 'Cannot reach API. Check network or CORS configuration.'
-            : undefined,
-          responseTime: Date.now() - startTime,
-        });
-      }
-
-      // Check API Gateway readiness (readyz endpoint) for component details
-      try {
-        const readyzStart = Date.now();
-        const readyzResponse = await publicClient.get<ReadinessResponse>('/v1/status/readyz');
-        const readyzTime = Date.now() - readyzStart;
-
-        // Add individual component statuses
-        if (readyzResponse.data.components) {
-          for (const [componentName, componentData] of Object.entries(readyzResponse.data.components)) {
-            const statusValue = typeof componentData === 'string'
-              ? componentData
-              : componentData.status;
-            const messageValue = typeof componentData === 'string'
-              ? componentData
-              : (componentData.message || componentData.status);
-
-            // Skip not_configured services
-            if (statusValue === 'not_configured') {
-              continue;
-            }
-
-            const displayName = componentName
-              .split('_')
-              .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-              .join(' ');
-
-            let status: ServiceStatus = 'healthy';
-            if (statusValue === 'degraded') {
-              status = 'degraded';
-            } else if (statusValue !== 'ready' && statusValue !== 'healthy') {
-              status = 'unhealthy';
-            }
-
-            newServices.push({
-              name: displayName,
-              status,
-              message: messageValue,
-              responseTime: readyzTime,
-            });
-          }
-        }
-      } catch {
-        // Readyz failed, but we already have healthz status
-      }
-
-      // CORS connectivity test
-      newServices.push({
-        name: 'CORS Config',
-        status: newServices[0]?.status === 'healthy' ? 'healthy' : 'unhealthy',
-        message: newServices[0]?.status === 'healthy' ? 'Connected' : 'Check CORS',
-      });
-
+      const newServices = await performHealthCheck();
       if (mounted) {
         setServices(newServices);
         setLastChecked(new Date());
@@ -188,39 +261,11 @@ export function ServiceHealthCheck() {
   const totalCount = services.length;
   const hasErrors = services.some(s => s.status === 'error' || s.status === 'unhealthy');
 
-  const handleRefresh = () => {
-    // Reset initialized to allow manual refresh
-    initialized.current = false;
+  const handleRefresh = async () => {
     setServices([{ name: 'API Gateway', status: 'checking' }]);
-    // Re-trigger useEffect by forcing re-render won't work due to ref
-    // Instead, we do inline check
-    initialized.current = true;
-
-    const checkNow = async () => {
-      const newServices: ServiceHealth[] = [];
-      try {
-        const response = await publicClient.get<HealthzResponse>('/v1/status/healthz');
-        newServices.push({
-          name: 'API Gateway',
-          status: response.data.status === 'healthy' ? 'healthy' : 'degraded',
-          message: `Status: ${response.data.status}`,
-        });
-      } catch {
-        newServices.push({
-          name: 'API Gateway',
-          status: 'error',
-          message: 'Connection failed',
-        });
-      }
-      newServices.push({
-        name: 'CORS Config',
-        status: newServices[0]?.status === 'healthy' ? 'healthy' : 'unhealthy',
-        message: newServices[0]?.status === 'healthy' ? 'Connected' : 'Check CORS',
-      });
-      setServices(newServices);
-      setLastChecked(new Date());
-    };
-    checkNow();
+    const newServices = await performHealthCheck();
+    setServices(newServices);
+    setLastChecked(new Date());
   };
 
   return (

@@ -82,6 +82,11 @@ func (h *Handler) SetBackendURI(backendID, uri string) {
 	h.backendURIs[backendID] = uri
 }
 
+// SetUserOrgServiceURL sets the URL for user-org-service (for auth proxy).
+func (h *Handler) SetUserOrgServiceURL(url string) {
+	h.userOrgServiceURL = url
+}
+
 // RegisterRoutes registers public API routes.
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/v1/inference", h.HandleInference)

@@ -1,0 +1,919 @@
+openapi: 3.0.3
+info:
+  title: AI-AAS Admin API - Model Management
+  description: API endpoints for model lifecycle management
+  version: 1.0.0
+
+servers:
+  - url: /api/v1
+    description: Admin API v1
+
+paths:
+  /models:
+    get:
+      summary: List all models
+      operationId: listModels
+      tags: [Models]
+      parameters:
+        - name: cached
+          in: query
+          schema:
+            type: boolean
+          description: Filter to only cached models
+        - name: deployed
+          in: query
+          schema:
+            type: boolean
+          description: Filter to only deployed models
+        - name: environment
+          in: query
+          schema:
+            type: string
+            enum: [development, staging, production]
+          description: Filter by deployment environment
+        - name: orphaned
+          in: query
+          schema:
+            type: boolean
+          description: Show only orphaned cache entries
+      responses:
+        '200':
+          description: List of models
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  models:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ModelSummary'
+                  total:
+                    type: integer
+
+    post:
+      summary: Register a new model
+      operationId: addModel
+      tags: [Models]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelAddRequest'
+      responses:
+        '201':
+          description: Model registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Model'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Model with name already exists
+
+  /models/{name}:
+    get:
+      summary: Get model details
+      operationId: getModel
+      tags: [Models]
+      parameters:
+        - $ref: '#/components/parameters/modelName'
+      responses:
+        '200':
+          description: Model details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Remove model from registry
+      operationId: removeModel
+      tags: [Models]
+      parameters:
+        - $ref: '#/components/parameters/modelName'
+        - name: force
+          in: query
+          schema:
+            type: boolean
+          description: Force removal even if deployed
+      responses:
+        '204':
+          description: Model removed
+        '400':
+          description: Cannot remove deployed model without force
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      summary: Update model metadata
+      operationId: updateModelMetadata
+      tags: [Models]
+      parameters:
+        - $ref: '#/components/parameters/modelName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelUpdateRequest'
+      responses:
+        '200':
+          description: Model updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Model'
+
+  /models/{name}/pull:
+    post:
+      summary: Pull model from HuggingFace to cache
+      operationId: pullModel
+      tags: [Models]
+      parameters:
+        - $ref: '#/components/parameters/modelName'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                revision:
+                  type: string
+                  description: HF revision (branch/tag/commit)
+      responses:
+        '202':
+          description: Pull started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+                  status:
+                    type: string
+        '400':
+          description: License not accepted for gated model
+
+  /models/{name}/cache:
+    get:
+      summary: List cached versions
+      operationId: listModelCache
+      tags: [Models]
+      parameters:
+        - $ref: '#/components/parameters/modelName'
+      responses:
+        '200':
+          description: Cached versions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  versions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CacheEntry'
+
+  /models/{name}/cache/{version}:
+    delete:
+      summary: Delete cached version
+      operationId: deleteModelCache
+      tags: [Models]
+      parameters:
+        - $ref: '#/components/parameters/modelName'
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Cache deleted
+        '400':
+          description: Cannot delete cache referenced by deployment
+
+  /models/{name}/cache/verify:
+    post:
+      summary: Verify cache integrity
+      operationId: verifyModelCache
+      tags: [Models]
+      parameters:
+        - $ref: '#/components/parameters/modelName'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                version:
+                  type: string
+      responses:
+        '200':
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  issues:
+                    type: array
+                    items:
+                      type: string
+
+  /models/{name}/validate:
+    post:
+      summary: Run validation checks
+      operationId: validateModel
+      tags: [Models]
+      parameters:
+        - $ref: '#/components/parameters/modelName'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                environment:
+                  type: string
+                fix:
+                  type: boolean
+                  description: Auto-fix safe issues
+      responses:
+        '200':
+          description: Validation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationResult'
+
+  /deployments:
+    get:
+      summary: List deployments
+      operationId: listDeployments
+      tags: [Deployments]
+      parameters:
+        - name: environment
+          in: query
+          schema:
+            type: string
+        - name: model
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of deployments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deployments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Deployment'
+
+    post:
+      summary: Deploy a model
+      operationId: deployModel
+      tags: [Deployments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeployRequest'
+      responses:
+        '202':
+          description: Deployment started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Deployment'
+        '400':
+          description: Invalid deployment request
+
+  /deployments/{id}:
+    get:
+      summary: Get deployment status
+      operationId: getDeployment
+      tags: [Deployments]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deployment details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentDetail'
+
+    delete:
+      summary: Undeploy model
+      operationId: undeployModel
+      tags: [Deployments]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: force
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '204':
+          description: Undeployed
+
+  /deployments/{id}/enable:
+    post:
+      summary: Enable deployment
+      operationId: enableDeployment
+      tags: [Deployments]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deployment enabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Deployment'
+
+  /deployments/{id}/disable:
+    post:
+      summary: Disable deployment
+      operationId: disableDeployment
+      tags: [Deployments]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                scheduled_at:
+                  type: string
+                  format: date-time
+      responses:
+        '200':
+          description: Deployment disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Deployment'
+
+  /deployments/{id}/scale:
+    post:
+      summary: Scale deployment
+      operationId: scaleDeployment
+      tags: [Deployments]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [replicas]
+              properties:
+                replicas:
+                  type: integer
+                  minimum: 0
+      responses:
+        '200':
+          description: Scaled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Deployment'
+
+  /deployments/{id}/restart:
+    post:
+      summary: Rolling restart
+      operationId: restartDeployment
+      tags: [Deployments]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '202':
+          description: Restart initiated
+
+  /credentials:
+    get:
+      summary: List credentials
+      operationId: listCredentials
+      tags: [Credentials]
+      responses:
+        '200':
+          description: List of credential types
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  credentials:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CredentialInfo'
+
+    post:
+      summary: Set credential
+      operationId: setCredential
+      tags: [Credentials]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialSetRequest'
+      responses:
+        '200':
+          description: Credential set
+        '400':
+          description: Invalid credential
+
+  /credentials/{type}:
+    delete:
+      summary: Delete credential
+      operationId: deleteCredential
+      tags: [Credentials]
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+
+  /credentials/{type}/test:
+    post:
+      summary: Test credential
+      operationId: testCredential
+      tags: [Credentials]
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  details:
+                    type: object
+
+  /aliases:
+    get:
+      summary: List aliases
+      operationId: listAliases
+      tags: [Aliases]
+      responses:
+        '200':
+          description: List of aliases
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  aliases:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Alias'
+
+    post:
+      summary: Create alias
+      operationId: createAlias
+      tags: [Aliases]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AliasCreateRequest'
+      responses:
+        '201':
+          description: Alias created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alias'
+
+  /aliases/{name}:
+    patch:
+      summary: Update alias
+      operationId: updateAlias
+      tags: [Aliases]
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target]
+              properties:
+                target:
+                  type: string
+      responses:
+        '200':
+          description: Alias updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alias'
+
+    delete:
+      summary: Delete alias
+      operationId: deleteAlias
+      tags: [Aliases]
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+
+components:
+  parameters:
+    modelName:
+      name: name
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Model name or alias
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+        details:
+          type: object
+
+    ModelSummary:
+      type: object
+      properties:
+        name:
+          type: string
+        hf_model_id:
+          type: string
+        cached:
+          type: boolean
+        deployed:
+          type: boolean
+        status:
+          type: string
+        environments:
+          type: array
+          items:
+            type: string
+
+    Model:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        hf_model_id:
+          type: string
+        hf_revision:
+          type: string
+        requires_auth:
+          type: boolean
+        is_gated:
+          type: boolean
+        license_type:
+          type: string
+        license_accepted_at:
+          type: string
+          format: date-time
+        recommended_gpu_memory_gb:
+          type: integer
+        recommended_cpu_memory_gb:
+          type: integer
+        pinned_version:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ModelDetail:
+      allOf:
+        - $ref: '#/components/schemas/Model'
+        - type: object
+          properties:
+            cache:
+              type: array
+              items:
+                $ref: '#/components/schemas/CacheEntry'
+            deployments:
+              type: array
+              items:
+                $ref: '#/components/schemas/Deployment'
+            last_validation:
+              $ref: '#/components/schemas/ValidationResult'
+
+    ModelAddRequest:
+      type: object
+      required: [hf_model_id, name]
+      properties:
+        hf_model_id:
+          type: string
+        name:
+          type: string
+        requires_auth:
+          type: boolean
+        license_type:
+          type: string
+        accept_license:
+          type: boolean
+        recommended_gpu_memory_gb:
+          type: integer
+        recommended_cpu_memory_gb:
+          type: integer
+
+    ModelUpdateRequest:
+      type: object
+      properties:
+        recommended_gpu_memory_gb:
+          type: integer
+        recommended_cpu_memory_gb:
+          type: integer
+        license_type:
+          type: string
+        pinned_version:
+          type: string
+
+    CacheEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        version:
+          type: string
+        hf_revision:
+          type: string
+        object_storage_path:
+          type: string
+        size_bytes:
+          type: integer
+        file_count:
+          type: integer
+        status:
+          type: string
+          enum: [downloading, ready, failed, deleted]
+        cached_at:
+          type: string
+          format: date-time
+        verified_at:
+          type: string
+          format: date-time
+
+    Deployment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        model_name:
+          type: string
+        environment:
+          type: string
+        enabled:
+          type: boolean
+        status:
+          type: string
+          enum: [pending, deploying, ready, failed, disabled, terminated]
+        endpoint:
+          type: string
+        replicas_desired:
+          type: integer
+        replicas_ready:
+          type: integer
+
+    DeploymentDetail:
+      allOf:
+        - $ref: '#/components/schemas/Deployment'
+        - type: object
+          properties:
+            namespace:
+              type: string
+            inferenceservice_name:
+              type: string
+            gpu_count:
+              type: integer
+            memory_gb:
+              type: integer
+            cache_version:
+              type: string
+            last_health_check_at:
+              type: string
+              format: date-time
+            last_health_status:
+              type: string
+            history:
+              type: array
+              items:
+                $ref: '#/components/schemas/StateHistoryEntry'
+
+    DeployRequest:
+      type: object
+      required: [model_name, environment]
+      properties:
+        model_name:
+          type: string
+        environment:
+          type: string
+          enum: [development, staging, production]
+        gpu_count:
+          type: integer
+          default: 1
+        memory_gb:
+          type: integer
+        replicas_min:
+          type: integer
+          default: 1
+        replicas_max:
+          type: integer
+        skip_validation:
+          type: boolean
+          default: false
+
+    StateHistoryEntry:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: [enabled, disabled, swapped_out, swapped_in]
+        performed_by:
+          type: string
+        reason:
+          type: string
+        executed_at:
+          type: string
+          format: date-time
+
+    ValidationResult:
+      type: object
+      properties:
+        model_name:
+          type: string
+        environment:
+          type: string
+        overall_status:
+          type: string
+          enum: [pass, warn, fail]
+        checks:
+          type: array
+          items:
+            type: object
+            properties:
+              layer:
+                type: string
+                enum: [registry, cache, deployment, endpoint, router]
+              name:
+                type: string
+              status:
+                type: string
+                enum: [pass, warn, fail, skip]
+              message:
+                type: string
+              remediation:
+                type: string
+        validated_at:
+          type: string
+          format: date-time
+
+    CredentialInfo:
+      type: object
+      properties:
+        type:
+          type: string
+        masked_value:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+
+    CredentialSetRequest:
+      type: object
+      required: [type, value]
+      properties:
+        type:
+          type: string
+          enum: [hf-token, s3]
+        value:
+          type: string
+          description: Token value or JSON for s3 credentials
+        metadata:
+          type: object
+          description: Additional metadata (e.g., endpoint for s3)
+
+    Alias:
+      type: object
+      properties:
+        name:
+          type: string
+        target:
+          type: string
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AliasCreateRequest:
+      type: object
+      required: [name, target]
+      properties:
+        name:
+          type: string
+        target:
+          type: string
+        description:
+          type: string
+

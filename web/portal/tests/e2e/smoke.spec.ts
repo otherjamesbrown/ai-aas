@@ -27,8 +27,8 @@ test.describe('Smoke Tests', () => {
   test('1. Login page loads', async ({ page }) => {
     await page.goto('/auth/login');
 
-    // Check for main heading
-    await expect(page.getByRole('heading', { name: /sign in/i })).toBeVisible();
+    // Check for main heading (UI rebuilt with "AI-AAS Portal" title)
+    await expect(page.getByRole('heading', { name: /ai-aas portal/i })).toBeVisible();
 
     // Check for form elements
     await expect(page.getByLabel(/email/i)).toBeVisible();
@@ -42,20 +42,17 @@ test.describe('Smoke Tests', () => {
     // Health check component should be visible
     const healthCheck = page.getByTestId('service-health-check');
 
-    // Wait for it to appear (may take a moment to check health)
+    // Wait for it to appear and stabilize (may take a moment to check health)
     await expect(healthCheck).toBeVisible({ timeout: 10000 });
 
-    // Verify it's stable (not rapidly re-rendering)
-    // Take two screenshots 1 second apart and compare
-    const screenshot1 = await healthCheck.screenshot();
-    await page.waitForTimeout(1000);
-    const screenshot2 = await healthCheck.screenshot();
+    // Wait for component to stabilize (initial health check requests)
+    await page.waitForTimeout(2000);
 
-    // The component should be stable (content may change but not rapidly)
-    // If screenshots are completely different, something is wrong
-    // This is a basic stability check - more sophisticated checks can be added
-    expect(screenshot1.length).toBeGreaterThan(0);
-    expect(screenshot2.length).toBeGreaterThan(0);
+    // Verify the component is still visible after stabilization
+    await expect(healthCheck).toBeVisible();
+
+    // Component should be attached and stable - basic visibility check is sufficient
+    // The guards we added prevent rapid re-rendering
   });
 
   test('3. Can authenticate with test user', async ({ page }) => {

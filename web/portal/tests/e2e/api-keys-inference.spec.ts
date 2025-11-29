@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { TEST_USERS } from './helpers/auth';
 
 /**
  * E2E test for API key creation and inference endpoint usage
@@ -18,9 +19,9 @@ import { test, expect } from '@playwright/test';
  * - mock-inference service running on http://localhost:8000
  */
 test.describe('API Key Creation and Inference', () => {
-  // Use Acme Ltd admin user for tests (see seeded-users.md)
-  const testEmail = 'admin@example-acme.com';
-  const testPassword = 'AcmeAdmin2024!Secure';
+  // Use centralized test user credentials
+  const testEmail = TEST_USERS.admin.email;
+  const testPassword = TEST_USERS.admin.password;
   const apiRouterUrl = process.env.API_ROUTER_URL || 'http://localhost:8080';
   const inferenceEndpoint = `${apiRouterUrl}/v1/inference`;
 

@@ -1,0 +1,42 @@
+# Loki Service
+# ClusterIP service for internal access
+# Ingress provides external access
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki
+  namespace: monitoring
+  labels:
+    app: loki
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3100
+      targetPort: 3100
+      protocol: TCP
+      name: http
+    - port: 9096
+      targetPort: 9096
+      protocol: TCP
+      name: grpc
+  selector:
+    app: loki
+---
+# Headless service for StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki-headless
+  namespace: monitoring
+  labels:
+    app: loki
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - port: 3100
+      targetPort: 3100
+      protocol: TCP
+      name: http
+  selector:
+    app: loki

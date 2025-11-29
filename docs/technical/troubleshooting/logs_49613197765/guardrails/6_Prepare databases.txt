@@ -1,0 +1,9 @@
+﻿2025-11-11T10:49:56.3811472Z ##[group]Run psql ***localhost:5432/postgres -c "CREATE DATABASE ai_aas;" || true
+2025-11-11T10:49:56.3812261Z [36;1mpsql ***localhost:5432/postgres -c "CREATE DATABASE ai_aas;" || true[0m
+2025-11-11T10:49:56.3812896Z [36;1mpsql ***localhost:5432/postgres -c "CREATE DATABASE ai_aas_analytics;" || true[0m
+2025-11-11T10:49:56.3846120Z shell: /usr/bin/bash -e {0}
+2025-11-11T10:49:56.3846342Z env:
+2025-11-11T10:49:56.3846541Z   GO111MODULE: on
+2025-11-11T10:49:56.3846779Z ##[endgroup]
+2025-11-11T10:49:56.5437947Z ERROR:  database "ai_aas" already exists
+2025-11-11T10:49:56.6182015Z CREATE DATABASE

@@ -1,7 +1,7 @@
 # vLLM Deployment Best Practices
 
 **Feature**: `010-vllm-deployment`
-**Last Updated**: 2025-01-27
+**Last Updated**: 2025-11-28
 
 ## Overview
 
@@ -196,52 +196,113 @@ resources:
 
 ---
 
-### Configure Appropriate Health Probes
+### Configure Appropriate Health Probes (KServe/Knative)
 
-**✅ DO**:
+Health probes are **critical** for preventing timeout errors during autoscaling and cold starts. Without proper configuration, Knative kills pods before models finish loading into GPU memory.
+
+**Reference**: See [Model Readiness Probes Runbook](../runbooks/enable-model-readiness-probes.md) for detailed configuration guide.
+
+#### CRITICAL: Knative Progress Deadline
+
+**⚠️ IMPORTANT**: Standard Kubernetes `startupProbe` is **NOT honored** by KServe/Knative. Knative manages probing through its queue-proxy sidecar and ignores container-level startup probes.
+
+**Solution**: Use the `serving.knative.dev/progress-deadline` annotation:
+
+| Model Size | `progress-deadline` | Loading Time |
+|:-----------|:--------------------|:-------------|
+| 7B | `360s` (6 min) | 2-5 min |
+| 13B | `600s` (10 min) | 5-8 min |
+| 20B | `900s` (15 min) | 8-12 min |
+| 70B+ | `1800s` (30 min) | 15-25 min |
+
+**✅ DO** (KServe InferenceService):
 ```yaml
-# Startup probe: For model loading (can take 5-20 minutes)
-startupProbe:
-  httpGet:
-    path: /health
-    port: 8000
-  initialDelaySeconds: 30
-  periodSeconds: 30
-  failureThreshold: 40  # 20 minutes total for 70B models
-  timeoutSeconds: 5
-
-# Liveness probe: Restart if hung
-livenessProbe:
-  httpGet:
-    path: /health
-    port: 8000
-  initialDelaySeconds: 60
-  periodSeconds: 30
-  failureThreshold: 3
-  timeoutSeconds: 5
-
-# Readiness probe: Remove from service if slow
-readinessProbe:
-  httpGet:
-    path: /health
-    port: 8000
-  initialDelaySeconds: 30
-  periodSeconds: 10
-  failureThreshold: 2
-  timeoutSeconds: 5
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: gpt-oss-20b
+  annotations:
+    serving.kserve.io/deploymentMode: "Serverless"
+    # CRITICAL: Allow 15 minutes for 20B model to load
+    serving.knative.dev/progress-deadline: "900s"
+spec:
+  predictor:
+    minReplicas: 1  # Keep warm to avoid cold starts
+    containers:
+      - name: kserve-container
+        ports:
+          - containerPort: 8000
+        # NOTE: startupProbe is ignored by Knative - use annotation above
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          periodSeconds: 10
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          periodSeconds: 30
+          failureThreshold: 3
 ```
 
 **❌ DON'T**:
 ```yaml
-# Don't use same tight timeouts for all models
-startupProbe:
-  failureThreshold: 10  # Only 5 minutes - too short for 70B models
+# Don't rely on startupProbe - Knative ignores it!
+containers:
+  - name: kserve-container
+    startupProbe:  # THIS IS IGNORED BY KNATIVE
+      failureThreshold: 90
 ```
 
-**Why**: Model size affects loading time:
-- 7B models: 5-10 minutes
-- 13B models: 10-15 minutes
-- 70B models: 15-20 minutes
+**How it works**:
+1. **progress-deadline**: Knative waits this long before marking revision as failed
+2. **readinessProbe**: Controls when Knative routes traffic (vLLM /health returns 200 after model loaded)
+3. **livenessProbe**: Restarts hung pods after model is fully operational
+
+**Key points**:
+1. Use `serving.knative.dev/progress-deadline` annotation for startup timeout
+2. Keep `readinessProbe` and `livenessProbe` on the container for traffic gating
+3. Set `minReplicas: 1` to avoid cold start delays
+4. vLLM `/health` returns 200 only after model is fully loaded
+
+---
+
+### Always Keep At Least One Replica Warm (minReplicas: 1)
+
+**CRITICAL**: Production models MUST have `minReplicas: 1` to avoid cold boot delays.
+
+**✅ DO**:
+```yaml
+spec:
+  predictor:
+    minReplicas: 1  # REQUIRED for production - keeps model loaded in GPU
+    maxReplicas: 5
+```
+
+**❌ DON'T**:
+```yaml
+spec:
+  predictor:
+    minReplicas: 0  # Scale-to-zero - causes 5-15 minute cold starts!
+```
+
+**Why**:
+- Model loading to GPU takes **2-5 minutes (7B)** to **5-15 minutes (20B+)**
+- With `minReplicas: 0`, first request after idle triggers cold start
+- Users experience 5-15 minute wait or timeout errors
+- Even with perfect probes, cold starts cannot be avoided without warm replicas
+
+**When `minReplicas: 0` is acceptable**:
+- Development/testing environments only
+- Models rarely used (cost savings > user experience)
+- Never for production user-facing models
+
+**Current configuration**:
+- `gpt-oss-20b`: minReplicas: 1 ✓
+- `mistral-7b-instruct`: minReplicas: 1 ✓
+- `llama-2-7b`: minReplicas: 1 ✓
 
 ---
 
@@ -736,7 +797,8 @@ RPO: 1 hour (hourly backups)
 - [ ] Values file reviewed and approved
 - [ ] Image version pinned
 - [ ] Resource limits appropriate for model size
-- [ ] Health probe timeouts match model size
+- [ ] Health probe timeouts match model size (see [Probe Runbook](../runbooks/enable-model-readiness-probes.md))
+- [ ] `minReplicas: 1` set for production (avoid cold starts)
 - [ ] Secrets created in Kubernetes
 - [ ] NetworkPolicies defined
 - [ ] Rollback plan documented
@@ -766,6 +828,7 @@ RPO: 1 hour (hourly backups)
 
 ## See Also
 
+- [Model Readiness Probes Runbook](../runbooks/enable-model-readiness-probes.md)
 - [Helm Chart README](../../infra/helm/charts/vllm-deployment/README.md)
 - [Rollout Workflow](../rollout-workflow.md)
 - [Rollback Workflow](../rollback-workflow.md)

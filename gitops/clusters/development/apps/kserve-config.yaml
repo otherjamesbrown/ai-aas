@@ -12,7 +12,7 @@ spec:
   project: platform-development
   source:
     repoURL: https://github.com/otherjamesbrown/ai-aas
-    targetRevision: 016-kserve-migration
+    targetRevision: develop  # Change to main after merge
     path: infra/k8s/kserve/base
   destination:
     server: https://kubernetes.default.svc

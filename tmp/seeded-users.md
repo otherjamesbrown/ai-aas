@@ -17,10 +17,13 @@ This document contains the credentials for test users seeded in the database.
 ### Org Admin User
 
 - **Email**: `admin@example-acme.com`
-- **Password**: `AcmeAdmin2024!Secure`
+- **Password**: `TestPass123` (deployed dev environment)
 - **Role**: `admin`
 - **Purpose**: Primary organization administrator for Acme Ltd
 - **Use Case**: Tests that require a user account should use this user
+
+> **Note**: The deployed development environment uses `TestPass123` as the password.
+> The seed script uses `AcmeAdmin2024!Secure` - re-run seeding to reset if needed.
 
 ### Manager
 

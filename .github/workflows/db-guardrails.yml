@@ -8,7 +8,7 @@ on:
       - 'configs/migrate.yaml'
       - 'configs/migrate.example.env'
       - '.github/workflows/db-guardrails.yml'
-      - 'docs/runbooks/migrations.md'
+      - 'docs/technical/workflows/migrations.md'
       - 'specs/003-database-schemas/**'
 
 jobs:

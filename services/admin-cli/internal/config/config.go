@@ -37,6 +37,7 @@ type Config struct {
 	AnalyticsEndpoint     string
 	AdminAPIEndpoint      string // Admin API Service endpoint for routing policies
 	ConfigServiceEndpoint string // etcd endpoint (deprecated - use AdminAPIEndpoint)
+	InferenceEndpoint     string // API Router endpoint for inference requests
 
 	// Authentication
 	APIKey string
@@ -93,6 +94,7 @@ func Load() (*Config, error) {
 		AnalyticsEndpoint:     v.GetString("api-endpoints.analytics-service"),
 		AdminAPIEndpoint:      v.GetString("api-endpoints.admin-api-service"),
 		ConfigServiceEndpoint: v.GetString("api-endpoints.config-service"),
+		InferenceEndpoint:     v.GetString("api-endpoints.inference-service"),
 		APIKey:                v.GetString("auth.api-key"),
 		CACertFile:            v.GetString("tls.ca-cert-file"),
 		DatabaseURL:           v.GetString("database.url"),
@@ -124,6 +126,10 @@ func LoadWithFlags(flagOverrides map[string]interface{}) (*Config, error) {
 		case "analytics-endpoint":
 			if v, ok := value.(string); ok {
 				cfg.AnalyticsEndpoint = v
+			}
+		case "inference-endpoint":
+			if v, ok := value.(string); ok {
+				cfg.InferenceEndpoint = v
 			}
 		case "api-key":
 			if v, ok := value.(string); ok {

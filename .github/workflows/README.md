@@ -1,24 +1,31 @@
-# GitHub Actions Workflows
+# CI/CD Workflows
 
-This directory contains all the GitHub Actions workflows for the AI-as-a-Service platform.
+This directory contains the GitHub Actions workflows for the AI-AAS platform.
 
 ## Main Workflows
 
-*   **`ci.yml`**: The main Continuous Integration (CI) pipeline. It is triggered on pushes to `main` and on all pull requests. It discovers all services and then builds, tests, and lints them.
-*   **`ci-remote.yml`**: A workflow that allows for the remote triggering of the CI pipeline. This is useful for running CI on a specific branch from a restricted environment.
-*   **`reusable-build.yml`**: A reusable workflow that provides a standardized way to build and test the Go services.
+*   **`ci.yml`**: This is the main Continuous Integration (CI) workflow. It is triggered on every push to the `main` branch and on every pull request. It discovers all the services in the `services/` directory and then builds and tests each service in parallel. It also runs a linting job and a security scan.
+*   **`ci-remote.yml`**: This workflow is used to run the CI pipeline on a remote environment. It is triggered manually and requires a git revision and a service name as input.
+*   **`e2e-tests.yml`**: This workflow runs the end-to-end tests. It is triggered manually.
+*   **`reusable-build.yml`**: This is a reusable workflow that builds or tests a single service. It is used by the `ci.yml` workflow.
 
 ## Service-Specific Workflows
 
-*   **`api-router-service.yml`**: A dedicated CI/CD pipeline for the `api-router-service`.
-*   **`user-org-service.yml`**: A dedicated CI/CD pipeline for the `user-org-service`.
-*   **`web-portal.yml`**: A dedicated CI/CD pipeline for the `web-portal` frontend application. It runs linting, unit tests, and end-to-end tests.
-*   **`shared-libraries-ci.yml`**: A CI pipeline for the shared libraries in the `shared/` directory.
-*   **`shared-libraries-release.yml`**: A workflow for creating releases of the shared libraries.
+The following workflows are service-specific and are triggered on changes within the respective service directories:
 
-## Infrastructure and Environment Workflows
+*   `analytics-service.yml`
+*   `api-router-service.yml`
+*   `user-org-service.yml`
+*   `web-portal.yml`
 
-*   **`infra-terraform.yml`**: A workflow for managing the infrastructure with Terraform.
-*   **`infra-availability.yml`**: A workflow that runs periodically to check the availability of the infrastructure.
-*   **`dev-environment-ci.yml`**: A CI pipeline for the development environment.
-*   **`db-guardrails.yml`**: A workflow that enforces guardrails on the database.
+These workflows are largely redundant with the main `ci.yml` workflow and will be removed in the future.
+
+## Other Workflows
+
+*   `api-router-validation.yml`: Validates the API router configuration.
+*   `db-guardrails.yml`: Checks for dangerous database migrations.
+*   `dev-environment-ci.yml`: Runs CI for the development environment.
+*   `infra-availability.yml`: Checks the availability of the infrastructure.
+*   `infra-terraform.yml`: Runs terraform to deploy infrastructure changes.
+*   `shared-libraries-ci.yml`: Runs CI for the shared libraries.
+*   `shared-libraries-release.yml`: Creates a release for the shared libraries.

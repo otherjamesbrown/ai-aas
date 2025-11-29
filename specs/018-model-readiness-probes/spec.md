@@ -2,23 +2,27 @@
 
 **Feature Branch**: `018-model-readiness-probes`
 **Created**: 2025-11-26
-**Status**: Draft
+**Status**: Implementation Complete - Validation In Progress
 **Input**: Implement proper readiness probes for KServe InferenceService deployments to prevent traffic routing to pods before model loading is complete, eliminating timeout errors during autoscaling and cold starts.
+
+## Implementation Status
+
+> **Note**: As of 2025-11-28, readiness probes have been implemented in all InferenceService manifests. This specification now serves as documentation of the design decisions and validation criteria. Remaining work focuses on validation testing and documentation.
 
 ## Problem Statement
 
-### Current Issue
+### Original Issue (Resolved)
 
-When KServe autoscales or creates new replicas of InferenceServices:
-1. Knative creates new pods to handle increased load
-2. Pods are marked as "Ready" before the vLLM model finishes loading into GPU memory
-3. Traffic is routed to these not-yet-ready pods via Knative activator
-4. Requests fail with timeout errors: `context deadline exceeded`
-5. Users receive `BACKEND_ERROR` responses until the model fully loads (2-5 minutes for large models)
+When KServe autoscaled or created new replicas of InferenceServices:
+1. Knative created new pods to handle increased load
+2. Pods were marked as "Ready" before the vLLM model finished loading into GPU memory
+3. Traffic was routed to these not-yet-ready pods via Knative activator
+4. Requests failed with timeout errors: `context deadline exceeded`
+5. Users received `BACKEND_ERROR` responses until the model fully loaded (2-5 minutes for large models)
 
 ### Root Cause
 
-The current InferenceService configurations lack proper readiness probes. Kubernetes marks pods as ready based solely on the container starting, not on the application's actual readiness to serve traffic. For vLLM models:
+The InferenceService configurations lacked proper readiness probes. Kubernetes marked pods as ready based solely on the container starting, not on the application's actual readiness to serve traffic. For vLLM models:
 - Container startup: ~10 seconds
 - **Model loading to GPU: 2-5 minutes (7B models) to 5-15 minutes (20B+ models)**
 - Without readiness probes, the pod receives traffic during the model loading phase

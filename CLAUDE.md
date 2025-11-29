@@ -104,6 +104,47 @@ kubectl get svc -A | grep <service-pattern>
 kubectl get deployment <name> -n <namespace> -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="BACKEND_ENDPOINTS")].value}'
 ```
 
+## Service Creation Requirements
+
+**CRITICAL**: When creating a new deployable service, you MUST include the following:
+
+### Required Components
+
+1. **Helm Chart** at `services/<service-name>/deployments/helm/<service-name>/`:
+   - `Chart.yaml` - Chart metadata
+   - `values.yaml` - Default values
+   - `values-development.yaml` - Development environment values (optional)
+   - `templates/deployment.yaml` - Deployment with health probes
+   - `templates/service.yaml` - Service definition
+   - `templates/serviceaccount.yaml` - Service account
+
+2. **ArgoCD Application** at `gitops/clusters/<env>/apps/<service-name>.yaml`:
+   - References the Helm chart path
+   - Configures sync policy and destination namespace
+   - See existing applications (e.g., `api-router-service.yaml`) as templates
+
+3. **Health Probes** (mandatory in Helm chart):
+   ```yaml
+   livenessProbe:
+     httpGet:
+       path: /health
+       port: http
+     initialDelaySeconds: 10
+     periodSeconds: 10
+   readinessProbe:
+     httpGet:
+       path: /ready
+       port: http
+     initialDelaySeconds: 5
+     periodSeconds: 5
+   ```
+
+### Not Sufficient for Production
+
+- Raw Kubernetes manifests in `services/<service-name>/k8s/` are **NOT** sufficient
+- Services without ArgoCD Applications will NOT be deployed or persistent
+- Refer to Constitution v1.5.0 for full requirements
+
 ## GitOps Deployment Workflow
 
 **CRITICAL**: All infrastructure and Kubernetes resource changes MUST follow this workflow. Never use `kubectl apply`, `kubectl edit`, or `kubectl patch` for permanent changes.

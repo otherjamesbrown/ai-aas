@@ -74,8 +74,8 @@ readinessProbe:
   path: /v1/status/readyz
   initialDelaySeconds: 15
   periodSeconds: 10
-  timeoutSeconds: 5
-  failureThreshold: 3
+  timeoutSeconds: 10  # Increased for parallel health checks
+  failureThreshold: 6  # More tolerant of transient failures
 
 env:
   - name: SERVICE_NAME
@@ -112,14 +112,19 @@ env:
 backends:
   # Format: backend-id:http://service-name.namespace.svc.cluster.local:port
   # KServe InferenceServices are exposed via Knative Services
-  # Use the -private service for internal cluster access (bypasses Istio gateway)
+  #
+  # IMPORTANT: Use the stable -predictor service (not revision-specific -00001, -00002)
+  # The -predictor service routes through Knative/Istio and automatically routes to
+  # the latest ready revision. This ensures traffic goes to pods with readiness probes
+  # that have passed (model fully loaded).
+  #
+  # Port 80 is the Knative gateway port which handles routing.
   # Note: Don't include path - it's added by the router based on request type
-  # Using revision-specific private services for direct pod access (bypasses Istio)
-  endpoints: "mistral-7b-instruct:http://mistral-7b-instruct-predictor-00002-private.development.svc.cluster.local,gpt-oss-20b:http://gpt-oss-20b-predictor-00001-private.development.svc.cluster.local"
+  endpoints: "mistral-7b-instruct:http://mistral-7b-instruct-predictor.development.svc.cluster.local:80,gpt-oss-20b:http://gpt-oss-20b-predictor.development.svc.cluster.local:80"
 
-# Redis configuration (optional for dev - stubbed if not available)
+# Redis configuration
 redis:
-  address: ""  # Empty = use in-memory stub rate limiter
+  address: "redis.development.svc.cluster.local:6379"
   password: ""
   db: 0
 

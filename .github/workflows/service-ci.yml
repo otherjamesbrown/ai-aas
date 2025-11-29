@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'services/**'
+      - 'shared/**'
+  pull_request:
+    paths:
+      - 'services/**'
+      - 'shared/**'
+
+env:
+  GO_VERSION: "1.24.x"
+
+jobs:
+  admin-api-service:
+    uses: ./.github/workflows/reusable/build.yml
+    with:
+      service: admin-api-service
+      target: test
+      go-version: ${{ env.GO_VERSION }}
+
+  admin-cli:
+    uses: ./.github/workflows/reusable/build.yml
+    with:
+      service: admin-cli
+      target: test
+      go-version: ${{ env.GO_VERSION }}
+
+  analytics-service:
+    uses: ./.github/workflows/reusable/build.yml
+    with:
+      service: analytics-service
+      target: test
+      go-version: ${{ env.GO_VERSION }}
+
+  api-router-service:
+    uses: ./.github/workflows/reusable/build.yml
+    with:
+      service: api-router-service
+      target: test
+      go-version: ${{ env.GO_VERSION }}
+
+  hello-service:
+    uses: ./.github/workflows/reusable/build.yml
+    with:
+      service: hello-service
+      target: test
+      go-version: ${{ env.GO_VERSION }}
+
+  user-org-service:
+    uses: ./.github/workflows/reusable/build.yml
+    with:
+      service: user-org-service
+      target: test
+      go-version: ${{ env.GO_VERSION }}
+
+  world-service:
+    uses: ./.github/workflows/reusable/build.yml
+    with:
+      service: world-service
+      target: test
+      go-version: ${{ env.GO_VERSION }}
+
+  lint:
+    name: Lint
+    needs:
+      - admin-api-service
+      - admin-cli
+      - analytics-service
+      - api-router-service
+      - hello-service
+      - user-org-service
+      - world-service
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
+            sh -s -- -b "$(go env GOPATH)"/bin v1.61.0
+      - name: Run golangci-lint
+        run: make lint
+
+  metrics-upload:
+    name: Metrics Upload
+    needs:
+      - lint
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    env:
+      RUN_ID: ${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Install tooling
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
+            sh -s -- -b "$(go env GOPATH)"/bin v1.55.2
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.19.0
+      - name: Run make check with metrics
+        continue-on-error: true
+        id: check
+        run: make check METRICS=true
+      - name: Upload metrics artifact (dry run)
+        env:
+          METRICS_BUCKET: ai-aas-build-metrics
+        run: |
+          if [ -d "scripts/metrics/output" ] && [ -n "$(ls -A scripts/metrics/output/*.json 2>/dev/null)" ]; then
+            FILE=$(ls -t scripts/metrics/output/*.json | head -n 1)
+            echo "Uploading $FILE"
+            ./scripts/metrics/upload.sh --dry-run "$FILE"
+          else
+            echo "No metrics files found, skipping upload"
+          fi
+      - name: Archive metrics artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: metrics-json
+          path: scripts/metrics/output/*.json
+          if-no-files-found: warn
