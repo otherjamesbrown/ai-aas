@@ -38,6 +38,13 @@ A scratch list of tasks, ideas, and improvements to tackle. Add items here so we
 
 ## Medium Priority
 
+### Web Portal / UI
+- [ ] **Add service health dashboard to Web Portal**
+  - Display platform health status similar to CLI `ai-aas-cli status` output
+  - Show all services: Admin API, API Router, User-Org, Analytics, Grafana, ArgoCD
+  - Real-time status indicators (healthy/slow/unhealthy)
+  - Latency display for each service
+
 ### CLI Improvements
 - [ ] Consider raising "slow" threshold from 1s to 2s for external health checks
 - [ ] Add `ai-aas-cli config show` command to display current configuration
