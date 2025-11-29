@@ -1,0 +1,154 @@
+name: Branch Sync Check
+
+# Ensures develop and main branches stay synchronized
+# Prevents drift that can cause merge conflicts and deployment issues
+
+on:
+  # Check after merges to main
+  push:
+    branches:
+      - main
+
+  # Check after merges to develop
+  pull_request:
+    branches:
+      - develop
+    types:
+      - closed
+
+  # Scheduled check every 6 hours
+  schedule:
+    - cron: '0 */6 * * *'
+
+  # Manual trigger
+  workflow_dispatch:
+
+jobs:
+  check-branch-sync:
+    name: Check Branch Synchronization
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for accurate comparison
+
+      - name: Fetch all branches
+        run: |
+          git fetch origin main develop
+
+      - name: Check if develop is behind main
+        id: check_sync
+        run: |
+          # Count commits that are in main but not in develop
+          BEHIND_COUNT=$(git rev-list --count origin/develop..origin/main)
+          # Count commits that are in develop but not in main
+          AHEAD_COUNT=$(git rev-list --count origin/main..origin/develop)
+
+          echo "behind_count=$BEHIND_COUNT" >> $GITHUB_OUTPUT
+          echo "ahead_count=$AHEAD_COUNT" >> $GITHUB_OUTPUT
+
+          echo "Develop is $BEHIND_COUNT commits behind main"
+          echo "Develop is $AHEAD_COUNT commits ahead of main"
+
+          if [ "$BEHIND_COUNT" -gt 0 ]; then
+            echo "needs_sync=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Develop branch is behind main and needs to be synced"
+          else
+            echo "needs_sync=false" >> $GITHUB_OUTPUT
+            echo "✅ Develop branch is up to date with main"
+          fi
+
+      - name: List commits that need to be merged
+        if: steps.check_sync.outputs.needs_sync == 'true'
+        run: |
+          echo "Commits in main that are not in develop:"
+          git log --oneline origin/develop..origin/main
+
+      - name: Generate sync report
+        if: always()
+        run: |
+          echo "## Branch Synchronization Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| develop behind main | ${{ steps.check_sync.outputs.behind_count }} commits |" >> $GITHUB_STEP_SUMMARY
+          echo "| develop ahead of main | ${{ steps.check_sync.outputs.ahead_count }} commits |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.check_sync.outputs.needs_sync }}" = "true" ]; then
+            echo "### ⚠️ Action Required" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "The \`develop\` branch is behind \`main\`. To sync:" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+            echo "git checkout develop" >> $GITHUB_STEP_SUMMARY
+            echo "git pull origin develop" >> $GITHUB_STEP_SUMMARY
+            echo "git merge origin/main" >> $GITHUB_STEP_SUMMARY
+            echo "git push origin develop" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ✅ Branches are synchronized" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Create issue if sync needed
+        if: steps.check_sync.outputs.needs_sync == 'true' && github.event_name == 'schedule'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Check if an issue already exists
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'branch-sync'
+            });
+
+            if (issues.data.length > 0) {
+              console.log('Issue already exists, skipping creation');
+              return;
+            }
+
+            // Create new issue
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '⚠️ Develop branch is behind main',
+              body: `## Branch Sync Required
+
+            The \`develop\` branch is **${{ steps.check_sync.outputs.behind_count }} commits behind** \`main\`.
+
+            This can cause:
+            - Merge conflicts when creating PRs
+            - Missing bug fixes in development environment
+            - Deployment inconsistencies
+
+            ### Resolution
+
+            Run the following commands to sync:
+
+            \`\`\`bash
+            git checkout develop
+            git pull origin develop
+            git merge origin/main
+            git push origin develop
+            \`\`\`
+
+            Or create a PR to merge \`main\` into \`develop\`.
+
+            ---
+            *This issue was automatically created by the Branch Sync Check workflow.*`,
+              labels: ['branch-sync', 'automated']
+            });
+
+      - name: Fail if behind (on push to main)
+        if: steps.check_sync.outputs.needs_sync == 'true' && github.event_name == 'push'
+        run: |
+          echo "::warning::Develop branch is ${{ steps.check_sync.outputs.behind_count }} commits behind main"
+          echo "Please merge main into develop to keep branches synchronized"
+          # Don't fail the workflow, just warn
+          # exit 1
