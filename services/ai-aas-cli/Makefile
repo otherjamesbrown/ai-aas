@@ -28,6 +28,7 @@ build: ## Build the CLI binary
 	@echo "Building $(BINARY_NAME)..."
 	@mkdir -p $(BINARY_DIR)
 	$(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(BINARY_NAME) .
+	@chmod +x $(BINARY_DIR)/$(BINARY_NAME)
 
 build-all: ## Cross-compile for all platforms
 	@echo "Building for all platforms..."
@@ -39,6 +40,7 @@ build-all: ## Cross-compile for all platforms
 		if [ "$$GOOS" = "windows" ]; then OUTPUT="$$OUTPUT.exe"; fi; \
 		echo "Building $$OUTPUT..."; \
 		GOOS=$$GOOS GOARCH=$$GOARCH $(GOBUILD) $(LDFLAGS) -o $$OUTPUT . ; \
+		if [ "$$GOOS" != "windows" ]; then chmod +x $$OUTPUT; fi; \
 	done
 
 install: build ## Install CLI to GOPATH/bin
