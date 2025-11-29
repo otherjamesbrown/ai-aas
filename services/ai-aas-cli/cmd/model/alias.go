@@ -3,15 +3,15 @@ package model
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"time"
 
-	_ "github.com/lib/pq" // PostgreSQL driver
 	"github.com/spf13/cobra"
 
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/api"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/registry"
 )
 
 // NewAliasCommand creates the model alias command group
@@ -47,6 +47,18 @@ Examples:
 	return cmd
 }
 
+func getAPIClient(cfg *config.Config) (*api.Client, error) {
+	if cfg.APIEndpoint == "" || cfg.APIEndpoint == "http://localhost:8080" {
+		return nil, fmt.Errorf("API endpoint not configured. Run 'ai-aas-cli --init' first")
+	}
+
+	opts := []api.ClientOption{}
+	if cfg.TLSInsecure {
+		opts = append(opts, api.WithInsecureSkipVerify())
+	}
+	return api.NewClient(cfg.APIEndpoint, cfg.APIKey, opts...), nil
+}
+
 func aliasListCommand() *cobra.Command {
 	var formatFlag string
 
@@ -63,52 +75,15 @@ func aliasListCommand() *cobra.Command {
 				return fmt.Errorf("load config: %w", err)
 			}
 
-			if cfg.DatabaseURL == "" {
-				return fmt.Errorf("DATABASE_URL not configured")
-			}
-
-			db, err := sql.Open("postgres", cfg.DatabaseURL)
+			apiClient, err := getAPIClient(cfg)
 			if err != nil {
-				return fmt.Errorf("connect to database: %w", err)
+				return err
 			}
-			defer db.Close()
+			regClient := registry.NewClient(apiClient)
 
-			query := `
-				SELECT a.id, a.alias_name, a.model_id, r.name as model_name,
-				       COALESCE(a.description, '') as description,
-				       a.created_at, a.updated_at
-				FROM model_aliases a
-				JOIN model_registry r ON a.model_id = r.id
-				ORDER BY a.alias_name
-			`
-
-			rows, err := db.QueryContext(ctx, query)
+			aliases, err := regClient.ListAliases(ctx)
 			if err != nil {
-				return fmt.Errorf("query aliases: %w", err)
-			}
-			defer rows.Close()
-
-			type aliasEntry struct {
-				ID          string    `json:"id"`
-				AliasName   string    `json:"alias_name"`
-				ModelID     string    `json:"model_id"`
-				ModelName   string    `json:"model_name"`
-				Description string    `json:"description"`
-				CreatedAt   time.Time `json:"created_at"`
-				UpdatedAt   time.Time `json:"updated_at"`
-			}
-
-			var aliases []aliasEntry
-			for rows.Next() {
-				var a aliasEntry
-				if err := rows.Scan(&a.ID, &a.AliasName, &a.ModelID, &a.ModelName, &a.Description, &a.CreatedAt, &a.UpdatedAt); err != nil {
-					return fmt.Errorf("scan row: %w", err)
-				}
-				aliases = append(aliases, a)
-			}
-
-			if err := rows.Err(); err != nil {
-				return fmt.Errorf("iterate rows: %w", err)
+				return fmt.Errorf("list aliases: %w", err)
 			}
 
 			if formatFlag == "json" {
@@ -166,48 +141,22 @@ Examples:
 				return fmt.Errorf("load config: %w", err)
 			}
 
-			if cfg.DatabaseURL == "" {
-				return fmt.Errorf("DATABASE_URL not configured")
-			}
-
-			db, err := sql.Open("postgres", cfg.DatabaseURL)
+			apiClient, err := getAPIClient(cfg)
 			if err != nil {
-				return fmt.Errorf("connect to database: %w", err)
+				return err
 			}
-			defer db.Close()
+			regClient := registry.NewClient(apiClient)
 
-			// Get model ID
-			var modelID string
-			err = db.QueryRowContext(ctx, `SELECT id FROM model_registry WHERE name = $1`, modelName).Scan(&modelID)
-			if err == sql.ErrNoRows {
-				return fmt.Errorf("model not found: %s", modelName)
-			} else if err != nil {
-				return fmt.Errorf("query model: %w", err)
-			}
-
-			// Insert alias
-			var desc *string
-			if description != "" {
-				desc = &description
-			}
-
-			query := `
-				INSERT INTO model_aliases (alias_name, model_id, description)
-				VALUES ($1, $2, $3)
-				RETURNING id, created_at
-			`
-
-			var id string
-			var createdAt time.Time
-			err = db.QueryRowContext(ctx, query, aliasName, modelID, desc).Scan(&id, &createdAt)
+			alias, err := regClient.CreateAlias(ctx, registry.AliasCreateRequest{
+				AliasName:   aliasName,
+				ModelName:   modelName,
+				Description: description,
+			})
 			if err != nil {
-				if isUniqueViolation(err) {
-					return fmt.Errorf("alias already exists: %s", aliasName)
-				}
 				return fmt.Errorf("create alias: %w", err)
 			}
 
-			fmt.Printf("Created alias '%s' -> '%s'\n", aliasName, modelName)
+			fmt.Printf("Created alias '%s' -> '%s'\n", alias.AliasName, alias.ModelName)
 			if description != "" {
 				fmt.Printf("  Description: %s\n", description)
 			}
@@ -253,61 +202,23 @@ Examples:
 				return fmt.Errorf("load config: %w", err)
 			}
 
-			if cfg.DatabaseURL == "" {
-				return fmt.Errorf("DATABASE_URL not configured")
-			}
-
-			db, err := sql.Open("postgres", cfg.DatabaseURL)
+			apiClient, err := getAPIClient(cfg)
 			if err != nil {
-				return fmt.Errorf("connect to database: %w", err)
+				return err
 			}
-			defer db.Close()
+			regClient := registry.NewClient(apiClient)
 
-			// Build update query
-			updates := []string{"updated_at = NOW()"}
-			queryArgs := []interface{}{aliasName}
-			argNum := 2
-
-			if modelName != "" {
-				// Get new model ID
-				var modelID string
-				err = db.QueryRowContext(ctx, `SELECT id FROM model_registry WHERE name = $1`, modelName).Scan(&modelID)
-				if err == sql.ErrNoRows {
-					return fmt.Errorf("model not found: %s", modelName)
-				} else if err != nil {
-					return fmt.Errorf("query model: %w", err)
-				}
-
-				updates = append(updates, fmt.Sprintf("model_id = $%d", argNum))
-				queryArgs = append(queryArgs, modelID)
-				argNum++
-			}
-
-			if description != "" {
-				updates = append(updates, fmt.Sprintf("description = $%d", argNum))
-				queryArgs = append(queryArgs, description)
-				argNum++
-			}
-
-			query := fmt.Sprintf(`
-				UPDATE model_aliases
-				SET %s
-				WHERE alias_name = $1
-			`, joinStrings(updates, ", "))
-
-			result, err := db.ExecContext(ctx, query, queryArgs...)
+			alias, err := regClient.UpdateAlias(ctx, aliasName, registry.AliasUpdateRequest{
+				ModelName:   modelName,
+				Description: description,
+			})
 			if err != nil {
 				return fmt.Errorf("update alias: %w", err)
 			}
 
-			rowsAffected, _ := result.RowsAffected()
-			if rowsAffected == 0 {
-				return fmt.Errorf("alias not found: %s", aliasName)
-			}
-
 			fmt.Printf("Updated alias '%s'\n", aliasName)
 			if modelName != "" {
-				fmt.Printf("  New target: %s\n", modelName)
+				fmt.Printf("  New target: %s\n", alias.ModelName)
 			}
 			if description != "" {
 				fmt.Printf("  Description: %s\n", description)
@@ -346,32 +257,20 @@ Examples:
 				return fmt.Errorf("load config: %w", err)
 			}
 
-			if cfg.DatabaseURL == "" {
-				return fmt.Errorf("DATABASE_URL not configured")
-			}
-
-			db, err := sql.Open("postgres", cfg.DatabaseURL)
+			apiClient, err := getAPIClient(cfg)
 			if err != nil {
-				return fmt.Errorf("connect to database: %w", err)
+				return err
 			}
-			defer db.Close()
+			regClient := registry.NewClient(apiClient)
 
-			// Check if alias exists
-			var targetModel string
-			err = db.QueryRowContext(ctx, `
-				SELECT r.name
-				FROM model_aliases a
-				JOIN model_registry r ON a.model_id = r.id
-				WHERE a.alias_name = $1
-			`, aliasName).Scan(&targetModel)
-			if err == sql.ErrNoRows {
+			// Get alias details for confirmation
+			alias, err := regClient.GetAlias(ctx, aliasName)
+			if err != nil {
 				return fmt.Errorf("alias not found: %s", aliasName)
-			} else if err != nil {
-				return fmt.Errorf("query alias: %w", err)
 			}
 
 			if !force {
-				fmt.Printf("Delete alias '%s' (currently pointing to '%s')? [y/N]: ", aliasName, targetModel)
+				fmt.Printf("Delete alias '%s' (currently pointing to '%s')? [y/N]: ", aliasName, alias.ModelName)
 				var response string
 				fmt.Scanln(&response)
 				if response != "y" && response != "Y" {
@@ -380,15 +279,8 @@ Examples:
 				}
 			}
 
-			// Delete alias
-			result, err := db.ExecContext(ctx, `DELETE FROM model_aliases WHERE alias_name = $1`, aliasName)
-			if err != nil {
+			if err := regClient.DeleteAlias(ctx, aliasName); err != nil {
 				return fmt.Errorf("delete alias: %w", err)
-			}
-
-			rowsAffected, _ := result.RowsAffected()
-			if rowsAffected == 0 {
-				return fmt.Errorf("alias not found: %s", aliasName)
 			}
 
 			fmt.Printf("Deleted alias '%s'\n", aliasName)
@@ -421,43 +313,15 @@ func aliasGetCommand() *cobra.Command {
 				return fmt.Errorf("load config: %w", err)
 			}
 
-			if cfg.DatabaseURL == "" {
-				return fmt.Errorf("DATABASE_URL not configured")
-			}
-
-			db, err := sql.Open("postgres", cfg.DatabaseURL)
+			apiClient, err := getAPIClient(cfg)
 			if err != nil {
-				return fmt.Errorf("connect to database: %w", err)
+				return err
 			}
-			defer db.Close()
+			regClient := registry.NewClient(apiClient)
 
-			query := `
-				SELECT a.id, a.alias_name, a.model_id, r.name as model_name,
-				       COALESCE(a.description, '') as description,
-				       a.created_at, a.updated_at
-				FROM model_aliases a
-				JOIN model_registry r ON a.model_id = r.id
-				WHERE a.alias_name = $1
-			`
-
-			var alias struct {
-				ID          string    `json:"id"`
-				AliasName   string    `json:"alias_name"`
-				ModelID     string    `json:"model_id"`
-				ModelName   string    `json:"model_name"`
-				Description string    `json:"description"`
-				CreatedAt   time.Time `json:"created_at"`
-				UpdatedAt   time.Time `json:"updated_at"`
-			}
-
-			err = db.QueryRowContext(ctx, query, aliasName).Scan(
-				&alias.ID, &alias.AliasName, &alias.ModelID, &alias.ModelName,
-				&alias.Description, &alias.CreatedAt, &alias.UpdatedAt,
-			)
-			if err == sql.ErrNoRows {
+			alias, err := regClient.GetAlias(ctx, aliasName)
+			if err != nil {
 				return fmt.Errorf("alias not found: %s", aliasName)
-			} else if err != nil {
-				return fmt.Errorf("query alias: %w", err)
 			}
 
 			if formatFlag == "json" {
@@ -479,35 +343,4 @@ func aliasGetCommand() *cobra.Command {
 	cmd.Flags().StringVar(&formatFlag, "format", "table", "Output format: table, json")
 
 	return cmd
-}
-
-// isUniqueViolation checks if the error is a PostgreSQL unique constraint violation
-func isUniqueViolation(err error) bool {
-	return err != nil && (contains(err.Error(), "23505") || contains(err.Error(), "unique constraint"))
-}
-
-// contains checks if str contains substr
-func contains(str, substr string) bool {
-	return len(str) >= len(substr) && (str == substr || len(str) > 0 && containsHelper(str, substr))
-}
-
-func containsHelper(str, substr string) bool {
-	for i := 0; i <= len(str)-len(substr); i++ {
-		if str[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
-
-// joinStrings joins strings with a separator (avoiding import of strings package)
-func joinStrings(strs []string, sep string) string {
-	if len(strs) == 0 {
-		return ""
-	}
-	result := strs[0]
-	for i := 1; i < len(strs); i++ {
-		result += sep + strs[i]
-	}
-	return result
 }

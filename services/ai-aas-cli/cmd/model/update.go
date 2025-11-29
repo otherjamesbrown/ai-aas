@@ -3,15 +3,12 @@ package model
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"time"
 
-	_ "github.com/lib/pq" // PostgreSQL driver
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/api"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/huggingface"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/kubernetes"
@@ -47,16 +44,10 @@ Examples:
 				return fmt.Errorf("load config: %w", err)
 			}
 
-			if cfg.APIEndpoint == "" || cfg.APIEndpoint == "http://localhost:8080" {
-				return fmt.Errorf("API endpoint not configured. Run 'ai-aas-cli --init' first")
+			apiClient, err := getAPIClient(cfg)
+			if err != nil {
+				return err
 			}
-
-			// Get API client
-			opts := []api.ClientOption{}
-			if cfg.TLSInsecure {
-				opts = append(opts, api.WithInsecureSkipVerify())
-			}
-			apiClient := api.NewClient(cfg.APIEndpoint, cfg.APIKey, opts...)
 			regClient := registry.NewClient(apiClient)
 
 			// Get HuggingFace client
@@ -230,16 +221,10 @@ Examples:
 				return fmt.Errorf("load config: %w", err)
 			}
 
-			if cfg.APIEndpoint == "" || cfg.APIEndpoint == "http://localhost:8080" {
-				return fmt.Errorf("API endpoint not configured. Run 'ai-aas-cli --init' first")
+			apiClient, err := getAPIClient(cfg)
+			if err != nil {
+				return err
 			}
-
-			// Get API client
-			opts := []api.ClientOption{}
-			if cfg.TLSInsecure {
-				opts = append(opts, api.WithInsecureSkipVerify())
-			}
-			apiClient := api.NewClient(cfg.APIEndpoint, cfg.APIKey, opts...)
 			regClient := registry.NewClient(apiClient)
 
 			// Get model info
@@ -379,19 +364,14 @@ Examples:
 				return fmt.Errorf("load config: %w", err)
 			}
 
-			if cfg.DatabaseURL == "" {
-				return fmt.Errorf("DATABASE_URL not configured")
+			apiClient, err := getAPIClient(cfg)
+			if err != nil {
+				return err
 			}
+			regClient := registry.NewClient(apiClient)
 
 			// If version is "current", get the current cached version
 			if version == "current" {
-				opts := []api.ClientOption{}
-				if cfg.TLSInsecure {
-					opts = append(opts, api.WithInsecureSkipVerify())
-				}
-				apiClient := api.NewClient(cfg.APIEndpoint, cfg.APIKey, opts...)
-				regClient := registry.NewClient(apiClient)
-
 				cacheEntries, err := regClient.GetCache(ctx, modelName)
 				if err != nil || len(cacheEntries) == 0 {
 					return fmt.Errorf("no cached version found for %s", modelName)
@@ -407,25 +387,9 @@ Examples:
 				version = latestCache.Version
 			}
 
-			db, err := sql.Open("postgres", cfg.DatabaseURL)
-			if err != nil {
-				return fmt.Errorf("connect to database: %w", err)
-			}
-			defer db.Close()
-
-			// Update pinned_version
-			result, err := db.ExecContext(ctx, `
-				UPDATE model_registry
-				SET pinned_version = $1, updated_at = NOW()
-				WHERE name = $2
-			`, version, modelName)
-			if err != nil {
-				return fmt.Errorf("update model: %w", err)
-			}
-
-			rowsAffected, _ := result.RowsAffected()
-			if rowsAffected == 0 {
-				return fmt.Errorf("model not found: %s", modelName)
+			// Pin via Admin API
+			if err := regClient.Pin(ctx, modelName, version); err != nil {
+				return fmt.Errorf("pin model: %w", err)
 			}
 
 			fmt.Printf("Pinned %s to version %s\n", modelName, truncateSHA(version))
@@ -462,41 +426,31 @@ Examples:
 				return fmt.Errorf("load config: %w", err)
 			}
 
-			if cfg.DatabaseURL == "" {
-				return fmt.Errorf("DATABASE_URL not configured")
-			}
-
-			db, err := sql.Open("postgres", cfg.DatabaseURL)
+			apiClient, err := getAPIClient(cfg)
 			if err != nil {
-				return fmt.Errorf("connect to database: %w", err)
+				return err
 			}
-			defer db.Close()
+			regClient := registry.NewClient(apiClient)
 
 			// Check current pin status
-			var currentPin sql.NullString
-			err = db.QueryRowContext(ctx, `SELECT pinned_version FROM model_registry WHERE name = $1`, modelName).Scan(&currentPin)
-			if err == sql.ErrNoRows {
+			model, err := regClient.Get(ctx, modelName)
+			if err != nil {
 				return fmt.Errorf("model not found: %s", modelName)
-			} else if err != nil {
-				return fmt.Errorf("query model: %w", err)
 			}
 
-			if !currentPin.Valid || currentPin.String == "" {
+			if model.PinnedVersion == "" {
 				fmt.Printf("Model %s is not pinned.\n", modelName)
 				return nil
 			}
 
-			// Clear pinned_version
-			_, err = db.ExecContext(ctx, `
-				UPDATE model_registry
-				SET pinned_version = NULL, updated_at = NOW()
-				WHERE name = $1
-			`, modelName)
-			if err != nil {
-				return fmt.Errorf("update model: %w", err)
+			previousVersion := model.PinnedVersion
+
+			// Unpin via Admin API
+			if err := regClient.Unpin(ctx, modelName); err != nil {
+				return fmt.Errorf("unpin model: %w", err)
 			}
 
-			fmt.Printf("Unpinned %s (was pinned to %s)\n", modelName, truncateSHA(currentPin.String))
+			fmt.Printf("Unpinned %s (was pinned to %s)\n", modelName, truncateSHA(previousVersion))
 			fmt.Println("Model will now be included in 'check-updates' and 'update' commands.")
 
 			return nil

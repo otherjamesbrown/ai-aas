@@ -3,17 +3,16 @@ package model
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"time"
 
-	_ "github.com/lib/pq" // PostgreSQL driver
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/kubernetes"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/registry"
 )
 
 // NewSwapCommand creates the model swap command
@@ -100,16 +99,32 @@ Examples:
 				return fmt.Errorf("disable %s: %w", disableModel, err)
 			}
 
-			// Record disable in history
-			if err := recordStateHistory(ctx, cfg, disableModel, environment, "swapped_out", reason); err != nil {
-				fmt.Printf("  Warning: could not record history: %v\n", err)
+			// Get API client for recording state history
+			apiClient, err := getAPIClient(cfg)
+			var regClient *registry.Client
+			if err == nil {
+				regClient = registry.NewClient(apiClient)
+			}
+
+			// Record disable in history via Admin API
+			if regClient != nil {
+				if err := regClient.RecordState(ctx, disableModel, registry.RecordStateRequest{
+					Environment: environment,
+					Action:      "swapped_out",
+					Reason:      reason,
+				}); err != nil {
+					fmt.Printf("  Warning: could not record history: %v\n", err)
+				}
 			}
 
 			fmt.Printf("  ✓ Disabled %s\n", disableModel)
 
-			// Wait briefly for resources to be released
+			// Wait for resources to be released using proper polling
 			fmt.Print("  Waiting for resources to be released...")
-			time.Sleep(5 * time.Second)
+			if err := k8sClient.WaitForDelete(ctx, disableIsvc, environment, 30*time.Second); err != nil {
+				// Not a fatal error, just log it
+				fmt.Printf(" (still terminating)")
+			}
 			fmt.Println(" done")
 
 			// Step 2: Enable the second model
@@ -153,9 +168,15 @@ Examples:
 				return fmt.Errorf("enable %s: %w", enableModel, err)
 			}
 
-			// Record enable in history
-			if err := recordStateHistory(ctx, cfg, enableModel, environment, "swapped_in", reason); err != nil {
-				fmt.Printf("  Warning: could not record history: %v\n", err)
+			// Record enable in history via Admin API
+			if regClient != nil {
+				if err := regClient.RecordState(ctx, enableModel, registry.RecordStateRequest{
+					Environment: environment,
+					Action:      "swapped_in",
+					Reason:      reason,
+				}); err != nil {
+					fmt.Printf("  Warning: could not record history: %v\n", err)
+				}
 			}
 
 			fmt.Printf("  ✓ Created InferenceService for %s\n", enableModel)
@@ -224,80 +245,16 @@ Examples:
 				return fmt.Errorf("load config: %w", err)
 			}
 
-			if cfg.DatabaseURL == "" {
-				return fmt.Errorf("DATABASE_URL not configured")
-			}
-
-			db, err := sql.Open("postgres", cfg.DatabaseURL)
+			apiClient, err := getAPIClient(cfg)
 			if err != nil {
-				return fmt.Errorf("connect to database: %w", err)
+				return err
 			}
-			defer db.Close()
+			regClient := registry.NewClient(apiClient)
 
-			// Build query
-			query := `
-				SELECT h.action, h.performed_by, h.reason, h.scheduled_at, h.executed_at,
-				       d.environment
-				FROM model_state_history h
-				JOIN model_deployments d ON h.deployment_id = d.id
-				JOIN model_registry r ON d.model_id = r.id
-				WHERE r.name = $1
-			`
-			queryArgs := []interface{}{modelName}
-			argNum := 2
-
-			if environment != "" {
-				query += fmt.Sprintf(" AND d.environment = $%d", argNum)
-				queryArgs = append(queryArgs, environment)
-				argNum++
-			}
-
-			query += " ORDER BY h.executed_at DESC"
-			query += fmt.Sprintf(" LIMIT $%d", argNum)
-			queryArgs = append(queryArgs, limit)
-
-			rows, err := db.QueryContext(ctx, query, queryArgs...)
+			// Get history via Admin API
+			entries, err := regClient.GetHistory(ctx, modelName, environment, limit)
 			if err != nil {
-				return fmt.Errorf("query history: %w", err)
-			}
-			defer rows.Close()
-
-			type historyEntry struct {
-				Action      string     `json:"action"`
-				PerformedBy string     `json:"performed_by"`
-				Reason      string     `json:"reason"`
-				ScheduledAt *time.Time `json:"scheduled_at,omitempty"`
-				ExecutedAt  time.Time  `json:"executed_at"`
-				Environment string     `json:"environment"`
-			}
-
-			var entries []historyEntry
-			for rows.Next() {
-				var e historyEntry
-				var performedBy, reason sql.NullString
-				var scheduledAt sql.NullTime
-
-				if err := rows.Scan(&e.Action, &performedBy, &reason, &scheduledAt, &e.ExecutedAt, &e.Environment); err != nil {
-					return fmt.Errorf("scan row: %w", err)
-				}
-
-				if performedBy.Valid {
-					e.PerformedBy = performedBy.String
-				} else {
-					e.PerformedBy = "system"
-				}
-				if reason.Valid {
-					e.Reason = reason.String
-				}
-				if scheduledAt.Valid {
-					e.ScheduledAt = &scheduledAt.Time
-				}
-
-				entries = append(entries, e)
-			}
-
-			if err := rows.Err(); err != nil {
-				return fmt.Errorf("iterate rows: %w", err)
+				return fmt.Errorf("get history: %w", err)
 			}
 
 			// Output
@@ -329,6 +286,9 @@ Examples:
 					reason = "-"
 				}
 				performedBy := e.PerformedBy
+				if performedBy == "" {
+					performedBy = "system"
+				}
 				if len(performedBy) > 20 {
 					performedBy = performedBy[:17] + "..."
 				}
@@ -351,60 +311,3 @@ Examples:
 	return cmd
 }
 
-// recordStateHistory records an action in the model_state_history table
-func recordStateHistory(ctx context.Context, cfg *config.Config, modelName, environment, action, reason string) error {
-	if cfg.DatabaseURL == "" {
-		return fmt.Errorf("DATABASE_URL not configured")
-	}
-
-	db, err := sql.Open("postgres", cfg.DatabaseURL)
-	if err != nil {
-		return fmt.Errorf("connect to database: %w", err)
-	}
-	defer db.Close()
-
-	// Get deployment ID
-	var deploymentID sql.NullString
-	err = db.QueryRowContext(ctx, `
-		SELECT d.id FROM model_deployments d
-		JOIN model_registry r ON d.model_id = r.id
-		WHERE r.name = $1 AND d.environment = $2
-	`, modelName, environment).Scan(&deploymentID)
-
-	if err == sql.ErrNoRows || !deploymentID.Valid {
-		// Create a deployment record if it doesn't exist
-		var modelID string
-		err = db.QueryRowContext(ctx, `SELECT id FROM model_registry WHERE name = $1`, modelName).Scan(&modelID)
-		if err != nil {
-			return fmt.Errorf("model not found: %s", modelName)
-		}
-
-		// Insert deployment record
-		err = db.QueryRowContext(ctx, `
-			INSERT INTO model_deployments (model_id, environment, namespace, status)
-			VALUES ($1, $2, $2, 'unknown')
-			RETURNING id
-		`, modelID, environment).Scan(&deploymentID)
-		if err != nil {
-			return fmt.Errorf("create deployment record: %w", err)
-		}
-	} else if err != nil {
-		return fmt.Errorf("query deployment: %w", err)
-	}
-
-	// Insert history entry
-	var reasonPtr *string
-	if reason != "" {
-		reasonPtr = &reason
-	}
-
-	_, err = db.ExecContext(ctx, `
-		INSERT INTO model_state_history (deployment_id, action, performed_by, reason)
-		VALUES ($1, $2, $3, $4)
-	`, deploymentID, action, "cli-user", reasonPtr)
-	if err != nil {
-		return fmt.Errorf("insert history: %w", err)
-	}
-
-	return nil
-}
