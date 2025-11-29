@@ -426,6 +426,7 @@ func checkInferenceBackend(ctx context.Context, client *http.Client, baseDomain,
 		result.Error = err.Error()
 		return result
 	}
+	// Set both headers for compatibility - API router accepts either X-API-Key or Authorization Bearer
 	modelsReq.Header.Set("X-API-Key", apiKey)
 	modelsReq.Header.Set("Authorization", "Bearer "+apiKey)
 
@@ -445,7 +446,13 @@ func checkInferenceBackend(ctx context.Context, client *http.Client, baseDomain,
 		return result
 	}
 
-	modelsBody, _ := io.ReadAll(modelsResp.Body)
+	modelsBody, err := io.ReadAll(modelsResp.Body)
+	if err != nil {
+		result.Status = "error"
+		result.Latency = time.Since(start).Round(time.Millisecond).String()
+		result.Error = fmt.Sprintf("failed to read models response: %v", err)
+		return result
+	}
 	var modelsData struct {
 		Data []struct {
 			ID string `json:"id"`
@@ -467,7 +474,13 @@ func checkInferenceBackend(ctx context.Context, client *http.Client, baseDomain,
 		},
 		"max_tokens": 1, // Minimal tokens to reduce cost/latency
 	}
-	bodyBytes, _ := json.Marshal(reqBody)
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		result.Status = "error"
+		result.Latency = time.Since(start).Round(time.Millisecond).String()
+		result.Error = fmt.Sprintf("failed to marshal request: %v", err)
+		return result
+	}
 
 	inferReq, err := http.NewRequestWithContext(ctx, "POST", completionsURL, bytes.NewReader(bodyBytes))
 	if err != nil {
@@ -476,6 +489,7 @@ func checkInferenceBackend(ctx context.Context, client *http.Client, baseDomain,
 		result.Error = err.Error()
 		return result
 	}
+	// Set both headers for compatibility - API router accepts either X-API-Key or Authorization Bearer
 	inferReq.Header.Set("X-API-Key", apiKey)
 	inferReq.Header.Set("Authorization", "Bearer "+apiKey)
 	inferReq.Header.Set("Content-Type", "application/json")
@@ -499,7 +513,12 @@ func checkInferenceBackend(ctx context.Context, client *http.Client, baseDomain,
 	}
 	defer inferResp.Body.Close()
 
-	respBody, _ := io.ReadAll(io.LimitReader(inferResp.Body, 2048))
+	respBody, err := io.ReadAll(io.LimitReader(inferResp.Body, 2048))
+	if err != nil {
+		result.Status = "error"
+		result.Error = fmt.Sprintf("failed to read inference response: %v", err)
+		return result
+	}
 
 	switch {
 	case inferResp.StatusCode == 200:

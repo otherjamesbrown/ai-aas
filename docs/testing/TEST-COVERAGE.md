@@ -6,9 +6,17 @@ This document tracks test coverage across the AI-AAS platform. It serves as the 
 
 ### Run Smoke Tests Against Dev Cluster
 
+> **Security Note**: The export command below may save the API key in your shell history.
+> To avoid this, prefix with a space (` export ...`) or use `read -s ADMIN_API_KEY` to input interactively.
+
 ```bash
 cd tests/e2e
+# Option 1: Direct (may save to history)
 export ADMIN_API_KEY=$(grep MASTER_ADMIN_API_KEY ../../secrets/env/.env | cut -d= -f2)
+
+# Option 2: Safer (not saved to history in most shells)
+ export ADMIN_API_KEY=$(grep MASTER_ADMIN_API_KEY ../../secrets/env/.env | cut -d= -f2)
+
 go test -v ./suites -run TestSmokeEndToEnd -timeout 10m
 ```
 
