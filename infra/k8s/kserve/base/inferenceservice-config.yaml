@@ -37,3 +37,13 @@ data:
       "localGateway": "knative-serving/knative-local-gateway",
       "localGatewayService": "knative-local-gateway.istio-system.svc.cluster.local"
     }
+
+  # Storage initializer configuration
+  storageInitializer: |-
+    {
+      "image": "kserve/storage-initializer:v0.11.0",
+      "memoryRequest": "100Mi",
+      "memoryLimit": "1Gi",
+      "cpuRequest": "100m",
+      "cpuLimit": "1"
+    }
