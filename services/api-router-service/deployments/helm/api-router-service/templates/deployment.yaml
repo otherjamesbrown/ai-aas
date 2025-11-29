@@ -126,6 +126,15 @@ spec:
             - containerPort: {{ .Values.service.port }}
               name: http
               protocol: TCP
+          {{- if .Values.startupProbe }}
+          startupProbe:
+            httpGet:
+              path: {{ .Values.startupProbe.path }}
+              port: http
+            failureThreshold: {{ .Values.startupProbe.failureThreshold }}
+            periodSeconds: {{ .Values.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.startupProbe.timeoutSeconds | default 5 }}
+          {{- end }}
           livenessProbe:
             httpGet:
               path: {{ .Values.livenessProbe.path }}

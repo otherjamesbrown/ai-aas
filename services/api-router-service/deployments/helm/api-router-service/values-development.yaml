@@ -13,7 +13,7 @@
 #
 # See docs/ingress-best-practices.md for complete documentation
 
-replicaCount: 1  # Single replica for dev
+replicaCount: 2  # Multiple replicas for resilience
 
 image:
   repository: ghcr.io/otherjamesbrown/api-router-service
@@ -61,21 +61,31 @@ resources:
     memory: 128Mi
 
 autoscaling:
-  enabled: false  # Disable autoscaling in dev
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+startupProbe:
+  path: /v1/status/healthz
+  failureThreshold: 30
+  periodSeconds: 2
+  timeoutSeconds: 5
 
 livenessProbe:
   path: /v1/status/healthz
-  initialDelaySeconds: 10
+  initialDelaySeconds: 5
   periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 3
 
 readinessProbe:
   path: /v1/status/readyz
-  initialDelaySeconds: 15
-  periodSeconds: 10
+  initialDelaySeconds: 5  # Reduced since startupProbe handles initial startup
+  periodSeconds: 5  # Check more frequently for faster recovery
   timeoutSeconds: 10  # Increased for parallel health checks
-  failureThreshold: 6  # More tolerant of transient failures
+  failureThreshold: 3  # Faster detection of issues (15s to unready)
 
 env:
   - name: SERVICE_NAME
