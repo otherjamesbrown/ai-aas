@@ -27,7 +27,28 @@ After reading the main guide, adhere to the following critical rules below.
 
 In addition to the principles outlined in the main guide, always adhere to:
 
+1.  **API-First Interfaces (from Constitution)**: All functionality MUST be exposed via REST APIs first.
+    - **CLI and Web UI are thin clients** - they MUST NOT contain business logic
+    - **No direct database access** from CLI or UI - always go through the Admin API
+    - When implementing CLI commands, use the existing `internal/api` and `internal/registry` clients
+    - Example pattern:
+      ```go
+      // CORRECT: Use API client
+      apiClient := api.NewClient(cfg.APIEndpoint, cfg.APIKey, opts...)
+      regClient := registry.NewClient(apiClient)
+      model, err := regClient.Get(ctx, modelName)
+
+      // WRONG: Direct database access
+      db, err := sql.Open("postgres", cfg.DatabaseURL)
+      rows, err := db.Query("SELECT * FROM models")
+      ```
+
 2.  **GitOps-First Deployment**: ALWAYS use GitOps for infrastructure and deployment changes. Never make direct changes to Kubernetes clusters. All changes must go through: edit → commit → push → ArgoCD sync.
+
+3.  **Reuse Existing Components**: Before implementing new functionality:
+    - Check for existing clients in `internal/api`, `internal/registry`, `internal/kubernetes`
+    - Check if the Admin API already has the endpoint you need
+    - If an API endpoint is missing, add it to Admin API first, then use it from CLI
 
 ## Environment Access & Credentials
 

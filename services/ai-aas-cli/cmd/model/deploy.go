@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/api"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
@@ -400,27 +399,14 @@ Examples:
 			}
 
 			fmt.Printf("Restarting InferenceService: %s/%s\n", namespace, isvcName)
+			fmt.Println("Triggering rolling restart via annotation update...")
 
-			// For KServe, we need to patch with a restart annotation
-			// This is typically done by updating an annotation to trigger a rollout
-			// For now, we'll delete and recreate (simplest approach)
-			fmt.Println("Triggering rolling restart...")
-
-			// Get current pods and delete them (K8s will recreate)
-			pods, err := k8sClient.GetPodStatus(ctx, isvcName, namespace)
-			if err != nil {
-				return fmt.Errorf("get pods: %w", err)
+			// Trigger rolling restart by updating annotation
+			if err := k8sClient.RestartInferenceService(ctx, isvcName, namespace); err != nil {
+				return fmt.Errorf("restart inferenceservice: %w", err)
 			}
 
-			fmt.Printf("Found %d pod(s) to restart\n", len(pods))
-			for _, pod := range pods {
-				fmt.Printf("  Restarting: %s\n", pod.Name)
-				// Delete pods to trigger restart
-				err := k8sClient.Clientset().CoreV1().Pods(namespace).Delete(ctx, pod.Name, deleteOpts())
-				if err != nil {
-					fmt.Printf("    Warning: %v\n", err)
-				}
-			}
+			fmt.Println("Rolling restart triggered.")
 
 			if wait {
 				fmt.Println("\nWaiting for pods to be ready...")
@@ -435,6 +421,7 @@ Examples:
 			}
 
 			fmt.Printf("\nRestart initiated for %s in %s\n", modelName, environment)
+			fmt.Println("\nNote: Use 'ai-aas-cli model status' to monitor restart progress")
 
 			return nil
 		},
@@ -475,7 +462,7 @@ Examples:
 			defer cancel()
 
 			// Parse replicas
-			minReplicas, maxReplicas, err := parseReplicas(replicas)
+			replicaCount, _, err := parseReplicas(replicas)
 			if err != nil {
 				return fmt.Errorf("invalid replicas: %w", err)
 			}
@@ -506,15 +493,15 @@ Examples:
 
 			fmt.Printf("Scaling InferenceService: %s/%s\n", namespace, isvcName)
 			fmt.Printf("  Current replicas: %d (ready: %d)\n", status.Replicas, status.ReadyReplicas)
-			fmt.Printf("  Target: %d-%d replicas\n", minReplicas, maxReplicas)
+			fmt.Printf("  Target: %d replicas\n", replicaCount)
 
-			// Note: Actual scaling would require patching the InferenceService
-			// This is a simplified implementation that shows what would happen
-			fmt.Println("\nNote: InferenceService scaling requires patching the resource.")
-			fmt.Println("For now, consider using 'kubectl patch' or redeploy with new replica counts.")
-			fmt.Printf("\nExample:\n")
-			fmt.Printf("  kubectl patch inferenceservice %s -n %s --type merge \\\n", isvcName, namespace)
-			fmt.Printf("    -p '{\"spec\":{\"predictor\":{\"minReplicas\":%d,\"maxReplicas\":%d}}}'\n", minReplicas, maxReplicas)
+			// Scale the InferenceService
+			if err := k8sClient.ScaleInferenceService(ctx, isvcName, namespace, replicaCount); err != nil {
+				return fmt.Errorf("scale inferenceservice: %w", err)
+			}
+
+			fmt.Printf("\nSuccessfully scaled %s to %d replicas\n", modelName, replicaCount)
+			fmt.Println("\nNote: Use 'ai-aas-cli model status' to check scaling progress")
 
 			return nil
 		},
@@ -609,9 +596,4 @@ func generateInferenceServiceYAML(cfg kubernetes.InferenceServiceConfig) ([]byte
 	}
 
 	return yaml.Marshal(isvc)
-}
-
-// deleteOpts returns default delete options
-func deleteOpts() metav1.DeleteOptions {
-	return metav1.DeleteOptions{}
 }

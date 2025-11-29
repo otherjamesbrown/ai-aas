@@ -202,3 +202,21 @@ func (c *Client) Ping(ctx context.Context) error {
 	return c.HealthCheck(ctx)
 }
 
+// NewHTTPClient creates a standalone HTTP client with optional TLS skip verification
+func NewHTTPClient(insecureSkipVerify bool) *http.Client {
+	client := &http.Client{
+		Timeout: 60 * time.Second,
+	}
+
+	if insecureSkipVerify {
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		if transport.TLSClientConfig == nil {
+			transport.TLSClientConfig = &tls.Config{}
+		}
+		transport.TLSClientConfig.InsecureSkipVerify = true //nolint:gosec // User-requested for dev environments
+		client.Transport = transport
+	}
+
+	return client
+}
+

@@ -187,3 +187,133 @@ func (c *Client) GetCache(ctx context.Context, name string) ([]CacheEntry, error
 	return entries, nil
 }
 
+// PinRequest contains parameters for pinning a model version
+type PinRequest struct {
+	Version string `json:"version"`
+}
+
+// Pin pins a model to a specific version
+func (c *Client) Pin(ctx context.Context, name string, version string) error {
+	req := PinRequest{Version: version}
+	if err := c.api.Post(ctx, "/v1/models/"+name+"/pin", req, nil); err != nil {
+		return fmt.Errorf("pin model %s: %w", name, err)
+	}
+	return nil
+}
+
+// Unpin removes the version pin from a model
+func (c *Client) Unpin(ctx context.Context, name string) error {
+	if err := c.api.Post(ctx, "/v1/models/"+name+"/unpin", nil, nil); err != nil {
+		return fmt.Errorf("unpin model %s: %w", name, err)
+	}
+	return nil
+}
+
+// Alias represents a model alias
+type Alias struct {
+	ID          string    `json:"id"`
+	AliasName   string    `json:"alias_name"`
+	ModelID     string    `json:"model_id"`
+	ModelName   string    `json:"model_name"`
+	Description string    `json:"description,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// AliasCreateRequest contains parameters for creating an alias
+type AliasCreateRequest struct {
+	AliasName   string `json:"alias_name"`
+	ModelName   string `json:"model_name"`
+	Description string `json:"description,omitempty"`
+}
+
+// AliasUpdateRequest contains parameters for updating an alias
+type AliasUpdateRequest struct {
+	ModelName   string `json:"model_name,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+// ListAliases returns all model aliases
+func (c *Client) ListAliases(ctx context.Context) ([]Alias, error) {
+	var aliases []Alias
+	if err := c.api.Get(ctx, "/v1/models/aliases", &aliases); err != nil {
+		return nil, fmt.Errorf("list aliases: %w", err)
+	}
+	return aliases, nil
+}
+
+// GetAlias retrieves a specific alias
+func (c *Client) GetAlias(ctx context.Context, aliasName string) (*Alias, error) {
+	var alias Alias
+	if err := c.api.Get(ctx, "/v1/models/aliases/"+aliasName, &alias); err != nil {
+		return nil, fmt.Errorf("get alias %s: %w", aliasName, err)
+	}
+	return &alias, nil
+}
+
+// CreateAlias creates a new model alias
+func (c *Client) CreateAlias(ctx context.Context, req AliasCreateRequest) (*Alias, error) {
+	var alias Alias
+	if err := c.api.Post(ctx, "/v1/models/aliases", req, &alias); err != nil {
+		return nil, fmt.Errorf("create alias: %w", err)
+	}
+	return &alias, nil
+}
+
+// UpdateAlias updates an existing alias
+func (c *Client) UpdateAlias(ctx context.Context, aliasName string, req AliasUpdateRequest) (*Alias, error) {
+	var alias Alias
+	if err := c.api.Put(ctx, "/v1/models/aliases/"+aliasName, req, &alias); err != nil {
+		return nil, fmt.Errorf("update alias %s: %w", aliasName, err)
+	}
+	return &alias, nil
+}
+
+// DeleteAlias deletes an alias
+func (c *Client) DeleteAlias(ctx context.Context, aliasName string) error {
+	if err := c.api.Delete(ctx, "/v1/models/aliases/"+aliasName); err != nil {
+		return fmt.Errorf("delete alias %s: %w", aliasName, err)
+	}
+	return nil
+}
+
+// StateHistoryEntry represents a model state change event
+type StateHistoryEntry struct {
+	ID          string     `json:"id"`
+	Action      string     `json:"action"`
+	PerformedBy string     `json:"performed_by"`
+	Reason      string     `json:"reason,omitempty"`
+	ScheduledAt *time.Time `json:"scheduled_at,omitempty"`
+	ExecutedAt  time.Time  `json:"executed_at"`
+	Environment string     `json:"environment"`
+}
+
+// GetHistory retrieves state history for a model
+func (c *Client) GetHistory(ctx context.Context, name string, environment string, limit int) ([]StateHistoryEntry, error) {
+	path := fmt.Sprintf("/v1/models/%s/history?limit=%d", name, limit)
+	if environment != "" {
+		path += "&environment=" + environment
+	}
+
+	var entries []StateHistoryEntry
+	if err := c.api.Get(ctx, path, &entries); err != nil {
+		return nil, fmt.Errorf("get history for %s: %w", name, err)
+	}
+	return entries, nil
+}
+
+// RecordStateRequest contains parameters for recording a state change
+type RecordStateRequest struct {
+	Environment string `json:"environment"`
+	Action      string `json:"action"`
+	Reason      string `json:"reason,omitempty"`
+}
+
+// RecordState records a state change for a model
+func (c *Client) RecordState(ctx context.Context, name string, req RecordStateRequest) error {
+	if err := c.api.Post(ctx, "/v1/models/"+name+"/history", req, nil); err != nil {
+		return fmt.Errorf("record state for %s: %w", name, err)
+	}
+	return nil
+}
+
