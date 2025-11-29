@@ -1,5 +1,6 @@
 # ClusterServingRuntime for vLLM
 # Defines how to run vLLM models in KServe
+# Supports HuggingFace models via VLLM_MODEL_NAME env var (downloads directly)
 apiVersion: serving.kserve.io/v1alpha1
 kind: ClusterServingRuntime
 metadata:
@@ -8,6 +9,9 @@ spec:
   annotations:
     prometheus.kserve.io/port: "8000"
     prometheus.kserve.io/path: /metrics
+  # Disable storage initializer - vLLM downloads models directly from HuggingFace
+  storageHelper:
+    disabled: true
   supportedModelFormats:
     - name: vllm
       version: "1"
@@ -19,19 +23,31 @@ spec:
   containers:
     - name: kserve-container
       image: vllm/vllm-openai:v0.6.4
+      # Note: Command uses VLLM_MODEL_NAME env var set by InferenceService
+      command:
+        - python3
+        - -m
+        - vllm.entrypoints.openai.api_server
       args:
         - --model
-        - /mnt/models
+        - $(VLLM_MODEL_NAME)
         - --port
         - "8000"
         - --tensor-parallel-size
         - "1"
         - --max-model-len
-        - "16384"
+        - "8192"
         - --trust-remote-code
+        - --download-dir
+        - /mnt/models
       env:
         - name: VLLM_ALLOW_RUNTIME_LORA_UPDATING
           value: "true"
+        # Default model name, overridden by InferenceService
+        - name: VLLM_MODEL_NAME
+          value: "mistralai/Mistral-7B-Instruct-v0.3"
+        - name: HF_HOME
+          value: "/mnt/models/.cache"
       ports:
         - containerPort: 8000
           protocol: TCP

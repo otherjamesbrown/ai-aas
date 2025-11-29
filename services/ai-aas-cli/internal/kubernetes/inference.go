@@ -4,6 +4,7 @@ package kubernetes
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -26,8 +27,9 @@ type InferenceServiceConfig struct {
 	Name           string
 	Namespace      string
 	ModelName      string
-	StorageURI     string // S3 path to model files
-	Runtime        string // ClusterServingRuntime name (e.g., "vllm-runtime")
+	StorageURI     string            // S3 path to model files (optional for HF models)
+	HFModelID      string            // HuggingFace model ID (e.g., "mistralai/Mistral-7B-Instruct-v0.3")
+	Runtime        string            // ClusterServingRuntime name (e.g., "vllm-runtime")
 	RuntimeVersion string
 	GPUCount       int
 	MemoryGB       int
@@ -36,6 +38,7 @@ type InferenceServiceConfig struct {
 	Environment    string
 	Labels         map[string]string
 	Annotations    map[string]string
+	EnvVars        map[string]string // Additional environment variables
 }
 
 // InferenceServiceStatus represents the status of an InferenceService
@@ -202,13 +205,37 @@ func buildInferenceServiceManifest(cfg InferenceServiceConfig) *unstructured.Uns
 		"modelFormat": map[string]interface{}{
 			"name": "vllm",
 		},
-		"storageUri": cfg.StorageURI,
-		"resources":  resources,
+		"resources": resources,
+	}
+
+	// For HuggingFace models, we pass model ID via env var (vLLM downloads directly)
+	// For S3 models, we use storageUri (storage initializer downloads)
+	if cfg.StorageURI != "" && !strings.HasPrefix(cfg.StorageURI, "hf://") {
+		modelSpec["storageUri"] = cfg.StorageURI
 	}
 
 	// Add explicit runtime if specified
 	if cfg.Runtime != "" {
 		modelSpec["runtime"] = cfg.Runtime
+	}
+
+	// Build container env vars for HuggingFace model
+	var containerEnvVars []interface{}
+	if cfg.HFModelID != "" {
+		containerEnvVars = append(containerEnvVars, map[string]interface{}{
+			"name":  "VLLM_MODEL_NAME",
+			"value": cfg.HFModelID,
+		})
+	}
+	// Add any additional env vars
+	for k, v := range cfg.EnvVars {
+		containerEnvVars = append(containerEnvVars, map[string]interface{}{
+			"name":  k,
+			"value": v,
+		})
+	}
+	if len(containerEnvVars) > 0 {
+		modelSpec["env"] = containerEnvVars
 	}
 
 	isvc := &unstructured.Unstructured{

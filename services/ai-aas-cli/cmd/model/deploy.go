@@ -117,7 +117,8 @@ Examples:
 				Namespace:   namespace,
 				ModelName:   modelName,
 				StorageURI:  storageURI,
-				Runtime:     "vllm-runtime", // Explicit runtime to avoid autoSelect issues
+				HFModelID:   model.HFModelID, // For vLLM to download from HuggingFace directly
+				Runtime:     "vllm-runtime",  // Explicit runtime to avoid autoSelect issues
 				GPUCount:    gpuCount,
 				MemoryGB:    memoryGB,
 				MinReplicas: minReplicas,
@@ -591,11 +592,27 @@ func generateInferenceServiceYAML(cfg kubernetes.InferenceServiceConfig) ([]byte
 		"modelFormat": map[string]interface{}{
 			"name": "vllm",
 		},
-		"storageUri": cfg.StorageURI,
-		"resources":  resources,
+		"resources": resources,
 	}
+
+	// For HuggingFace models, we pass model ID via env var (vLLM downloads directly)
+	// For S3 models, we use storageUri (storage initializer downloads)
+	if cfg.StorageURI != "" && !strings.HasPrefix(cfg.StorageURI, "hf://") {
+		modelSpec["storageUri"] = cfg.StorageURI
+	}
+
 	if cfg.Runtime != "" {
 		modelSpec["runtime"] = cfg.Runtime
+	}
+
+	// Build container env vars for HuggingFace model
+	if cfg.HFModelID != "" {
+		modelSpec["env"] = []map[string]interface{}{
+			{
+				"name":  "VLLM_MODEL_NAME",
+				"value": cfg.HFModelID,
+			},
+		}
 	}
 
 	isvc := map[string]interface{}{
