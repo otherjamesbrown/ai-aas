@@ -162,3 +162,89 @@ kubectl get deployment <name> -n <namespace> -o jsonpath='{.spec.template.spec.c
 
 - `docs/runbooks/deploy-to-environments.md`: Complete deployment runbook
 - ArgoCD endpoints: `argocd.dev.ai-aas.local`, `argocd.prod.ai-aas.local`
+
+## ArgoCD Application Requirements
+
+**CRITICAL**: All ArgoCD Applications MUST follow these standards for consistency and reliability.
+
+### Required Sync Policy
+
+Every new or modified Application MUST include these sync options:
+
+```yaml
+syncPolicy:
+  automated:
+    prune: true        # Remove resources not in Git
+    selfHeal: true     # Revert manual changes
+    allowEmpty: false  # Prevent accidental deletion
+  syncOptions:
+    - CreateNamespace=true
+    - PrunePropagationPolicy=foreground
+    - PruneLast=true
+  retry:
+    limit: 5
+    backoff:
+      duration: 5s
+      factor: 2
+      maxDuration: 3m
+```
+
+### Branch Targeting Rules
+
+- **Development apps**: ALWAYS target `develop` branch (`targetRevision: develop`)
+- **Production apps**: ALWAYS target `main` branch (`targetRevision: main`)
+- **NEVER** reference feature branches in Applications - they may be deleted
+- When creating PRs, ensure Applications don't point to the PR branch
+
+### RBAC Project Requirements
+
+Applications MUST be assigned to an AppProject with restrictive policies:
+
+- **Explicit destinations**: List specific namespaces, never use wildcard `*`
+- **Explicit sourceRepos**: Only allow specific repository URLs
+- **clusterResourceWhitelist**: Only allow required cluster-scoped resources
+- See `gitops/clusters/development/projects/platform-project.yaml` as reference
+
+### Application Template
+
+Use this template for new Applications:
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: <service-name>-<environment>
+  namespace: argocd
+  labels:
+    environment: <environment>
+    app: <service-name>
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform-<environment>
+  source:
+    repoURL: https://github.com/otherjamesbrown/ai-aas
+    targetRevision: develop  # or main for production
+    path: services/<service-name>/deployments/helm/<service-name>
+    helm:
+      valueFiles:
+        - values-<environment>.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: <namespace>
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+```

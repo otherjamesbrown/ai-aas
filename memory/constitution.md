@@ -1,20 +1,18 @@
 <!--
 Sync Impact Report
-- Version change: 1.4.2 → 1.5.0
+- Version change: 1.5.0 → 1.6.0
 - Modified principles:
-  - Updated: Declarative Infrastructure & GitOps - Added explicit Service Deployment Requirements
-  - Updated: Observability - Added Health Probe Requirements
+  - Updated: Declarative Infrastructure & GitOps - Added ArgoCD Application Requirements
 - Added sections:
-  - Service Deployment Requirements (under GitOps principle)
-  - Health Probe Requirements (under Observability principle)
-  - Deployment gate in Constitution Gates
+  - ArgoCD Application Requirements (under GitOps principle)
 - Removed sections: none
 - Templates requiring updates:
-  - .specify/templates/plan-template.md → Constitution Check gates (⚠ pending)
-  - .specify/templates/spec-template.md → Acceptance & API standards note (⚠ pending)
-  - .specify/templates/tasks-template.md → Cross-cutting security/observability tasks (⚠ pending)
-- Deferred TODOs:
-  - RATIFICATION_DATE: confirm original adoption date
+  - None - ArgoCD requirements are operational, not template-impacting
+- Changes in this version:
+  - Mandated sync policies (prune, selfHeal, allowEmpty)
+  - Mandated retry policies (limit 5, backoff 5s-3m)
+  - Mandated branch targeting (develop/main, never feature branches)
+  - Mandated restrictive AppProject RBAC (explicit namespaces, sourceRepos)
 -->
 
 # Inference-as-a-Service (IAS) Constitution
@@ -55,6 +53,14 @@ Rationale: A secure default posture reduces blast radius and operational risk.
   - Every deployable service MUST have an ArgoCD Application at `gitops/clusters/<env>/apps/<service-name>.yaml`.
   - Raw Kubernetes manifests in `services/<service-name>/k8s/` are NOT sufficient for production deployment.
   - Services without ArgoCD Applications will NOT be deployed and will NOT be persistent.
+- **ArgoCD Application Requirements**:
+  - All Applications MUST include automated sync with `prune: true`, `selfHeal: true`, and `allowEmpty: false`.
+  - All Applications MUST include retry policies: `limit: 5`, `backoff: 5s-3m` with exponential factor 2.
+  - All Applications MUST include syncOptions: `CreateNamespace=true`, `PrunePropagationPolicy=foreground`, `PruneLast=true`.
+  - Development Applications MUST target `develop` branch; production Applications MUST target `main` branch.
+  - Applications MUST NEVER reference feature branches (which may be deleted).
+  - Applications MUST be assigned to AppProjects with restrictive RBAC (explicit namespaces, no wildcards).
+  - AppProjects MUST use explicit `sourceRepos` and `clusterResourceWhitelist` (never wildcards).
 - Hybrid GitOps:
   - Git‑managed: org policies (budgets, rate limits, allowed models, memberships), observability config, model deployments.
   - API‑managed: secrets and runtime data (API keys, logs, audit records).
@@ -140,5 +146,5 @@ All implementation plans MUST explicitly pass these gates:
   - Keep specs aligned via targeted spec bumps and CHANGELOGs when contracts change.
 - Reviews: Periodic compliance reviews ensure gates remain testable, enforced, and automated where possible.
 
-**Version**: 1.5.0 | **Ratified**: 2025-11-06 | **Last Amended**: 2025-11-28
+**Version**: 1.6.0 | **Ratified**: 2025-11-06 | **Last Amended**: 2025-11-29
 

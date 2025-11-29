@@ -173,3 +173,58 @@ This ensures that PRs cannot be merged unless all CI checks pass, preventing bro
 - Bootstrap ArgoCD per cluster with `./scripts/gitops/bootstrap_argocd.sh <environment> <kube-context>`.
 - Register this repository using `argocd repo add` and sync `platform-<env>-infrastructure` applications after each promotion.
 - Customize `gitops/templates/argocd-values.yaml` (ingress, service type, RBAC) and rerun the bootstrap script to apply changes.
+
+### ArgoCD Application Standards
+
+All ArgoCD Applications MUST follow these standards for consistency and reliability:
+
+#### Required Sync Policy
+
+Every Application MUST include these sync options:
+
+```yaml
+syncPolicy:
+  automated:
+    prune: true        # Remove resources not in Git
+    selfHeal: true     # Revert manual changes
+    allowEmpty: false  # Prevent accidental deletion
+  syncOptions:
+    - CreateNamespace=true
+    - PrunePropagationPolicy=foreground
+    - PruneLast=true
+  retry:
+    limit: 5
+    backoff:
+      duration: 5s
+      factor: 2
+      maxDuration: 3m
+```
+
+#### Branch Targeting
+
+- **Development apps**: Target `develop` branch (`targetRevision: develop`)
+- **Production apps**: Target `main` branch (`targetRevision: main`)
+- **Never** reference feature branches or deleted branches in Applications
+
+#### RBAC Projects
+
+Applications MUST be assigned to an AppProject with restrictive policies:
+
+- **Explicit namespace destinations**: Never use wildcard `*` for namespaces
+- **Explicit sourceRepos**: Only allow specific repository URLs
+- **clusterResourceWhitelist**: Only allow required cluster-scoped resources (Namespaces, CRDs, ClusterRoles, etc.)
+- **namespaceResourceBlacklist**: Block dangerous resources like ResourceQuota/LimitRange
+
+Example project structure in `gitops/clusters/<env>/projects/platform-project.yaml`.
+
+#### Application Locations
+
+- Development: `gitops/clusters/development/apps/<service-name>.yaml`
+- Production: `gitops/clusters/production/apps/<service-name>.yaml`
+- Projects: `gitops/clusters/<env>/projects/`
+
+### Related Documentation
+
+- `docs/runbooks/argocd-deployment-workflow.md` - Deployment workflow
+- `docs/runbooks/argocd-bootstrap.md` - Bootstrap procedures
+- `docs/platform/argocd-testing-guide.md` - Testing guide
