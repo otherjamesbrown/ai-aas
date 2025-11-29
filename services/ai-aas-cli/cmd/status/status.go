@@ -182,17 +182,19 @@ func runStatus(ctx context.Context, verbose, jsonOutput bool) error {
 
 	// Determine overall health
 	allHealthy := true
+	hasSlow := false
 	for _, r := range results {
-		if r.Status != "healthy" && r.Status != "auth_required" {
+		if r.Status == "slow" {
+			hasSlow = true
+		} else if r.Status != "healthy" && r.Status != "auth_required" {
 			allHealthy = false
-			break
 		}
 	}
 
 	status := PlatformStatus{
 		Environment: cfg.Environment,
 		Timestamp:   time.Now().Format(time.RFC3339),
-		Healthy:     allHealthy,
+		Healthy:     allHealthy && !hasSlow,
 		Services:    results,
 	}
 
@@ -223,10 +225,17 @@ func runStatus(ctx context.Context, verbose, jsonOutput bool) error {
 	output.PrintTable(headers, rows)
 
 	fmt.Println()
-	if allHealthy {
-		fmt.Println("✓ All services are healthy")
+	if allHealthy && !hasSlow {
+		fmt.Println(colorGreen + "✓ All services are healthy" + colorReset)
+	} else if allHealthy && hasSlow {
+		fmt.Println(colorYellow + "⚠ All services reachable but some are slow (>1s response)" + colorReset)
+		fmt.Println()
+		fmt.Println("Possible causes:")
+		fmt.Println("  - High load on backend services")
+		fmt.Println("  - Network latency or DNS resolution delays")
+		fmt.Println("  - Cold start / model loading in progress")
 	} else {
-		fmt.Println("✗ Some services are unhealthy")
+		fmt.Println(colorRed + "✗ Some services are unhealthy" + colorReset)
 		fmt.Println()
 		fmt.Println("Troubleshooting:")
 		fmt.Println("  - Check if services are deployed and running")
@@ -291,13 +300,24 @@ func checkService(ctx context.Context, client *http.Client, name, baseURL, endpo
 
 	switch {
 	case resp.StatusCode >= 200 && resp.StatusCode < 300:
-		result.Status = "healthy"
-		result.Details = fmt.Sprintf("HTTP %d", resp.StatusCode)
+		// Check latency - if > 1 second, mark as slow
+		if latency > time.Second {
+			result.Status = "slow"
+			result.Details = fmt.Sprintf("HTTP %d (response > 1s)", resp.StatusCode)
+		} else {
+			result.Status = "healthy"
+			result.Details = fmt.Sprintf("HTTP %d", resp.StatusCode)
+		}
 	case resp.StatusCode == 401 || resp.StatusCode == 403:
 		// Auth required but service is reachable
 		if authRequired {
-			result.Status = "healthy"
-			result.Details = "Reachable (auth required)"
+			if latency > time.Second {
+				result.Status = "slow"
+				result.Details = "Reachable but slow (auth required)"
+			} else {
+				result.Status = "healthy"
+				result.Details = "Reachable (auth required)"
+			}
 		} else {
 			result.Status = "auth_required"
 			result.Details = "Unexpected auth requirement"
@@ -342,19 +362,30 @@ func extractBaseDomain(endpoint string) (string, error) {
 	return host, nil
 }
 
+// ANSI color codes
+const (
+	colorReset  = "\033[0m"
+	colorGreen  = "\033[32m"
+	colorYellow = "\033[33m"
+	colorRed    = "\033[31m"
+	colorCyan   = "\033[36m"
+)
+
 func getStatusIcon(status string) string {
 	switch status {
 	case "healthy":
-		return "✓"
+		return colorGreen + "✓" + colorReset
+	case "slow":
+		return colorYellow + "⚠" + colorReset
 	case "auth_required":
-		return "⚡"
+		return colorCyan + "⚡" + colorReset
 	case "unreachable", "dns_error", "connection_refused", "timeout":
-		return "✗"
+		return colorRed + "✗" + colorReset
 	case "endpoint_not_found":
-		return "?"
+		return colorYellow + "?" + colorReset
 	case "server_error":
-		return "!"
+		return colorRed + "!" + colorReset
 	default:
-		return "?"
+		return colorYellow + "?" + colorReset
 	}
 }
