@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/api"
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/huggingface"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/registry"
@@ -48,15 +49,18 @@ Examples:
 			modelName := args[0]
 
 			// Get configuration
-			apiEndpoint := viper.GetString("api.endpoint")
-			apiKey := viper.GetString("api.key")
-			hfToken := viper.GetString("hf.token")
+			cfg, err := config.Load()
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			// S3 config still from viper (not in main config struct)
 			s3Endpoint := viper.GetString("s3.endpoint")
 			s3AccessKey := viper.GetString("s3.access_key")
 			s3SecretKey := viper.GetString("s3.secret_key")
 			s3Bucket := viper.GetString("s3.bucket")
 
-			if apiEndpoint == "" {
+			if cfg.APIEndpoint == "" || cfg.APIEndpoint == "http://localhost:8080" {
 				return fmt.Errorf("API endpoint not configured. Run 'ai-aas-cli --init' first")
 			}
 
@@ -64,7 +68,11 @@ Examples:
 			defer cancel()
 
 			// Get model from registry
-			apiClient := api.NewClient(apiEndpoint, apiKey)
+			opts := []api.ClientOption{}
+			if cfg.TLSInsecure {
+				opts = append(opts, api.WithInsecureSkipVerify())
+			}
+			apiClient := api.NewClient(cfg.APIEndpoint, cfg.APIKey, opts...)
 			regClient := registry.NewClient(apiClient)
 
 			fmt.Printf("Looking up model: %s\n", modelName)
@@ -79,7 +87,7 @@ Examples:
 			}
 
 			// Get model size and file list
-			hfClient := huggingface.NewClient(huggingface.WithToken(hfToken))
+			hfClient := huggingface.NewClient(huggingface.WithToken(cfg.HFToken))
 			size, err := hfClient.GetModelSize(ctx, model.HFModelID, revision)
 			if err != nil {
 				return fmt.Errorf("get model size: %w", err)

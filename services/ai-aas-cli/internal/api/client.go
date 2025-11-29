@@ -4,6 +4,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -36,6 +37,18 @@ func WithHTTPClient(httpClient *http.Client) ClientOption {
 	}
 }
 
+// WithInsecureSkipVerify disables TLS certificate verification
+func WithInsecureSkipVerify() ClientOption {
+	return func(c *Client) {
+		transport := &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true, //nolint:gosec // User-requested for dev environments
+			},
+		}
+		c.httpClient.Transport = transport
+	}
+}
+
 // NewClient creates a new Admin API client
 func NewClient(baseURL, apiKey string, opts ...ClientOption) *Client {
 	c := &Client{
@@ -55,12 +68,19 @@ func NewClient(baseURL, apiKey string, opts ...ClientOption) *Client {
 
 // Request performs an HTTP request to the Admin API
 func (c *Client) Request(ctx context.Context, method, path string, body interface{}, result interface{}) error {
-	// Build URL
-	u, err := url.Parse(c.baseURL)
+	// Build URL - parse path to handle query strings correctly
+	pathURL, err := url.Parse(path)
+	if err != nil {
+		return fmt.Errorf("parse path: %w", err)
+	}
+
+	baseURL, err := url.Parse(c.baseURL)
 	if err != nil {
 		return fmt.Errorf("parse base URL: %w", err)
 	}
-	u.Path = path
+
+	// Resolve the path against the base URL
+	u := baseURL.ResolveReference(pathURL)
 
 	// Prepare body
 	var bodyReader io.Reader
@@ -82,7 +102,7 @@ func (c *Client) Request(ctx context.Context, method, path string, body interfac
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	if c.apiKey != "" {
-		req.Header.Set("X-API-Key", c.apiKey)
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	}
 
 	// Execute request
@@ -164,7 +184,7 @@ func (e *APIError) IsUnauthorized() bool {
 
 // HealthCheck performs a health check against the API
 func (c *Client) HealthCheck(ctx context.Context) error {
-	return c.Get(ctx, "/health", nil)
+	return c.Get(ctx, "/healthz", nil)
 }
 
 // Ping tests connectivity to the API

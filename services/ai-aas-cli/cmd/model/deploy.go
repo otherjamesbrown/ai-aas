@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/api"
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/kubernetes"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/registry"
@@ -61,11 +62,13 @@ Examples:
 			modelName := args[0]
 
 			// Get configuration
-			apiEndpoint := viper.GetString("api.endpoint")
-			apiKey := viper.GetString("api.key")
+			cfg, err := config.Load()
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
 			s3Bucket := viper.GetString("s3.bucket")
 
-			if apiEndpoint == "" {
+			if cfg.APIEndpoint == "" || cfg.APIEndpoint == "http://localhost:8080" {
 				return fmt.Errorf("API endpoint not configured. Run 'ai-aas-cli --init' first")
 			}
 
@@ -73,7 +76,11 @@ Examples:
 			defer cancel()
 
 			// Get model from registry
-			apiClient := api.NewClient(apiEndpoint, apiKey)
+			opts := []api.ClientOption{}
+			if cfg.TLSInsecure {
+				opts = append(opts, api.WithInsecureSkipVerify())
+			}
+			apiClient := api.NewClient(cfg.APIEndpoint, cfg.APIKey, opts...)
 			regClient := registry.NewClient(apiClient)
 
 			fmt.Printf("Looking up model: %s\n", modelName)
@@ -94,7 +101,7 @@ Examples:
 			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
 			namespace := fmt.Sprintf("%s", environment) // Using environment as namespace
 
-			cfg := kubernetes.InferenceServiceConfig{
+			isvcCfg := kubernetes.InferenceServiceConfig{
 				Name:        isvcName,
 				Namespace:   namespace,
 				ModelName:   modelName,
@@ -125,7 +132,7 @@ Examples:
 
 			if dryRun {
 				// Generate YAML and print
-				yamlBytes, err := generateInferenceServiceYAML(cfg)
+				yamlBytes, err := generateInferenceServiceYAML(isvcCfg)
 				if err != nil {
 					return fmt.Errorf("generate YAML: %w", err)
 				}
@@ -184,7 +191,7 @@ Examples:
 
 			// Create InferenceService
 			fmt.Println("\nCreating InferenceService...")
-			if err := k8sClient.CreateInferenceService(ctx, cfg); err != nil {
+			if err := k8sClient.CreateInferenceService(ctx, isvcCfg); err != nil {
 				return fmt.Errorf("create inferenceservice: %w", err)
 			}
 

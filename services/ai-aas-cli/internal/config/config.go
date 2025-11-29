@@ -35,7 +35,8 @@ type Config struct {
 	AdminAPIEndpoint  string `mapstructure:"admin_api_endpoint" json:"admin_api_endpoint,omitempty"`
 
 	// TLS Configuration
-	CACertFile string `mapstructure:"ca_cert_file" json:"ca_cert_file,omitempty"`
+	CACertFile     string `mapstructure:"ca_cert_file" json:"ca_cert_file,omitempty"`
+	TLSInsecure    bool   `mapstructure:"tls_insecure" json:"tls_insecure,omitempty"`
 
 	// Database (for direct DB commands)
 	DatabaseURL string `mapstructure:"database_url" json:"database_url,omitempty"`
