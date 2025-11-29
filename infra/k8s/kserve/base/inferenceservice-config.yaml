@@ -58,3 +58,23 @@ data:
       "cpuLimit": "1",
       "defaultUrl": ""
     }
+
+  # Batcher configuration
+  batcher: |-
+    {
+      "image": "kserve/agent:v0.11.0",
+      "memoryRequest": "100Mi",
+      "memoryLimit": "1Gi",
+      "cpuRequest": "100m",
+      "cpuLimit": "1"
+    }
+
+  # Agent configuration
+  agent: |-
+    {
+      "image": "kserve/agent:v0.11.0",
+      "memoryRequest": "100Mi",
+      "memoryLimit": "1Gi",
+      "cpuRequest": "100m",
+      "cpuLimit": "1"
+    }
