@@ -3,7 +3,7 @@
 Auto-generated from all feature plans. Last updated: 2025-11-17
 
 ## Active Technologies
-- Go 1.21+ (consistent with existing services) + net/http, chi router, shared/go/dbutil, shared/go/middleware, OpenTelemetry, Prometheus clien (017-admin-api-service)
+- Go 1.21+ (consistent with existing services) + net/http, chi router, shared/go/dbutil, shared/go/middleware, OpenTelemetry, Prometheus client (017-admin-api-service)
 - PostgreSQL (existing platform database) (017-admin-api-service)
 - YAML (Kubernetes manifests), KServe v0.11+, Knative Serving v1.x + KServe, Knative Serving, vLLM (v0.6.x - v0.10.x), Kubernetes 1.28+ (018-model-readiness-probes)
 - N/A (declarative configuration only) (018-model-readiness-probes)
@@ -30,7 +30,7 @@ Python 3.11+ (vLLM runtime), Go 1.21+ (management tooling), YAML (Helm charts): 
 ## Recent Changes
 - 020-model-management: Added Go 1.21+ (aligns with existing admin-cli codebase)
 - 018-model-readiness-probes: Added YAML (Kubernetes manifests), KServe v0.11+, Knative Serving v1.x + KServe, Knative Serving, vLLM (v0.6.x - v0.10.x), Kubernetes 1.28+
-- 017-admin-api-service: Added Go 1.21+ (consistent with existing services) + net/http, chi router, shared/go/dbutil, shared/go/middleware, OpenTelemetry, Prometheus clien
+- 017-admin-api-service: Added Go 1.21+ (consistent with existing services) + net/http, chi router, shared/go/dbutil, shared/go/middleware, OpenTelemetry, Prometheus client
 
 
 <!-- MANUAL ADDITIONS START -->

@@ -21,7 +21,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/otherjamesbrown/ai-aas
-    targetRevision: develop  # Change to main after merge
+    targetRevision: develop
     path: gitops/clusters/development/apps
     directory:
       recurse: true
