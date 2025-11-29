@@ -12,7 +12,7 @@ spec:
   project: platform-development
   source:
     repoURL: https://github.com/otherjamesbrown/ai-aas
-    targetRevision: 020-model-management
+    targetRevision: develop
     path: services/admin-api-service/deployments/helm/admin-api-service
     helm:
       valueFiles:
