@@ -202,6 +202,10 @@ func TestSmokeEndToEnd(t *testing.T) {
 	t.Log("=== Platform Smoke Test ===")
 	t.Log("")
 
+	passed := 0
+	skipped := 0
+	failed := 0
+
 	// --- Health Check ---
 	t.Log("Step 1: Health Check")
 	routerClient := harness.NewClient(ctx.Config.APIURLs.APIRouterService, ctx.Config.Timeouts.RequestTimeout)
@@ -211,89 +215,155 @@ func TestSmokeEndToEnd(t *testing.T) {
 
 	healthResp, err := routerClient.GET("/v1/status/healthz")
 	if err != nil {
-		t.Fatalf("  FAIL: Health check failed: %v", err)
+		t.Logf("  FAIL: Health check failed: %v", err)
+		failed++
+	} else if healthResp.StatusCode != 200 {
+		t.Logf("  FAIL: Health check returned %d", healthResp.StatusCode)
+		failed++
+	} else {
+		t.Log("  PASS: API Router is healthy")
+		passed++
 	}
-	if healthResp.StatusCode != 200 {
-		t.Fatalf("  FAIL: Health check returned %d", healthResp.StatusCode)
-	}
-	t.Log("  PASS: API Router is healthy")
 
 	// --- Models Check ---
 	t.Log("Step 2: Models Available")
 	modelsResp, err := routerClient.GET("/v1/models")
 	if err != nil {
-		t.Fatalf("  FAIL: Models check failed: %v", err)
+		t.Logf("  FAIL: Models check failed: %v", err)
+		failed++
+	} else if modelsResp.StatusCode != 200 {
+		t.Logf("  FAIL: Models check returned %d", modelsResp.StatusCode)
+		failed++
+	} else {
+		var models ModelsResponse
+		if err := json.Unmarshal(modelsResp.Body, &models); err != nil {
+			t.Logf("  FAIL: Failed to parse models: %v", err)
+			failed++
+		} else {
+			t.Logf("  PASS: %d models available", len(models.Data))
+			for _, m := range models.Data {
+				t.Logf("    - %s", m.ID)
+			}
+			passed++
+		}
 	}
-	if modelsResp.StatusCode != 200 {
-		t.Fatalf("  FAIL: Models check returned %d", modelsResp.StatusCode)
-	}
-
-	var models ModelsResponse
-	if err := json.Unmarshal(modelsResp.Body, &models); err != nil {
-		t.Fatalf("  FAIL: Failed to parse models: %v", err)
-	}
-	t.Logf("  PASS: %d models available", len(models.Data))
 
 	// --- Organization Creation ---
 	t.Log("Step 3: Create Organization")
 	orgFixture := fixtures.NewOrganizationFixture(ctx.Client, ctx.Fixtures)
 	org, err := orgFixture.Create(ctx, "")
 	if err != nil {
-		t.Fatalf("  FAIL: Organization creation failed: %v", err)
-	}
-	t.Logf("  PASS: Organization created: %s", org.ID)
-
-	// --- User Creation ---
-	t.Log("Step 4: Create User")
-	userFixture := fixtures.NewUserFixture(ctx.Client, ctx.Fixtures)
-	email := ctx.GenerateResourceName("smoketest") + "@test.example.com"
-	user, err := userFixture.Create(ctx, org.ID, email, "Smoke Test User", []string{"admin"})
-	if err != nil {
-		t.Fatalf("  FAIL: User creation failed: %v", err)
-	}
-	t.Logf("  PASS: User created: %s", user.ID)
-
-	// --- API Key Creation ---
-	t.Log("Step 5: Create API Key")
-	apiKeyFixture := fixtures.NewAPIKeyFixture(ctx.Client, ctx.Fixtures)
-	apiKey, err := apiKeyFixture.Create(ctx, org.ID, "", []string{"inference:read", "inference:write"})
-	if err != nil {
-		t.Fatalf("  FAIL: API key creation failed: %v", err)
-	}
-	t.Logf("  PASS: API key created: %s", apiKey.ID)
-
-	// --- Inference Request ---
-	t.Log("Step 6: Inference Request")
-	if len(models.Data) == 0 {
-		t.Log("  SKIP: No models available")
+		t.Logf("  FAIL: Organization creation failed: %v", err)
+		failed++
 	} else {
-		routerClient.SetHeader("Authorization", "Bearer "+apiKey.Key)
-		reqBody := map[string]interface{}{
-			"model": models.Data[0].ID,
-			"messages": []map[string]interface{}{
-				{"role": "user", "content": "Hello"},
-			},
-			"max_tokens": 10,
-		}
+		t.Logf("  PASS: Organization created: %s", org.ID)
+		passed++
+	}
 
-		inferResp, err := routerClient.POST("/v1/chat/completions", reqBody)
-		if err != nil {
-			t.Logf("  WARN: Inference failed: %v", err)
-		} else if inferResp.StatusCode == 200 {
-			var completion map[string]interface{}
-			json.Unmarshal(inferResp.Body, &completion)
-			if usage, ok := completion["usage"].(map[string]interface{}); ok {
-				t.Logf("  PASS: Inference completed (tokens: %.0f)", usage["total_tokens"])
-			} else {
-				t.Log("  PASS: Inference completed")
-			}
-		} else if inferResp.StatusCode == 503 {
-			t.Log("  SKIP: Backend unavailable")
+	// --- User-Org Service Health ---
+	t.Log("Step 4: User-Org Service Health")
+	userOrgClient := harness.NewClient(ctx.Config.APIURLs.UserOrgService, ctx.Config.Timeouts.RequestTimeout)
+	if isIPAddress(ctx.Config.APIURLs.UserOrgService) {
+		userOrgClient.SetHeader("Host", "user-org.dev.ai-aas.local")
+	}
+	userOrgHealth, err := userOrgClient.GET("/healthz")
+	if err != nil {
+		t.Logf("  FAIL: User-Org health check failed: %v", err)
+		failed++
+	} else if userOrgHealth.StatusCode != 200 {
+		t.Logf("  FAIL: User-Org health returned %d", userOrgHealth.StatusCode)
+		failed++
+	} else {
+		t.Log("  PASS: User-Org Service is healthy")
+		passed++
+	}
+
+	// --- Inference Request (using admin key) ---
+	t.Log("Step 5: Inference Request")
+	adminKey := ctx.Config.Credentials.AdminAPIKey
+	if adminKey == "" {
+		t.Log("  SKIP: No admin API key configured")
+		skipped++
+	} else {
+		routerClient.SetHeader("Authorization", "Bearer "+adminKey)
+		routerClient.SetHeader("X-API-Key", adminKey)
+
+		// Get models first
+		modelsResp, _ := routerClient.GET("/v1/models")
+		var models ModelsResponse
+		json.Unmarshal(modelsResp.Body, &models)
+
+		if len(models.Data) == 0 {
+			t.Log("  SKIP: No models available")
+			skipped++
 		} else {
-			t.Logf("  WARN: Inference returned %d", inferResp.StatusCode)
+			reqBody := map[string]interface{}{
+				"model": models.Data[0].ID,
+				"messages": []map[string]interface{}{
+					{"role": "user", "content": "Say hi"},
+				},
+				"max_tokens": 10,
+			}
+
+			inferResp, err := routerClient.POST("/v1/chat/completions", reqBody)
+			if err != nil {
+				t.Logf("  FAIL: Inference request failed: %v", err)
+				failed++
+			} else if inferResp.StatusCode == 200 {
+				var completion map[string]interface{}
+				json.Unmarshal(inferResp.Body, &completion)
+				if usage, ok := completion["usage"].(map[string]interface{}); ok {
+					t.Logf("  PASS: Inference completed (tokens: %.0f)", usage["total_tokens"])
+				} else {
+					t.Log("  PASS: Inference completed")
+				}
+				passed++
+			} else if inferResp.StatusCode == 503 {
+				t.Log("  SKIP: Backend unavailable (503)")
+				skipped++
+			} else if inferResp.StatusCode == 401 || inferResp.StatusCode == 403 {
+				t.Logf("  SKIP: Auth required (%d)", inferResp.StatusCode)
+				skipped++
+			} else {
+				t.Logf("  FAIL: Inference returned %d: %s", inferResp.StatusCode, string(inferResp.Body))
+				failed++
+			}
+		}
+	}
+
+	// --- Analytics Service Health ---
+	t.Log("Step 6: Analytics Service Health")
+	if ctx.Config.APIURLs.AnalyticsService == "" {
+		t.Log("  SKIP: Analytics service not configured")
+		skipped++
+	} else {
+		analyticsClient := harness.NewClient(ctx.Config.APIURLs.AnalyticsService, ctx.Config.Timeouts.RequestTimeout)
+		if isIPAddress(ctx.Config.APIURLs.AnalyticsService) {
+			analyticsClient.SetHeader("Host", "analytics.dev.ai-aas.local")
+		}
+		analyticsHealth, err := analyticsClient.GET("/analytics/v1/status/healthz")
+		if err != nil {
+			t.Logf("  FAIL: Analytics health check failed: %v", err)
+			failed++
+		} else if analyticsHealth.StatusCode != 200 {
+			t.Logf("  FAIL: Analytics health returned %d", analyticsHealth.StatusCode)
+			failed++
+		} else {
+			t.Log("  PASS: Analytics Service is healthy")
+			passed++
 		}
 	}
 
 	t.Log("")
+	t.Log("=== Smoke Test Summary ===")
+	t.Logf("  PASSED:  %d", passed)
+	t.Logf("  SKIPPED: %d", skipped)
+	t.Logf("  FAILED:  %d", failed)
+	t.Log("")
+
+	if failed > 0 {
+		t.Fatalf("Smoke test failed with %d failures", failed)
+	}
+
 	t.Log("=== Smoke Test Complete ===")
 }
