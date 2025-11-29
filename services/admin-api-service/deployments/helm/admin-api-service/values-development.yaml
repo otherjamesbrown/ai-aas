@@ -1,0 +1,54 @@
+# Development environment overrides
+replicaCount: 1
+
+image:
+  repository: ghcr.io/otherjamesbrown/ai-aas/admin-api-service
+  tag: latest
+  pullPolicy: Always
+
+env:
+  - name: PORT
+    value: "8080"
+  - name: ENVIRONMENT
+    value: development
+  - name: LOG_LEVEL
+    value: info
+
+secrets:
+  databaseUrlSecretName: admin-api-secrets
+  databaseUrlSecretKey: database-url
+  apiKeyHashSaltSecretName: admin-api-secrets
+  apiKeyHashSaltSecretKey: api-key-hash-salt
+  masterAdminApiKeySecretName: admin-api-secrets
+  masterAdminApiKeySecretKey: master-admin-api-key
+
+userOrgService:
+  endpoint: "http://user-org-service-development-user-org-service.user-org-service.svc.cluster.local:8081"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: admin-api.dev.ai-aas.local
+      paths:
+        - path: /
+          pathType: Prefix
+    - host: admin-api.172.232.58.222.nip.io
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - admin-api.dev.ai-aas.local
+        - admin-api.172.232.58.222.nip.io
+      secretName: ai-aas-tls
