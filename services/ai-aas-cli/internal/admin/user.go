@@ -20,7 +20,6 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/client/userorg"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/errors"
-	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/health"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
 )
 
@@ -158,8 +157,11 @@ func runUserList(cmd *cobra.Command, args []string, flagOrgID, flagFormat string
 		)
 	}
 
-	// Health check
-	checker := health.NewChecker(5 * time.Second)
+	// Create HTTP client with TLS config
+	checker, err := createHealthChecker(cfg)
+	if err != nil {
+		return errors.NewOperationError(fmt.Sprintf("create http client: %v", err), "Check TLS configuration")
+	}
 	requiredServices := map[string]string{
 		"user-org-service": cfg.UserOrgEndpoint,
 	}
@@ -168,7 +170,10 @@ func runUserList(cmd *cobra.Command, args []string, flagOrgID, flagFormat string
 	}
 
 	// Create client and list users
-	userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
+	userOrgClient, err := createUserOrgClient(cfg)
+	if err != nil {
+		return errors.NewOperationError(fmt.Sprintf("create client: %v", err), "Check TLS configuration")
+	}
 	users, err := userOrgClient.ListUsers(cmd.Context(), flagOrgID)
 	if err != nil {
 		return errors.NewOperationError(
@@ -348,8 +353,11 @@ func runUserCreate(cmd *cobra.Command, args []string, flagOrgID, flagEmail strin
 		)
 	}
 
-	// Health check
-	checker := health.NewChecker(5 * time.Second)
+	// Create HTTP client with TLS config
+	checker, err := createHealthChecker(cfg)
+	if err != nil {
+		return errors.NewOperationError(fmt.Sprintf("create http client: %v", err), "Check TLS configuration")
+	}
 	requiredServices := map[string]string{
 		"user-org-service": cfg.UserOrgEndpoint,
 	}
@@ -358,7 +366,10 @@ func runUserCreate(cmd *cobra.Command, args []string, flagOrgID, flagEmail strin
 	}
 
 	// Check if user exists (for upsert)
-	userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
+	userOrgClient, err := createUserOrgClient(cfg)
+	if err != nil {
+		return errors.NewOperationError(fmt.Sprintf("create client: %v", err), "Check TLS configuration")
+	}
 	var user *userorg.UserResponse
 	if flagUpsert {
 		existingUser, err := userOrgClient.GetUserByEmail(cmd.Context(), flagOrgID, flagEmail)
@@ -566,7 +577,10 @@ func runUserUpdate(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 		}
 
 		// Get user by email
-		userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
+		userOrgClient, err := createUserOrgClient(cfg)
+		if err != nil {
+			return errors.NewOperationError(fmt.Sprintf("create client: %v", err), "Check TLS configuration")
+		}
 		user, err := userOrgClient.GetUserByEmail(cmd.Context(), flagOrgID, flagEmail)
 		if err != nil {
 			return errors.NewOperationError(
@@ -594,8 +608,11 @@ func runUserUpdate(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 		)
 	}
 
-	// Health check
-	checker := health.NewChecker(5 * time.Second)
+	// Create HTTP client with TLS config
+	checker, err := createHealthChecker(cfg)
+	if err != nil {
+		return errors.NewOperationError(fmt.Sprintf("create http client: %v", err), "Check TLS configuration")
+	}
 	requiredServices := map[string]string{
 		"user-org-service": cfg.UserOrgEndpoint,
 	}
@@ -604,7 +621,10 @@ func runUserUpdate(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 	}
 
 	// Execute update
-	userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
+	userOrgClient, err := createUserOrgClient(cfg)
+	if err != nil {
+		return errors.NewOperationError(fmt.Sprintf("create client: %v", err), "Check TLS configuration")
+	}
 	user, err := userOrgClient.UpdateUser(cmd.Context(), flagOrgID, resolvedUserID, req)
 	if err != nil {
 		return errors.NewOperationError(
@@ -788,7 +808,10 @@ func runUserDelete(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 		}
 
 		// Get user by email
-		userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
+		userOrgClient, err := createUserOrgClient(cfg)
+		if err != nil {
+			return errors.NewOperationError(fmt.Sprintf("create client: %v", err), "Check TLS configuration")
+		}
 		user, err := userOrgClient.GetUserByEmail(cmd.Context(), flagOrgID, flagEmail)
 		if err != nil {
 			return errors.NewOperationError(
@@ -807,8 +830,11 @@ func runUserDelete(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 		)
 	}
 
-	// Health check
-	checker := health.NewChecker(5 * time.Second)
+	// Create HTTP client with TLS config
+	checker, err := createHealthChecker(cfg)
+	if err != nil {
+		return errors.NewOperationError(fmt.Sprintf("create http client: %v", err), "Check TLS configuration")
+	}
 	requiredServices := map[string]string{
 		"user-org-service": cfg.UserOrgEndpoint,
 	}
@@ -817,7 +843,10 @@ func runUserDelete(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 	}
 
 	// Get user details for confirmation display
-	userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
+	userOrgClient, err := createUserOrgClient(cfg)
+	if err != nil {
+		return errors.NewOperationError(fmt.Sprintf("create client: %v", err), "Check TLS configuration")
+	}
 	var userName string
 	user, err := userOrgClient.GetUser(cmd.Context(), flagOrgID, resolvedUserID)
 	if err == nil {

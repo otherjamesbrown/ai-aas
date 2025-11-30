@@ -299,16 +299,32 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	orgIDParam := chi.URLParam(r, "orgId")
 
-	_, err := h.resolveOrgID(ctx, orgIDParam)
+	orgID, err := h.resolveOrgID(ctx, orgIDParam)
 	if err != nil {
 		http.Error(w, "organization not found", http.StatusNotFound)
 		return
 	}
 
-	// TODO: Implement list query with pagination
-	// For now, return empty list
+	users, err := h.runtime.Postgres.ListUsersInOrg(ctx, orgID)
+	if err != nil {
+		h.logger.Error("failed to list users", zap.Error(err), zap.String("orgId", orgIDParam))
+		http.Error(w, "failed to list users", http.StatusInternalServerError)
+		return
+	}
+
+	// Convert to response format
+	var responses []UserResponse
+	for _, user := range users {
+		responses = append(responses, toUserResponse(user))
+	}
+	if responses == nil {
+		responses = []UserResponse{}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode([]UserResponse{})
+	if err := json.NewEncoder(w).Encode(responses); err != nil {
+		h.logger.Error("failed to encode response", zap.Error(err))
+	}
 }
 
 // GetUser handles GET /v1/orgs/{orgId}/users/{userId} - Retrieve user details.

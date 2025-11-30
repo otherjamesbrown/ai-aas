@@ -506,6 +506,12 @@ func (h *Handler) requireOrgAccess(ctx context.Context, orgID uuid.UUID) error {
 	authOrgID := middleware.GetOrgID(ctx)
 	userID := middleware.GetUserID(ctx)
 
+	// Service accounts with admin scope (or wildcard "*" scope) can access any org
+	// This allows platform admins to manage all orgs
+	if middleware.HasAnyScope(ctx, "admin", "*") {
+		return nil
+	}
+
 	// If user is in the same org, allow access
 	if authOrgID == orgID {
 		return nil
@@ -524,8 +530,8 @@ func (h *Handler) requireOrgAdmin(ctx context.Context, orgID uuid.UUID) error {
 		return err
 	}
 
-	// Then check for admin scope
-	if middleware.HasAnyScope(ctx, "org:admin", "model-access:admin", "admin") {
+	// Then check for admin scope (including wildcard scope)
+	if middleware.HasAnyScope(ctx, "org:admin", "model-access:admin", "admin", "*") {
 		return nil
 	}
 

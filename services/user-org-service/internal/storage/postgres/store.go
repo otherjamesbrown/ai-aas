@@ -189,6 +189,36 @@ func (s *Store) GetOrgBySlug(ctx context.Context, slug string) (Org, error) {
 	return out, err
 }
 
+// ListUsersInOrg retrieves all users in an organization.
+// Returns users ordered by created_at descending (newest first).
+func (s *Store) ListUsersInOrg(ctx context.Context, orgID uuid.UUID) ([]User, error) {
+	var out []User
+	err := s.withTenantTx(ctx, orgID, func(ctx context.Context, tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT * FROM users
+			WHERE org_id = $1 AND deleted_at IS NULL
+			ORDER BY created_at DESC
+		`, orgID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			user, err := scanUser(rows)
+			if err != nil {
+				return err
+			}
+			out = append(out, user)
+		}
+		return rows.Err()
+	})
+	if out == nil {
+		out = []User{}
+	}
+	return out, err
+}
+
 // GetUserByEmail retrieves a user by email within an organization.
 func (s *Store) GetUserByEmail(ctx context.Context, orgID uuid.UUID, email string) (User, error) {
 	var out User
