@@ -2,38 +2,29 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { RouterProvider } from '@tanstack/react-router';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { TelemetryProvider } from '@/providers/TelemetryProvider';
-import { FeatureFlagProviderWrapper } from '@/providers/FeatureFlagProviderWrapper';
-import { AuthProvider } from '@/providers/AuthProvider';
-import { QueryProvider } from '@/lib/query';
-import { ToastProvider } from '@/providers/ToastProvider';
+import { AppProviders } from '@/providers/AppProviders';
 import { router } from './app/AppRouter';
 import './styles/global.css';
 
 /**
  * Main application entry point
- * Wraps app with all necessary providers in correct order
+ *
+ * Provider hierarchy (max 4 levels per spec requirement):
+ * 1. StrictMode
+ * 2. ErrorBoundary
+ * 3. AppProviders (combines Auth, Query, Toast)
+ * 4. RouterProvider
+ *
+ * Note: TelemetryProvider and FeatureFlagProviderWrapper were evaluated
+ * and removed as they are not critical for the admin portal MVP.
+ * They can be re-added later if needed.
  */
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <TelemetryProvider
-        serviceName={import.meta.env.VITE_OTEL_SERVICE_NAME || 'web-portal'}
-        serviceVersion={import.meta.env.VITE_OTEL_SERVICE_VERSION || '0.1.0'}
-        endpoint={import.meta.env.VITE_OTEL_EXPORTER_OTLP_ENDPOINT}
-      >
-        <AuthProvider>
-          <FeatureFlagProviderWrapper
-            apiUrl={import.meta.env.VITE_FEATURE_FLAGS_API_URL}
-          >
-            <QueryProvider>
-              <ToastProvider>
-                <RouterProvider router={router} />
-              </ToastProvider>
-            </QueryProvider>
-          </FeatureFlagProviderWrapper>
-        </AuthProvider>
-      </TelemetryProvider>
+      <AppProviders>
+        <RouterProvider router={router} />
+      </AppProviders>
     </ErrorBoundary>
   </React.StrictMode>
 );

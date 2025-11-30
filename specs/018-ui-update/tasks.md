@@ -32,10 +32,10 @@
 
 **Purpose**: Project initialization and basic structure verification
 
-- [ ] T-S018-P01-001 Verify project structure exists at `web/portal/` per implementation plan
-- [ ] T-S018-P01-002 [P] Verify dependencies in `web/portal/package.json` (React 18, TypeScript, Vite, TailwindCSS, shadcn/ui, Playwright)
-- [ ] T-S018-P01-003 [P] Verify TypeScript configuration in `web/portal/tsconfig.json` has strict mode enabled (no `any` types allowed)
-- [ ] T-S018-P01-004 [P] Verify ESLint and Prettier configuration in `web/portal/`
+- [x] T-S018-P01-001 Verify project structure exists at `web/portal/` per implementation plan
+- [x] T-S018-P01-002 [P] Verify dependencies in `web/portal/package.json` (React 18, TypeScript, Vite, TailwindCSS, shadcn/ui, Playwright)
+- [x] T-S018-P01-003 [P] Verify TypeScript configuration in `web/portal/tsconfig.json` has strict mode enabled (no `any` types allowed)
+- [x] T-S018-P01-004 [P] Verify ESLint and Prettier configuration in `web/portal/`
 
 ---
 
@@ -45,16 +45,16 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T-S018-P02-005 [US1] Create centralized API configuration module in `web/portal/src/config/api.ts` with `ApiConfig` interface, `computeApiConfig()` function, and frozen `apiConfig` export
-- [ ] T-S018-P02-006 [US1] Create `web/portal/src/config/index.ts` that exports `apiConfig` from `api.ts`
-- [ ] T-S018-P02-007 [US1] Update `web/portal/src/lib/http/client.ts` to import and use `apiConfig` from centralized config, create `httpClient` (authenticated) with baseURL from `apiConfig.apiUrl`
-- [ ] T-S018-P02-008 [US1] Create `publicClient` (unauthenticated) in `web/portal/src/lib/http/client.ts` with baseURL from `apiConfig.baseUrl`
-- [ ] T-S018-P02-009 [US1] Add correlation ID interceptor to both `httpClient` and `publicClient` in `web/portal/src/lib/http/client.ts`
-- [ ] T-S018-P02-010 [US1] Add authentication interceptor to `httpClient` only in `web/portal/src/lib/http/client.ts` that reads token from sessionStorage
-- [ ] T-S018-P02-011 [US1] Add 401 error handling interceptor to `httpClient` in `web/portal/src/lib/http/client.ts` that clears sessionStorage and redirects to login
-- [ ] T-S018-P02-012 [US1] Create `TokenManager` class in `web/portal/src/services/tokenManager.ts` with `scheduleRefresh()`, `cancelRefresh()`, `setLogoutCallback()`, and private `doRefresh()` methods
-- [ ] T-S018-P02-013 [US1] Create `HealthMonitor` singleton class in `web/portal/src/services/healthMonitor.ts` with `start()`, `stop()`, `subscribe()`, and `getStatus()` methods
-- [ ] T-S018-P02-014 [US1] Create React hook `useHealthStatus()` in `web/portal/src/hooks/useHealthStatus.ts` that subscribes to `healthMonitor` and returns current status
+- [x] T-S018-P02-005 [US1] Create centralized API configuration module in `web/portal/src/config/api.ts` with `ApiConfig` interface, `computeApiConfig()` function, and frozen `apiConfig` export
+- [x] T-S018-P02-006 [US1] Create `web/portal/src/config/index.ts` that exports `apiConfig` from `api.ts`
+- [x] T-S018-P02-007 [US1] Update `web/portal/src/lib/http/client.ts` to import and use `apiConfig` from centralized config, create `httpClient` (authenticated) with baseURL from `apiConfig.apiUrl`
+- [x] T-S018-P02-008 [US1] Create `publicClient` (unauthenticated) in `web/portal/src/lib/http/client.ts` with baseURL from `apiConfig.baseUrl`
+- [x] T-S018-P02-009 [US1] Add correlation ID interceptor to both `httpClient` and `publicClient` in `web/portal/src/lib/http/client.ts`
+- [x] T-S018-P02-010 [US1] Add authentication interceptor to `httpClient` only in `web/portal/src/lib/http/client.ts` that reads token from sessionStorage
+- [x] T-S018-P02-011 [US1] Add 401 error handling interceptor to `httpClient` in `web/portal/src/lib/http/client.ts` that clears sessionStorage and redirects to login
+- [x] T-S018-P02-012 [US1] Create `TokenManager` class in `web/portal/src/services/tokenManager.ts` with `scheduleRefresh()`, `cancelRefresh()`, `setLogoutCallback()`, and private `doRefresh()` methods
+- [x] T-S018-P02-013 [US1] Create `HealthMonitor` singleton class in `web/portal/src/services/healthMonitor.ts` with `start()`, `stop()`, `subscribe()`, and `getStatus()` methods
+- [x] T-S018-P02-014 [US1] Create React hook `useHealthStatus()` in `web/portal/src/hooks/useHealthStatus.ts` that subscribes to `healthMonitor` and returns current status
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -75,8 +75,8 @@
 - [ ] T-S018-P03-019 [US1] Remove duplicated URL computation logic from `web/portal/src/components/ServiceHealthCheck.tsx`
 - [ ] T-S018-P03-020 [US1] Update `web/portal/src/app/features/admin/api/apiKeys.ts` to use `httpClient` instead of raw axios
 - [ ] T-S018-P03-021 [US1] Remove duplicated URL computation logic from `web/portal/src/app/features/admin/api/apiKeys.ts`
-- [ ] T-S018-P03-022 [US1] Create `AppProviders` wrapper component in `web/portal/src/providers/AppProviders.tsx` that combines QueryProvider and ToastProvider
-- [ ] T-S018-P03-023 [US1] Update `web/portal/src/main.tsx` to use `AppProviders` and flatten provider hierarchy to maximum 4 levels
+- [x] T-S018-P03-022 [US1] Create `AppProviders` wrapper component in `web/portal/src/providers/AppProviders.tsx` that combines QueryProvider and ToastProvider
+- [x] T-S018-P03-023 [US1] Update `web/portal/src/main.tsx` to use `AppProviders` and flatten provider hierarchy to maximum 4 levels
 - [ ] T-S018-P03-024 [US1] Evaluate and remove `TelemetryProvider` from `web/portal/src/main.tsx` if not actively used
 - [ ] T-S018-P03-025 [US1] Evaluate and remove or simplify `FeatureFlagProviderWrapper` from `web/portal/src/main.tsx` if not critical for admin portal
 - [ ] T-S018-P03-026 [US1] Search codebase for all native `fetch()` calls and replace with `publicClient` or `httpClient` as appropriate
@@ -99,18 +99,18 @@
 - [ ] T-S018-P04-030 [US2] Define Linode-inspired color palette in `web/portal/tailwind.config.js` for dark mode (background: `#1a1a1a`, `#2a2a2a`, text: `#ffffff`, `#9ca3af`, accent: `#00b050`, `#3b82f6`)
 - [ ] T-S018-P04-031 [US2] Define Linode-inspired color palette in `web/portal/tailwind.config.js` for light mode (background: `#f5f6f7`, `#ffffff`, text: `#1a1a1a`, `#6b7280`, accent: same as dark)
 - [ ] T-S018-P04-032 [US2] Configure shadcn/ui components for both light and dark modes in `web/portal/tailwind.config.js`
-- [ ] T-S018-P04-033 [US2] Create `useTheme` hook in `web/portal/src/hooks/useTheme.ts` that detects system preference, reads localStorage override, provides `mode`, `toggleTheme()`, and `setTheme()` functions, and implements debounce logic (300ms delay) to prevent rapid theme switching
+- [x] T-S018-P04-033 [US2] Create `useTheme` hook in `web/portal/src/hooks/useTheme.ts` that detects system preference, reads localStorage override, provides `mode`, `toggleTheme()`, and `setTheme()` functions, and implements debounce logic (300ms delay) to prevent rapid theme switching
 - [ ] T-S018-P04-034 [US2] Update `web/portal/src/styles/global.css` to include theme CSS variables and dark mode styles
 - [ ] T-S018-P04-035 [US2] Create `Sidebar` component in `web/portal/src/components/layout/Sidebar.tsx` with collapsible sections, icons, and navigation items organized by CLI command groups. Navigation structure: top-level sections for Dashboard, Model Management, Access Control, Platform Operations, Utilities, and Monitoring. Each CLI command group section contains expandable subsections or tabs for individual commands (e.g., Model Management → Registry, Cache, Deploy, Troubleshoot, Version, Library)
 - [ ] T-S018-P04-036 [US2] Create `Header` component in `web/portal/src/components/layout/Header.tsx` with search, user menu, notifications, and theme toggle
 - [ ] T-S018-P04-037 [US2] Create `ContentArea` component in `web/portal/src/components/layout/ContentArea.tsx` with proper spacing and padding
-- [ ] T-S018-P04-038 [US2] Create `Footer` component in `web/portal/src/components/layout/Footer.tsx` with version, API reference link, and feedback link
+- [x] T-S018-P04-038 [US2] Create `Footer` component in `web/portal/src/components/layout/Footer.tsx` with version, API reference link, and feedback link
 - [ ] T-S018-P04-039 [US2] Create `AdminLayout` wrapper component in `web/portal/src/components/layout/AdminLayout.tsx` that combines Sidebar, Header, ContentArea, and Footer
 - [ ] T-S018-P04-040 [US2] Create `DataTable` component in `web/portal/src/components/ui/DataTable.tsx` with sortable columns, pagination, and row selection
 - [ ] T-S018-P04-041 [US2] Create `StatusBadge` component in `web/portal/src/components/ui/StatusBadge.tsx` with traffic light indicators (green/healthy, grey/offline, red/error)
 - [ ] T-S018-P04-042 [US2] Create `TabNav` component in `web/portal/src/components/ui/TabNav.tsx` for page-level tab navigation
-- [ ] T-S018-P04-043 [US2] Create `Card` component in `web/portal/src/components/ui/Card.tsx` for detail views with header, content, and footer sections
-- [ ] T-S018-P04-044 [US2] Create `FilterPanel` component in `web/portal/src/components/ui/FilterPanel.tsx` with dropdowns, date pickers, and filter controls
+- [x] T-S018-P04-043 [US2] Create `Card` component in `web/portal/src/components/ui/Card.tsx` for detail views with header, content, and footer sections
+- [x] T-S018-P04-044 [US2] Create `FilterPanel` component in `web/portal/src/components/ui/FilterPanel.tsx` with dropdowns, date pickers, and filter controls
 - [ ] T-S018-P04-045 [US2] Create `LoadingSpinner` component in `web/portal/src/components/ui/LoadingSpinner.tsx` with size variants and accessibility labels
 - [ ] T-S018-P04-046 [US2] Export all UI components from `web/portal/src/components/ui/index.ts` for easy imports
 - [ ] T-S018-P04-047 [US2] Verify all layout and UI components render correctly in both light and dark modes
@@ -153,23 +153,23 @@
 
 ### Implementation for User Story 6 - Model Management Group
 
-- [ ] T-S018-P06-060 [US6] Create `web/portal/src/app/features/model-management/pages/ModelRegistryPage.tsx` with DataTable for model registry list, add/remove model functionality equivalent to `ai-aas-cli model registry` commands
-- [ ] T-S018-P06-061 [US6] Create `web/portal/src/app/features/model-management/pages/ModelCachePage.tsx` with cache status display, pull/delete/gc operations equivalent to `ai-aas-cli model cache` commands
-- [ ] T-S018-P06-062 [US6] Create `web/portal/src/app/features/model-management/pages/ModelDeployPage.tsx` with deployment list, create/delete/scale/status operations equivalent to `ai-aas-cli model deploy` commands
+- [x] T-S018-P06-060 [US6] Create `web/portal/src/app/features/model-management/pages/ModelRegistryPage.tsx` with DataTable for model registry list, add/remove model functionality equivalent to `ai-aas-cli model registry` commands
+- [x] T-S018-P06-061 [US6] Create `web/portal/src/app/features/model-management/pages/ModelCachePage.tsx` with cache status display, pull/delete/gc operations equivalent to `ai-aas-cli model cache` commands
+- [x] T-S018-P06-062 [US6] Create `web/portal/src/app/features/model-management/pages/ModelDeployPage.tsx` with deployment list, create/delete/scale/status operations equivalent to `ai-aas-cli model deploy` commands
 - [ ] T-S018-P06-063 [US6] Create `web/portal/src/app/features/model-management/pages/ModelTroubleshootPage.tsx` with logs viewer, events display, and test inference functionality equivalent to `ai-aas-cli model troubleshoot` commands
 - [ ] T-S018-P06-064 [US6] Create `web/portal/src/app/features/model-management/pages/ModelVersionPage.tsx` with version check, update, and pin functionality equivalent to `ai-aas-cli model version` commands
 - [ ] T-S018-P06-065 [US6] Create `web/portal/src/app/features/model-management/pages/ModelLibraryPage.tsx` with enable/disable/swap/list/history/alias operations equivalent to `ai-aas-cli model library` commands
 - [ ] T-S018-P06-066 [US6] Create `web/portal/src/app/features/model-management/pages/DeploymentStatusPage.tsx` with multi-source status inspection equivalent to `ai-aas-cli deployment status` command
-- [ ] T-S018-P06-067 [US6] Create `web/portal/src/app/features/model-management/pages/InferencePage.tsx` with get-models and send-request functionality equivalent to `ai-aas-cli inference` commands
-- [ ] T-S018-P06-068 [US6] Create API client functions in `web/portal/src/app/features/model-management/api/` for all model management operations using same endpoints as CLI
+- [x] T-S018-P06-067 [US6] Create `web/portal/src/app/features/model-management/pages/InferencePage.tsx` with get-models and send-request functionality equivalent to `ai-aas-cli inference` commands
+- [x] T-S018-P06-068 [US6] Create API client functions in `web/portal/src/app/features/model-management/api/` for all model management operations using same endpoints as CLI
 
 ### Implementation for User Story 6 - Access Control Group
 
-- [ ] T-S018-P06-069 [US6] Create `web/portal/src/app/features/access-control/pages/OrganizationsPage.tsx` with DataTable, create/update/delete operations equivalent to `ai-aas-cli org` commands
-- [ ] T-S018-P06-070 [US6] Create `web/portal/src/app/features/access-control/pages/UsersPage.tsx` with DataTable, create/update/delete operations equivalent to `ai-aas-cli user` commands
+- [x] T-S018-P06-069 [US6] Create `web/portal/src/app/features/access-control/pages/OrganizationsPage.tsx` with DataTable, create/update/delete operations equivalent to `ai-aas-cli org` commands
+- [x] T-S018-P06-070 [US6] Create `web/portal/src/app/features/access-control/pages/UsersPage.tsx` with DataTable, create/update/delete operations equivalent to `ai-aas-cli user` commands
 - [ ] T-S018-P06-071 [US6] Create `web/portal/src/app/features/access-control/pages/UserModelAccessPage.tsx` with show, set-mode, grant, revoke, list, grant-all operations equivalent to `ai-aas-cli user model-access` commands
 - [ ] T-S018-P06-072 [US6] Verify and update `web/portal/src/app/features/admin/pages/ApiKeysPage.tsx` to ensure it matches `ai-aas-cli apikey` command functionality. If modifications are needed, update the page to include all required operations (list, create, delete) with equivalent API calls and data format as CLI commands
-- [ ] T-S018-P06-073 [US6] Create API client functions in `web/portal/src/app/features/access-control/api/` for all access control operations using same endpoints as CLI
+- [x] T-S018-P06-073 [US6] Create API client functions in `web/portal/src/app/features/access-control/api/` for all access control operations using same endpoints as CLI
 
 ### Implementation for User Story 6 - Platform Operations Group
 
@@ -177,20 +177,20 @@
 - [ ] T-S018-P06-075 [US6] Create `web/portal/src/app/features/platform-operations/pages/RegistryPage.tsx` with register/deregister/enable/disable/list operations equivalent to `ai-aas-cli registry` commands
 - [ ] T-S018-P06-076 [US6] Create `web/portal/src/app/features/platform-operations/pages/RoutingPolicyPage.tsx` with create/list/delete operations equivalent to `ai-aas-cli routing policy` commands
 - [ ] T-S018-P06-077 [US6] Create `web/portal/src/app/features/platform-operations/pages/SyncPage.tsx` with trigger and status operations equivalent to `ai-aas-cli sync` commands
-- [ ] T-S018-P06-078 [US6] Create `web/portal/src/app/features/platform-operations/pages/CredentialsPage.tsx` with set/list/test/delete operations for hf-token and s3 equivalent to `ai-aas-cli credentials` commands
-- [ ] T-S018-P06-079 [US6] Create API client functions in `web/portal/src/app/features/platform-operations/api/` for all platform operations using same endpoints as CLI
+- [x] T-S018-P06-078 [US6] Create `web/portal/src/app/features/platform-operations/pages/CredentialsPage.tsx` with set/list/test/delete operations for hf-token and s3 equivalent to `ai-aas-cli credentials` commands
+- [x] T-S018-P06-079 [US6] Create API client functions in `web/portal/src/app/features/platform-operations/api/` for all platform operations using same endpoints as CLI
 
 ### Implementation for User Story 6 - Utilities Group
 
-- [ ] T-S018-P06-080 [US6] Create `web/portal/src/app/features/utilities/pages/StatusPage.tsx` with platform health status display equivalent to `ai-aas-cli status` command
+- [x] T-S018-P06-080 [US6] Create `web/portal/src/app/features/utilities/pages/StatusPage.tsx` with platform health status display equivalent to `ai-aas-cli status` command (created as PlatformStatusPage.tsx in platform-operations feature)
 - [ ] T-S018-P06-081 [US6] Create `web/portal/src/app/features/utilities/pages/ConfigPage.tsx` with show/set/test functionality equivalent to `ai-aas-cli config` commands
 - [ ] T-S018-P06-082 [US6] Create `web/portal/src/app/features/utilities/pages/ExportPage.tsx` with usage and memberships export functionality equivalent to `ai-aas-cli export` commands
 - [ ] T-S018-P06-083 [US6] Create API client functions in `web/portal/src/app/features/utilities/api/` for all utility operations using same endpoints as CLI
 
 ### Implementation for User Story 6 - Navigation and Integration
 
-- [ ] T-S018-P06-084 [US6] Update `web/portal/src/components/layout/Sidebar.tsx` to include navigation sections for Model Management, Access Control, Platform Operations, and Utilities command groups
-- [ ] T-S018-P06-085 [US6] Add routes in `web/portal/src/app/AppRouter.tsx` for all new CLI command group pages
+- [x] T-S018-P06-084 [US6] Update `web/portal/src/components/layout/Sidebar.tsx` to include navigation sections for Model Management, Access Control, Platform Operations, and Utilities command groups
+- [x] T-S018-P06-085 [US6] Add routes in `web/portal/src/app/AppRouter.tsx` for all new CLI command group pages
 - [ ] T-S018-P06-086 [US6] Add CLI command syntax tooltips or equivalent operation names in UI components where applicable. Add tooltips to: (1) action buttons performing CLI-equivalent operations, (2) page headers for CLI command group pages, (3) help text or info icons for complex operations. Format: "Equivalent to: ai-aas-cli [command] [subcommand]" (e.g., "Equivalent to: ai-aas-cli model deploy create")
 - [ ] T-S018-P06-087 [US6] Verify all UI operations produce equivalent results to corresponding CLI commands (same API calls, same data format, same validation rules)
 

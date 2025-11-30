@@ -11,6 +11,21 @@ import {
 } from './routes/adminRoutes';
 import { usageDashboardRoute } from './routes/usageRoutes';
 import { supportConsoleRoute } from './routes/supportRoutes';
+import {
+  modelRegistryRoute,
+  modelCacheRoute,
+  modelDeploymentsRoute,
+  inferenceRoute,
+} from './routes/modelRoutes';
+import {
+  organizationsRoute,
+  usersRoute,
+  credentialsRoute,
+} from './routes/accessRoutes';
+import {
+  platformStatusRoute,
+  gitOpsRoute,
+} from './routes/platformRoutes';
 
 // Lazy load route components
 const HomePage = lazy(() => import('./pages/HomePage'));
@@ -77,11 +92,25 @@ const notFoundRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
+  // Admin routes
   adminIndexRoute,
   organizationSettingsRoute,
   memberManagementRoute,
   budgetControlsRoute,
   apiKeysRoute,
+  // Model management routes
+  modelRegistryRoute,
+  modelCacheRoute,
+  modelDeploymentsRoute,
+  inferenceRoute,
+  // Access control routes
+  organizationsRoute,
+  usersRoute,
+  credentialsRoute,
+  // Platform operations routes
+  platformStatusRoute,
+  gitOpsRoute,
+  // Other routes
   usageDashboardRoute,
   supportConsoleRoute,
   accessDeniedRoute,

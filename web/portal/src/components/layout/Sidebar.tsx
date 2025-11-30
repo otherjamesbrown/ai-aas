@@ -57,6 +57,42 @@ const Icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
     </svg>
   ),
+  Cube: () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+    </svg>
+  ),
+  Server: () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+    </svg>
+  ),
+  Cloud: () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+    </svg>
+  ),
+  Cog: () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  ),
+  Database: () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+    </svg>
+  ),
+  GitBranch: () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 3v12m0 0a3 3 0 103 3H15a3 3 0 10-3-3H9a3 3 0 01-3 3zm12-3V9a3 3 0 00-3-3H9" />
+    </svg>
+  ),
+  Terminal: () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  ),
 };
 
 const navSections: NavSection[] = [
@@ -65,15 +101,35 @@ const navSections: NavSection[] = [
     defaultOpen: true,
     items: [
       { label: 'Home', href: '/', icon: <Icons.Home /> },
+      { label: 'Platform Status', href: '/platform/status', icon: <Icons.Server /> },
     ],
   },
   {
-    title: 'Administration',
+    title: 'Model Management',
     defaultOpen: true,
     items: [
+      { label: 'Registry', href: '/models/registry', icon: <Icons.Cube /> },
+      { label: 'Cache', href: '/models/cache', icon: <Icons.Database /> },
+      { label: 'Deployments', href: '/models/deployments', icon: <Icons.Cloud /> },
+      { label: 'Inference', href: '/models/inference', icon: <Icons.Terminal /> },
+    ],
+  },
+  {
+    title: 'Access Control',
+    defaultOpen: true,
+    items: [
+      { label: 'Organizations', href: '/access/organizations', icon: <Icons.Building />, roles: ['admin'] },
+      { label: 'Users', href: '/access/users', icon: <Icons.Users />, roles: ['admin'] },
       { label: 'API Keys', href: '/admin/api-keys', icon: <Icons.Key /> },
-      { label: 'Members', href: '/admin/members', icon: <Icons.Users /> },
-      { label: 'Organization', href: '/admin/organization', icon: <Icons.Building /> },
+      { label: 'Credentials', href: '/access/credentials', icon: <Icons.Shield />, roles: ['admin'] },
+    ],
+  },
+  {
+    title: 'Platform Operations',
+    defaultOpen: false,
+    items: [
+      { label: 'GitOps', href: '/platform/gitops', icon: <Icons.GitBranch />, roles: ['admin'] },
+      { label: 'Configuration', href: '/platform/config', icon: <Icons.Cog />, roles: ['admin'] },
     ],
   },
   {
