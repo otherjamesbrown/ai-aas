@@ -130,6 +130,18 @@ A scratch list of tasks, ideas, and improvements to tackle. Add items here so we
 
 ## Completed
 
+- [x] **Fix KServe webhook certificate bootstrap issue** (2024-11-30)
+  - **Problem:** KServe CRDs failed to sync due to invalid caBundle (`Cg==`) placeholder
+  - **Root cause:** ArgoCD applied CRDs before cert-manager created the Certificate resource
+  - **Solution:**
+    - Added ArgoCD sync-wave annotations (-2 for Issuer, -1 for Certificate, 1 for CRDs, 2 for webhooks)
+    - Removed invalid `caBundle: Cg==` placeholders from kserve.yaml
+    - cert-manager injects CA automatically via `cert-manager.io/inject-ca-from` annotation
+  - **Documentation:**
+    - Created `docs/platform/certificate-architecture.md`
+    - Created `docs/troubleshooting/kserve-certificate-issues.md`
+    - Updated `docs/runbooks/kserve-migration-deployment.md`
+    - Updated `infra/k8s/kserve/base/README.md`
 - [x] Fix CLI extractBaseDomain to handle multiple service prefixes (2024-11-29)
 - [x] Sync develop branch with main (2024-11-29)
 - [x] Fix production RBAC - replace wildcards with explicit whitelist (2024-11-29)
@@ -145,4 +157,8 @@ A scratch list of tasks, ideas, and improvements to tackle. Add items here so we
 - Using real DNS now (`*.dev.otherjamesbrown.com`) - much faster than nip.io
 - Internal API Router responds in ~34 microseconds, external latency depends on network path
 - Production RBAC was too permissive with wildcards - now fixed
-- All TLS certificates managed by cert-manager with Let's Encrypt (auto-renewal)
+- **Certificate architecture has two types:**
+  - **External TLS** (Let's Encrypt) - for public HTTPS endpoints
+  - **Internal webhooks** (self-signed) - for Kubernetes internal communication (KServe, etc.)
+- All external TLS certificates managed by cert-manager with Let's Encrypt (auto-renewal)
+- KServe internal certificates use self-signed issuer with cert-manager CA injection
