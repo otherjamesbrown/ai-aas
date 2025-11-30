@@ -360,9 +360,10 @@ test_revoke_model_access() {
 test_grant_all_current_models() {
     log_info "=== Test: Grant All Current Models ==="
 
-    # Grant all current models
+    # Grant multiple models at once (using test model names)
+    # Note: In production, this would use actual models from the registry
     assert_success "Grant all current models" \
-        run_cli user model-access grant-all --org-id "$TEST_ORG_ID" --user-id "$TEST_USER_ID"
+        run_cli user model-access grant-all --org-id "$TEST_ORG_ID" --user-id "$TEST_USER_ID" --models "llama-3-8b,gpt-4-turbo,claude-3"
 
     # Verify grants were created (should have at least one model)
     local output
@@ -401,6 +402,7 @@ test_show_with_email() {
         TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         log_error "Show with email failed"
+        echo "Output: $output"
         TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
 }

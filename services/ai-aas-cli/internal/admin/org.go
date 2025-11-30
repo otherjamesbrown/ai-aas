@@ -25,7 +25,6 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/client/userorg"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/errors"
-	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/health"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
 )
 
@@ -146,8 +145,8 @@ func runOrgList(cmd *cobra.Command, args []string, flagFormat string, flagVerbos
 		)
 	}
 
-	// Create HTTP client with optional CA cert
-	httpClient, err := config.CreateHTTPClient(cfg.CACertFile)
+	// Create HTTP client with optional CA cert and TLS insecure option
+	httpClient, err := createHTTPClient(cfg)
 	if err != nil {
 		return errors.NewOperationError(
 			fmt.Sprintf("failed to create HTTP client: %v", err),
@@ -156,7 +155,7 @@ func runOrgList(cmd *cobra.Command, args []string, flagFormat string, flagVerbos
 	}
 
 	// Health check
-	checker := health.NewCheckerWithClient(5*time.Second, httpClient)
+	checker := createHealthCheckerWithHTTPClient(httpClient)
 	requiredServices := map[string]string{
 		"user-org-service": cfg.UserOrgEndpoint,
 	}
@@ -165,7 +164,7 @@ func runOrgList(cmd *cobra.Command, args []string, flagFormat string, flagVerbos
 	}
 
 	// Create client and list orgs
-	userOrgClient := userorg.NewClientWithHTTPClient(cfg.UserOrgEndpoint, cfg.APIKey, httpClient)
+	userOrgClient := createUserOrgClientWithHTTPClient(cfg, httpClient)
 	orgs, err := userOrgClient.ListOrgs(cmd.Context())
 	if err != nil {
 		cliErr := errors.NewOperationError(
@@ -344,9 +343,18 @@ func runOrgCreate(cmd *cobra.Command, args []string, flagName, flagSlug, flagBil
 		)
 	}
 
+	// Create HTTP client with optional CA cert and TLS insecure option
+	httpClient, err := createHTTPClient(cfg)
+	if err != nil {
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to create HTTP client: %v", err),
+			"Verify the CA certificate file path is correct and the file is readable.",
+		)
+	}
+
 	// Health check (only if not dry-run)
 	if !flagDryRun {
-		checker := health.NewChecker(5 * time.Second)
+		checker := createHealthCheckerWithHTTPClient(httpClient)
 		requiredServices := map[string]string{
 			"user-org-service": cfg.UserOrgEndpoint,
 		}
@@ -403,7 +411,7 @@ func runOrgCreate(cmd *cobra.Command, args []string, flagName, flagSlug, flagBil
 	}
 
 	// Execute create
-	userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
+	userOrgClient := createUserOrgClientWithHTTPClient(cfg, httpClient)
 	org, err := userOrgClient.CreateOrg(cmd.Context(), req)
 	if err != nil {
 		cliErr := errors.NewOperationError(
@@ -603,8 +611,17 @@ func runOrgUpdate(cmd *cobra.Command, args []string, flagOrgID, flagFile, flagDi
 		)
 	}
 
+	// Create HTTP client with optional CA cert and TLS insecure option
+	httpClient, err := createHTTPClient(cfg)
+	if err != nil {
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to create HTTP client: %v", err),
+			"Verify the CA certificate file path is correct and the file is readable.",
+		)
+	}
+
 	// Health check
-	checker := health.NewChecker(5 * time.Second)
+	checker := createHealthCheckerWithHTTPClient(httpClient)
 	requiredServices := map[string]string{
 		"user-org-service": cfg.UserOrgEndpoint,
 	}
@@ -613,7 +630,7 @@ func runOrgUpdate(cmd *cobra.Command, args []string, flagOrgID, flagFile, flagDi
 	}
 
 	// Execute update
-	userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
+	userOrgClient := createUserOrgClientWithHTTPClient(cfg, httpClient)
 	org, err := userOrgClient.UpdateOrg(cmd.Context(), flagOrgID, req)
 	if err != nil {
 		cliErr := errors.NewOperationError(
@@ -779,8 +796,17 @@ func runOrgDelete(cmd *cobra.Command, args []string, flagOrgID string, flagConfi
 		)
 	}
 
+	// Create HTTP client with optional CA cert and TLS insecure option
+	httpClient, err := createHTTPClient(cfg)
+	if err != nil {
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to create HTTP client: %v", err),
+			"Verify the CA certificate file path is correct and the file is readable.",
+		)
+	}
+
 	// Health check
-	checker := health.NewChecker(5 * time.Second)
+	checker := createHealthCheckerWithHTTPClient(httpClient)
 	requiredServices := map[string]string{
 		"user-org-service": cfg.UserOrgEndpoint,
 	}
@@ -789,7 +815,7 @@ func runOrgDelete(cmd *cobra.Command, args []string, flagOrgID string, flagConfi
 	}
 
 	// Get org details for confirmation display
-	userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
+	userOrgClient := createUserOrgClientWithHTTPClient(cfg, httpClient)
 	var orgName string
 	org, err := userOrgClient.GetOrg(cmd.Context(), flagOrgID)
 	if err == nil {

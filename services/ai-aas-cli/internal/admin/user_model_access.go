@@ -10,6 +10,7 @@ package admin
 
 import (
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -83,12 +84,16 @@ func modelAccessShowCommand() *cobra.Command {
 				return errors.NewValidationError("--user-id or --email required", "Provide user identifier")
 			}
 
-			checker := health.NewChecker(5 * time.Second)
+			httpClient, err := createHTTPClient(cfg)
+			if err != nil {
+				return errors.NewOperationError(fmt.Sprintf("create http client: %v", err), "Check TLS configuration")
+			}
+			checker := createHealthCheckerWithHTTPClient(httpClient)
 			if _, err := checker.CheckRequired(cmd.Context(), map[string]string{"user-org-service": cfg.UserOrgEndpoint}); err != nil {
 				return errors.NewServiceUnavailableError("user-org-service", cfg.UserOrgEndpoint)
 			}
 
-			client := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
+			client := createUserOrgClientWithHTTPClient(cfg, httpClient)
 
 			// Resolve user ID from email if needed
 			userID := flagUserID
@@ -178,12 +183,16 @@ Modes:
 				return errors.NewValidationError("--mode must be 'restricted' or 'auto_grant'", "")
 			}
 
-			checker := health.NewChecker(5 * time.Second)
+			httpClient, err := createHTTPClient(cfg)
+			if err != nil {
+				return errors.NewOperationError(fmt.Sprintf("create http client: %v", err), "Check TLS configuration")
+			}
+			checker := createHealthCheckerWithHTTPClient(httpClient)
 			if _, err := checker.CheckRequired(cmd.Context(), map[string]string{"user-org-service": cfg.UserOrgEndpoint}); err != nil {
 				return errors.NewServiceUnavailableError("user-org-service", cfg.UserOrgEndpoint)
 			}
 
-			client := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
+			client := createUserOrgClientWithHTTPClient(cfg, httpClient)
 
 			userID := flagUserID
 			if userID == "" {
@@ -252,12 +261,16 @@ func modelAccessGrantCommand() *cobra.Command {
 				return errors.NewValidationError("--model is required", "Provide model name")
 			}
 
-			checker := health.NewChecker(5 * time.Second)
+			httpClient, err := createHTTPClient(cfg)
+			if err != nil {
+				return errors.NewOperationError(fmt.Sprintf("create http client: %v", err), "Check TLS configuration")
+			}
+			checker := createHealthCheckerWithHTTPClient(httpClient)
 			if _, err := checker.CheckRequired(cmd.Context(), map[string]string{"user-org-service": cfg.UserOrgEndpoint}); err != nil {
 				return errors.NewServiceUnavailableError("user-org-service", cfg.UserOrgEndpoint)
 			}
 
-			client := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
+			client := createUserOrgClientWithHTTPClient(cfg, httpClient)
 
 			userID := flagUserID
 			if userID == "" {
@@ -340,12 +353,16 @@ func modelAccessRevokeCommand() *cobra.Command {
 				return errors.NewValidationError("--model is required", "Provide model name")
 			}
 
-			checker := health.NewChecker(5 * time.Second)
+			httpClient, err := createHTTPClient(cfg)
+			if err != nil {
+				return errors.NewOperationError(fmt.Sprintf("create http client: %v", err), "Check TLS configuration")
+			}
+			checker := createHealthCheckerWithHTTPClient(httpClient)
 			if _, err := checker.CheckRequired(cmd.Context(), map[string]string{"user-org-service": cfg.UserOrgEndpoint}); err != nil {
 				return errors.NewServiceUnavailableError("user-org-service", cfg.UserOrgEndpoint)
 			}
 
-			client := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
+			client := createUserOrgClientWithHTTPClient(cfg, httpClient)
 
 			userID := flagUserID
 			if userID == "" {
@@ -410,12 +427,16 @@ func modelAccessListCommand() *cobra.Command {
 				return errors.NewValidationError("--user-id or --email required", "Provide user identifier")
 			}
 
-			checker := health.NewChecker(5 * time.Second)
+			httpClient, err := createHTTPClient(cfg)
+			if err != nil {
+				return errors.NewOperationError(fmt.Sprintf("create http client: %v", err), "Check TLS configuration")
+			}
+			checker := createHealthCheckerWithHTTPClient(httpClient)
 			if _, err := checker.CheckRequired(cmd.Context(), map[string]string{"user-org-service": cfg.UserOrgEndpoint}); err != nil {
 				return errors.NewServiceUnavailableError("user-org-service", cfg.UserOrgEndpoint)
 			}
 
-			client := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
+			client := createUserOrgClientWithHTTPClient(cfg, httpClient)
 
 			userID := flagUserID
 			if userID == "" {
@@ -496,12 +517,16 @@ them access to all currently available models.`,
 				return errors.NewValidationError("--models is required", "Provide at least one model name")
 			}
 
-			checker := health.NewChecker(5 * time.Second)
+			httpClient, err := createHTTPClient(cfg)
+			if err != nil {
+				return errors.NewOperationError(fmt.Sprintf("create http client: %v", err), "Check TLS configuration")
+			}
+			checker := createHealthCheckerWithHTTPClient(httpClient)
 			if _, err := checker.CheckRequired(cmd.Context(), map[string]string{"user-org-service": cfg.UserOrgEndpoint}); err != nil {
 				return errors.NewServiceUnavailableError("user-org-service", cfg.UserOrgEndpoint)
 			}
 
-			client := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
+			client := createUserOrgClientWithHTTPClient(cfg, httpClient)
 
 			userID := flagUserID
 			if userID == "" {
@@ -589,12 +614,16 @@ Examples:
 				return errors.NewValidationError("--models required when using restricted mode", "Provide models to grant")
 			}
 
-			checker := health.NewChecker(5 * time.Second)
+			httpClient, err := createHTTPClient(cfg)
+			if err != nil {
+				return errors.NewOperationError(fmt.Sprintf("create http client: %v", err), "Check TLS configuration")
+			}
+			checker := createHealthCheckerWithHTTPClient(httpClient)
 			if _, err := checker.CheckRequired(cmd.Context(), map[string]string{"user-org-service": cfg.UserOrgEndpoint}); err != nil {
 				return errors.NewServiceUnavailableError("user-org-service", cfg.UserOrgEndpoint)
 			}
 
-			client := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
+			client := createUserOrgClientWithHTTPClient(cfg, httpClient)
 
 			// List all users in the org
 			users, err := client.ListUsers(cmd.Context(), flagOrgID)
@@ -693,4 +722,20 @@ func applyOverrides(cfg *config.Config, endpoint, apiKey, format string) {
 	if format != "" {
 		cfg.OutputFormat = format
 	}
+}
+
+// createHTTPClient creates an HTTP client with TLS configuration from config.
+// This should be called once per command and the client reused for all HTTP operations.
+func createHTTPClient(cfg *config.Config) (*http.Client, error) {
+	return config.CreateHTTPClientWithOptions(cfg.CACertFile, cfg.TLSInsecure)
+}
+
+// createUserOrgClientWithHTTPClient creates a user-org client with a pre-configured HTTP client.
+func createUserOrgClientWithHTTPClient(cfg *config.Config, httpClient *http.Client) *userorg.Client {
+	return userorg.NewClientWithHTTPClient(cfg.UserOrgEndpoint, cfg.APIKey, httpClient)
+}
+
+// createHealthCheckerWithHTTPClient creates a health checker with a pre-configured HTTP client.
+func createHealthCheckerWithHTTPClient(httpClient *http.Client) *health.Checker {
+	return health.NewCheckerWithClient(5*time.Second, httpClient)
 }
