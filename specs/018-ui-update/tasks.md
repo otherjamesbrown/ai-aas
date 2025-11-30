@@ -168,7 +168,7 @@
 - [x] T-S018-P06-069 [US6] Create `web/portal/src/app/features/access-control/pages/OrganizationsPage.tsx` with DataTable, create/update/delete operations equivalent to `ai-aas-cli org` commands
 - [x] T-S018-P06-070 [US6] Create `web/portal/src/app/features/access-control/pages/UsersPage.tsx` with DataTable, create/update/delete operations equivalent to `ai-aas-cli user` commands
 - [x] T-S018-P06-071 [US6] Create `web/portal/src/app/features/access-control/pages/UserModelAccessPage.tsx` with show, set-mode, grant, revoke, list, grant-all operations equivalent to `ai-aas-cli user model-access` commands
-- [ ] T-S018-P06-072 [US6] Verify and update `web/portal/src/app/features/admin/pages/ApiKeysPage.tsx` to ensure it matches `ai-aas-cli apikey` command functionality. If modifications are needed, update the page to include all required operations (list, create, delete) with equivalent API calls and data format as CLI commands
+- [x] T-S018-P06-072 [US6] Verify and update `web/portal/src/app/features/admin/pages/ApiKeysPage.tsx` to ensure it matches `ai-aas-cli apikey` command functionality. If modifications are needed, update the page to include all required operations (list, create, delete) with equivalent API calls and data format as CLI commands (verified: already has list, create, revoke/delete functionality; added CLI reference section)
 - [x] T-S018-P06-073 [US6] Create API client functions in `web/portal/src/app/features/access-control/api/` for all access control operations using same endpoints as CLI
 
 ### Implementation for User Story 6 - Platform Operations Group
