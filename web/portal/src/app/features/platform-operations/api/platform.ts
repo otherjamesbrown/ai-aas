@@ -97,6 +97,44 @@ export const platformApi = {
   // ========== Config ==========
 
   /**
+   * Show all configuration
+   * Equivalent to: ai-aas-cli config show
+   */
+  async configShow(): Promise<Array<{
+    key: string;
+    value: string;
+    description?: string;
+    editable: boolean;
+    type: 'string' | 'number' | 'boolean' | 'json';
+  }>> {
+    const response = await httpClient.get<Array<{
+      key: string;
+      value: string;
+      description?: string;
+      editable: boolean;
+      type: 'string' | 'number' | 'boolean' | 'json';
+    }>>('/v1/admin/config');
+    return response.data;
+  },
+
+  /**
+   * Test configuration validity
+   * Equivalent to: ai-aas-cli config test
+   */
+  async configTest(): Promise<{
+    valid: boolean;
+    message: string;
+    errors?: string[];
+  }> {
+    const response = await httpClient.post<{
+      valid: boolean;
+      message: string;
+      errors?: string[];
+    }>('/v1/admin/config/test');
+    return response.data;
+  },
+
+  /**
    * List configuration entries
    * Equivalent to: ai-aas-cli config list
    */

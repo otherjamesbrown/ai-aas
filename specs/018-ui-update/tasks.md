@@ -156,9 +156,9 @@
 - [x] T-S018-P06-060 [US6] Create `web/portal/src/app/features/model-management/pages/ModelRegistryPage.tsx` with DataTable for model registry list, add/remove model functionality equivalent to `ai-aas-cli model registry` commands
 - [x] T-S018-P06-061 [US6] Create `web/portal/src/app/features/model-management/pages/ModelCachePage.tsx` with cache status display, pull/delete/gc operations equivalent to `ai-aas-cli model cache` commands
 - [x] T-S018-P06-062 [US6] Create `web/portal/src/app/features/model-management/pages/ModelDeployPage.tsx` with deployment list, create/delete/scale/status operations equivalent to `ai-aas-cli model deploy` commands
-- [ ] T-S018-P06-063 [US6] Create `web/portal/src/app/features/model-management/pages/ModelTroubleshootPage.tsx` with logs viewer, events display, and test inference functionality equivalent to `ai-aas-cli model troubleshoot` commands
-- [ ] T-S018-P06-064 [US6] Create `web/portal/src/app/features/model-management/pages/ModelVersionPage.tsx` with version check, update, and pin functionality equivalent to `ai-aas-cli model version` commands
-- [ ] T-S018-P06-065 [US6] Create `web/portal/src/app/features/model-management/pages/ModelLibraryPage.tsx` with enable/disable/swap/list/history/alias operations equivalent to `ai-aas-cli model library` commands
+- [x] T-S018-P06-063 [US6] Create `web/portal/src/app/features/model-management/pages/ModelTroubleshootPage.tsx` with logs viewer, events display, and test inference functionality equivalent to `ai-aas-cli model troubleshoot` commands
+- [x] T-S018-P06-064 [US6] Create `web/portal/src/app/features/model-management/pages/ModelVersionPage.tsx` with version check, update, and pin functionality equivalent to `ai-aas-cli model version` commands
+- [x] T-S018-P06-065 [US6] Create `web/portal/src/app/features/model-management/pages/ModelLibraryPage.tsx` with enable/disable/swap/list/history/alias operations equivalent to `ai-aas-cli model library` commands
 - [ ] T-S018-P06-066 [US6] Create `web/portal/src/app/features/model-management/pages/DeploymentStatusPage.tsx` with multi-source status inspection equivalent to `ai-aas-cli deployment status` command
 - [x] T-S018-P06-067 [US6] Create `web/portal/src/app/features/model-management/pages/InferencePage.tsx` with get-models and send-request functionality equivalent to `ai-aas-cli inference` commands
 - [x] T-S018-P06-068 [US6] Create API client functions in `web/portal/src/app/features/model-management/api/` for all model management operations using same endpoints as CLI
@@ -167,7 +167,7 @@
 
 - [x] T-S018-P06-069 [US6] Create `web/portal/src/app/features/access-control/pages/OrganizationsPage.tsx` with DataTable, create/update/delete operations equivalent to `ai-aas-cli org` commands
 - [x] T-S018-P06-070 [US6] Create `web/portal/src/app/features/access-control/pages/UsersPage.tsx` with DataTable, create/update/delete operations equivalent to `ai-aas-cli user` commands
-- [ ] T-S018-P06-071 [US6] Create `web/portal/src/app/features/access-control/pages/UserModelAccessPage.tsx` with show, set-mode, grant, revoke, list, grant-all operations equivalent to `ai-aas-cli user model-access` commands
+- [x] T-S018-P06-071 [US6] Create `web/portal/src/app/features/access-control/pages/UserModelAccessPage.tsx` with show, set-mode, grant, revoke, list, grant-all operations equivalent to `ai-aas-cli user model-access` commands
 - [ ] T-S018-P06-072 [US6] Verify and update `web/portal/src/app/features/admin/pages/ApiKeysPage.tsx` to ensure it matches `ai-aas-cli apikey` command functionality. If modifications are needed, update the page to include all required operations (list, create, delete) with equivalent API calls and data format as CLI commands
 - [x] T-S018-P06-073 [US6] Create API client functions in `web/portal/src/app/features/access-control/api/` for all access control operations using same endpoints as CLI
 
@@ -183,7 +183,7 @@
 ### Implementation for User Story 6 - Utilities Group
 
 - [x] T-S018-P06-080 [US6] Create `web/portal/src/app/features/utilities/pages/StatusPage.tsx` with platform health status display equivalent to `ai-aas-cli status` command (created as PlatformStatusPage.tsx in platform-operations feature)
-- [ ] T-S018-P06-081 [US6] Create `web/portal/src/app/features/utilities/pages/ConfigPage.tsx` with show/set/test functionality equivalent to `ai-aas-cli config` commands
+- [x] T-S018-P06-081 [US6] Create `web/portal/src/app/features/utilities/pages/ConfigPage.tsx` with show/set/test functionality equivalent to `ai-aas-cli config` commands (created as ConfigPage.tsx in platform-operations feature)
 - [ ] T-S018-P06-082 [US6] Create `web/portal/src/app/features/utilities/pages/ExportPage.tsx` with usage and memberships export functionality equivalent to `ai-aas-cli export` commands
 - [ ] T-S018-P06-083 [US6] Create API client functions in `web/portal/src/app/features/utilities/api/` for all utility operations using same endpoints as CLI
 

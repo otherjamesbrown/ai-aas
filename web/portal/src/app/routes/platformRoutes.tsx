@@ -5,6 +5,7 @@ import { rootRoute } from '../AppRouter';
 // Lazy load platform operations pages
 const PlatformStatusPage = lazy(() => import('../features/platform-operations/pages/PlatformStatusPage'));
 const GitOpsPage = lazy(() => import('../features/platform-operations/pages/GitOpsPage'));
+const ConfigPage = lazy(() => import('../features/platform-operations/pages/ConfigPage'));
 
 // Platform status route
 export const platformStatusRoute = createRoute({
@@ -18,4 +19,11 @@ export const gitOpsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/platform/gitops',
   component: GitOpsPage,
+});
+
+// Config route
+export const configRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/platform/config',
+  component: ConfigPage,
 });
