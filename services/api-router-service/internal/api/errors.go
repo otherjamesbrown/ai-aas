@@ -28,7 +28,8 @@ const (
 	ErrCodeAuthInvalid     = "AUTH_INVALID"
 
 	// Authorization errors (403)
-	ErrCodeForbidden = "FORBIDDEN"
+	ErrCodeForbidden     = "FORBIDDEN"
+	ErrCodeAccessDenied  = "ACCESS_DENIED" // Model access denied (Spec 022)
 
 	// Validation errors (400)
 	ErrCodeInvalidRequest = "INVALID_REQUEST"
@@ -134,7 +135,7 @@ func GetHTTPStatus(code string) int {
 		return http.StatusUnauthorized
 
 	// Authorization errors
-	case ErrCodeForbidden:
+	case ErrCodeForbidden, ErrCodeAccessDenied:
 		return http.StatusForbidden
 
 	// Validation errors

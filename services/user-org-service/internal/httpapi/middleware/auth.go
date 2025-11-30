@@ -319,6 +319,32 @@ func GetAuthenticatedUser(ctx context.Context) *AuthenticatedUser {
 	}
 }
 
+// HasScope checks if the authenticated user has a specific scope.
+// Returns false if not authenticated or scope not found.
+func HasScope(ctx context.Context, scope string) bool {
+	session := GetSession(ctx)
+	if session == nil || session.GrantedScopes == nil {
+		return false
+	}
+	for _, s := range session.GrantedScopes {
+		if s == scope {
+			return true
+		}
+	}
+	return false
+}
+
+// HasAnyScope checks if the authenticated user has any of the specified scopes.
+// Returns false if not authenticated or no matching scope found.
+func HasAnyScope(ctx context.Context, scopes ...string) bool {
+	for _, scope := range scopes {
+		if HasScope(ctx, scope) {
+			return true
+		}
+	}
+	return false
+}
+
 // tryAPIKeyAuth attempts to authenticate using the API key from the api_keys table.
 // Returns (true, context) if authentication succeeds, (false, nil) otherwise.
 func tryAPIKeyAuth(ctx context.Context, rt *bootstrap.Runtime, token string, requestID string, logger *zap.Logger, path string) (bool, context.Context) {

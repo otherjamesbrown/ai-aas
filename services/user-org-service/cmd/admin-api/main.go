@@ -62,6 +62,7 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/apikeys"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/auth"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/middleware"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/modelaccess"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/orgs"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/serviceaccounts"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/users"
@@ -121,6 +122,8 @@ func main() {
 				serviceaccounts.RegisterRoutes(r, runtime, logger)
 				// Register API key routes
 				apikeys.RegisterRoutes(r, runtime, logger)
+				// Register model access routes (Spec 022 - User Model Access Control)
+				modelaccess.RegisterRoutes(r, runtime, logger)
 			})
 		},
 	})

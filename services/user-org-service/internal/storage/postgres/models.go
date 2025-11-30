@@ -229,3 +229,40 @@ type RevokeSessionParams struct {
 	Version int64
 	Time    time.Time
 }
+
+// UserModelAccess represents a user's model access configuration within an org
+type UserModelAccess struct {
+	ID         uuid.UUID
+	OrgID      uuid.UUID
+	UserID     uuid.UUID
+	AccessMode string // "restricted" or "auto_grant"
+	Version    int64
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+// UserModelGrant represents an explicit model grant for a user
+type UserModelGrant struct {
+	ID        uuid.UUID
+	OrgID     uuid.UUID
+	UserID    uuid.UUID
+	ModelName string
+	GrantedAt time.Time
+	GrantedBy *uuid.UUID
+	ExpiresAt *time.Time
+}
+
+// CreateModelGrantParams holds parameters for creating a model grant
+type CreateModelGrantParams struct {
+	OrgID     uuid.UUID
+	UserID    uuid.UUID
+	ModelName string
+	GrantedBy *uuid.UUID
+	ExpiresAt *time.Time
+}
+
+// UserModelAccessInfo combines access mode and grants for API response
+type UserModelAccessInfo struct {
+	AccessMode    string
+	GrantedModels []UserModelGrant
+}

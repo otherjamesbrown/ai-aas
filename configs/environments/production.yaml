@@ -80,3 +80,11 @@ gitops:
     url: https://argocd.prod.otherjamesbrown.com
     project: platform-production
   targetRevision: main
+
+# Feature flags
+features:
+  # User-level model access control (Spec 022)
+  # When enabled, users in restricted mode can only access explicitly granted models
+  # When disabled, all users have access to all org models (legacy behavior)
+  # Start disabled in production for gradual rollout
+  user_model_access_enabled: false

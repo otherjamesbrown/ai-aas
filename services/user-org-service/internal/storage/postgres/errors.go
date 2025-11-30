@@ -7,4 +7,6 @@ var (
 	ErrOptimisticLock = errors.New("userorg/postgres: optimistic locking conflict")
 	// ErrNotFound is returned when a requested resource does not exist.
 	ErrNotFound = errors.New("userorg/postgres: resource not found")
+	// ErrConflict is returned when a resource already exists (duplicate).
+	ErrConflict = errors.New("userorg/postgres: resource already exists")
 )

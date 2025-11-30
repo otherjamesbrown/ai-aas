@@ -35,8 +35,8 @@ This specification defines user-level model access control within organizations.
 ```sql
 CREATE TABLE user_model_access (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    org_id UUID NOT NULL REFERENCES orgs(org_id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
 
     -- Access mode determines how permissions work for this user
     -- 'restricted': User can ONLY access explicitly granted models
@@ -57,13 +57,13 @@ CREATE INDEX idx_user_model_access_org_user ON user_model_access(org_id, user_id
 ```sql
 CREATE TABLE user_model_grants (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    org_id UUID NOT NULL REFERENCES orgs(org_id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     model_name VARCHAR(255) NOT NULL,  -- References model in registry
 
     -- Grant metadata
     granted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    granted_by UUID REFERENCES users(id),  -- Admin who granted access
+    granted_by UUID REFERENCES users(user_id),  -- Admin who granted access
 
     -- Optional: expiration
     expires_at TIMESTAMP WITH TIME ZONE,
@@ -327,16 +327,18 @@ To avoid hitting the database on every request:
 
 ---
 
-## New Model Registration Hook
+## New Model Registration Behavior
 
 When a new model is registered in the platform:
 
 1. Model added to `model_registry`
 2. Routing policy created (org can access model)
-3. **New:** For all users with `access_mode = 'auto_grant'`:
-   - No action needed (they auto-have access)
+3. For users with `access_mode = 'auto_grant'`:
+   - **No action needed** - they automatically have access (checked at request time)
 4. For users with `access_mode = 'restricted'`:
    - No automatic grants (org admin must explicitly grant)
+
+> **Note**: No webhook or notification system is required. The `auto_grant` mode is evaluated at request time, so new models are immediately accessible to auto_grant users without any explicit grant creation.
 
 ---
 
@@ -376,8 +378,9 @@ When `false`, skip user-level access check (current behavior).
 
 ### Phase 3: CLI & Admin Experience
 1. Complete CLI commands with good UX
-2. Add to Web Portal (if applicable)
-3. Add audit logging for access changes
+2. Add audit logging for access changes
+
+> **Out of Scope**: Web Portal integration deferred to future spec.
 
 ### Phase 4: Polish
 1. Add feature flag for gradual rollout
@@ -395,23 +398,29 @@ When `false`, skip user-level access check (current behavior).
 
 ---
 
-## Open Questions
+## Resolved Questions
 
-1. Should there be a "deny list" in addition to grants? (Block specific models for a user)
-2. Should grants be copyable between users? (Clone user A's access to user B)
-3. Should there be model groups/bundles for easier management?
-4. How should this integrate with future RBAC/roles system?
+> See `research.md` for full decision rationale.
+
+| Question | Decision |
+|----------|----------|
+| Should there be a "deny list"? | **No** - Grant-based (allowlist) approach is simpler and sufficient |
+| Should grants be copyable between users? | **Yes** - Via CLI command only (not dedicated API) |
+| Should there be model groups/bundles? | **No** - Defer to future RBAC roles implementation |
+| How integrate with future RBAC? | Design for forward compatibility; implement as parallel system |
 
 ---
 
 ## Files to Modify
 
+> **Note**: See `plan.md` for authoritative project structure.
+
 | Component | Files |
 |-----------|-------|
-| Database | `db/migrations/xxx_user_model_access.sql` |
-| User-Org Service | `services/user-org-service/internal/api/model_access.go` |
-| User-Org Service | `services/user-org-service/internal/repository/model_access.go` |
+| Database | `db/migrations/operational/20251130001_user_model_access.up.sql` |
+| User-Org Service | `services/user-org-service/internal/httpapi/modelaccess/handlers.go` |
+| User-Org Service | `services/user-org-service/internal/storage/postgres/model_access.go` |
 | API Router | `services/api-router-service/internal/auth/authenticator.go` |
-| API Router | `services/api-router-service/internal/middleware/model_access.go` |
+| API Router | `services/api-router-service/internal/api/public/model_access.go` |
 | CLI | `services/ai-aas-cli/cmd/user/model_access.go` |
 | CLI | `services/ai-aas-cli/internal/client/userorg/model_access.go` |

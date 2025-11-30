@@ -32,7 +32,7 @@ func UserCommand() *cobra.Command {
 		Long: `Manage users within organizations.
 
 Users are members of organizations who can access models and platform features
-based on their assigned roles.
+based on their assigned roles and model access permissions.
 
 Examples:
   # List users in an organization
@@ -47,20 +47,25 @@ Examples:
   # Delete a user
   ai-aas-cli user delete --org-id acme --email user@example.com --confirm
 
+  # Manage model access for a user
+  ai-aas-cli user model-access get --org-id acme --email user@example.com
+
 Workflow:
   1. Create org        ai-aas-cli org create --name <name> --slug <slug>
   2. Add users         ai-aas-cli user create --org-id <org> --email <email>
   3. Create API key    ai-aas-cli apikey create --org-id <org> --name <key-name>
 
 See Also:
-  ai-aas-cli org list      List organizations
-  ai-aas-cli apikey list   List API keys for user`,
+  ai-aas-cli org list             List organizations
+  ai-aas-cli apikey list          List API keys for user
+  ai-aas-cli user model-access    Manage user model access`,
 	}
 
 	cmd.AddCommand(userListCommand())
 	cmd.AddCommand(userCreateCommand())
 	cmd.AddCommand(userUpdateCommand())
 	cmd.AddCommand(userDeleteCommand())
+	cmd.AddCommand(ModelAccessCommand())
 
 	return cmd
 }

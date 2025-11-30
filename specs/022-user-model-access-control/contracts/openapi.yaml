@@ -1,0 +1,426 @@
+openapi: 3.1.0
+info:
+  title: User Model Access Control API
+  description: |
+    API endpoints for managing user-level model access control within organizations.
+    These endpoints are part of the user-org-service.
+  version: 1.0.0
+  contact:
+    name: AI-AAS Platform Team
+
+servers:
+  - url: /api/v1
+    description: User-Org Service API
+
+tags:
+  - name: User Model Access
+    description: Manage user-level model access permissions
+
+paths:
+  /orgs/{org_id}/users/{user_id}/model-access:
+    get:
+      operationId: getUserModelAccess
+      summary: Get user's model access configuration
+      description: |
+        Returns the user's access mode and list of granted models.
+        Includes available models from org's routing policies for reference.
+      tags:
+        - User Model Access
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrgIdParam'
+        - $ref: '#/components/parameters/UserIdParam'
+      responses:
+        '200':
+          description: User model access configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserModelAccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /orgs/{org_id}/users/{user_id}/model-access/mode:
+    put:
+      operationId: setUserAccessMode
+      summary: Set user's access mode
+      description: |
+        Sets the user's access mode to either 'restricted' or 'auto_grant'.
+        - restricted: User can only access explicitly granted models
+        - auto_grant: User can access all models (current and future)
+      tags:
+        - User Model Access
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrgIdParam'
+        - $ref: '#/components/parameters/UserIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetAccessModeRequest'
+      responses:
+        '200':
+          description: Access mode updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserModelAccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /orgs/{org_id}/users/{user_id}/model-access/grants:
+    get:
+      operationId: listUserModelGrants
+      summary: List user's model grants
+      description: Returns all explicit model grants for the user.
+      tags:
+        - User Model Access
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrgIdParam'
+        - $ref: '#/components/parameters/UserIdParam'
+      responses:
+        '200':
+          description: List of model grants
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelGrantsListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      operationId: grantModelAccess
+      summary: Grant model access to user
+      description: |
+        Creates an explicit grant for the user to access a specific model.
+        Only effective when user is in 'restricted' mode.
+      tags:
+        - User Model Access
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrgIdParam'
+        - $ref: '#/components/parameters/UserIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GrantModelRequest'
+      responses:
+        '201':
+          description: Grant created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelGrant'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Grant already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /orgs/{org_id}/users/{user_id}/model-access/grants/all-current:
+    post:
+      operationId: grantAllCurrentModels
+      summary: Grant access to all current models
+      description: |
+        Creates grants for all models currently available to the organization.
+        This is a snapshot—future models will NOT be automatically granted.
+        For auto-grant of future models, set access_mode to 'auto_grant'.
+      tags:
+        - User Model Access
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrgIdParam'
+        - $ref: '#/components/parameters/UserIdParam'
+      responses:
+        '200':
+          description: Grants created for all current models
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkGrantResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /orgs/{org_id}/users/{user_id}/model-access/grants/{model_name}:
+    delete:
+      operationId: revokeModelAccess
+      summary: Revoke model access from user
+      description: Removes the user's grant for a specific model.
+      tags:
+        - User Model Access
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrgIdParam'
+        - $ref: '#/components/parameters/UserIdParam'
+        - $ref: '#/components/parameters/ModelNameParam'
+      responses:
+        '204':
+          description: Grant revoked successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Admin API key with org admin permissions
+
+  parameters:
+    OrgIdParam:
+      name: org_id
+      in: path
+      required: true
+      description: Organization ID (UUID) or slug
+      schema:
+        type: string
+        example: "550e8400-e29b-41d4-a716-446655440000"
+
+    UserIdParam:
+      name: user_id
+      in: path
+      required: true
+      description: User ID (UUID) or email
+      schema:
+        type: string
+        example: "550e8400-e29b-41d4-a716-446655440001"
+
+    ModelNameParam:
+      name: model_name
+      in: path
+      required: true
+      description: Model name as registered in the platform
+      schema:
+        type: string
+        example: "mistral-7b"
+
+  schemas:
+    UserModelAccessResponse:
+      type: object
+      required:
+        - user_id
+        - org_id
+        - access_mode
+        - granted_models
+        - available_models
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: User ID
+        org_id:
+          type: string
+          format: uuid
+          description: Organization ID
+        access_mode:
+          $ref: '#/components/schemas/AccessMode'
+        granted_models:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModelGrant'
+          description: Explicit model grants (only relevant for restricted mode)
+        available_models:
+          type: array
+          items:
+            type: string
+          description: All models available to the organization
+          example: ["mistral-7b", "llama-3-8b", "gpt-4-turbo"]
+
+    SetAccessModeRequest:
+      type: object
+      required:
+        - access_mode
+      properties:
+        access_mode:
+          $ref: '#/components/schemas/AccessMode'
+
+    AccessMode:
+      type: string
+      enum:
+        - restricted
+        - auto_grant
+      description: |
+        Access mode for the user:
+        - restricted: User can only access explicitly granted models
+        - auto_grant: User can access all models (current and future)
+      example: "restricted"
+
+    GrantModelRequest:
+      type: object
+      required:
+        - model_name
+      properties:
+        model_name:
+          type: string
+          description: Name of the model to grant access to
+          example: "mistral-7b"
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Optional expiration timestamp (ISO 8601)
+          example: "2025-12-31T23:59:59Z"
+
+    ModelGrant:
+      type: object
+      required:
+        - grant_id
+        - model_name
+        - granted_at
+      properties:
+        grant_id:
+          type: string
+          format: uuid
+          description: Unique grant identifier
+        model_name:
+          type: string
+          description: Name of the granted model
+          example: "mistral-7b"
+        granted_at:
+          type: string
+          format: date-time
+          description: When the grant was created
+        granted_by:
+          type: string
+          format: uuid
+          nullable: true
+          description: User ID of admin who created the grant
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the grant expires (null = never)
+
+    ModelGrantsListResponse:
+      type: object
+      required:
+        - grants
+      properties:
+        grants:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModelGrant'
+
+    BulkGrantResponse:
+      type: object
+      required:
+        - granted_count
+        - models
+        - granted_at
+      properties:
+        granted_count:
+          type: integer
+          description: Number of models granted
+          example: 5
+        models:
+          type: array
+          items:
+            type: string
+          description: List of model names that were granted
+          example: ["mistral-7b", "llama-3-8b", "gpt-4-turbo", "claude-3", "gemini-pro"]
+        granted_at:
+          type: string
+          format: date-time
+          description: When the grants were created
+
+    ErrorResponse:
+      type: object
+      required:
+        - type
+        - title
+        - status
+      properties:
+        type:
+          type: string
+          format: uri
+          description: Error type URI
+          example: "https://api.ai-aas.io/errors/conflict"
+        title:
+          type: string
+          description: Short error title
+          example: "Grant Already Exists"
+        status:
+          type: integer
+          description: HTTP status code
+          example: 409
+        detail:
+          type: string
+          description: Detailed error message
+          example: "User already has access to model 'mistral-7b'"
+        instance:
+          type: string
+          format: uri
+          description: Request instance identifier
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    Unauthorized:
+      description: Missing or invalid authentication
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    Forbidden:
+      description: Insufficient permissions (must be org admin)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    NotFound:
+      description: Organization, user, or grant not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+

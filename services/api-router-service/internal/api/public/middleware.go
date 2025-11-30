@@ -391,3 +391,82 @@ func getModelFromRequest(r *http.Request) string {
 	return ""
 }
 
+// ModelAccessMiddleware creates middleware for user-level model access control.
+// This middleware checks if the authenticated user has access to the requested model.
+// Requires BodyBufferMiddleware to run first to extract the model from the request body.
+//
+// Spec reference: 022-user-model-access-control
+func ModelAccessMiddleware(auditLogger *usage.AuditLogger, logger *zap.Logger, tracer trace.Tracer, featureEnabled bool) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Skip if feature is disabled
+			if !featureEnabled {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Get authenticated context
+			authCtx := r.Context().Value(AuthContextKey)
+			if authCtx == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			authContext, ok := authCtx.(*auth.AuthenticatedContext)
+			if !ok {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Get model from request (set by BodyBufferMiddleware)
+			model := getModelFromRequest(r)
+			if model == "" {
+				// No model specified, skip check (will fail validation in handler)
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Check model access
+			if !authContext.CanAccessModel(model) {
+				logger.Warn("model access denied",
+					zap.String("user_id", authContext.PrincipalID),
+					zap.String("org_id", authContext.OrganizationID),
+					zap.String("model", model),
+					zap.String("access_mode", authContext.ModelAccessMode),
+				)
+
+				// Emit audit event
+				if auditLogger != nil {
+					auditLogger.LogDenial(usage.AuditEvent{
+						RequestID:      getRequestID(r),
+						OrganizationID: authContext.OrganizationID,
+						APIKeyID:       authContext.APIKeyID,
+						Model:          model,
+						Action:         "REQUEST_DENIED",
+						DecisionReason: "MODEL_ACCESS_DENIED",
+						LimitState:     "MODEL_ACCESS_DENIED",
+					})
+				}
+
+				// Record metric
+				telemetry.RecordModelAccessDenial(model, authContext.OrganizationID)
+
+				// Write error response
+				errorBuilder := api.NewErrorBuilder(tracer)
+				response := errorBuilder.BuildError(r.Context(),
+					api.NewError(api.ErrCodeAccessDenied, "Access to model denied"),
+					api.ErrCodeAccessDenied)
+
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(api.GetHTTPStatus(api.ErrCodeAccessDenied))
+				if err := json.NewEncoder(w).Encode(response); err != nil {
+					logger.Error("failed to write model access error response", zap.Error(err))
+				}
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+

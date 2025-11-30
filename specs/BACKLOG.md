@@ -86,6 +86,17 @@ A scratch list of tasks, ideas, and improvements to tackle. Add items here so we
 ### CLI Improvements
 - [ ] Consider raising "slow" threshold from 1s to 2s for external health checks
 - [ ] Add `ai-aas-cli config show` command to display current configuration
+- [ ] **Fix hardcoded 'main' revision in model library commands** (`library_cmd.go:130`)
+  - **Problem:** The `ai-aas-cli model library update` and related commands hardcode `"main"` as the HuggingFace revision, preventing version pinning for reproducible deployments.
+  - **Why it matters:**
+    - Production environments need exact version control for model artifacts
+    - "main" branch on HuggingFace can change without notice
+    - No way to update to a specific model version or rollback
+  - **Proposed solution:**
+    1. Add `--revision` / `-r` flag to library update/sync commands
+    2. Store selected revision in model registry metadata
+    3. Consider auto-detecting latest SHA from HuggingFace API when `main` is specified
+    4. Add `ai-aas-cli model library versions <model>` to list available HuggingFace revisions
 - [x] **Refactor model commands to use nested subcommands** (2024-11-30)
   - Refactored 27 flat commands into 6 parent command groups
   - New structure: `model registry/cache/deploy/troubleshoot/version/library`
