@@ -48,6 +48,9 @@ type ValidateAPIKeyResponse struct {
 	Status         string   `json:"status,omitempty"`
 	ExpiresAt      *string  `json:"expiresAt,omitempty"`
 	Message        string   `json:"message,omitempty"`
+	// Model access control (Spec 022)
+	ModelAccessMode string   `json:"modelAccessMode,omitempty"` // "restricted" or "auto_grant"
+	GrantedModels   []string `json:"grantedModels,omitempty"`   // List of granted model names
 }
 
 // ValidateAPIKey handles POST /v1/auth/validate-api-key.
@@ -154,6 +157,28 @@ func (h *Handler) ValidateAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 	if expiresAtStr != "" {
 		response.ExpiresAt = &expiresAtStr
+	}
+
+	// Fetch model access info for user principals (Spec 022)
+	if apiKey.PrincipalType == postgres.PrincipalTypeUser {
+		accessMode, err := h.runtime.Postgres.GetUserAccessMode(ctx, apiKey.OrgID, apiKey.PrincipalID)
+		if err == nil {
+			response.ModelAccessMode = accessMode
+			// For restricted mode, fetch granted models
+			if accessMode == "restricted" {
+				grantedModels, err := h.runtime.Postgres.GetGrantedModelNames(ctx, apiKey.OrgID, apiKey.PrincipalID)
+				if err == nil {
+					response.GrantedModels = grantedModels
+				}
+			}
+		}
+		// Default to auto_grant if no access mode is set (legacy behavior)
+		if response.ModelAccessMode == "" {
+			response.ModelAccessMode = "auto_grant"
+		}
+	} else {
+		// Service accounts default to auto_grant (all models accessible)
+		response.ModelAccessMode = "auto_grant"
 	}
 
 	w.Header().Set("Content-Type", "application/json")

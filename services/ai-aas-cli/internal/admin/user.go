@@ -29,13 +29,14 @@ func UserCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "user",
 		Short: "Manage users",
-		Long:  "Manage users: list, create, update, delete",
+		Long:  "Manage users: list, create, update, delete, model-access",
 	}
 
 	cmd.AddCommand(userListCommand())
 	cmd.AddCommand(userCreateCommand())
 	cmd.AddCommand(userUpdateCommand())
 	cmd.AddCommand(userDeleteCommand())
+	cmd.AddCommand(ModelAccessCommand())
 
 	return cmd
 }

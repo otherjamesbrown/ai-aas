@@ -49,6 +49,15 @@ var (
 		},
 		[]string{"quota_type"}, // "daily_quota", "monthly_quota"
 	)
+
+	// ModelAccessDenialsTotal tracks total model access denials (Spec 022).
+	ModelAccessDenialsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "api_router_model_access_denials_total",
+			Help: "Total number of model access denials due to user-level restrictions",
+		},
+		[]string{"model", "org_id"},
+	)
 )
 
 // RecordRateLimitDenial records a rate limit denial metric.
@@ -64,5 +73,10 @@ func RecordBudgetDenial(quotaType string) {
 // RecordQuotaDenial records a quota denial metric.
 func RecordQuotaDenial(quotaType string) {
 	QuotaDenialsTotal.WithLabelValues(quotaType).Inc()
+}
+
+// RecordModelAccessDenial records a model access denial metric (Spec 022).
+func RecordModelAccessDenial(model, orgID string) {
+	ModelAccessDenialsTotal.WithLabelValues(model, orgID).Inc()
 }
 

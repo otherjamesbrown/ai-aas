@@ -37,11 +37,36 @@ import (
 
 // AuthenticatedContext contains authentication and authorization context.
 type AuthenticatedContext struct {
-	APIKeyID       string
-	OrganizationID string
-	PrincipalID    string
-	PrincipalType  string
-	Scopes         []string
+	APIKeyID        string
+	OrganizationID  string
+	PrincipalID     string
+	PrincipalType   string
+	Scopes          []string
+	// Model access control (Spec 022)
+	ModelAccessMode string   // "restricted" or "auto_grant"
+	GrantedModels   []string // List of granted model names (only relevant for restricted mode)
+}
+
+// CanAccessModel checks if the authenticated principal has access to a specific model.
+// Returns true if access is allowed, false otherwise.
+func (c *AuthenticatedContext) CanAccessModel(modelName string) bool {
+	// If no access mode is set (legacy or feature disabled), allow access
+	if c.ModelAccessMode == "" || c.ModelAccessMode == "auto_grant" {
+		return true
+	}
+
+	// For restricted mode, check if model is in granted list
+	if c.ModelAccessMode == "restricted" {
+		for _, grantedModel := range c.GrantedModels {
+			if grantedModel == modelName {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Unknown mode - default to allow (fail open for safety)
+	return true
 }
 
 // Authenticator handles API key authentication.
@@ -169,14 +194,17 @@ func (a *Authenticator) validateAPIKey(apiKey string) (*AuthenticatedContext, er
 	}
 
 	var validationResp struct {
-		Valid          bool     `json:"valid"`
-		APIKeyID       string   `json:"apiKeyId"`
-		OrganizationID string   `json:"organizationId"`
-		PrincipalID    string   `json:"principalId"`
-		PrincipalType  string   `json:"principalType"`
-		Scopes         []string `json:"scopes"`
-		Status         string   `json:"status"`
-		Message        string   `json:"message"`
+		Valid           bool     `json:"valid"`
+		APIKeyID        string   `json:"apiKeyId"`
+		OrganizationID  string   `json:"organizationId"`
+		PrincipalID     string   `json:"principalId"`
+		PrincipalType   string   `json:"principalType"`
+		Scopes          []string `json:"scopes"`
+		Status          string   `json:"status"`
+		Message         string   `json:"message"`
+		// Model access control (Spec 022)
+		ModelAccessMode string   `json:"modelAccessMode,omitempty"` // "restricted" or "auto_grant"
+		GrantedModels   []string `json:"grantedModels,omitempty"`   // Only populated for restricted mode
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&validationResp); err != nil {
@@ -189,11 +217,13 @@ func (a *Authenticator) validateAPIKey(apiKey string) (*AuthenticatedContext, er
 
 	// Build authenticated context
 	ctx := &AuthenticatedContext{
-		APIKeyID:       validationResp.APIKeyID,
-		OrganizationID: validationResp.OrganizationID,
-		PrincipalID:    validationResp.PrincipalID,
-		PrincipalType:  validationResp.PrincipalType,
-		Scopes:         validationResp.Scopes,
+		APIKeyID:        validationResp.APIKeyID,
+		OrganizationID:  validationResp.OrganizationID,
+		PrincipalID:     validationResp.PrincipalID,
+		PrincipalType:   validationResp.PrincipalType,
+		Scopes:          validationResp.Scopes,
+		ModelAccessMode: validationResp.ModelAccessMode,
+		GrantedModels:   validationResp.GrantedModels,
 	}
 
 	// Cache the result for 1 minute
@@ -218,11 +248,13 @@ func (a *Authenticator) validateAPIKeyStub(apiKey string) (*AuthenticatedContext
 		}
 
 		return &AuthenticatedContext{
-			APIKeyID:       uuid.New().String(),
-			OrganizationID: orgID,
-			PrincipalID:    uuid.New().String(),
-			PrincipalType:  "service_account",
-			Scopes:         []string{"inference:read"},
+			APIKeyID:        uuid.New().String(),
+			OrganizationID:  orgID,
+			PrincipalID:     uuid.New().String(),
+			PrincipalType:   "service_account",
+			Scopes:          []string{"inference:read"},
+			ModelAccessMode: "auto_grant", // Default to auto_grant for dev/test keys
+			GrantedModels:   []string{},   // Empty - all models allowed
 		}, nil
 	}
 
