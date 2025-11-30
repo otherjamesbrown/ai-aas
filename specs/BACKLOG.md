@@ -76,6 +76,26 @@ A scratch list of tasks, ideas, and improvements to tackle. Add items here so we
 
 ## Medium Priority
 
+### Testing & Quality
+
+- [ ] **Full integration test suite for user-model-access-control**
+  - **Context**: E2E CLI-based tests exist at `tests/e2e/scripts/test-user-model-access.sh`
+  - **Missing tests**:
+    - Handler integration tests (Admin API endpoints with real database)
+    - API Router integration tests (model access enforcement at inference time)
+    - Repository unit tests for edge cases
+  - **Proposed structure**:
+    ```
+    tests/
+    ├── e2e/scripts/test-user-model-access.sh     # ✅ Created
+    ├── integration/
+    │   ├── admin-api/user-model-access_test.go   # Handler tests
+    │   └── api-router/access-enforcement_test.go # Inference-time enforcement
+    └── unit/
+        └── repository/user-model-access_test.go  # Edge cases
+    ```
+  - **Why it matters**: Ensures the access control system works correctly across all layers (API, database, inference)
+
 ### Web Portal / UI
 - [ ] **Add service health dashboard to Web Portal**
   - Display platform health status similar to CLI `ai-aas-cli status` output
