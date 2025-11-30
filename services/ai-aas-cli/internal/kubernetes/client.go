@@ -41,7 +41,10 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		// Build kubeconfig path
 		kubeconfig := cfg.Kubeconfig
 		if kubeconfig == "" {
-			if home := os.Getenv("HOME"); home != "" {
+			// Check KUBECONFIG environment variable first
+			if envKubeconfig := os.Getenv("KUBECONFIG"); envKubeconfig != "" {
+				kubeconfig = envKubeconfig
+			} else if home := os.Getenv("HOME"); home != "" {
 				kubeconfig = filepath.Join(home, ".kube", "config")
 			}
 		}

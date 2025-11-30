@@ -29,7 +29,36 @@ func UserCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "user",
 		Short: "Manage users",
-		Long:  "Manage users: list, create, update, delete, model-access",
+		Long: `Manage users within organizations.
+
+Users are members of organizations who can access models and platform features
+based on their assigned roles and model access permissions.
+
+Examples:
+  # List users in an organization
+  ai-aas-cli user list --org-id acme
+
+  # Invite a new user
+  ai-aas-cli user create --org-id acme --email user@example.com
+
+  # Update user status
+  ai-aas-cli user update --org-id acme --email user@example.com --status suspended
+
+  # Delete a user
+  ai-aas-cli user delete --org-id acme --email user@example.com --confirm
+
+  # Manage model access for a user
+  ai-aas-cli user model-access get --org-id acme --email user@example.com
+
+Workflow:
+  1. Create org        ai-aas-cli org create --name <name> --slug <slug>
+  2. Add users         ai-aas-cli user create --org-id <org> --email <email>
+  3. Create API key    ai-aas-cli apikey create --org-id <org> --name <key-name>
+
+See Also:
+  ai-aas-cli org list             List organizations
+  ai-aas-cli apikey list          List API keys for user
+  ai-aas-cli user model-access    Manage user model access`,
 	}
 
 	cmd.AddCommand(userListCommand())
@@ -52,7 +81,23 @@ func userListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List users",
-		Long:  "List users in an organization with structured output (table, json, csv)",
+		Long: `List all users in an organization.
+
+Output includes user ID, email, display name, status, and MFA enrollment.
+
+Examples:
+  # List users in table format (default)
+  ai-aas-cli user list --org-id acme
+
+  # List in JSON format
+  ai-aas-cli user list --org-id acme --format json
+
+  # List in CSV format for export
+  ai-aas-cli user list --org-id acme --format csv > users.csv
+
+See Also:
+  ai-aas-cli user create     Add a new user
+  ai-aas-cli apikey list     List API keys for organization`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runUserList(cmd, args, flagOrgID, flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey)
 		},
@@ -202,7 +247,35 @@ func userCreateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create user",
-		Long:  "Create (invite) a user with idempotent support (--upsert flag)",
+		Long: `Invite a new user to an organization.
+
+An invitation email will be sent to the user. The invite expires after 72 hours
+by default, but can be customized with --expires-in-hours.
+
+Examples:
+  # Invite a user
+  ai-aas-cli user create --org-id acme --email user@example.com
+
+  # Invite with specific roles
+  ai-aas-cli user create --org-id acme --email admin@example.com \
+    --roles admin,developer
+
+  # Invite with custom expiration
+  ai-aas-cli user create --org-id acme --email user@example.com \
+    --expires-in-hours 168
+
+  # Idempotent create (won't fail if user exists)
+  ai-aas-cli user create --org-id acme --email user@example.com --upsert
+
+Next Steps:
+  After inviting a user:
+  1. User accepts invite via email link
+  2. Optionally assign more roles
+  3. Create API keys for the user
+
+See Also:
+  ai-aas-cli user list       List organization users
+  ai-aas-cli apikey create   Create API key for user`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runUserCreate(cmd, args, flagOrgID, flagEmail, flagRoles, flagExpiresInHours, flagUpsert,
 				flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey)
@@ -397,7 +470,25 @@ func userUpdateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "Update user",
-		Long:  "Update a user's display name, status, or metadata",
+		Long: `Update a user's settings.
+
+You can identify the user by --user-id or --email. Update display name or status.
+
+Examples:
+  # Update display name
+  ai-aas-cli user update --org-id acme --email user@example.com \
+    --display-name "Jane Doe"
+
+  # Suspend a user
+  ai-aas-cli user update --org-id acme --email user@example.com \
+    --status suspended
+
+  # Reactivate a user
+  ai-aas-cli user update --org-id acme --user-id u_123 --status active
+
+See Also:
+  ai-aas-cli user list      List organization users
+  ai-aas-cli user delete    Remove a user`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runUserUpdate(cmd, args, flagOrgID, flagUserID, flagEmail, flagDisplayName, flagStatus,
 				flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey)
@@ -596,7 +687,30 @@ func userDeleteCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete",
 		Short: "Delete user",
-		Long:  "Delete a user with confirmation and force flags",
+		Long: `Delete a user from an organization.
+
+This is a destructive operation that cannot be undone. The user's access will
+be immediately revoked.
+
+Examples:
+  # Delete by email with confirmation
+  ai-aas-cli user delete --org-id acme --email user@example.com --confirm
+
+  # Delete by user ID
+  ai-aas-cli user delete --org-id acme --user-id u_123 --confirm
+
+  # Force delete (for scripts)
+  ai-aas-cli user delete --org-id acme --email user@example.com --force
+
+Warning:
+  Deleting a user will also revoke:
+  - All API keys owned by the user
+  - All active sessions
+  - Access to all organization resources
+
+See Also:
+  ai-aas-cli user update    Suspend instead of delete
+  ai-aas-cli user list      List organization users`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runUserDelete(cmd, args, flagOrgID, flagUserID, flagEmail, flagConfirm, flagForce,
 				flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey)
