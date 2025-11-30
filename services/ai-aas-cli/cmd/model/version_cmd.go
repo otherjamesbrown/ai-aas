@@ -315,9 +315,12 @@ See Also:
 			fmt.Printf("  Model: %s\n", model.HFModelID)
 			fmt.Printf("  Version: %s\n", truncateSHA(hfInfo.SHA))
 
-			pullCmd := NewPullCommand()
-			pullCmd.SetArgs([]string{modelName, "--revision", hfInfo.SHA})
-			if err := pullCmd.Execute(); err != nil {
+			if err := PullModelToCache(ctx, PullOptions{
+				ModelName:  modelName,
+				Revision:   hfInfo.SHA,
+				DryRun:     false,
+				SkipVerify: false,
+			}); err != nil {
 				return fmt.Errorf("pull failed: %w", err)
 			}
 

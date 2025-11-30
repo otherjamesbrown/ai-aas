@@ -562,7 +562,7 @@ Typical Workflow:
   1. ai-aas-cli model registry add meta-llama/Llama-2-7b-hf
   2. ai-aas-cli model cache pull meta-llama/Llama-2-7b-hf
   3. ai-aas-cli model deploy create meta-llama/Llama-2-7b-hf
-  4. ai-aas-cli model troubleshoot status meta-llama/Llama-2-7b-hf
+  4. ai-aas-cli model deploy status meta-llama/Llama-2-7b-hf
 
 Getting Help:
   ai-aas-cli model --help                    Show this help

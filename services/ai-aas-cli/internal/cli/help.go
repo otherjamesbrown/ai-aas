@@ -215,7 +215,7 @@ func PrintModelRegistered(name, hfModelID string) {
 
 // PrintModelCached prints the model cached message with guidance
 func PrintModelCached(name string, sizeBytes int64) {
-	sizeStr := formatBytes(sizeBytes)
+	sizeStr := FormatBytes(sizeBytes)
 	PrintSuccess(fmt.Sprintf("Model cached: %s (%s)", name, sizeStr))
 
 	PrintNextSteps([]NextStep{
@@ -248,8 +248,9 @@ func PrintCacheDeleted(name string) {
 	fmt.Printf("  %s\n", cyan(fmt.Sprintf("ai-aas model registry remove %s", name)))
 }
 
-// formatBytes formats bytes to human-readable string
-func formatBytes(b int64) string {
+// FormatBytes formats bytes to human-readable string.
+// Exported for use in other packages to avoid duplication.
+func FormatBytes(b int64) string {
 	const unit = 1024
 	if b < unit {
 		return fmt.Sprintf("%d B", b)

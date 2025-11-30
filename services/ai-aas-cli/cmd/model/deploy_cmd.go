@@ -17,6 +17,7 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/kubernetes"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/registry"
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/storage"
 )
 
 // NewDeployParentCommand creates the model deploy parent command
@@ -208,7 +209,7 @@ See Also:
 				if err != nil {
 					return err
 				}
-				manifestPath := fmt.Sprintf("models/%s/%s/manifest.json", modelName, revision)
+				manifestPath := fmt.Sprintf("models/%s/%s/%s", modelName, revision, storage.ManifestFileName)
 				exists, err := s3Client.Exists(ctx, manifestPath)
 				if err != nil {
 					return fmt.Errorf("check cache: %w", err)
@@ -514,14 +515,16 @@ func newDeployScaleCommand() *cobra.Command {
 		Short: "Scale model replicas",
 		Long: `Scale the replica count of a model deployment.
 
-You can specify a single number or a range (min-max) for auto-scaling.
+Specify a fixed replica count for the deployment.
 
 Examples:
   # Scale to 3 replicas
   ai-aas model deploy scale mistral-7b -e development --replicas 3
 
-  # Set auto-scaling range
-  ai-aas model deploy scale mistral-7b -e development --replicas 2-5
+  # Scale down to 1 replica
+  ai-aas model deploy scale mistral-7b -e development --replicas 1
+
+Note: Auto-scaling ranges (e.g., 2-5) are not yet implemented.
 
 See Also:
   ai-aas model deploy status      Check current status

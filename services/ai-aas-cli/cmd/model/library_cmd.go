@@ -516,9 +516,11 @@ See Also:
 				return fmt.Errorf("disable %s: %w", disableModel, err)
 			}
 
-			apiClient, _ := getAPIClient(cfg)
+			apiClient, apiErr := getAPIClient(cfg)
 			var regClient *registry.Client
-			if apiClient != nil {
+			if apiErr != nil {
+				fmt.Printf("  Warning: could not get API client to record history: %v\n", apiErr)
+			} else if apiClient != nil {
 				regClient = registry.NewClient(apiClient)
 				if err := regClient.RecordState(ctx, disableModel, registry.RecordStateRequest{
 					Environment: environment,
@@ -533,7 +535,8 @@ See Also:
 
 			fmt.Print("  Waiting for resources to be released...")
 			if err := k8sClient.WaitForDelete(ctx, disableIsvc, environment, 30*time.Second); err != nil {
-				fmt.Print(" (still terminating)")
+				fmt.Println(" FAILED")
+				return fmt.Errorf("failed waiting for old model '%s' to be deleted: %w", disableModel, err)
 			}
 			fmt.Println(" done")
 

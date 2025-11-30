@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -445,12 +446,12 @@ See Also:
 			fmt.Printf("  Files:         %d\n", fileCount)
 			fmt.Printf("  Total Size:    %s\n", formatBytes(totalSize))
 
-			if quick {
-				fmt.Println("\n[Quick check - size only]")
-			}
-
 			fmt.Printf("\nIntegrity\n")
-			fmt.Printf("  Status:        [+] verified\n")
+			if quick {
+				fmt.Printf("  Status:        [~] manifest present (quick check - no hash verification)\n")
+			} else {
+				fmt.Printf("  Status:        [~] manifest present (hash verification not implemented)\n")
+			}
 			fmt.Printf("  Manifest:      present\n")
 
 			cli.PrintNextSteps([]cli.NextStep{
@@ -606,9 +607,10 @@ See Also:
 
 			// Group by model
 			type versionInfo struct {
-				version string
-				size    int64
-				files   int
+				version      string
+				size         int64
+				files        int
+				lastModified time.Time
 			}
 			models := make(map[string][]versionInfo)
 
@@ -620,18 +622,35 @@ See Also:
 				model := parts[0]
 				version := parts[1]
 
+				// Get last modified time from object
+				var lastMod time.Time
+				if t, ok := obj.LastModified.(time.Time); ok {
+					lastMod = t
+				}
+
 				found := false
 				for i := range models[model] {
 					if models[model][i].version == version {
 						models[model][i].size += obj.Size
 						models[model][i].files++
+						// Track the newest file time for this version
+						if lastMod.After(models[model][i].lastModified) {
+							models[model][i].lastModified = lastMod
+						}
 						found = true
 						break
 					}
 				}
 				if !found {
-					models[model] = append(models[model], versionInfo{version: version, size: obj.Size, files: 1})
+					models[model] = append(models[model], versionInfo{version: version, size: obj.Size, files: 1, lastModified: lastMod})
 				}
+			}
+
+			// Sort versions by lastModified (newest first) before selecting which to delete
+			for model := range models {
+				sort.Slice(models[model], func(i, j int) bool {
+					return models[model][i].lastModified.After(models[model][j].lastModified)
+				})
 			}
 
 			var toDelete []string

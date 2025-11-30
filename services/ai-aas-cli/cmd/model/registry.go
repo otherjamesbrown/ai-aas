@@ -4,7 +4,6 @@ package model
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -127,11 +126,7 @@ See Also:
 			// Check if model is gated
 			if modelInfo.Gated {
 				if !acceptLicense {
-					fmt.Println("\nThis is a gated model requiring license acceptance.")
-					fmt.Printf("   License: %s\n", huggingface.GetLicenseFullName(licenseType))
-					fmt.Printf("   Accept license at: https://huggingface.co/%s\n\n", hfModelID)
-					fmt.Println("After accepting the license on HuggingFace, run again with --accept-license")
-					os.Exit(1)
+					return fmt.Errorf("gated model requires license acceptance\n\n   License: %s\n   Accept license at: https://huggingface.co/%s\n\nAfter accepting the license on HuggingFace, run again with --accept-license", huggingface.GetLicenseFullName(licenseType), hfModelID)
 				}
 				requiresAuth = true
 			}
