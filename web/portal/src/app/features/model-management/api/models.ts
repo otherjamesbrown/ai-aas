@@ -362,27 +362,68 @@ export const modelsApi = {
   // ========== Deployment Status ==========
 
   /**
-   * Get multi-source deployment status
+   * Get multi-source deployment status for all deployments
    * Equivalent to: ai-aas-cli deployment status
    */
-  async deploymentStatus(): Promise<{
-    deployments: Array<{
+  async deploymentStatusAll(): Promise<Array<{
+    name: string;
+    model: string;
+    replicas: { ready: number; desired: number };
+    status: 'running' | 'pending' | 'failed' | 'unknown';
+    sources: {
+      kubernetes?: { status: string; message?: string; conditions?: Array<{ type: string; status: string; message?: string }> };
+      argocd?: { sync_status: string; health_status: string; message?: string };
+      vllm?: { status: string; model_loaded: boolean; gpu_memory_used?: string };
+    };
+    created_at: string;
+    updated_at: string;
+  }>> {
+    const response = await httpClient.get<Array<{
       name: string;
-      environment: string;
-      kubernetes_status: string;
-      api_router_status: string;
-      inference_status: string;
-    }>;
+      model: string;
+      replicas: { ready: number; desired: number };
+      status: 'running' | 'pending' | 'failed' | 'unknown';
+      sources: {
+        kubernetes?: { status: string; message?: string; conditions?: Array<{ type: string; status: string; message?: string }> };
+        argocd?: { sync_status: string; health_status: string; message?: string };
+        vllm?: { status: string; model_loaded: boolean; gpu_memory_used?: string };
+      };
+      created_at: string;
+      updated_at: string;
+    }>>('/v1/admin/deployments/status');
+    return response.data;
+  },
+
+  /**
+   * Get detailed deployment status for a specific deployment
+   * Equivalent to: ai-aas-cli deployment status <name>
+   */
+  async deploymentStatus(name: string): Promise<{
+    name: string;
+    model: string;
+    replicas: { ready: number; desired: number };
+    status: 'running' | 'pending' | 'failed' | 'unknown';
+    sources: {
+      kubernetes?: { status: string; message?: string; conditions?: Array<{ type: string; status: string; message?: string }> };
+      argocd?: { sync_status: string; health_status: string; message?: string };
+      vllm?: { status: string; model_loaded: boolean; gpu_memory_used?: string };
+    };
+    created_at: string;
+    updated_at: string;
   }> {
     const response = await httpClient.get<{
-      deployments: Array<{
-        name: string;
-        environment: string;
-        kubernetes_status: string;
-        api_router_status: string;
-        inference_status: string;
-      }>;
-    }>('/v1/admin/deployments/status');
+      name: string;
+      model: string;
+      replicas: { ready: number; desired: number };
+      status: 'running' | 'pending' | 'failed' | 'unknown';
+      sources: {
+        kubernetes?: { status: string; message?: string; conditions?: Array<{ type: string; status: string; message?: string }> };
+        argocd?: { sync_status: string; health_status: string; message?: string };
+        vllm?: { status: string; model_loaded: boolean; gpu_memory_used?: string };
+      };
+      created_at: string;
+      updated_at: string;
+    }>(`/v1/admin/deployments/${name}/status`);
     return response.data;
   },
 

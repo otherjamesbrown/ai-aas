@@ -159,7 +159,7 @@
 - [x] T-S018-P06-063 [US6] Create `web/portal/src/app/features/model-management/pages/ModelTroubleshootPage.tsx` with logs viewer, events display, and test inference functionality equivalent to `ai-aas-cli model troubleshoot` commands
 - [x] T-S018-P06-064 [US6] Create `web/portal/src/app/features/model-management/pages/ModelVersionPage.tsx` with version check, update, and pin functionality equivalent to `ai-aas-cli model version` commands
 - [x] T-S018-P06-065 [US6] Create `web/portal/src/app/features/model-management/pages/ModelLibraryPage.tsx` with enable/disable/swap/list/history/alias operations equivalent to `ai-aas-cli model library` commands
-- [ ] T-S018-P06-066 [US6] Create `web/portal/src/app/features/model-management/pages/DeploymentStatusPage.tsx` with multi-source status inspection equivalent to `ai-aas-cli deployment status` command
+- [x] T-S018-P06-066 [US6] Create `web/portal/src/app/features/model-management/pages/DeploymentStatusPage.tsx` with multi-source status inspection equivalent to `ai-aas-cli deployment status` command
 - [x] T-S018-P06-067 [US6] Create `web/portal/src/app/features/model-management/pages/InferencePage.tsx` with get-models and send-request functionality equivalent to `ai-aas-cli inference` commands
 - [x] T-S018-P06-068 [US6] Create API client functions in `web/portal/src/app/features/model-management/api/` for all model management operations using same endpoints as CLI
 

@@ -19,6 +19,7 @@ import {
   modelVersionRoute,
   modelLibraryRoute,
   inferenceRoute,
+  deploymentStatusRoute,
 } from './routes/modelRoutes';
 import {
   organizationsRoute,
@@ -116,6 +117,7 @@ const routeTree = rootRoute.addChildren([
   modelVersionRoute,
   modelLibraryRoute,
   inferenceRoute,
+  deploymentStatusRoute,
   // Access control routes
   organizationsRoute,
   usersRoute,

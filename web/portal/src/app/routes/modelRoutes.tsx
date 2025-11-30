@@ -10,6 +10,7 @@ const ModelTroubleshootPage = lazy(() => import('../features/model-management/pa
 const ModelVersionPage = lazy(() => import('../features/model-management/pages/ModelVersionPage'));
 const ModelLibraryPage = lazy(() => import('../features/model-management/pages/ModelLibraryPage'));
 const InferencePage = lazy(() => import('../features/model-management/pages/InferencePage'));
+const DeploymentStatusPage = lazy(() => import('../features/model-management/pages/DeploymentStatusPage'));
 
 // Model registry route
 export const modelRegistryRoute = createRoute({
@@ -58,4 +59,11 @@ export const inferenceRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/models/inference',
   component: InferencePage,
+});
+
+// Deployment status route
+export const deploymentStatusRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/models/deployment-status',
+  component: DeploymentStatusPage,
 });

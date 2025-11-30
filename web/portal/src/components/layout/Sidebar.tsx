@@ -135,6 +135,7 @@ const navSections: NavSection[] = [
       { label: 'Versions', href: '/models/versions', icon: <Icons.GitBranch /> },
       { label: 'Library', href: '/models/library', icon: <Icons.Cube /> },
       { label: 'Inference', href: '/models/inference', icon: <Icons.Terminal /> },
+      { label: 'Status', href: '/models/deployment-status', icon: <Icons.Chart /> },
     ],
   },
   {
