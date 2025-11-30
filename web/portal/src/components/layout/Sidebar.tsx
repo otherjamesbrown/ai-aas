@@ -123,6 +123,7 @@ const navSections: NavSection[] = [
     items: [
       { label: 'Organizations', href: '/access/organizations', icon: <Icons.Building />, roles: ['admin'] },
       { label: 'Users', href: '/access/users', icon: <Icons.Users />, roles: ['admin'] },
+      { label: 'Model Access', href: '/access/user-model-access', icon: <Icons.Shield />, roles: ['admin'] },
       { label: 'API Keys', href: '/admin/api-keys', icon: <Icons.Key /> },
       { label: 'Credentials', href: '/access/credentials', icon: <Icons.Shield />, roles: ['admin'] },
     ],

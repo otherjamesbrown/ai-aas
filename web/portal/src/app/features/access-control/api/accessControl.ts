@@ -195,4 +195,75 @@ export const accessControlApi = {
   async credentialsDelete(type: string): Promise<void> {
     await httpClient.delete(`/v1/admin/credentials/${type}`);
   },
+
+  // ========== User Model Access ==========
+
+  /**
+   * Show user model access
+   * Equivalent to: ai-aas-cli user model-access show <user>
+   */
+  async userModelAccessShow(userId: string): Promise<{
+    user_id: string;
+    user_email: string;
+    access_mode: 'allowlist' | 'denylist' | 'all';
+    models: Array<{
+      model_name: string;
+      granted: boolean;
+      granted_at?: string;
+      granted_by?: string;
+    }>;
+  }> {
+    const response = await httpClient.get<{
+      user_id: string;
+      user_email: string;
+      access_mode: 'allowlist' | 'denylist' | 'all';
+      models: Array<{
+        model_name: string;
+        granted: boolean;
+        granted_at?: string;
+        granted_by?: string;
+      }>;
+    }>(`/v1/admin/users/${userId}/model-access`);
+    return response.data;
+  },
+
+  /**
+   * Set user model access mode
+   * Equivalent to: ai-aas-cli user model-access set-mode <user> <mode>
+   */
+  async userModelAccessSetMode(userId: string, mode: 'allowlist' | 'denylist' | 'all'): Promise<void> {
+    await httpClient.post(`/v1/admin/users/${userId}/model-access/mode`, { mode });
+  },
+
+  /**
+   * Grant model access to user
+   * Equivalent to: ai-aas-cli user model-access grant <user> <model>
+   */
+  async userModelAccessGrant(userId: string, modelName: string): Promise<void> {
+    await httpClient.post(`/v1/admin/users/${userId}/model-access/grant`, { model_name: modelName });
+  },
+
+  /**
+   * Revoke model access from user
+   * Equivalent to: ai-aas-cli user model-access revoke <user> <model>
+   */
+  async userModelAccessRevoke(userId: string, modelName: string): Promise<void> {
+    await httpClient.post(`/v1/admin/users/${userId}/model-access/revoke`, { model_name: modelName });
+  },
+
+  /**
+   * Grant all models to user
+   * Equivalent to: ai-aas-cli user model-access grant-all <user>
+   */
+  async userModelAccessGrantAll(userId: string): Promise<void> {
+    await httpClient.post(`/v1/admin/users/${userId}/model-access/grant-all`);
+  },
+
+  /**
+   * List available models for access control
+   */
+  async listAvailableModels(): Promise<string[]> {
+    const response = await httpClient.get<string[]>('/v1/admin/models/available');
+    return response.data;
+  },
 };

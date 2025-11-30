@@ -23,6 +23,7 @@ import {
 import {
   organizationsRoute,
   usersRoute,
+  userModelAccessRoute,
   credentialsRoute,
 } from './routes/accessRoutes';
 import {
@@ -112,6 +113,7 @@ const routeTree = rootRoute.addChildren([
   // Access control routes
   organizationsRoute,
   usersRoute,
+  userModelAccessRoute,
   credentialsRoute,
   // Platform operations routes
   platformStatusRoute,
