@@ -34,7 +34,29 @@ func OrgCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "org",
 		Short: "Manage organizations",
-		Long:  "Manage organizations: list, create, update, delete",
+		Long: `Manage organizations in the AI-AAS platform.
+
+Organizations are the top-level tenant in AI-AAS. Each organization can have
+multiple users, API keys, and model access policies.
+
+Examples:
+  # List all organizations
+  ai-aas-cli org list
+
+  # Create a new organization
+  ai-aas-cli org create --name "ACME Corp" --slug acme
+
+  # Update organization status
+  ai-aas-cli org update --org-id acme --status suspended
+
+  # Delete an organization
+  ai-aas-cli org delete --org-id acme --confirm
+
+Workflow:
+  1. Create org        ai-aas-cli org create --name <name> --slug <slug>
+  2. Add users         ai-aas-cli user create --org-id <org> --email <email>
+  3. Create API key    ai-aas-cli apikey create --org-id <org> --name <key-name>
+  4. Enable models     ai-aas-cli model library enable <model> --org-id <org>`,
 	}
 
 	cmd.AddCommand(orgListCommand())
@@ -55,7 +77,23 @@ func orgListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List organizations",
-		Long:  "List all organizations with structured output (table, json, csv)",
+		Long: `List all organizations in the platform.
+
+Output includes organization ID, name, slug, status, and creation date.
+
+Examples:
+  # List in table format (default)
+  ai-aas-cli org list
+
+  # List in JSON format
+  ai-aas-cli org list --format json
+
+  # List in CSV format for export
+  ai-aas-cli org list --format csv > orgs.csv
+
+See Also:
+  ai-aas-cli org create    Create a new organization
+  ai-aas-cli user list     List users in an organization`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runOrgList(cmd, args, flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey)
 		},
@@ -201,7 +239,35 @@ func orgCreateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create organization",
-		Long:  "Create a new organization with dry-run support",
+		Long: `Create a new organization in the platform.
+
+Organizations are the top-level tenant. The slug is used in URLs and must be
+unique across the platform.
+
+Examples:
+  # Create a basic organization
+  ai-aas-cli org create --name "ACME Corp" --slug acme
+
+  # Create with billing owner
+  ai-aas-cli org create --name "ACME Corp" --slug acme \
+    --billing-owner-email billing@acme.com
+
+  # Create with GitOps configuration
+  ai-aas-cli org create --name "ACME Corp" --slug acme \
+    --declarative-enabled --declarative-repo-url https://github.com/acme/config
+
+  # Preview without creating
+  ai-aas-cli org create --name "ACME Corp" --slug acme --dry-run
+
+Next Steps:
+  After creating an organization:
+  1. Add users         ai-aas-cli user create --org-id <slug> --email <email>
+  2. Create API key    ai-aas-cli apikey create --org-id <slug> --name <key-name>
+  3. Enable models     ai-aas-cli model library enable <model> --org-id <slug>
+
+See Also:
+  ai-aas-cli org list      List all organizations
+  ai-aas-cli user create   Add users to organization`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runOrgCreate(cmd, args, flagName, flagSlug, flagBillingOwnerEmail,
 				flagDeclarativeEnabled, flagDeclarativeRepoURL, flagDeclarativeBranch,
@@ -411,7 +477,27 @@ func orgUpdateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "Update organization",
-		Long:  "Update an organization with file input (JSON/YAML) support",
+		Long: `Update an organization's settings.
+
+You can update individual fields with flags or provide a JSON/YAML file with
+multiple fields to update.
+
+Examples:
+  # Update display name
+  ai-aas-cli org update --org-id acme --display-name "ACME Corporation"
+
+  # Suspend an organization
+  ai-aas-cli org update --org-id acme --status suspended
+
+  # Reactivate an organization
+  ai-aas-cli org update --org-id acme --status active
+
+  # Update from file
+  ai-aas-cli org update --org-id acme --file org-update.yaml
+
+See Also:
+  ai-aas-cli org list      List all organizations
+  ai-aas-cli org delete    Delete an organization`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runOrgUpdate(cmd, args, flagOrgID, flagFile, flagDisplayName, flagStatus,
 				flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey)
@@ -599,7 +685,28 @@ func orgDeleteCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete",
 		Short: "Delete organization",
-		Long:  "Delete an organization with confirmation and force flags",
+		Long: `Delete an organization from the platform.
+
+This is a destructive operation that cannot be undone. All users, API keys,
+and resources associated with the organization will be removed.
+
+Examples:
+  # Delete with confirmation prompt
+  ai-aas-cli org delete --org-id acme --confirm
+
+  # Force delete (for scripts)
+  ai-aas-cli org delete --org-id acme --force
+
+Warning:
+  Deleting an organization will also delete:
+  - All users in the organization
+  - All API keys for the organization
+  - All model access policies
+  - All usage history and audit logs
+
+See Also:
+  ai-aas-cli org update    Suspend instead of delete
+  ai-aas-cli org list      List all organizations`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runOrgDelete(cmd, args, flagOrgID, flagConfirm, flagForce,
 				flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey)

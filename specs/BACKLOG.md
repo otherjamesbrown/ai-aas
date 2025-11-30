@@ -37,11 +37,35 @@ A scratch list of tasks, ideas, and improvements to tackle. Add items here so we
   - GitHub workflows use repository variables
 
 ### Model Deployment
-- [ ] **Deploy vLLM model to development cluster**
-  - Register model in model registry
-  - Configure vLLM deployment via Knative/Istio
-  - Verify inference endpoint via API Router
-  - Test with `ai-aas-cli inference` commands
+- [x] **Deploy vLLM model to development cluster** (2024-11-30)
+  - Registered `mistral-7b-instruct` (Mistral-7B-Instruct-v0.3) in model registry
+  - Created vLLM ClusterServingRuntime for KServe
+  - Deployed via CLI: `ai-aas model deploy mistral-7b-instruct`
+  - Verified inference via OpenAI-compatible API (`/v1/chat/completions`)
+
+- [ ] **Multi-inference-engine support**
+  - Currently only supports vLLM runtime
+  - Add support for NVIDIA Triton Inference Server
+  - Add support for other engines (TensorRT-LLM, text-generation-inference)
+  - Create pluggable ClusterServingRuntime abstraction
+  - Allow model registry to specify preferred inference engine per model
+
+- [ ] **Per-model inference engine parameters**
+  - Models may require different runtime settings (context length, batch size, etc.)
+  - Add `inference_config` JSONB field to model_registry for engine-specific params
+  - Examples: `max_model_len`, `tensor_parallel_size`, `dtype`, `quantization`
+  - CLI should support: `ai-aas model add --inference-config '{"max_model_len": 32768}'`
+  - InferenceService should inject these as container args/env vars
+
+- [ ] **GPU type targeting**
+  - Add `gpu_type` field to model_registry (e.g., `a100`, `h100`, `rtx4000-ada`)
+  - Deploy command should set Kubernetes `nodeSelector` based on GPU type
+  - Support scheduling to specific GPU classes based on model requirements
+
+- [ ] **Pre-cache models to Object Storage**
+  - Integrate `model pull` with `model deploy` (use S3 cache instead of HF download)
+  - Update `model pull` to create `model_cache` DB entry after upload
+  - Reduces vLLM cold start time from ~10min to ~2min for large models
 
 ### Pipeline & CI/CD
 - [ ] Enable GitHub branch protection on `main` (require PR review, status checks)
@@ -62,6 +86,12 @@ A scratch list of tasks, ideas, and improvements to tackle. Add items here so we
 ### CLI Improvements
 - [ ] Consider raising "slow" threshold from 1s to 2s for external health checks
 - [ ] Add `ai-aas-cli config show` command to display current configuration
+- [x] **Refactor model commands to use nested subcommands** (2024-11-30)
+  - Refactored 27 flat commands into 6 parent command groups
+  - New structure: `model registry/cache/deploy/troubleshoot/version/library`
+  - Added world-class `--help` output with examples, workflows, and next steps
+  - Updated org/user/apikey commands with improved help text
+  - Added CLI-first guidance to CLAUDE.md and AI_ASSISTANT_GUIDE.md
 
 ### Observability
 - [ ] Add post-sync health validation hooks in ArgoCD

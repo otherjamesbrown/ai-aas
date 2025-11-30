@@ -25,6 +25,71 @@ This is a mono-repo for a platform that provides AI as a service, built on a mic
 3.  **Run checks**: `make check` (format, lint, security)
 4.  **Run tests**: `make test SERVICE=<service-name>`
 
+## CLI-First Operations
+
+**IMPORTANT**: Always prefer the `ai-aas-cli` for platform operations over direct API calls or kubectl commands.
+
+### CLI Command Structure
+
+The CLI uses nested subcommands organized by domain:
+
+```bash
+# Model Management
+ai-aas-cli model registry add/list/info/remove     # Manage model registry
+ai-aas-cli model cache pull/list/delete/gc         # Manage model cache
+ai-aas-cli model deploy create/delete/scale/status # Manage deployments
+ai-aas-cli model troubleshoot logs/events/test     # Debug deployments
+ai-aas-cli model version check/update/pin          # Manage versions
+ai-aas-cli model library enable/disable/swap       # Organization library
+
+# Organization Management
+ai-aas-cli org list/create/update/delete           # Manage organizations
+ai-aas-cli user list/create/update/delete          # Manage users
+ai-aas-cli apikey list/create/delete               # Manage API keys
+
+# Platform Operations
+ai-aas-cli credentials set/list/test               # Manage credentials
+ai-aas-cli status                                  # Check platform health
+ai-aas-cli config show/set/test                    # Manage CLI config
+```
+
+### Example Model Deployment Workflow
+
+```bash
+# 1. Register model from HuggingFace
+ai-aas-cli model registry add mistralai/Mistral-7B-v0.1 --name mistral-7b
+
+# 2. Cache model to object storage
+ai-aas-cli model cache pull mistral-7b
+
+# 3. Deploy model
+ai-aas-cli model deploy create mistral-7b -e development
+
+# 4. Check deployment status
+ai-aas-cli model deploy status mistral-7b -e development
+
+# 5. Test inference
+ai-aas-cli model troubleshoot test mistral-7b -e development
+```
+
+### CLI Help
+
+Every command has detailed help with examples and next steps:
+
+```bash
+ai-aas-cli --help                         # All commands
+ai-aas-cli model --help                   # Model commands
+ai-aas-cli model deploy --help            # Deploy subcommands
+ai-aas-cli model deploy create --help     # Specific command details
+```
+
+### When CLI Doesn't Support an Operation
+
+If you need to perform an operation that the CLI doesn't support:
+1. Note it as a potential enhancement
+2. Fall back to the Admin API
+3. Consider adding the command to the backlog
+
 ## Key Architectural Concepts
 
 - **Model Serving**: The platform uses [KServe](https://kserve.github.io/website/) for model serving. Models are deployed as `InferenceService` custom resources in Kubernetes.
