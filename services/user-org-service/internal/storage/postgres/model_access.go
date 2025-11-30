@@ -196,11 +196,12 @@ func (s *Store) CheckModelAccess(ctx context.Context, orgID, userID uuid.UUID, m
 
 // GrantAllCurrentModels grants all available models to a user (snapshot).
 // Uses the provided model list (caller should fetch from routing_policies or model registry).
+// Returns the number of NEW grants created (excludes already-existing grants).
 func (s *Store) GrantAllCurrentModels(ctx context.Context, orgID, userID uuid.UUID, grantedBy *uuid.UUID, modelNames []string) (int, error) {
 	var count int
 	err := s.withTenantTx(ctx, orgID, func(ctx context.Context, tx pgx.Tx) error {
 		for _, modelName := range modelNames {
-			_, err := tx.Exec(ctx, `
+			cmd, err := tx.Exec(ctx, `
 				INSERT INTO user_model_grants (org_id, user_id, model_name, granted_by)
 				VALUES ($1, $2, $3, $4)
 				ON CONFLICT (org_id, user_id, model_name) DO NOTHING
@@ -208,7 +209,8 @@ func (s *Store) GrantAllCurrentModels(ctx context.Context, orgID, userID uuid.UU
 			if err != nil {
 				return err
 			}
-			count++
+			// Only count rows that were actually inserted (not conflicts)
+			count += int(cmd.RowsAffected())
 		}
 		return nil
 	})

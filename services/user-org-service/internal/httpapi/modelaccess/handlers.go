@@ -28,6 +28,7 @@ package modelaccess
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -170,8 +171,9 @@ func (h *Handler) SetUserAccessMode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.requireOrgAccess(ctx, orgID); err != nil {
-		h.writeError(w, http.StatusForbidden, "forbidden", "Access Denied", "you do not have access to this organization")
+	// Require admin privileges for modifying user access mode
+	if err := h.requireOrgAdmin(ctx, orgID); err != nil {
+		h.writeError(w, http.StatusForbidden, "forbidden", "Access Denied", "admin privileges required to modify user access")
 		return
 	}
 
@@ -283,8 +285,9 @@ func (h *Handler) GrantModelAccess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.requireOrgAccess(ctx, orgID); err != nil {
-		h.writeError(w, http.StatusForbidden, "forbidden", "Access Denied", "you do not have access to this organization")
+	// Require admin privileges for granting model access
+	if err := h.requireOrgAdmin(ctx, orgID); err != nil {
+		h.writeError(w, http.StatusForbidden, "forbidden", "Access Denied", "admin privileges required to grant model access")
 		return
 	}
 
@@ -366,8 +369,9 @@ func (h *Handler) GrantAllCurrentModels(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := h.requireOrgAccess(ctx, orgID); err != nil {
-		h.writeError(w, http.StatusForbidden, "forbidden", "Access Denied", "you do not have access to this organization")
+	// Require admin privileges for bulk granting model access
+	if err := h.requireOrgAdmin(ctx, orgID); err != nil {
+		h.writeError(w, http.StatusForbidden, "forbidden", "Access Denied", "admin privileges required to grant model access")
 		return
 	}
 
@@ -379,15 +383,14 @@ func (h *Handler) GrantAllCurrentModels(w http.ResponseWriter, r *http.Request) 
 
 	actorID := middleware.GetUserID(ctx)
 
-	// TODO: Fetch available models from model registry or routing policies
-	// For now, we'll use an empty list which means caller should provide models via request body
-	// or we can make this endpoint accept a list of models in the body
-
-	// Try to read models from request body (optional)
+	// Read models from request body
 	var requestBody struct {
 		Models []string `json:"models"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&requestBody)
+	if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+		h.writeError(w, http.StatusBadRequest, "bad_request", "Invalid Request", "invalid JSON payload")
+		return
+	}
 
 	models := requestBody.Models
 	if len(models) == 0 {
@@ -407,6 +410,7 @@ func (h *Handler) GrantAllCurrentModels(w http.ResponseWriter, r *http.Request) 
 		zap.String("org_id", orgID.String()),
 		zap.String("user_id", targetUserID.String()),
 		zap.Int("granted_count", count),
+		zap.Int("requested_count", len(models)),
 		zap.Strings("models", models),
 		zap.String("actor_id", actorID.String()),
 	)
@@ -433,8 +437,9 @@ func (h *Handler) RevokeModelAccess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.requireOrgAccess(ctx, orgID); err != nil {
-		h.writeError(w, http.StatusForbidden, "forbidden", "Access Denied", "you do not have access to this organization")
+	// Require admin privileges for revoking model access
+	if err := h.requireOrgAdmin(ctx, orgID); err != nil {
+		h.writeError(w, http.StatusForbidden, "forbidden", "Access Denied", "admin privileges required to revoke model access")
 		return
 	}
 
@@ -508,6 +513,34 @@ func (h *Handler) requireOrgAccess(ctx context.Context, orgID uuid.UUID) error {
 
 	// Otherwise, verify user is a member of the target org
 	return h.runtime.Postgres.ValidateUserOrgMembership(ctx, userID, orgID)
+}
+
+// requireOrgAdmin checks if the authenticated user has admin privileges for the org.
+// Admin privileges are granted via scopes: "org:admin", "model-access:admin", or "admin".
+// Returns nil if authorized, error otherwise.
+func (h *Handler) requireOrgAdmin(ctx context.Context, orgID uuid.UUID) error {
+	// First check org access
+	if err := h.requireOrgAccess(ctx, orgID); err != nil {
+		return err
+	}
+
+	// Then check for admin scope
+	if middleware.HasAnyScope(ctx, "org:admin", "model-access:admin", "admin") {
+		return nil
+	}
+
+	// Check if user is the billing owner of the org (implicit admin)
+	org, err := h.runtime.Postgres.GetOrg(ctx, orgID)
+	if err != nil {
+		return fmt.Errorf("failed to get org: %w", err)
+	}
+
+	userID := middleware.GetUserID(ctx)
+	if org.BillingOwnerUserID != nil && *org.BillingOwnerUserID == userID {
+		return nil
+	}
+
+	return fmt.Errorf("admin privileges required")
 }
 
 func (h *Handler) writeJSON(w http.ResponseWriter, status int, data any) {

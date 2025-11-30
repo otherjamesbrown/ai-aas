@@ -65,8 +65,8 @@ func (c *AuthenticatedContext) CanAccessModel(modelName string) bool {
 		return false
 	}
 
-	// Unknown mode - default to allow (fail open for safety)
-	return true
+	// Unknown mode - default to deny (fail closed for security)
+	return false
 }
 
 // Authenticator handles API key authentication.

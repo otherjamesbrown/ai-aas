@@ -172,9 +172,9 @@ func (h *Handler) ValidateAPIKey(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		// Default to auto_grant if no access mode is set (legacy behavior)
+		// Default to restricted if no access mode is set or error occurred (fail-closed for security)
 		if response.ModelAccessMode == "" {
-			response.ModelAccessMode = "auto_grant"
+			response.ModelAccessMode = "restricted"
 		}
 	} else {
 		// Service accounts default to auto_grant (all models accessible)
