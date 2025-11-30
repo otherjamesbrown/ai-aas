@@ -86,12 +86,18 @@ log_test() {
     echo -e "${YELLOW}[TEST]${NC} $1"
 }
 
+# CLI binary path - prefer local dev build if available
+CLI_BIN="${CLI_BIN:-ai-aas-cli}"
+if [[ -x "$ROOT_DIR/services/ai-aas-cli/bin/ai-aas-cli" ]]; then
+    CLI_BIN="$ROOT_DIR/services/ai-aas-cli/bin/ai-aas-cli"
+fi
+
 # Run CLI command with optional verbose output
 run_cli() {
     if [[ "$VERBOSE" == "true" ]]; then
-        ai-aas-cli "$@"
+        "$CLI_BIN" "$@"
     else
-        ai-aas-cli "$@" 2>/dev/null
+        "$CLI_BIN" "$@" 2>/dev/null
     fi
 }
 
@@ -158,12 +164,13 @@ assert_contains() {
 check_prerequisites() {
     log_info "Checking prerequisites..."
 
-    # Check CLI is installed
-    if ! command -v ai-aas-cli &> /dev/null; then
-        log_error "ai-aas-cli is not installed or not in PATH"
-        echo "Install with: cd $ROOT_DIR/services/ai-aas-cli && make install"
+    # Check CLI is available
+    if ! "$CLI_BIN" --version &> /dev/null && ! "$CLI_BIN" --help &> /dev/null; then
+        log_error "ai-aas-cli is not installed or not accessible"
+        echo "Build with: cd $ROOT_DIR/services/ai-aas-cli && go build -o bin/ai-aas-cli ."
         exit 1
     fi
+    log_info "Using CLI: $CLI_BIN"
 
     # Check API key is set
     if [[ -z "${MASTER_ADMIN_API_KEY:-}" ]]; then
@@ -181,7 +188,7 @@ check_prerequisites() {
     fi
 
     # Check CLI can connect
-    if ! ai-aas-cli status &> /dev/null; then
+    if ! "$CLI_BIN" status &> /dev/null; then
         log_warn "CLI status check failed - services may not be accessible"
         echo "Ensure you have access to the development cluster"
     fi
@@ -193,32 +200,40 @@ check_prerequisites() {
 setup_test_data() {
     log_info "Setting up test data..."
 
-    # Create test organization
+    # Create test organization and capture output
     log_info "Creating test organization: $TEST_ORG_SLUG"
-    if ! run_cli org create --slug "$TEST_ORG_SLUG" --name "E2E Model Access Test Org"; then
+    local create_output
+    create_output=$(run_cli org create --slug "$TEST_ORG_SLUG" --name "E2E Model Access Test Org" 2>&1)
+    if [[ $? -ne 0 ]]; then
         log_error "Failed to create test organization"
+        echo "$create_output"
         exit 1
     fi
 
-    # Get org ID
-    TEST_ORG_ID=$(run_cli org list --output json 2>/dev/null | jq -r ".[] | select(.slug == \"$TEST_ORG_SLUG\") | .id" || echo "")
+    # Extract org ID from the create output (from the "Org ID:" line or audit log)
+    TEST_ORG_ID=$(echo "$create_output" | grep -E "Org ID:|orgId" | head -1 | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' || echo "")
     if [[ -z "$TEST_ORG_ID" ]]; then
-        log_error "Failed to get test organization ID"
+        log_error "Failed to get test organization ID from create output"
+        echo "$create_output"
         exit 1
     fi
     log_info "Test org ID: $TEST_ORG_ID"
 
-    # Create test user
+    # Create test user and capture output
     log_info "Creating test user: $TEST_USER_EMAIL"
-    if ! run_cli user create --org-id "$TEST_ORG_ID" --email "$TEST_USER_EMAIL" --name "E2E Test User"; then
+    local user_output
+    user_output=$(run_cli user create --org-id "$TEST_ORG_ID" --email "$TEST_USER_EMAIL" 2>&1)
+    if [[ $? -ne 0 ]]; then
         log_error "Failed to create test user"
+        echo "$user_output"
         exit 1
     fi
 
-    # Get user ID
-    TEST_USER_ID=$(run_cli user list --org-id "$TEST_ORG_ID" --output json 2>/dev/null | jq -r ".[] | select(.email == \"$TEST_USER_EMAIL\") | .id" || echo "")
+    # Extract user ID from the create output (from "User ID:" line or audit log)
+    TEST_USER_ID=$(echo "$user_output" | grep -E "User ID:|userId" | head -1 | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' || echo "")
     if [[ -z "$TEST_USER_ID" ]]; then
-        log_error "Failed to get test user ID"
+        log_error "Failed to get test user ID from create output"
+        echo "$user_output"
         exit 1
     fi
     log_info "Test user ID: $TEST_USER_ID"
