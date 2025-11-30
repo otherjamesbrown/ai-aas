@@ -221,9 +221,9 @@ export const modelsApi = {
    * Get deployment logs
    * Equivalent to: ai-aas-cli model troubleshoot logs <name>
    */
-  async troubleshootLogs(name: string, environment: string, lines?: number): Promise<{ logs: string[] }> {
-    const params = lines ? `&lines=${lines}` : '';
-    const response = await httpClient.get<{ logs: string[] }>(`/v1/admin/models/deployments/${name}/logs?environment=${environment}${params}`);
+  async troubleshootLogs(name: string, lines?: number): Promise<{ logs: string }> {
+    const params = lines ? `?lines=${lines}` : '';
+    const response = await httpClient.get<{ logs: string }>(`/v1/admin/models/deployments/${name}/logs${params}`);
     return response.data;
   },
 
@@ -231,30 +231,42 @@ export const modelsApi = {
    * Get deployment events
    * Equivalent to: ai-aas-cli model troubleshoot events <name>
    */
-  async troubleshootEvents(name: string, environment: string): Promise<{ events: Array<{ type: string; message: string; timestamp: string }> }> {
-    const response = await httpClient.get<{ events: Array<{ type: string; message: string; timestamp: string }> }>(`/v1/admin/models/deployments/${name}/events?environment=${environment}`);
+  async troubleshootEvents(name: string): Promise<{ events: Array<{ type: string; reason: string; message: string; last_timestamp: string }> }> {
+    const response = await httpClient.get<{ events: Array<{ type: string; reason: string; message: string; last_timestamp: string }> }>(`/v1/admin/models/deployments/${name}/events`);
     return response.data;
   },
 
   /**
    * Test inference
-   * Equivalent to: ai-aas-cli model troubleshoot test <name>
+   * Equivalent to: ai-aas-cli model troubleshoot test-inference <name>
    */
-  async troubleshootTest(name: string, environment: string): Promise<{ success: boolean; latency_ms: number; response?: string; error?: string }> {
-    const response = await httpClient.post<{ success: boolean; latency_ms: number; response?: string; error?: string }>(`/v1/admin/models/deployments/${name}/test`, {
-      environment,
-    });
+  async troubleshootTestInference(name: string): Promise<{ success: boolean; latency_ms: number; response?: string; error?: string }> {
+    const response = await httpClient.post<{ success: boolean; latency_ms: number; response?: string; error?: string }>(`/v1/admin/models/deployments/${name}/test-inference`);
     return response.data;
   },
 
   // ========== Model Version ==========
 
   /**
-   * Check model version
-   * Equivalent to: ai-aas-cli model version check <name>
+   * Check all model versions
+   * Equivalent to: ai-aas-cli model version check
    */
-  async versionCheck(name: string): Promise<ModelVersion> {
-    const response = await httpClient.get<ModelVersion>(`/v1/admin/models/registry/${name}/version`);
+  async versionCheck(): Promise<Array<{
+    model_name: string;
+    current_version: string;
+    latest_version: string;
+    pinned: boolean;
+    update_available: boolean;
+    source: string;
+  }>> {
+    const response = await httpClient.get<Array<{
+      model_name: string;
+      current_version: string;
+      latest_version: string;
+      pinned: boolean;
+      update_available: boolean;
+      source: string;
+    }>>('/v1/admin/models/versions');
     return response.data;
   },
 
@@ -262,21 +274,28 @@ export const modelsApi = {
    * Update model version
    * Equivalent to: ai-aas-cli model version update <name>
    */
-  async versionUpdate(name: string, version?: string): Promise<RegistryModel> {
-    const response = await httpClient.post<RegistryModel>(`/v1/admin/models/registry/${name}/version/update`, {
+  async versionUpdate(name: string): Promise<RegistryModel> {
+    const response = await httpClient.post<RegistryModel>(`/v1/admin/models/registry/${name}/version/update`);
+    return response.data;
+  },
+
+  /**
+   * Pin model version
+   * Equivalent to: ai-aas-cli model version pin <name> <version>
+   */
+  async versionPin(name: string, version: string): Promise<RegistryModel> {
+    const response = await httpClient.post<RegistryModel>(`/v1/admin/models/registry/${name}/version/pin`, {
       version,
     });
     return response.data;
   },
 
   /**
-   * Pin model version
-   * Equivalent to: ai-aas-cli model version pin <name> --version <v>
+   * Unpin model version
+   * Equivalent to: ai-aas-cli model version unpin <name>
    */
-  async versionPin(name: string, version: string): Promise<RegistryModel> {
-    const response = await httpClient.post<RegistryModel>(`/v1/admin/models/registry/${name}/version/pin`, {
-      version,
-    });
+  async versionUnpin(name: string): Promise<RegistryModel> {
+    const response = await httpClient.post<RegistryModel>(`/v1/admin/models/registry/${name}/version/unpin`);
     return response.data;
   },
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { healthMonitor, ServiceHealth } from '@/services/healthMonitor';
 
 /**
@@ -10,12 +10,12 @@ import { healthMonitor, ServiceHealth } from '@/services/healthMonitor';
  * Usage:
  * ```typescript
  * function MyComponent() {
- *   const { status, isHealthy, refresh } = useHealthStatus();
+ *   const { services, lastChecked, refresh, isRefreshing, isHealthy } = useHealthStatus();
  *
  *   return (
  *     <div>
- *       {Object.values(status).map(service => (
- *         <div key={service.name}>
+ *       {Object.entries(services).map(([key, service]) => (
+ *         <div key={key}>
  *           {service.name}: {service.status}
  *         </div>
  *       ))}
@@ -25,9 +25,11 @@ import { healthMonitor, ServiceHealth } from '@/services/healthMonitor';
  * ```
  */
 export function useHealthStatus() {
-  const [status, setStatus] = useState<Record<string, ServiceHealth>>(
+  const [services, setServices] = useState<Record<string, ServiceHealth>>(
     healthMonitor.getStatus()
   );
+  const [lastChecked, setLastChecked] = useState<Date | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     // Start health monitor if not already running
@@ -35,24 +37,41 @@ export function useHealthStatus() {
 
     // Subscribe to status updates
     const unsubscribe = healthMonitor.subscribe(() => {
-      setStatus(healthMonitor.getStatus());
+      setServices(healthMonitor.getStatus());
+      setLastChecked(new Date());
+      setIsRefreshing(false);
     });
 
     // Get initial status
-    setStatus(healthMonitor.getStatus());
+    const initialStatus = healthMonitor.getStatus();
+    setServices(initialStatus);
+    if (Object.keys(initialStatus).length > 0) {
+      setLastChecked(new Date());
+    }
 
     return () => {
       unsubscribe();
     };
   }, []);
 
+  const refresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await healthMonitor.refresh();
+  }, []);
+
   return {
     /** Current health status of all services */
-    status,
+    services,
+    /** @deprecated Use services instead */
+    status: services,
+    /** When the last health check was performed */
+    lastChecked,
+    /** Whether a refresh is currently in progress */
+    isRefreshing,
     /** Whether all services are healthy */
     isHealthy: healthMonitor.isHealthy(),
     /** Force a health check refresh */
-    refresh: () => healthMonitor.refresh(),
+    refresh,
   };
 }
 
