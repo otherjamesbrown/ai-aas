@@ -29,7 +29,38 @@ func APIKeyCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "apikey",
 		Short: "Manage API keys",
-		Long:  "Manage API keys: list, create, delete",
+		Long: `Manage API keys for organizations and users.
+
+API keys authenticate requests to the AI-AAS inference API. Keys can be scoped
+to specific models and have optional expiration dates.
+
+Examples:
+  # List all API keys for an organization
+  ai-aas-cli apikey list --org-id acme
+
+  # Create an API key for a user
+  ai-aas-cli apikey create --org-id acme --user-id u_123
+
+  # Create with expiration
+  ai-aas-cli apikey create --org-id acme --user-id u_123 --expires-in-days 90
+
+  # Delete an API key
+  ai-aas-cli apikey delete --org-id acme --api-key-id ak_123 --confirm
+
+Workflow:
+  1. Create org        ai-aas-cli org create --name <name> --slug <slug>
+  2. Add users         ai-aas-cli user create --org-id <org> --email <email>
+  3. Create API key    ai-aas-cli apikey create --org-id <org> --user-id <user>
+  4. Use API key       curl -H "Authorization: Bearer <key>" ...
+
+Security:
+  - API key secrets are shown only once at creation time
+  - Keys can be revoked immediately with 'apikey delete'
+  - Consider setting expiration for production keys
+
+See Also:
+  ai-aas-cli user list     List users who can own keys
+  ai-aas-cli org list      List organizations`,
 	}
 
 	cmd.AddCommand(apiKeyListCommand())
@@ -50,7 +81,27 @@ func apiKeyListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List API keys",
-		Long:  "List API keys for an organization with structured output (table, json, csv)",
+		Long: `List all API keys in an organization.
+
+Output includes key ID, associated user, fingerprint, status, and expiration.
+
+Examples:
+  # List in table format (default)
+  ai-aas-cli apikey list --org-id acme
+
+  # List in JSON format
+  ai-aas-cli apikey list --org-id acme --format json
+
+  # List in CSV format for audit
+  ai-aas-cli apikey list --org-id acme --format csv > keys.csv
+
+Note:
+  API key secrets are never shown in list output for security reasons.
+  Only the fingerprint (partial hash) is displayed.
+
+See Also:
+  ai-aas-cli apikey create    Create a new API key
+  ai-aas-cli user list        List users who own keys`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAPIKeyList(cmd, args, flagOrgID, flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey)
 		},
@@ -189,7 +240,33 @@ func apiKeyCreateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create API key",
-		Long:  "Create an API key for a user in an organization",
+		Long: `Create an API key for a user.
+
+The key secret is only displayed once. Store it securely immediately after
+creation - it cannot be retrieved later.
+
+Examples:
+  # Create a key (never expires)
+  ai-aas-cli apikey create --org-id acme --user-id u_123
+
+  # Create with 90-day expiration
+  ai-aas-cli apikey create --org-id acme --user-id u_123 --expires-in-days 90
+
+  # Create with specific scopes
+  ai-aas-cli apikey create --org-id acme --user-id u_123 \
+    --scopes inference:read,inference:write
+
+  # Output in JSON for automation
+  ai-aas-cli apikey create --org-id acme --user-id u_123 --format json
+
+Security Best Practices:
+  - Set expiration for production keys
+  - Rotate keys regularly
+  - Use minimal scopes
+
+See Also:
+  ai-aas-cli apikey list      List existing keys
+  ai-aas-cli apikey delete    Revoke a key`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAPIKeyCreate(cmd, args, flagOrgID, flagUserID, flagScopes, flagExpiresInDays,
 				flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey)
@@ -357,7 +434,29 @@ func apiKeyDeleteCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete",
 		Short: "Delete API key",
-		Long:  "Delete (revoke) an API key with confirmation and force flags",
+		Long: `Revoke an API key.
+
+Once deleted, the key immediately stops working. This cannot be undone.
+Any applications using this key will lose access.
+
+Examples:
+  # Delete with confirmation
+  ai-aas-cli apikey delete --org-id acme --api-key-id ak_123 --confirm
+
+  # Force delete (for scripts)
+  ai-aas-cli apikey delete --org-id acme --api-key-id ak_123 --force
+
+  # Delete in quiet mode
+  ai-aas-cli apikey delete --org-id acme --api-key-id ak_123 --force --quiet
+
+Warning:
+  - Deletion takes effect immediately
+  - Applications using this key will get authentication errors
+  - Consider creating a replacement key before deleting
+
+See Also:
+  ai-aas-cli apikey list      Find the key ID to delete
+  ai-aas-cli apikey create    Create a replacement key`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAPIKeyDelete(cmd, args, flagOrgID, flagAPIKeyID, flagConfirm, flagForce,
 				flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey)

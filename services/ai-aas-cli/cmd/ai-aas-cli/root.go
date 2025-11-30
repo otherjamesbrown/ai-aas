@@ -34,9 +34,21 @@ func NewRootCommand(version, buildTime, gitCommit string) *cobra.Command {
 		Long: `ai-aas-cli provides comprehensive management for the AI-AAS platform.
 
 Quick Start:
-  ai-aas-cli --init              Initialize CLI configuration
-  ai-aas-cli model list          List registered models
-  ai-aas-cli org list            List organizations
+  ai-aas-cli --init                       Initialize CLI configuration
+  ai-aas-cli model registry list          List registered models
+  ai-aas-cli model deploy create <model>  Deploy a model
+  ai-aas-cli org list                     List organizations
+
+Model Workflow:
+  ai-aas-cli model registry add meta-llama/Llama-2-7b-hf   # Register
+  ai-aas-cli model cache pull meta-llama/Llama-2-7b-hf     # Cache locally
+  ai-aas-cli model deploy create meta-llama/Llama-2-7b-hf  # Deploy
+
+Getting Help:
+  ai-aas-cli --help                       Show this help
+  ai-aas-cli model --help                 Show model management commands
+  ai-aas-cli model deploy --help          Show deployment subcommands
+  ai-aas-cli model deploy create --help   Show create deployment options
 
 Environment Variables:
   AI_AAS_ENVIRONMENT    Target environment (dev/staging/prod)
@@ -530,55 +542,43 @@ Examples:
 	return cmd
 }
 
-// newModelCommand creates the model subcommand
+// newModelCommand creates the model subcommand with nested command structure
 func newModelCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "model",
 		Short: "Model lifecycle management",
-		Long:  "Manage AI models: registry, caching, deployment, validation.",
+		Long: `Comprehensive AI model management for the AI-AAS platform.
+
+The model command provides nested subcommands organized by lifecycle stage:
+
+  registry      Discover and register models from HuggingFace Hub
+  cache         Download and manage local model files in S3 storage
+  deploy        Create and manage KServe InferenceService deployments
+  troubleshoot  Debug deployment issues with logs, events, and diagnostics
+  version       Manage model versions, updates, and pinning
+  library       Manage organization's enabled model library
+
+Typical Workflow:
+  1. ai-aas-cli model registry add meta-llama/Llama-2-7b-hf
+  2. ai-aas-cli model cache pull meta-llama/Llama-2-7b-hf
+  3. ai-aas-cli model deploy create meta-llama/Llama-2-7b-hf
+  4. ai-aas-cli model troubleshoot status meta-llama/Llama-2-7b-hf
+
+Getting Help:
+  ai-aas-cli model --help                    Show this help
+  ai-aas-cli model registry --help           Show registry commands
+  ai-aas-cli model deploy create --help      Show deploy create options
+
+For more information, see: https://docs.ai-aas.io/cli/model`,
 	}
 
-	// Registry commands - use implementations from cmd/model package
-	cmd.AddCommand(model.NewAddCommand())
-	cmd.AddCommand(model.NewListCommand())
-	cmd.AddCommand(model.NewInfoCommand())
-	cmd.AddCommand(model.NewRemoveCommand())
-	cmd.AddCommand(model.NewStatusCommand())
-
-	// Cache commands - use implementations from cmd/model package
-	cmd.AddCommand(model.NewPullCommand())
-	cmd.AddCommand(model.NewCacheCommand())
-
-	// Deployment commands - use implementations from cmd/model package
-	cmd.AddCommand(model.NewDeployCommand())
-	cmd.AddCommand(model.NewUndeployCommand())
-	cmd.AddCommand(model.NewRestartCommand())
-	cmd.AddCommand(model.NewScaleCommand())
-
-	// Library management - use implementations from cmd/model package
-	cmd.AddCommand(model.NewEnableCommand())
-	cmd.AddCommand(model.NewDisableCommand())
-	cmd.AddCommand(model.NewLibraryCommand())
-	cmd.AddCommand(model.NewSwapCommand())
-	cmd.AddCommand(model.NewHistoryCommand())
-
-	// Validation - use implementation from cmd/model package
-	cmd.AddCommand(model.NewValidateCommand())
-
-	// Updates - use implementations from cmd/model package
-	cmd.AddCommand(model.NewCheckUpdatesCommand())
-	cmd.AddCommand(model.NewUpdateCommand())
-	cmd.AddCommand(model.NewPinCommand())
-	cmd.AddCommand(model.NewUnpinCommand())
-
-	// Troubleshooting
-	cmd.AddCommand(model.NewLogsCommand())
-	cmd.AddCommand(model.NewEventsCommand())
-	cmd.AddCommand(model.NewDescribeCommand())
-	cmd.AddCommand(model.NewTestCommand())
-
-	// Aliases
-	cmd.AddCommand(model.NewAliasCommand())
+	// Add nested parent commands (each has its own subcommands)
+	cmd.AddCommand(model.NewRegistryCommand())
+	cmd.AddCommand(model.NewCacheParentCommand())
+	cmd.AddCommand(model.NewDeployParentCommand())
+	cmd.AddCommand(model.NewTroubleshootParentCommand())
+	cmd.AddCommand(model.NewVersionParentCommand())
+	cmd.AddCommand(model.NewLibraryParentCommand())
 
 	return cmd
 }

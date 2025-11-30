@@ -97,14 +97,20 @@ Examples:
 				}
 			}
 
-			// Register in platform
+			// Register in platform via Admin API
 			fmt.Printf("Registering model in platform as: %s\n", name)
+
+			// Use Admin API endpoint for registry operations
+			adminEndpoint := cfg.AdminAPIEndpoint
+			if adminEndpoint == "" {
+				adminEndpoint = cfg.APIEndpoint // fallback for backward compatibility
+			}
 
 			opts := []api.ClientOption{}
 			if cfg.TLSInsecure {
 				opts = append(opts, api.WithInsecureSkipVerify())
 			}
-			apiClient := api.NewClient(cfg.APIEndpoint, cfg.APIKey, opts...)
+			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
 			regClient := registry.NewClient(apiClient)
 
 			model, err := regClient.Add(ctx, registry.AddRequest{

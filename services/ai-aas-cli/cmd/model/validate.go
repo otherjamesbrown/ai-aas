@@ -60,8 +60,14 @@ Examples:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			if cfg.APIEndpoint == "" || cfg.APIEndpoint == "http://localhost:8080" {
-				return fmt.Errorf("API endpoint not configured. Run 'ai-aas-cli --init' first")
+			// Use Admin API endpoint for registry operations
+			adminEndpoint := cfg.AdminAPIEndpoint
+			if adminEndpoint == "" {
+				adminEndpoint = cfg.APIEndpoint // fallback for backward compatibility
+			}
+
+			if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
+				return fmt.Errorf("Admin API endpoint not configured. Run 'ai-aas-cli --init' first")
 			}
 
 			// Get API client
@@ -69,7 +75,7 @@ Examples:
 			if cfg.TLSInsecure {
 				opts = append(opts, api.WithInsecureSkipVerify())
 			}
-			apiClient := api.NewClient(cfg.APIEndpoint, cfg.APIKey, opts...)
+			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
 			regClient := registry.NewClient(apiClient)
 
 			// Get models to validate

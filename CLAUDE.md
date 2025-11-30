@@ -23,6 +23,51 @@ After reading the main guide, adhere to the following critical rules below.
 - If relevant to the task, check the backlog for related items
 - Offer to pick up items from the backlog if the user is looking for things to work on
 
+## CLI-First Operations
+
+**IMPORTANT**: When performing platform operations, ALWAYS prefer the CLI over direct API calls or kubectl commands.
+
+### Why CLI-First?
+
+- **Consistency**: CLI provides validated, tested workflows
+- **Documentation**: CLI `--help` shows proper usage and next steps
+- **Auditing**: CLI operations are logged consistently
+- **Error handling**: CLI provides actionable error messages
+
+### Required Approach
+
+1. **Check if CLI supports the operation** before using kubectl or API calls:
+   ```bash
+   ai-aas-cli --help                    # See all commands
+   ai-aas-cli model --help              # See model commands
+   ai-aas-cli model deploy create --help # See specific command
+   ```
+
+2. **Use CLI for these operations**:
+   - Model management: `ai-aas-cli model registry/cache/deploy/troubleshoot`
+   - Organizations: `ai-aas-cli org list/create/update/delete`
+   - Users: `ai-aas-cli user list/create/update/delete`
+   - API Keys: `ai-aas-cli apikey list/create/delete`
+   - Credentials: `ai-aas-cli credentials set/list/test`
+   - Status checks: `ai-aas-cli status`
+
+3. **If CLI doesn't support an operation**:
+   - Note this as a gap: "CLI doesn't support X - consider adding to backlog"
+   - Use the Admin API as fallback
+   - Suggest the command that should exist
+
+### Example Workflow
+
+```bash
+# CORRECT: Use CLI for model deployment
+ai-aas-cli model registry add meta-llama/Llama-2-7b-hf --name llama-7b
+ai-aas-cli model cache pull llama-7b
+ai-aas-cli model deploy create llama-7b -e development
+
+# AVOID: Direct kubectl for routine operations
+# kubectl apply -f deployment.yaml  # Only for infrastructure changes via GitOps
+```
+
 ## Core Principles
 
 In addition to the principles outlined in the main guide, always adhere to:

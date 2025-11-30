@@ -60,8 +60,14 @@ Examples:
 			s3SecretKey := viper.GetString("s3.secret_key")
 			s3Bucket := viper.GetString("s3.bucket")
 
-			if cfg.APIEndpoint == "" || cfg.APIEndpoint == "http://localhost:8080" {
-				return fmt.Errorf("API endpoint not configured. Run 'ai-aas-cli --init' first")
+			// Use Admin API endpoint for registry operations
+			adminEndpoint := cfg.AdminAPIEndpoint
+			if adminEndpoint == "" {
+				adminEndpoint = cfg.APIEndpoint // fallback for backward compatibility
+			}
+
+			if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
+				return fmt.Errorf("Admin API endpoint not configured. Run 'ai-aas-cli --init' first")
 			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Hour) // Long timeout for large models
@@ -72,7 +78,7 @@ Examples:
 			if cfg.TLSInsecure {
 				opts = append(opts, api.WithInsecureSkipVerify())
 			}
-			apiClient := api.NewClient(cfg.APIEndpoint, cfg.APIKey, opts...)
+			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
 			regClient := registry.NewClient(apiClient)
 
 			fmt.Printf("Looking up model: %s\n", modelName)

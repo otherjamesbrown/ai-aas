@@ -18,12 +18,59 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/api"
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/cli"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/kubernetes"
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/registry"
 )
 
-// NewLogsCommand creates the model logs command
-func NewLogsCommand() *cobra.Command {
+// NewTroubleshootParentCommand creates the model troubleshoot parent command
+func NewTroubleshootParentCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "troubleshoot",
+		Short: "Debug and validate model deployments",
+		Long: `Debug and validate model deployments with comprehensive tools.
+
+Use these commands to investigate issues with model deployments, view logs,
+check events, and run validation tests.
+
+Examples:
+  # View pod logs
+  ai-aas model troubleshoot logs mistral-7b -e development
+
+  # Check Kubernetes events
+  ai-aas model troubleshoot events mistral-7b -e development
+
+  # Get detailed deployment info
+  ai-aas model troubleshoot describe mistral-7b -e development
+
+  # Test inference
+  ai-aas model troubleshoot test mistral-7b -e development
+
+  # Run full validation
+  ai-aas model troubleshoot validate mistral-7b -e development
+
+Common Issues:
+  - Pod stuck Pending    Check events for resource issues
+  - Model not ready      Check logs for loading errors
+  - Inference failing    Run test command with --prompt`,
+		Run: func(cmd *cobra.Command, args []string) {
+			cmd.Help()
+		},
+	}
+
+	// Add subcommands
+	cmd.AddCommand(newTroubleshootLogsCommand())
+	cmd.AddCommand(newTroubleshootEventsCommand())
+	cmd.AddCommand(newTroubleshootDescribeCommand())
+	cmd.AddCommand(newTroubleshootTestCommand())
+	cmd.AddCommand(newTroubleshootValidateCommand())
+
+	return cmd
+}
+
+// newTroubleshootLogsCommand creates the troubleshoot logs subcommand
+func newTroubleshootLogsCommand() *cobra.Command {
 	var (
 		environment string
 		follow      bool
@@ -37,21 +84,29 @@ func NewLogsCommand() *cobra.Command {
 		Short: "Stream model pod logs",
 		Long: `Stream logs from the pods running a deployed model.
 
+View startup logs to debug loading issues, or follow logs in real-time
+to monitor inference requests.
+
 Examples:
   # View recent logs
-  ai-aas-cli model logs llama-3-8b -e development
+  ai-aas model troubleshoot logs mistral-7b -e development
 
   # Follow logs in real-time
-  ai-aas-cli model logs llama-3-8b -e development --follow
+  ai-aas model troubleshoot logs mistral-7b -e development --follow
 
   # View last 200 lines
-  ai-aas-cli model logs llama-3-8b -e development --tail 200
+  ai-aas model troubleshoot logs mistral-7b -e development --tail 200
 
   # View logs from a specific container
-  ai-aas-cli model logs llama-3-8b -e development --container kserve-container
+  ai-aas model troubleshoot logs mistral-7b -e development --container kserve-container
 
   # View logs from previous (crashed) pod
-  ai-aas-cli model logs llama-3-8b -e development --previous`,
+  ai-aas model troubleshoot logs mistral-7b -e development --previous
+
+See Also:
+  ai-aas model troubleshoot events    Check K8s events
+  ai-aas model troubleshoot describe  Get detailed info
+  ai-aas model deploy status          Check deployment status`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			modelName := args[0]
@@ -59,7 +114,6 @@ Examples:
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 			defer cancel()
 
-			// Get kubeconfig for environment
 			kubeconfig := viper.GetString(fmt.Sprintf("environments.%s.kubeconfig", environment))
 			kubecontext := viper.GetString(fmt.Sprintf("environments.%s.context", environment))
 			namespace := environment
@@ -73,7 +127,6 @@ Examples:
 				return fmt.Errorf("create k8s client: %w", err)
 			}
 
-			// Find pods for this model
 			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
 			pods, err := k8sClient.Clientset().CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
 				LabelSelector: fmt.Sprintf("serving.kserve.io/inferenceservice=%s", isvcName),
@@ -83,12 +136,11 @@ Examples:
 			}
 
 			if len(pods.Items) == 0 {
-				return fmt.Errorf("no pods found for model %s in %s", modelName, environment)
+				return fmt.Errorf("no pods found for model %s in %s\n\nTo check deployment status:\n  ai-aas model deploy status %s -e %s", modelName, environment, modelName, environment)
 			}
 
 			fmt.Printf("Found %d pod(s) for %s\n\n", len(pods.Items), modelName)
 
-			// Stream logs from the first running pod
 			for _, pod := range pods.Items {
 				if pod.Status.Phase != corev1.PodRunning && !previous {
 					continue
@@ -96,7 +148,6 @@ Examples:
 
 				containerName := container
 				if containerName == "" {
-					// Default to first container or kserve-container if exists
 					for _, c := range pod.Spec.Containers {
 						if c.Name == "kserve-container" {
 							containerName = c.Name
@@ -137,7 +188,6 @@ Examples:
 					fmt.Print(line)
 				}
 
-				// Only show first pod's logs unless following all
 				if !follow {
 					break
 				}
@@ -157,8 +207,8 @@ Examples:
 	return cmd
 }
 
-// NewEventsCommand creates the model events command
-func NewEventsCommand() *cobra.Command {
+// newTroubleshootEventsCommand creates the troubleshoot events subcommand
+func newTroubleshootEventsCommand() *cobra.Command {
 	var environment string
 
 	cmd := &cobra.Command{
@@ -166,10 +216,16 @@ func NewEventsCommand() *cobra.Command {
 		Short: "Show Kubernetes events for model",
 		Long: `Show Kubernetes events related to a model's deployment.
 
-This includes InferenceService events, pod events, and related resource events.
+Events reveal scheduling issues, resource problems, image pull errors,
+and other cluster-level issues.
 
 Examples:
-  ai-aas-cli model events llama-3-8b -e development`,
+  # View events for a model
+  ai-aas model troubleshoot events mistral-7b -e development
+
+See Also:
+  ai-aas model troubleshoot logs      View pod logs
+  ai-aas model troubleshoot describe  Get detailed info`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			modelName := args[0]
@@ -177,7 +233,6 @@ Examples:
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			// Get kubeconfig for environment
 			kubeconfig := viper.GetString(fmt.Sprintf("environments.%s.kubeconfig", environment))
 			kubecontext := viper.GetString(fmt.Sprintf("environments.%s.context", environment))
 			namespace := environment
@@ -193,26 +248,22 @@ Examples:
 
 			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
 
-			// Get all events in namespace and filter by related objects
 			events, err := k8sClient.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{})
 			if err != nil {
 				return fmt.Errorf("list events: %w", err)
 			}
 
-			fmt.Printf("Events for %s in %s:\n\n", modelName, environment)
+			fmt.Printf("Events for %s in %s:\n", modelName, environment)
+			fmt.Println("────────────────────────────────────────────────────────────────────────────────────────────────────")
 			fmt.Printf("%-8s %-12s %-40s %s\n", "TYPE", "REASON", "OBJECT", "MESSAGE")
-			fmt.Println(strings.Repeat("-", 100))
+			fmt.Println("────────────────────────────────────────────────────────────────────────────────────────────────────")
 
 			found := false
 			for _, event := range events.Items {
-				// Filter events related to this model
 				objName := event.InvolvedObject.Name
 				if strings.HasPrefix(objName, isvcName) || strings.Contains(objName, modelName) {
 					found = true
 					typeStr := event.Type
-					if typeStr == "Warning" {
-						typeStr = "Warning"
-					}
 					objRef := fmt.Sprintf("%s/%s", event.InvolvedObject.Kind, event.InvolvedObject.Name)
 					if len(objRef) > 40 {
 						objRef = objRef[:37] + "..."
@@ -229,6 +280,17 @@ Examples:
 				fmt.Println("No recent events found.")
 			}
 
+			cli.PrintNextSteps([]cli.NextStep{
+				{
+					Command:     fmt.Sprintf("ai-aas model troubleshoot logs %s -e %s", modelName, environment),
+					Description: "View pod logs",
+				},
+				{
+					Command:     fmt.Sprintf("ai-aas model troubleshoot describe %s -e %s", modelName, environment),
+					Description: "Get detailed info",
+				},
+			})
+
 			return nil
 		},
 	}
@@ -239,21 +301,26 @@ Examples:
 	return cmd
 }
 
-// NewDescribeCommand creates the model describe command
-func NewDescribeCommand() *cobra.Command {
+// newTroubleshootDescribeCommand creates the troubleshoot describe subcommand
+func newTroubleshootDescribeCommand() *cobra.Command {
 	var environment string
 
 	cmd := &cobra.Command{
 		Use:   "describe <model-name>",
 		Short: "Show full deployment details",
-		Long: `Show detailed information about a model deployment including:
-- InferenceService status and configuration
-- Pod details and resource usage
-- Container statuses
-- Conditions and events
+		Long: `Show detailed information about a model deployment.
+
+Includes InferenceService status, conditions, pod details, resource usage,
+and container statuses.
 
 Examples:
-  ai-aas-cli model describe llama-3-8b -e development`,
+  # Get detailed info
+  ai-aas model troubleshoot describe mistral-7b -e development
+
+See Also:
+  ai-aas model deploy status          Quick status check
+  ai-aas model troubleshoot logs      View logs
+  ai-aas model troubleshoot events    View events`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			modelName := args[0]
@@ -261,7 +328,6 @@ Examples:
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			// Get kubeconfig for environment
 			kubeconfig := viper.GetString(fmt.Sprintf("environments.%s.kubeconfig", environment))
 			kubecontext := viper.GetString(fmt.Sprintf("environments.%s.context", environment))
 			namespace := environment
@@ -277,10 +343,9 @@ Examples:
 
 			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
 
-			// Get InferenceService
 			isvc, err := k8sClient.GetInferenceService(ctx, isvcName, namespace)
 			if err != nil {
-				return fmt.Errorf("get inferenceservice: %w", err)
+				return fmt.Errorf("deployment not found: %s in %s\n\nTo deploy:\n  ai-aas model deploy create %s -e %s", isvcName, namespace, modelName, environment)
 			}
 
 			fmt.Printf("=== InferenceService: %s ===\n\n", isvcName)
@@ -303,7 +368,6 @@ Examples:
 				fmt.Println()
 			}
 
-			// Get pods
 			pods, err := k8sClient.GetPodStatus(ctx, isvcName, namespace)
 			if err != nil {
 				return fmt.Errorf("get pods: %w", err)
@@ -315,11 +379,10 @@ Examples:
 				fmt.Printf("Phase:    %s\n", pod.Phase)
 				fmt.Printf("Ready:    %v\n", pod.Ready)
 				fmt.Printf("Restarts: %d\n", pod.Restarts)
-				fmt.Printf("Age:      %s\n", formatDuration(pod.Age))
+				fmt.Printf("Age:      %s\n", formatDurationShort(pod.Age))
 				fmt.Println()
 			}
 
-			// Get detailed pod info
 			podList, err := k8sClient.Clientset().CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
 				LabelSelector: fmt.Sprintf("serving.kserve.io/inferenceservice=%s", isvcName),
 			})
@@ -367,8 +430,8 @@ Examples:
 	return cmd
 }
 
-// NewTestCommand creates the model test command
-func NewTestCommand() *cobra.Command {
+// newTroubleshootTestCommand creates the troubleshoot test subcommand
+func newTroubleshootTestCommand() *cobra.Command {
 	var (
 		environment string
 		prompt      string
@@ -380,15 +443,22 @@ func NewTestCommand() *cobra.Command {
 		Short: "Run inference test",
 		Long: `Run an inference test against a deployed model to verify it's working.
 
+Sends a simple chat completion request and displays the response,
+latency, and status.
+
 Examples:
   # Basic test
-  ai-aas-cli model test llama-3-8b -e development
+  ai-aas model troubleshoot test mistral-7b -e development
 
   # Custom prompt
-  ai-aas-cli model test llama-3-8b -e development --prompt "Explain quantum computing"
+  ai-aas model troubleshoot test mistral-7b -e development --prompt "Explain quantum computing"
 
   # With timeout
-  ai-aas-cli model test llama-3-8b -e development --timeout 60s`,
+  ai-aas model troubleshoot test mistral-7b -e development --timeout 60s
+
+See Also:
+  ai-aas model troubleshoot validate  Full validation
+  ai-aas model deploy status          Check status`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			modelName := args[0]
@@ -396,7 +466,6 @@ Examples:
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
 
-			// Get configuration
 			cfg, err := config.Load()
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
@@ -406,7 +475,6 @@ Examples:
 				return fmt.Errorf("API endpoint not configured. Run 'ai-aas-cli --init' first")
 			}
 
-			// Get kubeconfig for environment
 			kubeconfig := viper.GetString(fmt.Sprintf("environments.%s.kubeconfig", environment))
 			kubecontext := viper.GetString(fmt.Sprintf("environments.%s.context", environment))
 			namespace := environment
@@ -422,30 +490,27 @@ Examples:
 
 			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
 
-			// Check if deployed
 			isvc, err := k8sClient.GetInferenceService(ctx, isvcName, namespace)
 			if err != nil {
-				return fmt.Errorf("model not deployed: %w", err)
+				return fmt.Errorf("deployment not found: %s\n\nTo deploy:\n  ai-aas model deploy create %s -e %s", modelName, modelName, environment)
 			}
 
 			if !isvc.Ready {
-				// Check pod status to provide more helpful error message
 				pods, podErr := k8sClient.GetPodStatus(ctx, isvcName, namespace)
 				if podErr == nil && len(pods) > 0 {
 					pod := pods[0]
 					switch pod.Phase {
 					case "Pending":
-						return fmt.Errorf("model is pending (waiting for resources or scheduling)")
+						return fmt.Errorf("model is pending (waiting for resources or scheduling)\n\nTo check events:\n  ai-aas model troubleshoot events %s -e %s", modelName, environment)
 					case "Running":
 						if !pod.Ready {
-							return fmt.Errorf("model is starting up (loading model weights, this may take several minutes)")
+							return fmt.Errorf("model is starting up (loading model weights, this may take several minutes)\n\nTo watch progress:\n  ai-aas model troubleshoot logs %s -e %s --follow", modelName, environment)
 						}
 					case "ContainerCreating":
 						return fmt.Errorf("model container is being created (pulling image or initializing)")
 					}
 				}
 
-				// Check conditions for more specific info
 				for _, cond := range isvc.Conditions {
 					if cond.Type == "Ready" && cond.Status != "True" {
 						if cond.Reason != "" {
@@ -454,20 +519,18 @@ Examples:
 					}
 				}
 
-				return fmt.Errorf("model not ready (use 'ai-aas model describe %s -e %s' for details)", modelName, environment)
+				return fmt.Errorf("model not ready\n\nTo check details:\n  ai-aas model troubleshoot describe %s -e %s", modelName, environment)
 			}
 
 			fmt.Printf("Testing %s in %s\n", modelName, environment)
 			fmt.Printf("Endpoint: %s\n", cfg.APIEndpoint)
 			fmt.Printf("Prompt: %s\n\n", prompt)
 
-			// Build request using the API router
 			opts := []api.ClientOption{}
 			if cfg.TLSInsecure {
 				opts = append(opts, api.WithInsecureSkipVerify())
 			}
 
-			// Send inference request via API router
 			startTime := time.Now()
 
 			reqBody := map[string]interface{}{
@@ -519,10 +582,12 @@ Examples:
 						}
 					}
 				}
-				fmt.Println("\nTest PASSED")
+				fmt.Println()
+				cli.PrintSuccess("Test PASSED")
 			} else {
 				fmt.Printf("\nError: %s\n", string(body))
-				fmt.Println("\nTest FAILED")
+				fmt.Println()
+				cli.PrintWarning("Test FAILED")
 				return fmt.Errorf("inference test failed with status %d", resp.StatusCode)
 			}
 
@@ -538,13 +603,136 @@ Examples:
 	return cmd
 }
 
-// Helper functions
+// newTroubleshootValidateCommand creates the troubleshoot validate subcommand
+func newTroubleshootValidateCommand() *cobra.Command {
+	var (
+		environment string
+		jsonOutput  bool
+		skipChecks  []string
+	)
 
-func int64Ptr(i int64) *int64 {
-	return &i
+	cmd := &cobra.Command{
+		Use:   "validate [model-name]",
+		Short: "Run full-stack validation",
+		Long: `Validate a model across all layers: registry, cache, deployment, and endpoint.
+
+Performs comprehensive checks:
+- Registry: Model is registered and configuration is valid
+- Cache: Model files are cached in object storage
+- Deployment: InferenceService exists and is healthy
+- Endpoint: Model responds to inference requests
+
+Examples:
+  # Validate all models
+  ai-aas model troubleshoot validate -e development
+
+  # Validate a specific model
+  ai-aas model troubleshoot validate mistral-7b -e development
+
+  # Output as JSON
+  ai-aas model troubleshoot validate mistral-7b -e development --json
+
+  # Skip certain checks
+  ai-aas model troubleshoot validate mistral-7b -e development --skip endpoint
+
+See Also:
+  ai-aas model troubleshoot test      Quick inference test
+  ai-aas model registry status        Registry status only`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+
+			cfg, err := config.Load()
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			adminEndpoint := cfg.AdminAPIEndpoint
+			if adminEndpoint == "" {
+				adminEndpoint = cfg.APIEndpoint
+			}
+
+			if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
+				return fmt.Errorf("Admin API endpoint not configured. Run 'ai-aas-cli --init' first")
+			}
+
+			opts := []api.ClientOption{}
+			if cfg.TLSInsecure {
+				opts = append(opts, api.WithInsecureSkipVerify())
+			}
+			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+			regClient := registry.NewClient(apiClient)
+
+			var modelNames []string
+			if len(args) > 0 {
+				modelNames = []string{args[0]}
+			} else {
+				models, err := regClient.List(ctx, registry.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("list models: %w", err)
+				}
+				for _, m := range models {
+					modelNames = append(modelNames, m.Name)
+				}
+			}
+
+			if len(modelNames) == 0 {
+				fmt.Println("No models found to validate.")
+				return nil
+			}
+
+			skipSet := make(map[string]bool)
+			for _, s := range skipChecks {
+				skipSet[s] = true
+			}
+
+			results := make(map[string]*ModelValidationResult)
+			allPassed := true
+
+			for _, modelName := range modelNames {
+				result := validateModel(ctx, modelName, environment, regClient, skipSet)
+				results[modelName] = result
+				if !result.Passed {
+					allPassed = false
+				}
+			}
+
+			if jsonOutput {
+				output := map[string]interface{}{
+					"timestamp":   time.Now().UTC(),
+					"environment": environment,
+					"passed":      allPassed,
+					"results":     results,
+				}
+				jsonBytes, err := json.MarshalIndent(output, "", "  ")
+				if err != nil {
+					return fmt.Errorf("marshal json: %w", err)
+				}
+				fmt.Println(string(jsonBytes))
+			} else {
+				printValidationResults(results, allPassed)
+			}
+
+			if !allPassed {
+				return fmt.Errorf("validation failed")
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVarP(&environment, "environment", "e", "", "target environment")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "output as JSON")
+	cmd.Flags().StringSliceVar(&skipChecks, "skip", nil, "skip specific checks (registry, cache, deployment, endpoint)")
+
+	return cmd
 }
 
-func formatDuration(d time.Duration) string {
+// Helper functions
+// Note: int64Ptr is defined in troubleshoot.go
+
+func formatDurationShort(d time.Duration) string {
 	if d < time.Minute {
 		return fmt.Sprintf("%ds", int(d.Seconds()))
 	}
@@ -556,3 +744,6 @@ func formatDuration(d time.Duration) string {
 	}
 	return fmt.Sprintf("%dd", int(d.Hours()/24))
 }
+
+// validateModel and related functions are in validate.go
+// CheckResult and ModelValidationResult types are in validate.go
