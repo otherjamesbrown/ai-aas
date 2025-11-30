@@ -30,6 +30,11 @@ import {
   platformStatusRoute,
   gitOpsRoute,
   configRoute,
+  bootstrapRoute,
+  registryRoute,
+  routingPolicyRoute,
+  syncRoute,
+  exportRoute,
 } from './routes/platformRoutes';
 
 // Lazy load route components
@@ -120,6 +125,11 @@ const routeTree = rootRoute.addChildren([
   platformStatusRoute,
   gitOpsRoute,
   configRoute,
+  bootstrapRoute,
+  registryRoute,
+  routingPolicyRoute,
+  syncRoute,
+  exportRoute,
   // Other routes
   usageDashboardRoute,
   supportConsoleRoute,

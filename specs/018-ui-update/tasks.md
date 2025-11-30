@@ -173,10 +173,10 @@
 
 ### Implementation for User Story 6 - Platform Operations Group
 
-- [ ] T-S018-P06-074 [US6] Create `web/portal/src/app/features/platform-operations/pages/BootstrapPage.tsx` with bootstrap form equivalent to `ai-aas-cli bootstrap` command
-- [ ] T-S018-P06-075 [US6] Create `web/portal/src/app/features/platform-operations/pages/RegistryPage.tsx` with register/deregister/enable/disable/list operations equivalent to `ai-aas-cli registry` commands
-- [ ] T-S018-P06-076 [US6] Create `web/portal/src/app/features/platform-operations/pages/RoutingPolicyPage.tsx` with create/list/delete operations equivalent to `ai-aas-cli routing policy` commands
-- [ ] T-S018-P06-077 [US6] Create `web/portal/src/app/features/platform-operations/pages/SyncPage.tsx` with trigger and status operations equivalent to `ai-aas-cli sync` commands
+- [x] T-S018-P06-074 [US6] Create `web/portal/src/app/features/platform-operations/pages/BootstrapPage.tsx` with bootstrap form equivalent to `ai-aas-cli bootstrap` command
+- [x] T-S018-P06-075 [US6] Create `web/portal/src/app/features/platform-operations/pages/RegistryPage.tsx` with register/deregister/enable/disable/list operations equivalent to `ai-aas-cli registry` commands
+- [x] T-S018-P06-076 [US6] Create `web/portal/src/app/features/platform-operations/pages/RoutingPolicyPage.tsx` with create/list/delete operations equivalent to `ai-aas-cli routing policy` commands
+- [x] T-S018-P06-077 [US6] Create `web/portal/src/app/features/platform-operations/pages/SyncPage.tsx` with trigger and status operations equivalent to `ai-aas-cli sync` commands
 - [x] T-S018-P06-078 [US6] Create `web/portal/src/app/features/platform-operations/pages/CredentialsPage.tsx` with set/list/test/delete operations for hf-token and s3 equivalent to `ai-aas-cli credentials` commands
 - [x] T-S018-P06-079 [US6] Create API client functions in `web/portal/src/app/features/platform-operations/api/` for all platform operations using same endpoints as CLI
 
@@ -184,8 +184,8 @@
 
 - [x] T-S018-P06-080 [US6] Create `web/portal/src/app/features/utilities/pages/StatusPage.tsx` with platform health status display equivalent to `ai-aas-cli status` command (created as PlatformStatusPage.tsx in platform-operations feature)
 - [x] T-S018-P06-081 [US6] Create `web/portal/src/app/features/utilities/pages/ConfigPage.tsx` with show/set/test functionality equivalent to `ai-aas-cli config` commands (created as ConfigPage.tsx in platform-operations feature)
-- [ ] T-S018-P06-082 [US6] Create `web/portal/src/app/features/utilities/pages/ExportPage.tsx` with usage and memberships export functionality equivalent to `ai-aas-cli export` commands
-- [ ] T-S018-P06-083 [US6] Create API client functions in `web/portal/src/app/features/utilities/api/` for all utility operations using same endpoints as CLI
+- [x] T-S018-P06-082 [US6] Create `web/portal/src/app/features/utilities/pages/ExportPage.tsx` with usage and memberships export functionality equivalent to `ai-aas-cli export` commands (created as ExportPage.tsx in platform-operations feature)
+- [x] T-S018-P06-083 [US6] Create API client functions in `web/portal/src/app/features/utilities/api/` for all utility operations using same endpoints as CLI (added to platform.ts API)
 
 ### Implementation for User Story 6 - Navigation and Integration
 

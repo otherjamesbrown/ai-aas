@@ -251,4 +251,212 @@ export const platformApi = {
     const response = await httpClient.post<{ status: string }>(`/v1/admin/gitops/applications/${name}/refresh`);
     return response.data;
   },
+
+  // ========== Bootstrap ==========
+
+  /**
+   * Bootstrap the platform
+   * Equivalent to: ai-aas-cli bootstrap
+   */
+  async bootstrap(data: {
+    admin_email: string;
+    admin_password: string;
+    org_name: string;
+    hf_token?: string;
+    skip_model_pull?: boolean;
+  }): Promise<{ api_key: string; message: string }> {
+    const response = await httpClient.post<{ api_key: string; message: string }>('/v1/admin/bootstrap', data);
+    return response.data;
+  },
+
+  // ========== Registry ==========
+
+  /**
+   * List registered services
+   * Equivalent to: ai-aas-cli registry list
+   */
+  async registryList(): Promise<Array<{
+    name: string;
+    type: string;
+    endpoint: string;
+    status: 'enabled' | 'disabled';
+    health: 'healthy' | 'unhealthy' | 'unknown';
+    registered_at: string;
+  }>> {
+    const response = await httpClient.get<Array<{
+      name: string;
+      type: string;
+      endpoint: string;
+      status: 'enabled' | 'disabled';
+      health: 'healthy' | 'unhealthy' | 'unknown';
+      registered_at: string;
+    }>>('/v1/admin/registry');
+    return response.data;
+  },
+
+  /**
+   * Register a service
+   * Equivalent to: ai-aas-cli registry register
+   */
+  async registryRegister(data: {
+    name: string;
+    type: string;
+    endpoint: string;
+  }): Promise<{ message: string }> {
+    const response = await httpClient.post<{ message: string }>('/v1/admin/registry', data);
+    return response.data;
+  },
+
+  /**
+   * Deregister a service
+   * Equivalent to: ai-aas-cli registry deregister
+   */
+  async registryDeregister(name: string): Promise<void> {
+    await httpClient.delete(`/v1/admin/registry/${name}`);
+  },
+
+  /**
+   * Enable a service
+   * Equivalent to: ai-aas-cli registry enable
+   */
+  async registryEnable(name: string): Promise<{ message: string }> {
+    const response = await httpClient.post<{ message: string }>(`/v1/admin/registry/${name}/enable`);
+    return response.data;
+  },
+
+  /**
+   * Disable a service
+   * Equivalent to: ai-aas-cli registry disable
+   */
+  async registryDisable(name: string): Promise<{ message: string }> {
+    const response = await httpClient.post<{ message: string }>(`/v1/admin/registry/${name}/disable`);
+    return response.data;
+  },
+
+  // ========== Routing Policy ==========
+
+  /**
+   * List routing policies
+   * Equivalent to: ai-aas-cli routing policy list
+   */
+  async routingPolicyList(): Promise<Array<{
+    id: string;
+    name: string;
+    priority: number;
+    conditions: Record<string, string>;
+    target: string;
+    enabled: boolean;
+    created_at: string;
+  }>> {
+    const response = await httpClient.get<Array<{
+      id: string;
+      name: string;
+      priority: number;
+      conditions: Record<string, string>;
+      target: string;
+      enabled: boolean;
+      created_at: string;
+    }>>('/v1/admin/routing/policies');
+    return response.data;
+  },
+
+  /**
+   * Create routing policy
+   * Equivalent to: ai-aas-cli routing policy create
+   */
+  async routingPolicyCreate(data: {
+    name: string;
+    priority: number;
+    conditions: Record<string, string>;
+    target: string;
+  }): Promise<{ id: string; message: string }> {
+    const response = await httpClient.post<{ id: string; message: string }>('/v1/admin/routing/policies', data);
+    return response.data;
+  },
+
+  /**
+   * Delete routing policy
+   * Equivalent to: ai-aas-cli routing policy delete
+   */
+  async routingPolicyDelete(id: string): Promise<void> {
+    await httpClient.delete(`/v1/admin/routing/policies/${id}`);
+  },
+
+  // ========== Sync ==========
+
+  /**
+   * Trigger sync
+   * Equivalent to: ai-aas-cli sync trigger
+   */
+  async syncTrigger(target?: string): Promise<{ job_id: string; message: string }> {
+    const response = await httpClient.post<{ job_id: string; message: string }>('/v1/admin/sync/trigger', { target });
+    return response.data;
+  },
+
+  /**
+   * Get sync status
+   * Equivalent to: ai-aas-cli sync status
+   */
+  async syncStatus(): Promise<{
+    last_sync: string;
+    status: 'idle' | 'syncing' | 'failed';
+    targets: Array<{
+      name: string;
+      last_sync: string;
+      status: string;
+      message?: string;
+    }>;
+  }> {
+    const response = await httpClient.get<{
+      last_sync: string;
+      status: 'idle' | 'syncing' | 'failed';
+      targets: Array<{
+        name: string;
+        last_sync: string;
+        status: string;
+        message?: string;
+      }>;
+    }>('/v1/admin/sync/status');
+    return response.data;
+  },
+
+  // ========== Export ==========
+
+  /**
+   * Export usage data
+   * Equivalent to: ai-aas-cli export usage
+   */
+  async exportUsage(params?: {
+    start_date?: string;
+    end_date?: string;
+    format?: 'json' | 'csv';
+  }): Promise<Blob> {
+    const queryParams = new URLSearchParams();
+    if (params?.start_date) queryParams.append('start_date', params.start_date);
+    if (params?.end_date) queryParams.append('end_date', params.end_date);
+    if (params?.format) queryParams.append('format', params.format);
+
+    const response = await httpClient.get<Blob>(`/v1/admin/export/usage?${queryParams}`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  /**
+   * Export memberships data
+   * Equivalent to: ai-aas-cli export memberships
+   */
+  async exportMemberships(params?: {
+    org_id?: string;
+    format?: 'json' | 'csv';
+  }): Promise<Blob> {
+    const queryParams = new URLSearchParams();
+    if (params?.org_id) queryParams.append('org_id', params.org_id);
+    if (params?.format) queryParams.append('format', params.format);
+
+    const response = await httpClient.get<Blob>(`/v1/admin/export/memberships?${queryParams}`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
 };
