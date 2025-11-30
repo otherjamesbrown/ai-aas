@@ -294,7 +294,7 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListUsers handles GET /v1/orgs/{orgId}/users - List users in organization.
-// TODO: Add pagination, filtering, and authorization checks.
+// TODO: Add pagination and filtering.
 func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	orgIDParam := chi.URLParam(r, "orgId")
@@ -302,6 +302,13 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	orgID, err := h.resolveOrgID(ctx, orgIDParam)
 	if err != nil {
 		http.Error(w, "organization not found", http.StatusNotFound)
+		return
+	}
+
+	// Authorization: verify user has access to this organization
+	if err := h.requireOrgAccess(ctx, orgID); err != nil {
+		h.logger.Warn("unauthorized access to list users", zap.Error(err), zap.String("orgId", orgIDParam))
+		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -593,4 +600,26 @@ func generateInviteToken() (string, error) {
 	}
 	// Encode as URL-safe base64 (no padding)
 	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+// requireOrgAccess checks if the authenticated user has access to the specified organization.
+// Service accounts with admin or wildcard scope can access any org.
+// Regular users must be a member of the org.
+func (h *Handler) requireOrgAccess(ctx context.Context, orgID uuid.UUID) error {
+	// Service accounts with admin scope (or wildcard "*" scope) can access any org
+	if middleware.HasAnyScope(ctx, "admin", "*") {
+		return nil
+	}
+
+	// Get authenticated user's org from context
+	authOrgID := middleware.GetOrgID(ctx)
+	userID := middleware.GetUserID(ctx)
+
+	// If user is in the same org, allow access
+	if authOrgID == orgID {
+		return nil
+	}
+
+	// Otherwise, verify user is a member of the target org
+	return h.runtime.Postgres.ValidateUserOrgMembership(ctx, userID, orgID)
 }
