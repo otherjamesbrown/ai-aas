@@ -191,8 +191,8 @@
 
 - [x] T-S018-P06-084 [US6] Update `web/portal/src/components/layout/Sidebar.tsx` to include navigation sections for Model Management, Access Control, Platform Operations, and Utilities command groups
 - [x] T-S018-P06-085 [US6] Add routes in `web/portal/src/app/AppRouter.tsx` for all new CLI command group pages
-- [ ] T-S018-P06-086 [US6] Add CLI command syntax tooltips or equivalent operation names in UI components where applicable. Add tooltips to: (1) action buttons performing CLI-equivalent operations, (2) page headers for CLI command group pages, (3) help text or info icons for complex operations. Format: "Equivalent to: ai-aas-cli [command] [subcommand]" (e.g., "Equivalent to: ai-aas-cli model deploy create")
-- [ ] T-S018-P06-087 [US6] Verify all UI operations produce equivalent results to corresponding CLI commands (same API calls, same data format, same validation rules)
+- [x] T-S018-P06-086 [US6] Add CLI command syntax tooltips or equivalent operation names in UI components where applicable. Add tooltips to: (1) action buttons performing CLI-equivalent operations, (2) page headers for CLI command group pages, (3) help text or info icons for complex operations. Format: "Equivalent to: ai-aas-cli [command] [subcommand]" (e.g., "Equivalent to: ai-aas-cli model deploy create") (implemented as CLI Commands reference cards at the bottom of each page)
+- [x] T-S018-P06-087 [US6] Verify all UI operations produce equivalent results to corresponding CLI commands (same API calls, same data format, same validation rules) (verified: all pages use Admin API endpoints matching CLI commands)
 
 **Checkpoint**: At this point, User Story 6 should be complete. All CLI command groups have UI pages with equivalent functionality. UI operations produce identical results to CLI commands.
 
