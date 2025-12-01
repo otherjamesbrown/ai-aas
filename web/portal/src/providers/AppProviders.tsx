@@ -1,10 +1,32 @@
 import { ReactNode } from 'react';
 import { QueryProvider } from '@/lib/query';
 import { ToastProvider } from './ToastProvider';
-import { AuthProvider } from './AuthProvider';
+import { AuthProvider, useAuth } from './AuthProvider';
+import { FeatureFlagProvider } from './FeatureFlagProvider';
 
 interface AppProvidersProps {
   children: ReactNode;
+}
+
+/**
+ * Inner providers that need auth context
+ */
+function AuthenticatedProviders({ children }: { children: ReactNode }) {
+  const { user, isAuthenticated } = useAuth();
+
+  return (
+    <FeatureFlagProvider
+      userId={user?.id}
+      organizationId={user?.organizationId}
+      isAuthenticated={isAuthenticated}
+    >
+      <QueryProvider>
+        <ToastProvider>
+          {children}
+        </ToastProvider>
+      </QueryProvider>
+    </FeatureFlagProvider>
+  );
 }
 
 /**
@@ -15,8 +37,9 @@ interface AppProvidersProps {
  *
  * Provider Order:
  * 1. AuthProvider - Authentication state
- * 2. QueryProvider - TanStack Query for data fetching
- * 3. ToastProvider - Toast notifications
+ * 2. FeatureFlagProvider - Feature flags (needs auth context)
+ * 3. QueryProvider - TanStack Query for data fetching
+ * 4. ToastProvider - Toast notifications
  *
  * Usage:
  * ```tsx
@@ -28,11 +51,9 @@ interface AppProvidersProps {
 export function AppProviders({ children }: AppProvidersProps) {
   return (
     <AuthProvider>
-      <QueryProvider>
-        <ToastProvider>
-          {children}
-        </ToastProvider>
-      </QueryProvider>
+      <AuthenticatedProviders>
+        {children}
+      </AuthenticatedProviders>
     </AuthProvider>
   );
 }
