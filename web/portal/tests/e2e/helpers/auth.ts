@@ -42,7 +42,8 @@ export async function loginViaUI(
   await page.getByRole('button', { name: /sign in$/i }).click();
 
   // Wait for navigation to complete
-  await page.waitForURL(/^\/$/, { timeout: 15000 });
+  // Use endsWith pattern to match full URL (https://portal.example.com/)
+  await page.waitForURL(/\/$/, { timeout: 15000 });
 }
 
 /**

@@ -66,7 +66,8 @@ test.describe('Smoke Tests', () => {
     await page.getByRole('button', { name: /sign in$/i }).click();
 
     // Should redirect to home page after successful login
-    await expect(page).toHaveURL(/^\/$/, { timeout: 15000 });
+    // Use endsWith pattern to match full URL (https://portal.example.com/)
+    await expect(page).toHaveURL(/\/$/, { timeout: 15000 });
   });
 
   test('4. Home page loads after login', async ({ page }) => {
