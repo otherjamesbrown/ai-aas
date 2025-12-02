@@ -31,6 +31,10 @@ spec:
         value: fr-par-1
       - name: S3_ENDPOINT
         value: "https://fr-par-1.linodeobjects.com"
+      - name: AWS_ENDPOINT_URL_S3
+        value: "https://fr-par-1.linodeobjects.com"
+      - name: AWS_ENDPOINT_URL
+        value: "https://fr-par-1.linodeobjects.com"
       - name: S3_USE_HTTPS
         value: "1"
       - name: S3_VERIFY_SSL
