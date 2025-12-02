@@ -12,7 +12,7 @@ spec:
   project: platform-staging
   source:
     repoURL: https://github.com/otherjamesbrown/ai-aas
-    targetRevision: main
+    targetRevision: staging
     path: services/user-org-service/configs/helm
     helm:
       valueFiles:

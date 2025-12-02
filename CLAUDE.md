@@ -272,10 +272,27 @@ syncPolicy:
 
 ### Branch Targeting Rules
 
-- **Development apps**: ALWAYS target `develop` branch (`targetRevision: develop`)
-- **Production apps**: ALWAYS target `main` branch (`targetRevision: main`)
+📖 **[docs/development/branching-workflow.md](docs/development/branching-workflow.md)** - Complete branching workflow guide
+
+The platform uses a three-branch promotion workflow:
+
+```
+develop → staging → main
+```
+
+| Branch | ArgoCD Target | Environment |
+|--------|---------------|-------------|
+| `develop` | development | Fast iteration |
+| `staging` | staging | Code review & testing |
+| `main` | production | Production-ready |
+
+**Key Rules:**
+- **Development apps**: Target `develop` branch (`targetRevision: develop`)
+- **Staging apps**: Target `staging` branch (`targetRevision: staging`)
+- **Production apps**: Target `main` branch (`targetRevision: main`)
+- PRs to `staging` must come from `develop`
+- PRs to `main` must come from `staging`
 - **NEVER** reference feature branches in Applications - they may be deleted
-- When creating PRs, ensure Applications don't point to the PR branch
 
 ### RBAC Project Requirements
 
