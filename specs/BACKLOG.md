@@ -43,6 +43,22 @@ A scratch list of tasks, ideas, and improvements to tackle. Add items here so we
   - Deployed via CLI: `ai-aas model deploy mistral-7b-instruct`
   - Verified inference via OpenAI-compatible API (`/v1/chat/completions`)
 
+- [ ] **Fix API Router to KServe networking** (2024-12-02)
+  - **Problem:** API Router cannot connect to KServe InferenceServices - requests timeout
+  - **Root cause investigation needed:**
+    - KServe uses Knative serving with queue-proxy sidecar
+    - ExternalName services route through Istio gateway (requires Host header routing)
+    - Direct ClusterIP services also timeout (may need Istio injection or different port)
+  - **Options to evaluate:**
+    1. Configure API Router to send proper Host header for Knative routing
+    2. Disable Istio sidecar injection for KServe namespace
+    3. Use the private service on correct port (8012 for queue-proxy)
+    4. Deploy API Router in same network policy domain as KServe
+  - **Related files:**
+    - `services/api-router-service/deployments/helm/api-router-service/values-development.yaml`
+    - `services/api-router-service/internal/routing/backend_client.go`
+  - **Note:** Routing policies are now correctly bootstrapped from backend endpoints
+
 - [ ] **Multi-inference-engine support**
   - Currently only supports vLLM runtime
   - Add support for NVIDIA Triton Inference Server
@@ -66,6 +82,16 @@ A scratch list of tasks, ideas, and improvements to tackle. Add items here so we
   - Integrate `model pull` with `model deploy` (use S3 cache instead of HF download)
   - Update `model pull` to create `model_cache` DB entry after upload
   - Reduces vLLM cold start time from ~10min to ~2min for large models
+
+- [ ] **Server-side model caching (background job worker)**
+  - Current `ai-aas model cache pull` downloads client-side (requires local disk space + bandwidth)
+  - For large models (27GB+ like Mistral-7B), this is impractical from dev machines
+  - **Proposed solution**: Background job worker to process `PullJob` records
+    - Admin-api already has `CreatePullJob` which inserts `pending` status records
+    - Need a worker process to pick up pending jobs and execute them server-side
+    - Options: Kubernetes Job, dedicated worker pod, or serverless function
+  - Worker would have access to S3 credentials and HuggingFace token
+  - CLI would just create the job and poll for status
 
 ### Pipeline & CI/CD
 - [ ] Enable GitHub branch protection on `main` (require PR review, status checks)
