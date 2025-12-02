@@ -47,7 +47,9 @@ spec:
         - name: VLLM_MODEL_NAME
           value: "mistralai/Mistral-7B-Instruct-v0.3"
         - name: HF_HOME
-          value: "/mnt/models/.cache"
+          value: "/tmp/.cache"
+        - name: TRANSFORMERS_CACHE
+          value: "/tmp/.cache"
       ports:
         - containerPort: 8000
           protocol: TCP
