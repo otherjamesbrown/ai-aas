@@ -43,21 +43,15 @@ A scratch list of tasks, ideas, and improvements to tackle. Add items here so we
   - Deployed via CLI: `ai-aas model deploy mistral-7b-instruct`
   - Verified inference via OpenAI-compatible API (`/v1/chat/completions`)
 
-- [ ] **Fix API Router to KServe networking** (2024-12-02)
+- [x] **Fix API Router to KServe networking** (2024-12-02)
   - **Problem:** API Router cannot connect to KServe InferenceServices - requests timeout
-  - **Root cause investigation needed:**
-    - KServe uses Knative serving with queue-proxy sidecar
-    - ExternalName services route through Istio gateway (requires Host header routing)
-    - Direct ClusterIP services also timeout (may need Istio injection or different port)
-  - **Options to evaluate:**
-    1. Configure API Router to send proper Host header for Knative routing
-    2. Disable Istio sidecar injection for KServe namespace
-    3. Use the private service on correct port (8012 for queue-proxy)
-    4. Deploy API Router in same network policy domain as KServe
-  - **Related files:**
-    - `services/api-router-service/deployments/helm/api-router-service/values-development.yaml`
-    - `services/api-router-service/internal/routing/backend_client.go`
-  - **Note:** Routing policies are now correctly bootstrapped from backend endpoints
+  - **Root cause:** Port 80 on ClusterIP services routes through Istio which causes timeouts
+  - **Solution:** Use the `-private` service on port 8012 (queue-proxy port)
+    - This bypasses Istio routing and connects directly to the queue-proxy sidecar
+    - Example: `http://model-predictor-00001-private.namespace.svc.cluster.local:8012`
+  - **Key learning:** KServe exposes multiple service endpoints:
+    - Port 80 on regular service: Routes through Istio gateway (needs Host header)
+    - Port 8012 on -private service: Direct queue-proxy access (recommended for internal services)
 
 - [ ] **Multi-inference-engine support**
   - Currently only supports vLLM runtime

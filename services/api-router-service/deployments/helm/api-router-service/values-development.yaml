@@ -117,13 +117,13 @@ backends:
   # Format: backend-id:http://service-name.namespace.svc.cluster.local:port
   # KServe InferenceServices are exposed via Knative Services
   #
-  # NOTE: Using the direct revision ClusterIP service (predictor-00001) to avoid
-  # Istio routing issues. The -predictor ExternalName service requires proper Host
-  # header routing through the Knative/Istio gateway which can cause timeout issues.
+  # IMPORTANT: Use the -private service on port 8012 (queue-proxy port)
+  # - Port 80 on regular services routes through Istio which causes timeouts
+  # - Port 8012 on -private services connects directly to the queue-proxy sidecar
+  # - This bypasses Istio routing and provides direct pod connectivity
   #
-  # Port 80 is the service port that routes to the container's port 8000.
   # Note: Don't include path - it's added by the router based on request type
-  endpoints: "mistralai/Mistral-7B-Instruct-v0.3:http://mistral-7b-development-predictor-00001.development.svc.cluster.local:80"
+  endpoints: "mistralai/Mistral-7B-Instruct-v0.3:http://mistral-7b-development-predictor-00001-private.development.svc.cluster.local:8012"
 
 # Redis configuration
 redis:
