@@ -65,8 +65,12 @@ export function FeatureFlagProvider({
         setFlags(getDefaultFlags());
       }
     } catch (err) {
-      console.error('Failed to fetch feature flags:', err);
-      
+      // Silently fall back to defaults - the feature flags endpoint is optional
+      // and may not be available in all environments
+      if (import.meta.env.DEV) {
+        console.debug('Feature flags fetch failed, using defaults:', err);
+      }
+
       // Use default flags on error
       setFlags(getDefaultFlags());
     } finally {

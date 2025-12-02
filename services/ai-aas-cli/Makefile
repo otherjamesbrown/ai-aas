@@ -64,9 +64,10 @@ test-integration: ## Run integration tests
 	@echo "Running integration tests..."
 	$(GOTEST) -v ./tests/integration/...
 
-test-e2e: ## Run end-to-end tests
+test-e2e: build ## Run end-to-end tests (requires dev environment)
 	@echo "Running E2E tests..."
-	$(GOTEST) -v ./tests/e2e/...
+	@echo "NOTE: Requires development environment. Run: source tests/e2e/env.sh"
+	AI_AAS_CLI_PATH=$(BINARY_DIR)/$(BINARY_NAME) $(GOTEST) -v -tags=e2e ./tests/e2e/...
 
 coverage: ## Run tests with coverage
 	@echo "Running tests with coverage..."

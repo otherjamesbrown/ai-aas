@@ -100,6 +100,38 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/v1/auth/token", h.HandleAuthProxy)
 	r.Post("/v1/auth/logout", h.HandleAuthProxy)
 	r.Get("/v1/auth/callback", h.HandleAuthProxy)
+
+	// Admin portal endpoints (proxied to user-org-service with JWT auth)
+	// Organization and API key management
+	r.Get("/organizations/me", h.HandleAdminProxy)
+	r.Patch("/organizations/me", h.HandleAdminProxy)
+	r.Get("/organizations/me/api-keys", h.HandleAdminProxy)
+	r.Post("/organizations/me/api-keys", h.HandleAdminProxy)
+	r.Get("/organizations/me/api-keys/{apiKeyId}", h.HandleAdminProxy)
+	r.Patch("/organizations/me/api-keys/{apiKeyId}", h.HandleAdminProxy)
+	r.Post("/organizations/me/api-keys/{apiKeyId}/rotate", h.HandleAdminProxy)
+	r.Post("/organizations/me/api-keys/{apiKeyId}/revoke", h.HandleAdminProxy)
+	r.Delete("/organizations/me/api-keys/{apiKeyId}", h.HandleAdminProxy)
+
+	// Member management
+	r.Get("/organizations/me/members", h.HandleAdminProxy)
+	r.Post("/organizations/me/members", h.HandleAdminProxy)
+	r.Patch("/organizations/me/members/{memberId}", h.HandleAdminProxy)
+	r.Delete("/organizations/me/members/{memberId}", h.HandleAdminProxy)
+
+	// Usage and budgets
+	r.Get("/organizations/me/usage", h.HandleAdminProxy)
+	r.Get("/organizations/me/budgets", h.HandleAdminProxy)
+	r.Patch("/organizations/me/budgets", h.HandleAdminProxy)
+
+	// Models (admin view)
+	r.Get("/organizations/me/models", h.HandleAdminProxy)
+
+	// Feature flags (local stub - returns sensible defaults)
+	r.Get("/feature-flags", h.HandleFeatureFlags)
+
+	// Support/impersonation status
+	r.Get("/support/impersonations/current", h.HandleImpersonationStatus)
 }
 
 // HandleInference handles POST /v1/inference requests.

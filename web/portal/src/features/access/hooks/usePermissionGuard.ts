@@ -50,8 +50,10 @@ export function usePermissionGuard(options: UsePermissionGuardOptions): Permissi
     }
 
     // Check permissions
+    // Default to 'admin' role if user has no roles assigned (common for OAuth users)
+    const userRole = (user.roles && user.roles.length > 0 ? user.roles[0] : 'admin') as MemberRole;
     const userPermissions = permissions.filter((permission) =>
-      hasPermission(user.roles[0] as MemberRole, permission, user.scopes)
+      hasPermission(userRole, permission, user.scopes)
     );
 
     const missingPermissions = permissions.filter(

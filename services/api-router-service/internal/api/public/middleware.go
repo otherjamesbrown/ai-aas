@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5/middleware"
 	"go.opentelemetry.io/otel/trace"
@@ -238,8 +239,10 @@ func BodyBufferMiddleware(maxSize int64) func(http.Handler) http.Handler {
 
 // AuthContextMiddleware extracts auth context and adds it to request context.
 // Public endpoints that don't require authentication will skip auth and proceed without an auth context.
+// JWT-authenticated endpoints (using Bearer token) also skip API key auth.
 func AuthContextMiddleware(authenticator *auth.Authenticator, logger *zap.Logger, tracer trace.Tracer) func(http.Handler) http.Handler {
-	// Public endpoints that don't require authentication
+	// Public endpoints that don't require API key authentication
+	// Note: Some endpoints use JWT (Bearer token) auth instead of API key
 	publicEndpoints := map[string]bool{
 		"GET /v1/models":         true,
 		"POST /v1/auth/login":    true, // Password-based login
@@ -247,6 +250,16 @@ func AuthContextMiddleware(authenticator *auth.Authenticator, logger *zap.Logger
 		"POST /v1/auth/token":    true, // Token exchange/refresh
 		"POST /v1/auth/logout":   true, // Logout endpoint
 		"GET /v1/auth/callback":  true, // OAuth callback
+		// Feature flags endpoint (returns defaults, no auth required)
+		"GET /feature-flags": true,
+		// Impersonation status (returns 404 if no active session)
+		"GET /support/impersonations/current": true,
+	}
+
+	// JWT-authenticated endpoints (use Bearer token, skip API key middleware)
+	// These endpoints proxy to user-org-service with JWT auth
+	jwtAuthPrefixes := []string{
+		"/organizations/me",
 	}
 
 	return func(next http.Handler) http.Handler {
@@ -259,6 +272,18 @@ func AuthContextMiddleware(authenticator *auth.Authenticator, logger *zap.Logger
 					zap.String("method", r.Method))
 				next.ServeHTTP(w, r)
 				return
+			}
+
+			// Check if this is a JWT-authenticated endpoint (uses Bearer token)
+			// These endpoints proxy to user-org-service which handles JWT validation
+			for _, prefix := range jwtAuthPrefixes {
+				if strings.HasPrefix(r.URL.Path, prefix) {
+					logger.Debug("skipping API key auth for JWT-authenticated endpoint",
+						zap.String("path", r.URL.Path),
+						zap.String("method", r.Method))
+					next.ServeHTTP(w, r)
+					return
+				}
 			}
 
 			authCtx, err := authenticator.Authenticate(r)

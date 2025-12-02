@@ -97,6 +97,41 @@ A scratch list of tasks, ideas, and improvements to tackle. Add items here so we
   - **Why it matters**: Ensures the access control system works correctly across all layers (API, database, inference)
 
 ### Web Portal / UI
+
+- [ ] **UI Resilience & Defensive Coding** (Added 2024-12-02)
+  - **Problem:** UI crashes when API returns incomplete data (e.g., missing `billing_contact`, `address` on organization profile)
+  - **Root cause:** Components access nested properties without null checks (e.g., `profile.billing_contact.name`)
+  - **Current workaround:** Added defensive defaults in OrganizationSettingsPage
+  - **Recommended improvements:**
+    1. Add Zod/TypeScript validation for all API responses at the service layer
+    2. Create utility functions for safe nested property access
+    3. Add error boundaries around each major component section
+    4. Implement graceful fallback UI for missing data (e.g., "Not configured" placeholders)
+  - **Files needing review:**
+    - All admin pages accessing nested API response objects
+    - `src/features/admin/org/OrganizationSettingsPage.tsx` (partially fixed)
+    - `src/features/access/hooks/usePermissionGuard.ts` (partially fixed for empty roles)
+
+- [ ] **API Contract Alignment**
+  - **Problem:** Frontend expects fields that backend doesn't return
+  - **Examples found:**
+    - `/organizations/me` doesn't return `billing_contact` or `address` objects
+    - `/auth/userinfo` returns empty `roles: []` array
+  - **Options:**
+    1. Update user-org-service to return complete objects (including empty nested objects)
+    2. Update frontend types to mark all nested objects as optional
+    3. Create API schema documentation (OpenAPI) and validate both sides
+  - **Recommendation:** Option 3 - proper API contracts prevent future drift
+
+- [ ] **Circuit Breaker UX Improvements**
+  - **Problem:** When api-router circuit breaker opens, login hangs indefinitely with no feedback
+  - **Current behavior:** Loading spinner spins forever, user doesn't know what's wrong
+  - **Recommended improvements:**
+    1. Add request timeout on frontend (e.g., 10s) with user-friendly error message
+    2. Show "Service temporarily unavailable" instead of infinite loading
+    3. Add retry button with exponential backoff
+    4. Consider adding health status indicator in UI header
+
 - [ ] **Add service health dashboard to Web Portal**
   - Display platform health status similar to CLI `ai-aas-cli status` output
   - Show all services: Admin API, API Router, User-Org, Analytics, Grafana, ArgoCD

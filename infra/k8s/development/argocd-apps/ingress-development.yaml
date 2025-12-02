@@ -21,7 +21,7 @@ spec:
   source:
     path: infra/k8s/development/ingress
     repoURL: https://github.com/otherjamesbrown/ai-aas
-    targetRevision: main
+    targetRevision: develop
     directory:
       recurse: true
   syncPolicy:

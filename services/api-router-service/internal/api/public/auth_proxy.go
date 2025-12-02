@@ -96,8 +96,8 @@ func (h *Handler) HandleAuthProxy(w http.ResponseWriter, r *http.Request) {
 
 	// Copy response headers
 	for name, values := range resp.Header {
-		// Skip hop-by-hop headers
-		if isHopByHopHeader(name) {
+		// Skip hop-by-hop and CORS headers (CORS is handled by api-router middleware)
+		if shouldSkipHeader(name) {
 			continue
 		}
 		for _, value := range values {
@@ -154,4 +154,30 @@ func isHopByHopHeader(name string) bool {
 		"Upgrade":             true,
 	}
 	return hopByHopHeaders[strings.Title(strings.ToLower(name))]
+}
+
+// shouldSkipHeader checks if a response header should be skipped when proxying.
+// This includes hop-by-hop headers and CORS headers (which are handled by api-router's
+// CORS middleware to avoid duplicate headers).
+func shouldSkipHeader(name string) bool {
+	if isHopByHopHeader(name) {
+		return true
+	}
+	// Skip CORS headers - they are handled by api-router's CORS middleware
+	// Including them from the upstream would result in duplicate headers
+	lowerName := strings.ToLower(name)
+	corsHeaders := []string{
+		"access-control-allow-origin",
+		"access-control-allow-methods",
+		"access-control-allow-headers",
+		"access-control-allow-credentials",
+		"access-control-expose-headers",
+		"access-control-max-age",
+	}
+	for _, h := range corsHeaders {
+		if lowerName == h {
+			return true
+		}
+	}
+	return false
 }

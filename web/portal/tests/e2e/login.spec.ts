@@ -73,11 +73,17 @@ test.describe('Login Page', () => {
     // Submit form
     await page.getByRole('button', { name: /sign in$/i }).click();
 
-    // Should redirect to home page after successful login
-    await expect(page).toHaveURL(/\//, { timeout: 10000 });
+    // Wait for the userinfo call to complete (indicates login success)
+    await page.waitForResponse(
+      resp => resp.url().includes('/auth/userinfo') && resp.status() === 200,
+      { timeout: 15000 }
+    ).catch(() => console.log('userinfo not captured'));
 
-    // Should not see login button in header anymore
-    await expect(page.getByRole('link', { name: /login/i })).not.toBeVisible();
+    // Should redirect away from login page after successful login
+    await expect(page).not.toHaveURL(/\/auth\/login/, { timeout: 15000 });
+
+    // Should see user email in header (indicating logged in state)
+    await expect(page.getByText(TEST_USERS.admin.email).first()).toBeVisible({ timeout: 5000 });
   });
 
   test('should support optional organization ID field', async ({ page }) => {
