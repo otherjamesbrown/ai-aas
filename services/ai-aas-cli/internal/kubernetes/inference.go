@@ -4,6 +4,7 @@ package kubernetes
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -26,7 +27,9 @@ type InferenceServiceConfig struct {
 	Name           string
 	Namespace      string
 	ModelName      string
-	StorageURI     string // S3 path to model files
+	StorageURI     string            // S3 path to model files (optional for HF models)
+	HFModelID      string            // HuggingFace model ID (e.g., "mistralai/Mistral-7B-Instruct-v0.3")
+	Runtime        string            // ClusterServingRuntime name (e.g., "vllm-runtime")
 	RuntimeVersion string
 	GPUCount       int
 	MemoryGB       int
@@ -35,6 +38,7 @@ type InferenceServiceConfig struct {
 	Environment    string
 	Labels         map[string]string
 	Annotations    map[string]string
+	EnvVars        map[string]string // Additional environment variables
 }
 
 // InferenceServiceStatus represents the status of an InferenceService
@@ -196,6 +200,44 @@ func buildInferenceServiceManifest(cfg InferenceServiceConfig) *unstructured.Uns
 		resources["requests"].(map[string]interface{})["nvidia.com/gpu"] = cfg.GPUCount
 	}
 
+	// Build model spec
+	modelSpec := map[string]interface{}{
+		"modelFormat": map[string]interface{}{
+			"name": "vllm",
+		},
+		"resources": resources,
+	}
+
+	// For HuggingFace models, we pass model ID via env var (vLLM downloads directly)
+	// For S3 models, we use storageUri (storage initializer downloads)
+	if cfg.StorageURI != "" && !strings.HasPrefix(cfg.StorageURI, "hf://") {
+		modelSpec["storageUri"] = cfg.StorageURI
+	}
+
+	// Add explicit runtime if specified
+	if cfg.Runtime != "" {
+		modelSpec["runtime"] = cfg.Runtime
+	}
+
+	// Build container env vars for HuggingFace model
+	var containerEnvVars []interface{}
+	if cfg.HFModelID != "" {
+		containerEnvVars = append(containerEnvVars, map[string]interface{}{
+			"name":  "VLLM_MODEL_NAME",
+			"value": cfg.HFModelID,
+		})
+	}
+	// Add any additional env vars
+	for k, v := range cfg.EnvVars {
+		containerEnvVars = append(containerEnvVars, map[string]interface{}{
+			"name":  k,
+			"value": v,
+		})
+	}
+	if len(containerEnvVars) > 0 {
+		modelSpec["env"] = containerEnvVars
+	}
+
 	isvc := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "serving.kserve.io/v1beta1",
@@ -208,13 +250,7 @@ func buildInferenceServiceManifest(cfg InferenceServiceConfig) *unstructured.Uns
 			},
 			"spec": map[string]interface{}{
 				"predictor": map[string]interface{}{
-					"model": map[string]interface{}{
-						"modelFormat": map[string]interface{}{
-							"name": "vllm",
-						},
-						"storageUri": cfg.StorageURI,
-						"resources":  resources,
-					},
+					"model":       modelSpec,
 					"minReplicas": cfg.MinReplicas,
 					"maxReplicas": cfg.MaxReplicas,
 				},
@@ -320,5 +356,97 @@ func getPodRestarts(pod *corev1.Pod) int32 {
 		restarts += cs.RestartCount
 	}
 	return restarts
+}
+
+// ScaleInferenceService scales an InferenceService to the specified replica count
+func (c *Client) ScaleInferenceService(ctx context.Context, name, namespace string, replicas int) error {
+	dynamicClient, err := dynamic.NewForConfig(c.config)
+	if err != nil {
+		return fmt.Errorf("create dynamic client: %w", err)
+	}
+
+	if namespace == "" {
+		namespace = c.namespace
+	}
+
+	// Get current InferenceService
+	result, err := dynamicClient.Resource(InferenceServiceGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("get inferenceservice: %w", err)
+	}
+
+	// Update minReplicas and maxReplicas
+	if err := unstructured.SetNestedField(result.Object, int64(replicas), "spec", "predictor", "minReplicas"); err != nil {
+		return fmt.Errorf("set minReplicas: %w", err)
+	}
+	if err := unstructured.SetNestedField(result.Object, int64(replicas), "spec", "predictor", "maxReplicas"); err != nil {
+		return fmt.Errorf("set maxReplicas: %w", err)
+	}
+
+	// Update the resource
+	_, err = dynamicClient.Resource(InferenceServiceGVR).Namespace(namespace).Update(ctx, result, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("update inferenceservice: %w", err)
+	}
+
+	return nil
+}
+
+// RestartInferenceService performs a rolling restart by updating an annotation
+func (c *Client) RestartInferenceService(ctx context.Context, name, namespace string) error {
+	dynamicClient, err := dynamic.NewForConfig(c.config)
+	if err != nil {
+		return fmt.Errorf("create dynamic client: %w", err)
+	}
+
+	if namespace == "" {
+		namespace = c.namespace
+	}
+
+	// Get current InferenceService
+	result, err := dynamicClient.Resource(InferenceServiceGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("get inferenceservice: %w", err)
+	}
+
+	// Update restart annotation to trigger rolling restart
+	annotations, _, _ := unstructured.NestedStringMap(result.Object, "metadata", "annotations")
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+	annotations["ai-aas.io/restarted-at"] = time.Now().Format(time.RFC3339)
+
+	annotationsInterface := make(map[string]interface{})
+	for k, v := range annotations {
+		annotationsInterface[k] = v
+	}
+	if err := unstructured.SetNestedMap(result.Object, annotationsInterface, "metadata", "annotations"); err != nil {
+		return fmt.Errorf("set annotations: %w", err)
+	}
+
+	// Also update pod template annotation to force pod recreation
+	podAnnotations, _, _ := unstructured.NestedStringMap(result.Object, "spec", "predictor", "model", "annotations")
+	if podAnnotations == nil {
+		podAnnotations = make(map[string]string)
+	}
+	podAnnotations["ai-aas.io/restarted-at"] = time.Now().Format(time.RFC3339)
+
+	podAnnotationsInterface := make(map[string]interface{})
+	for k, v := range podAnnotations {
+		podAnnotationsInterface[k] = v
+	}
+	// Set on predictor level for KServe
+	if err := unstructured.SetNestedField(result.Object, podAnnotationsInterface, "spec", "predictor", "annotations"); err != nil {
+		// Try without setting if path doesn't exist
+		_ = err
+	}
+
+	// Update the resource
+	_, err = dynamicClient.Resource(InferenceServiceGVR).Namespace(namespace).Update(ctx, result, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("update inferenceservice: %w", err)
+	}
+
+	return nil
 }
 

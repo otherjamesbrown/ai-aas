@@ -319,8 +319,35 @@ func GetAuthenticatedUser(ctx context.Context) *AuthenticatedUser {
 	}
 }
 
+// HasScope checks if the authenticated user has a specific scope.
+// Returns false if not authenticated or scope not found.
+func HasScope(ctx context.Context, scope string) bool {
+	session := GetSession(ctx)
+	if session == nil || session.GrantedScopes == nil {
+		return false
+	}
+	for _, s := range session.GrantedScopes {
+		if s == scope {
+			return true
+		}
+	}
+	return false
+}
+
+// HasAnyScope checks if the authenticated user has any of the specified scopes.
+// Returns false if not authenticated or no matching scope found.
+func HasAnyScope(ctx context.Context, scopes ...string) bool {
+	for _, scope := range scopes {
+		if HasScope(ctx, scope) {
+			return true
+		}
+	}
+	return false
+}
+
 // tryAPIKeyAuth attempts to authenticate using the API key from the api_keys table.
 // Returns (true, context) if authentication succeeds, (false, nil) otherwise.
+// Supports both user and service_account principal types.
 func tryAPIKeyAuth(ctx context.Context, rt *bootstrap.Runtime, token string, requestID string, logger *zap.Logger, path string) (bool, context.Context) {
 	if rt.Postgres == nil {
 		return false, nil
@@ -337,18 +364,20 @@ func tryAPIKeyAuth(ctx context.Context, rt *bootstrap.Runtime, token string, req
 		zap.String("fingerprint", fingerprint[:min(20, len(fingerprint))]+"..."))
 
 	// Look up API key in database by fingerprint
+	// Support both user and service_account principal types
 	var apiKeyID uuid.UUID
 	var orgID uuid.UUID
-	var userID uuid.UUID
+	var principalID uuid.UUID
+	var principalType string
 	var status string
 	var expiresAt *time.Time
 	var scopes []string
 
 	err := rt.Postgres.Pool().QueryRow(ctx, `
-		SELECT api_key_id, org_id, principal_id, status, expires_at, scopes
+		SELECT api_key_id, org_id, principal_id, principal_type, status, expires_at, scopes
 		FROM api_keys
-		WHERE fingerprint = $1 AND principal_type = 'user'
-	`, fingerprint).Scan(&apiKeyID, &orgID, &userID, &status, &expiresAt, &scopes)
+		WHERE fingerprint = $1 AND principal_type IN ('user', 'service_account')
+	`, fingerprint).Scan(&apiKeyID, &orgID, &principalID, &principalType, &status, &expiresAt, &scopes)
 
 	if err != nil {
 		if err.Error() != "no rows in result set" {
@@ -379,12 +408,14 @@ func tryAPIKeyAuth(ctx context.Context, rt *bootstrap.Runtime, token string, req
 	}
 
 	// Store authenticated context in request
-	ctx = context.WithValue(ctx, UserIDKey, userID)
+	// For service accounts, principalID is the service account ID
+	// For users, principalID is the user ID
+	ctx = context.WithValue(ctx, UserIDKey, principalID)
 	ctx = context.WithValue(ctx, OrgIDKey, orgID)
 
 	// Create a session for compatibility with existing code
 	session := &oauth.Session{
-		UserID:        userID.String(),
+		UserID:        principalID.String(),
 		OrgID:         orgID.String(),
 		GrantedScopes: scopes,
 	}
@@ -393,7 +424,8 @@ func tryAPIKeyAuth(ctx context.Context, rt *bootstrap.Runtime, token string, req
 	logger.Info("RequireAuth: API key authentication successful",
 		zap.String("path", path),
 		zap.String("request_id", requestID),
-		zap.String("user_id", userID.String()),
+		zap.String("principal_id", principalID.String()),
+		zap.String("principal_type", principalType),
 		zap.String("org_id", orgID.String()),
 		zap.String("api_key_id", apiKeyID.String()),
 		zap.Strings("scopes", scopes))

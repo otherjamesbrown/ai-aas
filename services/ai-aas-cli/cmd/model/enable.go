@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/api"
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/kubernetes"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/registry"
 )
@@ -46,16 +47,28 @@ Examples:
 			defer cancel()
 
 			// Get configuration
-			apiEndpoint := viper.GetString("api.endpoint")
-			apiKey := viper.GetString("api.key")
+			cfg, err := config.Load()
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
 			s3Bucket := viper.GetString("s3.bucket")
 
-			if apiEndpoint == "" {
-				return fmt.Errorf("API endpoint not configured. Run 'ai-aas-cli --init' first")
+			// Use Admin API endpoint for registry operations
+			adminEndpoint := cfg.AdminAPIEndpoint
+			if adminEndpoint == "" {
+				adminEndpoint = cfg.APIEndpoint // fallback for backward compatibility
+			}
+
+			if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
+				return fmt.Errorf("Admin API endpoint not configured. Run 'ai-aas-cli --init' first")
 			}
 
 			// Get API client
-			apiClient := api.NewClient(apiEndpoint, apiKey)
+			opts := []api.ClientOption{}
+			if cfg.TLSInsecure {
+				opts = append(opts, api.WithInsecureSkipVerify())
+			}
+			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
 			regClient := registry.NewClient(apiClient)
 
 			// Get kubeconfig for environment
@@ -97,7 +110,7 @@ Examples:
 				}
 
 				// Create InferenceService
-				cfg := kubernetes.InferenceServiceConfig{
+				isvcCfg := kubernetes.InferenceServiceConfig{
 					Name:        isvcName,
 					Namespace:   environment,
 					ModelName:   modelName,
@@ -116,7 +129,7 @@ Examples:
 					},
 				}
 
-				if err := k8sClient.CreateInferenceService(ctx, cfg); err != nil {
+				if err := k8sClient.CreateInferenceService(ctx, isvcCfg); err != nil {
 					fmt.Printf("  ERROR: %v\n", err)
 					failed = append(failed, modelName)
 					continue
@@ -275,15 +288,27 @@ Examples:
 			defer cancel()
 
 			// Get configuration
-			apiEndpoint := viper.GetString("api.endpoint")
-			apiKey := viper.GetString("api.key")
+			cfg, err := config.Load()
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
 
-			if apiEndpoint == "" {
-				return fmt.Errorf("API endpoint not configured. Run 'ai-aas-cli --init' first")
+			// Use Admin API endpoint for registry operations
+			adminEndpoint := cfg.AdminAPIEndpoint
+			if adminEndpoint == "" {
+				adminEndpoint = cfg.APIEndpoint // fallback for backward compatibility
+			}
+
+			if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
+				return fmt.Errorf("Admin API endpoint not configured. Run 'ai-aas-cli --init' first")
 			}
 
 			// Get API client
-			apiClient := api.NewClient(apiEndpoint, apiKey)
+			opts := []api.ClientOption{}
+			if cfg.TLSInsecure {
+				opts = append(opts, api.WithInsecureSkipVerify())
+			}
+			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
 			regClient := registry.NewClient(apiClient)
 
 			// List models

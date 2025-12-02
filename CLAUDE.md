@@ -8,11 +8,92 @@ For a general overview of the architecture, development workflow, and key docume
 
 After reading the main guide, adhere to the following critical rules below.
 
+## Backlog & Task Tracking
+
+**IMPORTANT**: We maintain a project backlog to track ideas, improvements, and tasks.
+
+📋 **[specs/BACKLOG.md](specs/BACKLOG.md)** - Platform backlog and scratch list
+
+**When ending a session or completing work:**
+- Ask the user: "Would you like to add anything to the backlog before we finish?"
+- If the user mentions something to do "later" or "eventually", offer to add it to the backlog
+- When discovering issues or improvement opportunities, suggest adding them to the backlog
+
+**When starting a session:**
+- If relevant to the task, check the backlog for related items
+- Offer to pick up items from the backlog if the user is looking for things to work on
+
+## CLI-First Operations
+
+**IMPORTANT**: When performing platform operations, ALWAYS prefer the CLI over direct API calls or kubectl commands.
+
+### Why CLI-First?
+
+- **Consistency**: CLI provides validated, tested workflows
+- **Documentation**: CLI `--help` shows proper usage and next steps
+- **Auditing**: CLI operations are logged consistently
+- **Error handling**: CLI provides actionable error messages
+
+### Required Approach
+
+1. **Check if CLI supports the operation** before using kubectl or API calls:
+   ```bash
+   ai-aas-cli --help                    # See all commands
+   ai-aas-cli model --help              # See model commands
+   ai-aas-cli model deploy create --help # See specific command
+   ```
+
+2. **Use CLI for these operations**:
+   - Model management: `ai-aas-cli model registry/cache/deploy/troubleshoot`
+   - Organizations: `ai-aas-cli org list/create/update/delete`
+   - Users: `ai-aas-cli user list/create/update/delete`
+   - API Keys: `ai-aas-cli apikey list/create/delete`
+   - Credentials: `ai-aas-cli credentials set/list/test`
+   - Status checks: `ai-aas-cli status`
+
+3. **If CLI doesn't support an operation**:
+   - Note this as a gap: "CLI doesn't support X - consider adding to backlog"
+   - Use the Admin API as fallback
+   - Suggest the command that should exist
+
+### Example Workflow
+
+```bash
+# CORRECT: Use CLI for model deployment
+ai-aas-cli model registry add meta-llama/Llama-2-7b-hf --name llama-7b
+ai-aas-cli model cache pull llama-7b
+ai-aas-cli model deploy create llama-7b -e development
+
+# AVOID: Direct kubectl for routine operations
+# kubectl apply -f deployment.yaml  # Only for infrastructure changes via GitOps
+```
+
 ## Core Principles
 
 In addition to the principles outlined in the main guide, always adhere to:
 
+1.  **API-First Interfaces (from Constitution)**: All functionality MUST be exposed via REST APIs first.
+    - **CLI and Web UI are thin clients** - they MUST NOT contain business logic
+    - **No direct database access** from CLI or UI - always go through the Admin API
+    - When implementing CLI commands, use the existing `internal/api` and `internal/registry` clients
+    - Example pattern:
+      ```go
+      // CORRECT: Use API client
+      apiClient := api.NewClient(cfg.APIEndpoint, cfg.APIKey, opts...)
+      regClient := registry.NewClient(apiClient)
+      model, err := regClient.Get(ctx, modelName)
+
+      // WRONG: Direct database access
+      db, err := sql.Open("postgres", cfg.DatabaseURL)
+      rows, err := db.Query("SELECT * FROM models")
+      ```
+
 2.  **GitOps-First Deployment**: ALWAYS use GitOps for infrastructure and deployment changes. Never make direct changes to Kubernetes clusters. All changes must go through: edit → commit → push → ArgoCD sync.
+
+3.  **Reuse Existing Components**: Before implementing new functionality:
+    - Check for existing clients in `internal/api`, `internal/registry`, `internal/kubernetes`
+    - Check if the Admin API already has the endpoint you need
+    - If an API endpoint is missing, add it to Admin API first, then use it from CLI
 
 ## Environment Access & Credentials
 
@@ -162,3 +243,89 @@ kubectl get deployment <name> -n <namespace> -o jsonpath='{.spec.template.spec.c
 
 - `docs/runbooks/deploy-to-environments.md`: Complete deployment runbook
 - ArgoCD endpoints: `argocd.dev.ai-aas.local`, `argocd.prod.ai-aas.local`
+
+## ArgoCD Application Requirements
+
+**CRITICAL**: All ArgoCD Applications MUST follow these standards for consistency and reliability.
+
+### Required Sync Policy
+
+Every new or modified Application MUST include these sync options:
+
+```yaml
+syncPolicy:
+  automated:
+    prune: true        # Remove resources not in Git
+    selfHeal: true     # Revert manual changes
+    allowEmpty: false  # Prevent accidental deletion
+  syncOptions:
+    - CreateNamespace=true
+    - PrunePropagationPolicy=foreground
+    - PruneLast=true
+  retry:
+    limit: 5
+    backoff:
+      duration: 5s
+      factor: 2
+      maxDuration: 3m
+```
+
+### Branch Targeting Rules
+
+- **Development apps**: ALWAYS target `develop` branch (`targetRevision: develop`)
+- **Production apps**: ALWAYS target `main` branch (`targetRevision: main`)
+- **NEVER** reference feature branches in Applications - they may be deleted
+- When creating PRs, ensure Applications don't point to the PR branch
+
+### RBAC Project Requirements
+
+Applications MUST be assigned to an AppProject with restrictive policies:
+
+- **Explicit destinations**: List specific namespaces, never use wildcard `*`
+- **Explicit sourceRepos**: Only allow specific repository URLs
+- **clusterResourceWhitelist**: Only allow required cluster-scoped resources
+- See `gitops/clusters/development/projects/platform-project.yaml` as reference
+
+### Application Template
+
+Use this template for new Applications:
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: <service-name>-<environment>
+  namespace: argocd
+  labels:
+    environment: <environment>
+    app: <service-name>
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform-<environment>
+  source:
+    repoURL: https://github.com/otherjamesbrown/ai-aas
+    targetRevision: develop  # or main for production
+    path: services/<service-name>/deployments/helm/<service-name>
+    helm:
+      valueFiles:
+        - values-<environment>.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: <namespace>
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+```

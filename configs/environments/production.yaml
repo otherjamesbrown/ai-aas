@@ -1,0 +1,90 @@
+api_version: v1
+kind: EnvironmentProfile
+metadata:
+  name: production
+  description: Production environment (to be configured)
+  extends: base
+
+# Domain Configuration - SINGLE SOURCE OF TRUTH
+# All service URLs are derived from these values
+domain:
+  # Primary public domain for this environment
+  # TODO: Update when production domain is configured
+  baseDomain: prod.otherjamesbrown.com
+  # Internal local hostname (for /etc/hosts access)
+  localDomain: prod.ai-aas.local
+  # LoadBalancer IP (from production cloud provider)
+  # TODO: Update when production cluster is provisioned
+  loadBalancerIP: ""
+  # TLS configuration
+  tls:
+    enabled: true
+    clusterIssuer: letsencrypt-prod
+
+# Service hostnames - derived from baseDomain
+services:
+  api-router:
+    subdomain: api
+  admin-api:
+    subdomain: admin-api
+  web-portal:
+    subdomain: portal
+  user-org-service:
+    subdomain: user-org
+  analytics-service:
+    subdomain: analytics
+  grafana:
+    subdomain: grafana
+  loki:
+    subdomain: loki
+  argocd:
+    subdomain: argocd
+
+# Full URLs for services
+urls:
+  api: https://api.prod.otherjamesbrown.com
+  adminApi: https://admin-api.prod.otherjamesbrown.com
+  portal: https://portal.prod.otherjamesbrown.com
+  userOrg: https://user-org.prod.otherjamesbrown.com
+  analytics: https://analytics.prod.otherjamesbrown.com
+  grafana: https://grafana.prod.otherjamesbrown.com
+  loki: https://loki.prod.otherjamesbrown.com
+  argocd: https://argocd.prod.otherjamesbrown.com
+
+# Environment variables to inject into services
+environment_variables:
+  - name: ENVIRONMENT
+    value: production
+  - name: LOG_LEVEL
+    value: info
+  - name: BASE_DOMAIN
+    value: prod.otherjamesbrown.com
+  - name: API_URL
+    value: https://api.prod.otherjamesbrown.com
+  - name: PORTAL_URL
+    value: https://portal.prod.otherjamesbrown.com
+  - name: ADMIN_API_URL
+    value: https://admin-api.prod.otherjamesbrown.com
+  - name: USER_ORG_URL
+    value: https://user-org.prod.otherjamesbrown.com
+
+# Kubernetes cluster configuration
+kubernetes:
+  context: akamai-production
+  namespace: production
+  kubeconfig: secrets/kubeconfigs/kubeconfig-production.yaml
+
+# GitOps configuration
+gitops:
+  argocd:
+    url: https://argocd.prod.otherjamesbrown.com
+    project: platform-production
+  targetRevision: main
+
+# Feature flags
+features:
+  # User-level model access control (Spec 022)
+  # When enabled, users in restricted mode can only access explicitly granted models
+  # When disabled, all users have access to all org models (legacy behavior)
+  # Start disabled in production for gradual rollout
+  user_model_access_enabled: false

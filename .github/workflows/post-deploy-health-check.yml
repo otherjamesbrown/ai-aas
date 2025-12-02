@@ -1,0 +1,217 @@
+name: Post-Deployment Health Check
+
+# Validates platform health after deployments to development environment
+# Runs automatically after pushes to develop branch and can be triggered manually
+
+on:
+  # Trigger after pushes to develop (after ArgoCD sync)
+  push:
+    branches:
+      - develop
+    paths:
+      # Only run when service or gitops files change
+      - 'services/**'
+      - 'gitops/**'
+      - 'shared/**'
+
+  # Manual trigger for any environment
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to validate'
+        required: true
+        default: 'development'
+        type: choice
+        options:
+          - development
+          - production
+
+  # Run after other workflows complete
+  workflow_run:
+    workflows: ["Service CI"]
+    types:
+      - completed
+    branches:
+      - develop
+
+jobs:
+  # Wait for ArgoCD to sync (typically 3-5 minutes)
+  wait-for-sync:
+    name: Wait for ArgoCD Sync
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_run'
+    steps:
+      - name: Wait for ArgoCD sync
+        run: |
+          echo "Waiting 3 minutes for ArgoCD to detect and sync changes..."
+          sleep 180
+
+  health-check:
+    name: Platform Health Check
+    runs-on: ubuntu-latest
+    needs: [wait-for-sync]
+    if: always() && (needs.wait-for-sync.result == 'success' || needs.wait-for-sync.result == 'skipped')
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set environment configuration
+        id: config
+        run: |
+          ENV="${{ inputs.environment || 'development' }}"
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+
+          # Domain configuration from GitHub repository variables
+          # Set these in Settings > Secrets and variables > Actions > Variables:
+          # - DEV_BASE_DOMAIN: dev.otherjamesbrown.com
+          # - PROD_BASE_DOMAIN: prod.otherjamesbrown.com
+          if [ "$ENV" = "development" ]; then
+            echo "base_domain=${{ vars.DEV_BASE_DOMAIN || 'dev.otherjamesbrown.com' }}" >> $GITHUB_OUTPUT
+          elif [ "$ENV" = "production" ]; then
+            echo "base_domain=${{ vars.PROD_BASE_DOMAIN || 'prod.otherjamesbrown.com' }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check Admin API Health
+        id: admin_api
+        run: |
+          RESPONSE=$(curl -sk -w "\n%{http_code}" \
+            "https://admin-api.${{ steps.config.outputs.base_domain }}/healthz" \
+            --max-time 30 || echo -e "\n000")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "status=healthy" >> $GITHUB_OUTPUT
+            echo "Admin API: healthy (HTTP $HTTP_CODE)"
+          else
+            echo "status=unhealthy" >> $GITHUB_OUTPUT
+            echo "Admin API: unhealthy (HTTP $HTTP_CODE)"
+          fi
+
+      - name: Check API Router Health
+        id: api_router
+        run: |
+          RESPONSE=$(curl -sk -w "\n%{http_code}" \
+            "https://api.${{ steps.config.outputs.base_domain }}/v1/status/healthz" \
+            --max-time 30 || echo -e "\n000")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "status=healthy" >> $GITHUB_OUTPUT
+            echo "API Router: healthy (HTTP $HTTP_CODE)"
+          else
+            echo "status=unhealthy" >> $GITHUB_OUTPUT
+            echo "API Router: unhealthy (HTTP $HTTP_CODE)"
+          fi
+
+      - name: Check User-Org Service Health
+        id: user_org
+        run: |
+          RESPONSE=$(curl -sk -w "\n%{http_code}" \
+            "https://user-org.${{ steps.config.outputs.base_domain }}/healthz" \
+            --max-time 30 || echo -e "\n000")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "status=healthy" >> $GITHUB_OUTPUT
+            echo "User-Org Service: healthy (HTTP $HTTP_CODE)"
+          else
+            echo "status=unhealthy" >> $GITHUB_OUTPUT
+            echo "User-Org Service: unhealthy (HTTP $HTTP_CODE)"
+          fi
+
+      - name: Check Web Portal Health
+        id: web_portal
+        run: |
+          RESPONSE=$(curl -sk -w "\n%{http_code}" \
+            "https://portal.${{ steps.config.outputs.base_domain }}/" \
+            --max-time 30 || echo -e "\n000")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "status=healthy" >> $GITHUB_OUTPUT
+            echo "Web Portal: healthy (HTTP $HTTP_CODE)"
+          else
+            echo "status=unhealthy" >> $GITHUB_OUTPUT
+            echo "Web Portal: unhealthy (HTTP $HTTP_CODE)"
+          fi
+
+      - name: Check Analytics Service Health
+        id: analytics
+        run: |
+          RESPONSE=$(curl -sk -w "\n%{http_code}" \
+            "https://analytics.${{ steps.config.outputs.base_domain }}/analytics/v1/status/healthz" \
+            --max-time 30 || echo -e "\n000")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "status=healthy" >> $GITHUB_OUTPUT
+            echo "Analytics: healthy (HTTP $HTTP_CODE)"
+          else
+            echo "status=unhealthy" >> $GITHUB_OUTPUT
+            echo "Analytics: unhealthy (HTTP $HTTP_CODE)"
+          fi
+
+      - name: Check Grafana Health
+        id: grafana
+        run: |
+          RESPONSE=$(curl -sk -w "\n%{http_code}" \
+            "https://grafana.${{ steps.config.outputs.base_domain }}/api/health" \
+            --max-time 30 || echo -e "\n000")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "status=healthy" >> $GITHUB_OUTPUT
+            echo "Grafana: healthy (HTTP $HTTP_CODE)"
+          else
+            echo "status=unhealthy" >> $GITHUB_OUTPUT
+            echo "Grafana: unhealthy (HTTP $HTTP_CODE)"
+          fi
+
+      - name: Check ArgoCD Health
+        id: argocd
+        run: |
+          RESPONSE=$(curl -sk -w "\n%{http_code}" \
+            "https://argocd.${{ steps.config.outputs.base_domain }}/healthz" \
+            --max-time 30 || echo -e "\n000")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "status=healthy" >> $GITHUB_OUTPUT
+            echo "ArgoCD: healthy (HTTP $HTTP_CODE)"
+          else
+            echo "status=unhealthy" >> $GITHUB_OUTPUT
+            echo "ArgoCD: unhealthy (HTTP $HTTP_CODE)"
+          fi
+
+      - name: Generate Health Report
+        if: always()
+        run: |
+          echo "## Platform Health Check Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ steps.config.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "**Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Admin API | ${{ steps.admin_api.outputs.status == 'healthy' && '✅ Healthy' || '❌ Unhealthy' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| API Router | ${{ steps.api_router.outputs.status == 'healthy' && '✅ Healthy' || '❌ Unhealthy' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| User-Org Service | ${{ steps.user_org.outputs.status == 'healthy' && '✅ Healthy' || '❌ Unhealthy' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Web Portal | ${{ steps.web_portal.outputs.status == 'healthy' && '✅ Healthy' || '❌ Unhealthy' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Analytics | ${{ steps.analytics.outputs.status == 'healthy' && '✅ Healthy' || '❌ Unhealthy' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Grafana | ${{ steps.grafana.outputs.status == 'healthy' && '✅ Healthy' || '❌ Unhealthy' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ArgoCD | ${{ steps.argocd.outputs.status == 'healthy' && '✅ Healthy' || '❌ Unhealthy' }} |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Evaluate Overall Health
+        run: |
+          # Core services that must be healthy
+          CORE_SERVICES="${{ steps.admin_api.outputs.status }},${{ steps.api_router.outputs.status }},${{ steps.user_org.outputs.status }}"
+
+          if echo "$CORE_SERVICES" | grep -q "unhealthy"; then
+            echo "❌ Core services are unhealthy - deployment may have issues"
+            exit 1
+          fi
+
+          echo "✅ All core services are healthy"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Post-deployment health check failed for ${{ steps.config.outputs.environment }}"
+          echo "Check the health report above for details on which services are unhealthy."
+          # Future: Add Slack/PagerDuty notification here

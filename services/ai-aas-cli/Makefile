@@ -28,6 +28,7 @@ build: ## Build the CLI binary
 	@echo "Building $(BINARY_NAME)..."
 	@mkdir -p $(BINARY_DIR)
 	$(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(BINARY_NAME) .
+	@chmod +x $(BINARY_DIR)/$(BINARY_NAME)
 
 build-all: ## Cross-compile for all platforms
 	@echo "Building for all platforms..."
@@ -39,6 +40,7 @@ build-all: ## Cross-compile for all platforms
 		if [ "$$GOOS" = "windows" ]; then OUTPUT="$$OUTPUT.exe"; fi; \
 		echo "Building $$OUTPUT..."; \
 		GOOS=$$GOOS GOARCH=$$GOARCH $(GOBUILD) $(LDFLAGS) -o $$OUTPUT . ; \
+		if [ "$$GOOS" != "windows" ]; then chmod +x $$OUTPUT; fi; \
 	done
 
 install: build ## Install CLI to GOPATH/bin
@@ -62,9 +64,10 @@ test-integration: ## Run integration tests
 	@echo "Running integration tests..."
 	$(GOTEST) -v ./tests/integration/...
 
-test-e2e: ## Run end-to-end tests
+test-e2e: build ## Run end-to-end tests (requires dev environment)
 	@echo "Running E2E tests..."
-	$(GOTEST) -v ./tests/e2e/...
+	@echo "NOTE: Requires development environment. Run: source tests/e2e/env.sh"
+	AI_AAS_CLI_PATH=$(BINARY_DIR)/$(BINARY_NAME) $(GOTEST) -v -tags=e2e ./tests/e2e/...
 
 coverage: ## Run tests with coverage
 	@echo "Running tests with coverage..."

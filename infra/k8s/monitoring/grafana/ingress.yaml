@@ -1,9 +1,16 @@
 # Grafana Ingress
 # Exposes Grafana dashboard via HTTPS
 #
-# Access URLs:
+# Domain Configuration:
+# ---------------------
+# This file uses environment-specific domain values. When creating for a new environment:
+# 1. Reference configs/environments/{env}.yaml for the correct baseDomain
+# 2. Replace "dev.otherjamesbrown.com" with the environment's baseDomain
+# 3. Replace "dev.ai-aas.local" with the environment's localDomain
+#
+# Access URLs (Development):
 # - Hostname: https://grafana.dev.ai-aas.local (requires /etc/hosts entry)
-# - IP-based: https://grafana.172.232.58.222.nip.io (works without DNS)
+# - Public DNS: https://grafana.dev.otherjamesbrown.com
 #
 # Default credentials: admin / admin
 apiVersion: networking.k8s.io/v1
@@ -16,6 +23,7 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: nginx
   rules:
@@ -29,7 +37,7 @@ spec:
                 name: grafana
                 port:
                   number: 3000
-    - host: grafana.172.232.58.222.nip.io
+    - host: grafana.dev.otherjamesbrown.com
       http:
         paths:
           - path: /
@@ -40,7 +48,6 @@ spec:
                 port:
                   number: 3000
   tls:
-    - secretName: ai-aas-tls
+    - secretName: grafana-tls
       hosts:
-        - grafana.dev.ai-aas.local
-        - grafana.172.232.58.222.nip.io
+        - grafana.dev.otherjamesbrown.com

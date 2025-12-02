@@ -114,3 +114,122 @@ type CredentialTestResult struct {
 	AccountInfo map[string]interface{} `json:"account_info,omitempty"`
 }
 
+// Deployment represents a model deployment in an environment
+type Deployment struct {
+	ID                   string     `json:"id"`
+	ModelID              string     `json:"model_id"`
+	ModelName            string     `json:"model_name,omitempty"`
+	CacheID              string     `json:"cache_id,omitempty"`
+	Environment          string     `json:"environment"`
+	Namespace            string     `json:"namespace"`
+	InferenceServiceName string     `json:"inferenceservice_name,omitempty"`
+	Endpoint             string     `json:"endpoint,omitempty"`
+	Enabled              bool       `json:"enabled"`
+	Status               string     `json:"status"`
+	ReplicasDesired      int        `json:"replicas_desired"`
+	ReplicasReady        int        `json:"replicas_ready"`
+	GPUCount             int        `json:"gpu_count"`
+	MemoryGB             int        `json:"memory_gb,omitempty"`
+	LastHealthCheckAt    *time.Time `json:"last_health_check_at,omitempty"`
+	LastHealthStatus     string     `json:"last_health_status,omitempty"`
+	LastEnabledAt        *time.Time `json:"last_enabled_at,omitempty"`
+	LastEnabledBy        string     `json:"last_enabled_by,omitempty"`
+	LastDisabledAt       *time.Time `json:"last_disabled_at,omitempty"`
+	LastDisabledBy       string     `json:"last_disabled_by,omitempty"`
+	CreatedAt            time.Time  `json:"created_at"`
+	UpdatedAt            time.Time  `json:"updated_at"`
+}
+
+// ListDeploymentsOptions represents query options for listing deployments
+type ListDeploymentsOptions struct {
+	Environment string
+	ModelName   string
+	Status      string
+	Enabled     *bool
+}
+
+// CreateDeploymentRequest represents a request to create a deployment
+type CreateDeploymentRequest struct {
+	ModelName   string `json:"model_name"`
+	CacheID     string `json:"cache_id,omitempty"`
+	Environment string `json:"environment"`
+	Namespace   string `json:"namespace,omitempty"`
+	GPUCount    int    `json:"gpu_count,omitempty"`
+	MemoryGB    int    `json:"memory_gb,omitempty"`
+	Replicas    int    `json:"replicas,omitempty"`
+}
+
+// ScaleDeploymentRequest represents a request to scale a deployment
+type ScaleDeploymentRequest struct {
+	Replicas int  `json:"replicas"`
+	GPUCount *int `json:"gpu_count,omitempty"`
+	MemoryGB *int `json:"memory_gb,omitempty"`
+}
+
+// EnableDisableRequest represents a request to enable/disable a deployment
+type EnableDisableRequest struct {
+	By string `json:"by,omitempty"`
+}
+
+// ValidationResult represents a single validation check result
+type ValidationResult struct {
+	ID             string    `json:"id"`
+	ModelID        string    `json:"model_id"`
+	Environment    string    `json:"environment,omitempty"`
+	ValidationType string    `json:"validation_type"`
+	CheckName      string    `json:"check_name"`
+	Status         string    `json:"status"`
+	Message        string    `json:"message"`
+	Remediation    string    `json:"remediation,omitempty"`
+	ValidatedAt    time.Time `json:"validated_at"`
+}
+
+// ValidateModelRequest contains options for model validation
+type ValidateModelRequest struct {
+	Environment string   `json:"environment,omitempty"`
+	Layers      []string `json:"layers,omitempty"`
+}
+
+// StateHistoryEntry represents an audit entry for state changes
+type StateHistoryEntry struct {
+	ID           string     `json:"id"`
+	DeploymentID string     `json:"deployment_id"`
+	ModelName    string     `json:"model_name,omitempty"`
+	Environment  string     `json:"environment,omitempty"`
+	Action       string     `json:"action"`
+	PerformedBy  string     `json:"performed_by,omitempty"`
+	Reason       string     `json:"reason,omitempty"`
+	ScheduledAt  *time.Time `json:"scheduled_at,omitempty"`
+	ExecutedAt   time.Time  `json:"executed_at"`
+}
+
+// StateChangeRequest represents a request to enable/disable with reason
+type StateChangeRequest struct {
+	By     string `json:"by,omitempty"`
+	Reason string `json:"reason,omitempty"`
+}
+
+// Alias represents a model alias
+type Alias struct {
+	ID          string    `json:"id"`
+	AliasName   string    `json:"alias_name"`
+	ModelID     string    `json:"model_id"`
+	ModelName   string    `json:"model_name"`
+	Description string    `json:"description,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// CreateAliasRequest represents a request to create an alias
+type CreateAliasRequest struct {
+	AliasName   string `json:"alias_name"`
+	ModelName   string `json:"model_name"`
+	Description string `json:"description,omitempty"`
+}
+
+// UpdateAliasRequest represents a request to update an alias
+type UpdateAliasRequest struct {
+	ModelName   *string `json:"model_name,omitempty"`
+	Description *string `json:"description,omitempty"`
+}
+

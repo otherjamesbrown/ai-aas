@@ -20,7 +20,6 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/client/userorg"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/errors"
-	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/health"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
 )
 
@@ -29,13 +28,43 @@ func UserCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "user",
 		Short: "Manage users",
-		Long:  "Manage users: list, create, update, delete",
+		Long: `Manage users within organizations.
+
+Users are members of organizations who can access models and platform features
+based on their assigned roles and model access permissions.
+
+Examples:
+  # List users in an organization
+  ai-aas-cli user list --org-id acme
+
+  # Invite a new user
+  ai-aas-cli user create --org-id acme --email user@example.com
+
+  # Update user status
+  ai-aas-cli user update --org-id acme --email user@example.com --status suspended
+
+  # Delete a user
+  ai-aas-cli user delete --org-id acme --email user@example.com --confirm
+
+  # Manage model access for a user
+  ai-aas-cli user model-access get --org-id acme --email user@example.com
+
+Workflow:
+  1. Create org        ai-aas-cli org create --name <name> --slug <slug>
+  2. Add users         ai-aas-cli user create --org-id <org> --email <email>
+  3. Create API key    ai-aas-cli apikey create --org-id <org> --name <key-name>
+
+See Also:
+  ai-aas-cli org list             List organizations
+  ai-aas-cli apikey list          List API keys for user
+  ai-aas-cli user model-access    Manage user model access`,
 	}
 
 	cmd.AddCommand(userListCommand())
 	cmd.AddCommand(userCreateCommand())
 	cmd.AddCommand(userUpdateCommand())
 	cmd.AddCommand(userDeleteCommand())
+	cmd.AddCommand(ModelAccessCommand())
 
 	return cmd
 }
@@ -51,7 +80,23 @@ func userListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List users",
-		Long:  "List users in an organization with structured output (table, json, csv)",
+		Long: `List all users in an organization.
+
+Output includes user ID, email, display name, status, and MFA enrollment.
+
+Examples:
+  # List users in table format (default)
+  ai-aas-cli user list --org-id acme
+
+  # List in JSON format
+  ai-aas-cli user list --org-id acme --format json
+
+  # List in CSV format for export
+  ai-aas-cli user list --org-id acme --format csv > users.csv
+
+See Also:
+  ai-aas-cli user create     Add a new user
+  ai-aas-cli apikey list     List API keys for organization`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runUserList(cmd, args, flagOrgID, flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey)
 		},
@@ -104,16 +149,26 @@ func runUserList(cmd *cobra.Command, args []string, flagOrgID, flagFormat string
 		)
 	}
 
-	// Validate required fields
-	if flagOrgID == "" {
+	// Use default org if not specified
+	orgID := flagOrgID
+	if orgID == "" {
+		orgID = cfg.DefaultOrgID
+	}
+	if orgID == "" {
 		return errors.NewValidationError(
 			"--org-id is required",
-			"Provide organization ID or slug with --org-id flag",
+			"Provide organization ID or slug with --org-id flag, or set a default with 'ai-aas-cli org use <org-id>'",
 		)
 	}
 
+	// Create HTTP client with TLS config (reused for all operations)
+	httpClient, err := createHTTPClient(cfg)
+	if err != nil {
+		return errors.NewOperationError(fmt.Sprintf("create http client: %v", err), "Check TLS configuration")
+	}
+
 	// Health check
-	checker := health.NewChecker(5 * time.Second)
+	checker := createHealthCheckerWithHTTPClient(httpClient)
 	requiredServices := map[string]string{
 		"user-org-service": cfg.UserOrgEndpoint,
 	}
@@ -122,8 +177,8 @@ func runUserList(cmd *cobra.Command, args []string, flagOrgID, flagFormat string
 	}
 
 	// Create client and list users
-	userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
-	users, err := userOrgClient.ListUsers(cmd.Context(), flagOrgID)
+	userOrgClient := createUserOrgClientWithHTTPClient(cfg, httpClient)
+	users, err := userOrgClient.ListUsers(cmd.Context(), orgID)
 	if err != nil {
 		return errors.NewOperationError(
 			fmt.Sprintf("failed to list users: %v", err),
@@ -135,7 +190,7 @@ func runUserList(cmd *cobra.Command, args []string, flagOrgID, flagFormat string
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
 		Type:        "user_list",
-		Command:     fmt.Sprintf("user list --org-id=%s", flagOrgID),
+		Command:     fmt.Sprintf("user list --org-id=%s", orgID),
 		Outcome:     "success",
 		Duration:    time.Since(startTime),
 	})
@@ -201,7 +256,35 @@ func userCreateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create user",
-		Long:  "Create (invite) a user with idempotent support (--upsert flag)",
+		Long: `Invite a new user to an organization.
+
+An invitation email will be sent to the user. The invite expires after 72 hours
+by default, but can be customized with --expires-in-hours.
+
+Examples:
+  # Invite a user
+  ai-aas-cli user create --org-id acme --email user@example.com
+
+  # Invite with specific roles
+  ai-aas-cli user create --org-id acme --email admin@example.com \
+    --roles admin,developer
+
+  # Invite with custom expiration
+  ai-aas-cli user create --org-id acme --email user@example.com \
+    --expires-in-hours 168
+
+  # Idempotent create (won't fail if user exists)
+  ai-aas-cli user create --org-id acme --email user@example.com --upsert
+
+Next Steps:
+  After inviting a user:
+  1. User accepts invite via email link
+  2. Optionally assign more roles
+  3. Create API keys for the user
+
+See Also:
+  ai-aas-cli user list       List organization users
+  ai-aas-cli apikey create   Create API key for user`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runUserCreate(cmd, args, flagOrgID, flagEmail, flagRoles, flagExpiresInHours, flagUpsert,
 				flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey)
@@ -260,11 +343,15 @@ func runUserCreate(cmd *cobra.Command, args []string, flagOrgID, flagEmail strin
 		)
 	}
 
-	// Validate required fields
-	if flagOrgID == "" {
+	// Use default org if not specified
+	orgID := flagOrgID
+	if orgID == "" {
+		orgID = cfg.DefaultOrgID
+	}
+	if orgID == "" {
 		return errors.NewValidationError(
 			"--org-id is required",
-			"Provide organization ID or slug with --org-id flag",
+			"Provide organization ID or slug with --org-id flag, or set a default with 'ai-aas-cli org use <org-id>'",
 		)
 	}
 	if flagEmail == "" {
@@ -274,8 +361,14 @@ func runUserCreate(cmd *cobra.Command, args []string, flagOrgID, flagEmail strin
 		)
 	}
 
+	// Create HTTP client with TLS config (reused for all operations)
+	httpClient, err := createHTTPClient(cfg)
+	if err != nil {
+		return errors.NewOperationError(fmt.Sprintf("create http client: %v", err), "Check TLS configuration")
+	}
+
 	// Health check
-	checker := health.NewChecker(5 * time.Second)
+	checker := createHealthCheckerWithHTTPClient(httpClient)
 	requiredServices := map[string]string{
 		"user-org-service": cfg.UserOrgEndpoint,
 	}
@@ -284,10 +377,10 @@ func runUserCreate(cmd *cobra.Command, args []string, flagOrgID, flagEmail strin
 	}
 
 	// Check if user exists (for upsert)
-	userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
+	userOrgClient := createUserOrgClientWithHTTPClient(cfg, httpClient)
 	var user *userorg.UserResponse
 	if flagUpsert {
-		existingUser, err := userOrgClient.GetUserByEmail(cmd.Context(), flagOrgID, flagEmail)
+		existingUser, err := userOrgClient.GetUserByEmail(cmd.Context(), orgID, flagEmail)
 		if err == nil {
 			// User exists, return existing user
 			user = existingUser
@@ -307,7 +400,7 @@ func runUserCreate(cmd *cobra.Command, args []string, flagOrgID, flagEmail strin
 			ExpiresInHours: flagExpiresInHours,
 		}
 
-		invitedUser, err := userOrgClient.InviteUser(cmd.Context(), flagOrgID, req)
+		invitedUser, err := userOrgClient.InviteUser(cmd.Context(), orgID, req)
 		if err != nil {
 			return errors.NewOperationError(
 				fmt.Sprintf("failed to invite user: %v", err),
@@ -321,9 +414,9 @@ func runUserCreate(cmd *cobra.Command, args []string, flagOrgID, flagEmail strin
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
 		Type:        "user_create",
-		Command:     fmt.Sprintf("user create --org-id=%s --email=%s", flagOrgID, flagEmail),
+		Command:     fmt.Sprintf("user create --org-id=%s --email=%s", orgID, flagEmail),
 		Parameters: map[string]interface{}{
-			"orgId":  flagOrgID,
+			"orgId":  orgID,
 			"email":  flagEmail,
 			"userId": user.UserID,
 			"upsert": flagUpsert,
@@ -396,7 +489,25 @@ func userUpdateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "Update user",
-		Long:  "Update a user's display name, status, or metadata",
+		Long: `Update a user's settings.
+
+You can identify the user by --user-id or --email. Update display name or status.
+
+Examples:
+  # Update display name
+  ai-aas-cli user update --org-id acme --email user@example.com \
+    --display-name "Jane Doe"
+
+  # Suspend a user
+  ai-aas-cli user update --org-id acme --email user@example.com \
+    --status suspended
+
+  # Reactivate a user
+  ai-aas-cli user update --org-id acme --user-id u_123 --status active
+
+See Also:
+  ai-aas-cli user list      List organization users
+  ai-aas-cli user delete    Remove a user`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runUserUpdate(cmd, args, flagOrgID, flagUserID, flagEmail, flagDisplayName, flagStatus,
 				flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey)
@@ -455,13 +566,34 @@ func runUserUpdate(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 		)
 	}
 
-	// Validate required fields
-	if flagOrgID == "" {
+	// Use default org if not specified
+	orgID := flagOrgID
+	if orgID == "" {
+		orgID = cfg.DefaultOrgID
+	}
+	if orgID == "" {
 		return errors.NewValidationError(
 			"--org-id is required",
-			"Provide organization ID or slug with --org-id flag",
+			"Provide organization ID or slug with --org-id flag, or set a default with 'ai-aas-cli org use <org-id>'",
 		)
 	}
+
+	// Create HTTP client with TLS config (reused for all operations)
+	httpClient, err := createHTTPClient(cfg)
+	if err != nil {
+		return errors.NewOperationError(fmt.Sprintf("create http client: %v", err), "Check TLS configuration")
+	}
+
+	// Health check
+	checker := createHealthCheckerWithHTTPClient(httpClient)
+	requiredServices := map[string]string{
+		"user-org-service": cfg.UserOrgEndpoint,
+	}
+	if _, err := checker.CheckRequired(cmd.Context(), requiredServices); err != nil {
+		return errors.NewServiceUnavailableError("user-org-service", cfg.UserOrgEndpoint)
+	}
+
+	userOrgClient := createUserOrgClientWithHTTPClient(cfg, httpClient)
 
 	// Resolve user ID
 	resolvedUserID := flagUserID
@@ -474,8 +606,7 @@ func runUserUpdate(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 		}
 
 		// Get user by email
-		userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
-		user, err := userOrgClient.GetUserByEmail(cmd.Context(), flagOrgID, flagEmail)
+		user, err := userOrgClient.GetUserByEmail(cmd.Context(), orgID, flagEmail)
 		if err != nil {
 			return errors.NewOperationError(
 				fmt.Sprintf("failed to find user by email: %v", err),
@@ -502,18 +633,8 @@ func runUserUpdate(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 		)
 	}
 
-	// Health check
-	checker := health.NewChecker(5 * time.Second)
-	requiredServices := map[string]string{
-		"user-org-service": cfg.UserOrgEndpoint,
-	}
-	if _, err := checker.CheckRequired(cmd.Context(), requiredServices); err != nil {
-		return errors.NewServiceUnavailableError("user-org-service", cfg.UserOrgEndpoint)
-	}
-
 	// Execute update
-	userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
-	user, err := userOrgClient.UpdateUser(cmd.Context(), flagOrgID, resolvedUserID, req)
+	user, err := userOrgClient.UpdateUser(cmd.Context(), orgID, resolvedUserID, req)
 	if err != nil {
 		return errors.NewOperationError(
 			fmt.Sprintf("failed to update user: %v", err),
@@ -525,9 +646,9 @@ func runUserUpdate(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
 		Type:        "user_update",
-		Command:     fmt.Sprintf("user update --org-id=%s --user-id=%s", flagOrgID, resolvedUserID),
+		Command:     fmt.Sprintf("user update --org-id=%s --user-id=%s", orgID, resolvedUserID),
 		Parameters: map[string]interface{}{
-			"orgId":  flagOrgID,
+			"orgId":  orgID,
 			"userId": resolvedUserID,
 			"request": req,
 		},
@@ -595,7 +716,30 @@ func userDeleteCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete",
 		Short: "Delete user",
-		Long:  "Delete a user with confirmation and force flags",
+		Long: `Delete a user from an organization.
+
+This is a destructive operation that cannot be undone. The user's access will
+be immediately revoked.
+
+Examples:
+  # Delete by email with confirmation
+  ai-aas-cli user delete --org-id acme --email user@example.com --confirm
+
+  # Delete by user ID
+  ai-aas-cli user delete --org-id acme --user-id u_123 --confirm
+
+  # Force delete (for scripts)
+  ai-aas-cli user delete --org-id acme --email user@example.com --force
+
+Warning:
+  Deleting a user will also revoke:
+  - All API keys owned by the user
+  - All active sessions
+  - Access to all organization resources
+
+See Also:
+  ai-aas-cli user update    Suspend instead of delete
+  ai-aas-cli user list      List organization users`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runUserDelete(cmd, args, flagOrgID, flagUserID, flagEmail, flagConfirm, flagForce,
 				flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey)
@@ -654,13 +798,34 @@ func runUserDelete(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 		)
 	}
 
-	// Validate required fields
-	if flagOrgID == "" {
+	// Use default org if not specified
+	orgID := flagOrgID
+	if orgID == "" {
+		orgID = cfg.DefaultOrgID
+	}
+	if orgID == "" {
 		return errors.NewValidationError(
 			"--org-id is required",
-			"Provide organization ID or slug with --org-id flag",
+			"Provide organization ID or slug with --org-id flag, or set a default with 'ai-aas-cli org use <org-id>'",
 		)
 	}
+
+	// Create HTTP client with TLS config (reused for all operations)
+	httpClient, err := createHTTPClient(cfg)
+	if err != nil {
+		return errors.NewOperationError(fmt.Sprintf("create http client: %v", err), "Check TLS configuration")
+	}
+
+	// Health check
+	checker := createHealthCheckerWithHTTPClient(httpClient)
+	requiredServices := map[string]string{
+		"user-org-service": cfg.UserOrgEndpoint,
+	}
+	if _, err := checker.CheckRequired(cmd.Context(), requiredServices); err != nil {
+		return errors.NewServiceUnavailableError("user-org-service", cfg.UserOrgEndpoint)
+	}
+
+	userOrgClient := createUserOrgClientWithHTTPClient(cfg, httpClient)
 
 	// Resolve user ID
 	resolvedUserID := flagUserID
@@ -673,8 +838,7 @@ func runUserDelete(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 		}
 
 		// Get user by email
-		userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
-		user, err := userOrgClient.GetUserByEmail(cmd.Context(), flagOrgID, flagEmail)
+		user, err := userOrgClient.GetUserByEmail(cmd.Context(), orgID, flagEmail)
 		if err != nil {
 			return errors.NewOperationError(
 				fmt.Sprintf("failed to find user by email: %v", err),
@@ -692,19 +856,9 @@ func runUserDelete(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 		)
 	}
 
-	// Health check
-	checker := health.NewChecker(5 * time.Second)
-	requiredServices := map[string]string{
-		"user-org-service": cfg.UserOrgEndpoint,
-	}
-	if _, err := checker.CheckRequired(cmd.Context(), requiredServices); err != nil {
-		return errors.NewServiceUnavailableError("user-org-service", cfg.UserOrgEndpoint)
-	}
-
 	// Get user details for confirmation display
-	userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
 	var userName string
-	user, err := userOrgClient.GetUser(cmd.Context(), flagOrgID, resolvedUserID)
+	user, err := userOrgClient.GetUser(cmd.Context(), orgID, resolvedUserID)
 	if err == nil {
 		userName = user.Email
 	}
@@ -719,7 +873,7 @@ func runUserDelete(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 	}
 
 	// Execute delete
-	if err := userOrgClient.DeleteUser(cmd.Context(), flagOrgID, resolvedUserID); err != nil {
+	if err := userOrgClient.DeleteUser(cmd.Context(), orgID, resolvedUserID); err != nil {
 		return errors.NewOperationError(
 			fmt.Sprintf("failed to delete user: %v", err),
 			"Verify your API key is valid and the user exists.",
@@ -730,9 +884,9 @@ func runUserDelete(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
 		Type:        "user_delete",
-		Command:     fmt.Sprintf("user delete --org-id=%s --user-id=%s --confirm", flagOrgID, resolvedUserID),
+		Command:     fmt.Sprintf("user delete --org-id=%s --user-id=%s --confirm", orgID, resolvedUserID),
 		Parameters: map[string]interface{}{
-			"orgId":  flagOrgID,
+			"orgId":  orgID,
 			"userId": resolvedUserID,
 		},
 		Outcome:  "success",

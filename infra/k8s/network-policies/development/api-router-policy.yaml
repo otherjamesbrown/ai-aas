@@ -78,7 +78,7 @@ spec:
       ports:
         - protocol: TCP
           port: 6379
-    # Allow to vLLM backends in system namespace
+    # Allow to vLLM backends in system namespace (legacy)
     - to:
         - namespaceSelector:
             matchLabels:
@@ -86,6 +86,17 @@ spec:
       ports:
         - protocol: TCP
           port: 8000
+    # Allow to ALL KServe InferenceServices in development namespace
+    # Uses port 8012 (queue-proxy) on -private services for direct pod access
+    # Uses matchExpressions with Exists operator to match any InferenceService
+    - to:
+        - podSelector:
+            matchExpressions:
+              - key: serving.kserve.io/inferenceservice
+                operator: Exists
+      ports:
+        - protocol: TCP
+          port: 8012
     # Allow to OTEL collector
     - to:
         - namespaceSelector:

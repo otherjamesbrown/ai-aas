@@ -1,0 +1,103 @@
+api_version: v1
+kind: EnvironmentProfile
+metadata:
+  name: development
+  description: Cloud development environment (Akamai/Linode Kubernetes cluster)
+  extends: base
+
+# Domain Configuration - SINGLE SOURCE OF TRUTH
+# All service URLs are derived from these values
+domain:
+  # Primary public domain for this environment
+  baseDomain: dev.otherjamesbrown.com
+  # Internal local hostname (for /etc/hosts access)
+  localDomain: dev.ai-aas.local
+  # LoadBalancer IP (from Akamai cloud)
+  loadBalancerIP: "172.232.58.222"
+  # TLS configuration
+  tls:
+    enabled: true
+    clusterIssuer: letsencrypt-prod
+    # Only public domains get Let's Encrypt certs
+    # Local domains use the same cert (browser warning acceptable for local dev)
+
+# Service hostnames - derived from baseDomain
+# Format: {service}.{baseDomain}
+services:
+  api-router:
+    subdomain: api
+    # Results in: api.dev.otherjamesbrown.com
+  admin-api:
+    subdomain: admin-api
+    # Results in: admin-api.dev.otherjamesbrown.com
+  web-portal:
+    subdomain: portal
+    # Results in: portal.dev.otherjamesbrown.com
+  user-org-service:
+    subdomain: user-org
+    # Results in: user-org.dev.otherjamesbrown.com
+  analytics-service:
+    subdomain: analytics
+    # Results in: analytics.dev.otherjamesbrown.com
+  grafana:
+    subdomain: grafana
+    # Results in: grafana.dev.otherjamesbrown.com
+  loki:
+    subdomain: loki
+    # Results in: loki.dev.otherjamesbrown.com
+  argocd:
+    subdomain: argocd
+    # Results in: argocd.dev.otherjamesbrown.com
+  etcd:
+    subdomain: etcd
+    # Results in: etcd.dev.otherjamesbrown.com
+
+# Full URLs for services (computed from domain.baseDomain)
+# These are the canonical URLs to use everywhere
+urls:
+  api: https://api.dev.otherjamesbrown.com
+  adminApi: https://admin-api.dev.otherjamesbrown.com
+  portal: https://portal.dev.otherjamesbrown.com
+  userOrg: https://user-org.dev.otherjamesbrown.com
+  analytics: https://analytics.dev.otherjamesbrown.com
+  grafana: https://grafana.dev.otherjamesbrown.com
+  loki: https://loki.dev.otherjamesbrown.com
+  argocd: https://argocd.dev.otherjamesbrown.com
+  etcd: https://etcd.dev.otherjamesbrown.com
+
+# Environment variables to inject into services
+environment_variables:
+  - name: ENVIRONMENT
+    value: development
+  - name: LOG_LEVEL
+    value: debug
+  - name: BASE_DOMAIN
+    value: dev.otherjamesbrown.com
+  - name: API_URL
+    value: https://api.dev.otherjamesbrown.com
+  - name: PORTAL_URL
+    value: https://portal.dev.otherjamesbrown.com
+  - name: ADMIN_API_URL
+    value: https://admin-api.dev.otherjamesbrown.com
+  - name: USER_ORG_URL
+    value: https://user-org.dev.otherjamesbrown.com
+
+# Kubernetes cluster configuration
+kubernetes:
+  context: akamai-development
+  namespace: development
+  kubeconfig: secrets/kubeconfigs/kubeconfig-development.yaml
+
+# GitOps configuration
+gitops:
+  argocd:
+    url: https://argocd.dev.otherjamesbrown.com
+    project: platform-development
+  targetRevision: develop
+
+# Feature flags
+features:
+  # User-level model access control (Spec 022)
+  # When enabled, users in restricted mode can only access explicitly granted models
+  # When disabled, all users have access to all org models (legacy behavior)
+  user_model_access_enabled: true

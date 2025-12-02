@@ -3,7 +3,7 @@
 #
 # Access URLs:
 # - Hostname: https://etcd.dev.ai-aas.local (requires /etc/hosts entry)
-# - IP-based: https://etcd.172.232.58.222.nip.io (works without DNS)
+# - Public DNS: https://etcd.dev.otherjamesbrown.com
 #
 # Apply with: kubectl apply -f infra/k8s/development/ingress/etcd-ingress.yaml
 apiVersion: networking.k8s.io/v1
@@ -14,6 +14,7 @@ metadata:
   annotations:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: nginx
   rules:
@@ -27,7 +28,7 @@ spec:
             name: etcd-service
             port:
               number: 2379
-  - host: etcd.172.232.58.222.nip.io
+  - host: etcd.dev.otherjamesbrown.com
     http:
       paths:
       - path: /
@@ -38,7 +39,6 @@ spec:
             port:
               number: 2379
   tls:
-  - secretName: ai-aas-tls
+  - secretName: etcd-tls
     hosts:
-    - etcd.dev.ai-aas.local
-    - etcd.172.232.58.222.nip.io
+    - etcd.dev.otherjamesbrown.com

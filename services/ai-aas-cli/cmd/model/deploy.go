@@ -11,9 +11,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/api"
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/kubernetes"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/registry"
@@ -61,19 +61,30 @@ Examples:
 			modelName := args[0]
 
 			// Get configuration
-			apiEndpoint := viper.GetString("api.endpoint")
-			apiKey := viper.GetString("api.key")
+			cfg, err := config.Load()
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
 			s3Bucket := viper.GetString("s3.bucket")
 
-			if apiEndpoint == "" {
+			if cfg.APIEndpoint == "" || cfg.APIEndpoint == "http://localhost:8080" {
 				return fmt.Errorf("API endpoint not configured. Run 'ai-aas-cli --init' first")
 			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 			defer cancel()
 
-			// Get model from registry
-			apiClient := api.NewClient(apiEndpoint, apiKey)
+			// Get model from registry via Admin API
+			adminEndpoint := cfg.AdminAPIEndpoint
+			if adminEndpoint == "" {
+				adminEndpoint = cfg.APIEndpoint // fallback for backward compatibility
+			}
+
+			opts := []api.ClientOption{}
+			if cfg.TLSInsecure {
+				opts = append(opts, api.WithInsecureSkipVerify())
+			}
+			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
 			regClient := registry.NewClient(apiClient)
 
 			fmt.Printf("Looking up model: %s\n", modelName)
@@ -88,17 +99,26 @@ Examples:
 			}
 
 			// Build storage URI
-			storageURI := fmt.Sprintf("s3://%s/models/%s/%s/", s3Bucket, modelName, revision)
+			// If S3 bucket is configured, use S3. Otherwise, use HuggingFace directly.
+			var storageURI string
+			if s3Bucket != "" {
+				storageURI = fmt.Sprintf("s3://%s/models/%s/%s/", s3Bucket, modelName, revision)
+			} else {
+				// Use HuggingFace storage URI for direct model loading
+				storageURI = fmt.Sprintf("hf://%s", model.HFModelID)
+			}
 
 			// Create InferenceService config
 			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
 			namespace := fmt.Sprintf("%s", environment) // Using environment as namespace
 
-			cfg := kubernetes.InferenceServiceConfig{
+			isvcCfg := kubernetes.InferenceServiceConfig{
 				Name:        isvcName,
 				Namespace:   namespace,
 				ModelName:   modelName,
 				StorageURI:  storageURI,
+				HFModelID:   model.HFModelID, // For vLLM to download from HuggingFace directly
+				Runtime:     "vllm-runtime",  // Explicit runtime to avoid autoSelect issues
 				GPUCount:    gpuCount,
 				MemoryGB:    memoryGB,
 				MinReplicas: minReplicas,
@@ -125,7 +145,7 @@ Examples:
 
 			if dryRun {
 				// Generate YAML and print
-				yamlBytes, err := generateInferenceServiceYAML(cfg)
+				yamlBytes, err := generateInferenceServiceYAML(isvcCfg)
 				if err != nil {
 					return fmt.Errorf("generate YAML: %w", err)
 				}
@@ -136,8 +156,8 @@ Examples:
 				return nil
 			}
 
-			// Validate cache exists if not skipping validation
-			if !skipValidation {
+			// Validate cache exists if not skipping validation and using S3
+			if !skipValidation && s3Bucket != "" {
 				fmt.Println("\nValidating model cache...")
 				s3Client, err := getS3Client(ctx)
 				if err != nil {
@@ -152,6 +172,8 @@ Examples:
 					return fmt.Errorf("model not cached. Run 'ai-aas-cli model pull %s' first", modelName)
 				}
 				fmt.Println("Cache validated.")
+			} else if s3Bucket == "" {
+				fmt.Println("\nUsing HuggingFace direct loading (no S3 cache configured)")
 			}
 
 			// Get kubeconfig for environment
@@ -184,7 +206,7 @@ Examples:
 
 			// Create InferenceService
 			fmt.Println("\nCreating InferenceService...")
-			if err := k8sClient.CreateInferenceService(ctx, cfg); err != nil {
+			if err := k8sClient.CreateInferenceService(ctx, isvcCfg); err != nil {
 				return fmt.Errorf("create inferenceservice: %w", err)
 			}
 
@@ -393,27 +415,14 @@ Examples:
 			}
 
 			fmt.Printf("Restarting InferenceService: %s/%s\n", namespace, isvcName)
+			fmt.Println("Triggering rolling restart via annotation update...")
 
-			// For KServe, we need to patch with a restart annotation
-			// This is typically done by updating an annotation to trigger a rollout
-			// For now, we'll delete and recreate (simplest approach)
-			fmt.Println("Triggering rolling restart...")
-
-			// Get current pods and delete them (K8s will recreate)
-			pods, err := k8sClient.GetPodStatus(ctx, isvcName, namespace)
-			if err != nil {
-				return fmt.Errorf("get pods: %w", err)
+			// Trigger rolling restart by updating annotation
+			if err := k8sClient.RestartInferenceService(ctx, isvcName, namespace); err != nil {
+				return fmt.Errorf("restart inferenceservice: %w", err)
 			}
 
-			fmt.Printf("Found %d pod(s) to restart\n", len(pods))
-			for _, pod := range pods {
-				fmt.Printf("  Restarting: %s\n", pod.Name)
-				// Delete pods to trigger restart
-				err := k8sClient.Clientset().CoreV1().Pods(namespace).Delete(ctx, pod.Name, deleteOpts())
-				if err != nil {
-					fmt.Printf("    Warning: %v\n", err)
-				}
-			}
+			fmt.Println("Rolling restart triggered.")
 
 			if wait {
 				fmt.Println("\nWaiting for pods to be ready...")
@@ -428,6 +437,7 @@ Examples:
 			}
 
 			fmt.Printf("\nRestart initiated for %s in %s\n", modelName, environment)
+			fmt.Println("\nNote: Use 'ai-aas-cli model status' to monitor restart progress")
 
 			return nil
 		},
@@ -468,7 +478,7 @@ Examples:
 			defer cancel()
 
 			// Parse replicas
-			minReplicas, maxReplicas, err := parseReplicas(replicas)
+			replicaCount, _, err := parseReplicas(replicas)
 			if err != nil {
 				return fmt.Errorf("invalid replicas: %w", err)
 			}
@@ -499,15 +509,15 @@ Examples:
 
 			fmt.Printf("Scaling InferenceService: %s/%s\n", namespace, isvcName)
 			fmt.Printf("  Current replicas: %d (ready: %d)\n", status.Replicas, status.ReadyReplicas)
-			fmt.Printf("  Target: %d-%d replicas\n", minReplicas, maxReplicas)
+			fmt.Printf("  Target: %d replicas\n", replicaCount)
 
-			// Note: Actual scaling would require patching the InferenceService
-			// This is a simplified implementation that shows what would happen
-			fmt.Println("\nNote: InferenceService scaling requires patching the resource.")
-			fmt.Println("For now, consider using 'kubectl patch' or redeploy with new replica counts.")
-			fmt.Printf("\nExample:\n")
-			fmt.Printf("  kubectl patch inferenceservice %s -n %s --type merge \\\n", isvcName, namespace)
-			fmt.Printf("    -p '{\"spec\":{\"predictor\":{\"minReplicas\":%d,\"maxReplicas\":%d}}}'\n", minReplicas, maxReplicas)
+			// Scale the InferenceService
+			if err := k8sClient.ScaleInferenceService(ctx, isvcName, namespace, replicaCount); err != nil {
+				return fmt.Errorf("scale inferenceservice: %w", err)
+			}
+
+			fmt.Printf("\nSuccessfully scaled %s to %d replicas\n", modelName, replicaCount)
+			fmt.Println("\nNote: Use 'ai-aas-cli model status' to check scaling progress")
 
 			return nil
 		},
@@ -577,6 +587,34 @@ func generateInferenceServiceYAML(cfg kubernetes.InferenceServiceConfig) ([]byte
 		annotations[k] = v
 	}
 
+	// Build model spec
+	modelSpec := map[string]interface{}{
+		"modelFormat": map[string]interface{}{
+			"name": "vllm",
+		},
+		"resources": resources,
+	}
+
+	// For HuggingFace models, we pass model ID via env var (vLLM downloads directly)
+	// For S3 models, we use storageUri (storage initializer downloads)
+	if cfg.StorageURI != "" && !strings.HasPrefix(cfg.StorageURI, "hf://") {
+		modelSpec["storageUri"] = cfg.StorageURI
+	}
+
+	if cfg.Runtime != "" {
+		modelSpec["runtime"] = cfg.Runtime
+	}
+
+	// Build container env vars for HuggingFace model
+	if cfg.HFModelID != "" {
+		modelSpec["env"] = []map[string]interface{}{
+			{
+				"name":  "VLLM_MODEL_NAME",
+				"value": cfg.HFModelID,
+			},
+		}
+	}
+
 	isvc := map[string]interface{}{
 		"apiVersion": "serving.kserve.io/v1beta1",
 		"kind":       "InferenceService",
@@ -588,13 +626,7 @@ func generateInferenceServiceYAML(cfg kubernetes.InferenceServiceConfig) ([]byte
 		},
 		"spec": map[string]interface{}{
 			"predictor": map[string]interface{}{
-				"model": map[string]interface{}{
-					"modelFormat": map[string]interface{}{
-						"name": "vllm",
-					},
-					"storageUri": cfg.StorageURI,
-					"resources":  resources,
-				},
+				"model":       modelSpec,
 				"minReplicas": cfg.MinReplicas,
 				"maxReplicas": cfg.MaxReplicas,
 			},
@@ -602,9 +634,4 @@ func generateInferenceServiceYAML(cfg kubernetes.InferenceServiceConfig) ([]byte
 	}
 
 	return yaml.Marshal(isvc)
-}
-
-// deleteOpts returns default delete options
-func deleteOpts() metav1.DeleteOptions {
-	return metav1.DeleteOptions{}
 }

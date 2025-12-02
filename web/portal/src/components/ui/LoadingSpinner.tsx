@@ -1,6 +1,8 @@
 interface LoadingSpinnerProps {
   size?: 'sm' | 'md' | 'lg';
   className?: string;
+  /** Accessibility label for screen readers */
+  'aria-label'?: string;
 }
 
 const sizeClasses = {
@@ -12,13 +14,15 @@ const sizeClasses = {
 /**
  * LoadingSpinner - Animated loading indicator
  */
-export function LoadingSpinner({ size = 'md', className = '' }: LoadingSpinnerProps) {
+export function LoadingSpinner({ size = 'md', className = '', 'aria-label': ariaLabel = 'Loading' }: LoadingSpinnerProps) {
   return (
     <svg
       className={`animate-spin text-primary ${sizeClasses[size]} ${className}`}
       xmlns="http://www.w3.org/2000/svg"
       fill="none"
       viewBox="0 0 24 24"
+      role="status"
+      aria-label={ariaLabel}
     >
       <circle
         className="opacity-25"

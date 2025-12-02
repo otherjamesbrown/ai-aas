@@ -189,6 +189,93 @@ func (s *Store) GetOrgBySlug(ctx context.Context, slug string) (Org, error) {
 	return out, err
 }
 
+// ListOrgs retrieves all organizations with optional pagination.
+// Returns organizations ordered by created_at descending (newest first).
+func (s *Store) ListOrgs(ctx context.Context, limit, offset int) ([]Org, error) {
+	var out []Org
+	if limit <= 0 {
+		limit = 100 // default limit
+	}
+	if limit > 1000 {
+		limit = 1000 // max limit
+	}
+	err := s.withTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT * FROM orgs
+			WHERE deleted_at IS NULL
+			ORDER BY created_at DESC
+			LIMIT $1 OFFSET $2
+		`, limit, offset)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			org, err := scanOrg(rows)
+			if err != nil {
+				return err
+			}
+			out = append(out, org)
+		}
+		return rows.Err()
+	})
+	if out == nil {
+		out = []Org{}
+	}
+	return out, err
+}
+
+// DeleteOrg soft-deletes an organization by ID.
+// This sets deleted_at timestamp and does NOT cascade to users/API keys.
+// Use with caution - consider using status transitions instead.
+func (s *Store) DeleteOrg(ctx context.Context, id uuid.UUID) error {
+	return s.withTenantTx(ctx, id, func(ctx context.Context, tx pgx.Tx) error {
+		result, err := tx.Exec(ctx, `
+			UPDATE orgs
+			SET deleted_at = NOW(), updated_at = NOW(), version = version + 1
+			WHERE org_id = $1 AND deleted_at IS NULL
+		`, id)
+		if err != nil {
+			return err
+		}
+		if result.RowsAffected() == 0 {
+			return ErrNotFound
+		}
+		return nil
+	})
+}
+
+// ListUsersInOrg retrieves all users in an organization.
+// Returns users ordered by created_at descending (newest first).
+func (s *Store) ListUsersInOrg(ctx context.Context, orgID uuid.UUID) ([]User, error) {
+	var out []User
+	err := s.withTenantTx(ctx, orgID, func(ctx context.Context, tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT * FROM users
+			WHERE org_id = $1 AND deleted_at IS NULL
+			ORDER BY created_at DESC
+		`, orgID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			user, err := scanUser(rows)
+			if err != nil {
+				return err
+			}
+			out = append(out, user)
+		}
+		return rows.Err()
+	})
+	if out == nil {
+		out = []User{}
+	}
+	return out, err
+}
+
 // GetUserByEmail retrieves a user by email within an organization.
 func (s *Store) GetUserByEmail(ctx context.Context, orgID uuid.UUID, email string) (User, error) {
 	var out User
@@ -810,6 +897,45 @@ func (s *Store) ListAPIKeysForPrincipal(ctx context.Context, orgID uuid.UUID, pr
 		}
 		return rows.Err()
 	})
+	return out, err
+}
+
+// ListAPIKeysForOrg lists all API keys for an organization with optional pagination.
+// Returns API keys ordered by created_at descending (newest first).
+func (s *Store) ListAPIKeysForOrg(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]APIKey, error) {
+	var out []APIKey
+	if limit <= 0 {
+		limit = 100 // default limit
+	}
+	if limit > 1000 {
+		limit = 1000 // max limit
+	}
+	err := s.withTenantTx(ctx, orgID, func(ctx context.Context, tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT *
+			FROM api_keys
+			WHERE org_id = $1
+			  AND deleted_at IS NULL
+			ORDER BY created_at DESC
+			LIMIT $2 OFFSET $3
+		`, orgID, limit, offset)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			key, err := scanAPIKey(rows)
+			if err != nil {
+				return err
+			}
+			out = append(out, key)
+		}
+		return rows.Err()
+	})
+	if out == nil {
+		out = []APIKey{}
+	}
 	return out, err
 }
 

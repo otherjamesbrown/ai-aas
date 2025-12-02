@@ -72,17 +72,19 @@ Input.displayName = 'Input';
 
 /**
  * Select - Form select with label and error states
+ * Supports either options prop (array) or children (option elements)
  */
-interface SelectProps extends InputHTMLAttributes<HTMLSelectElement> {
+interface SelectProps extends Omit<InputHTMLAttributes<HTMLSelectElement>, 'children'> {
   label?: string;
   error?: string;
   hint?: string;
-  options: { value: string; label: string; disabled?: boolean }[];
+  options?: { value: string; label: string; disabled?: boolean }[];
   placeholder?: string;
+  children?: ReactNode;
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
-  ({ label, error, hint, options, placeholder, className = '', id, ...props }, ref) => {
+  ({ label, error, hint, options, placeholder, children, className = '', id, ...props }, ref) => {
     const selectId = id || `select-${Math.random().toString(36).slice(2, 9)}`;
 
     return (
@@ -119,11 +121,13 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
               {placeholder}
             </option>
           )}
-          {options.map((option) => (
-            <option key={option.value} value={option.value} disabled={option.disabled}>
-              {option.label}
-            </option>
-          ))}
+          {options
+            ? options.map((option) => (
+                <option key={option.value} value={option.value} disabled={option.disabled}>
+                  {option.label}
+                </option>
+              ))
+            : children}
         </select>
         {error && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{error}</p>}
         {hint && !error && (

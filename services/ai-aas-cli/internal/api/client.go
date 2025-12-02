@@ -4,6 +4,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -36,6 +37,26 @@ func WithHTTPClient(httpClient *http.Client) ClientOption {
 	}
 }
 
+// WithInsecureSkipVerify disables TLS certificate verification
+func WithInsecureSkipVerify() ClientOption {
+	return func(c *Client) {
+		// Get the existing transport or use DefaultTransport
+		customTransport, ok := c.httpClient.Transport.(*http.Transport)
+		if !ok || customTransport == nil {
+			customTransport = http.DefaultTransport.(*http.Transport)
+		}
+
+		// Clone the transport to avoid modifying a shared instance
+		// This preserves connection pooling, HTTP/2, and proxy settings
+		transport := customTransport.Clone()
+		if transport.TLSClientConfig == nil {
+			transport.TLSClientConfig = &tls.Config{}
+		}
+		transport.TLSClientConfig.InsecureSkipVerify = true //nolint:gosec // User-requested for dev environments
+		c.httpClient.Transport = transport
+	}
+}
+
 // NewClient creates a new Admin API client
 func NewClient(baseURL, apiKey string, opts ...ClientOption) *Client {
 	c := &Client{
@@ -55,12 +76,19 @@ func NewClient(baseURL, apiKey string, opts ...ClientOption) *Client {
 
 // Request performs an HTTP request to the Admin API
 func (c *Client) Request(ctx context.Context, method, path string, body interface{}, result interface{}) error {
-	// Build URL
-	u, err := url.Parse(c.baseURL)
+	// Build URL - parse path to handle query strings correctly
+	pathURL, err := url.Parse(path)
+	if err != nil {
+		return fmt.Errorf("parse path: %w", err)
+	}
+
+	baseURL, err := url.Parse(c.baseURL)
 	if err != nil {
 		return fmt.Errorf("parse base URL: %w", err)
 	}
-	u.Path = path
+
+	// Resolve the path against the base URL
+	u := baseURL.ResolveReference(pathURL)
 
 	// Prepare body
 	var bodyReader io.Reader
@@ -82,7 +110,7 @@ func (c *Client) Request(ctx context.Context, method, path string, body interfac
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	if c.apiKey != "" {
-		req.Header.Set("X-API-Key", c.apiKey)
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	}
 
 	// Execute request
@@ -164,7 +192,7 @@ func (e *APIError) IsUnauthorized() bool {
 
 // HealthCheck performs a health check against the API
 func (c *Client) HealthCheck(ctx context.Context) error {
-	return c.Get(ctx, "/health", nil)
+	return c.Get(ctx, "/healthz", nil)
 }
 
 // Ping tests connectivity to the API
@@ -172,5 +200,23 @@ func (c *Client) Ping(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	return c.HealthCheck(ctx)
+}
+
+// NewHTTPClient creates a standalone HTTP client with optional TLS skip verification
+func NewHTTPClient(insecureSkipVerify bool) *http.Client {
+	client := &http.Client{
+		Timeout: 60 * time.Second,
+	}
+
+	if insecureSkipVerify {
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		if transport.TLSClientConfig == nil {
+			transport.TLSClientConfig = &tls.Config{}
+		}
+		transport.TLSClientConfig.InsecureSkipVerify = true //nolint:gosec // User-requested for dev environments
+		client.Transport = transport
+	}
+
+	return client
 }
 

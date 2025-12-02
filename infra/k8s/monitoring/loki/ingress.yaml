@@ -1,12 +1,19 @@
 # Loki Ingress
 # Exposes Loki API via HTTPS
 #
-# Access URLs:
+# Domain Configuration:
+# ---------------------
+# This file uses environment-specific domain values. When creating for a new environment:
+# 1. Reference configs/environments/{env}.yaml for the correct baseDomain
+# 2. Replace "dev.otherjamesbrown.com" with the environment's baseDomain
+# 3. Replace "dev.ai-aas.local" with the environment's localDomain
+#
+# Access URLs (Development):
 # - Hostname: https://loki.dev.ai-aas.local (requires /etc/hosts entry)
-# - IP-based: https://loki.172.232.58.222.nip.io (works without DNS)
+# - Public DNS: https://loki.dev.otherjamesbrown.com
 #
 # Example queries:
-# curl -s 'https://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+# curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
 #   --data-urlencode 'query={level="error"}' \
 #   --data-urlencode 'limit=50'
 apiVersion: networking.k8s.io/v1
@@ -19,6 +26,7 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: nginx
   rules:
@@ -32,7 +40,7 @@ spec:
                 name: loki
                 port:
                   number: 3100
-    - host: loki.172.232.58.222.nip.io
+    - host: loki.dev.otherjamesbrown.com
       http:
         paths:
           - path: /
@@ -43,7 +51,6 @@ spec:
                 port:
                   number: 3100
   tls:
-    - secretName: ai-aas-tls
+    - secretName: loki-tls
       hosts:
-        - loki.dev.ai-aas.local
-        - loki.172.232.58.222.nip.io
+        - loki.dev.otherjamesbrown.com

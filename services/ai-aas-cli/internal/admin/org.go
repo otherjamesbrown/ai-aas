@@ -25,7 +25,6 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/client/userorg"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/errors"
-	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/health"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
 )
 
@@ -34,13 +33,36 @@ func OrgCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "org",
 		Short: "Manage organizations",
-		Long:  "Manage organizations: list, create, update, delete",
+		Long: `Manage organizations in the AI-AAS platform.
+
+Organizations are the top-level tenant in AI-AAS. Each organization can have
+multiple users, API keys, and model access policies.
+
+Examples:
+  # List all organizations
+  ai-aas-cli org list
+
+  # Create a new organization
+  ai-aas-cli org create --name "ACME Corp" --slug acme
+
+  # Update organization status
+  ai-aas-cli org update --org-id acme --status suspended
+
+  # Delete an organization
+  ai-aas-cli org delete --org-id acme --confirm
+
+Workflow:
+  1. Create org        ai-aas-cli org create --name <name> --slug <slug>
+  2. Add users         ai-aas-cli user create --org-id <org> --email <email>
+  3. Create API key    ai-aas-cli apikey create --org-id <org> --user-id <user>
+  4. Enable models     ai-aas-cli model library enable <model> --org-id <org>`,
 	}
 
 	cmd.AddCommand(orgListCommand())
 	cmd.AddCommand(orgCreateCommand())
 	cmd.AddCommand(orgUpdateCommand())
 	cmd.AddCommand(orgDeleteCommand())
+	cmd.AddCommand(orgUseCommand())
 
 	return cmd
 }
@@ -55,7 +77,23 @@ func orgListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List organizations",
-		Long:  "List all organizations with structured output (table, json, csv)",
+		Long: `List all organizations in the platform.
+
+Output includes organization ID, name, slug, status, and creation date.
+
+Examples:
+  # List in table format (default)
+  ai-aas-cli org list
+
+  # List in JSON format
+  ai-aas-cli org list --format json
+
+  # List in CSV format for export
+  ai-aas-cli org list --format csv > orgs.csv
+
+See Also:
+  ai-aas-cli org create    Create a new organization
+  ai-aas-cli user list     List users in an organization`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runOrgList(cmd, args, flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey)
 		},
@@ -108,8 +146,8 @@ func runOrgList(cmd *cobra.Command, args []string, flagFormat string, flagVerbos
 		)
 	}
 
-	// Create HTTP client with optional CA cert
-	httpClient, err := config.CreateHTTPClient(cfg.CACertFile)
+	// Create HTTP client with optional CA cert and TLS insecure option
+	httpClient, err := createHTTPClient(cfg)
 	if err != nil {
 		return errors.NewOperationError(
 			fmt.Sprintf("failed to create HTTP client: %v", err),
@@ -118,7 +156,7 @@ func runOrgList(cmd *cobra.Command, args []string, flagFormat string, flagVerbos
 	}
 
 	// Health check
-	checker := health.NewCheckerWithClient(5*time.Second, httpClient)
+	checker := createHealthCheckerWithHTTPClient(httpClient)
 	requiredServices := map[string]string{
 		"user-org-service": cfg.UserOrgEndpoint,
 	}
@@ -127,7 +165,7 @@ func runOrgList(cmd *cobra.Command, args []string, flagFormat string, flagVerbos
 	}
 
 	// Create client and list orgs
-	userOrgClient := userorg.NewClientWithHTTPClient(cfg.UserOrgEndpoint, cfg.APIKey, httpClient)
+	userOrgClient := createUserOrgClientWithHTTPClient(cfg, httpClient)
 	orgs, err := userOrgClient.ListOrgs(cmd.Context())
 	if err != nil {
 		cliErr := errors.NewOperationError(
@@ -197,15 +235,47 @@ func orgCreateCommand() *cobra.Command {
 	var flagQuiet bool
 	var flagUserOrgEndpoint string
 	var flagAPIKey string
+	var flagUse bool
 
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create organization",
-		Long:  "Create a new organization with dry-run support",
+		Long: `Create a new organization in the platform.
+
+Organizations are the top-level tenant. The slug is used in URLs and must be
+unique across the platform.
+
+Examples:
+  # Create a basic organization
+  ai-aas-cli org create --name "ACME Corp" --slug acme
+
+  # Create and set as default organization
+  ai-aas-cli org create --name "ACME Corp" --slug acme --use
+
+  # Create with billing owner
+  ai-aas-cli org create --name "ACME Corp" --slug acme \
+    --billing-owner-email billing@acme.com
+
+  # Create with GitOps configuration
+  ai-aas-cli org create --name "ACME Corp" --slug acme \
+    --declarative-enabled --declarative-repo-url https://github.com/acme/config
+
+  # Preview without creating
+  ai-aas-cli org create --name "ACME Corp" --slug acme --dry-run
+
+Next Steps:
+  After creating an organization:
+  1. Add users         ai-aas-cli user create --org-id <slug> --email <email>
+  2. Create API key    ai-aas-cli apikey create --org-id <slug> --user-id <user>
+  3. Enable models     ai-aas-cli model library enable <model> --org-id <slug>
+
+See Also:
+  ai-aas-cli org list      List all organizations
+  ai-aas-cli user create   Add users to organization`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runOrgCreate(cmd, args, flagName, flagSlug, flagBillingOwnerEmail,
 				flagDeclarativeEnabled, flagDeclarativeRepoURL, flagDeclarativeBranch,
-				flagDryRun, flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey)
+				flagDryRun, flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey, flagUse)
 		},
 	}
 
@@ -221,13 +291,14 @@ func orgCreateCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&flagQuiet, "quiet", false, "Suppress non-error output")
 	cmd.Flags().StringVar(&flagUserOrgEndpoint, "user-org-endpoint", "", "User-org-service endpoint (overrides config)")
 	cmd.Flags().StringVar(&flagAPIKey, "api-key", "", "API key for authentication (overrides config)")
+	cmd.Flags().BoolVar(&flagUse, "use", false, "Set as default organization after creation")
 
 	return cmd
 }
 
 func runOrgCreate(cmd *cobra.Command, args []string, flagName, flagSlug, flagBillingOwnerEmail string,
 	flagDeclarativeEnabled bool, flagDeclarativeRepoURL, flagDeclarativeBranch string,
-	flagDryRun bool, flagFormat string, flagVerbose, flagQuiet bool, flagUserOrgEndpoint, flagAPIKey string) error {
+	flagDryRun bool, flagFormat string, flagVerbose, flagQuiet bool, flagUserOrgEndpoint, flagAPIKey string, flagUse bool) error {
 	startTime := time.Now()
 
 	// Load configuration
@@ -278,9 +349,18 @@ func runOrgCreate(cmd *cobra.Command, args []string, flagName, flagSlug, flagBil
 		)
 	}
 
+	// Create HTTP client with optional CA cert and TLS insecure option
+	httpClient, err := createHTTPClient(cfg)
+	if err != nil {
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to create HTTP client: %v", err),
+			"Verify the CA certificate file path is correct and the file is readable.",
+		)
+	}
+
 	// Health check (only if not dry-run)
 	if !flagDryRun {
-		checker := health.NewChecker(5 * time.Second)
+		checker := createHealthCheckerWithHTTPClient(httpClient)
 		requiredServices := map[string]string{
 			"user-org-service": cfg.UserOrgEndpoint,
 		}
@@ -337,7 +417,7 @@ func runOrgCreate(cmd *cobra.Command, args []string, flagName, flagSlug, flagBil
 	}
 
 	// Execute create
-	userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
+	userOrgClient := createUserOrgClientWithHTTPClient(cfg, httpClient)
 	org, err := userOrgClient.CreateOrg(cmd.Context(), req)
 	if err != nil {
 		cliErr := errors.NewOperationError(
@@ -360,6 +440,19 @@ func runOrgCreate(cmd *cobra.Command, args []string, flagName, flagSlug, flagBil
 		Outcome:  "success",
 		Duration: time.Since(startTime),
 	})
+
+	// Set as default organization if --use flag is set
+	if flagUse {
+		cfg.DefaultOrgID = org.Slug // Use slug as it's more user-friendly
+		if err := config.Save(cfg); err != nil {
+			// Don't fail the whole operation, just warn
+			if !cfg.Quiet {
+				fmt.Printf("Warning: failed to save default organization: %v\n", err)
+			}
+		} else if !cfg.Quiet {
+			fmt.Printf("Default organization set to: %s\n\n", org.Slug)
+		}
+	}
 
 	// Format output
 	if cfg.OutputFormat == "json" {
@@ -411,7 +504,27 @@ func orgUpdateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "Update organization",
-		Long:  "Update an organization with file input (JSON/YAML) support",
+		Long: `Update an organization's settings.
+
+You can update individual fields with flags or provide a JSON/YAML file with
+multiple fields to update.
+
+Examples:
+  # Update display name
+  ai-aas-cli org update --org-id acme --display-name "ACME Corporation"
+
+  # Suspend an organization
+  ai-aas-cli org update --org-id acme --status suspended
+
+  # Reactivate an organization
+  ai-aas-cli org update --org-id acme --status active
+
+  # Update from file
+  ai-aas-cli org update --org-id acme --file org-update.yaml
+
+See Also:
+  ai-aas-cli org list      List all organizations
+  ai-aas-cli org delete    Delete an organization`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runOrgUpdate(cmd, args, flagOrgID, flagFile, flagDisplayName, flagStatus,
 				flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey)
@@ -517,8 +630,17 @@ func runOrgUpdate(cmd *cobra.Command, args []string, flagOrgID, flagFile, flagDi
 		)
 	}
 
+	// Create HTTP client with optional CA cert and TLS insecure option
+	httpClient, err := createHTTPClient(cfg)
+	if err != nil {
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to create HTTP client: %v", err),
+			"Verify the CA certificate file path is correct and the file is readable.",
+		)
+	}
+
 	// Health check
-	checker := health.NewChecker(5 * time.Second)
+	checker := createHealthCheckerWithHTTPClient(httpClient)
 	requiredServices := map[string]string{
 		"user-org-service": cfg.UserOrgEndpoint,
 	}
@@ -527,7 +649,7 @@ func runOrgUpdate(cmd *cobra.Command, args []string, flagOrgID, flagFile, flagDi
 	}
 
 	// Execute update
-	userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
+	userOrgClient := createUserOrgClientWithHTTPClient(cfg, httpClient)
 	org, err := userOrgClient.UpdateOrg(cmd.Context(), flagOrgID, req)
 	if err != nil {
 		cliErr := errors.NewOperationError(
@@ -599,7 +721,28 @@ func orgDeleteCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete",
 		Short: "Delete organization",
-		Long:  "Delete an organization with confirmation and force flags",
+		Long: `Delete an organization from the platform.
+
+This is a destructive operation that cannot be undone. All users, API keys,
+and resources associated with the organization will be removed.
+
+Examples:
+  # Delete with confirmation prompt
+  ai-aas-cli org delete --org-id acme --confirm
+
+  # Force delete (for scripts)
+  ai-aas-cli org delete --org-id acme --force
+
+Warning:
+  Deleting an organization will also delete:
+  - All users in the organization
+  - All API keys for the organization
+  - All model access policies
+  - All usage history and audit logs
+
+See Also:
+  ai-aas-cli org update    Suspend instead of delete
+  ai-aas-cli org list      List all organizations`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runOrgDelete(cmd, args, flagOrgID, flagConfirm, flagForce,
 				flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey)
@@ -672,8 +815,17 @@ func runOrgDelete(cmd *cobra.Command, args []string, flagOrgID string, flagConfi
 		)
 	}
 
+	// Create HTTP client with optional CA cert and TLS insecure option
+	httpClient, err := createHTTPClient(cfg)
+	if err != nil {
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to create HTTP client: %v", err),
+			"Verify the CA certificate file path is correct and the file is readable.",
+		)
+	}
+
 	// Health check
-	checker := health.NewChecker(5 * time.Second)
+	checker := createHealthCheckerWithHTTPClient(httpClient)
 	requiredServices := map[string]string{
 		"user-org-service": cfg.UserOrgEndpoint,
 	}
@@ -682,7 +834,7 @@ func runOrgDelete(cmd *cobra.Command, args []string, flagOrgID string, flagConfi
 	}
 
 	// Get org details for confirmation display
-	userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
+	userOrgClient := createUserOrgClientWithHTTPClient(cfg, httpClient)
 	var orgName string
 	org, err := userOrgClient.GetOrg(cmd.Context(), flagOrgID)
 	if err == nil {
@@ -731,6 +883,107 @@ func runOrgDelete(cmd *cobra.Command, args []string, flagOrgID string, flagConfi
 			fmt.Printf("Organization deleted successfully: %s\n", flagOrgID)
 		}
 	}
+	return nil
+}
+
+func orgUseCommand() *cobra.Command {
+	var flagClear bool
+
+	cmd := &cobra.Command{
+		Use:   "use [org-id]",
+		Short: "Set default organization",
+		Long: `Set the default organization for subsequent commands.
+
+When a default organization is set, commands like 'user list' and 'apikey create'
+will use it automatically instead of requiring --org-id.
+
+The default organization can be overridden at any time with --org-id flag,
+or with the AI_AAS_DEFAULT_ORG_ID environment variable.
+
+Examples:
+  # Set default organization
+  ai-aas-cli org use acme
+
+  # Show current default
+  ai-aas-cli org use
+
+  # Clear default organization
+  ai-aas-cli org use --clear
+
+  # Use environment variable instead
+  export AI_AAS_DEFAULT_ORG_ID=acme
+
+After setting a default organization:
+  # These are equivalent
+  ai-aas-cli user list --org-id acme
+  ai-aas-cli user list
+
+See Also:
+  ai-aas-cli org list      List available organizations
+  ai-aas-cli org create    Create a new organization`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runOrgUse(cmd, args, flagClear)
+		},
+	}
+
+	cmd.Flags().BoolVar(&flagClear, "clear", false, "Clear the default organization")
+
+	return cmd
+}
+
+func runOrgUse(cmd *cobra.Command, args []string, flagClear bool) error {
+	// Load configuration
+	cfg, err := config.Load()
+	if err != nil {
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to load configuration: %v", err),
+			"Check your configuration file or environment variables.",
+		)
+	}
+
+	// Clear mode
+	if flagClear {
+		cfg.DefaultOrgID = ""
+		if err := config.Save(cfg); err != nil {
+			return errors.NewOperationError(
+				fmt.Sprintf("failed to save configuration: %v", err),
+				"Check that the config file is writable.",
+			)
+		}
+		fmt.Println("Default organization cleared.")
+		return nil
+	}
+
+	// If no args, show current default
+	if len(args) == 0 {
+		if cfg.DefaultOrgID == "" {
+			fmt.Println("No default organization set.")
+			fmt.Println("\nTo set a default organization:")
+			fmt.Println("  ai-aas-cli org use <org-id>")
+			fmt.Println("\nOr use environment variable:")
+			fmt.Println("  export AI_AAS_DEFAULT_ORG_ID=<org-id>")
+		} else {
+			fmt.Printf("Default organization: %s\n", cfg.DefaultOrgID)
+		}
+		return nil
+	}
+
+	// Set new default
+	orgID := args[0]
+	cfg.DefaultOrgID = orgID
+
+	if err := config.Save(cfg); err != nil {
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to save configuration: %v", err),
+			"Check that the config file is writable.",
+		)
+	}
+
+	fmt.Printf("Default organization set to: %s\n", orgID)
+	fmt.Println("\nYou can now use commands without --org-id:")
+	fmt.Println("  ai-aas-cli user list")
+	fmt.Println("  ai-aas-cli apikey create --user-id <user-id>")
+
 	return nil
 }
 

@@ -3057,13 +3057,14 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from: kserve/serving-cert
     controller-gen.kubebuilder.io/version: v0.12.0
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
   name: inferenceservices.serving.kserve.io
 spec:
   conversion:
     strategy: Webhook
     webhook:
       clientConfig:
-        caBundle: Cg==
         service:
           name: kserve-webhook-server-service
           namespace: kserve
@@ -21345,6 +21346,8 @@ kind: Certificate
 metadata:
   name: serving-cert
   namespace: kserve
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
 spec:
   commonName: kserve-webhook-server-service.kserve.svc
   dnsNames:
@@ -21359,6 +21362,8 @@ kind: Issuer
 metadata:
   name: selfsigned-issuer
   namespace: kserve
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
 spec:
   selfSigned: {}
 ---
@@ -21367,13 +21372,13 @@ kind: MutatingWebhookConfiguration
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: kserve/serving-cert
+    argocd.argoproj.io/sync-wave: "2"
   creationTimestamp: null
   name: inferenceservice.serving.kserve.io
 webhooks:
 - admissionReviewVersions:
   - v1beta1
   clientConfig:
-    caBundle: Cg==
     service:
       name: kserve-webhook-server-service
       namespace: kserve
@@ -21394,7 +21399,6 @@ webhooks:
 - admissionReviewVersions:
   - v1beta1
   clientConfig:
-    caBundle: Cg==
     service:
       name: kserve-webhook-server-service
       namespace: kserve
@@ -21426,13 +21430,13 @@ kind: ValidatingWebhookConfiguration
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: kserve/serving-cert
+    argocd.argoproj.io/sync-wave: "2"
   creationTimestamp: null
   name: clusterservingruntime.serving.kserve.io
 webhooks:
 - admissionReviewVersions:
   - v1beta1
   clientConfig:
-    caBundle: Cg==
     service:
       name: kserve-webhook-server-service
       namespace: kserve
@@ -21456,13 +21460,13 @@ kind: ValidatingWebhookConfiguration
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: kserve/serving-cert
+    argocd.argoproj.io/sync-wave: "2"
   creationTimestamp: null
   name: inferencegraph.serving.kserve.io
 webhooks:
 - admissionReviewVersions:
   - v1beta1
   clientConfig:
-    caBundle: Cg==
     service:
       name: kserve-webhook-server-service
       namespace: kserve
@@ -21486,13 +21490,13 @@ kind: ValidatingWebhookConfiguration
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: kserve/serving-cert
+    argocd.argoproj.io/sync-wave: "2"
   creationTimestamp: null
   name: inferenceservice.serving.kserve.io
 webhooks:
 - admissionReviewVersions:
   - v1beta1
   clientConfig:
-    caBundle: Cg==
     service:
       name: kserve-webhook-server-service
       namespace: kserve
@@ -21516,13 +21520,13 @@ kind: ValidatingWebhookConfiguration
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: kserve/serving-cert
+    argocd.argoproj.io/sync-wave: "2"
   creationTimestamp: null
   name: servingruntime.serving.kserve.io
 webhooks:
 - admissionReviewVersions:
   - v1beta1
   clientConfig:
-    caBundle: Cg==
     service:
       name: kserve-webhook-server-service
       namespace: kserve
@@ -21546,13 +21550,13 @@ kind: ValidatingWebhookConfiguration
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: kserve/serving-cert
+    argocd.argoproj.io/sync-wave: "2"
   creationTimestamp: null
   name: trainedmodel.serving.kserve.io
 webhooks:
 - admissionReviewVersions:
   - v1beta1
   clientConfig:
-    caBundle: Cg==
     service:
       name: kserve-webhook-server-service
       namespace: kserve

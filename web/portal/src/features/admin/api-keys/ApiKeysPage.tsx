@@ -4,12 +4,17 @@ import { apiKeysApi } from '../api/apiKeys';
 import { ConfirmDestructiveModal } from '@/components/ConfirmDestructiveModal';
 import { CreateApiKeyModal } from './CreateApiKeyModal';
 import { ViewApiKeyModal } from './ViewApiKeyModal';
-import { Button, DataTable, StatusBadge, IconButton } from '@/components/ui';
+import { Button, DataTable, StatusBadge, IconButton, Card, CardHeader, CardContent } from '@/components/ui';
 import type { Column } from '@/components/ui';
 import type { ApiKeyCredential, CreateApiKeyRequest } from '../types';
 
 /**
  * API key management UI - rebuilt with unified components
+ *
+ * CLI equivalents:
+ * - ai-aas-cli apikey list
+ * - ai-aas-cli apikey create
+ * - ai-aas-cli apikey delete (revoke)
  */
 export default function ApiKeysPage() {
   const queryClient = useQueryClient();
@@ -244,6 +249,21 @@ export default function ApiKeysPage() {
           secret={newKeySecret}
         />
       )}
+
+      {/* CLI Reference */}
+      <Card>
+        <CardHeader title="CLI Commands" />
+        <CardContent>
+          <div className="bg-gray-100 dark:bg-gray-800 rounded-md p-4 font-mono text-sm space-y-2">
+            <p className="text-gray-500"># List API keys</p>
+            <p className="text-primary">ai-aas-cli apikey list</p>
+            <p className="text-gray-500 mt-3"># Create an API key</p>
+            <p className="text-primary">ai-aas-cli apikey create --name {'<name>'} --scopes {'<scope1,scope2>'}</p>
+            <p className="text-gray-500 mt-3"># Delete (revoke) an API key</p>
+            <p className="text-primary">ai-aas-cli apikey delete {'<key-id>'}</p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

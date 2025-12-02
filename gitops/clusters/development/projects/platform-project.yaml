@@ -5,11 +5,79 @@ metadata:
   namespace: argocd
 spec:
   description: Platform infrastructure applications for development
+
+  # Explicitly list allowed destination namespaces
   destinations:
-    - namespace: '*'
+    - namespace: argocd
       server: https://kubernetes.default.svc
+    - namespace: development
+      server: https://kubernetes.default.svc
+    - namespace: admin-api-service
+      server: https://kubernetes.default.svc
+    - namespace: user-org-service
+      server: https://kubernetes.default.svc
+    - namespace: istio-system
+      server: https://kubernetes.default.svc
+    - namespace: knative-serving
+      server: https://kubernetes.default.svc
+    - namespace: kserve
+      server: https://kubernetes.default.svc
+    - namespace: monitoring
+      server: https://kubernetes.default.svc
+    - namespace: observability
+      server: https://kubernetes.default.svc
+    - namespace: network
+      server: https://kubernetes.default.svc
+    - namespace: secrets
+      server: https://kubernetes.default.svc
+
+  # Explicitly list allowed source repositories
   sourceRepos:
-    - '*'
+    - https://github.com/otherjamesbrown/ai-aas
+    - https://istio-release.storage.googleapis.com/charts
+    - https://knative.github.io/operator
+    - https://grafana.github.io/helm-charts
+    - https://kserve.github.io/kserve
+
+  # Cluster-scoped resources that can be created
   clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+    - group: ''
+      kind: PersistentVolume
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding
+    - group: networking.k8s.io
+      kind: IngressClass
+    - group: storage.k8s.io
+      kind: StorageClass
+    - group: scheduling.k8s.io
+      kind: PriorityClass
+    - group: serving.knative.dev
+      kind: '*'
+    - group: serving.kserve.io
+      kind: '*'
+    - group: networking.istio.io
+      kind: '*'
+    - group: security.istio.io
+      kind: '*'
+
+  # Namespace-scoped resources (default allow all, can restrict if needed)
+  namespaceResourceWhitelist:
     - group: '*'
       kind: '*'
+
+  # Deny specific dangerous resources
+  namespaceResourceBlacklist:
+    - group: ''
+      kind: ResourceQuota
+    - group: ''
+      kind: LimitRange

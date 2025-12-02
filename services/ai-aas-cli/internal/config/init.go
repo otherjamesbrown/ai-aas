@@ -26,6 +26,11 @@ func NewInitWizard() *InitWizard {
 	}
 }
 
+// hasExistingValue checks if a config value is set and not default
+func hasExistingValue(value, defaultValue string) bool {
+	return value != "" && value != defaultValue
+}
+
 // Run executes the initialization wizard
 func (w *InitWizard) Run() error {
 	fmt.Println("╔════════════════════════════════════════════════════════════════╗")
@@ -38,20 +43,20 @@ func (w *InitWizard) Run() error {
 		w.checkPath()
 	}
 
-	// Check for existing config
+	// Load existing config if present
 	if Exists() {
-		fmt.Println("⚠ Existing configuration found.")
-		overwrite, err := w.prompt("Overwrite existing configuration? (y/N): ")
+		existingConfig, err := Load()
 		if err != nil {
-			return err
-		}
-		if !strings.HasPrefix(strings.ToLower(overwrite), "y") {
-			fmt.Println("Keeping existing configuration.")
-			return nil
+			fmt.Printf("⚠ Could not load existing config: %v\n", err)
+			fmt.Println("  Starting with fresh configuration.\n")
+		} else {
+			fmt.Println("✓ Found existing configuration")
+			fmt.Println("  For each setting, press Enter to keep existing value or type a new one.\n")
+			w.config = existingConfig
 		}
 	}
 
-	// Collect configuration
+	// Collect configuration (with option to keep existing values)
 	if err := w.collectAPIEndpoint(); err != nil {
 		return err
 	}
@@ -116,12 +121,20 @@ func (w *InitWizard) checkPath() {
 func (w *InitWizard) collectAPIEndpoint() error {
 	fmt.Println("Platform Domain or API Endpoint")
 	fmt.Println("  You can provide either:")
-	fmt.Println("    - Base domain:  172.232.58.222.nip.io")
-	fmt.Println("    - Full API URL: https://api.172.232.58.222.nip.io")
+	fmt.Println("    - Base domain:  dev.otherjamesbrown.com")
+	fmt.Println("    - Full API URL: https://api.dev.otherjamesbrown.com")
 	fmt.Println()
 	fmt.Println("  If you provide a base domain, endpoints will be constructed as:")
 	fmt.Println("    api.<domain>, user-org.<domain>, etc.")
 	fmt.Println()
+
+	// Show existing value if present
+	existingEndpoint := w.config.APIEndpoint
+	if hasExistingValue(existingEndpoint, "http://localhost:8080") {
+		fmt.Printf("  Current: %s\n", existingEndpoint)
+		fmt.Println("  Press Enter to keep, or type new value:")
+		fmt.Println()
+	}
 
 	input, err := w.prompt("Domain or API Endpoint: ")
 	if err != nil {
@@ -129,7 +142,14 @@ func (w *InitWizard) collectAPIEndpoint() error {
 	}
 
 	input = strings.TrimSpace(input)
+
+	// If empty and we have existing value, keep it
 	if input == "" {
+		if hasExistingValue(existingEndpoint, "http://localhost:8080") {
+			fmt.Printf("  ✓ Keeping existing endpoint: %s\n", existingEndpoint)
+			fmt.Println()
+			return nil
+		}
 		return fmt.Errorf("domain or API endpoint is required")
 	}
 
@@ -165,16 +185,32 @@ func (w *InitWizard) collectAPIKey() error {
 	fmt.Println("  (This will be stored securely)")
 	fmt.Println()
 
+	// Show existing value if present (masked)
+	existingKey := w.config.APIKey
+	if existingKey != "" {
+		fmt.Printf("  Current: %s\n", MaskSecret(existingKey))
+		fmt.Println("  Press Enter to keep, or type new value:")
+		fmt.Println()
+	}
+
 	key, err := w.prompt("API Key: ")
 	if err != nil {
 		return err
 	}
 
+	key = strings.TrimSpace(key)
+
+	// If empty and we have existing value, keep it
 	if key == "" {
+		if existingKey != "" {
+			fmt.Printf("  ✓ Keeping existing API key: %s\n", MaskSecret(existingKey))
+			fmt.Println()
+			return nil
+		}
 		return fmt.Errorf("API key is required")
 	}
 
-	w.config.APIKey = strings.TrimSpace(key)
+	w.config.APIKey = key
 
 	fmt.Println()
 	return nil
@@ -197,12 +233,32 @@ func (w *InitWizard) collectEnvironment() error {
 		return nil
 	}
 
-	env, err := w.prompt("Environment (required): ")
+	// Show existing value if present
+	existingEnv := w.config.Environment
+	if existingEnv != "" && existingEnv != "development" {
+		fmt.Printf("  Current: %s\n", existingEnv)
+		fmt.Println("  Press Enter to keep, or type new value:")
+		fmt.Println()
+	} else if existingEnv == "development" {
+		fmt.Printf("  Current: %s (default)\n", existingEnv)
+		fmt.Println("  Press Enter to keep, or type new value:")
+		fmt.Println()
+	}
+
+	env, err := w.prompt("Environment: ")
 	if err != nil {
 		return err
 	}
 
+	env = strings.TrimSpace(env)
+
+	// If empty and we have existing value, keep it
 	if env == "" {
+		if existingEnv != "" {
+			fmt.Printf("  ✓ Keeping existing environment: %s\n", existingEnv)
+			fmt.Println()
+			return nil
+		}
 		return fmt.Errorf("environment is required (set via prompt or AI_AAS_ENVIRONMENT env var)")
 	}
 

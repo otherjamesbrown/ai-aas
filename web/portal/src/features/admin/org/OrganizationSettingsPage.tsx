@@ -85,6 +85,10 @@ export default function OrganizationSettingsPage() {
     );
   }
 
+  // Provide defaults for optional nested objects
+  const billingContact = profile.billing_contact || { name: '', email: '', phone: '' };
+  const address = profile.address || { country: '', region: '', postal_code: '', street_lines: [''] };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -129,21 +133,21 @@ export default function OrganizationSettingsPage() {
             <Input
               label="Name"
               name="billing_name"
-              defaultValue={profile.billing_contact.name}
+              defaultValue={billingContact.name}
               required
             />
             <Input
               label="Email"
               type="email"
               name="billing_email"
-              defaultValue={profile.billing_contact.email}
+              defaultValue={billingContact.email}
               required
             />
             <Input
               label="Phone"
               type="tel"
               name="billing_phone"
-              defaultValue={profile.billing_contact.phone}
+              defaultValue={billingContact.phone}
             />
           </div>
         </div>
@@ -157,24 +161,24 @@ export default function OrganizationSettingsPage() {
             <Input
               label="Country"
               name="country"
-              defaultValue={profile.address.country}
+              defaultValue={address.country}
               required
             />
             <Input
               label="Region/State"
               name="region"
-              defaultValue={profile.address.region}
+              defaultValue={address.region}
             />
             <Input
               label="Postal Code"
               name="postal_code"
-              defaultValue={profile.address.postal_code}
+              defaultValue={address.postal_code}
               required
             />
             <Input
               label="Street Address"
               name="street"
-              defaultValue={profile.address.street_lines[0]}
+              defaultValue={address.street_lines?.[0] || ''}
               required
             />
           </div>

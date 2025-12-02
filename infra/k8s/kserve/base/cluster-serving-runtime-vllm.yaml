@@ -1,0 +1,78 @@
+# ClusterServingRuntime for vLLM
+# Defines how to run vLLM models in KServe
+# Uses storage-initializer to download models from S3 to /mnt/models
+apiVersion: serving.kserve.io/v1alpha1
+kind: ClusterServingRuntime
+metadata:
+  name: vllm-runtime
+spec:
+  annotations:
+    prometheus.kserve.io/port: "8000"
+    prometheus.kserve.io/path: /metrics
+  # Storage helper enabled - uses storage-initializer to download from S3
+  supportedModelFormats:
+    - name: vllm
+      version: "1"
+      autoSelect: true
+      priority: 1
+  protocolVersions:
+    - v2
+    - grpc-v2
+  containers:
+    - name: kserve-container
+      image: vllm/vllm-openai:v0.6.4
+      # Model loaded from local path (populated by storage-initializer)
+      command:
+        - python3
+        - -m
+        - vllm.entrypoints.openai.api_server
+      args:
+        - --model
+        - /mnt/models
+        - --served-model-name
+        - $(VLLM_MODEL_NAME)
+        - --port
+        - "8000"
+        - --tensor-parallel-size
+        - "1"
+        - --max-model-len
+        - "8192"
+        - --trust-remote-code
+        - --download-dir
+        - /tmp
+      env:
+        - name: VLLM_ALLOW_RUNTIME_LORA_UPDATING
+          value: "true"
+        # Model name for API responses, overridden by InferenceService
+        - name: VLLM_MODEL_NAME
+          value: "mistralai/Mistral-7B-Instruct-v0.3"
+        - name: HF_HOME
+          value: "/tmp/.cache"
+        - name: TRANSFORMERS_CACHE
+          value: "/tmp/.cache"
+      ports:
+        - containerPort: 8000
+          protocol: TCP
+      resources:
+        requests:
+          cpu: "2"
+          memory: "8Gi"
+        limits:
+          cpu: "4"
+          memory: "16Gi"
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: 8000
+        initialDelaySeconds: 300
+        periodSeconds: 30
+        timeoutSeconds: 10
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: 8000
+        initialDelaySeconds: 300
+        periodSeconds: 10
+        timeoutSeconds: 10
+        failureThreshold: 3

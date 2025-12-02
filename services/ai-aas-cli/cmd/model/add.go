@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/api"
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/huggingface"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/registry"
 )
@@ -45,11 +45,12 @@ Examples:
 			hfModelID := args[0]
 
 			// Get configuration
-			apiEndpoint := viper.GetString("api.endpoint")
-			apiKey := viper.GetString("api.key")
-			hfToken := viper.GetString("hf.token")
+			cfg, err := config.Load()
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
 
-			if apiEndpoint == "" {
+			if cfg.APIEndpoint == "" || cfg.APIEndpoint == "http://localhost:8080" {
 				return fmt.Errorf("API endpoint not configured. Run 'ai-aas-cli --init' first")
 			}
 
@@ -57,7 +58,7 @@ Examples:
 			defer cancel()
 
 			// Check model on HuggingFace
-			hfClient := huggingface.NewClient(huggingface.WithToken(hfToken))
+			hfClient := huggingface.NewClient(huggingface.WithToken(cfg.HFToken))
 			
 			fmt.Printf("Checking model on HuggingFace Hub: %s\n", hfModelID)
 			
@@ -96,10 +97,20 @@ Examples:
 				}
 			}
 
-			// Register in platform
+			// Register in platform via Admin API
 			fmt.Printf("Registering model in platform as: %s\n", name)
 
-			apiClient := api.NewClient(apiEndpoint, apiKey)
+			// Use Admin API endpoint for registry operations
+			adminEndpoint := cfg.AdminAPIEndpoint
+			if adminEndpoint == "" {
+				adminEndpoint = cfg.APIEndpoint // fallback for backward compatibility
+			}
+
+			opts := []api.ClientOption{}
+			if cfg.TLSInsecure {
+				opts = append(opts, api.WithInsecureSkipVerify())
+			}
+			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
 			regClient := registry.NewClient(apiClient)
 
 			model, err := regClient.Add(ctx, registry.AddRequest{

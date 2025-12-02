@@ -10,14 +10,27 @@ COPY shared/go /shared/go
 
 # Copy service files
 COPY services/user-org-service/go.mod services/user-org-service/go.sum ./
+
+# Create a go.work file to configure the workspace
+RUN printf '%s\n' \
+    'go 1.24.0' \
+    '' \
+    'use (' \
+    '	.' \
+    '	/shared/go' \
+    ')' \
+    '' \
+    'replace github.com/ai-aas/shared-go v0.0.0 => /shared/go' \
+    > go.work
+
 RUN go mod download
 
 # Copy service source code
 COPY services/user-org-service .
 
 # Build both binaries
-RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/admin-api ./cmd/admin-api
-RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/reconciler ./cmd/reconciler
+RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/admin-api ./cmd/admin-api && \
+    CGO_ENABLED=0 GOOS=linux go build -o /bin/reconciler ./cmd/reconciler
 
 # Final stage: minimal runtime image
 FROM alpine:latest

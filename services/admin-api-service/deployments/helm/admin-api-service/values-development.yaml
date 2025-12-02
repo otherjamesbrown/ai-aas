@@ -1,0 +1,47 @@
+# Development environment overrides
+# Domain configuration is computed from global.domain.base
+# See values.yaml for defaults and configs/environments/development.yaml for canonical source
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/otherjamesbrown/ai-aas/admin-api-service
+  # Using 'latest' tag intentionally for development to auto-update on each push.
+  # Production environments should pin to specific version tags (e.g., v1.2.3).
+  tag: latest
+  pullPolicy: Always
+
+env:
+  - name: PORT
+    value: "8080"
+  - name: ENVIRONMENT
+    value: development
+  - name: LOG_LEVEL
+    value: info
+
+secrets:
+  databaseUrlSecretName: admin-api-secrets
+  databaseUrlSecretKey: database-url
+  apiKeyHashSaltSecretName: admin-api-secrets
+  apiKeyHashSaltSecretKey: api-key-hash-salt
+  masterAdminApiKeySecretName: admin-api-secrets
+  masterAdminApiKeySecretKey: master-admin-api-key
+
+userOrgService:
+  endpoint: "http://user-org-service-development-user-org-service.user-org-service.svc.cluster.local:8081"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# Ingress configuration - hosts computed from global.domain.base
+ingress:
+  enabled: true
+  # subdomain: admin-api (default from values.yaml)
+  # Hosts are computed automatically:
+  #   - admin-api.dev.ai-aas.local (local domain)
+  #   - admin-api.dev.otherjamesbrown.com (public domain)

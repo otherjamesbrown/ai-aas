@@ -31,6 +31,30 @@ This runbook provides step-by-step instructions for deploying the KServe infrast
 - [ ] `kubectl` configured for the development cluster
 - [ ] Hugging Face token (for downloading models)
 - [ ] GPU nodes available and labeled
+- [ ] cert-manager installed and operational
+
+## Certificate Architecture
+
+KServe uses **two types of certificates**:
+
+1. **External TLS (Let's Encrypt)** - For public-facing ingress (e.g., `api.dev.otherjamesbrown.com`)
+   - Managed by cert-manager ClusterIssuers (`letsencrypt-prod`, `letsencrypt-staging`)
+   - Used for HTTPS termination at ingress
+
+2. **Internal Webhook Certificates (Self-signed)** - For Kubernetes internal communication
+   - Managed by cert-manager with a self-signed Issuer in the `kserve` namespace
+   - Required for CRD validation/conversion webhooks
+   - Automatically rotated by cert-manager
+
+**Important**: The KServe installation manifest (`kserve.yaml`) uses ArgoCD sync waves to ensure certificates are created before CRDs and webhooks that depend on them:
+
+| Sync Wave | Resources |
+|-----------|-----------|
+| -2 | `Issuer/selfsigned-issuer` |
+| -1 | `Certificate/serving-cert` |
+| 0 | Default (Namespace, RBAC, etc.) |
+| 1 | CRDs with conversion webhooks |
+| 2 | Webhook configurations |
 
 ## Phase 1: Infrastructure Deployment
 

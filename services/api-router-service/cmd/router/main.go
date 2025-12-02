@@ -118,60 +118,42 @@ func main() {
 		logger.Warn("failed to load initial configuration, using cache fallback", zap.Error(err))
 	}
 
-	// Bootstrap default routing policy for development
-	// Only support the actual deployed model - don't silently alias other model names
-	if cfg.Environment == "development" {
-		policy := &config.RoutingPolicy{
-			PolicyID:       "*-mistral-7b-instruct",
-			OrganizationID: "*", // Global policy
-			Model:          "mistral-7b-instruct",
-			Backends: []config.BackendWeight{
-				{
-					BackendID: "mistral-7b-instruct",
-					Weight:    100,
-				},
-			},
-			FailoverThreshold: 3,
-			UpdatedAt:         time.Now(),
-			Version:           1,
-		}
-		if err := cache.StorePolicy(ctx, policy); err != nil {
-			logger.Error("failed to bootstrap routing policy",
-				zap.String("model", "mistral-7b-instruct"),
-				zap.Error(err),
-			)
-		} else {
-			logger.Info("bootstrapped routing policy",
-				zap.String("model", "mistral-7b-instruct"),
-				zap.String("backend", "mistral-7b-instruct"),
-			)
-		}
+	// Initialize backend registry from config (needed early for policy bootstrapping)
+	backendRegistry := config.NewBackendRegistry(cfg)
+	logger.Info("backend registry initialized",
+		zap.Strings("backends", backendRegistry.ListBackends()),
+	)
 
-		// Bootstrap routing policy for gpt-oss-20b
-		policyGptOss20b := &config.RoutingPolicy{
-			PolicyID:       "*-gpt-oss-20b",
-			OrganizationID: "*", // Global policy
-			Model:          "gpt-oss-20b",
-			Backends: []config.BackendWeight{
-				{
-					BackendID: "gpt-oss-20b",
-					Weight:    100,
+	// Bootstrap routing policies from configured backend endpoints
+	// This creates a global policy for each backend that maps model name -> backend
+	if cfg.Environment == "development" {
+		backendIDs := backendRegistry.ListBackends()
+		for _, backendID := range backendIDs {
+			policy := &config.RoutingPolicy{
+				PolicyID:       "*-" + backendID,
+				OrganizationID: "*", // Global policy
+				Model:          backendID, // Model name matches backend ID
+				Backends: []config.BackendWeight{
+					{
+						BackendID: backendID,
+						Weight:    100,
+					},
 				},
-			},
-			FailoverThreshold: 3,
-			UpdatedAt:         time.Now(),
-			Version:           1,
-		}
-		if err := cache.StorePolicy(ctx, policyGptOss20b); err != nil {
-			logger.Error("failed to bootstrap routing policy",
-				zap.String("model", "gpt-oss-20b"),
-				zap.Error(err),
-			)
-		} else {
-			logger.Info("bootstrapped routing policy",
-				zap.String("model", "gpt-oss-20b"),
-				zap.String("backend", "gpt-oss-20b"),
-			)
+				FailoverThreshold: 3,
+				UpdatedAt:         time.Now(),
+				Version:           1,
+			}
+			if err := cache.StorePolicy(ctx, policy); err != nil {
+				logger.Error("failed to bootstrap routing policy",
+					zap.String("model", backendID),
+					zap.Error(err),
+				)
+			} else {
+				logger.Info("bootstrapped routing policy",
+					zap.String("model", backendID),
+					zap.String("backend", backendID),
+				)
+			}
 		}
 	}
 
@@ -285,12 +267,6 @@ func main() {
 
 	// Initialize audit logger
 	auditLogger := usage.NewAuditLogger(logger)
-
-	// Initialize backend registry from config
-	backendRegistry := config.NewBackendRegistry(cfg)
-	logger.Info("backend registry initialized",
-		zap.Strings("backends", backendRegistry.ListBackends()),
-	)
 
 	// Initialize Kafka publisher for usage records (if configured)
 	var kafkaPublisher *usage.Publisher
