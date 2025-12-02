@@ -125,7 +125,7 @@ backends:
   # Port 80 is the Knative gateway port which handles routing.
   # Note: Don't include path - it's added by the router based on request type
   # Example: "model-name:http://model-name-predictor.development.svc.cluster.local:80"
-  endpoints: ""  # Empty - no models deployed. Add via CLI or Admin API
+  endpoints: "mistralai/Mistral-7B-Instruct-v0.3:http://mistral-7b-development-predictor.development.svc.cluster.local:80"
 
 # Redis configuration
 redis:
