@@ -189,6 +189,63 @@ func (s *Store) GetOrgBySlug(ctx context.Context, slug string) (Org, error) {
 	return out, err
 }
 
+// ListOrgs retrieves all organizations with optional pagination.
+// Returns organizations ordered by created_at descending (newest first).
+func (s *Store) ListOrgs(ctx context.Context, limit, offset int) ([]Org, error) {
+	var out []Org
+	if limit <= 0 {
+		limit = 100 // default limit
+	}
+	if limit > 1000 {
+		limit = 1000 // max limit
+	}
+	err := s.withTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT * FROM orgs
+			WHERE deleted_at IS NULL
+			ORDER BY created_at DESC
+			LIMIT $1 OFFSET $2
+		`, limit, offset)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			org, err := scanOrg(rows)
+			if err != nil {
+				return err
+			}
+			out = append(out, org)
+		}
+		return rows.Err()
+	})
+	if out == nil {
+		out = []Org{}
+	}
+	return out, err
+}
+
+// DeleteOrg soft-deletes an organization by ID.
+// This sets deleted_at timestamp and does NOT cascade to users/API keys.
+// Use with caution - consider using status transitions instead.
+func (s *Store) DeleteOrg(ctx context.Context, id uuid.UUID) error {
+	return s.withTenantTx(ctx, id, func(ctx context.Context, tx pgx.Tx) error {
+		result, err := tx.Exec(ctx, `
+			UPDATE orgs
+			SET deleted_at = NOW(), updated_at = NOW(), version = version + 1
+			WHERE org_id = $1 AND deleted_at IS NULL
+		`, id)
+		if err != nil {
+			return err
+		}
+		if result.RowsAffected() == 0 {
+			return ErrNotFound
+		}
+		return nil
+	})
+}
+
 // ListUsersInOrg retrieves all users in an organization.
 // Returns users ordered by created_at descending (newest first).
 func (s *Store) ListUsersInOrg(ctx context.Context, orgID uuid.UUID) ([]User, error) {

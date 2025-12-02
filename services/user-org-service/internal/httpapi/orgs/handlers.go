@@ -43,6 +43,7 @@ package orgs
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -72,7 +73,13 @@ func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger *zap.Logger
 		// to ensure GET /v1/orgs/{orgId} matches correctly
 		r.Get("/{orgId}", handler.GetOrg)
 		r.Patch("/{orgId}", handler.UpdateOrg)
+		r.Delete("/{orgId}", handler.DeleteOrg)
 	})
+
+	// Frontend-friendly convenience routes (no /v1 prefix)
+	// These resolve org from authenticated context
+	router.Get("/organizations/me", handler.GetOrgForMe)
+	router.Patch("/organizations/me", handler.UpdateOrgForMe)
 }
 
 // Handler serves organization management endpoints.
@@ -348,11 +355,91 @@ func (h *Handler) UpdateOrg(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListOrgs handles GET /v1/orgs - List organizations.
-// TODO: Add pagination, filtering, and authorization checks.
+// Supports pagination via ?limit=N&offset=M query parameters.
+// Note: This is a master admin endpoint - normal users should only see their own org.
 func (h *Handler) ListOrgs(w http.ResponseWriter, r *http.Request) {
-	// Placeholder - full implementation requires pagination and auth
+	ctx := r.Context()
+
+	// Parse pagination parameters
+	limit := 100
+	offset := 0
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if o := r.URL.Query().Get("offset"); o != "" {
+		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+
+	orgs, err := h.runtime.Postgres.ListOrgs(ctx, limit, offset)
+	if err != nil {
+		h.logger.Error("failed to list organizations", zap.Error(err))
+		http.Error(w, "failed to list organizations", http.StatusInternalServerError)
+		return
+	}
+
+	// Convert to response format
+	resp := make([]OrganizationResponse, 0, len(orgs))
+	for _, org := range orgs {
+		resp = append(resp, toOrgResponse(org))
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode([]OrganizationResponse{})
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		h.logger.Error("failed to encode response", zap.Error(err))
+	}
+}
+
+// DeleteOrg handles DELETE /v1/orgs/{orgId} - Delete (soft-delete) an organization.
+// This is a destructive operation that requires master admin privileges.
+func (h *Handler) DeleteOrg(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgIDParam := chi.URLParam(r, "orgId")
+
+	// Parse org ID (UUID or slug)
+	var orgID uuid.UUID
+	var err error
+	if orgID, err = uuid.Parse(orgIDParam); err != nil {
+		// Try as slug
+		org, err := h.runtime.Postgres.GetOrgBySlug(ctx, orgIDParam)
+		if err != nil {
+			if err == postgres.ErrNotFound {
+				http.Error(w, "organization not found", http.StatusNotFound)
+				return
+			}
+			h.logger.Error("failed to resolve organization", zap.Error(err), zap.String("orgId", orgIDParam))
+			http.Error(w, "failed to resolve organization", http.StatusInternalServerError)
+			return
+		}
+		orgID = org.ID
+	}
+
+	// Perform soft delete
+	if err := h.runtime.Postgres.DeleteOrg(ctx, orgID); err != nil {
+		if err == postgres.ErrNotFound {
+			http.Error(w, "organization not found", http.StatusNotFound)
+			return
+		}
+		h.logger.Error("failed to delete organization", zap.Error(err), zap.String("orgId", orgID.String()))
+		http.Error(w, "failed to delete organization", http.StatusInternalServerError)
+		return
+	}
+
+	// Emit audit event
+	actorID := getActorID(r)
+	event := audit.BuildEvent(orgID, actorID, audit.ActorTypeUser, audit.ActionOrgDelete, audit.TargetTypeOrg, &orgID)
+	event = audit.BuildEventFromRequest(event, r)
+	_ = h.runtime.Audit.Emit(ctx, event)
+
+	h.logger.Info("organization deleted",
+		zap.String("org_id", orgID.String()),
+		zap.String("actor_id", actorID.String()),
+	)
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // toOrgResponse converts a postgres.Org to an OrganizationResponse.
@@ -372,4 +459,145 @@ func toOrgResponse(org postgres.Org) OrganizationResponse {
 // Requires RequireAuth middleware to be applied to the route.
 func getActorID(r *http.Request) uuid.UUID {
 	return middleware.GetUserID(r.Context())
+}
+
+// GetOrgForMe handles GET /organizations/me - Get the current user's organization.
+// Resolves the organization from the authenticated context.
+func (h *Handler) GetOrgForMe(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get org ID from authenticated context
+	orgID := middleware.GetOrgID(ctx)
+	if orgID == uuid.Nil {
+		http.Error(w, "organization not found in context", http.StatusUnauthorized)
+		return
+	}
+
+	org, err := h.runtime.Postgres.GetOrg(ctx, orgID)
+	if err != nil {
+		if err == postgres.ErrNotFound {
+			http.Error(w, "organization not found", http.StatusNotFound)
+			return
+		}
+		h.logger.Error("failed to get organization", zap.Error(err), zap.String("orgId", orgID.String()))
+		http.Error(w, "failed to retrieve organization", http.StatusInternalServerError)
+		return
+	}
+
+	resp := toOrgResponse(org)
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		h.logger.Error("failed to encode response", zap.Error(err))
+	}
+}
+
+// UpdateOrgForMe handles PATCH /organizations/me - Update the current user's organization.
+// Resolves the organization from the authenticated context.
+func (h *Handler) UpdateOrgForMe(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get org ID from authenticated context
+	orgID := middleware.GetOrgID(ctx)
+	if orgID == uuid.Nil {
+		http.Error(w, "organization not found in context", http.StatusUnauthorized)
+		return
+	}
+
+	// Get existing org to obtain current version
+	existingOrg, err := h.runtime.Postgres.GetOrg(ctx, orgID)
+	if err != nil {
+		if err == postgres.ErrNotFound {
+			http.Error(w, "organization not found", http.StatusNotFound)
+			return
+		}
+		h.logger.Error("failed to get organization for update", zap.Error(err), zap.String("orgId", orgID.String()))
+		http.Error(w, "failed to retrieve organization", http.StatusInternalServerError)
+		return
+	}
+
+	var req UpdateOrgRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.Warn("invalid request payload", zap.Error(err))
+		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		return
+	}
+
+	// Build update params (only include fields that are provided)
+	params := postgres.UpdateOrgParams{
+		ID:      existingOrg.ID,
+		Version: existingOrg.Version,
+		Name:    existingOrg.Name, // Default to existing
+		Status:  existingOrg.Status,
+	}
+
+	if req.DisplayName != nil {
+		params.Name = *req.DisplayName
+	}
+	if req.Status != nil {
+		// Validate status
+		validStatuses := map[string]bool{"active": true, "suspended": true}
+		if !validStatuses[*req.Status] {
+			http.Error(w, "invalid status", http.StatusBadRequest)
+			return
+		}
+		params.Status = *req.Status
+	}
+	if req.BudgetPolicyID != nil {
+		if policyID, err := uuid.Parse(*req.BudgetPolicyID); err == nil {
+			params.BudgetPolicyID = &policyID
+		}
+	}
+
+	// Handle declarative config updates
+	if req.Declarative != nil {
+		if req.Declarative.Enabled {
+			params.DeclarativeMode = "enabled"
+			if req.Declarative.RepoURL != "" {
+				params.DeclarativeRepoURL = &req.Declarative.RepoURL
+			}
+			if req.Declarative.Branch != "" {
+				params.DeclarativeBranch = &req.Declarative.Branch
+			}
+		} else {
+			params.DeclarativeMode = "disabled"
+		}
+	}
+
+	// Merge metadata if provided
+	if req.Metadata != nil {
+		params.Metadata = req.Metadata
+	} else {
+		params.Metadata = existingOrg.Metadata
+	}
+
+	org, err := h.runtime.Postgres.UpdateOrg(ctx, params)
+	if err != nil {
+		if err == postgres.ErrOptimisticLock {
+			http.Error(w, "organization was modified concurrently", http.StatusConflict)
+			return
+		}
+		h.logger.Error("failed to update organization", zap.Error(err), zap.String("orgId", existingOrg.ID.String()))
+		http.Error(w, "failed to update organization", http.StatusInternalServerError)
+		return
+	}
+
+	// Emit audit event
+	actorID := getActorID(r)
+	action := audit.ActionOrgUpdate
+	if req.Status != nil && *req.Status == "suspended" {
+		action = audit.ActionOrgSuspend
+	}
+	event := audit.BuildEvent(org.ID, actorID, audit.ActorTypeSystem, action, audit.TargetTypeOrg, &org.ID)
+	event = audit.BuildEventFromRequest(event, r)
+	event.Metadata = map[string]any{
+		"previous_status": existingOrg.Status,
+		"new_status":      org.Status,
+	}
+	_ = h.runtime.Audit.Emit(ctx, event)
+
+	resp := toOrgResponse(org)
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		h.logger.Error("failed to encode response", zap.Error(err))
+	}
 }

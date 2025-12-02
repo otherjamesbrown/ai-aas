@@ -314,6 +314,7 @@ const (
 	ActionOrgCreate        = "org.create"
 	ActionOrgUpdate        = "org.update"
 	ActionOrgSuspend       = "org.suspend"
+	ActionOrgDelete        = "org.delete"
 	ActionUserInvite       = "user.invite"
 	ActionUserCreate       = "user.create"
 	ActionUserUpdate       = "user.update"
