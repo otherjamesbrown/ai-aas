@@ -177,7 +177,8 @@ func (c *Client) downloadFile(ctx context.Context, modelID, revision string, fil
 	}
 
 	// Build download URL
-	url := fmt.Sprintf("%s/%s/resolve/%s/%s", DefaultBaseURL, modelID, revision, file.Path)
+	// Note: Downloads use huggingface.co directly, not the /api endpoint
+	url := fmt.Sprintf("https://huggingface.co/%s/resolve/%s/%s", modelID, revision, file.Path)
 
 	// Create request
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
@@ -194,14 +195,33 @@ func (c *Client) downloadFile(ctx context.Context, modelID, revision string, fil
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", existingSize))
 	}
 
-	resp, err := c.httpClient.Do(req)
+	// Use a dedicated download client with no timeout (large files need time)
+	// and explicit redirect following
+	downloadClient := &http.Client{
+		Timeout: 0, // No timeout for downloads
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			// Follow up to 10 redirects, preserving auth header
+			if len(via) >= 10 {
+				return fmt.Errorf("stopped after 10 redirects")
+			}
+			// Preserve authorization header on redirects to same host
+			if len(via) > 0 && req.URL.Host == via[0].URL.Host {
+				if auth := via[0].Header.Get("Authorization"); auth != "" {
+					req.Header.Set("Authorization", auth)
+				}
+			}
+			return nil
+		},
+	}
+
+	resp, err := downloadClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
-		return nil, fmt.Errorf("download failed with status %d", resp.StatusCode)
+		return nil, fmt.Errorf("download failed with status %d for URL: %s", resp.StatusCode, url)
 	}
 
 	// Open file for writing

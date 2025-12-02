@@ -171,7 +171,8 @@ See Also:
 			defer os.RemoveAll(tempDir)
 
 			// Download from HuggingFace
-			fmt.Println("\nDownloading from HuggingFace...")
+			hfURL := fmt.Sprintf("https://huggingface.co/%s/tree/%s", model.HFModelID, revision)
+			fmt.Printf("\nDownloading from HuggingFace: %s\n", hfURL)
 			progress := output.NewDownloadProgressBar("Downloading", size)
 
 			downloadOpts := huggingface.DownloadOptions{

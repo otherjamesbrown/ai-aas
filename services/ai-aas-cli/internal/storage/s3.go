@@ -2,6 +2,7 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -56,11 +57,17 @@ func NewS3Client(ctx context.Context, cfg S3Config) (*S3Client, error) {
 	}
 
 	// Create S3 client with custom endpoint
+	// For S3-compatible services like Linode Object Storage, we need to disable
+	// request checksum calculation as they don't fully support the newer AWS SDK v2
+	// checksum handling which causes XAmzContentSHA256Mismatch errors.
 	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 		if cfg.Endpoint != "" {
 			o.BaseEndpoint = aws.String(cfg.Endpoint)
 		}
 		o.UsePathStyle = cfg.ForcePathStyle
+		// Disable request checksum calculation for non-AWS S3-compatible services
+		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
+		o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
 	})
 
 	return &S3Client{
@@ -81,16 +88,12 @@ func (c *S3Client) fullPath(path string) string {
 
 // Upload uploads a file to S3
 func (c *S3Client) Upload(ctx context.Context, localPath, remotePath string) error {
-	f, err := os.Open(localPath)
+	// Read the entire file into memory
+	// Using bytes.NewReader which is seekable, required for AWS SDK v2 to compute
+	// the content SHA256 correctly for S3-compatible services like Linode Object Storage
+	data, err := os.ReadFile(localPath)
 	if err != nil {
-		return fmt.Errorf("open file: %w", err)
-	}
-	defer f.Close()
-
-	// Get file info for content length
-	info, err := f.Stat()
-	if err != nil {
-		return fmt.Errorf("stat file: %w", err)
+		return fmt.Errorf("read file: %w", err)
 	}
 
 	key := c.fullPath(remotePath)
@@ -98,8 +101,8 @@ func (c *S3Client) Upload(ctx context.Context, localPath, remotePath string) err
 	_, err = c.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:        aws.String(c.bucket),
 		Key:           aws.String(key),
-		Body:          f,
-		ContentLength: aws.Int64(info.Size()),
+		Body:          bytes.NewReader(data),
+		ContentLength: aws.Int64(int64(len(data))),
 	})
 	if err != nil {
 		return fmt.Errorf("put object: %w", err)
@@ -167,7 +170,7 @@ func (c *S3Client) UploadMultipart(ctx context.Context, localPath, remotePath st
 			Key:           aws.String(key),
 			UploadId:      uploadID,
 			PartNumber:    aws.Int32(partNumber),
-			Body:          strings.NewReader(string(buffer[:n])),
+			Body:          bytes.NewReader(buffer[:n]),
 			ContentLength: aws.Int64(int64(n)),
 		})
 		if err != nil {

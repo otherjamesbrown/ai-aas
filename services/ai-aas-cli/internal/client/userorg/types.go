@@ -146,3 +146,21 @@ type BudgetStatusResponse struct {
 	PeriodEnd         string `json:"periodEnd,omitempty"`
 }
 
+// CreateUserRequest represents direct user creation request (bypasses invite flow).
+type CreateUserRequest struct {
+	Email          string   `json:"email"`
+	DisplayName    string   `json:"displayName,omitempty"`
+	Roles          []string `json:"roles,omitempty"`
+	ForcePwdChange *bool    `json:"forcePwdChange,omitempty"` // If true, user must change password on first login
+}
+
+// CreateUserResponse represents direct user creation response with temporary password.
+type CreateUserResponse struct {
+	UserID            string `json:"userId"`
+	Email             string `json:"email"`
+	DisplayName       string `json:"displayName"`
+	Status            string `json:"status"`
+	TemporaryPassword string `json:"temporaryPassword"`
+	CreatedAt         string `json:"createdAt"`
+}
+

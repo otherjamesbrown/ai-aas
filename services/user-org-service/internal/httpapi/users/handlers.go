@@ -79,6 +79,7 @@ func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger *zap.Logger
 	// Register routes directly under /v1/orgs/{orgId} without using Route()
 	// This prevents the route group from intercepting GET /v1/orgs/{orgId} requests
 	router.Post("/v1/orgs/{orgId}/invites", handler.InviteUser)
+	router.Post("/v1/orgs/{orgId}/users", handler.CreateUser) // Direct user creation
 	router.Get("/v1/orgs/{orgId}/users", handler.ListUsers)
 	router.Get("/v1/orgs/{orgId}/users/{userId}", handler.GetUser)
 	router.Patch("/v1/orgs/{orgId}/users/{userId}", handler.UpdateUser)
@@ -129,6 +130,25 @@ type UpdateUserRequest struct {
 // RoleAssignmentRequest represents role assignment updates.
 type RoleAssignmentRequest struct {
 	Roles []string `json:"roles"`
+}
+
+// CreateUserRequest represents the payload for direct user creation.
+type CreateUserRequest struct {
+	Email          string   `json:"email"`
+	DisplayName    string   `json:"displayName,omitempty"`
+	Roles          []string `json:"roles,omitempty"`
+	ForcePwdChange *bool    `json:"forcePwdChange,omitempty"` // If true, user must change password on first login
+}
+
+// CreateUserResponse represents the response for direct user creation.
+// Includes the temporary password which is shown only once.
+type CreateUserResponse struct {
+	UserID            string `json:"userId"`
+	Email             string `json:"email"`
+	DisplayName       string `json:"displayName"`
+	Status            string `json:"status"`
+	TemporaryPassword string `json:"temporaryPassword"`
+	CreatedAt         string `json:"createdAt"`
 }
 
 // InviteUser handles POST /v1/orgs/{orgId}/invites - Invite a new user.
@@ -288,6 +308,123 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		h.logger.Error("failed to encode response", zap.Error(err))
+	}
+}
+
+// CreateUser handles POST /v1/orgs/{orgId}/users - Create a user directly.
+// Creates an active user with a generated temporary password that is returned once.
+// This is for admin/CLI use where email invitation is not needed.
+func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgIDParam := chi.URLParam(r, "orgId")
+
+	// Resolve org ID (UUID or slug)
+	orgID, err := h.resolveOrgID(ctx, orgIDParam)
+	if err != nil {
+		http.Error(w, "organization not found", http.StatusNotFound)
+		return
+	}
+
+	var req CreateUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.Warn("invalid request payload", zap.Error(err))
+		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		return
+	}
+
+	// Validate email
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+	if email == "" {
+		http.Error(w, "email is required", http.StatusBadRequest)
+		return
+	}
+
+	// Check if user already exists
+	_, err = h.runtime.Postgres.GetUserByEmail(ctx, orgID, email)
+	if err == nil {
+		http.Error(w, "user with this email already exists", http.StatusConflict)
+		return
+	}
+	// ErrNotFound is expected, continue
+
+	// Generate secure temporary password (user should change on first login)
+	tempPassword, err := generateSecurePassword()
+	if err != nil {
+		h.logger.Error("failed to generate temporary password", zap.Error(err))
+		http.Error(w, "failed to create user", http.StatusInternalServerError)
+		return
+	}
+	passwordHash, err := security.HashPassword(tempPassword)
+	if err != nil {
+		h.logger.Error("failed to hash password", zap.Error(err))
+		http.Error(w, "failed to create user", http.StatusInternalServerError)
+		return
+	}
+
+	// Set display name (default to email if not provided)
+	displayName := req.DisplayName
+	if displayName == "" {
+		displayName = email
+	}
+
+	// Create user with active status
+	userID := uuid.New()
+	actorID := getActorID(r)
+
+	// Determine if password must be changed on first login
+	// Default to false (no forced password change) unless explicitly requested
+	passwordMustChange := false
+	if req.ForcePwdChange != nil && *req.ForcePwdChange {
+		passwordMustChange = true
+	}
+
+	params := postgres.CreateUserParams{
+		ID:             userID,
+		OrgID:          orgID,
+		Email:          email,
+		DisplayName:    displayName,
+		PasswordHash:   passwordHash,
+		Status:         "active",
+		MFAEnrolled:    false,
+		MFAMethods:     []string{},
+		RecoveryTokens: []string{},
+		Metadata: map[string]any{
+			"roles":                req.Roles,
+			"password_must_change": passwordMustChange,
+			"created_via":          "direct",
+		},
+	}
+
+	createdUser, err := h.runtime.Postgres.CreateUser(ctx, params)
+	if err != nil {
+		h.logger.Error("failed to create user", zap.Error(err), zap.String("email", email))
+		http.Error(w, "failed to create user", http.StatusInternalServerError)
+		return
+	}
+
+	// Emit audit event
+	event := audit.BuildEvent(orgID, actorID, audit.ActorTypeSystem, audit.ActionUserCreate, audit.TargetTypeUser, &createdUser.ID)
+	event = audit.BuildEventFromRequest(event, r)
+	event.Metadata = map[string]any{
+		"email":       email,
+		"roles":       req.Roles,
+		"created_via": "direct",
+	}
+	_ = h.runtime.Audit.Emit(ctx, event)
+
+	resp := CreateUserResponse{
+		UserID:            createdUser.ID.String(),
+		Email:             createdUser.Email,
+		DisplayName:       createdUser.DisplayName,
+		Status:            createdUser.Status,
+		TemporaryPassword: tempPassword, // Shown only once
+		CreatedAt:         createdUser.CreatedAt.Format(time.RFC3339),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		h.logger.Error("failed to encode response", zap.Error(err))
 	}
@@ -600,6 +737,54 @@ func generateInviteToken() (string, error) {
 	}
 	// Encode as URL-safe base64 (no padding)
 	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+// generateSecurePassword generates a secure random password for direct user creation.
+// Returns a human-readable password with mixed case, numbers, and special chars.
+func generateSecurePassword() (string, error) {
+	// Character sets for password generation
+	const (
+		lowercase = "abcdefghijkmnopqrstuvwxyz"  // Excluding l for readability
+		uppercase = "ABCDEFGHJKLMNPQRSTUVWXYZ"   // Excluding I, O for readability
+		digits    = "23456789"                   // Excluding 0, 1 for readability
+		special   = "!@#$%^&*"
+	)
+	allChars := lowercase + uppercase + digits + special
+
+	// Generate 16-character password
+	passwordLen := 16
+	password := make([]byte, passwordLen)
+
+	// Ensure at least one character from each set
+	charSets := []string{lowercase, uppercase, digits, special}
+	for i, set := range charSets {
+		idx := make([]byte, 1)
+		if _, err := rand.Read(idx); err != nil {
+			return "", fmt.Errorf("generate password: %w", err)
+		}
+		password[i] = set[int(idx[0])%len(set)]
+	}
+
+	// Fill remaining positions with random characters from all sets
+	for i := len(charSets); i < passwordLen; i++ {
+		idx := make([]byte, 1)
+		if _, err := rand.Read(idx); err != nil {
+			return "", fmt.Errorf("generate password: %w", err)
+		}
+		password[i] = allChars[int(idx[0])%len(allChars)]
+	}
+
+	// Shuffle the password to avoid predictable positions
+	for i := passwordLen - 1; i > 0; i-- {
+		jByte := make([]byte, 1)
+		if _, err := rand.Read(jByte); err != nil {
+			return "", fmt.Errorf("generate password: %w", err)
+		}
+		j := int(jByte[0]) % (i + 1)
+		password[i], password[j] = password[j], password[i]
+	}
+
+	return string(password), nil
 }
 
 // requireOrgAccess checks if the authenticated user has access to the specified organization.
