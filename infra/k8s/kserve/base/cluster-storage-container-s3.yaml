@@ -38,7 +38,7 @@ spec:
       - name: S3_USE_HTTPS
         value: "1"
       - name: S3_VERIFY_SSL
-        value: "0"
+        value: "1"
 
   supportedUriFormats:
     - regex: "s3://.*"

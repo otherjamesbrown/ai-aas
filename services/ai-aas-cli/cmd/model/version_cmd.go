@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/cache"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/cli"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/huggingface"
@@ -315,7 +316,7 @@ See Also:
 			fmt.Printf("  Model: %s\n", model.HFModelID)
 			fmt.Printf("  Version: %s\n", truncateSHA(hfInfo.SHA))
 
-			if err := PullModelToCache(ctx, PullOptions{
+			if err := cache.PullModelToCache(ctx, cache.PullOptions{
 				ModelName:  modelName,
 				Revision:   hfInfo.SHA,
 				DryRun:     false,

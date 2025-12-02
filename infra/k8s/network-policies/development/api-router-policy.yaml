@@ -86,12 +86,14 @@ spec:
       ports:
         - protocol: TCP
           port: 8000
-    # Allow to KServe InferenceServices in development namespace
+    # Allow to ALL KServe InferenceServices in development namespace
     # Uses port 8012 (queue-proxy) on -private services for direct pod access
+    # Uses matchExpressions with Exists operator to match any InferenceService
     - to:
         - podSelector:
-            matchLabels:
-              serving.kserve.io/inferenceservice: mistral-7b-development
+            matchExpressions:
+              - key: serving.kserve.io/inferenceservice
+                operator: Exists
       ports:
         - protocol: TCP
           port: 8012

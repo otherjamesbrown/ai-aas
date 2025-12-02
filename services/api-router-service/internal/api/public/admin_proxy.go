@@ -54,9 +54,9 @@ func (h *Handler) HandleAdminProxy(w http.ResponseWriter, r *http.Request) {
 	// User-org-service has convenience routes at /organizations/me/* (no /v1 prefix)
 	// These routes are registered directly in the router for frontend compatibility
 	path := r.URL.Path
-	// Don't modify /organizations/me/* paths - they're already correct
+	// Don't modify paths in noV1PrefixPaths - they're already correct
 	// Only add /v1 prefix for other paths that need it
-	if len(path) > 0 && path[0] == '/' && !hasV1Prefix(path) && !startsWithOrganizationsMe(path) {
+	if len(path) > 0 && path[0] == '/' && !hasV1Prefix(path) && !shouldSkipV1Prefix(path) {
 		path = "/v1" + path
 	}
 
@@ -202,14 +202,25 @@ func (h *Handler) HandleImpersonationStatus(w http.ResponseWriter, r *http.Reque
 	_, _ = w.Write([]byte(`{"error":"No active impersonation session","code":"NOT_FOUND"}`))
 }
 
+// noV1PrefixPaths lists path prefixes that should NOT have /v1 prepended.
+// These routes are registered directly in user-org-service without the /v1 prefix.
+// To add new exceptions, simply append to this slice.
+var noV1PrefixPaths = []string{
+	"/organizations/me",
+}
+
 // hasV1Prefix checks if a path already has the /v1 prefix
 func hasV1Prefix(path string) bool {
 	return len(path) >= 3 && path[:3] == "/v1"
 }
 
-// startsWithOrganizationsMe checks if a path starts with /organizations/me
-// These routes are registered without the /v1 prefix in user-org-service
-func startsWithOrganizationsMe(path string) bool {
-	const prefix = "/organizations/me"
-	return len(path) >= len(prefix) && path[:len(prefix)] == prefix
+// shouldSkipV1Prefix checks if a path matches any prefix in noV1PrefixPaths.
+// Returns true if the path should NOT have /v1 prepended.
+func shouldSkipV1Prefix(path string) bool {
+	for _, prefix := range noV1PrefixPaths {
+		if len(path) >= len(prefix) && path[:len(prefix)] == prefix {
+			return true
+		}
+	}
+	return false
 }
