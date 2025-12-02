@@ -28,6 +28,9 @@ type Config struct {
 	Quiet       bool   `mapstructure:"quiet" json:"quiet"`
 	OutputFormat string `mapstructure:"output_format" json:"output_format"`
 
+	// Default organization (set with 'ai-aas-cli org use <org-id>')
+	DefaultOrgID string `mapstructure:"default_org_id" json:"default_org_id,omitempty"`
+
 	// Service-specific endpoints (for admin commands)
 	UserOrgEndpoint   string `mapstructure:"user_org_endpoint" json:"user_org_endpoint,omitempty"`
 	AnalyticsEndpoint string `mapstructure:"analytics_endpoint" json:"analytics_endpoint,omitempty"`
@@ -107,6 +110,11 @@ func Load() (*Config, error) {
 		cfg.APIEndpoint = endpointOverride
 	}
 
+	// AI_AAS_DEFAULT_ORG_ID overrides config file default org
+	if orgOverride := os.Getenv("AI_AAS_DEFAULT_ORG_ID"); orgOverride != "" {
+		cfg.DefaultOrgID = orgOverride
+	}
+
 	return &cfg, nil
 }
 
@@ -139,6 +147,9 @@ func Save(cfg *Config) error {
 	viper.Set("environment", cfg.Environment)
 	viper.Set("verbose", cfg.Verbose)
 	viper.Set("output_format", cfg.OutputFormat)
+	if cfg.DefaultOrgID != "" {
+		viper.Set("default_org_id", cfg.DefaultOrgID)
+	}
 
 	// Service-specific endpoints (optional, derived from base domain)
 	if cfg.UserOrgEndpoint != "" {

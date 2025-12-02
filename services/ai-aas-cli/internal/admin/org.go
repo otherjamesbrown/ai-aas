@@ -54,7 +54,7 @@ Examples:
 Workflow:
   1. Create org        ai-aas-cli org create --name <name> --slug <slug>
   2. Add users         ai-aas-cli user create --org-id <org> --email <email>
-  3. Create API key    ai-aas-cli apikey create --org-id <org> --name <key-name>
+  3. Create API key    ai-aas-cli apikey create --org-id <org> --user-id <user>
   4. Enable models     ai-aas-cli model library enable <model> --org-id <org>`,
 	}
 
@@ -62,6 +62,7 @@ Workflow:
 	cmd.AddCommand(orgCreateCommand())
 	cmd.AddCommand(orgUpdateCommand())
 	cmd.AddCommand(orgDeleteCommand())
+	cmd.AddCommand(orgUseCommand())
 
 	return cmd
 }
@@ -234,6 +235,7 @@ func orgCreateCommand() *cobra.Command {
 	var flagQuiet bool
 	var flagUserOrgEndpoint string
 	var flagAPIKey string
+	var flagUse bool
 
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -246,6 +248,9 @@ unique across the platform.
 Examples:
   # Create a basic organization
   ai-aas-cli org create --name "ACME Corp" --slug acme
+
+  # Create and set as default organization
+  ai-aas-cli org create --name "ACME Corp" --slug acme --use
 
   # Create with billing owner
   ai-aas-cli org create --name "ACME Corp" --slug acme \
@@ -261,7 +266,7 @@ Examples:
 Next Steps:
   After creating an organization:
   1. Add users         ai-aas-cli user create --org-id <slug> --email <email>
-  2. Create API key    ai-aas-cli apikey create --org-id <slug> --name <key-name>
+  2. Create API key    ai-aas-cli apikey create --org-id <slug> --user-id <user>
   3. Enable models     ai-aas-cli model library enable <model> --org-id <slug>
 
 See Also:
@@ -270,7 +275,7 @@ See Also:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runOrgCreate(cmd, args, flagName, flagSlug, flagBillingOwnerEmail,
 				flagDeclarativeEnabled, flagDeclarativeRepoURL, flagDeclarativeBranch,
-				flagDryRun, flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey)
+				flagDryRun, flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey, flagUse)
 		},
 	}
 
@@ -286,13 +291,14 @@ See Also:
 	cmd.Flags().BoolVar(&flagQuiet, "quiet", false, "Suppress non-error output")
 	cmd.Flags().StringVar(&flagUserOrgEndpoint, "user-org-endpoint", "", "User-org-service endpoint (overrides config)")
 	cmd.Flags().StringVar(&flagAPIKey, "api-key", "", "API key for authentication (overrides config)")
+	cmd.Flags().BoolVar(&flagUse, "use", false, "Set as default organization after creation")
 
 	return cmd
 }
 
 func runOrgCreate(cmd *cobra.Command, args []string, flagName, flagSlug, flagBillingOwnerEmail string,
 	flagDeclarativeEnabled bool, flagDeclarativeRepoURL, flagDeclarativeBranch string,
-	flagDryRun bool, flagFormat string, flagVerbose, flagQuiet bool, flagUserOrgEndpoint, flagAPIKey string) error {
+	flagDryRun bool, flagFormat string, flagVerbose, flagQuiet bool, flagUserOrgEndpoint, flagAPIKey string, flagUse bool) error {
 	startTime := time.Now()
 
 	// Load configuration
@@ -434,6 +440,19 @@ func runOrgCreate(cmd *cobra.Command, args []string, flagName, flagSlug, flagBil
 		Outcome:  "success",
 		Duration: time.Since(startTime),
 	})
+
+	// Set as default organization if --use flag is set
+	if flagUse {
+		cfg.DefaultOrgID = org.Slug // Use slug as it's more user-friendly
+		if err := config.Save(cfg); err != nil {
+			// Don't fail the whole operation, just warn
+			if !cfg.Quiet {
+				fmt.Printf("Warning: failed to save default organization: %v\n", err)
+			}
+		} else if !cfg.Quiet {
+			fmt.Printf("Default organization set to: %s\n\n", org.Slug)
+		}
+	}
 
 	// Format output
 	if cfg.OutputFormat == "json" {
@@ -864,6 +883,107 @@ func runOrgDelete(cmd *cobra.Command, args []string, flagOrgID string, flagConfi
 			fmt.Printf("Organization deleted successfully: %s\n", flagOrgID)
 		}
 	}
+	return nil
+}
+
+func orgUseCommand() *cobra.Command {
+	var flagClear bool
+
+	cmd := &cobra.Command{
+		Use:   "use [org-id]",
+		Short: "Set default organization",
+		Long: `Set the default organization for subsequent commands.
+
+When a default organization is set, commands like 'user list' and 'apikey create'
+will use it automatically instead of requiring --org-id.
+
+The default organization can be overridden at any time with --org-id flag,
+or with the AI_AAS_DEFAULT_ORG_ID environment variable.
+
+Examples:
+  # Set default organization
+  ai-aas-cli org use acme
+
+  # Show current default
+  ai-aas-cli org use
+
+  # Clear default organization
+  ai-aas-cli org use --clear
+
+  # Use environment variable instead
+  export AI_AAS_DEFAULT_ORG_ID=acme
+
+After setting a default organization:
+  # These are equivalent
+  ai-aas-cli user list --org-id acme
+  ai-aas-cli user list
+
+See Also:
+  ai-aas-cli org list      List available organizations
+  ai-aas-cli org create    Create a new organization`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runOrgUse(cmd, args, flagClear)
+		},
+	}
+
+	cmd.Flags().BoolVar(&flagClear, "clear", false, "Clear the default organization")
+
+	return cmd
+}
+
+func runOrgUse(cmd *cobra.Command, args []string, flagClear bool) error {
+	// Load configuration
+	cfg, err := config.Load()
+	if err != nil {
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to load configuration: %v", err),
+			"Check your configuration file or environment variables.",
+		)
+	}
+
+	// Clear mode
+	if flagClear {
+		cfg.DefaultOrgID = ""
+		if err := config.Save(cfg); err != nil {
+			return errors.NewOperationError(
+				fmt.Sprintf("failed to save configuration: %v", err),
+				"Check that the config file is writable.",
+			)
+		}
+		fmt.Println("Default organization cleared.")
+		return nil
+	}
+
+	// If no args, show current default
+	if len(args) == 0 {
+		if cfg.DefaultOrgID == "" {
+			fmt.Println("No default organization set.")
+			fmt.Println("\nTo set a default organization:")
+			fmt.Println("  ai-aas-cli org use <org-id>")
+			fmt.Println("\nOr use environment variable:")
+			fmt.Println("  export AI_AAS_DEFAULT_ORG_ID=<org-id>")
+		} else {
+			fmt.Printf("Default organization: %s\n", cfg.DefaultOrgID)
+		}
+		return nil
+	}
+
+	// Set new default
+	orgID := args[0]
+	cfg.DefaultOrgID = orgID
+
+	if err := config.Save(cfg); err != nil {
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to save configuration: %v", err),
+			"Check that the config file is writable.",
+		)
+	}
+
+	fmt.Printf("Default organization set to: %s\n", orgID)
+	fmt.Println("\nYou can now use commands without --org-id:")
+	fmt.Println("  ai-aas-cli user list")
+	fmt.Println("  ai-aas-cli apikey create --user-id <user-id>")
+
 	return nil
 }
 

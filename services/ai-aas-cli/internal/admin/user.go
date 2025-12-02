@@ -149,11 +149,15 @@ func runUserList(cmd *cobra.Command, args []string, flagOrgID, flagFormat string
 		)
 	}
 
-	// Validate required fields
-	if flagOrgID == "" {
+	// Use default org if not specified
+	orgID := flagOrgID
+	if orgID == "" {
+		orgID = cfg.DefaultOrgID
+	}
+	if orgID == "" {
 		return errors.NewValidationError(
 			"--org-id is required",
-			"Provide organization ID or slug with --org-id flag",
+			"Provide organization ID or slug with --org-id flag, or set a default with 'ai-aas-cli org use <org-id>'",
 		)
 	}
 
@@ -174,7 +178,7 @@ func runUserList(cmd *cobra.Command, args []string, flagOrgID, flagFormat string
 
 	// Create client and list users
 	userOrgClient := createUserOrgClientWithHTTPClient(cfg, httpClient)
-	users, err := userOrgClient.ListUsers(cmd.Context(), flagOrgID)
+	users, err := userOrgClient.ListUsers(cmd.Context(), orgID)
 	if err != nil {
 		return errors.NewOperationError(
 			fmt.Sprintf("failed to list users: %v", err),
@@ -186,7 +190,7 @@ func runUserList(cmd *cobra.Command, args []string, flagOrgID, flagFormat string
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
 		Type:        "user_list",
-		Command:     fmt.Sprintf("user list --org-id=%s", flagOrgID),
+		Command:     fmt.Sprintf("user list --org-id=%s", orgID),
 		Outcome:     "success",
 		Duration:    time.Since(startTime),
 	})
@@ -339,11 +343,15 @@ func runUserCreate(cmd *cobra.Command, args []string, flagOrgID, flagEmail strin
 		)
 	}
 
-	// Validate required fields
-	if flagOrgID == "" {
+	// Use default org if not specified
+	orgID := flagOrgID
+	if orgID == "" {
+		orgID = cfg.DefaultOrgID
+	}
+	if orgID == "" {
 		return errors.NewValidationError(
 			"--org-id is required",
-			"Provide organization ID or slug with --org-id flag",
+			"Provide organization ID or slug with --org-id flag, or set a default with 'ai-aas-cli org use <org-id>'",
 		)
 	}
 	if flagEmail == "" {
@@ -372,7 +380,7 @@ func runUserCreate(cmd *cobra.Command, args []string, flagOrgID, flagEmail strin
 	userOrgClient := createUserOrgClientWithHTTPClient(cfg, httpClient)
 	var user *userorg.UserResponse
 	if flagUpsert {
-		existingUser, err := userOrgClient.GetUserByEmail(cmd.Context(), flagOrgID, flagEmail)
+		existingUser, err := userOrgClient.GetUserByEmail(cmd.Context(), orgID, flagEmail)
 		if err == nil {
 			// User exists, return existing user
 			user = existingUser
@@ -392,7 +400,7 @@ func runUserCreate(cmd *cobra.Command, args []string, flagOrgID, flagEmail strin
 			ExpiresInHours: flagExpiresInHours,
 		}
 
-		invitedUser, err := userOrgClient.InviteUser(cmd.Context(), flagOrgID, req)
+		invitedUser, err := userOrgClient.InviteUser(cmd.Context(), orgID, req)
 		if err != nil {
 			return errors.NewOperationError(
 				fmt.Sprintf("failed to invite user: %v", err),
@@ -406,9 +414,9 @@ func runUserCreate(cmd *cobra.Command, args []string, flagOrgID, flagEmail strin
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
 		Type:        "user_create",
-		Command:     fmt.Sprintf("user create --org-id=%s --email=%s", flagOrgID, flagEmail),
+		Command:     fmt.Sprintf("user create --org-id=%s --email=%s", orgID, flagEmail),
 		Parameters: map[string]interface{}{
-			"orgId":  flagOrgID,
+			"orgId":  orgID,
 			"email":  flagEmail,
 			"userId": user.UserID,
 			"upsert": flagUpsert,
@@ -558,11 +566,15 @@ func runUserUpdate(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 		)
 	}
 
-	// Validate required fields
-	if flagOrgID == "" {
+	// Use default org if not specified
+	orgID := flagOrgID
+	if orgID == "" {
+		orgID = cfg.DefaultOrgID
+	}
+	if orgID == "" {
 		return errors.NewValidationError(
 			"--org-id is required",
-			"Provide organization ID or slug with --org-id flag",
+			"Provide organization ID or slug with --org-id flag, or set a default with 'ai-aas-cli org use <org-id>'",
 		)
 	}
 
@@ -594,7 +606,7 @@ func runUserUpdate(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 		}
 
 		// Get user by email
-		user, err := userOrgClient.GetUserByEmail(cmd.Context(), flagOrgID, flagEmail)
+		user, err := userOrgClient.GetUserByEmail(cmd.Context(), orgID, flagEmail)
 		if err != nil {
 			return errors.NewOperationError(
 				fmt.Sprintf("failed to find user by email: %v", err),
@@ -622,7 +634,7 @@ func runUserUpdate(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 	}
 
 	// Execute update
-	user, err := userOrgClient.UpdateUser(cmd.Context(), flagOrgID, resolvedUserID, req)
+	user, err := userOrgClient.UpdateUser(cmd.Context(), orgID, resolvedUserID, req)
 	if err != nil {
 		return errors.NewOperationError(
 			fmt.Sprintf("failed to update user: %v", err),
@@ -634,9 +646,9 @@ func runUserUpdate(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
 		Type:        "user_update",
-		Command:     fmt.Sprintf("user update --org-id=%s --user-id=%s", flagOrgID, resolvedUserID),
+		Command:     fmt.Sprintf("user update --org-id=%s --user-id=%s", orgID, resolvedUserID),
 		Parameters: map[string]interface{}{
-			"orgId":  flagOrgID,
+			"orgId":  orgID,
 			"userId": resolvedUserID,
 			"request": req,
 		},
@@ -786,11 +798,15 @@ func runUserDelete(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 		)
 	}
 
-	// Validate required fields
-	if flagOrgID == "" {
+	// Use default org if not specified
+	orgID := flagOrgID
+	if orgID == "" {
+		orgID = cfg.DefaultOrgID
+	}
+	if orgID == "" {
 		return errors.NewValidationError(
 			"--org-id is required",
-			"Provide organization ID or slug with --org-id flag",
+			"Provide organization ID or slug with --org-id flag, or set a default with 'ai-aas-cli org use <org-id>'",
 		)
 	}
 
@@ -822,7 +838,7 @@ func runUserDelete(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 		}
 
 		// Get user by email
-		user, err := userOrgClient.GetUserByEmail(cmd.Context(), flagOrgID, flagEmail)
+		user, err := userOrgClient.GetUserByEmail(cmd.Context(), orgID, flagEmail)
 		if err != nil {
 			return errors.NewOperationError(
 				fmt.Sprintf("failed to find user by email: %v", err),
@@ -842,7 +858,7 @@ func runUserDelete(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 
 	// Get user details for confirmation display
 	var userName string
-	user, err := userOrgClient.GetUser(cmd.Context(), flagOrgID, resolvedUserID)
+	user, err := userOrgClient.GetUser(cmd.Context(), orgID, resolvedUserID)
 	if err == nil {
 		userName = user.Email
 	}
@@ -857,7 +873,7 @@ func runUserDelete(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 	}
 
 	// Execute delete
-	if err := userOrgClient.DeleteUser(cmd.Context(), flagOrgID, resolvedUserID); err != nil {
+	if err := userOrgClient.DeleteUser(cmd.Context(), orgID, resolvedUserID); err != nil {
 		return errors.NewOperationError(
 			fmt.Sprintf("failed to delete user: %v", err),
 			"Verify your API key is valid and the user exists.",
@@ -868,9 +884,9 @@ func runUserDelete(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
 		Type:        "user_delete",
-		Command:     fmt.Sprintf("user delete --org-id=%s --user-id=%s --confirm", flagOrgID, resolvedUserID),
+		Command:     fmt.Sprintf("user delete --org-id=%s --user-id=%s --confirm", orgID, resolvedUserID),
 		Parameters: map[string]interface{}{
-			"orgId":  flagOrgID,
+			"orgId":  orgID,
 			"userId": resolvedUserID,
 		},
 		Outcome:  "success",

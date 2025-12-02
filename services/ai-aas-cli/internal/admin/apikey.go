@@ -154,11 +154,15 @@ func runAPIKeyList(cmd *cobra.Command, args []string, flagOrgID, flagFormat stri
 		)
 	}
 
-	// Validate required fields
-	if flagOrgID == "" {
+	// Use default org if not specified
+	orgID := flagOrgID
+	if orgID == "" {
+		orgID = cfg.DefaultOrgID
+	}
+	if orgID == "" {
 		return errors.NewValidationError(
 			"--org-id is required",
-			"Provide organization ID or slug with --org-id flag",
+			"Provide organization ID or slug with --org-id flag, or set a default with 'ai-aas-cli org use <org-id>'",
 		)
 	}
 
@@ -173,7 +177,7 @@ func runAPIKeyList(cmd *cobra.Command, args []string, flagOrgID, flagFormat stri
 
 	// Create client and list API keys
 	userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
-	apiKeys, err := userOrgClient.ListAPIKeys(cmd.Context(), flagOrgID)
+	apiKeys, err := userOrgClient.ListAPIKeys(cmd.Context(), orgID)
 	if err != nil {
 		return errors.NewOperationError(
 			fmt.Sprintf("failed to list API keys: %v", err),
@@ -185,7 +189,7 @@ func runAPIKeyList(cmd *cobra.Command, args []string, flagOrgID, flagFormat stri
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
 		Type:        "apikey_list",
-		Command:     fmt.Sprintf("apikey list --org-id=%s", flagOrgID),
+		Command:     fmt.Sprintf("apikey list --org-id=%s", orgID),
 		Outcome:     "success",
 		Duration:    time.Since(startTime),
 	})
@@ -324,17 +328,21 @@ func runAPIKeyCreate(cmd *cobra.Command, args []string, flagOrgID, flagUserID st
 		)
 	}
 
-	// Validate required fields
-	if flagOrgID == "" {
+	// Use default org if not specified
+	orgID := flagOrgID
+	if orgID == "" {
+		orgID = cfg.DefaultOrgID
+	}
+	if orgID == "" {
 		return errors.NewValidationError(
 			"--org-id is required",
-			"Provide organization ID or slug with --org-id flag",
+			"Provide organization ID or slug with --org-id flag, or set a default with 'ai-aas-cli org use <org-id>'",
 		)
 	}
 	if flagUserID == "" {
 		return errors.NewValidationError(
 			"--user-id is required",
-			"Provide user ID with --user-id flag",
+			"Provide user ID with --user-id flag. API keys must be associated with a user.",
 		)
 	}
 
@@ -357,7 +365,7 @@ func runAPIKeyCreate(cmd *cobra.Command, args []string, flagOrgID, flagUserID st
 
 	// Execute create
 	userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
-	apiKey, err := userOrgClient.IssueUserAPIKey(cmd.Context(), flagOrgID, flagUserID, req)
+	apiKey, err := userOrgClient.IssueUserAPIKey(cmd.Context(), orgID, flagUserID, req)
 	if err != nil {
 		return errors.NewOperationError(
 			fmt.Sprintf("failed to create API key: %v", err),
@@ -369,9 +377,9 @@ func runAPIKeyCreate(cmd *cobra.Command, args []string, flagOrgID, flagUserID st
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
 		Type:        "apikey_create",
-		Command:     fmt.Sprintf("apikey create --org-id=%s --user-id=%s", flagOrgID, flagUserID),
+		Command:     fmt.Sprintf("apikey create --org-id=%s --user-id=%s", orgID, flagUserID),
 		Parameters: map[string]interface{}{
-			"orgId":     flagOrgID,
+			"orgId":     orgID,
 			"userId":    flagUserID,
 			"apiKeyId":  apiKey.APIKeyID,
 			"secret":    apiKey.Secret, // Will be masked by audit logger
@@ -514,11 +522,15 @@ func runAPIKeyDelete(cmd *cobra.Command, args []string, flagOrgID, flagAPIKeyID 
 		)
 	}
 
-	// Validate required fields
-	if flagOrgID == "" {
+	// Use default org if not specified
+	orgID := flagOrgID
+	if orgID == "" {
+		orgID = cfg.DefaultOrgID
+	}
+	if orgID == "" {
 		return errors.NewValidationError(
 			"--org-id is required",
-			"Provide organization ID or slug with --org-id flag",
+			"Provide organization ID or slug with --org-id flag, or set a default with 'ai-aas-cli org use <org-id>'",
 		)
 	}
 	if flagAPIKeyID == "" {
@@ -553,7 +565,7 @@ func runAPIKeyDelete(cmd *cobra.Command, args []string, flagOrgID, flagAPIKeyID 
 
 	// Execute delete
 	userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
-	if err := userOrgClient.DeleteAPIKey(cmd.Context(), flagOrgID, flagAPIKeyID); err != nil {
+	if err := userOrgClient.DeleteAPIKey(cmd.Context(), orgID, flagAPIKeyID); err != nil {
 		return errors.NewOperationError(
 			fmt.Sprintf("failed to delete API key: %v", err),
 			"Verify your API key is valid and the API key exists.",
@@ -564,9 +576,9 @@ func runAPIKeyDelete(cmd *cobra.Command, args []string, flagOrgID, flagAPIKeyID 
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
 		Type:        "apikey_delete",
-		Command:     fmt.Sprintf("apikey delete --org-id=%s --api-key-id=%s --confirm", flagOrgID, flagAPIKeyID),
+		Command:     fmt.Sprintf("apikey delete --org-id=%s --api-key-id=%s --confirm", orgID, flagAPIKeyID),
 		Parameters: map[string]interface{}{
-			"orgId":    flagOrgID,
+			"orgId":    orgID,
 			"apiKeyId": flagAPIKeyID,
 		},
 		Outcome:  "success",
