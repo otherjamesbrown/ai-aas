@@ -900,6 +900,45 @@ func (s *Store) ListAPIKeysForPrincipal(ctx context.Context, orgID uuid.UUID, pr
 	return out, err
 }
 
+// ListAPIKeysForOrg lists all API keys for an organization with optional pagination.
+// Returns API keys ordered by created_at descending (newest first).
+func (s *Store) ListAPIKeysForOrg(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]APIKey, error) {
+	var out []APIKey
+	if limit <= 0 {
+		limit = 100 // default limit
+	}
+	if limit > 1000 {
+		limit = 1000 // max limit
+	}
+	err := s.withTenantTx(ctx, orgID, func(ctx context.Context, tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT *
+			FROM api_keys
+			WHERE org_id = $1
+			  AND deleted_at IS NULL
+			ORDER BY created_at DESC
+			LIMIT $2 OFFSET $3
+		`, orgID, limit, offset)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			key, err := scanAPIKey(rows)
+			if err != nil {
+				return err
+			}
+			out = append(out, key)
+		}
+		return rows.Err()
+	})
+	if out == nil {
+		out = []APIKey{}
+	}
+	return out, err
+}
+
 // CreateServiceAccount creates a new service account within an organization.
 func (s *Store) CreateServiceAccount(ctx context.Context, params CreateServiceAccountParams) (ServiceAccount, error) {
 	if params.Metadata == nil {

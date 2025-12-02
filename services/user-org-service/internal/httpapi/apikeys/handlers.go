@@ -47,6 +47,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -549,9 +550,89 @@ func (h *Handler) IssueUserAPIKey(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListAPIKeys handles GET /v1/orgs/{orgId}/api-keys - List all API keys for the organization.
+// Supports pagination via ?limit=N&offset=M query parameters.
 func (h *Handler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
-	// TODO: Implement listing API keys
-	http.Error(w, "not implemented", http.StatusNotImplemented)
+	ctx := r.Context()
+	orgIDParam := chi.URLParam(r, "orgId")
+
+	// Parse org ID (UUID or slug)
+	var orgID uuid.UUID
+	var err error
+	if orgID, err = uuid.Parse(orgIDParam); err != nil {
+		// Try as slug
+		org, err := h.runtime.Postgres.GetOrgBySlug(ctx, orgIDParam)
+		if err != nil {
+			if err == postgres.ErrNotFound {
+				http.Error(w, "organization not found", http.StatusNotFound)
+				return
+			}
+			h.logger.Error("failed to resolve organization", zap.Error(err), zap.String("orgId", orgIDParam))
+			http.Error(w, "failed to resolve organization", http.StatusInternalServerError)
+			return
+		}
+		orgID = org.ID
+	}
+
+	// Parse pagination parameters
+	limit := 100
+	offset := 0
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if o := r.URL.Query().Get("offset"); o != "" {
+		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+
+	// List API keys for this organization
+	apiKeys, err := h.runtime.Postgres.ListAPIKeysForOrg(ctx, orgID, limit, offset)
+	if err != nil {
+		h.logger.Error("failed to list API keys", zap.Error(err), zap.String("orgId", orgID.String()))
+		http.Error(w, "failed to list API keys", http.StatusInternalServerError)
+		return
+	}
+
+	// Convert to response format (without secrets)
+	type APIKeyResponse struct {
+		APIKeyID      string   `json:"apiKeyId"`
+		PrincipalType string   `json:"principalType"`
+		PrincipalID   string   `json:"principalId"`
+		Fingerprint   string   `json:"fingerprint"`
+		Status        string   `json:"status"`
+		Scopes        []string `json:"scopes"`
+		IssuedAt      string   `json:"issuedAt"`
+		ExpiresAt     *string  `json:"expiresAt,omitempty"`
+		LastUsedAt    *string  `json:"lastUsedAt,omitempty"`
+	}
+
+	responses := make([]APIKeyResponse, len(apiKeys))
+	for i, key := range apiKeys {
+		responses[i] = APIKeyResponse{
+			APIKeyID:      key.ID.String(),
+			PrincipalType: string(key.PrincipalType),
+			PrincipalID:   key.PrincipalID.String(),
+			Fingerprint:   key.Fingerprint,
+			Status:        key.Status,
+			Scopes:        key.Scopes,
+			IssuedAt:      key.IssuedAt.Format(time.RFC3339),
+		}
+		if key.ExpiresAt != nil {
+			expStr := key.ExpiresAt.Format(time.RFC3339)
+			responses[i].ExpiresAt = &expStr
+		}
+		if key.LastUsedAt != nil {
+			usedStr := key.LastUsedAt.Format(time.RFC3339)
+			responses[i].LastUsedAt = &usedStr
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(responses); err != nil {
+		h.logger.Error("failed to encode response", zap.Error(err))
+	}
 }
 
 // GetAPIKey handles GET /v1/orgs/{orgId}/api-keys/{apiKeyId} - Get API key details.
