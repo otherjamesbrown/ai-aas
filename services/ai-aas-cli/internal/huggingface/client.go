@@ -1,323 +1,61 @@
-// Package huggingface provides a client for interacting with the HuggingFace Hub API.
+// Package huggingface re-exports the shared huggingface client for backward compatibility.
+// New code should import github.com/ai-aas/shared-go/modelcache/huggingface directly.
 package huggingface
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"time"
+
+	sharedHF "github.com/ai-aas/shared-go/modelcache/huggingface"
 )
 
+// Re-export constants
 const (
-	// DefaultBaseURL is the default HuggingFace API URL
-	DefaultBaseURL = "https://huggingface.co/api"
-	// DefaultTimeout is the default HTTP client timeout
-	DefaultTimeout = 30 * time.Second
+	DefaultBaseURL = sharedHF.DefaultBaseURL
+	DefaultTimeout = sharedHF.DefaultTimeout
 )
 
-// Client provides methods for interacting with the HuggingFace Hub API
-type Client struct {
-	baseURL    string
-	token      string
-	httpClient *http.Client
-}
+// Re-export types
+type (
+	Client       = sharedHF.Client
+	ClientOption = sharedHF.ClientOption
+	ModelInfo    = sharedHF.ModelInfo
+	CardData     = sharedHF.CardData
+	Sibling      = sharedHF.Sibling
+	LFSInfo      = sharedHF.LFSInfo
+	UserInfo     = sharedHF.UserInfo
+	OrgInfo      = sharedHF.OrgInfo
+	RepoFile     = sharedHF.RepoFile
+)
 
-// ClientOption configures the client
-type ClientOption func(*Client)
-
-// WithToken sets the HuggingFace token for authentication
-func WithToken(token string) ClientOption {
-	return func(c *Client) {
-		c.token = token
+// Re-export constructor and options
+var (
+	NewClient   = sharedHF.NewClient
+	WithToken   = sharedHF.WithToken
+	WithBaseURL = sharedHF.WithBaseURL
+	WithTimeout = func(timeout time.Duration) ClientOption {
+		return sharedHF.WithTimeout(timeout)
 	}
-}
+)
 
-// WithBaseURL sets a custom base URL
-func WithBaseURL(baseURL string) ClientOption {
-	return func(c *Client) {
-		c.baseURL = baseURL
-	}
-}
+// Re-export download types
+type (
+	DownloadOptions  = sharedHF.DownloadOptions
+	DownloadResult   = sharedHF.DownloadResult
+	DownloadedFile   = sharedHF.DownloadedFile
+)
 
-// WithTimeout sets the HTTP client timeout
-func WithTimeout(timeout time.Duration) ClientOption {
-	return func(c *Client) {
-		c.httpClient.Timeout = timeout
-	}
-}
+// Re-export functions
+var (
+	DefaultDownloadOptions = sharedHF.DefaultDownloadOptions
+	ComputeFileChecksum    = sharedHF.ComputeFileChecksum
+)
 
-// NewClient creates a new HuggingFace Hub client
-func NewClient(opts ...ClientOption) *Client {
-	c := &Client{
-		baseURL: DefaultBaseURL,
-		httpClient: &http.Client{
-			Timeout: DefaultTimeout,
-		},
-	}
-
-	for _, opt := range opts {
-		opt(c)
-	}
-
-	return c
-}
-
-// ModelInfo contains information about a HuggingFace model
-type ModelInfo struct {
-	ID            string   `json:"id"`              // Full model ID (org/name)
-	ModelID       string   `json:"modelId"`         // Same as ID
-	Author        string   `json:"author"`          // Organization/user
-	SHA           string   `json:"sha"`             // Current commit SHA
-	LastModified  string   `json:"lastModified"`    // ISO8601 timestamp
-	Private       bool     `json:"private"`         // Is model private
-	Gated         bool     `json:"gated"`           // Requires license acceptance
-	Disabled      bool     `json:"disabled"`        // Is model disabled
-	Downloads     int64    `json:"downloads"`       // Download count
-	Likes         int64    `json:"likes"`           // Like count
-	Tags          []string `json:"tags"`            // Model tags
-	PipelineTag   string   `json:"pipeline_tag"`    // Pipeline type
-	LibraryName   string   `json:"library_name"`    // Library (transformers, etc.)
-	CardData      CardData `json:"cardData"`        // Model card data
-	Siblings      []Sibling `json:"siblings"`       // File list
-}
-
-// CardData contains model card metadata
-type CardData struct {
-	License     interface{} `json:"license"`     // License string or array
-	LicenseLink string      `json:"license_link"` // URL to license
-	Language    interface{} `json:"language"`    // Language(s)
-	Tags        []string    `json:"tags"`        // Tags
-}
-
-// Sibling represents a file in the model repository
-type Sibling struct {
-	RFilename string `json:"rfilename"` // Relative filename
-	Size      int64  `json:"size"`      // File size in bytes
-	BlobID    string `json:"blobId"`    // Blob identifier
-	LFS       *LFSInfo `json:"lfs"`     // LFS info if applicable
-}
-
-// LFSInfo contains LFS-specific file information
-type LFSInfo struct {
-	Size        int64  `json:"size"`
-	SHA256      string `json:"sha256"`
-	PointerSize int64  `json:"pointerSize"`
-}
-
-// GetModel retrieves information about a model from the HuggingFace Hub
-func (c *Client) GetModel(ctx context.Context, modelID string) (*ModelInfo, error) {
-	endpoint := fmt.Sprintf("%s/models/%s", c.baseURL, url.PathEscape(modelID))
-	
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	c.setHeaders(req)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("execute request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, ErrModelNotFound
-	}
-
-	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, ErrUnauthorized
-	}
-
-	if resp.StatusCode == http.StatusForbidden {
-		return nil, ErrForbidden
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var info ModelInfo
-	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
-	}
-
-	return &info, nil
-}
-
-// ModelExists checks if a model exists on the HuggingFace Hub
-func (c *Client) ModelExists(ctx context.Context, modelID string) (bool, error) {
-	_, err := c.GetModel(ctx, modelID)
-	if err == ErrModelNotFound {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-// GetModelRevision retrieves information about a specific revision
-func (c *Client) GetModelRevision(ctx context.Context, modelID, revision string) (*ModelInfo, error) {
-	endpoint := fmt.Sprintf("%s/models/%s/revision/%s", c.baseURL, url.PathEscape(modelID), url.PathEscape(revision))
-	
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	c.setHeaders(req)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("execute request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, ErrRevisionNotFound
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var info ModelInfo
-	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
-	}
-
-	return &info, nil
-}
-
-// WhoAmI returns information about the authenticated user
-func (c *Client) WhoAmI(ctx context.Context) (*UserInfo, error) {
-	if c.token == "" {
-		return nil, ErrNoToken
-	}
-
-	endpoint := fmt.Sprintf("%s/whoami-v2", c.baseURL)
-	
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	c.setHeaders(req)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("execute request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, ErrUnauthorized
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var info UserInfo
-	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
-	}
-
-	return &info, nil
-}
-
-// UserInfo contains information about a HuggingFace user
-type UserInfo struct {
-	Type     string `json:"type"`     // "user" or "org"
-	ID       string `json:"id"`       // User ID
-	Name     string `json:"name"`     // Username
-	Fullname string `json:"fullname"` // Full name
-	Email    string `json:"email"`    // Email (if available)
-	EmailVerified bool `json:"emailVerified"`
-	Plan     string `json:"plan"`     // Subscription plan
-	CanPay   bool   `json:"canPay"`
-	IsPro    bool   `json:"isPro"`
-	Orgs     []OrgInfo `json:"orgs"` // Organizations
-}
-
-// OrgInfo contains organization information
-type OrgInfo struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Role string `json:"roleInOrg"`
-}
-
-// setHeaders sets common headers for API requests
-func (c *Client) setHeaders(req *http.Request) {
-	req.Header.Set("Accept", "application/json")
-	if c.token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.token)
-	}
-}
-
-// ValidateToken validates the HuggingFace token
-func (c *Client) ValidateToken(ctx context.Context) (*UserInfo, error) {
-	return c.WhoAmI(ctx)
-}
-
-// RepoFile represents a file in a HuggingFace repository
-type RepoFile struct {
-	Type string `json:"type"` // "file" or "directory"
-	Path string `json:"path"` // Relative path in repo
-	Size int64  `json:"size"` // File size in bytes
-	OID  string `json:"oid"`  // Git OID
-	LFS  *LFSInfo `json:"lfs,omitempty"` // LFS info if applicable
-}
-
-// ListFiles returns the list of files in a model repository
-func (c *Client) ListFiles(ctx context.Context, modelID, revision string) ([]RepoFile, error) {
-	if revision == "" {
-		revision = "main"
-	}
-
-	endpoint := fmt.Sprintf("%s/models/%s/tree/%s", c.baseURL, url.PathEscape(modelID), url.PathEscape(revision))
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	c.setHeaders(req)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("execute request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, ErrModelNotFound
-	}
-
-	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, ErrUnauthorized
-	}
-
-	if resp.StatusCode == http.StatusForbidden {
-		return nil, ErrForbidden
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var files []RepoFile
-	if err := json.NewDecoder(resp.Body).Decode(&files); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
-	}
-
-	return files, nil
-}
+// Ensure interface compatibility at compile time
+var _ interface {
+	GetModel(ctx context.Context, modelID string) (*ModelInfo, error)
+	ModelExists(ctx context.Context, modelID string) (bool, error)
+	ListFiles(ctx context.Context, modelID, revision string) ([]RepoFile, error)
+	DownloadModel(ctx context.Context, modelID string, opts DownloadOptions) (*DownloadResult, error)
+	GetModelSize(ctx context.Context, modelID, revision string) (int64, error)
+} = (*Client)(nil)

@@ -27,6 +27,11 @@ type Service interface {
 	PullModel(name string, opts PullOptions) (*PullJob, error)
 	VerifyCache(name string, version string) (*VerifyResult, error)
 
+	// Pull job operations
+	ListPullJobs(modelName string) ([]PullJob, error)
+	GetPullJob(jobID string) (*PullJob, error)
+	CancelPullJob(jobID string) error
+
 	// Credentials operations
 	ListCredentials() ([]Credential, error)
 	SetCredential(credType string, value string, metadata map[string]interface{}) error
@@ -50,6 +55,9 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	// Cache endpoints
 	r.Get("/models/{name}/cache", h.GetModelCache)
 	r.Post("/models/{name}/pull", h.PullModel)
+	r.Get("/models/{name}/pull", h.ListPullJobs)
+	r.Get("/models/{name}/pull/{job_id}", h.GetPullJob)
+	r.Delete("/models/{name}/pull/{job_id}", h.CancelPullJob)
 	r.Post("/models/{name}/cache/verify", h.VerifyCache)
 
 	// Credentials endpoints
@@ -150,6 +158,47 @@ func (h *Handler) PullModel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusAccepted, job)
+}
+
+// ListPullJobs handles GET /models/{name}/pull
+func (h *Handler) ListPullJobs(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+
+	jobs, err := h.service.ListPullJobs(name)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list pull jobs", err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"jobs": jobs,
+	})
+}
+
+// GetPullJob handles GET /models/{name}/pull/{job_id}
+func (h *Handler) GetPullJob(w http.ResponseWriter, r *http.Request) {
+	jobID := chi.URLParam(r, "job_id")
+
+	job, err := h.service.GetPullJob(jobID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "pull job not found", err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, job)
+}
+
+// CancelPullJob handles DELETE /models/{name}/pull/{job_id}
+func (h *Handler) CancelPullJob(w http.ResponseWriter, r *http.Request) {
+	jobID := chi.URLParam(r, "job_id")
+
+	err := h.service.CancelPullJob(jobID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to cancel pull job", err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // VerifyCache handles POST /models/{name}/cache/verify

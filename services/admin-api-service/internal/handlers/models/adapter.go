@@ -3,7 +3,9 @@ package models
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	svcModels "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/services/models"
 )
@@ -114,6 +116,47 @@ func (a *ServiceAdapter) PullModel(name string, opts PullOptions) (*PullJob, err
 	}
 
 	return convertPullJob(svcJob, name), nil
+}
+
+// ListPullJobs returns all pull jobs for a model
+func (a *ServiceAdapter) ListPullJobs(modelName string) ([]PullJob, error) {
+	svcJobs, err := a.svc.ListPullJobs(a.ctx, modelName)
+	if err != nil {
+		return nil, err
+	}
+
+	jobs := make([]PullJob, len(svcJobs))
+	for i, j := range svcJobs {
+		jobs[i] = *convertPullJob(&j, modelName)
+	}
+	return jobs, nil
+}
+
+// GetPullJob returns a specific pull job by ID
+func (a *ServiceAdapter) GetPullJob(jobID string) (*PullJob, error) {
+	id, err := uuid.Parse(jobID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid job ID: %w", err)
+	}
+
+	svcJob, err := a.svc.GetPullJob(a.ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get model name from model_id
+	modelName := "" // The service layer doesn't return model name, we'd need to look it up
+	return convertPullJob(svcJob, modelName), nil
+}
+
+// CancelPullJob cancels a running pull job
+func (a *ServiceAdapter) CancelPullJob(jobID string) error {
+	id, err := uuid.Parse(jobID)
+	if err != nil {
+		return fmt.Errorf("invalid job ID: %w", err)
+	}
+
+	return a.svc.CancelPullJob(a.ctx, id)
 }
 
 // VerifyCache verifies the cache integrity for a model

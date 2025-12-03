@@ -100,6 +100,15 @@ config:
   metricsEnabled: "true"
   tracingEnabled: "false"
 
+# Background worker configuration for server-side model caching
+worker:
+  # Enable the background job worker for processing pull jobs
+  enabled: true
+  # How often to poll the database for pending jobs
+  pollInterval: "5s"
+  # How often to update progress during pull operations
+  progressUpdateInterval: "10s"
+
 secrets:
   databaseUrlSecretName: admin-api-secrets
   databaseUrlSecretKey: database-url

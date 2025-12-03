@@ -93,6 +93,13 @@ spec:
             - name: USER_ORG_SERVICE_URL
               value: {{ .Values.userOrgService.endpoint | quote }}
             {{- end }}
+            # Worker configuration for server-side model caching
+            - name: WORKER_ENABLED
+              value: {{ .Values.worker.enabled | quote }}
+            - name: WORKER_POLL_INTERVAL
+              value: {{ .Values.worker.pollInterval | quote }}
+            - name: WORKER_PROGRESS_UPDATE_INTERVAL
+              value: {{ .Values.worker.progressUpdateInterval | quote }}
           livenessProbe:
             httpGet:
               path: {{ .Values.livenessProbe.path }}

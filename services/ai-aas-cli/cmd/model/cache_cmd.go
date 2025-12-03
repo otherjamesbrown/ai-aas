@@ -71,6 +71,7 @@ func newCachePullCommand() *cobra.Command {
 		revision   string
 		dryRun     bool
 		skipVerify bool
+		serverSide bool
 	)
 
 	cmd := &cobra.Command{
@@ -81,9 +82,14 @@ func newCachePullCommand() *cobra.Command {
 The model is first downloaded to a local temp directory, then uploaded to S3.
 A manifest file is created to track file integrity.
 
+With --server flag, the download happens server-side (no local bandwidth or S3 credentials needed).
+
 Examples:
   # Pull a model using default revision (main)
   ai-aas model cache pull mistral-7b
+
+  # Pull using server-side download (no local S3 credentials needed)
+  ai-aas model cache pull mistral-7b --server
 
   # Pull a specific revision
   ai-aas model cache pull mistral-7b --revision abc123
@@ -104,12 +110,6 @@ See Also:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			// S3 config
-			s3Endpoint := viper.GetString("s3.endpoint")
-			s3AccessKey := viper.GetString("s3.access_key")
-			s3SecretKey := viper.GetString("s3.secret_key")
-			s3Bucket := viper.GetString("s3.bucket")
-
 			adminEndpoint := cfg.AdminAPIEndpoint
 			if adminEndpoint == "" {
 				adminEndpoint = cfg.APIEndpoint
@@ -122,23 +122,35 @@ See Also:
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Hour)
 			defer cancel()
 
-			// Get model from registry
+			// Create API client
 			opts := []api.ClientOption{}
 			if cfg.TLSInsecure {
 				opts = append(opts, api.WithInsecureSkipVerify())
 			}
 			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+
+			// Determine revision
+			if revision == "" {
+				revision = "main"
+			}
+
+			// If server-side pull, use the API
+			if serverSide {
+				return runServerSidePull(ctx, apiClient, modelName, revision, dryRun)
+			}
+
+			// Local pull requires S3 credentials
+			s3Endpoint := viper.GetString("s3.endpoint")
+			s3AccessKey := viper.GetString("s3.access_key")
+			s3SecretKey := viper.GetString("s3.secret_key")
+			s3Bucket := viper.GetString("s3.bucket")
+
 			regClient := registry.NewClient(apiClient)
 
 			fmt.Printf("Looking up model: %s\n", modelName)
 			model, err := regClient.Get(ctx, modelName)
 			if err != nil {
 				return fmt.Errorf("model not found: %s\n\nIs the model registered? Try:\n  ai-aas model registry add <hf-model-id> --name %s", modelName, modelName)
-			}
-
-			// Determine revision
-			if revision == "" {
-				revision = "main"
 			}
 
 			// Get model size
@@ -284,6 +296,7 @@ See Also:
 	cmd.Flags().StringVarP(&revision, "revision", "r", "main", "HuggingFace revision (branch/tag/commit)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview download without executing")
 	cmd.Flags().BoolVar(&skipVerify, "skip-verify", false, "skip upload verification")
+	cmd.Flags().BoolVar(&serverSide, "server", false, "use server-side download (no local S3 credentials needed)")
 
 	return cmd
 }
@@ -713,4 +726,95 @@ See Also:
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview what would be deleted")
 
 	return cmd
+}
+
+// runServerSidePull triggers a server-side model pull and monitors progress
+func runServerSidePull(ctx context.Context, apiClient *api.Client, modelName, revision string, dryRun bool) error {
+	fmt.Printf("Triggering server-side pull for: %s (revision: %s)\n", modelName, revision)
+
+	if dryRun {
+		fmt.Println("\n[DRY RUN] Would create server-side pull job")
+		return nil
+	}
+
+	// Create the pull job
+	job, err := apiClient.CreatePullJob(ctx, modelName, api.PullOptions{Revision: revision})
+	if err != nil {
+		return fmt.Errorf("create pull job: %w", err)
+	}
+
+	fmt.Printf("Pull job created: %s\n", job.ID)
+	fmt.Println("Monitoring progress (Ctrl+C to cancel)...")
+	fmt.Println()
+
+	// Set up cancellation handling
+	cancelCtx, cancelFunc := context.WithCancel(ctx)
+	defer cancelFunc()
+
+	// Handle Ctrl+C to cancel the job
+	sigCh := make(chan os.Signal, 1)
+	defer close(sigCh)
+
+	go func() {
+		select {
+		case <-sigCh:
+			fmt.Println("\nCancelling pull job...")
+			// Cancel in background, don't block
+			go func() {
+				cancelErr := apiClient.CancelPullJob(context.Background(), modelName, job.ID)
+				if cancelErr != nil {
+					fmt.Printf("Warning: failed to cancel job: %v\n", cancelErr)
+				}
+			}()
+			cancelFunc()
+		case <-cancelCtx.Done():
+			return
+		}
+	}()
+
+	// Poll for progress
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	lastStatus := ""
+	for {
+		select {
+		case <-cancelCtx.Done():
+			return fmt.Errorf("pull cancelled")
+		case <-ticker.C:
+			updatedJob, err := apiClient.GetPullJob(cancelCtx, modelName, job.ID)
+			if err != nil {
+				return fmt.Errorf("get job status: %w", err)
+			}
+
+			// Print progress
+			if updatedJob.Status != lastStatus {
+				fmt.Printf("\nStatus: %s\n", updatedJob.Status)
+				lastStatus = updatedJob.Status
+			}
+
+			if updatedJob.BytesTotal > 0 {
+				fmt.Printf("\r  Progress: %.1f%% (%s / %s)    ",
+					updatedJob.Progress,
+					formatBytes(updatedJob.BytesCompleted),
+					formatBytes(updatedJob.BytesTotal))
+			} else {
+				fmt.Printf("\r  Progress: %.1f%%    ", updatedJob.Progress)
+			}
+
+			// Check if complete
+			switch updatedJob.Status {
+			case "complete":
+				fmt.Println()
+				cli.PrintModelCached(modelName, updatedJob.BytesTotal)
+				return nil
+			case "failed":
+				fmt.Println()
+				return fmt.Errorf("pull failed: %s", updatedJob.Error)
+			case "cancelled":
+				fmt.Println()
+				return fmt.Errorf("pull was cancelled")
+			}
+		}
+	}
 }
