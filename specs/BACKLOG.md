@@ -88,7 +88,13 @@ A scratch list of tasks, ideas, and improvements to tackle. Add items here so we
   - CLI would just create the job and poll for status
 
 ### Pipeline & CI/CD
-- [ ] Enable GitHub branch protection on `main` (require PR review, status checks)
+- [x] **Implement develop → staging → main branch workflow** (2024-12-03)
+  - Created `staging` branch for code review before production
+  - Added `branch-flow-enforcement.yml` GitHub Action to enforce PR source branches
+  - Updated ArgoCD apps to target correct branches per environment
+  - Documentation: `docs/development/branching-workflow.md`
+  - **Flow:** `develop` (fast iteration) → `staging` (code review) → `main` (production)
+  - **Manual step required:** Configure branch protection rules in GitHub Settings
 - [ ] Add Slack/PagerDuty notifications for workflow failures
 - [ ] Add dependency vulnerability scanning (Dependabot/Snyk)
 
