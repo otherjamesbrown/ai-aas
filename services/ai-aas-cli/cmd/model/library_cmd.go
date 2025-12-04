@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -152,25 +153,37 @@ See Also:
 				return nil
 			}
 
+			// Color definitions
+			header := color.New(color.FgWhite, color.Bold)
+			muted := color.New(color.FgHiBlack)
+			success := color.New(color.FgGreen, color.Bold)
+			warning := color.New(color.FgYellow)
+			errorColor := color.New(color.FgRed, color.Bold)
+			info := color.New(color.FgCyan)
+
 			// Print header
-			fmt.Printf("%-20s %-10s %-12s %s\n", "MODEL", "CACHED", "STATUS", "NEXT STEP")
-			fmt.Println("───────────────────────────────────────────────────────────────────────────────")
+			header.Printf("%-20s %-10s %-12s %s\n", "MODEL", "CACHED", "STATUS", "NEXT STEP")
+			muted.Println("───────────────────────────────────────────────────────────────────────────────")
 
 			for _, m := range models {
 				cached := "No"
+				cachedColor := muted
 				isCached := false
 				s3Client, err := getS3Client(ctx)
 				if err == nil {
-					manifestPath := fmt.Sprintf("models/%s/main/manifest.json", m.Name)
+					// Note: manifest filename is .manifest.json (with leading dot)
+					manifestPath := fmt.Sprintf("models/%s/main/.manifest.json", m.Name)
 					exists, _ := s3Client.Exists(ctx, manifestPath)
 					if exists {
 						cached = "Yes"
+						cachedColor = success
 						isCached = true
 					}
 				}
 
 				status := "registered"
-				nextStep := fmt.Sprintf("→ model cache pull %s", m.Name)
+				statusColor := warning
+				nextStep := muted.Sprintf("→ model cache pull %s", m.Name)
 
 				if environment != "" {
 					kubeconfig := viper.GetString(fmt.Sprintf("environments.%s.kubeconfig", environment))
@@ -187,7 +200,8 @@ See Also:
 						if err == nil {
 							if isvcStatus.Ready {
 								status = "ready"
-								nextStep = "✓ Serving inference"
+								statusColor = success
+								nextStep = success.Sprint("✓ Serving inference")
 							} else {
 								// Check conditions for failure
 								failed := false
@@ -199,28 +213,36 @@ See Also:
 								}
 								if failed {
 									status = "failed"
-									nextStep = fmt.Sprintf("→ model troubleshoot %s", m.Name)
+									statusColor = errorColor
+									nextStep = errorColor.Sprintf("→ model troubleshoot %s", m.Name)
 								} else {
 									status = "deploying"
-									nextStep = "⏳ Waiting for ready..."
+									statusColor = info
+									nextStep = info.Sprint("⏳ Waiting for ready...")
 								}
 							}
 						} else if isCached {
 							status = "cached"
-							nextStep = fmt.Sprintf("→ model library enable %s -e %s", m.Name, environment)
+							statusColor = info
+							nextStep = muted.Sprintf("→ model library enable %s -e %s", m.Name, environment)
 						}
 					}
 				} else if isCached {
 					status = "cached"
-					nextStep = fmt.Sprintf("→ model library enable %s -e <env>", m.Name)
+					statusColor = info
+					nextStep = muted.Sprintf("→ model library enable %s -e <env>", m.Name)
 				}
 
-				fmt.Printf("%-20s %-10s %-12s %s\n", m.Name, cached, status, nextStep)
+				// Print row with colored fields
+				fmt.Printf("%-20s ", m.Name)
+				cachedColor.Printf("%-10s ", cached)
+				statusColor.Printf("%-12s ", status)
+				fmt.Println(nextStep)
 			}
 
 			fmt.Printf("\nTotal: %d model(s)\n", len(models))
 			if environment == "" {
-				fmt.Println("\nTip: Use -e <environment> to see deployment status")
+				muted.Println("\nTip: Use -e <environment> to see deployment status")
 			}
 
 			return nil
