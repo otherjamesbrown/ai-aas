@@ -126,13 +126,13 @@ type UpdateUserRequest struct {
 
 // APIKeyResponse represents an API key in API responses.
 type APIKeyResponse struct {
-	KeyID       string                 `json:"keyId"`           // Short, unique identifier
+	KeyID       string                 `json:"apiKeyId"`        // UUID identifier (from user-org-service)
 	Notes       string                 `json:"notes,omitempty"` // Human-readable description
 	Fingerprint string                 `json:"fingerprint"`     // Hash of token for identification
 	Status      string                 `json:"status"`
 	Scopes      []string               `json:"scopes,omitempty"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt   string                 `json:"createdAt"`
+	CreatedAt   string                 `json:"issuedAt"`        // API returns issuedAt not createdAt
 	ExpiresAt   string                 `json:"expiresAt,omitempty"`
 }
 
