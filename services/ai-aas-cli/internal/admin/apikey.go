@@ -12,6 +12,7 @@ package admin
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -369,9 +370,18 @@ func runAPIKeyCreate(cmd *cobra.Command, args []string, flagOrgID, flagUserID, f
 	userOrgClient := createUserOrgClientWithHTTPClient(cfg, httpClient)
 
 	// Resolve user ID from email if needed
+	// Also handle case where user provides email in --user-id flag
 	resolvedUserID := flagUserID
-	if resolvedUserID == "" {
-		user, err := userOrgClient.GetUserByEmail(cmd.Context(), orgID, flagEmail)
+	emailToResolve := flagEmail
+
+	// If --user-id looks like an email (contains @), treat it as email
+	if resolvedUserID != "" && strings.Contains(resolvedUserID, "@") {
+		emailToResolve = resolvedUserID
+		resolvedUserID = ""
+	}
+
+	if resolvedUserID == "" && emailToResolve != "" {
+		user, err := userOrgClient.GetUserByEmail(cmd.Context(), orgID, emailToResolve)
 		if err != nil {
 			return errors.NewOperationError(
 				fmt.Sprintf("failed to find user by email: %v", err),

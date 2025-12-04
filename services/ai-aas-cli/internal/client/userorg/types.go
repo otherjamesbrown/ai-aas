@@ -92,8 +92,8 @@ type IssueAPIKeyRequest struct {
 
 // IssuedAPIKeyResponse represents an issued API key (token shown once).
 type IssuedAPIKeyResponse struct {
-	KeyID       string `json:"keyId"`       // Short, unique identifier for the key
-	Token       string `json:"token"`       // The secret token (ai-aas_xxx...) - shown only once
+	KeyID       string `json:"apiKeyId"`    // UUID identifier (from user-org-service)
+	Token       string `json:"secret"`      // The secret token - shown only once
 	Fingerprint string `json:"fingerprint"` // Hash of token for identification
 	Status      string `json:"status"`
 	ExpiresAt   string `json:"expiresAt,omitempty"`
@@ -101,8 +101,8 @@ type IssuedAPIKeyResponse struct {
 
 // RotateAPIKeyResponse represents rotated API key response.
 type RotateAPIKeyResponse struct {
-	KeyID       string `json:"keyId"`       // Short, unique identifier for the key
-	Token       string `json:"token"`       // The secret token (ai-aas_xxx...) - shown only once
+	KeyID       string `json:"apiKeyId"`    // UUID identifier (from user-org-service)
+	Token       string `json:"secret"`      // The secret token - shown only once
 	Fingerprint string `json:"fingerprint"` // Hash of token for identification
 	Status      string `json:"status"`
 	ExpiresAt   string `json:"expiresAt,omitempty"`
