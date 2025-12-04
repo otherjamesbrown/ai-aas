@@ -71,7 +71,7 @@ func newCachePullCommand() *cobra.Command {
 		revision   string
 		dryRun     bool
 		skipVerify bool
-		serverSide bool
+		localMode  bool
 	)
 
 	cmd := &cobra.Command{
@@ -79,23 +79,23 @@ func newCachePullCommand() *cobra.Command {
 		Short: "Download model to object storage cache",
 		Long: `Download a registered model from HuggingFace to object storage.
 
-The model is first downloaded to a local temp directory, then uploaded to S3.
-A manifest file is created to track file integrity.
+By default, the download happens server-side - no local bandwidth or S3 credentials needed.
+The server downloads from HuggingFace and uploads directly to object storage.
 
-With --server flag, the download happens server-side (no local bandwidth or S3 credentials needed).
+Use --local flag if you need to download through your machine (requires S3 credentials).
 
 Examples:
-  # Pull a model using default revision (main)
+  # Pull a model (server-side, default)
   ai-aas model cache pull mistral-7b
-
-  # Pull using server-side download (no local S3 credentials needed)
-  ai-aas model cache pull mistral-7b --server
 
   # Pull a specific revision
   ai-aas model cache pull mistral-7b --revision abc123
 
   # Preview download without executing
   ai-aas model cache pull mistral-7b --dry-run
+
+  # Pull using local download (requires S3 credentials)
+  ai-aas model cache pull mistral-7b --local
 
 See Also:
   ai-aas model cache list         View cached models
@@ -134,8 +134,8 @@ See Also:
 				revision = "main"
 			}
 
-			// If server-side pull, use the API
-			if serverSide {
+			// Default to server-side pull unless --local is specified
+			if !localMode {
 				return runServerSidePull(ctx, apiClient, modelName, revision, dryRun)
 			}
 
@@ -295,8 +295,8 @@ See Also:
 
 	cmd.Flags().StringVarP(&revision, "revision", "r", "main", "HuggingFace revision (branch/tag/commit)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview download without executing")
-	cmd.Flags().BoolVar(&skipVerify, "skip-verify", false, "skip upload verification")
-	cmd.Flags().BoolVar(&serverSide, "server", false, "use server-side download (no local S3 credentials needed)")
+	cmd.Flags().BoolVar(&skipVerify, "skip-verify", false, "skip upload verification (local mode only)")
+	cmd.Flags().BoolVar(&localMode, "local", false, "use local download (requires S3 credentials)")
 
 	return cmd
 }

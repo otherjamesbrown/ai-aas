@@ -198,12 +198,12 @@ func runAPIKeyList(cmd *cobra.Command, args []string, flagOrgID, flagFormat stri
 	if cfg.OutputFormat == "json" {
 		return output.PrintJSON(apiKeys)
 	} else if cfg.OutputFormat == "csv" {
-		headers := []string{"apiKeyId", "userId", "fingerprint", "status", "expiresAt"}
+		headers := []string{"keyId", "notes", "fingerprint", "status", "expiresAt"}
 		var rows [][]string
 		for _, key := range apiKeys {
 			rows = append(rows, []string{
-				key.APIKeyID,
-				key.UserID,
+				key.KeyID,
+				key.Notes,
 				key.Fingerprint,
 				key.Status,
 				key.ExpiresAt,
@@ -211,12 +211,12 @@ func runAPIKeyList(cmd *cobra.Command, args []string, flagOrgID, flagFormat stri
 		}
 		return output.PrintTable(headers, rows)
 	} else {
-		headers := []string{"API Key ID", "User ID", "Fingerprint", "Status", "Expires At"}
+		headers := []string{"Key ID", "Notes", "Fingerprint", "Status", "Expires At"}
 		var rows [][]string
 		for _, key := range apiKeys {
 			rows = append(rows, []string{
-				key.APIKeyID,
-				key.UserID,
+				key.KeyID,
+				key.Notes,
 				key.Fingerprint,
 				key.Status,
 				key.ExpiresAt,
@@ -398,30 +398,30 @@ func runAPIKeyCreate(cmd *cobra.Command, args []string, flagOrgID, flagUserID, f
 		)
 	}
 
-	// Audit logging (mask secret)
+	// Audit logging (mask token)
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
 		Type:        "apikey_create",
 		Command:     fmt.Sprintf("apikey create --org-id=%s --user-id=%s", orgID, resolvedUserID),
 		Parameters: map[string]interface{}{
-			"orgId":     orgID,
-			"userId":    resolvedUserID,
-			"email":     flagEmail,
-			"apiKeyId":  apiKey.APIKeyID,
-			"secret":    apiKey.Secret, // Will be masked by audit logger
+			"orgId":   orgID,
+			"userId":  resolvedUserID,
+			"email":   flagEmail,
+			"keyId":   apiKey.KeyID,
+			"token":   apiKey.Token, // Will be masked by audit logger
 		},
 		Outcome:  "success",
 		Duration: time.Since(startTime),
 	})
 
-	// Format output - show secret only once
+	// Format output - show token only once
 	if cfg.OutputFormat == "json" {
 		return output.PrintJSON(apiKey)
 	} else if cfg.OutputFormat == "csv" {
-		headers := []string{"apiKeyId", "secret", "fingerprint", "status", "expiresAt"}
+		headers := []string{"keyId", "token", "fingerprint", "status", "expiresAt"}
 		rows := [][]string{{
-			apiKey.APIKeyID,
-			apiKey.Secret,
+			apiKey.KeyID,
+			apiKey.Token,
 			apiKey.Fingerprint,
 			apiKey.Status,
 			apiKey.ExpiresAt,
@@ -431,8 +431,8 @@ func runAPIKeyCreate(cmd *cobra.Command, args []string, flagOrgID, flagUserID, f
 		if !cfg.Quiet {
 			fmt.Println("⚠️  IMPORTANT: Save this API key now. It will not be shown again.")
 			fmt.Printf("API key created successfully:\n")
-			fmt.Printf("  API Key ID: %s\n", apiKey.APIKeyID)
-			fmt.Printf("  Secret: %s\n", apiKey.Secret)
+			fmt.Printf("  Key ID: %s\n", apiKey.KeyID)
+			fmt.Printf("  Token:  %s\n", apiKey.Token)
 			fmt.Printf("  Fingerprint: %s\n", apiKey.Fingerprint)
 			fmt.Printf("  Status: %s\n", apiKey.Status)
 			if apiKey.ExpiresAt != "" {
@@ -440,10 +440,10 @@ func runAPIKeyCreate(cmd *cobra.Command, args []string, flagOrgID, flagUserID, f
 			}
 		}
 		if cfg.OutputFormat == "table" {
-			headers := []string{"API Key ID", "Secret", "Fingerprint", "Status", "Expires At"}
+			headers := []string{"Key ID", "Token", "Fingerprint", "Status", "Expires At"}
 			rows := [][]string{{
-				apiKey.APIKeyID,
-				apiKey.Secret,
+				apiKey.KeyID,
+				apiKey.Token,
 				apiKey.Fingerprint,
 				apiKey.Status,
 				apiKey.ExpiresAt,

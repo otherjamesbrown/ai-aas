@@ -27,8 +27,30 @@ func NewLibraryParentCommand() *cobra.Command {
 The library provides simplified commands for quickly enabling (deploying) and
 disabling (undeploying) models that are already registered and cached.
 
+MODEL LIFECYCLE
+───────────────
+Models progress through these stages:
+
+  ┌────────────┐     ┌────────────┐     ┌────────────┐     ┌────────────┐
+  │ registered │────▶│   cached   │────▶│ deploying  │────▶│   ready    │
+  └────────────┘     └────────────┘     └────────────┘     └────────────┘
+                                               │                  │
+                                               ▼                  ▼
+                                        ┌────────────┐     ┌────────────┐
+                                        │   failed   │     │  disabled  │
+                                        └────────────┘     └────────────┘
+
+STATUS REFERENCE
+────────────────
+  registered  Model is in registry, weights not cached    → model cache pull
+  cached      Model weights stored in object storage      → model library enable
+  deploying   InferenceService is starting up             → wait or check status
+  ready       Model is serving inference requests         ✓ Ready to use
+  failed      Deployment failed                           → model troubleshoot
+  disabled    Model manually disabled/scaled to 0         → model library enable
+
 Examples:
-  # View library overview
+  # View library overview with next steps
   ai-aas model library list -e development
 
   # Quick enable a model
@@ -67,18 +89,29 @@ func newLibraryListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "Show model library overview",
-		Long: `Display an overview of all models with their status across environments.
+		Long: `Display an overview of all models with their status and next steps.
 
-Shows which models are registered, cached, and deployed.
+Shows which models are registered, cached, and deployed, along with the
+recommended next action for each model.
+
+STATUS VALUES
+─────────────
+  registered  Model is in registry, weights not cached
+  cached      Model weights stored in object storage
+  deploying   InferenceService is starting up
+  ready       Model is serving inference requests
+  failed      Deployment encountered an error
+  disabled    Model manually disabled/scaled to 0
 
 Examples:
   # Show full library overview
   ai-aas model library list
 
-  # Filter by environment
+  # Filter by environment (shows deployment status)
   ai-aas model library list -e development
 
 See Also:
+  ai-aas model library --help     View full lifecycle diagram
   ai-aas model registry list      View registry details
   ai-aas model library enable     Enable a model`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -120,21 +153,25 @@ See Also:
 			}
 
 			// Print header
-			fmt.Printf("%-20s %-10s %-15s\n", "MODEL", "CACHED", "STATUS")
-			fmt.Println("─────────────────────────────────────────────")
+			fmt.Printf("%-20s %-10s %-12s %s\n", "MODEL", "CACHED", "STATUS", "NEXT STEP")
+			fmt.Println("───────────────────────────────────────────────────────────────────────────────")
 
 			for _, m := range models {
 				cached := "No"
+				isCached := false
 				s3Client, err := getS3Client(ctx)
 				if err == nil {
 					manifestPath := fmt.Sprintf("models/%s/main/manifest.json", m.Name)
 					exists, _ := s3Client.Exists(ctx, manifestPath)
 					if exists {
 						cached = "Yes"
+						isCached = true
 					}
 				}
 
 				status := "registered"
+				nextStep := fmt.Sprintf("→ model cache pull %s", m.Name)
+
 				if environment != "" {
 					kubeconfig := viper.GetString(fmt.Sprintf("environments.%s.kubeconfig", environment))
 					kubecontext := viper.GetString(fmt.Sprintf("environments.%s.context", environment))
@@ -149,22 +186,42 @@ See Also:
 						isvcStatus, err := k8sClient.GetInferenceService(ctx, isvcName, environment)
 						if err == nil {
 							if isvcStatus.Ready {
-								status = "enabled (ready)"
+								status = "ready"
+								nextStep = "✓ Serving inference"
 							} else {
-								status = "enabled (pending)"
+								// Check conditions for failure
+								failed := false
+								for _, cond := range isvcStatus.Conditions {
+									if cond.Type == "Ready" && cond.Status == "False" && cond.Reason == "RevisionFailed" {
+										failed = true
+										break
+									}
+								}
+								if failed {
+									status = "failed"
+									nextStep = fmt.Sprintf("→ model troubleshoot %s", m.Name)
+								} else {
+									status = "deploying"
+									nextStep = "⏳ Waiting for ready..."
+								}
 							}
-						} else if cached == "Yes" {
+						} else if isCached {
 							status = "cached"
+							nextStep = fmt.Sprintf("→ model library enable %s -e %s", m.Name, environment)
 						}
 					}
-				} else if cached == "Yes" {
+				} else if isCached {
 					status = "cached"
+					nextStep = fmt.Sprintf("→ model library enable %s -e <env>", m.Name)
 				}
 
-				fmt.Printf("%-20s %-10s %-15s\n", m.Name, cached, status)
+				fmt.Printf("%-20s %-10s %-12s %s\n", m.Name, cached, status, nextStep)
 			}
 
 			fmt.Printf("\nTotal: %d model(s)\n", len(models))
+			if environment == "" {
+				fmt.Println("\nTip: Use -e <environment> to see deployment status")
+			}
 
 			return nil
 		},
