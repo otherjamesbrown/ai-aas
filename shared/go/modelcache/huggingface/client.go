@@ -116,7 +116,8 @@ type LFSInfo struct {
 
 // GetModel retrieves information about a model from the HuggingFace Hub
 func (c *Client) GetModel(ctx context.Context, modelID string) (*ModelInfo, error) {
-	endpoint := fmt.Sprintf("%s/models/%s", c.baseURL, url.PathEscape(modelID))
+	// Don't escape modelID - the slash in "org/model" is intentional for the HuggingFace API path
+	endpoint := fmt.Sprintf("%s/models/%s", c.baseURL, modelID)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -170,7 +171,8 @@ func (c *Client) ModelExists(ctx context.Context, modelID string) (bool, error) 
 
 // GetModelRevision retrieves information about a specific revision
 func (c *Client) GetModelRevision(ctx context.Context, modelID, revision string) (*ModelInfo, error) {
-	endpoint := fmt.Sprintf("%s/models/%s/revision/%s", c.baseURL, url.PathEscape(modelID), url.PathEscape(revision))
+	// Don't escape modelID - the slash in "org/model" is intentional for the HuggingFace API path
+	endpoint := fmt.Sprintf("%s/models/%s/revision/%s", c.baseURL, modelID, url.PathEscape(revision))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -289,7 +291,8 @@ func (c *Client) ListFiles(ctx context.Context, modelID, revision string) ([]Rep
 		revision = "main"
 	}
 
-	endpoint := fmt.Sprintf("%s/models/%s/tree/%s", c.baseURL, url.PathEscape(modelID), url.PathEscape(revision))
+	// Don't escape modelID - the slash in "org/model" is intentional for the HuggingFace API path
+	endpoint := fmt.Sprintf("%s/models/%s/tree/%s", c.baseURL, modelID, url.PathEscape(revision))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
