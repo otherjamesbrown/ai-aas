@@ -1,0 +1,51 @@
+# Staging environment overrides
+# Domain configuration is computed from global.domain.base
+
+global:
+  domain:
+    base: "staging.otherjamesbrown.com"
+    local: "staging.ai-aas.local"
+
+replicaCount: 2
+
+image:
+  repository: ghcr.io/otherjamesbrown/analytics-service
+  tag: latest
+  pullPolicy: Always
+
+env:
+  - name: SERVICE_NAME
+    value: analytics-service
+  - name: HTTP_PORT
+    value: "8084"
+  - name: ENVIRONMENT
+    value: staging
+  - name: LOG_LEVEL
+    value: info
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+ingress:
+  enabled: true
+
+# Redis configuration - uses staging Redis
+redis:
+  url: "redis://redis.staging.svc.cluster.local:6379"
+
+# RabbitMQ configuration
+rabbitmq:
+  stream: usage.events.v1
+  consumer: analytics-service-staging
