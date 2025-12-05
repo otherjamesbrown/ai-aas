@@ -58,9 +58,22 @@ label_gpu_nodes() {
 }
 
 # Label RTX6000 nodes (24GB VRAM - for larger models)
+# Note: RTX6000 is NOT supported by LKE, but kept for standalone GPU nodes
 label_gpu_nodes "g1-gpu-rtx6000" "rtx6000" "NVIDIA-RTX-6000"
 
-# Label RTX4000 Ada nodes (20GB VRAM - for smaller models)
+# Label RTX4000 Ada Medium nodes (20GB VRAM, 32GB RAM)
+label_gpu_nodes "g2-gpu-rtx4000a1-m" "rtx4000-medium" "NVIDIA-RTX-4000-Ada"
+
+# Label RTX4000 Ada Large nodes (20GB VRAM, 64GB RAM)
+label_gpu_nodes "g2-gpu-rtx4000a1-l" "rtx4000-large" "NVIDIA-RTX-4000-Ada"
+
+# Label RTX4000 Ada XL nodes (20GB VRAM, 128GB RAM)
+label_gpu_nodes "g2-gpu-rtx4000a1-xl" "rtx4000-xlarge" "NVIDIA-RTX-4000-Ada"
+
+# Label RTX4000 Ada Small nodes (20GB VRAM, 16GB RAM) - fallback
+label_gpu_nodes "g2-gpu-rtx4000a1-s" "rtx4000-small" "NVIDIA-RTX-4000-Ada"
+
+# Generic fallback for any other RTX4000 variant
 label_gpu_nodes "g2-gpu-rtx4000a" "rtx4000" "NVIDIA-RTX-4000-Ada"
 
 echo ""

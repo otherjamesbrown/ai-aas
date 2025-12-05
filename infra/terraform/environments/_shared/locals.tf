@@ -82,7 +82,8 @@ locals {
           taints = []
         },
         {
-          # RTX4000 Ada - 20GB VRAM, good for 7B models and embeddings
+          # RTX4000 Ada Medium - 20GB VRAM, 32GB RAM, for 7B models and embeddings
+          # Note: RTX6000 (g1-gpu-*) is NOT supported by LKE
           type  = "g2-gpu-rtx4000a1-m"
           count = 1
           autoscaler = {
@@ -90,20 +91,20 @@ locals {
             max = 2
           }
           # Note: labels and taints applied via scripts/infra/apply-gpu-node-labels.sh
-          # Labels: nvidia.com/gpu.product=RTX4000-Ada, ai-aas.io/gpu-class=rtx4000
+          # Labels: nvidia.com/gpu.product=RTX4000-Ada, ai-aas.io/gpu-class=rtx4000-medium
           labels = {}
           taints = []
         },
         {
-          # RTX6000 - 24GB VRAM, for larger 13B+ models
-          type  = "g1-gpu-rtx6000-1"
+          # RTX4000 Ada Large - 20GB VRAM, 64GB RAM, for larger models needing more CPU memory
+          type  = "g2-gpu-rtx4000a1-l"
           count = 1
           autoscaler = {
             min = 1
             max = 1
           }
           # Note: labels and taints applied via scripts/infra/apply-gpu-node-labels.sh
-          # Labels: nvidia.com/gpu.product=RTX6000, ai-aas.io/gpu-class=rtx6000
+          # Labels: nvidia.com/gpu.product=RTX4000-Ada, ai-aas.io/gpu-class=rtx4000-large
           labels = {}
           taints = []
         }
