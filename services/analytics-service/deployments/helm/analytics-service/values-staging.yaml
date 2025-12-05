@@ -42,6 +42,21 @@ autoscaling:
 ingress:
   enabled: true
 
+# Increase startup time for database connection to remote Linode Postgres
+livenessProbe:
+  path: /analytics/v1/status/healthz
+  initialDelaySeconds: 60
+  periodSeconds: 15
+  timeoutSeconds: 10
+  failureThreshold: 5
+
+readinessProbe:
+  path: /analytics/v1/status/readyz
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 10
+  failureThreshold: 5
+
 # Telemetry configuration
 otel:
   enabled: true
