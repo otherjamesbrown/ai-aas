@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_dispatch:  # Allow manual triggering
   push:
     branches:
       - main
@@ -9,6 +10,8 @@ on:
     paths:
       - 'services/**'
       - 'shared/**'
+      - '.github/workflows/service-ci.yml'
+      - '.github/workflows/reusable-build.yml'
   pull_request:
     paths:
       - 'services/**'
