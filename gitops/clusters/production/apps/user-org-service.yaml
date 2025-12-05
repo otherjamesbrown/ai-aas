@@ -12,7 +12,7 @@ spec:
   project: platform-production
   source:
     repoURL: https://github.com/otherjamesbrown/ai-aas
-    targetRevision: v*  # Watch all tags starting with 'v' (e.g., v1.0.0, v1.1.0)
+    targetRevision: main  # Production deploys from main branch
     path: services/user-org-service/configs/helm
     helm:
       valueFiles:

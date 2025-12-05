@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/spf13/viper"
 )
 
 // InitWizard runs the interactive initialization wizard
@@ -48,10 +50,10 @@ func (w *InitWizard) Run() error {
 		existingConfig, err := Load()
 		if err != nil {
 			fmt.Printf("⚠ Could not load existing config: %v\n", err)
-			fmt.Println("  Starting with fresh configuration.\n")
+			fmt.Println("  Starting with fresh configuration.")
 		} else {
 			fmt.Println("✓ Found existing configuration")
-			fmt.Println("  For each setting, press Enter to keep existing value or type a new one.\n")
+			fmt.Println("  For each setting, press Enter to keep existing value or type a new one.")
 			w.config = existingConfig
 		}
 	}
@@ -81,6 +83,9 @@ func (w *InitWizard) Run() error {
 	} else {
 		fmt.Println("✓ API connection successful")
 	}
+
+	// Auto-detect S3/Object Storage credentials from environment
+	w.detectS3Credentials()
 
 	// Save configuration
 	if err := Save(w.config); err != nil {
@@ -167,12 +172,14 @@ func (w *InitWizard) collectAPIEndpoint() error {
 		w.config.APIEndpoint = fmt.Sprintf("https://api.%s", baseDomain)
 		w.config.UserOrgEndpoint = fmt.Sprintf("https://user-org.%s", baseDomain)
 		w.config.InferenceEndpoint = fmt.Sprintf("https://api.%s", baseDomain)
+		w.config.AdminAPIEndpoint = fmt.Sprintf("https://admin-api.%s", baseDomain)
 
 		fmt.Println()
 		fmt.Println("  Constructed endpoints from base domain:")
 		fmt.Printf("    API Endpoint:      %s\n", w.config.APIEndpoint)
 		fmt.Printf("    User-Org Service:  %s\n", w.config.UserOrgEndpoint)
 		fmt.Printf("    Inference API:     %s\n", w.config.InferenceEndpoint)
+		fmt.Printf("    Admin API:         %s\n", w.config.AdminAPIEndpoint)
 	}
 
 	fmt.Println()
@@ -353,5 +360,65 @@ func InitFromFlags(apiKey, endpoint, environment, hfToken string) error {
 	}
 
 	return Save(cfg)
+}
+
+// detectS3Credentials auto-detects S3/Object Storage credentials from environment variables
+// Supports Linode Object Storage (LINODE_OBJECT_STORAGE_*) and standard AWS (AWS_*)
+func (w *InitWizard) detectS3Credentials() {
+	// Check for Linode Object Storage credentials
+	accessKey := os.Getenv("LINODE_OBJECT_STORAGE_ACCESS_KEY")
+	secretKey := os.Getenv("LINODE_OBJECT_STORAGE_SECRET_KEY")
+
+	// Fall back to AWS-style credentials
+	if accessKey == "" {
+		accessKey = os.Getenv("AWS_ACCESS_KEY_ID")
+	}
+	if secretKey == "" {
+		secretKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
+	}
+
+	// Check for S3 endpoint and bucket
+	endpoint := os.Getenv("S3_ENDPOINT")
+	if endpoint == "" {
+		endpoint = os.Getenv("LINODE_OBJECT_STORAGE_ENDPOINT")
+	}
+	bucket := os.Getenv("S3_BUCKET")
+	if bucket == "" {
+		bucket = os.Getenv("LINODE_OBJECT_STORAGE_BUCKET")
+	}
+
+	// If we have credentials, configure them
+	if accessKey != "" && secretKey != "" {
+		fmt.Println()
+		fmt.Println("Object Storage Configuration")
+		fmt.Println("  Found S3/Object Storage credentials in environment")
+
+		// Set via viper for nested s3.* keys
+		viper.Set("s3.access_key", accessKey)
+		viper.Set("s3.secret_key", secretKey)
+
+		if endpoint != "" {
+			viper.Set("s3.endpoint", endpoint)
+			fmt.Printf("  Endpoint: %s\n", endpoint)
+		} else {
+			// Default to Linode Paris (fr-par-1) if not specified
+			defaultEndpoint := "https://fr-par-1.linodeobjects.com"
+			viper.Set("s3.endpoint", defaultEndpoint)
+			fmt.Printf("  Endpoint: %s (default)\n", defaultEndpoint)
+		}
+
+		if bucket != "" {
+			viper.Set("s3.bucket", bucket)
+			fmt.Printf("  Bucket: %s\n", bucket)
+		} else {
+			// Default bucket name
+			defaultBucket := "ai-aas"
+			viper.Set("s3.bucket", defaultBucket)
+			fmt.Printf("  Bucket: %s (default)\n", defaultBucket)
+		}
+
+		fmt.Printf("  Access Key: %s\n", MaskSecret(accessKey))
+		fmt.Println("✓ S3 credentials configured")
+	}
 }
 

@@ -33,12 +33,22 @@ func UserCommand() *cobra.Command {
 Users are members of organizations who can access models and platform features
 based on their assigned roles and model access permissions.
 
+User Creation Methods:
+  1. INVITE (default): Send an email invitation that user must accept
+     ai-aas-cli user create --org-id acme --email user@example.com
+
+  2. DIRECT: Create user with temporary password (for manual distribution)
+     ai-aas-cli user create --org-id acme --email user@example.com --direct
+
 Examples:
   # List users in an organization
   ai-aas-cli user list --org-id acme
 
-  # Invite a new user
+  # Invite a new user (sends email)
   ai-aas-cli user create --org-id acme --email user@example.com
+
+  # Create user directly with temporary password
+  ai-aas-cli user create --org-id acme --email user@example.com --direct
 
   # Update user status
   ai-aas-cli user update --org-id acme --email user@example.com --status suspended
@@ -52,7 +62,7 @@ Examples:
 Workflow:
   1. Create org        ai-aas-cli org create --name <name> --slug <slug>
   2. Add users         ai-aas-cli user create --org-id <org> --email <email>
-  3. Create API key    ai-aas-cli apikey create --org-id <org> --name <key-name>
+  3. Create API key    ai-aas-cli apikey create --org-id <org> --user-id <user>
 
 See Also:
   ai-aas-cli org list             List organizations
@@ -244,30 +254,48 @@ func runUserList(cmd *cobra.Command, args []string, flagOrgID, flagFormat string
 func userCreateCommand() *cobra.Command {
 	var flagOrgID string
 	var flagEmail string
+	var flagDisplayName string
 	var flagRoles []string
 	var flagExpiresInHours int
+	var flagDirect bool
+	var flagForcePwdChange bool
 	var flagUpsert bool
 	var flagFormat string
 	var flagVerbose bool
 	var flagQuiet bool
 	var flagUserOrgEndpoint string
 	var flagAPIKey string
+	var flagProfile string
 
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create user",
-		Long: `Invite a new user to an organization.
+		Long: `Create a new user in an organization.
 
-An invitation email will be sent to the user. The invite expires after 72 hours
-by default, but can be customized with --expires-in-hours.
+Two creation methods are available:
+
+1. INVITE (default): Send an email invitation that user must accept.
+   The invite expires after 72 hours by default (customizable with --expires-in-hours).
+
+2. DIRECT (--direct): Create user immediately with a temporary password.
+   The password is shown once and must be distributed to the user manually.
+   By default, no password change is required on first login.
+   Use --force-pwd-change to require the user to change their password.
 
 Examples:
-  # Invite a user
+  # Invite a user (sends email)
   ai-aas-cli user create --org-id acme --email user@example.com
 
-  # Invite with specific roles
+  # Create user directly with temporary password (no change required)
+  ai-aas-cli user create --org-id acme --email user@example.com --direct
+
+  # Create user and require password change on first login
+  ai-aas-cli user create --org-id acme --email user@example.com --direct \
+    --force-pwd-change
+
+  # Create with display name and roles
   ai-aas-cli user create --org-id acme --email admin@example.com \
-    --roles admin,developer
+    --display-name "Admin User" --roles admin,developer --direct
 
   # Invite with custom expiration
   ai-aas-cli user create --org-id acme --email user@example.com \
@@ -276,7 +304,15 @@ Examples:
   # Idempotent create (won't fail if user exists)
   ai-aas-cli user create --org-id acme --email user@example.com --upsert
 
+  # Create user and save to profile (uses org_id from profile)
+  ai-aas-cli user create --email user@example.com --direct --profile acme-admin
+
 Next Steps:
+  After creating a user with --direct:
+  1. Securely share the password with the user
+  2. User logs in (password change required only if --force-pwd-change was used)
+  3. Create API keys:  ai-aas-cli apikey create --org-id <org> --user-id <user>
+
   After inviting a user:
   1. User accepts invite via email link
   2. Optionally assign more roles
@@ -286,27 +322,31 @@ See Also:
   ai-aas-cli user list       List organization users
   ai-aas-cli apikey create   Create API key for user`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runUserCreate(cmd, args, flagOrgID, flagEmail, flagRoles, flagExpiresInHours, flagUpsert,
-				flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey)
+			return runUserCreate(cmd, args, flagOrgID, flagEmail, flagDisplayName, flagRoles, flagExpiresInHours, flagDirect, flagForcePwdChange, flagUpsert,
+				flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey, flagProfile)
 		},
 	}
 
 	cmd.Flags().StringVar(&flagOrgID, "org-id", "", "Organization ID or slug (required)")
 	cmd.Flags().StringVar(&flagEmail, "email", "", "User email (required)")
+	cmd.Flags().StringVar(&flagDisplayName, "display-name", "", "Display name for the user")
 	cmd.Flags().StringSliceVar(&flagRoles, "roles", []string{}, "User roles")
-	cmd.Flags().IntVar(&flagExpiresInHours, "expires-in-hours", 72, "Invite expiration in hours (default: 72)")
+	cmd.Flags().IntVar(&flagExpiresInHours, "expires-in-hours", 72, "Invite expiration in hours (default: 72, invite mode only)")
+	cmd.Flags().BoolVar(&flagDirect, "direct", false, "Create user directly with temporary password (bypasses invite flow)")
+	cmd.Flags().BoolVar(&flagForcePwdChange, "force-pwd-change", false, "Require password change on first login (--direct mode only)")
 	cmd.Flags().BoolVar(&flagUpsert, "upsert", false, "Update user if already exists (idempotent)")
 	cmd.Flags().StringVar(&flagFormat, "format", "table", "Output format: table, json, csv")
 	cmd.Flags().BoolVar(&flagVerbose, "verbose", false, "Enable verbose output")
 	cmd.Flags().BoolVar(&flagQuiet, "quiet", false, "Suppress non-error output")
 	cmd.Flags().StringVar(&flagUserOrgEndpoint, "user-org-endpoint", "", "User-org-service endpoint (overrides config)")
 	cmd.Flags().StringVar(&flagAPIKey, "api-key", "", "API key for authentication (overrides config)")
+	cmd.Flags().StringVar(&flagProfile, "profile", "", "Use org_id from profile and save user_id to it")
 
 	return cmd
 }
 
-func runUserCreate(cmd *cobra.Command, args []string, flagOrgID, flagEmail string, flagRoles []string, flagExpiresInHours int, flagUpsert bool,
-	flagFormat string, flagVerbose, flagQuiet bool, flagUserOrgEndpoint, flagAPIKey string) error {
+func runUserCreate(cmd *cobra.Command, args []string, flagOrgID, flagEmail, flagDisplayName string, flagRoles []string, flagExpiresInHours int, flagDirect, flagForcePwdChange, flagUpsert bool,
+	flagFormat string, flagVerbose, flagQuiet bool, flagUserOrgEndpoint, flagAPIKey string, flagProfile string) error {
 	startTime := time.Now()
 
 	// Load configuration
@@ -343,8 +383,14 @@ func runUserCreate(cmd *cobra.Command, args []string, flagOrgID, flagEmail strin
 		)
 	}
 
-	// Use default org if not specified
+	// Use profile org_id if --profile is set
 	orgID := flagOrgID
+	if orgID == "" && flagProfile != "" {
+		if profile, err := config.GetProfile(flagProfile); err == nil && profile.OrgID != "" {
+			orgID = profile.OrgID
+		}
+	}
+	// Fall back to default org
 	if orgID == "" {
 		orgID = cfg.DefaultOrgID
 	}
@@ -376,11 +422,143 @@ func runUserCreate(cmd *cobra.Command, args []string, flagOrgID, flagEmail strin
 		return errors.NewServiceUnavailableError("user-org-service", cfg.UserOrgEndpoint)
 	}
 
-	// Check if user exists (for upsert)
 	userOrgClient := createUserOrgClientWithHTTPClient(cfg, httpClient)
+
+	// Handle DIRECT user creation (bypasses invite flow)
+	if flagDirect {
+		return runDirectUserCreate(cmd, cfg, userOrgClient, orgID, flagEmail, flagDisplayName, flagRoles, flagForcePwdChange, flagUpsert, flagProfile, startTime)
+	}
+
+	// Handle INVITE user creation (default)
+	return runInviteUserCreate(cmd, cfg, userOrgClient, orgID, flagEmail, flagRoles, flagExpiresInHours, flagUpsert, flagProfile, startTime)
+}
+
+// runDirectUserCreate handles direct user creation with temporary password.
+func runDirectUserCreate(cmd *cobra.Command, cfg *config.Config, userOrgClient *userorg.Client, orgID, email, displayName string, roles []string, forcePwdChange, upsert bool, profileName string, startTime time.Time) error {
+	// Check if user exists (for upsert)
+	if upsert {
+		existingUser, err := userOrgClient.GetUserByEmail(cmd.Context(), orgID, email)
+		if err == nil {
+			// User exists, return existing user
+			if !cfg.Quiet {
+				fmt.Printf("User already exists (upsert mode):\n")
+				fmt.Printf("  User ID: %s\n", existingUser.UserID)
+				fmt.Printf("  Email: %s\n", existingUser.Email)
+				fmt.Printf("  Status: %s\n", existingUser.Status)
+				fmt.Println()
+				fmt.Println("Note: No new password generated for existing user.")
+			}
+			return nil
+		}
+	}
+
+	// Create user directly
+	req := userorg.CreateUserRequest{
+		Email:           email,
+		DisplayName:     displayName,
+		Roles:           roles,
+		ForcePwdChange:  &forcePwdChange,
+	}
+
+	createdUser, err := userOrgClient.CreateUser(cmd.Context(), orgID, req)
+	if err != nil {
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to create user: %v", err),
+			"Verify your API key is valid and you have permission to create users.",
+		)
+	}
+
+	// Audit logging
+	auditLogger := audit.NewLogger(nil)
+	_ = auditLogger.LogOperation(audit.Operation{
+		Type:    "user_create_direct",
+		Command: fmt.Sprintf("user create --org-id=%s --email=%s --direct --force-pwd-change=%v", orgID, email, forcePwdChange),
+		Parameters: map[string]interface{}{
+			"orgId":          orgID,
+			"email":          email,
+			"userId":         createdUser.UserID,
+			"method":         "direct",
+			"forcePwdChange": forcePwdChange,
+		},
+		Outcome:  "success",
+		Duration: time.Since(startTime),
+	})
+
+	// Save to profile if --profile flag is set
+	if profileName != "" {
+		if err := config.UpdateProfile(profileName, func(p *config.Profile) {
+			p.UserID = createdUser.UserID
+			p.Email = createdUser.Email
+		}); err != nil {
+			if !cfg.Quiet {
+				fmt.Printf("Warning: failed to update profile '%s': %v\n", profileName, err)
+			}
+		} else if !cfg.Quiet {
+			fmt.Printf("\nSaved to profile '%s'\n", profileName)
+			if profile, err := config.GetProfile(profileName); err == nil {
+				fmt.Printf("  org_id:   %s\n", valueOrNotSet(profile.OrgID))
+				fmt.Printf("  user_id:  %s\n", profile.UserID)
+				fmt.Printf("  email:    %s\n", profile.Email)
+				fmt.Printf("  api_key:  %s\n", valueOrNotSet(profile.APIKey))
+			}
+		}
+	}
+
+	// Format output
+	if cfg.OutputFormat == "json" {
+		return output.PrintJSON(createdUser)
+	} else if cfg.OutputFormat == "csv" {
+		headers := []string{"userId", "email", "displayName", "status", "temporaryPassword", "createdAt"}
+		rows := [][]string{{
+			createdUser.UserID,
+			createdUser.Email,
+			createdUser.DisplayName,
+			createdUser.Status,
+			createdUser.TemporaryPassword,
+			createdUser.CreatedAt,
+		}}
+		return output.PrintTable(headers, rows)
+	}
+
+	// Default table output with prominent password display
+	if !cfg.Quiet {
+		fmt.Println()
+		fmt.Println("User created successfully!")
+		fmt.Println()
+		fmt.Printf("  User ID:      %s\n", createdUser.UserID)
+		fmt.Printf("  Email:        %s\n", createdUser.Email)
+		if createdUser.DisplayName != "" {
+			fmt.Printf("  Display Name: %s\n", createdUser.DisplayName)
+		}
+		fmt.Printf("  Status:       %s\n", createdUser.Status)
+		fmt.Printf("  Created At:   %s\n", createdUser.CreatedAt)
+		fmt.Println()
+		fmt.Println("  ╔══════════════════════════════════════════════════════════════╗")
+		fmt.Println("  ║  TEMPORARY PASSWORD (shown once - save it now!)              ║")
+		fmt.Println("  ╠══════════════════════════════════════════════════════════════╣")
+		fmt.Printf("  ║  %s%-52s║\n", createdUser.TemporaryPassword, "")
+		fmt.Println("  ╚══════════════════════════════════════════════════════════════╝")
+		fmt.Println()
+		if forcePwdChange {
+			fmt.Println("  The user must change this password on first login (--force-pwd-change).")
+		} else {
+			fmt.Println("  No password change required on first login.")
+		}
+		fmt.Println()
+		fmt.Println("Next steps:")
+		fmt.Printf("  1. Share the password securely with the user\n")
+		fmt.Printf("  2. Create API key: ai-aas-cli apikey create --org-id %s --user-id %s\n", orgID, createdUser.UserID)
+		fmt.Println()
+	}
+	return nil
+}
+
+// runInviteUserCreate handles invite-based user creation (sends email).
+func runInviteUserCreate(cmd *cobra.Command, cfg *config.Config, userOrgClient *userorg.Client, orgID, email string, roles []string, expiresInHours int, upsert bool, profileName string, startTime time.Time) error {
+	// Check if user exists (for upsert)
 	var user *userorg.UserResponse
-	if flagUpsert {
-		existingUser, err := userOrgClient.GetUserByEmail(cmd.Context(), orgID, flagEmail)
+	if upsert {
+		existingUser, err := userOrgClient.GetUserByEmail(cmd.Context(), orgID, email)
 		if err == nil {
 			// User exists, return existing user
 			user = existingUser
@@ -395,9 +573,9 @@ func runUserCreate(cmd *cobra.Command, args []string, flagOrgID, flagEmail strin
 	// Create/invite user if not found or not upsert
 	if user == nil {
 		req := userorg.InviteUserRequest{
-			Email:          flagEmail,
-			Roles:          flagRoles,
-			ExpiresInHours: flagExpiresInHours,
+			Email:          email,
+			Roles:          roles,
+			ExpiresInHours: expiresInHours,
 		}
 
 		invitedUser, err := userOrgClient.InviteUser(cmd.Context(), orgID, req)
@@ -413,17 +591,38 @@ func runUserCreate(cmd *cobra.Command, args []string, flagOrgID, flagEmail strin
 	// Audit logging
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
-		Type:        "user_create",
-		Command:     fmt.Sprintf("user create --org-id=%s --email=%s", orgID, flagEmail),
+		Type:    "user_create",
+		Command: fmt.Sprintf("user create --org-id=%s --email=%s", orgID, email),
 		Parameters: map[string]interface{}{
 			"orgId":  orgID,
-			"email":  flagEmail,
+			"email":  email,
 			"userId": user.UserID,
-			"upsert": flagUpsert,
+			"upsert": upsert,
+			"method": "invite",
 		},
 		Outcome:  "success",
 		Duration: time.Since(startTime),
 	})
+
+	// Save to profile if --profile flag is set
+	if profileName != "" {
+		if err := config.UpdateProfile(profileName, func(p *config.Profile) {
+			p.UserID = user.UserID
+			p.Email = user.Email
+		}); err != nil {
+			if !cfg.Quiet {
+				fmt.Printf("Warning: failed to update profile '%s': %v\n", profileName, err)
+			}
+		} else if !cfg.Quiet {
+			fmt.Printf("\nSaved to profile '%s'\n", profileName)
+			if profile, err := config.GetProfile(profileName); err == nil {
+				fmt.Printf("  org_id:   %s\n", valueOrNotSet(profile.OrgID))
+				fmt.Printf("  user_id:  %s\n", profile.UserID)
+				fmt.Printf("  email:    %s\n", profile.Email)
+				fmt.Printf("  api_key:  %s\n", valueOrNotSet(profile.APIKey))
+			}
+		}
+	}
 
 	// Format output
 	if cfg.OutputFormat == "json" {
@@ -445,7 +644,7 @@ func runUserCreate(cmd *cobra.Command, args []string, flagOrgID, flagEmail strin
 		return output.PrintTable(headers, rows)
 	} else {
 		if !cfg.Quiet {
-			if flagUpsert && user != nil {
+			if upsert && user != nil {
 				fmt.Printf("User exists (upsert mode):\n")
 			} else {
 				fmt.Printf("User invited successfully:\n")

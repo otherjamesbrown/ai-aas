@@ -163,6 +163,21 @@ func main() {
 	}
 	defer loader.Stop()
 
+	// Initialize Admin API sync for routing policies (alternative to etcd)
+	var adminSyncClient *config.AdminSyncClient
+	if cfg.AdminAPIEndpoint != "" {
+		adminSyncClient = config.NewAdminSyncClient(config.AdminSyncConfig{
+			Endpoint:     cfg.AdminAPIEndpoint,
+			APIKey:       cfg.AdminAPIKey,
+			SyncInterval: cfg.AdminAPISyncInterval,
+		}, cache, logger)
+		if err := adminSyncClient.Start(ctx); err != nil {
+			logger.Warn("failed to start admin sync", zap.Error(err))
+		} else {
+			defer adminSyncClient.Stop()
+		}
+	}
+
 	// ============================================================================
 	// Router Setup and Architecture
 	// ============================================================================

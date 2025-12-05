@@ -161,9 +161,11 @@ const (
 
 type APIKey struct {
 	ID            uuid.UUID
+	KeyID         string // Short, unique identifier (12 chars) - user-friendly lookup key
 	OrgID         uuid.UUID
 	PrincipalType PrincipalType
 	PrincipalID   uuid.UUID
+	Notes         string // Human-readable description (like GitHub token name)
 	Fingerprint   string
 	Status        string
 	Scopes        []string
@@ -180,9 +182,11 @@ type APIKey struct {
 
 type CreateAPIKeyParams struct {
 	ID            uuid.UUID
+	KeyID         string // Short, unique identifier (12 chars)
 	OrgID         uuid.UUID
 	PrincipalType PrincipalType
 	PrincipalID   uuid.UUID
+	Notes         string // Human-readable description
 	Fingerprint   string
 	Status        string
 	Scopes        []string

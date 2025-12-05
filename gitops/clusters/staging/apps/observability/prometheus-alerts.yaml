@@ -1,0 +1,29 @@
+# Prometheus Alerting Rules Application
+# ======================================
+# Deploys PrometheusRule resources for platform alerting
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus-alerts-staging
+  namespace: argocd
+  labels:
+    environment: staging
+    app: prometheus-alerts
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform-staging
+  source:
+    repoURL: https://github.com/otherjamesbrown/ai-aas
+    targetRevision: staging
+    path: infra/k8s/prometheus-rules/staging
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

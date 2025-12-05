@@ -5,8 +5,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
+	"github.com/fatih/color"
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/cmd/engine"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/cmd/model"
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/cmd/profile"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/cmd/status"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/admin"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/api"
@@ -20,11 +24,21 @@ import (
 )
 
 var (
-	cfgFile     string
-	verbose     bool
-	quiet       bool
+	cfgFile      string
+	profileName  string
+	verbose      bool
+	quiet        bool
 	outputFormat string
 )
+
+// ProfileName returns the current profile name (for use by subcommands).
+func ProfileName() string {
+	// Check environment variable first
+	if envProfile := os.Getenv("AI_AAS_PROFILE"); envProfile != "" {
+		return envProfile
+	}
+	return profileName
+}
 
 // NewRootCommand creates the root command for ai-aas-cli
 func NewRootCommand(version, buildTime, gitCommit string) *cobra.Command {
@@ -35,13 +49,22 @@ func NewRootCommand(version, buildTime, gitCommit string) *cobra.Command {
 
 Quick Start:
   ai-aas-cli --init                       Initialize CLI configuration
+  ai-aas-cli --init-status                Show current configuration status
   ai-aas-cli model registry list          List registered models
   ai-aas-cli model deploy create <model>  Deploy a model
   ai-aas-cli org list                     List organizations
 
+Configuration:
+  ai-aas-cli --init                           Full interactive setup wizard
+  ai-aas-cli --init-status                    Show what's configured
+  ai-aas-cli --init-hf-token <token>          Set HuggingFace token
+  ai-aas-cli --init-api-key <key>             Set API key
+  ai-aas-cli --init-domain <domain>           Set base domain (derives endpoints)
+  ai-aas-cli --init-environment <env>         Set environment (dev/staging/prod)
+
 Model Workflow:
   ai-aas-cli model registry add meta-llama/Llama-2-7b-hf   # Register
-  ai-aas-cli model cache pull meta-llama/Llama-2-7b-hf     # Cache locally
+  ai-aas-cli model cache pull meta-llama/Llama-2-7b-hf     # Cache (server-side)
   ai-aas-cli model deploy create meta-llama/Llama-2-7b-hf  # Deploy
 
 Getting Help:
@@ -53,7 +76,8 @@ Getting Help:
 Environment Variables:
   AI_AAS_ENVIRONMENT    Target environment (dev/staging/prod)
   AI_AAS_API_KEY        API key for authentication
-  AI_AAS_API_ENDPOINT   Admin API endpoint URL`,
+  AI_AAS_API_ENDPOINT   Admin API endpoint URL
+  AI_AAS_PROFILE        Active profile name`,
 		Version: fmt.Sprintf("%s (build: %s, commit: %s)", version, buildTime, gitCommit),
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			return initConfig()
@@ -62,16 +86,42 @@ Environment Variables:
 
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.ai-aas-cli.yaml)")
+	rootCmd.PersistentFlags().StringVarP(&profileName, "profile", "p", "", "use named profile for org/user/credentials")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose output")
 	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "suppress non-essential output")
 	rootCmd.PersistentFlags().StringVarP(&outputFormat, "format", "f", "table", "output format (table, json, csv)")
 
-	// Init flag - handled via RunE since it's on the root command
-	var initFlag bool
+	// Init flags - handled via RunE since they're on the root command
+	var (
+		initFlag       bool
+		initStatus     bool
+		initDomain     string
+		initAPIKey     string
+		initEnv        string
+		initHFToken    string
+		initAdminAPI   string
+		initUserOrgAPI string
+	)
 	rootCmd.Flags().BoolVar(&initFlag, "init", false, "run initialization wizard")
+	rootCmd.Flags().BoolVar(&initStatus, "init-status", false, "show current configuration status")
+	rootCmd.Flags().StringVar(&initDomain, "init-domain", "", "set base domain (e.g., dev.example.com)")
+	rootCmd.Flags().StringVar(&initAPIKey, "init-api-key", "", "set API key")
+	rootCmd.Flags().StringVar(&initEnv, "init-environment", "", "set environment (development/staging/production)")
+	rootCmd.Flags().StringVar(&initHFToken, "init-hf-token", "", "set HuggingFace token")
+	rootCmd.Flags().StringVar(&initAdminAPI, "init-admin-api", "", "set Admin API endpoint")
+	rootCmd.Flags().StringVar(&initUserOrgAPI, "init-user-org-api", "", "set User-Org Service endpoint")
 	rootCmd.RunE = func(cmd *cobra.Command, args []string) error {
+		// --init-status: Show configuration status
+		if initStatus {
+			return showInitStatus()
+		}
+		// --init: Run full wizard
 		if initFlag {
 			return runInit()
+		}
+		// Individual config updates
+		if initDomain != "" || initAPIKey != "" || initEnv != "" || initHFToken != "" || initAdminAPI != "" || initUserOrgAPI != "" {
+			return runPartialInit(initDomain, initAPIKey, initEnv, initHFToken, initAdminAPI, initUserOrgAPI)
 		}
 		// If no --init flag and no subcommand, show help
 		return cmd.Help()
@@ -97,6 +147,10 @@ Environment Variables:
 	inferenceCmd := admin.InferenceCommand()
 	inferenceCmd.GroupID = "model"
 	rootCmd.AddCommand(inferenceCmd)
+
+	engineCmd := engine.NewEngineCommand()
+	engineCmd.GroupID = "model"
+	rootCmd.AddCommand(engineCmd)
 
 	// Access Control commands
 	orgCmd := admin.OrgCommand()
@@ -140,6 +194,10 @@ Environment Variables:
 	configCmd := newConfigCommand()
 	configCmd.GroupID = "util"
 	rootCmd.AddCommand(configCmd)
+
+	profileCmd := profile.NewProfileCmd()
+	profileCmd.GroupID = "util"
+	rootCmd.AddCommand(profileCmd)
 
 	exportCmd := admin.ExportCommand()
 	exportCmd.GroupID = "util"
@@ -191,6 +249,237 @@ func runInit() error {
 
 	wizard := config.NewInitWizard()
 	return wizard.Run()
+}
+
+// showInitStatus displays the current configuration status
+func showInitStatus() error {
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
+	success := color.New(color.FgGreen, color.Bold)
+	warning := color.New(color.FgYellow)
+	muted := color.New(color.FgHiBlack)
+	label := color.New(color.FgWhite, color.Bold)
+
+	checkMark := success.Sprint("✓")
+	crossMark := color.New(color.FgRed, color.Bold).Sprint("✗")
+
+	fmt.Println()
+	label.Println("AI-AAS CLI Configuration Status")
+	muted.Println("─────────────────────────────────────────────")
+	fmt.Println()
+
+	// Track what's configured for summary
+	configuredCount := 0
+	totalRequired := 3 // API endpoint, API key, environment
+	totalOptional := 4 // HF token, User-Org, Admin API override, TLS
+
+	// Required settings
+	label.Println("Required Settings:")
+
+	// API Endpoint
+	if cfg.APIEndpoint != "" && cfg.APIEndpoint != "http://localhost:8080" {
+		fmt.Printf("  %s API Endpoint:     %s\n", checkMark, cfg.APIEndpoint)
+		configuredCount++
+	} else if cfg.APIEndpoint == "http://localhost:8080" {
+		fmt.Printf("  %s API Endpoint:     %s %s\n", warning.Sprint("~"), cfg.APIEndpoint, muted.Sprint("(default)"))
+	} else {
+		fmt.Printf("  %s API Endpoint:     %s\n", crossMark, muted.Sprint("(not set)"))
+	}
+
+	// API Key
+	if cfg.APIKey != "" {
+		fmt.Printf("  %s API Key:          %s\n", checkMark, config.MaskSecret(cfg.APIKey))
+		configuredCount++
+	} else {
+		fmt.Printf("  %s API Key:          %s\n", crossMark, muted.Sprint("(not set)"))
+	}
+
+	// Environment
+	if cfg.Environment != "" {
+		fmt.Printf("  %s Environment:      %s\n", checkMark, cfg.Environment)
+		configuredCount++
+	} else {
+		fmt.Printf("  %s Environment:      %s\n", crossMark, muted.Sprint("(not set)"))
+	}
+
+	fmt.Println()
+	label.Println("Optional Settings:")
+
+	optionalConfigured := 0
+
+	// HuggingFace Token
+	if cfg.HFToken != "" {
+		fmt.Printf("  %s HuggingFace Token: %s\n", checkMark, config.MaskSecret(cfg.HFToken))
+		optionalConfigured++
+	} else {
+		fmt.Printf("  %s HuggingFace Token: %s\n", muted.Sprint("-"), muted.Sprint("(not set - needed for model caching)"))
+	}
+
+	// User-Org Endpoint
+	if cfg.UserOrgEndpoint != "" {
+		fmt.Printf("  %s User-Org Service: %s\n", checkMark, cfg.UserOrgEndpoint)
+		optionalConfigured++
+	} else {
+		fmt.Printf("  %s User-Org Service: %s\n", muted.Sprint("-"), muted.Sprint("(not set - uses API endpoint)"))
+	}
+
+	// Admin API Endpoint override
+	if cfg.AdminAPIEndpoint != "" {
+		fmt.Printf("  %s Admin API:        %s\n", checkMark, cfg.AdminAPIEndpoint)
+		optionalConfigured++
+	} else {
+		fmt.Printf("  %s Admin API:        %s\n", muted.Sprint("-"), muted.Sprint("(not set - uses API endpoint)"))
+	}
+
+	// TLS Settings
+	if cfg.TLSInsecure {
+		fmt.Printf("  %s TLS:              %s\n", warning.Sprint("!"), warning.Sprint("insecure (skip verify)"))
+		optionalConfigured++
+	} else if cfg.CACertFile != "" {
+		fmt.Printf("  %s TLS:              %s\n", checkMark, fmt.Sprintf("CA: %s", cfg.CACertFile))
+		optionalConfigured++
+	} else {
+		fmt.Printf("  %s TLS:              %s\n", muted.Sprint("-"), muted.Sprint("(default system CA)"))
+	}
+
+	// Summary
+	fmt.Println()
+	muted.Println("─────────────────────────────────────────────")
+
+	if configuredCount >= totalRequired {
+		success.Printf("Ready: %d/%d required settings configured\n", configuredCount, totalRequired)
+	} else {
+		warning.Printf("Incomplete: %d/%d required settings configured\n", configuredCount, totalRequired)
+		fmt.Println()
+		fmt.Println("Run 'ai-aas-cli --init' to complete setup")
+	}
+
+	if optionalConfigured > 0 {
+		fmt.Printf("Optional: %d/%d settings configured\n", optionalConfigured, totalOptional)
+	}
+
+	// Config file location
+	configPath, _ := config.GetConfigPath()
+	fmt.Println()
+	muted.Printf("Config file: %s\n", configPath)
+
+	// Quick commands hint
+	fmt.Println()
+	label.Println("Quick Commands:")
+	fmt.Printf("  %s %s\n", muted.Sprint("Run wizard:"), "ai-aas-cli --init")
+	fmt.Printf("  %s %s\n", muted.Sprint("Set HF token:"), "ai-aas-cli --init-hf-token <token>")
+	fmt.Printf("  %s %s\n", muted.Sprint("Test config:"), "ai-aas-cli config test")
+
+	return nil
+}
+
+// runPartialInit updates specific configuration values without running the full wizard
+func runPartialInit(domain, apiKey, env, hfToken, adminAPI, userOrgAPI string) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
+	success := color.New(color.FgGreen, color.Bold)
+	checkMark := success.Sprint("✓")
+	updated := false
+
+	// Update domain-based endpoints
+	if domain != "" {
+		// Derive endpoints from domain
+		domain = strings.TrimPrefix(domain, "https://")
+		domain = strings.TrimPrefix(domain, "http://")
+		domain = strings.TrimSuffix(domain, "/")
+
+		cfg.APIEndpoint = fmt.Sprintf("https://admin-api.%s", domain)
+		cfg.UserOrgEndpoint = fmt.Sprintf("https://user-org.%s", domain)
+		fmt.Printf("%s Base domain set: %s\n", checkMark, domain)
+		fmt.Printf("    → API Endpoint: %s\n", cfg.APIEndpoint)
+		fmt.Printf("    → User-Org:     %s\n", cfg.UserOrgEndpoint)
+		updated = true
+	}
+
+	// Update API key
+	if apiKey != "" {
+		cfg.APIKey = apiKey
+		fmt.Printf("%s API Key set: %s\n", checkMark, config.MaskSecret(apiKey))
+		updated = true
+	}
+
+	// Update environment
+	if env != "" {
+		// Normalize environment
+		switch strings.ToLower(env) {
+		case "dev":
+			env = "development"
+		case "prod":
+			env = "production"
+		case "stage":
+			env = "staging"
+		}
+		cfg.Environment = env
+		fmt.Printf("%s Environment set: %s\n", checkMark, env)
+		updated = true
+	}
+
+	// Update HuggingFace token
+	if hfToken != "" {
+		cfg.HFToken = hfToken
+		fmt.Printf("%s HuggingFace token set: %s\n", checkMark, config.MaskSecret(hfToken))
+		updated = true
+
+		// Also sync to Admin API if configured
+		adminEndpoint := cfg.AdminAPIEndpoint
+		if adminEndpoint == "" {
+			adminEndpoint = cfg.APIEndpoint
+		}
+		if adminEndpoint != "" && cfg.APIKey != "" {
+			opts := []api.ClientOption{}
+			if cfg.TLSInsecure {
+				opts = append(opts, api.WithInsecureSkipVerify())
+			}
+			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+			credClient := credentials.NewClient(apiClient)
+			ctx := context.Background()
+			if err := credClient.Set(ctx, "hf-token", hfToken, nil); err != nil {
+				output.WarningMsg("Could not sync HF token to Admin API: %v", err)
+			} else {
+				fmt.Printf("%s HuggingFace token synced to Admin API\n", checkMark)
+			}
+		}
+	}
+
+	// Update Admin API endpoint
+	if adminAPI != "" {
+		cfg.AdminAPIEndpoint = adminAPI
+		fmt.Printf("%s Admin API endpoint set: %s\n", checkMark, adminAPI)
+		updated = true
+	}
+
+	// Update User-Org API endpoint
+	if userOrgAPI != "" {
+		cfg.UserOrgEndpoint = userOrgAPI
+		fmt.Printf("%s User-Org API endpoint set: %s\n", checkMark, userOrgAPI)
+		updated = true
+	}
+
+	if !updated {
+		return fmt.Errorf("no configuration values provided. Use --help for available options")
+	}
+
+	// Save configuration
+	if err := config.Save(cfg); err != nil {
+		return fmt.Errorf("save config: %w", err)
+	}
+
+	fmt.Println()
+	output.SuccessMsg("Configuration updated successfully")
+	fmt.Println("Run 'ai-aas-cli --init-status' to see current configuration")
+
+	return nil
 }
 
 // newConfigCommand creates the config subcommand
@@ -342,13 +631,23 @@ Examples:
 
 				// Also store in Admin API for server-side operations
 				apiCfg, err := config.Load()
-				if err == nil && apiCfg.APIEndpoint != "" && apiCfg.APIKey != "" {
-					apiClient := api.NewClient(apiCfg.APIEndpoint, apiCfg.APIKey)
-					credClient := credentials.NewClient(apiClient)
-					if err := credClient.Set(ctx, "hf-token", value, nil); err != nil {
-						fmt.Printf("  (Note: Could not sync to Admin API: %v)\n", err)
-					} else {
-						fmt.Println("✓ HuggingFace token synced to Admin API")
+				if err == nil {
+					adminEndpoint := apiCfg.AdminAPIEndpoint
+					if adminEndpoint == "" {
+						adminEndpoint = apiCfg.APIEndpoint
+					}
+					if adminEndpoint != "" && apiCfg.APIKey != "" {
+						opts := []api.ClientOption{}
+						if apiCfg.TLSInsecure {
+							opts = append(opts, api.WithInsecureSkipVerify())
+						}
+						apiClient := api.NewClient(adminEndpoint, apiCfg.APIKey, opts...)
+						credClient := credentials.NewClient(apiClient)
+						if err := credClient.Set(ctx, "hf-token", value, nil); err != nil {
+							fmt.Printf("  (Note: Could not sync to Admin API: %v)\n", err)
+						} else {
+							fmt.Println("✓ HuggingFace token synced to Admin API")
+						}
 					}
 				}
 			case "s3":
@@ -558,7 +857,10 @@ The model command provides nested subcommands organized by lifecycle stage:
   version       Manage model versions, updates, and pinning
   library       Manage organization's enabled model library
 
-Typical Workflow:
+Quick Deploy (recommended):
+  ai-aas-cli model hf-deploy https://huggingface.co/unsloth/gpt-oss-20b
+
+Manual Workflow:
   1. ai-aas-cli model registry add meta-llama/Llama-2-7b-hf
   2. ai-aas-cli model cache pull meta-llama/Llama-2-7b-hf
   3. ai-aas-cli model deploy create meta-llama/Llama-2-7b-hf
@@ -573,6 +875,7 @@ For more information, see: https://docs.ai-aas.io/cli/model`,
 	}
 
 	// Add nested parent commands (each has its own subcommands)
+	cmd.AddCommand(model.NewHFDeployCommand())
 	cmd.AddCommand(model.NewRegistryCommand())
 	cmd.AddCommand(model.NewCacheParentCommand())
 	cmd.AddCommand(model.NewDeployParentCommand())

@@ -1,0 +1,114 @@
+# Branch Flow Enforcement
+#
+# Enforces the branch promotion workflow:
+#   develop -> staging -> main
+#
+# This workflow ensures:
+# - PRs to staging can only come from develop
+# - PRs to main can only come from staging
+#
+# To make this effective, configure branch protection rules in GitHub:
+# - staging: Require PR, require this check to pass
+# - main: Require PR, require this check to pass
+
+name: Branch Flow Enforcement
+
+on:
+  pull_request:
+    branches:
+      - staging
+      - main
+
+jobs:
+  check-source-branch:
+    name: Validate PR Source Branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check branch flow rules
+        run: |
+          TARGET="${{ github.base_ref }}"
+          SOURCE="${{ github.head_ref }}"
+
+          echo "============================================"
+          echo "Branch Flow Enforcement Check"
+          echo "============================================"
+          echo "Source branch: $SOURCE"
+          echo "Target branch: $TARGET"
+          echo ""
+
+          # Define allowed flows
+          # staging <- develop only
+          # main <- staging only
+
+          if [[ "$TARGET" == "staging" ]]; then
+            if [[ "$SOURCE" != "develop" ]]; then
+              echo "ERROR: PRs to 'staging' must come from 'develop' branch"
+              echo ""
+              echo "Branch Flow Rules:"
+              echo "  develop -> staging -> main"
+              echo ""
+              echo "Your PR: $SOURCE -> $TARGET (NOT ALLOWED)"
+              echo ""
+              echo "To fix this:"
+              echo "  1. Merge your changes into 'develop' first"
+              echo "  2. Create a PR from 'develop' to 'staging'"
+              exit 1
+            fi
+            echo "PASS: develop -> staging is allowed"
+          fi
+
+          if [[ "$TARGET" == "main" ]]; then
+            if [[ "$SOURCE" != "staging" ]]; then
+              echo "ERROR: PRs to 'main' must come from 'staging' branch"
+              echo ""
+              echo "Branch Flow Rules:"
+              echo "  develop -> staging -> main"
+              echo ""
+              echo "Your PR: $SOURCE -> $TARGET (NOT ALLOWED)"
+              echo ""
+              echo "To fix this:"
+              echo "  1. Merge your changes into 'staging' first"
+              echo "  2. Create a PR from 'staging' to 'main'"
+              exit 1
+            fi
+            echo "PASS: staging -> main is allowed"
+          fi
+
+          echo ""
+          echo "============================================"
+          echo "Branch flow check passed!"
+          echo "============================================"
+
+      - name: Add PR comment on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const target = context.payload.pull_request.base.ref;
+            const source = context.payload.pull_request.head.ref;
+
+            let allowedSource = target === 'staging' ? 'develop' : 'staging';
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## Branch Flow Violation
+
+            This PR cannot be merged because it violates the branch flow rules.
+
+            | Current | Required |
+            |---------|----------|
+            | \`${source}\` -> \`${target}\` | \`${allowedSource}\` -> \`${target}\` |
+
+            ### Branch Promotion Flow
+            \`\`\`
+            develop -> staging -> main
+            \`\`\`
+
+            ### How to Fix
+            1. Close this PR
+            2. Merge your changes into \`${allowedSource}\` first
+            3. Create a new PR from \`${allowedSource}\` to \`${target}\`
+            `
+            });

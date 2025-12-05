@@ -71,14 +71,41 @@ locals {
       node_pools = [
         {
           type  = "g6-standard-6"
-          count = 4
+          count = 3
           autoscaler = {
-            min = 4
-            max = 8
+            min = 3
+            max = 6
           }
           labels = {
             role = "general"
           }
+          taints = []
+        },
+        {
+          # RTX4000 Ada Medium - 20GB VRAM, 32GB RAM, for 7B models and embeddings
+          # Note: RTX6000 (g1-gpu-*) is NOT supported by LKE
+          type  = "g2-gpu-rtx4000a1-m"
+          count = 1
+          autoscaler = {
+            min = 1
+            max = 2
+          }
+          # Note: labels and taints applied via scripts/infra/apply-gpu-node-labels.sh
+          # Labels: nvidia.com/gpu.product=RTX4000-Ada, ai-aas.io/gpu-class=rtx4000-medium
+          labels = {}
+          taints = []
+        },
+        {
+          # RTX4000 Ada Large - 20GB VRAM, 64GB RAM, for larger models needing more CPU memory
+          type  = "g2-gpu-rtx4000a1-l"
+          count = 1
+          autoscaler = {
+            min = 1
+            max = 1
+          }
+          # Note: labels and taints applied via scripts/infra/apply-gpu-node-labels.sh
+          # Labels: nvidia.com/gpu.product=RTX4000-Ada, ai-aas.io/gpu-class=rtx4000-large
+          labels = {}
           taints = []
         }
       ]

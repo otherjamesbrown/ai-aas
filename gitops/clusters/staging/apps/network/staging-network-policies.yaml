@@ -1,0 +1,30 @@
+# Network Policies for Staging Namespace
+# ==========================================
+# These policies control traffic flow between services for security isolation.
+# Default: deny all ingress, allow specific paths.
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: staging-network-policies
+  namespace: argocd
+  labels:
+    environment: staging
+    app: network-policies
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform-staging
+  source:
+    repoURL: https://github.com/otherjamesbrown/ai-aas
+    targetRevision: staging
+    path: infra/k8s/network-policies/staging
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

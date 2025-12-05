@@ -96,19 +96,22 @@ type Handler struct {
 	logger  *zap.Logger
 }
 
+// TokenPrefix is the prefix for all AI-AAS API tokens.
+const TokenPrefix = "ai-aas_"
+
 // IssueAPIKeyRequest represents the payload for issuing an API key.
 type IssueAPIKeyRequest struct {
-	DisplayName   string         `json:"display_name,omitempty"`
+	Notes         string         `json:"notes,omitempty"` // Human-readable description (like GitHub token name)
 	Scopes        []string       `json:"scopes,omitempty"`
 	ExpiresInDays *int           `json:"expiresInDays,omitempty"`
 	Annotations   map[string]any `json:"annotations,omitempty"`
 }
 
-// IssuedAPIKeyResponse represents an issued API key (secret shown once).
+// IssuedAPIKeyResponse represents an issued API key (token shown once).
 type IssuedAPIKeyResponse struct {
-	APIKeyID    string  `json:"apiKeyId"`
-	Secret      string  `json:"secret"`
-	Fingerprint string  `json:"fingerprint"`
+	KeyID       string  `json:"keyId"`       // Short, unique identifier for the key
+	Token       string  `json:"token"`       // The secret token (ai-aas_xxx...) - shown only once
+	Fingerprint string  `json:"fingerprint"` // Hash of token for identification
 	Status      string  `json:"status"`
 	ExpiresAt   *string `json:"expiresAt,omitempty"`
 }
@@ -177,25 +180,26 @@ func (h *Handler) IssueAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate secure random secret (32 bytes = 256 bits)
-	secretBytes := make([]byte, 32)
-	if _, err := rand.Read(secretBytes); err != nil {
-		h.logger.Error("failed to generate secret", zap.Error(err))
+	// Generate secure random token (32 bytes = 256 bits)
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		h.logger.Error("failed to generate token", zap.Error(err))
 		http.Error(w, "failed to generate API key", http.StatusInternalServerError)
 		return
 	}
 
-	// Encode secret as base64url (URL-safe, no padding)
-	secret := base64.RawURLEncoding.EncodeToString(secretBytes)
+	// Encode token as base64url with ai-aas_ prefix
+	tokenRaw := base64.RawURLEncoding.EncodeToString(tokenBytes)
+	token := TokenPrefix + tokenRaw
 
-	// Compute fingerprint (SHA-256 hash of secret)
-	fingerprintHash := sha256.Sum256([]byte(secret))
+	// Compute fingerprint (SHA-256 hash of full token including prefix)
+	fingerprintHash := sha256.Sum256([]byte(token))
 	fingerprint := base64.RawURLEncoding.EncodeToString(fingerprintHash[:])
 
-	// Encrypt secret via Vault Transit (stub for now)
-	encryptedSecret, err := h.encryptSecret(ctx, secret)
+	// Encrypt token via Vault Transit (stub for now)
+	encryptedSecret, err := h.encryptSecret(ctx, token)
 	if err != nil {
-		h.logger.Error("failed to encrypt secret", zap.Error(err))
+		h.logger.Error("failed to encrypt token", zap.Error(err))
 		http.Error(w, "failed to encrypt API key", http.StatusInternalServerError)
 		return
 	}
@@ -207,25 +211,17 @@ func (h *Handler) IssueAPIKey(w http.ResponseWriter, r *http.Request) {
 		expiresAt = &exp
 	}
 
-	// Prepare annotations (include display_name if provided)
-	annotations := req.Annotations
-	if annotations == nil {
-		annotations = make(map[string]any)
-	}
-	if req.DisplayName != "" {
-		annotations["display_name"] = req.DisplayName
-	}
-
 	// Create API key record in database
 	params := postgres.CreateAPIKeyParams{
 		OrgID:         orgID,
 		PrincipalType: postgres.PrincipalTypeServiceAccount,
 		PrincipalID:   serviceAccountID,
+		Notes:         req.Notes,
 		Fingerprint:   fingerprint,
 		Status:        "active",
 		Scopes:        req.Scopes,
 		ExpiresAt:     expiresAt,
-		Annotations:   annotations,
+		Annotations:   req.Annotations,
 	}
 
 	apiKey, err := h.runtime.Postgres.CreateAPIKey(ctx, params)
@@ -257,10 +253,10 @@ func (h *Handler) IssueAPIKey(w http.ResponseWriter, r *http.Request) {
 	// Record API key issuance
 	metrics.RecordAPIKeyIssued()
 
-	// Build response (secret shown once)
+	// Build response (token shown once)
 	resp := IssuedAPIKeyResponse{
-		APIKeyID:    apiKey.ID.String(),
-		Secret:      secret, // Only time secret is returned
+		KeyID:       apiKey.KeyID,
+		Token:       token,
 		Fingerprint: fingerprint,
 		Status:      apiKey.Status,
 	}
@@ -460,25 +456,26 @@ func (h *Handler) IssueUserAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate secure random secret (32 bytes = 256 bits)
-	secretBytes := make([]byte, 32)
-	if _, err := rand.Read(secretBytes); err != nil {
-		h.logger.Error("failed to generate secret", zap.Error(err))
+	// Generate secure random token (32 bytes = 256 bits)
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		h.logger.Error("failed to generate token", zap.Error(err))
 		http.Error(w, "failed to generate API key", http.StatusInternalServerError)
 		return
 	}
 
-	// Encode secret as base64url (URL-safe, no padding)
-	secret := base64.RawURLEncoding.EncodeToString(secretBytes)
+	// Encode token as base64url with ai-aas_ prefix
+	tokenRaw := base64.RawURLEncoding.EncodeToString(tokenBytes)
+	token := TokenPrefix + tokenRaw
 
-	// Compute fingerprint (SHA-256 hash of secret)
-	fingerprintHash := sha256.Sum256([]byte(secret))
+	// Compute fingerprint (SHA-256 hash of full token including prefix)
+	fingerprintHash := sha256.Sum256([]byte(token))
 	fingerprint := base64.RawURLEncoding.EncodeToString(fingerprintHash[:])
 
-	// Encrypt secret via Vault Transit (stub for now)
-	encryptedSecret, err := h.encryptSecret(ctx, secret)
+	// Encrypt token via Vault Transit (stub for now)
+	encryptedSecret, err := h.encryptSecret(ctx, token)
 	if err != nil {
-		h.logger.Error("failed to encrypt secret", zap.Error(err))
+		h.logger.Error("failed to encrypt token", zap.Error(err))
 		http.Error(w, "failed to encrypt API key", http.StatusInternalServerError)
 		return
 	}
@@ -495,6 +492,7 @@ func (h *Handler) IssueUserAPIKey(w http.ResponseWriter, r *http.Request) {
 		OrgID:         orgID,
 		PrincipalType: postgres.PrincipalTypeUser,
 		PrincipalID:   userID,
+		Notes:         req.Notes,
 		Fingerprint:   fingerprint,
 		Status:        "active",
 		Scopes:        req.Scopes,
@@ -530,10 +528,10 @@ func (h *Handler) IssueUserAPIKey(w http.ResponseWriter, r *http.Request) {
 	// Record API key issuance
 	metrics.RecordAPIKeyIssued()
 
-	// Build response (secret shown once)
+	// Build response (token shown once)
 	resp := IssuedAPIKeyResponse{
-		APIKeyID:    apiKey.ID.String(),
-		Secret:      secret, // Only time secret is returned
+		KeyID:       apiKey.KeyID,
+		Token:       token,
 		Fingerprint: fingerprint,
 		Status:      apiKey.Status,
 	}
@@ -597,7 +595,8 @@ func (h *Handler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
 
 	// Convert to response format (without secrets)
 	type APIKeyResponse struct {
-		APIKeyID      string   `json:"apiKeyId"`
+		KeyID         string   `json:"keyId"`
+		Notes         string   `json:"notes,omitempty"`
 		PrincipalType string   `json:"principalType"`
 		PrincipalID   string   `json:"principalId"`
 		Fingerprint   string   `json:"fingerprint"`
@@ -611,7 +610,8 @@ func (h *Handler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
 	responses := make([]APIKeyResponse, len(apiKeys))
 	for i, key := range apiKeys {
 		responses[i] = APIKeyResponse{
-			APIKeyID:      key.ID.String(),
+			KeyID:         key.KeyID,
+			Notes:         key.Notes,
 			PrincipalType: string(key.PrincipalType),
 			PrincipalID:   key.PrincipalID.String(),
 			Fingerprint:   key.Fingerprint,
@@ -697,25 +697,26 @@ func (h *Handler) IssueUserAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate secure random secret (32 bytes = 256 bits)
-	secretBytes := make([]byte, 32)
-	if _, err := rand.Read(secretBytes); err != nil {
-		h.logger.Error("failed to generate secret", zap.Error(err))
+	// Generate secure random token (32 bytes = 256 bits)
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		h.logger.Error("failed to generate token", zap.Error(err))
 		http.Error(w, "failed to generate API key", http.StatusInternalServerError)
 		return
 	}
 
-	// Encode secret as base64url (URL-safe, no padding)
-	secret := base64.RawURLEncoding.EncodeToString(secretBytes)
+	// Encode token as base64url with ai-aas_ prefix
+	tokenRaw := base64.RawURLEncoding.EncodeToString(tokenBytes)
+	token := TokenPrefix + tokenRaw
 
-	// Compute fingerprint (SHA-256 hash of secret)
-	fingerprintHash := sha256.Sum256([]byte(secret))
+	// Compute fingerprint (SHA-256 hash of full token including prefix)
+	fingerprintHash := sha256.Sum256([]byte(token))
 	fingerprint := base64.RawURLEncoding.EncodeToString(fingerprintHash[:])
 
-	// Encrypt secret via Vault Transit (stub for now)
-	encryptedSecret, err := h.encryptSecret(ctx, secret)
+	// Encrypt token via Vault Transit (stub for now)
+	encryptedSecret, err := h.encryptSecret(ctx, token)
 	if err != nil {
-		h.logger.Error("failed to encrypt secret", zap.Error(err))
+		h.logger.Error("failed to encrypt token", zap.Error(err))
 		http.Error(w, "failed to encrypt API key", http.StatusInternalServerError)
 		return
 	}
@@ -727,25 +728,17 @@ func (h *Handler) IssueUserAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 		expiresAt = &exp
 	}
 
-	// Prepare annotations (include display_name if provided)
-	annotations := req.Annotations
-	if annotations == nil {
-		annotations = make(map[string]any)
-	}
-	if req.DisplayName != "" {
-		annotations["display_name"] = req.DisplayName
-	}
-
 	// Create API key record in database
 	params := postgres.CreateAPIKeyParams{
 		OrgID:         orgID,
 		PrincipalType: postgres.PrincipalTypeUser,
 		PrincipalID:   userID,
+		Notes:         req.Notes,
 		Fingerprint:   fingerprint,
 		Status:        "active",
 		Scopes:        req.Scopes,
 		ExpiresAt:     expiresAt,
-		Annotations:   annotations,
+		Annotations:   req.Annotations,
 	}
 
 	apiKey, err := h.runtime.Postgres.CreateAPIKey(ctx, params)
@@ -776,10 +769,10 @@ func (h *Handler) IssueUserAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 	// Record API key issuance
 	metrics.RecordAPIKeyIssued()
 
-	// Build response (secret shown once)
+	// Build response (token shown once)
 	resp := IssuedAPIKeyResponse{
-		APIKeyID:    apiKey.ID.String(),
-		Secret:      secret, // Only time secret is returned
+		KeyID:       apiKey.KeyID,
+		Token:       token,
 		Fingerprint: fingerprint,
 		Status:      apiKey.Status,
 	}
@@ -822,7 +815,8 @@ func (h *Handler) ListAPIKeysForMe(w http.ResponseWriter, r *http.Request) {
 	
 	// Convert to response format (without secrets)
 	type APIKeyResponse struct {
-		APIKeyID    string   `json:"apiKeyId"`
+		KeyID       string   `json:"keyId"`
+		Notes       string   `json:"notes,omitempty"`
 		Fingerprint string   `json:"fingerprint"`
 		Status      string   `json:"status"`
 		Scopes      []string `json:"scopes"`
@@ -830,11 +824,12 @@ func (h *Handler) ListAPIKeysForMe(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt   *string  `json:"expiresAt,omitempty"`
 		LastUsedAt  *string  `json:"lastUsedAt,omitempty"`
 	}
-	
+
 	responses := make([]APIKeyResponse, len(apiKeys))
 	for i, key := range apiKeys {
 		responses[i] = APIKeyResponse{
-			APIKeyID:    key.ID.String(),
+			KeyID:       key.KeyID,
+			Notes:       key.Notes,
 			Fingerprint: key.Fingerprint,
 			Status:      key.Status,
 			Scopes:      key.Scopes,
@@ -895,7 +890,8 @@ func (h *Handler) GetAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 	
 	// Build response (without secret)
 	type APIKeyResponse struct {
-		APIKeyID    string   `json:"apiKeyId"`
+		KeyID       string   `json:"keyId"`
+		Notes       string   `json:"notes,omitempty"`
 		Fingerprint string   `json:"fingerprint"`
 		Status      string   `json:"status"`
 		Scopes      []string `json:"scopes"`
@@ -903,9 +899,10 @@ func (h *Handler) GetAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt   *string  `json:"expiresAt,omitempty"`
 		LastUsedAt  *string  `json:"lastUsedAt,omitempty"`
 	}
-	
+
 	resp := APIKeyResponse{
-		APIKeyID:    apiKey.ID.String(),
+		KeyID:       apiKey.KeyID,
+		Notes:       apiKey.Notes,
 		Fingerprint: apiKey.Fingerprint,
 		Status:      apiKey.Status,
 		Scopes:      apiKey.Scopes,

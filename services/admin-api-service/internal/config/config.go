@@ -34,6 +34,11 @@ type Config struct {
 	MetricsEnabled bool
 	TracingEnabled bool
 	OTLPEndpoint   string
+
+	// Worker settings
+	WorkerEnabled              bool
+	WorkerPollInterval         time.Duration
+	WorkerProgressUpdateInterval time.Duration
 }
 
 // Load reads configuration from environment variables
@@ -53,6 +58,10 @@ func Load() (*Config, error) {
 		MetricsEnabled:  getEnvBool("METRICS_ENABLED", true),
 		TracingEnabled:  getEnvBool("TRACING_ENABLED", false),
 		OTLPEndpoint:    getEnv("OTLP_ENDPOINT", ""),
+		// Worker settings
+		WorkerEnabled:                getEnvBool("WORKER_ENABLED", true),
+		WorkerPollInterval:           getEnvDuration("WORKER_POLL_INTERVAL", 5*time.Second),
+		WorkerProgressUpdateInterval: getEnvDuration("WORKER_PROGRESS_UPDATE_INTERVAL", 10*time.Second),
 	}
 
 	if cfg.DatabaseURL == "" {

@@ -11,15 +11,17 @@ import (
 
 // ModelRegistryService handles model registry business logic
 type ModelRegistryService struct {
-	repo   *repository.ModelRepository
-	logger *zap.Logger
+	repo       *repository.ModelRepository
+	policyRepo *repository.PolicyRepository
+	logger     *zap.Logger
 }
 
 // NewModelRegistryService creates a new model registry service
-func NewModelRegistryService(repo *repository.ModelRepository, logger *zap.Logger) *ModelRegistryService {
+func NewModelRegistryService(repo *repository.ModelRepository, policyRepo *repository.PolicyRepository, logger *zap.Logger) *ModelRegistryService {
 	return &ModelRegistryService{
-		repo:   repo,
-		logger: logger,
+		repo:       repo,
+		policyRepo: policyRepo,
+		logger:     logger,
 	}
 }
 
@@ -53,7 +55,59 @@ func (s *ModelRegistryService) Register(ctx context.Context, reg *domain.ModelRe
 		zap.String("action", action),
 	)
 
+	// Auto-create global routing policy for new models (default behavior)
+	// This ensures newly deployed models are immediately accessible to all orgs
+	if created && s.policyRepo != nil {
+		if err := s.createDefaultRoutingPolicy(ctx, model); err != nil {
+			// Log the error but don't fail the registration
+			// The model is registered, policy can be created manually if needed
+			s.logger.Warn("failed to auto-create routing policy",
+				zap.String("model_name", model.ModelName),
+				zap.Error(err),
+			)
+		}
+	}
+
 	return model, created, nil
+}
+
+// createDefaultRoutingPolicy creates a global routing policy for the model
+func (s *ModelRegistryService) createDefaultRoutingPolicy(ctx context.Context, model *domain.Model) error {
+	// Build the backend ID from model name (matches deployment naming convention)
+	backendID := model.ModelName
+
+	policyCreate := &domain.PolicyCreate{
+		OrganizationID: "*", // Global policy - applies to all organizations
+		Model:          model.ModelName,
+		Backends: []domain.Backend{
+			{
+				BackendID: backendID,
+				Weight:    100,
+			},
+		},
+		FailoverThreshold: 3,
+		Metadata: map[string]interface{}{
+			"auto_created":  true,
+			"model_id":      model.ModelID.String(),
+			"endpoint":      model.DeploymentEndpoint,
+			"namespace":     model.DeploymentNamespace,
+			"environment":   model.DeploymentEnvironment,
+			"created_reason": "auto-created on model registration",
+		},
+	}
+
+	policy, err := s.policyRepo.Create(ctx, policyCreate, "system")
+	if err != nil {
+		return fmt.Errorf("failed to create routing policy: %w", err)
+	}
+
+	s.logger.Info("auto-created global routing policy",
+		zap.String("policy_id", policy.PolicyID),
+		zap.String("model", model.ModelName),
+		zap.String("backend_id", backendID),
+	)
+
+	return nil
 }
 
 // Get retrieves a model by name and environment

@@ -12,6 +12,7 @@ package admin
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -198,12 +199,12 @@ func runAPIKeyList(cmd *cobra.Command, args []string, flagOrgID, flagFormat stri
 	if cfg.OutputFormat == "json" {
 		return output.PrintJSON(apiKeys)
 	} else if cfg.OutputFormat == "csv" {
-		headers := []string{"apiKeyId", "userId", "fingerprint", "status", "expiresAt"}
+		headers := []string{"keyId", "notes", "fingerprint", "status", "expiresAt"}
 		var rows [][]string
 		for _, key := range apiKeys {
 			rows = append(rows, []string{
-				key.APIKeyID,
-				key.UserID,
+				key.KeyID,
+				key.Notes,
 				key.Fingerprint,
 				key.Status,
 				key.ExpiresAt,
@@ -211,12 +212,12 @@ func runAPIKeyList(cmd *cobra.Command, args []string, flagOrgID, flagFormat stri
 		}
 		return output.PrintTable(headers, rows)
 	} else {
-		headers := []string{"API Key ID", "User ID", "Fingerprint", "Status", "Expires At"}
+		headers := []string{"Key ID", "Notes", "Fingerprint", "Status", "Expires At"}
 		var rows [][]string
 		for _, key := range apiKeys {
 			rows = append(rows, []string{
-				key.APIKeyID,
-				key.UserID,
+				key.KeyID,
+				key.Notes,
 				key.Fingerprint,
 				key.Status,
 				key.ExpiresAt,
@@ -233,6 +234,7 @@ func runAPIKeyList(cmd *cobra.Command, args []string, flagOrgID, flagFormat stri
 func apiKeyCreateCommand() *cobra.Command {
 	var flagOrgID string
 	var flagUserID string
+	var flagEmail string
 	var flagScopes []string
 	var flagExpiresInDays int
 	var flagFormat string
@@ -240,6 +242,7 @@ func apiKeyCreateCommand() *cobra.Command {
 	var flagQuiet bool
 	var flagUserOrgEndpoint string
 	var flagAPIKey string
+	var flagProfile string
 
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -250,18 +253,24 @@ The key secret is only displayed once. Store it securely immediately after
 creation - it cannot be retrieved later.
 
 Examples:
-  # Create a key (never expires)
+  # Create a key using email (never expires)
+  ai-aas-cli apikey create --org-id acme --email user@example.com
+
+  # Create a key using user ID
   ai-aas-cli apikey create --org-id acme --user-id u_123
 
   # Create with 90-day expiration
-  ai-aas-cli apikey create --org-id acme --user-id u_123 --expires-in-days 90
+  ai-aas-cli apikey create --org-id acme --email user@example.com --expires-in-days 90
 
   # Create with specific scopes
-  ai-aas-cli apikey create --org-id acme --user-id u_123 \
+  ai-aas-cli apikey create --org-id acme --email user@example.com \
     --scopes inference:read,inference:write
 
   # Output in JSON for automation
-  ai-aas-cli apikey create --org-id acme --user-id u_123 --format json
+  ai-aas-cli apikey create --org-id acme --email user@example.com --format json
+
+  # Create key and save to profile (uses org_id/user_id from profile)
+  ai-aas-cli apikey create --profile acme-admin
 
 Security Best Practices:
   - Set expiration for production keys
@@ -272,13 +281,14 @@ See Also:
   ai-aas-cli apikey list      List existing keys
   ai-aas-cli apikey delete    Revoke a key`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAPIKeyCreate(cmd, args, flagOrgID, flagUserID, flagScopes, flagExpiresInDays,
-				flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey)
+			return runAPIKeyCreate(cmd, args, flagOrgID, flagUserID, flagEmail, flagScopes, flagExpiresInDays,
+				flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey, flagProfile)
 		},
 	}
 
 	cmd.Flags().StringVar(&flagOrgID, "org-id", "", "Organization ID or slug (required)")
-	cmd.Flags().StringVar(&flagUserID, "user-id", "", "User ID (required)")
+	cmd.Flags().StringVar(&flagUserID, "user-id", "", "User ID (required if --email not provided)")
+	cmd.Flags().StringVar(&flagEmail, "email", "", "User email (required if --user-id not provided)")
 	cmd.Flags().StringSliceVar(&flagScopes, "scopes", []string{}, "API key scopes")
 	cmd.Flags().IntVar(&flagExpiresInDays, "expires-in-days", 0, "Expiration in days (0 = no expiration)")
 	cmd.Flags().StringVar(&flagFormat, "format", "table", "Output format: table, json, csv")
@@ -286,12 +296,13 @@ See Also:
 	cmd.Flags().BoolVar(&flagQuiet, "quiet", false, "Suppress non-error output")
 	cmd.Flags().StringVar(&flagUserOrgEndpoint, "user-org-endpoint", "", "User-org-service endpoint (overrides config)")
 	cmd.Flags().StringVar(&flagAPIKey, "api-key", "", "API key for authentication (overrides config)")
+	cmd.Flags().StringVar(&flagProfile, "profile", "", "Use org_id/user_id from profile and save api_key to it")
 
 	return cmd
 }
 
-func runAPIKeyCreate(cmd *cobra.Command, args []string, flagOrgID, flagUserID string, flagScopes []string, flagExpiresInDays int,
-	flagFormat string, flagVerbose, flagQuiet bool, flagUserOrgEndpoint, flagAPIKey string) error {
+func runAPIKeyCreate(cmd *cobra.Command, args []string, flagOrgID, flagUserID, flagEmail string, flagScopes []string, flagExpiresInDays int,
+	flagFormat string, flagVerbose, flagQuiet bool, flagUserOrgEndpoint, flagAPIKey string, flagProfile string) error {
 	startTime := time.Now()
 
 	// Load configuration
@@ -328,31 +339,72 @@ func runAPIKeyCreate(cmd *cobra.Command, args []string, flagOrgID, flagUserID st
 		)
 	}
 
-	// Use default org if not specified
+	// Use profile org_id/user_id if --profile is set
 	orgID := flagOrgID
+	resolvedUserID := flagUserID
+	emailToResolve := flagEmail
+	if flagProfile != "" {
+		if profile, err := config.GetProfile(flagProfile); err == nil {
+			if orgID == "" && profile.OrgID != "" {
+				orgID = profile.OrgID
+			}
+			if resolvedUserID == "" && emailToResolve == "" && profile.UserID != "" {
+				resolvedUserID = profile.UserID
+			}
+		}
+	}
+
+	// Fall back to default org
 	if orgID == "" {
 		orgID = cfg.DefaultOrgID
 	}
 	if orgID == "" {
 		return errors.NewValidationError(
 			"--org-id is required",
-			"Provide organization ID or slug with --org-id flag, or set a default with 'ai-aas-cli org use <org-id>'",
+			"Provide organization ID or slug with --org-id flag, set a default with 'ai-aas-cli org use <org-id>', or use --profile",
 		)
 	}
-	if flagUserID == "" {
+	if resolvedUserID == "" && emailToResolve == "" {
 		return errors.NewValidationError(
-			"--user-id is required",
-			"Provide user ID with --user-id flag. API keys must be associated with a user.",
+			"either --user-id or --email is required",
+			"Provide user ID with --user-id or email with --email flag. API keys must be associated with a user.",
 		)
 	}
 
+	// Create HTTP client with TLS config (reused for all operations)
+	httpClient, err := createHTTPClient(cfg)
+	if err != nil {
+		return errors.NewOperationError(fmt.Sprintf("create http client: %v", err), "Check TLS configuration")
+	}
+
 	// Health check
-	checker := health.NewChecker(5 * time.Second)
+	checker := createHealthCheckerWithHTTPClient(httpClient)
 	requiredServices := map[string]string{
 		"user-org-service": cfg.UserOrgEndpoint,
 	}
 	if _, err := checker.CheckRequired(cmd.Context(), requiredServices); err != nil {
 		return errors.NewServiceUnavailableError("user-org-service", cfg.UserOrgEndpoint)
+	}
+
+	userOrgClient := createUserOrgClientWithHTTPClient(cfg, httpClient)
+
+	// Resolve user ID from email if needed
+	// Also handle case where user provides email in --user-id flag
+	// If --user-id looks like an email (contains @), treat it as email
+	if resolvedUserID != "" && strings.Contains(resolvedUserID, "@") {
+		emailToResolve = resolvedUserID
+		resolvedUserID = ""
+	}
+
+	if resolvedUserID == "" && emailToResolve != "" {
+		user, err := userOrgClient.GetUserByEmail(cmd.Context(), orgID, emailToResolve)
+		if err != nil {
+			return errors.NewOperationError(
+				fmt.Sprintf("failed to find user by email: %v", err),
+				"Verify the email exists in this organization.",
+			)
+		}
+		resolvedUserID = user.UserID
 	}
 
 	// Build request
@@ -364,8 +416,7 @@ func runAPIKeyCreate(cmd *cobra.Command, args []string, flagOrgID, flagUserID st
 	}
 
 	// Execute create
-	userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
-	apiKey, err := userOrgClient.IssueUserAPIKey(cmd.Context(), orgID, flagUserID, req)
+	apiKey, err := userOrgClient.IssueUserAPIKey(cmd.Context(), orgID, resolvedUserID, req)
 	if err != nil {
 		return errors.NewOperationError(
 			fmt.Sprintf("failed to create API key: %v", err),
@@ -373,29 +424,52 @@ func runAPIKeyCreate(cmd *cobra.Command, args []string, flagOrgID, flagUserID st
 		)
 	}
 
-	// Audit logging (mask secret)
+	// Audit logging (mask token)
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
 		Type:        "apikey_create",
-		Command:     fmt.Sprintf("apikey create --org-id=%s --user-id=%s", orgID, flagUserID),
+		Command:     fmt.Sprintf("apikey create --org-id=%s --user-id=%s", orgID, resolvedUserID),
 		Parameters: map[string]interface{}{
-			"orgId":     orgID,
-			"userId":    flagUserID,
-			"apiKeyId":  apiKey.APIKeyID,
-			"secret":    apiKey.Secret, // Will be masked by audit logger
+			"orgId":   orgID,
+			"userId":  resolvedUserID,
+			"email":   emailToResolve,
+			"keyId":   apiKey.KeyID,
+			"token":   apiKey.Token, // Will be masked by audit logger
 		},
 		Outcome:  "success",
 		Duration: time.Since(startTime),
 	})
 
-	// Format output - show secret only once
+	// Save to profile if --profile flag is set
+	if flagProfile != "" {
+		if err := config.UpdateProfile(flagProfile, func(p *config.Profile) {
+			p.APIKey = apiKey.Token
+		}); err != nil {
+			if !cfg.Quiet {
+				fmt.Printf("Warning: failed to update profile '%s': %v\n", flagProfile, err)
+			}
+		} else if !cfg.Quiet {
+			fmt.Printf("\nProfile '%s' is now complete!\n", flagProfile)
+			if profile, err := config.GetProfile(flagProfile); err == nil {
+				fmt.Printf("  environment: %s\n", profile.Environment)
+				fmt.Printf("  org_id:      %s\n", profile.OrgID)
+				fmt.Printf("  user_id:     %s\n", profile.UserID)
+				fmt.Printf("  email:       %s\n", profile.Email)
+				fmt.Printf("  api_key:     %s\n", config.MaskSecret(profile.APIKey))
+				fmt.Println()
+				fmt.Printf("Switch to this profile: ai-aas-cli profile use %s\n", flagProfile)
+			}
+		}
+	}
+
+	// Format output - show token only once
 	if cfg.OutputFormat == "json" {
 		return output.PrintJSON(apiKey)
 	} else if cfg.OutputFormat == "csv" {
-		headers := []string{"apiKeyId", "secret", "fingerprint", "status", "expiresAt"}
+		headers := []string{"keyId", "token", "fingerprint", "status", "expiresAt"}
 		rows := [][]string{{
-			apiKey.APIKeyID,
-			apiKey.Secret,
+			apiKey.KeyID,
+			apiKey.Token,
 			apiKey.Fingerprint,
 			apiKey.Status,
 			apiKey.ExpiresAt,
@@ -405,8 +479,8 @@ func runAPIKeyCreate(cmd *cobra.Command, args []string, flagOrgID, flagUserID st
 		if !cfg.Quiet {
 			fmt.Println("⚠️  IMPORTANT: Save this API key now. It will not be shown again.")
 			fmt.Printf("API key created successfully:\n")
-			fmt.Printf("  API Key ID: %s\n", apiKey.APIKeyID)
-			fmt.Printf("  Secret: %s\n", apiKey.Secret)
+			fmt.Printf("  Key ID: %s\n", apiKey.KeyID)
+			fmt.Printf("  Token:  %s\n", apiKey.Token)
 			fmt.Printf("  Fingerprint: %s\n", apiKey.Fingerprint)
 			fmt.Printf("  Status: %s\n", apiKey.Status)
 			if apiKey.ExpiresAt != "" {
@@ -414,10 +488,10 @@ func runAPIKeyCreate(cmd *cobra.Command, args []string, flagOrgID, flagUserID st
 			}
 		}
 		if cfg.OutputFormat == "table" {
-			headers := []string{"API Key ID", "Secret", "Fingerprint", "Status", "Expires At"}
+			headers := []string{"Key ID", "Token", "Fingerprint", "Status", "Expires At"}
 			rows := [][]string{{
-				apiKey.APIKeyID,
-				apiKey.Secret,
+				apiKey.KeyID,
+				apiKey.Token,
 				apiKey.Fingerprint,
 				apiKey.Status,
 				apiKey.ExpiresAt,

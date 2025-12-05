@@ -123,7 +123,7 @@ backends:
   # - This bypasses Istio routing and provides direct pod connectivity
   #
   # Note: Don't include path - it's added by the router based on request type
-  endpoints: "mistralai/Mistral-7B-Instruct-v0.3:http://mistral-7b-development-predictor-00001-private.development.svc.cluster.local:8012"
+  endpoints: "mistralai/Mistral-7B-Instruct-v0.3:http://mistral-7b-development-predictor-00001-private.development.svc.cluster.local:8012,unsloth/gpt-oss-20b:http://gpt-oss-20b-development-predictor-00002-private.development.svc.cluster.local:8012"
 
 # Redis configuration
 redis:
@@ -142,6 +142,14 @@ configService:
   endpoint: ""  # Empty = use static config
   watchEnabled: false
   cachePath: /tmp/api-router-config.db
+
+# Admin API sync for routing policies (alternative to etcd)
+adminApi:
+  endpoint: "http://admin-api-service-development.admin-api-service.svc.cluster.local:8080"
+  syncInterval: "30s"
+  # Use the admin API key from local secret (copied from admin-api-service)
+  apiKeySecretName: "admin-api-sync-secrets"
+  apiKeySecretKey: "api-key"
 
 # Rate limiting configuration
 rateLimit:

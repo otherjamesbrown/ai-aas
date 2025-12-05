@@ -88,7 +88,7 @@ ai-aas-cli model deploy create --help     # Specific command details
 If you need to perform an operation that the CLI doesn't support:
 1. Note it as a potential enhancement
 2. Fall back to the Admin API
-3. Consider adding the command to the backlog
+3. Consider creating a beads issue: `bd create "CLI: Add <command>" --type feature`
 
 ## Key Architectural Concepts
 

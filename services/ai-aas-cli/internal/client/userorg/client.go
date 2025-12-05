@@ -108,7 +108,7 @@ func (c *Client) Bootstrap(ctx context.Context, req BootstrapRequest) (*Bootstra
 	return &BootstrapResponse{
 		AdminID: inviteResp.UserID,
 		OrgID:   org.OrgID,
-		APIKey:  apiKeyResp.Secret,
+		APIKey:  apiKeyResp.Token,
 		Email:   req.Email,
 		OrgName: org.Name,
 	}, nil
@@ -398,8 +398,8 @@ func (c *Client) RotateAPIKey(ctx context.Context, orgID, apiKeyID string) (*Rot
 
 	// Convert IssuedAPIKeyResponse to RotateAPIKeyResponse (same structure)
 	return &RotateAPIKeyResponse{
-		APIKeyID:    result.APIKeyID,
-		Secret:      result.Secret,
+		KeyID:       result.KeyID,
+		Token:       result.Token,
 		Fingerprint: result.Fingerprint,
 		Status:      result.Status,
 		ExpiresAt:   result.ExpiresAt,
@@ -644,5 +644,45 @@ func (c *Client) GetBudgetStatus(ctx context.Context, orgID string) (*BudgetStat
 		RemainingCents:    0,
 		Status:            "not_configured",
 	}, nil
+}
+
+// CreateUser creates a user directly (bypassing invite flow).
+// Returns the created user with a temporary password that must be changed on first login.
+func (c *Client) CreateUser(ctx context.Context, orgID string, req CreateUserRequest) (*CreateUserResponse, error) {
+	url := fmt.Sprintf("%s/v1/orgs/%s/users", c.baseURL, orgID)
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
+	}
+
+	resp, err := client.DoWithRetry(ctx, c.httpClient, httpReq, c.retryCfg)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		bodyBytes := make([]byte, 1024)
+		n, _ := resp.Body.Read(bodyBytes)
+		return nil, fmt.Errorf("create user failed: status %d, body: %s", resp.StatusCode, string(bodyBytes[:n]))
+	}
+
+	var result CreateUserResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	return &result, nil
 }
 

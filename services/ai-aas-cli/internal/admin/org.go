@@ -236,6 +236,7 @@ func orgCreateCommand() *cobra.Command {
 	var flagUserOrgEndpoint string
 	var flagAPIKey string
 	var flagUse bool
+	var flagProfile string
 
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -260,6 +261,9 @@ Examples:
   ai-aas-cli org create --name "ACME Corp" --slug acme \
     --declarative-enabled --declarative-repo-url https://github.com/acme/config
 
+  # Create and save to a profile (for progressive profile building)
+  ai-aas-cli org create --name "ACME Corp" --slug acme --profile acme-admin
+
   # Preview without creating
   ai-aas-cli org create --name "ACME Corp" --slug acme --dry-run
 
@@ -275,7 +279,7 @@ See Also:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runOrgCreate(cmd, args, flagName, flagSlug, flagBillingOwnerEmail,
 				flagDeclarativeEnabled, flagDeclarativeRepoURL, flagDeclarativeBranch,
-				flagDryRun, flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey, flagUse)
+				flagDryRun, flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey, flagUse, flagProfile)
 		},
 	}
 
@@ -292,13 +296,14 @@ See Also:
 	cmd.Flags().StringVar(&flagUserOrgEndpoint, "user-org-endpoint", "", "User-org-service endpoint (overrides config)")
 	cmd.Flags().StringVar(&flagAPIKey, "api-key", "", "API key for authentication (overrides config)")
 	cmd.Flags().BoolVar(&flagUse, "use", false, "Set as default organization after creation")
+	cmd.Flags().StringVar(&flagProfile, "profile", "", "Save org_id to named profile")
 
 	return cmd
 }
 
 func runOrgCreate(cmd *cobra.Command, args []string, flagName, flagSlug, flagBillingOwnerEmail string,
 	flagDeclarativeEnabled bool, flagDeclarativeRepoURL, flagDeclarativeBranch string,
-	flagDryRun bool, flagFormat string, flagVerbose, flagQuiet bool, flagUserOrgEndpoint, flagAPIKey string, flagUse bool) error {
+	flagDryRun bool, flagFormat string, flagVerbose, flagQuiet bool, flagUserOrgEndpoint, flagAPIKey string, flagUse bool, flagProfile string) error {
 	startTime := time.Now()
 
 	// Load configuration
@@ -451,6 +456,26 @@ func runOrgCreate(cmd *cobra.Command, args []string, flagName, flagSlug, flagBil
 			}
 		} else if !cfg.Quiet {
 			fmt.Printf("Default organization set to: %s\n\n", org.Slug)
+		}
+	}
+
+	// Save to profile if --profile flag is set
+	if flagProfile != "" {
+		if err := config.UpdateProfile(flagProfile, func(p *config.Profile) {
+			p.OrgID = org.Slug // Use slug as it's more user-friendly
+		}); err != nil {
+			if !cfg.Quiet {
+				fmt.Printf("Warning: failed to update profile '%s': %v\n", flagProfile, err)
+			}
+		} else if !cfg.Quiet {
+			fmt.Printf("Saved to profile '%s'\n", flagProfile)
+			// Show profile status
+			if profile, err := config.GetProfile(flagProfile); err == nil {
+				fmt.Printf("  org_id:   %s\n", profile.OrgID)
+				fmt.Printf("  user_id:  %s\n", valueOrNotSet(profile.UserID))
+				fmt.Printf("  api_key:  %s\n", valueOrNotSet(profile.APIKey))
+				fmt.Println()
+			}
 		}
 	}
 
@@ -892,35 +917,54 @@ func orgUseCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "use [org-id]",
 		Short: "Set default organization",
-		Long: `Set the default organization for subsequent commands.
+		Long: `Set or show the default organization for subsequent commands.
 
-When a default organization is set, commands like 'user list' and 'apikey create'
-will use it automatically instead of requiring --org-id.
+When a default organization is set, commands like 'user list', 'user create',
+'apikey list', and 'apikey create' will use it automatically, eliminating the
+need to specify --org-id on every command.
 
-The default organization can be overridden at any time with --org-id flag,
-or with the AI_AAS_DEFAULT_ORG_ID environment variable.
+The default is saved to your configuration file (~/.ai-aas-cli.yaml) and persists
+across sessions.
+
+Priority Order:
+  1. --org-id flag (highest priority, always used if provided)
+  2. AI_AAS_DEFAULT_ORG_ID environment variable
+  3. Saved default organization (from 'org use' command)
 
 Examples:
-  # Set default organization
+  # Set default organization (by slug or ID)
   ai-aas-cli org use acme
+  ai-aas-cli org use 550e8400-e29b-41d4-a716-446655440000
 
-  # Show current default
+  # Show current default organization
   ai-aas-cli org use
 
   # Clear default organization
   ai-aas-cli org use --clear
 
-  # Use environment variable instead
+  # Set via environment variable (useful for scripts/CI)
   export AI_AAS_DEFAULT_ORG_ID=acme
 
-After setting a default organization:
-  # These are equivalent
+After Setting a Default:
+  # Before: required --org-id on every command
   ai-aas-cli user list --org-id acme
+  ai-aas-cli user create --org-id acme --email user@example.com
+  ai-aas-cli apikey create --org-id acme --user-id u_123
+
+  # After: --org-id is optional
   ai-aas-cli user list
+  ai-aas-cli user create --email user@example.com
+  ai-aas-cli apikey create --user-id u_123
+
+  # Override when needed
+  ai-aas-cli user list --org-id other-org
+
+Tip: Use 'ai-aas-cli org create --use' to set the default when creating an org.
 
 See Also:
   ai-aas-cli org list      List available organizations
-  ai-aas-cli org create    Create a new organization`,
+  ai-aas-cli org create    Create a new organization
+  ai-aas-cli config show   Show current configuration`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runOrgUse(cmd, args, flagClear)
 		},
@@ -985,5 +1029,13 @@ func runOrgUse(cmd *cobra.Command, args []string, flagClear bool) error {
 	fmt.Println("  ai-aas-cli apikey create --user-id <user-id>")
 
 	return nil
+}
+
+// valueOrNotSet returns the value or "(not set)" if empty.
+func valueOrNotSet(s string) string {
+	if s == "" {
+		return "(not set)"
+	}
+	return s
 }
 

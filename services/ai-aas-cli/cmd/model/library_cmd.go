@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/api"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/cli"
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/client/inference"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/kubernetes"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
@@ -27,8 +29,30 @@ func NewLibraryParentCommand() *cobra.Command {
 The library provides simplified commands for quickly enabling (deploying) and
 disabling (undeploying) models that are already registered and cached.
 
+MODEL LIFECYCLE
+───────────────
+Models progress through these stages:
+
+  ┌────────────┐     ┌────────────┐     ┌────────────┐     ┌────────────┐
+  │ registered │────▶│   cached   │────▶│ deploying  │────▶│   ready    │
+  └────────────┘     └────────────┘     └────────────┘     └────────────┘
+                                               │                  │
+                                               ▼                  ▼
+                                        ┌────────────┐     ┌────────────┐
+                                        │   failed   │     │  disabled  │
+                                        └────────────┘     └────────────┘
+
+STATUS REFERENCE
+────────────────
+  registered  Model is in registry, weights not cached    → model cache pull
+  cached      Model weights stored in object storage      → model library enable
+  deploying   InferenceService is starting up             → wait or check status
+  ready       Model is serving inference requests         ✓ Ready to use
+  failed      Deployment failed                           → model troubleshoot
+  disabled    Model manually disabled/scaled to 0         → model library enable
+
 Examples:
-  # View library overview
+  # View library overview with next steps
   ai-aas model library list -e development
 
   # Quick enable a model
@@ -67,18 +91,34 @@ func newLibraryListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "Show model library overview",
-		Long: `Display an overview of all models with their status across environments.
+		Long: `Display an overview of all models with their status and next steps.
 
-Shows which models are registered, cached, and deployed.
+Shows which models are registered, cached, deployed, and available to users.
+
+STATUS VALUES
+─────────────
+  registered  Model is in registry, weights not cached
+  cached      Model weights stored in object storage
+  deploying   InferenceService is starting up
+  ready       Model is serving inference requests
+  failed      Deployment encountered an error
+  disabled    Model manually disabled/scaled to 0
+
+AVAILABLE COLUMN
+────────────────
+  Yes   Model is routed through API Router (users can access it)
+  No    Model is deployed but not routed (not in API Router config)
+  -     Model is not deployed
 
 Examples:
   # Show full library overview
   ai-aas model library list
 
-  # Filter by environment
+  # Filter by environment (shows deployment status)
   ai-aas model library list -e development
 
 See Also:
+  ai-aas model library --help     View full lifecycle diagram
   ai-aas model registry list      View registry details
   ai-aas model library enable     Enable a model`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -88,6 +128,13 @@ See Also:
 			cfg, err := config.Load()
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			// If no environment specified, try to get from active profile
+			if environment == "" {
+				if profile, _, err := config.GetActiveProfile(); err == nil && profile != nil && profile.Environment != "" {
+					environment = profile.Environment
+				}
 			}
 
 			adminEndpoint := cfg.AdminAPIEndpoint
@@ -119,22 +166,58 @@ See Also:
 				return nil
 			}
 
+			// Get available models from API Router (inference endpoint)
+			availableModels := make(map[string]bool)
+			inferenceEndpoint := cfg.InferenceEndpoint
+			if inferenceEndpoint != "" {
+				inferenceClient := inference.NewClient(inferenceEndpoint, cfg.APIKey)
+				availableList, err := inferenceClient.ListModels(ctx)
+				if err == nil {
+					for _, m := range availableList.Data {
+						availableModels[m.ID] = true
+					}
+				}
+			}
+
+			// Color definitions
+			header := color.New(color.FgWhite, color.Bold)
+			muted := color.New(color.FgHiBlack)
+			success := color.New(color.FgGreen, color.Bold)
+			warning := color.New(color.FgYellow)
+			errorColor := color.New(color.FgRed, color.Bold)
+			info := color.New(color.FgCyan)
+
+			// Print environment header if set
+			if environment != "" {
+				info.Printf("Environment: %s\n", environment)
+				fmt.Println()
+			}
+
 			// Print header
-			fmt.Printf("%-20s %-10s %-15s\n", "MODEL", "CACHED", "STATUS")
-			fmt.Println("─────────────────────────────────────────────")
+			header.Printf("%-20s %-10s %-12s %-10s %s\n", "MODEL", "CACHED", "STATUS", "AVAILABLE", "NEXT STEP")
+			muted.Println("─────────────────────────────────────────────────────────────────────────────────────────────")
 
 			for _, m := range models {
 				cached := "No"
+				cachedColor := muted
+				isCached := false
 				s3Client, err := getS3Client(ctx)
 				if err == nil {
-					manifestPath := fmt.Sprintf("models/%s/main/manifest.json", m.Name)
+					// Note: manifest filename is .manifest.json (with leading dot)
+					manifestPath := fmt.Sprintf("models/%s/main/.manifest.json", m.Name)
 					exists, _ := s3Client.Exists(ctx, manifestPath)
 					if exists {
 						cached = "Yes"
+						cachedColor = success
+						isCached = true
 					}
 				}
 
 				status := "registered"
+				statusColor := warning
+				nextStep := muted.Sprintf("→ model cache pull %s", m.Name)
+				isDeployed := false
+
 				if environment != "" {
 					kubeconfig := viper.GetString(fmt.Sprintf("environments.%s.kubeconfig", environment))
 					kubecontext := viper.GetString(fmt.Sprintf("environments.%s.context", environment))
@@ -148,23 +231,74 @@ See Also:
 						isvcName := fmt.Sprintf("%s-%s", m.Name, environment)
 						isvcStatus, err := k8sClient.GetInferenceService(ctx, isvcName, environment)
 						if err == nil {
+							isDeployed = true
 							if isvcStatus.Ready {
-								status = "enabled (ready)"
+								status = "ready"
+								statusColor = success
+								nextStep = success.Sprint("✓ Serving inference")
 							} else {
-								status = "enabled (pending)"
+								// Check conditions for failure
+								failed := false
+								for _, cond := range isvcStatus.Conditions {
+									if cond.Type == "Ready" && cond.Status == "False" && cond.Reason == "RevisionFailed" {
+										failed = true
+										break
+									}
+								}
+								if failed {
+									status = "failed"
+									statusColor = errorColor
+									nextStep = errorColor.Sprintf("→ model troubleshoot %s", m.Name)
+								} else {
+									status = "deploying"
+									statusColor = info
+									nextStep = info.Sprint("⏳ Waiting for ready...")
+								}
 							}
-						} else if cached == "Yes" {
+						} else if isCached {
 							status = "cached"
+							statusColor = info
+							nextStep = muted.Sprintf("→ model library enable %s -e %s", m.Name, environment)
 						}
 					}
-				} else if cached == "Yes" {
+				} else if isCached {
 					status = "cached"
+					statusColor = info
+					nextStep = muted.Sprintf("→ model library enable %s -e <env>", m.Name)
 				}
 
-				fmt.Printf("%-20s %-10s %-15s\n", m.Name, cached, status)
+				// Check if available via API Router
+				// Models can be registered by HF model ID (org/model) or by short name
+				available := "-"
+				availableColor := muted
+				if isDeployed {
+					// Check both the HF model ID and the short name
+					isAvailable := availableModels[m.HFModelID] || availableModels[m.Name]
+					if isAvailable {
+						available = "Yes"
+						availableColor = success
+					} else {
+						available = "No"
+						availableColor = warning
+						// Update next step to indicate routing needed
+						if status == "ready" {
+							nextStep = warning.Sprint("⚠ Add to API Router config")
+						}
+					}
+				}
+
+				// Print row with colored fields
+				fmt.Printf("%-20s ", m.Name)
+				cachedColor.Printf("%-10s ", cached)
+				statusColor.Printf("%-12s ", status)
+				availableColor.Printf("%-10s ", available)
+				fmt.Println(nextStep)
 			}
 
 			fmt.Printf("\nTotal: %d model(s)\n", len(models))
+			if environment == "" {
+				muted.Println("\nTip: Use -e <environment> or set a profile with 'ai-aas-cli profile use <profile>'")
+			}
 
 			return nil
 		},
@@ -217,6 +351,17 @@ See Also:
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
+
+			// If no environment specified, try to get from active profile
+			if environment == "" {
+				if profile, _, err := config.GetActiveProfile(); err == nil && profile != nil && profile.Environment != "" {
+					environment = profile.Environment
+				}
+			}
+			if environment == "" {
+				return fmt.Errorf("environment is required. Use -e <environment> or set a profile")
+			}
+
 			s3Bucket := viper.GetString("s3.bucket")
 
 			adminEndpoint := cfg.AdminAPIEndpoint
@@ -323,11 +468,10 @@ See Also:
 		},
 	}
 
-	cmd.Flags().StringVarP(&environment, "environment", "e", "", "target environment (required)")
+	cmd.Flags().StringVarP(&environment, "environment", "e", "", "target environment (uses profile if not specified)")
 	cmd.Flags().IntVar(&gpuCount, "gpu-count", 1, "number of GPUs")
 	cmd.Flags().IntVar(&memoryGB, "memory", 24, "memory allocation in GB")
 	cmd.Flags().BoolVar(&wait, "wait", false, "wait for models to be ready")
-	_ = cmd.MarkFlagRequired("environment")
 
 	return cmd
 }
@@ -363,6 +507,16 @@ See Also:
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			modelName := args[0]
+
+			// If no environment specified, try to get from active profile
+			if environment == "" {
+				if profile, _, err := config.GetActiveProfile(); err == nil && profile != nil && profile.Environment != "" {
+					environment = profile.Environment
+				}
+			}
+			if environment == "" {
+				return fmt.Errorf("environment is required. Use -e <environment> or set a profile")
+			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
@@ -418,10 +572,9 @@ See Also:
 		},
 	}
 
-	cmd.Flags().StringVarP(&environment, "environment", "e", "", "target environment (required)")
+	cmd.Flags().StringVarP(&environment, "environment", "e", "", "target environment (uses profile if not specified)")
 	cmd.Flags().BoolVar(&force, "force", false, "skip confirmation")
 	cmd.Flags().StringVar(&reason, "reason", "", "reason for disabling")
-	_ = cmd.MarkFlagRequired("environment")
 
 	return cmd
 }
@@ -461,6 +614,16 @@ See Also:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			disableModel := args[0]
 			enableModel := args[1]
+
+			// If no environment specified, try to get from active profile
+			if environment == "" {
+				if profile, _, err := config.GetActiveProfile(); err == nil && profile != nil && profile.Environment != "" {
+					environment = profile.Environment
+				}
+			}
+			if environment == "" {
+				return fmt.Errorf("environment is required. Use -e <environment> or set a profile")
+			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 			defer cancel()
@@ -610,10 +773,9 @@ See Also:
 		},
 	}
 
-	cmd.Flags().StringVarP(&environment, "environment", "e", "", "target environment (required)")
+	cmd.Flags().StringVarP(&environment, "environment", "e", "", "target environment (uses profile if not specified)")
 	cmd.Flags().BoolVar(&force, "force", false, "skip confirmation")
 	cmd.Flags().StringVar(&reason, "reason", "", "reason for swap (for audit)")
-	_ = cmd.MarkFlagRequired("environment")
 
 	return cmd
 }
