@@ -8,20 +8,27 @@ For a general overview of the architecture, development workflow, and key docume
 
 After reading the main guide, adhere to the following critical rules below.
 
-## Backlog & Task Tracking
+## Issue Tracking with Beads
 
-**IMPORTANT**: We maintain a project backlog to track ideas, improvements, and tasks.
+**IMPORTANT**: We use beads for issue tracking. All tasks, bugs, and features are tracked as beads issues.
 
-📋 **[specs/BACKLOG.md](specs/BACKLOG.md)** - Platform backlog and scratch list
+**Common beads commands:**
+```bash
+bd list --status open              # List open issues
+bd list --priority 1               # List high priority issues
+bd show <issue-id>                 # Show issue details
+bd create "Title" --type feature   # Create new issue
+bd update <issue-id> --status in_progress  # Update status
+bd close <issue-id>                # Close an issue
+```
 
 **When ending a session or completing work:**
-- Ask the user: "Would you like to add anything to the backlog before we finish?"
-- If the user mentions something to do "later" or "eventually", offer to add it to the backlog
-- When discovering issues or improvement opportunities, suggest adding them to the backlog
+- Ask the user: "Would you like to create any beads issues before we finish?"
+- If the user mentions something to do "later" or "eventually", offer to create a beads issue
 
 **When starting a session:**
-- If relevant to the task, check the backlog for related items
-- Offer to pick up items from the backlog if the user is looking for things to work on
+- Use `bd list --status open` to check for relevant issues
+- Use `bd ready` to find tasks with no blockers
 
 ## CLI-First Operations
 
@@ -52,7 +59,7 @@ After reading the main guide, adhere to the following critical rules below.
    - Status checks: `ai-aas-cli status`
 
 3. **If CLI doesn't support an operation**:
-   - Note this as a gap: "CLI doesn't support X - consider adding to backlog"
+   - Note this as a gap: "CLI doesn't support X - consider creating a beads issue"
    - Use the Admin API as fallback
    - Suggest the command that should exist
 
