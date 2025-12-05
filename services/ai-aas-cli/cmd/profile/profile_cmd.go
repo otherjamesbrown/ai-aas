@@ -47,16 +47,35 @@ Workflow:
 }
 
 func newCreateCmd() *cobra.Command {
-	var environment string
+	var (
+		environment       string
+		adminAPIEndpoint  string
+		inferenceEndpoint string
+		userOrgEndpoint   string
+		kubeconfig        string
+	)
 
 	cmd := &cobra.Command{
 		Use:   "create <name>",
 		Short: "Create a new profile",
-		Long: `Create a new empty profile shell.
+		Long: `Create a new profile with environment and endpoint configuration.
 
-The profile starts with just the environment set. Subsequent commands
-(org create, user create, apikey create) with --profile flag will
-populate the org_id, user_id, and api_key fields.`,
+Profiles follow the AWS CLI pattern - each profile is self-contained with
+all the endpoints and credentials needed to connect to an environment.
+
+Examples:
+  # Create a development profile
+  ai-aas-cli profile create dev \
+    --environment development \
+    --admin-api-endpoint https://admin-api.dev.example.com \
+    --inference-endpoint https://api.dev.example.com
+
+  # Create a staging profile for Singapore
+  ai-aas-cli profile create staging-sg \
+    --environment staging \
+    --admin-api-endpoint https://admin-api.staging.example.com \
+    --inference-endpoint https://api.staging.example.com \
+    --kubeconfig ~/.kube/staging-sg.yaml`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
@@ -65,19 +84,55 @@ populate the org_id, user_id, and api_key fields.`,
 				return err
 			}
 
+			// Update profile with endpoint overrides
+			if adminAPIEndpoint != "" || inferenceEndpoint != "" || userOrgEndpoint != "" || kubeconfig != "" {
+				if err := config.UpdateProfile(name, func(p *config.Profile) {
+					if adminAPIEndpoint != "" {
+						p.AdminAPIEndpoint = adminAPIEndpoint
+					}
+					if inferenceEndpoint != "" {
+						p.InferenceEndpoint = inferenceEndpoint
+					}
+					if userOrgEndpoint != "" {
+						p.UserOrgEndpoint = userOrgEndpoint
+					}
+					if kubeconfig != "" {
+						p.Kubeconfig = kubeconfig
+					}
+				}); err != nil {
+					return err
+				}
+			}
+
 			fmt.Printf("Profile '%s' created\n", name)
-			fmt.Printf("  environment: %s\n", environment)
-			fmt.Printf("  org_id:      (not set)\n")
-			fmt.Printf("  user_id:     (not set)\n")
-			fmt.Printf("  api_key:     (not set)\n")
+			fmt.Printf("  environment:  %s\n", environment)
+			if adminAPIEndpoint != "" {
+				fmt.Printf("  admin_api:    %s\n", adminAPIEndpoint)
+			}
+			if inferenceEndpoint != "" {
+				fmt.Printf("  inference:    %s\n", inferenceEndpoint)
+			}
+			if userOrgEndpoint != "" {
+				fmt.Printf("  user_org:     %s\n", userOrgEndpoint)
+			}
+			if kubeconfig != "" {
+				fmt.Printf("  kubeconfig:   %s\n", kubeconfig)
+			}
+			fmt.Printf("  org_id:       (not set)\n")
+			fmt.Printf("  user_id:      (not set)\n")
+			fmt.Printf("  api_key:      (not set)\n")
 			fmt.Println()
-			fmt.Printf("Next: Use --profile %s with org/user/apikey commands to populate\n", name)
+			fmt.Printf("Next: Use --profile %s with org/user/apikey commands to populate credentials\n", name)
 
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVarP(&environment, "environment", "e", "development", "Environment (development, staging, production)")
+	cmd.Flags().StringVarP(&environment, "environment", "e", "development", "Environment label (development, staging, production)")
+	cmd.Flags().StringVar(&adminAPIEndpoint, "admin-api-endpoint", "", "Admin API endpoint URL")
+	cmd.Flags().StringVar(&inferenceEndpoint, "inference-endpoint", "", "Inference API endpoint URL")
+	cmd.Flags().StringVar(&userOrgEndpoint, "user-org-endpoint", "", "User-org service endpoint URL")
+	cmd.Flags().StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig file for this environment")
 
 	return cmd
 }
@@ -367,11 +422,14 @@ func newShowCmd() *cobra.Command {
 			fmt.Printf("  api_key:     %s\n", config.MaskSecret(profile.APIKey))
 			fmt.Printf("  status:      %s\n", profile.Status())
 
-			if profile.UserOrgEndpoint != "" {
-				fmt.Printf("  user_org_endpoint: %s\n", profile.UserOrgEndpoint)
-			}
-			if profile.AdminAPIEndpoint != "" {
-				fmt.Printf("  admin_api_endpoint: %s\n", profile.AdminAPIEndpoint)
+			// Show endpoints
+			fmt.Println()
+			fmt.Println("Endpoints:")
+			fmt.Printf("  admin_api:   %s\n", valueOrNotSet(profile.AdminAPIEndpoint))
+			fmt.Printf("  inference:   %s\n", valueOrNotSet(profile.InferenceEndpoint))
+			fmt.Printf("  user_org:    %s\n", valueOrNotSet(profile.UserOrgEndpoint))
+			if profile.Kubeconfig != "" {
+				fmt.Printf("  kubeconfig:  %s\n", profile.Kubeconfig)
 			}
 
 			return nil
