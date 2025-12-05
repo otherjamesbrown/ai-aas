@@ -86,6 +86,29 @@ func (m *mockService) PullModel(name string, opts PullOptions) (*PullJob, error)
 	}, nil
 }
 
+func (m *mockService) ListPullJobs(modelName string) ([]PullJob, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return []PullJob{}, nil
+}
+
+func (m *mockService) GetPullJob(modelName, jobID string) (*PullJob, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return &PullJob{
+		ID:        jobID,
+		ModelName: modelName,
+		Status:    "completed",
+		StartedAt: time.Now(),
+	}, nil
+}
+
+func (m *mockService) CancelPullJob(jobID string) error {
+	return m.err
+}
+
 func (m *mockService) VerifyCache(name string, version string) (*VerifyResult, error) {
 	if m.err != nil {
 		return nil, m.err

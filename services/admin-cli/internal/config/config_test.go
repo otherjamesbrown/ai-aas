@@ -13,7 +13,7 @@ func TestApplyDefaults(t *testing.T) {
 	v := viper.New()
 	ApplyDefaults(v)
 
-	if v.GetString("api-endpoints.user-org-service") != "https://user-org.172.232.58.222.nip.io" {
+	if v.GetString("api-endpoints.user-org-service") != "https://user-org.dev.otherjamesbrown.com" {
 		t.Errorf("expected default user-org-service endpoint, got %s", v.GetString("api-endpoints.user-org-service"))
 	}
 
@@ -33,7 +33,7 @@ func TestLoad(t *testing.T) {
 	}
 
 	// Verify defaults are applied
-	if cfg.UserOrgEndpoint != "https://user-org.172.232.58.222.nip.io" {
+	if cfg.UserOrgEndpoint != "https://user-org.dev.otherjamesbrown.com" {
 		t.Errorf("expected default endpoint, got %s", cfg.UserOrgEndpoint)
 	}
 }

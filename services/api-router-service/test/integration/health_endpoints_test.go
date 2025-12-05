@@ -263,9 +263,10 @@ func TestReadyzEndpointRedisDown(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	// Should return 503 when Redis is down
-	if w.Code != http.StatusServiceUnavailable {
-		t.Errorf("expected status 503, got %d. Body: %s", w.Code, w.Body.String())
+	// Should return 200 with degraded status when Redis is down
+	// (service is ready but degraded, not completely unavailable)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d. Body: %s", w.Code, w.Body.String())
 		return
 	}
 
