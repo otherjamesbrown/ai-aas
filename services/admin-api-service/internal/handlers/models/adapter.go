@@ -132,20 +132,18 @@ func (a *ServiceAdapter) ListPullJobs(modelName string) ([]PullJob, error) {
 	return jobs, nil
 }
 
-// GetPullJob returns a specific pull job by ID
-func (a *ServiceAdapter) GetPullJob(jobID string) (*PullJob, error) {
+// GetPullJob returns a specific pull job by ID, scoped to the specified model
+func (a *ServiceAdapter) GetPullJob(modelName, jobID string) (*PullJob, error) {
 	id, err := uuid.Parse(jobID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid job ID: %w", err)
 	}
 
-	svcJob, err := a.svc.GetPullJob(a.ctx, id)
+	svcJob, err := a.svc.GetPullJob(a.ctx, modelName, id)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get model name from model_id
-	modelName := "" // The service layer doesn't return model name, we'd need to look it up
 	return convertPullJob(svcJob, modelName), nil
 }
 

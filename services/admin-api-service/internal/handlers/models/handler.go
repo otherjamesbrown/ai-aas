@@ -29,7 +29,7 @@ type Service interface {
 
 	// Pull job operations
 	ListPullJobs(modelName string) ([]PullJob, error)
-	GetPullJob(jobID string) (*PullJob, error)
+	GetPullJob(modelName, jobID string) (*PullJob, error)
 	CancelPullJob(jobID string) error
 
 	// Credentials operations
@@ -177,9 +177,10 @@ func (h *Handler) ListPullJobs(w http.ResponseWriter, r *http.Request) {
 
 // GetPullJob handles GET /models/{name}/pull/{job_id}
 func (h *Handler) GetPullJob(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
 	jobID := chi.URLParam(r, "job_id")
 
-	job, err := h.service.GetPullJob(jobID)
+	job, err := h.service.GetPullJob(name, jobID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "pull job not found", err)
 		return
