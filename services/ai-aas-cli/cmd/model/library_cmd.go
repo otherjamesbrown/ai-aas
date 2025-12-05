@@ -12,6 +12,7 @@ import (
 
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/api"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/cli"
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/client/inference"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/kubernetes"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
@@ -92,8 +93,7 @@ func newLibraryListCommand() *cobra.Command {
 		Short: "Show model library overview",
 		Long: `Display an overview of all models with their status and next steps.
 
-Shows which models are registered, cached, and deployed, along with the
-recommended next action for each model.
+Shows which models are registered, cached, deployed, and available to users.
 
 STATUS VALUES
 ─────────────
@@ -103,6 +103,12 @@ STATUS VALUES
   ready       Model is serving inference requests
   failed      Deployment encountered an error
   disabled    Model manually disabled/scaled to 0
+
+AVAILABLE COLUMN
+────────────────
+  Yes   Model is routed through API Router (users can access it)
+  No    Model is deployed but not routed (not in API Router config)
+  -     Model is not deployed
 
 Examples:
   # Show full library overview
@@ -153,6 +159,19 @@ See Also:
 				return nil
 			}
 
+			// Get available models from API Router (inference endpoint)
+			availableModels := make(map[string]bool)
+			inferenceEndpoint := cfg.InferenceEndpoint
+			if inferenceEndpoint != "" {
+				inferenceClient := inference.NewClient(inferenceEndpoint, cfg.APIKey)
+				availableList, err := inferenceClient.ListModels(ctx)
+				if err == nil {
+					for _, m := range availableList.Data {
+						availableModels[m.ID] = true
+					}
+				}
+			}
+
 			// Color definitions
 			header := color.New(color.FgWhite, color.Bold)
 			muted := color.New(color.FgHiBlack)
@@ -162,8 +181,8 @@ See Also:
 			info := color.New(color.FgCyan)
 
 			// Print header
-			header.Printf("%-20s %-10s %-12s %s\n", "MODEL", "CACHED", "STATUS", "NEXT STEP")
-			muted.Println("───────────────────────────────────────────────────────────────────────────────")
+			header.Printf("%-20s %-10s %-12s %-10s %s\n", "MODEL", "CACHED", "STATUS", "AVAILABLE", "NEXT STEP")
+			muted.Println("─────────────────────────────────────────────────────────────────────────────────────────────")
 
 			for _, m := range models {
 				cached := "No"
@@ -184,6 +203,7 @@ See Also:
 				status := "registered"
 				statusColor := warning
 				nextStep := muted.Sprintf("→ model cache pull %s", m.Name)
+				isDeployed := false
 
 				if environment != "" {
 					kubeconfig := viper.GetString(fmt.Sprintf("environments.%s.kubeconfig", environment))
@@ -198,6 +218,7 @@ See Also:
 						isvcName := fmt.Sprintf("%s-%s", m.Name, environment)
 						isvcStatus, err := k8sClient.GetInferenceService(ctx, isvcName, environment)
 						if err == nil {
+							isDeployed = true
 							if isvcStatus.Ready {
 								status = "ready"
 								statusColor = success
@@ -233,10 +254,31 @@ See Also:
 					nextStep = muted.Sprintf("→ model library enable %s -e <env>", m.Name)
 				}
 
+				// Check if available via API Router
+				// Models can be registered by HF model ID (org/model) or by short name
+				available := "-"
+				availableColor := muted
+				if isDeployed {
+					// Check both the HF model ID and the short name
+					isAvailable := availableModels[m.HFModelID] || availableModels[m.Name]
+					if isAvailable {
+						available = "Yes"
+						availableColor = success
+					} else {
+						available = "No"
+						availableColor = warning
+						// Update next step to indicate routing needed
+						if status == "ready" {
+							nextStep = warning.Sprint("⚠ Add to API Router config")
+						}
+					}
+				}
+
 				// Print row with colored fields
 				fmt.Printf("%-20s ", m.Name)
 				cachedColor.Printf("%-10s ", cached)
 				statusColor.Printf("%-12s ", status)
+				availableColor.Printf("%-10s ", available)
 				fmt.Println(nextStep)
 			}
 
