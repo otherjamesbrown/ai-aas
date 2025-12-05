@@ -299,32 +299,33 @@ func GetEffectiveConfig(profileName string) (*Config, *Profile, error) {
 			cfg.APIKey = profile.APIKey
 		}
 
-		// Endpoint overrides from profile
+		// Endpoint resolution with correct precedence: profile > environment > global
+		// Load environment-specific endpoints for fallback
+		envEndpoints := viper.GetStringMapString(fmt.Sprintf("environments.%s", profile.Environment))
+
 		if profile.AdminAPIEndpoint != "" {
 			cfg.AdminAPIEndpoint = profile.AdminAPIEndpoint
+		} else if envEndpoints["admin_api_endpoint"] != "" {
+			cfg.AdminAPIEndpoint = envEndpoints["admin_api_endpoint"]
 		}
+
 		if profile.InferenceEndpoint != "" {
 			cfg.InferenceEndpoint = profile.InferenceEndpoint
+		} else if envEndpoints["inference_endpoint"] != "" {
+			cfg.InferenceEndpoint = envEndpoints["inference_endpoint"]
 		}
+
 		if profile.UserOrgEndpoint != "" {
 			cfg.UserOrgEndpoint = profile.UserOrgEndpoint
+		} else if envEndpoints["user_org_endpoint"] != "" {
+			cfg.UserOrgEndpoint = envEndpoints["user_org_endpoint"]
 		}
 
 		// Kubeconfig override from profile - set directly in viper for GetKubeconfig() to pick up
+		// Note: This modifies global viper state as a workaround since Kubeconfig isn't in Config struct.
+		// A future refactor could add Kubeconfig to Config for cleaner data flow.
 		if profile.Kubeconfig != "" {
 			viper.Set(fmt.Sprintf("environments.%s.kubeconfig", profile.Environment), profile.Kubeconfig)
-		}
-
-		// Fallback: Get endpoints from environments config if not set in profile
-		envEndpoints := viper.GetStringMapString(fmt.Sprintf("environments.%s", profile.Environment))
-		if cfg.UserOrgEndpoint == "" && envEndpoints["user_org_endpoint"] != "" {
-			cfg.UserOrgEndpoint = envEndpoints["user_org_endpoint"]
-		}
-		if cfg.AdminAPIEndpoint == "" && envEndpoints["admin_api_endpoint"] != "" {
-			cfg.AdminAPIEndpoint = envEndpoints["admin_api_endpoint"]
-		}
-		if cfg.InferenceEndpoint == "" && envEndpoints["inference_endpoint"] != "" {
-			cfg.InferenceEndpoint = envEndpoints["inference_endpoint"]
 		}
 	}
 

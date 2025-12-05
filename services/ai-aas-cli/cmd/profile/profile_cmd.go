@@ -119,6 +119,7 @@ Examples:
 				fmt.Printf("  kubeconfig:   %s\n", kubeconfig)
 			}
 			fmt.Printf("  org_id:       (not set)\n")
+			fmt.Printf("  user_id:      (not set)\n")
 			fmt.Printf("  api_key:      (not set)\n")
 			fmt.Println()
 			fmt.Printf("Next: Use --profile %s with org/user/apikey commands to populate credentials\n", name)
