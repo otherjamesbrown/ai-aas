@@ -98,6 +98,10 @@ jobs:
       - name: Run go vet on all services
         run: |
           for dir in services/*/; do
+            # Skip template directory
+            if [[ "$dir" == *"_template"* ]]; then
+              continue
+            fi
             if [ -f "$dir/go.mod" ]; then
               echo "Running go vet for $dir"
               (cd "$dir" && go vet ./...)
