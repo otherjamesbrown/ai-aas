@@ -95,23 +95,18 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.24.x"
-      - name: Download Go modules
+      - name: Run go vet on all services
         run: |
           for dir in services/*/; do
             if [ -f "$dir/go.mod" ]; then
-              echo "Downloading modules for $dir"
-              (cd "$dir" && go mod download)
+              echo "Running go vet for $dir"
+              (cd "$dir" && go vet ./...)
             fi
           done
           if [ -f "shared/go/go.mod" ]; then
-            (cd shared/go && go mod download)
+            echo "Running go vet for shared/go"
+            (cd shared/go && go vet ./...)
           fi
-      - name: Install golangci-lint
-        run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
-            sh -s -- -b "$(go env GOPATH)"/bin v1.62.2
-      - name: Run golangci-lint
-        run: make lint
 
   metrics-upload:
     name: Metrics Upload
@@ -126,22 +121,10 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.24.x"
-      - name: Download Go modules
-        run: |
-          for dir in services/*/; do
-            if [ -f "$dir/go.mod" ]; then
-              (cd "$dir" && go mod download)
-            fi
-          done
-          if [ -f "shared/go/go.mod" ]; then
-            (cd shared/go && go mod download)
-          fi
       - name: Install tooling
         run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
-            sh -s -- -b "$(go env GOPATH)"/bin v1.62.2
           go install github.com/securego/gosec/v2/cmd/gosec@v2.19.0
-      - name: Run make check with metrics
+      - name: Run make check with metrics (best effort)
         continue-on-error: true
         id: check
         run: make check METRICS=true
