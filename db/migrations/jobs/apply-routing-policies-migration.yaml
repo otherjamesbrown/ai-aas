@@ -18,6 +18,10 @@ spec:
           set -e
           echo "Applying routing_policies migration..."
 
+          # Read database URL from mounted secret file
+          DATABASE_URL=$(cat /etc/secrets/database-url)
+          export DATABASE_URL
+
           # Check if table already exists
           EXISTS=$(psql "$DATABASE_URL" -t -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'routing_policies');")
 
@@ -59,9 +63,14 @@ spec:
           EOF
 
           echo "Migration applied successfully!"
-        env:
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: admin-api-secrets
-              key: database-url
+        volumeMounts:
+        - name: db-secret
+          mountPath: /etc/secrets
+          readOnly: true
+      volumes:
+      - name: db-secret
+        secret:
+          secretName: admin-api-secrets
+          items:
+          - key: database-url
+            path: database-url
