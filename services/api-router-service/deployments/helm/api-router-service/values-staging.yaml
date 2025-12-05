@@ -13,14 +13,14 @@ ingress:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-staging
   hosts:
-    - host: router.api.ai-aas.dev
+    - host: api.staging.otherjamesbrown.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - secretName: api-router-service-tls
       hosts:
-        - router.api.ai-aas.dev
+        - api.staging.otherjamesbrown.com
 
 resources:
   limits:

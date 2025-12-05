@@ -17,51 +17,7 @@ spec:
     helm:
       valueFiles:
         - values.yaml
-      # Staging-specific overrides
-      values: |
-        image:
-          repository: ghcr.io/otherjamesbrown/ai-aas/user-org-service
-          tag: staging
-          pullPolicy: Always
-        env:
-          - name: ENVIRONMENT
-            value: staging
-          - name: LOG_LEVEL
-            value: info
-          - name: DATABASE_URL
-            valueFrom:
-              secretKeyRef:
-                name: user-org-service-db-secret
-                key: database-url
-          - name: REDIS_ADDR
-            value: "redis.staging.svc.cluster.local:6379"
-          - name: OAUTH_HMAC_SECRET
-            valueFrom:
-              secretKeyRef:
-                name: user-org-service-secrets
-                key: oauth-hmac-secret
-          - name: OAUTH_CLIENT_ID
-            value: "user-org-admin"
-          - name: OAUTH_CLIENT_SECRET
-            valueFrom:
-              secretKeyRef:
-                name: user-org-service-secrets
-                key: oauth-client-secret
-        service:
-          type: ClusterIP
-          port: 8081
-        resources:
-          requests:
-            cpu: 250m
-            memory: 256Mi
-          limits:
-            cpu: 500m
-            memory: 512Mi
-        replicas: 2
-        migrations:
-          enabled: true
-        prometheus:
-          enabled: true
+        - values-staging.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: user-org-service

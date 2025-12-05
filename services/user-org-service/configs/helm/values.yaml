@@ -67,4 +67,22 @@ postgres:
 migrations:
   enabled: true
 
+# Global domain configuration (used by ingress)
+global:
+  domain:
+    base: ""
+    local: ""
+  tls:
+    enabled: true
+    clusterIssuer: letsencrypt-prod
+
+# Ingress configuration
+ingress:
+  enabled: false
+  className: nginx
+  subdomain: user-org
+  annotations: {}
+  tlsSecretName: ""
+  hosts: []
+
 
