@@ -10,7 +10,8 @@ replicaCount: 2
 
 image:
   repository: ghcr.io/otherjamesbrown/analytics-service
-  tag: staging
+  # Use 'latest' until CI builds staging tags (see beads issue)
+  tag: latest
   pullPolicy: Always
 
 env:

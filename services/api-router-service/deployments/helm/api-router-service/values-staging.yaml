@@ -2,7 +2,8 @@
 replicaCount: 3
 
 image:
-  tag: staging
+  # Use 'latest' until CI builds staging tags (see beads issue)
+  tag: latest
 
 service:
   type: ClusterIP
