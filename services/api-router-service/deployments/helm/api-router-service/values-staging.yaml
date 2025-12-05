@@ -2,7 +2,7 @@
 replicaCount: 3
 
 image:
-  tag: staging
+  tag: latest  # TODO: Use staging tag once CI builds it
 
 service:
   type: ClusterIP
