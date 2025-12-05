@@ -166,9 +166,8 @@ jobs:
           - admin-api-service
           - analytics-service
           - api-router-service
-          - hello-service
           - user-org-service
-          - world-service
+          # Note: hello-service and world-service don't have Dockerfiles
     steps:
       - name: Checkout
         uses: actions/checkout@v4
