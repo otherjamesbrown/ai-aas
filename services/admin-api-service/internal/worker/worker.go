@@ -74,7 +74,53 @@ func (w *Worker) Start(ctx context.Context) error {
 		zap.Duration("progress_update_interval", w.cfg.ProgressUpdateInterval),
 	)
 
+	// Recover orphaned jobs from previous worker crashes (ADR-006)
+	if err := w.recoverOrphanedJobs(ctx); err != nil {
+		w.logger.Error("failed to recover orphaned jobs", zap.Error(err))
+		// Continue anyway - don't block startup
+	}
+
 	go w.run(ctx)
+	return nil
+}
+
+// recoverOrphanedJobs resets jobs that were left in 'downloading' or 'uploading'
+// state due to a worker crash. These jobs are reset to 'pending' so they can be
+// retried. Jobs are considered orphaned if they've been in progress for more than
+// the configured timeout (default: 1 hour).
+func (w *Worker) recoverOrphanedJobs(ctx context.Context) error {
+	const orphanTimeout = 1 * time.Hour
+
+	query := `
+		UPDATE pull_jobs
+		SET status = 'pending', started_at = NULL, error_message = 'Recovered from orphaned state'
+		WHERE status IN ('downloading', 'uploading')
+		  AND started_at < NOW() - $1::interval
+		RETURNING id
+	`
+
+	rows, err := w.pool.Query(ctx, query, orphanTimeout)
+	if err != nil {
+		return fmt.Errorf("query orphaned jobs: %w", err)
+	}
+	defer rows.Close()
+
+	var recovered []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return fmt.Errorf("scan job id: %w", err)
+		}
+		recovered = append(recovered, id)
+	}
+
+	if len(recovered) > 0 {
+		w.logger.Info("recovered orphaned jobs",
+			zap.Int("count", len(recovered)),
+			zap.Any("job_ids", recovered),
+		)
+	}
+
 	return nil
 }
 

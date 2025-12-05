@@ -455,7 +455,6 @@ func runPartialInit(domain, apiKey, env, hfToken, adminAPI, userOrgAPI string) e
 	// Update Admin API endpoint
 	if adminAPI != "" {
 		cfg.AdminAPIEndpoint = adminAPI
-		cfg.APIEndpoint = adminAPI // Also set as primary
 		fmt.Printf("%s Admin API endpoint set: %s\n", checkMark, adminAPI)
 		updated = true
 	}
