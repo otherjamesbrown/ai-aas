@@ -108,7 +108,7 @@ func (c *Client) Bootstrap(ctx context.Context, req BootstrapRequest) (*Bootstra
 	return &BootstrapResponse{
 		AdminID: inviteResp.UserID,
 		OrgID:   org.OrgID,
-		APIKey:  apiKeyResp.Secret,
+		APIKey:  apiKeyResp.Token,
 		Email:   req.Email,
 		OrgName: org.Name,
 	}, nil
@@ -398,8 +398,8 @@ func (c *Client) RotateAPIKey(ctx context.Context, orgID, apiKeyID string) (*Rot
 
 	// Convert IssuedAPIKeyResponse to RotateAPIKeyResponse (same structure)
 	return &RotateAPIKeyResponse{
-		APIKeyID:    result.APIKeyID,
-		Secret:      result.Secret,
+		KeyID:       result.KeyID,
+		Token:       result.Token,
 		Fingerprint: result.Fingerprint,
 		Status:      result.Status,
 		ExpiresAt:   result.ExpiresAt,

@@ -766,6 +766,11 @@ func (s *Store) CreateAPIKey(ctx context.Context, params CreateAPIKeyParams) (AP
 	if apiKeyID == uuid.Nil {
 		apiKeyID = uuid.New()
 	}
+	// Generate short key_id if not provided (12 char alphanumeric)
+	keyID := params.KeyID
+	if keyID == "" {
+		keyID = strings.ToLower(strings.ReplaceAll(uuid.New().String(), "-", "")[:12])
+	}
 	var out APIKey
 	err := s.withTenantTx(ctx, params.OrgID, func(ctx context.Context, tx pgx.Tx) error {
 		scopesJSON, err := mustJSONB(params.Scopes)
@@ -779,21 +784,24 @@ func (s *Store) CreateAPIKey(ctx context.Context, params CreateAPIKeyParams) (AP
 		row := tx.QueryRow(ctx, `
 			INSERT INTO api_keys (
 				api_key_id,
+				key_id,
 				org_id,
 				principal_type,
 				principal_id,
+				notes,
 				fingerprint,
 				status,
 				scopes,
 				expires_at,
 				annotations
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-			RETURNING *
-		`,
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+			RETURNING `+apiKeyColumns,
 			apiKeyID,
+			keyID,
 			params.OrgID,
 			string(params.PrincipalType),
 			params.PrincipalID,
+			params.Notes,
 			params.Fingerprint,
 			params.Status,
 			string(scopesJSON),
@@ -810,10 +818,15 @@ func (s *Store) CreateAPIKey(ctx context.Context, params CreateAPIKeyParams) (AP
 	return out, err
 }
 
+// apiKeyColumns is the canonical column list for api_keys queries.
+const apiKeyColumns = `api_key_id, key_id, org_id, principal_type, principal_id, notes,
+	fingerprint, status, scopes, issued_at, revoked_at, expires_at,
+	last_used_at, annotations, version, created_at, updated_at, deleted_at`
+
 // GetAPIKeyByID retrieves an API key by its ID.
 func (s *Store) GetAPIKeyByID(ctx context.Context, apiKeyID uuid.UUID) (APIKey, error) {
 	row := s.pool.QueryRow(ctx, `
-		SELECT *
+		SELECT `+apiKeyColumns+`
 		FROM api_keys
 		WHERE api_key_id = $1 AND deleted_at IS NULL
 	`, apiKeyID)
@@ -832,7 +845,7 @@ func (s *Store) GetAPIKeyByFingerprint(ctx context.Context, orgID uuid.UUID, fin
 	var out APIKey
 	err := s.withTenantTx(ctx, orgID, func(ctx context.Context, tx pgx.Tx) error {
 		row := tx.QueryRow(ctx, `
-			SELECT *
+			SELECT `+apiKeyColumns+`
 			FROM api_keys
 			WHERE org_id = $1 AND fingerprint = $2 AND deleted_at IS NULL
 		`, orgID, fingerprint)
@@ -854,7 +867,7 @@ func (s *Store) GetAPIKeyByFingerprint(ctx context.Context, orgID uuid.UUID, fin
 // Use this only when org_id is not available (e.g., API Router initial lookup).
 func (s *Store) GetAPIKeyByFingerprintAnyOrg(ctx context.Context, fingerprint string) (APIKey, error) {
 	row := s.pool.QueryRow(ctx, `
-		SELECT *
+		SELECT `+apiKeyColumns+`
 		FROM api_keys
 		WHERE fingerprint = $1 AND deleted_at IS NULL
 		LIMIT 1
@@ -875,7 +888,7 @@ func (s *Store) ListAPIKeysForPrincipal(ctx context.Context, orgID uuid.UUID, pr
 	var out []APIKey
 	err := s.withTenantTx(ctx, orgID, func(ctx context.Context, tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
-			SELECT *
+			SELECT `+apiKeyColumns+`
 			FROM api_keys
 			WHERE org_id = $1
 			  AND principal_type = $2
@@ -912,7 +925,7 @@ func (s *Store) ListAPIKeysForOrg(ctx context.Context, orgID uuid.UUID, limit, o
 	}
 	err := s.withTenantTx(ctx, orgID, func(ctx context.Context, tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
-			SELECT *
+			SELECT `+apiKeyColumns+`
 			FROM api_keys
 			WHERE org_id = $1
 			  AND deleted_at IS NULL
@@ -1182,12 +1195,15 @@ func scanAPIKey(row pgx.Row) (APIKey, error) {
 		expires         pgtype.Timestamptz
 		lastUsed        pgtype.Timestamptz
 		deleted         pgtype.Timestamptz
+		notes           pgtype.Text
 	)
 	err := row.Scan(
 		&key.ID,
+		&key.KeyID,
 		&key.OrgID,
 		&principalType,
 		&key.PrincipalID,
+		&notes,
 		&key.Fingerprint,
 		&key.Status,
 		&scopesJSON,
@@ -1205,6 +1221,9 @@ func scanAPIKey(row pgx.Row) (APIKey, error) {
 		return APIKey{}, err
 	}
 	key.PrincipalType = PrincipalType(principalType)
+	if notes.Valid {
+		key.Notes = notes.String
+	}
 
 	scopes, err := jsonSliceStringDefault(scopesJSON)
 	if err != nil {

@@ -236,6 +236,7 @@ func orgCreateCommand() *cobra.Command {
 	var flagUserOrgEndpoint string
 	var flagAPIKey string
 	var flagUse bool
+	var flagProfile string
 
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -260,6 +261,9 @@ Examples:
   ai-aas-cli org create --name "ACME Corp" --slug acme \
     --declarative-enabled --declarative-repo-url https://github.com/acme/config
 
+  # Create and save to a profile (for progressive profile building)
+  ai-aas-cli org create --name "ACME Corp" --slug acme --profile acme-admin
+
   # Preview without creating
   ai-aas-cli org create --name "ACME Corp" --slug acme --dry-run
 
@@ -275,7 +279,7 @@ See Also:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runOrgCreate(cmd, args, flagName, flagSlug, flagBillingOwnerEmail,
 				flagDeclarativeEnabled, flagDeclarativeRepoURL, flagDeclarativeBranch,
-				flagDryRun, flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey, flagUse)
+				flagDryRun, flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey, flagUse, flagProfile)
 		},
 	}
 
@@ -292,13 +296,14 @@ See Also:
 	cmd.Flags().StringVar(&flagUserOrgEndpoint, "user-org-endpoint", "", "User-org-service endpoint (overrides config)")
 	cmd.Flags().StringVar(&flagAPIKey, "api-key", "", "API key for authentication (overrides config)")
 	cmd.Flags().BoolVar(&flagUse, "use", false, "Set as default organization after creation")
+	cmd.Flags().StringVar(&flagProfile, "profile", "", "Save org_id to named profile")
 
 	return cmd
 }
 
 func runOrgCreate(cmd *cobra.Command, args []string, flagName, flagSlug, flagBillingOwnerEmail string,
 	flagDeclarativeEnabled bool, flagDeclarativeRepoURL, flagDeclarativeBranch string,
-	flagDryRun bool, flagFormat string, flagVerbose, flagQuiet bool, flagUserOrgEndpoint, flagAPIKey string, flagUse bool) error {
+	flagDryRun bool, flagFormat string, flagVerbose, flagQuiet bool, flagUserOrgEndpoint, flagAPIKey string, flagUse bool, flagProfile string) error {
 	startTime := time.Now()
 
 	// Load configuration
@@ -451,6 +456,26 @@ func runOrgCreate(cmd *cobra.Command, args []string, flagName, flagSlug, flagBil
 			}
 		} else if !cfg.Quiet {
 			fmt.Printf("Default organization set to: %s\n\n", org.Slug)
+		}
+	}
+
+	// Save to profile if --profile flag is set
+	if flagProfile != "" {
+		if err := config.UpdateProfile(flagProfile, func(p *config.Profile) {
+			p.OrgID = org.Slug // Use slug as it's more user-friendly
+		}); err != nil {
+			if !cfg.Quiet {
+				fmt.Printf("Warning: failed to update profile '%s': %v\n", flagProfile, err)
+			}
+		} else if !cfg.Quiet {
+			fmt.Printf("Saved to profile '%s'\n", flagProfile)
+			// Show profile status
+			if profile, err := config.GetProfile(flagProfile); err == nil {
+				fmt.Printf("  org_id:   %s\n", profile.OrgID)
+				fmt.Printf("  user_id:  %s\n", valueOrNotSet(profile.UserID))
+				fmt.Printf("  api_key:  %s\n", valueOrNotSet(profile.APIKey))
+				fmt.Println()
+			}
 		}
 	}
 
@@ -1004,5 +1029,13 @@ func runOrgUse(cmd *cobra.Command, args []string, flagClear bool) error {
 	fmt.Println("  ai-aas-cli apikey create --user-id <user-id>")
 
 	return nil
+}
+
+// valueOrNotSet returns the value or "(not set)" if empty.
+func valueOrNotSet(s string) string {
+	if s == "" {
+		return "(not set)"
+	}
+	return s
 }
 

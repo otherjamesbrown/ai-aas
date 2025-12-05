@@ -84,25 +84,26 @@ type UserResponse struct {
 
 // IssueAPIKeyRequest represents API key creation request.
 type IssueAPIKeyRequest struct {
+	Notes         string                 `json:"notes,omitempty"` // Human-readable description
 	Scopes        []string               `json:"scopes,omitempty"`
 	ExpiresInDays *int                   `json:"expiresInDays,omitempty"`
 	Annotations   map[string]interface{} `json:"annotations,omitempty"`
 }
 
-// IssuedAPIKeyResponse represents an issued API key (secret shown once).
+// IssuedAPIKeyResponse represents an issued API key (token shown once).
 type IssuedAPIKeyResponse struct {
-	APIKeyID    string `json:"apiKeyId"`
-	Secret      string `json:"secret"`
-	Fingerprint string `json:"fingerprint"`
+	KeyID       string `json:"keyId"`       // Short, unique identifier for the key
+	Token       string `json:"token"`       // The secret token - shown only once
+	Fingerprint string `json:"fingerprint"` // Hash of token for identification
 	Status      string `json:"status"`
 	ExpiresAt   string `json:"expiresAt,omitempty"`
 }
 
 // RotateAPIKeyResponse represents rotated API key response.
 type RotateAPIKeyResponse struct {
-	APIKeyID    string `json:"apiKeyId"`
-	Secret      string `json:"secret"`
-	Fingerprint string `json:"fingerprint"`
+	KeyID       string `json:"keyId"`       // Short, unique identifier for the key
+	Token       string `json:"token"`       // The secret token - shown only once
+	Fingerprint string `json:"fingerprint"` // Hash of token for identification
 	Status      string `json:"status"`
 	ExpiresAt   string `json:"expiresAt,omitempty"`
 }
@@ -125,13 +126,13 @@ type UpdateUserRequest struct {
 
 // APIKeyResponse represents an API key in API responses.
 type APIKeyResponse struct {
-	APIKeyID    string                 `json:"apiKeyId"`
-	UserID      string                 `json:"userId,omitempty"`
-	Fingerprint string                 `json:"fingerprint"`
+	KeyID       string                 `json:"keyId"`           // Short, unique identifier for the key
+	Notes       string                 `json:"notes,omitempty"` // Human-readable description
+	Fingerprint string                 `json:"fingerprint"`     // Hash of token for identification
 	Status      string                 `json:"status"`
 	Scopes      []string               `json:"scopes,omitempty"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt   string                 `json:"createdAt"`
+	CreatedAt   string                 `json:"issuedAt"`        // API returns issuedAt not createdAt
 	ExpiresAt   string                 `json:"expiresAt,omitempty"`
 }
 

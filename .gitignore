@@ -19,3 +19,19 @@ kubeconfig*
 .DS_Store
 services/ai-aas-cli/ai-aas-cli
 services/admin-cli/admin-cli
+
+# Built binaries
+services/ai-aas-cli/bin/
+services/api-router-service/api-router
+services/user-org-service/user-org-service
+services/admin-api-service/admin-api-service
+
+# Temporary migration files
+migrate.env
+migrate.env.tmp
+
+# Beads issue tracking (local only)
+.beads/
+
+# Claude Code extension
+.cxp/

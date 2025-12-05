@@ -300,17 +300,18 @@ func (s *Service) CreatePullJob(ctx context.Context, req CreatePullJobRequest) (
 	return &job, nil
 }
 
-// GetPullJob returns a pull job by ID
-func (s *Service) GetPullJob(ctx context.Context, id uuid.UUID) (*PullJob, error) {
+// GetPullJob returns a pull job by ID, scoped to the specified model
+func (s *Service) GetPullJob(ctx context.Context, modelName string, id uuid.UUID) (*PullJob, error) {
 	query := `
-		SELECT id, model_id, revision, status, progress, bytes_total,
-		       bytes_completed, error_message, started_at, completed_at, created_by
-		FROM pull_jobs
-		WHERE id = $1
+		SELECT j.id, j.model_id, j.revision, j.status, j.progress, j.bytes_total,
+		       j.bytes_completed, j.error_message, j.started_at, j.completed_at, j.created_by
+		FROM pull_jobs j
+		JOIN model_registry r ON j.model_id = r.id
+		WHERE j.id = $1 AND r.name = $2
 	`
 
 	var job PullJob
-	err := s.pool.QueryRow(ctx, query, id).Scan(
+	err := s.pool.QueryRow(ctx, query, id, modelName).Scan(
 		&job.ID, &job.ModelID, &job.Revision, &job.Status, &job.Progress,
 		&job.BytesTotal, &job.BytesCompleted, &job.ErrorMessage,
 		&job.StartedAt, &job.CompletedAt, &job.CreatedBy,

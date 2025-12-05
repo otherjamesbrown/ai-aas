@@ -174,17 +174,17 @@ func runCredentialsRotate(cmd *cobra.Command, args []string, flagOrgID, flagAPIK
 	// Output results
 	if !cfg.Quiet {
 		fmt.Printf("✓ API key rotated successfully\n")
-		fmt.Printf("  API Key ID: %s\n", resp.APIKeyID)
-		fmt.Printf("  New Secret: %s (save this securely)\n", resp.Secret)
+		fmt.Printf("  Key ID:      %s\n", resp.KeyID)
+		fmt.Printf("  New Token:   %s (save this securely)\n", resp.Token)
 		fmt.Printf("  Fingerprint: %s\n", resp.Fingerprint)
-		fmt.Printf("  Duration: %s\n", duration.Round(time.Millisecond))
+		fmt.Printf("  Duration:    %s\n", duration.Round(time.Millisecond))
 	}
 
 	if cfg.OutputFormat == "json" {
 		return output.PrintJSON(map[string]interface{}{
 			"success":     true,
-			"api_key_id":  resp.APIKeyID,
-			"secret":      resp.Secret,
+			"keyId":       resp.KeyID,
+			"token":       resp.Token,
 			"fingerprint": resp.Fingerprint,
 			"duration":    duration.String(),
 		})

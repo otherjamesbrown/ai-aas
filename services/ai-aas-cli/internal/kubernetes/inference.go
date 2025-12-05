@@ -112,7 +112,25 @@ func (c *Client) GetInferenceService(ctx context.Context, name, namespace string
 		return nil, fmt.Errorf("get inferenceservice: %w", err)
 	}
 
-	return parseInferenceServiceStatus(result)
+	status, err := parseInferenceServiceStatus(result)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get pod counts for replica status
+	pods, err := c.clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("serving.kserve.io/inferenceservice=%s", name),
+	})
+	if err == nil {
+		status.Replicas = int32(len(pods.Items))
+		for _, pod := range pods.Items {
+			if isPodReady(&pod) {
+				status.ReadyReplicas++
+			}
+		}
+	}
+
+	return status, nil
 }
 
 // DeleteInferenceService deletes an InferenceService
