@@ -9,10 +9,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Profile represents a saved identity configuration (org + user + credentials).
-// Profiles bundle environment + identity together for easy switching.
+// Profile represents a saved identity configuration (org + user + credentials + endpoints).
+// Profiles bundle everything needed to connect to a specific environment.
+// This follows the AWS CLI pattern where each profile is self-contained.
 type Profile struct {
-	// Environment (development, staging, production)
+	// Environment label (development, staging, production) - for display/organization
 	Environment string `yaml:"environment" json:"environment"`
 
 	// Organization ID or slug
@@ -27,9 +28,13 @@ type Profile struct {
 	// API key token (the secret)
 	APIKey string `yaml:"api_key,omitempty" json:"api_key,omitempty"`
 
-	// Optional: override endpoints for this profile
-	UserOrgEndpoint  string `yaml:"user_org_endpoint,omitempty" json:"user_org_endpoint,omitempty"`
-	AdminAPIEndpoint string `yaml:"admin_api_endpoint,omitempty" json:"admin_api_endpoint,omitempty"`
+	// Endpoints - when set, these override the global defaults
+	AdminAPIEndpoint  string `yaml:"admin_api_endpoint,omitempty" json:"admin_api_endpoint,omitempty"`
+	InferenceEndpoint string `yaml:"inference_endpoint,omitempty" json:"inference_endpoint,omitempty"`
+	UserOrgEndpoint   string `yaml:"user_org_endpoint,omitempty" json:"user_org_endpoint,omitempty"`
+
+	// Kubeconfig path for kubectl operations
+	Kubeconfig string `yaml:"kubeconfig,omitempty" json:"kubeconfig,omitempty"`
 }
 
 // ProfileConfig holds all profiles and the active profile name.
@@ -282,6 +287,7 @@ func GetEffectiveConfig(profileName string) (*Config, *Profile, error) {
 	}
 
 	// Override with profile values if profile exists
+	// Profile values take precedence over global config (AWS CLI pattern)
 	if profile != nil {
 		if profile.Environment != "" {
 			cfg.Environment = profile.Environment
@@ -292,20 +298,33 @@ func GetEffectiveConfig(profileName string) (*Config, *Profile, error) {
 		if profile.APIKey != "" {
 			cfg.APIKey = profile.APIKey
 		}
-		if profile.UserOrgEndpoint != "" {
-			cfg.UserOrgEndpoint = profile.UserOrgEndpoint
-		}
+
+		// Endpoint overrides from profile
 		if profile.AdminAPIEndpoint != "" {
 			cfg.AdminAPIEndpoint = profile.AdminAPIEndpoint
 		}
+		if profile.InferenceEndpoint != "" {
+			cfg.InferenceEndpoint = profile.InferenceEndpoint
+		}
+		if profile.UserOrgEndpoint != "" {
+			cfg.UserOrgEndpoint = profile.UserOrgEndpoint
+		}
 
-		// Get endpoints from environments config if not set in profile
+		// Kubeconfig override from profile - set directly in viper for GetKubeconfig() to pick up
+		if profile.Kubeconfig != "" {
+			viper.Set(fmt.Sprintf("environments.%s.kubeconfig", profile.Environment), profile.Kubeconfig)
+		}
+
+		// Fallback: Get endpoints from environments config if not set in profile
 		envEndpoints := viper.GetStringMapString(fmt.Sprintf("environments.%s", profile.Environment))
 		if cfg.UserOrgEndpoint == "" && envEndpoints["user_org_endpoint"] != "" {
 			cfg.UserOrgEndpoint = envEndpoints["user_org_endpoint"]
 		}
 		if cfg.AdminAPIEndpoint == "" && envEndpoints["admin_api_endpoint"] != "" {
 			cfg.AdminAPIEndpoint = envEndpoints["admin_api_endpoint"]
+		}
+		if cfg.InferenceEndpoint == "" && envEndpoints["inference_endpoint"] != "" {
+			cfg.InferenceEndpoint = envEndpoints["inference_endpoint"]
 		}
 	}
 
