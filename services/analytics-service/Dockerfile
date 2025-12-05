@@ -3,19 +3,28 @@ FROM golang:1.24-alpine AS builder
 
 WORKDIR /build
 
-# Copy the entire monorepo structure to maintain relative paths
+# Copy the service and shared modules
 COPY services/analytics-service ./services/analytics-service
 COPY shared ./shared
 
-# Disable Go workspace mode for Docker builds
-ENV GOWORK=off
+# Create a minimal go.work file for the Docker build
+RUN printf '%s\n' \
+    'go 1.24.0' \
+    '' \
+    'use (' \
+    '	./services/analytics-service' \
+    '	./shared/go' \
+    ')' \
+    '' \
+    'replace github.com/ai-aas/shared-go v0.0.0 => ./shared/go' \
+    > go.work
 
 # Download dependencies from the service directory
 WORKDIR /build/services/analytics-service
 RUN go mod download
 
-# Build the analytics binary
-RUN CGO_ENABLED=0 GOOS=linux GOWORK=off go build -o /bin/analytics ./cmd/analytics-service
+# Build the analytics binary with workspace mode
+RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/analytics ./cmd/analytics-service
 
 # Final stage: minimal runtime image
 FROM alpine:latest
