@@ -48,11 +48,26 @@ env:
   - name: LOG_LEVEL
     value: info
 
+# Increase startup time for connections to remote services
+livenessProbe:
+  path: /v1/status/healthz
+  initialDelaySeconds: 60
+  periodSeconds: 15
+  timeoutSeconds: 10
+  failureThreshold: 5
+
+readinessProbe:
+  path: /v1/status/readyz
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 10
+  failureThreshold: 5
+
 otel:
   enabled: true
-  collectorEndpoint: otel-collector.observability:4317
+  collectorEndpoint: otel-collector.observability.svc.cluster.local:4317
   protocol: grpc
-  insecure: false
+  insecure: true
 
 prometheus:
   enabled: true
