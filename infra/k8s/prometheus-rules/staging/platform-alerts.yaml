@@ -1,0 +1,167 @@
+# Platform-wide Prometheus Alerting Rules for Staging
+# ====================================================
+# These rules provide alerting for all platform services
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: platform-alerts
+  namespace: monitoring
+  labels:
+    app: prometheus
+    release: prometheus
+    environment: staging
+spec:
+  groups:
+    # API Router Service Alerts
+    - name: api-router-service
+      rules:
+        - alert: APIRouterHighErrorRate
+          expr: |
+            (
+              sum(rate(http_requests_total{job="api-router-service", status=~"5.."}[5m]))
+              /
+              sum(rate(http_requests_total{job="api-router-service"}[5m]))
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+            service: api-router-service
+            environment: staging
+          annotations:
+            summary: "High error rate on API Router (staging)"
+            description: "API Router error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+
+        - alert: APIRouterHighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket{job="api-router-service"}[5m])) by (le)
+            ) > 2
+          for: 5m
+          labels:
+            severity: warning
+            service: api-router-service
+            environment: staging
+          annotations:
+            summary: "High latency on API Router (staging)"
+            description: "API Router p95 latency is {{ $value | humanizeDuration }} (threshold: 2s)"
+
+        - alert: APIRouterPodNotReady
+          expr: |
+            kube_deployment_status_replicas_ready{deployment=~".*api-router.*", namespace="staging"}
+            /
+            kube_deployment_status_replicas{deployment=~".*api-router.*", namespace="staging"}
+            < 0.5
+          for: 5m
+          labels:
+            severity: critical
+            service: api-router-service
+            environment: staging
+          annotations:
+            summary: "API Router has insufficient ready replicas (staging)"
+            description: "Less than 50% of API Router pods are ready"
+
+    # Admin API Service Alerts
+    - name: admin-api-service
+      rules:
+        - alert: AdminAPIHighErrorRate
+          expr: |
+            (
+              sum(rate(http_requests_total{job="admin-api-service", status=~"5.."}[5m]))
+              /
+              sum(rate(http_requests_total{job="admin-api-service"}[5m]))
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+            service: admin-api-service
+            environment: staging
+          annotations:
+            summary: "High error rate on Admin API (staging)"
+            description: "Admin API error rate is {{ $value | humanizePercentage }}"
+
+    # GPU/Inference Alerts - Critical for staging with GPU nodes
+    - name: gpu-inference
+      rules:
+        - alert: VLLMHighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(vllm_request_duration_seconds_bucket[5m])) by (le)
+            ) > 30
+          for: 5m
+          labels:
+            severity: warning
+            service: vllm
+            environment: staging
+          annotations:
+            summary: "High inference latency (staging)"
+            description: "vLLM p95 latency is {{ $value | humanizeDuration }} (threshold: 30s)"
+
+        - alert: VLLMGPUMemoryHigh
+          expr: |
+            (vllm_gpu_memory_used_bytes / vllm_gpu_memory_total_bytes) > 0.95
+          for: 5m
+          labels:
+            severity: warning
+            service: vllm
+            environment: staging
+          annotations:
+            summary: "vLLM GPU memory usage high (staging)"
+            description: "GPU memory usage is {{ $value | humanizePercentage }}"
+
+        - alert: GPUNodeNotReady
+          expr: |
+            kube_node_status_condition{condition="Ready", status="true", node=~".*gpu.*"} == 0
+          for: 2m
+          labels:
+            severity: critical
+            service: gpu-node
+            environment: staging
+          annotations:
+            summary: "GPU node not ready (staging)"
+            description: "GPU node {{ $labels.node }} is not in Ready state"
+
+        - alert: NvidiaDriverNotLoaded
+          expr: |
+            DCGM_FI_DEV_GPU_UTIL == -1
+          for: 5m
+          labels:
+            severity: critical
+            service: nvidia-driver
+            environment: staging
+          annotations:
+            summary: "NVIDIA driver not loaded on GPU node (staging)"
+            description: "NVIDIA GPU driver is not responding on node"
+
+    # Infrastructure Alerts
+    - name: infrastructure
+      rules:
+        - alert: HighMemoryUsage
+          expr: |
+            (
+              container_memory_usage_bytes{namespace="staging"}
+              /
+              container_spec_memory_limit_bytes{namespace="staging"}
+            ) > 0.9
+          for: 5m
+          labels:
+            severity: warning
+            environment: staging
+          annotations:
+            summary: "High memory usage detected (staging)"
+            description: "Container {{ $labels.container }} in pod {{ $labels.pod }} is using {{ $value | humanizePercentage }} of memory limit"
+
+        - alert: HighCPUUsage
+          expr: |
+            (
+              rate(container_cpu_usage_seconds_total{namespace="staging"}[5m])
+              /
+              container_spec_cpu_quota{namespace="staging"} * 100000
+            ) > 0.9
+          for: 5m
+          labels:
+            severity: warning
+            environment: staging
+          annotations:
+            summary: "High CPU usage detected (staging)"
+            description: "Container {{ $labels.container }} in pod {{ $labels.pod }} is using {{ $value | humanizePercentage }} of CPU limit"

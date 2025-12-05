@@ -9,8 +9,10 @@ import (
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/api/handlers"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/api/middleware"
+	enginesHandler "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/handlers/engines"
 	modelsHandler "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/handlers/models"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/config"
+	enginesSvc "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/services/engines"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/repository"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/service"
 	"go.uber.org/zap"
@@ -47,7 +49,8 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 		// Model registry routes (Phase 3)
 		r.Route("/registry/models", func(r chi.Router) {
 			modelRepo := repository.NewModelRepository(db)
-			modelSvc := service.NewModelRegistryService(modelRepo, logger)
+			policyRepo := repository.NewPolicyRepository(db)
+			modelSvc := service.NewModelRegistryService(modelRepo, policyRepo, logger)
 			modelHandler := handlers.NewModelHandler(modelSvc, logger)
 
 			r.Post("/", modelHandler.Register)
@@ -101,6 +104,11 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 		modelsAdapter := modelsHandler.NewServiceAdapter(modelsSvc)
 		modelsHdlr := modelsHandler.NewHandler(modelsAdapter)
 		modelsHdlr.RegisterRoutes(r)
+
+		// Inference engine management routes (AIAAS-042)
+		engSvc := enginesSvc.NewService(db.Pool())
+		engHdlr := enginesHandler.NewHandler(engSvc)
+		engHdlr.RegisterRoutes(r)
 	})
 
 	return r

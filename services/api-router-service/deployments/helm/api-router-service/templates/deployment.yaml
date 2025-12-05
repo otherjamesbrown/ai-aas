@@ -113,6 +113,25 @@ spec:
             {{- end }}
             - name: BUDGET_SERVICE_TIMEOUT
               value: {{ .Values.budget.timeout | quote }}
+            # Admin API Sync (alternative to etcd for routing policies)
+            {{- if .Values.adminApi }}
+            {{- if .Values.adminApi.endpoint }}
+            - name: ADMIN_API_ENDPOINT
+              value: {{ .Values.adminApi.endpoint | quote }}
+            - name: ADMIN_API_SYNC_INTERVAL
+              value: {{ .Values.adminApi.syncInterval | default "30s" | quote }}
+            {{- end }}
+            {{- if .Values.adminApi.apiKeySecretName }}
+            - name: ADMIN_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.adminApi.apiKeySecretName }}
+                  key: {{ .Values.adminApi.apiKeySecretKey | default "api-key" }}
+            {{- else if .Values.adminApi.apiKey }}
+            - name: ADMIN_API_KEY
+              value: {{ .Values.adminApi.apiKey | quote }}
+            {{- end }}
+            {{- end }}
             # Telemetry
             {{- if .Values.otel.enabled }}
             - name: OTEL_EXPORTER_OTLP_ENDPOINT

@@ -34,10 +34,15 @@ type Config struct {
 	KafkaBrokers string `envconfig:"KAFKA_BROKERS" default:"localhost:9092"`
 	KafkaTopic   string `envconfig:"KAFKA_TOPIC" default:"usage.records.v1"`
 
-	// Config Service
+	// Config Service (etcd)
 	ConfigServiceEndpoint string `envconfig:"CONFIG_SERVICE_ENDPOINT" default:"localhost:2379"`
-	ConfigWatchEnabled     bool   `envconfig:"CONFIG_WATCH_ENABLED" default:"true"`
-	ConfigCachePath        string `envconfig:"CONFIG_CACHE_PATH" default:"/tmp/api-router-config.db"`
+	ConfigWatchEnabled    bool   `envconfig:"CONFIG_WATCH_ENABLED" default:"true"`
+	ConfigCachePath       string `envconfig:"CONFIG_CACHE_PATH" default:"/tmp/api-router-config.db"`
+
+	// Admin API Sync (alternative to etcd for routing policies)
+	AdminAPIEndpoint     string        `envconfig:"ADMIN_API_ENDPOINT" default:""`
+	AdminAPIKey          string        `envconfig:"ADMIN_API_KEY" default:""`
+	AdminAPISyncInterval time.Duration `envconfig:"ADMIN_API_SYNC_INTERVAL" default:"30s"`
 
 	// Backend endpoints (comma-separated: id1:uri1,id2:uri2)
 	BackendEndpoints string `envconfig:"BACKEND_ENDPOINTS" default:"mock-backend-1:http://localhost:8001/v1/completions,mock-backend-2:http://localhost:8002/v1/completions"`

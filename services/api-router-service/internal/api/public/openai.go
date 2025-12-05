@@ -144,9 +144,19 @@ func (h *Handler) HandleOpenAIChatCompletions(w http.ResponseWriter, r *http.Req
 	}
 
 	// Forward OpenAI request directly to backend's OpenAI endpoint
-	backendEndpoint := h.buildBackendEndpointForOpenAI(policy.Backends[0].BackendID, openAIReq.Model, "/v1/chat/completions")
-	
-	// Forward the OpenAI request as-is to the backend
+	backendID := policy.Backends[0].BackendID
+	backendEndpoint := h.buildBackendEndpointForOpenAI(backendID, openAIReq.Model, "/v1/chat/completions")
+
+	// Rewrite model name to match backend's expected model ID
+	// User sends alias (e.g., "gpt-oss-20b"), backend expects HuggingFace ID (e.g., "unsloth/gpt-oss-20b")
+	originalModel := openAIReq.Model
+	openAIReq.Model = backendID
+	h.logger.Debug("rewriting model name for backend",
+		zap.String("original_model", originalModel),
+		zap.String("backend_model", backendID),
+	)
+
+	// Forward the OpenAI request to the backend
 	openAIRespInterface, routingDecision, err := h.forwardOpenAIRequest(ctx, backendEndpoint, openAIReq, "chat")
 	if err != nil {
 		h.writeError(w, r, fmt.Errorf("backend request failed: %w", err), api.ErrCodeBackendError)
@@ -246,9 +256,19 @@ func (h *Handler) HandleOpenAICompletions(w http.ResponseWriter, r *http.Request
 	}
 
 	// Forward OpenAI request directly to backend's OpenAI endpoint
-	backendEndpoint := h.buildBackendEndpointForOpenAI(policy.Backends[0].BackendID, openAIReq.Model, "/v1/completions")
-	
-	// Forward the OpenAI request as-is to the backend
+	backendID := policy.Backends[0].BackendID
+	backendEndpoint := h.buildBackendEndpointForOpenAI(backendID, openAIReq.Model, "/v1/completions")
+
+	// Rewrite model name to match backend's expected model ID
+	// User sends alias (e.g., "gpt-oss-20b"), backend expects HuggingFace ID (e.g., "unsloth/gpt-oss-20b")
+	originalModel := openAIReq.Model
+	openAIReq.Model = backendID
+	h.logger.Debug("rewriting model name for backend",
+		zap.String("original_model", originalModel),
+		zap.String("backend_model", backendID),
+	)
+
+	// Forward the OpenAI request to the backend
 	openAIRespInterface, routingDecision, err := h.forwardOpenAIRequest(ctx, backendEndpoint, openAIReq, "completion")
 	if err != nil {
 		h.writeError(w, r, fmt.Errorf("backend request failed: %w", err), api.ErrCodeBackendError)
