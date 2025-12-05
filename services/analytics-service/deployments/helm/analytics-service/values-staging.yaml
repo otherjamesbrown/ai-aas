@@ -42,6 +42,13 @@ autoscaling:
 ingress:
   enabled: true
 
+# Telemetry configuration
+otel:
+  enabled: true
+  collectorEndpoint: otel-collector.observability.svc.cluster.local:4317
+  protocol: grpc
+  insecure: true
+
 # Database configuration - reference staging secret
 database:
   urlSecretName: analytics-service-secrets
