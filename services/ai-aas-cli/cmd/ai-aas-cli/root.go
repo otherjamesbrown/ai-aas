@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/cmd/engine"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/cmd/model"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/cmd/profile"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/cmd/status"
@@ -146,6 +147,10 @@ Environment Variables:
 	inferenceCmd := admin.InferenceCommand()
 	inferenceCmd.GroupID = "model"
 	rootCmd.AddCommand(inferenceCmd)
+
+	engineCmd := engine.NewEngineCommand()
+	engineCmd.GroupID = "model"
+	rootCmd.AddCommand(engineCmd)
 
 	// Access Control commands
 	orgCmd := admin.OrgCommand()

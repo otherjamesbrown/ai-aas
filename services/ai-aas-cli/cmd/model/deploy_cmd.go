@@ -14,6 +14,7 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/api"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/cli"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/engines"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/kubernetes"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/registry"
@@ -68,6 +69,7 @@ Workflow:
 func newDeployCreateCommand() *cobra.Command {
 	var (
 		environment    string
+		engineConfig   string
 		gpuCount       int
 		memoryGB       int
 		minReplicas    int
@@ -85,11 +87,15 @@ func newDeployCreateCommand() *cobra.Command {
 		Long: `Deploy a model to Kubernetes using KServe InferenceService.
 
 The model can be loaded from the object storage cache (faster) or directly
-from HuggingFace. GPU and memory resources are allocated based on flags.
+from HuggingFace. GPU and memory resources are allocated based on flags
+or an engine configuration profile.
 
 Examples:
   # Deploy to development
   ai-aas model deploy create mistral-7b -e development
+
+  # Deploy with engine config profile
+  ai-aas model deploy create mistral-7b -e development --engine-config vllm/default
 
   # Deploy with custom resources
   ai-aas model deploy create mistral-7b -e development --gpu-count 2 --memory 48
@@ -106,6 +112,7 @@ Examples:
 See Also:
   ai-aas model deploy status      Check deployment status
   ai-aas model deploy delete      Remove deployment
+  ai-aas engine config list       List available engine configs
   ai-aas model troubleshoot logs  View startup logs`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -155,6 +162,45 @@ See Also:
 				storageURI = fmt.Sprintf("hf://%s", model.HFModelID)
 			}
 
+			// Determine runtime and resource settings
+			runtime := "vllm-runtime"
+			effectiveGPU := gpuCount
+			effectiveMemory := memoryGB
+			effectiveMinReplicas := minReplicas
+			effectiveMaxReplicas := maxReplicas
+			var configName string
+
+			// If engine config specified, fetch it and apply settings
+			if engineConfig != "" {
+				fmt.Printf("Loading engine config: %s\n", engineConfig)
+				engClient := engines.NewClient(apiClient)
+				ecfg, err := engClient.GetConfig(ctx, engineConfig)
+				if err != nil {
+					return fmt.Errorf("engine config not found: %s\n\nTo list available configs:\n  ai-aas engine config list", engineConfig)
+				}
+
+				// Use runtime based on engine name (e.g., vllm -> vllm-runtime)
+				runtime = ecfg.EngineName + "-runtime"
+				configName = ecfg.Name
+
+				// Apply config values unless explicitly overridden by flags
+				if !cmd.Flags().Changed("gpu-count") {
+					effectiveGPU = ecfg.GPUCount
+				}
+				if !cmd.Flags().Changed("memory") {
+					effectiveMemory = ecfg.MemoryGB
+				}
+				if !cmd.Flags().Changed("min-replicas") {
+					effectiveMinReplicas = ecfg.MinReplicas
+				}
+				if !cmd.Flags().Changed("max-replicas") {
+					effectiveMaxReplicas = ecfg.MaxReplicas
+				}
+
+				fmt.Printf("Using config: %s (engine: %s, %d GPU, %dGB memory)\n",
+					ecfg.Name, ecfg.EngineName, effectiveGPU, effectiveMemory)
+			}
+
 			// Create InferenceService config
 			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
 			namespace := environment
@@ -165,11 +211,11 @@ See Also:
 				ModelName:   modelName,
 				StorageURI:  storageURI,
 				HFModelID:   model.HFModelID,
-				Runtime:     "vllm-runtime",
-				GPUCount:    gpuCount,
-				MemoryGB:    memoryGB,
-				MinReplicas: minReplicas,
-				MaxReplicas: maxReplicas,
+				Runtime:     runtime,
+				GPUCount:    effectiveGPU,
+				MemoryGB:    effectiveMemory,
+				MinReplicas: effectiveMinReplicas,
+				MaxReplicas: effectiveMaxReplicas,
 				Environment: environment,
 				Labels: map[string]string{
 					"ai-aas.io/model":       modelName,
@@ -181,14 +227,23 @@ See Also:
 				},
 			}
 
+			// Add engine config label if specified
+			if configName != "" {
+				isvcCfg.Labels["ai-aas.io/engine-config"] = configName
+			}
+
 			// Show configuration
 			fmt.Printf("\nDeployment Configuration:\n")
 			fmt.Printf("  Model: %s (%s)\n", modelName, model.HFModelID)
 			fmt.Printf("  Environment: %s\n", environment)
 			fmt.Printf("  InferenceService: %s/%s\n", namespace, isvcName)
 			fmt.Printf("  Storage: %s\n", storageURI)
-			fmt.Printf("  Resources: %d GPU(s), %dGB memory\n", gpuCount, memoryGB)
-			fmt.Printf("  Replicas: %d-%d\n", minReplicas, maxReplicas)
+			fmt.Printf("  Runtime: %s\n", runtime)
+			if configName != "" {
+				fmt.Printf("  Engine Config: %s\n", configName)
+			}
+			fmt.Printf("  Resources: %d GPU(s), %dGB memory\n", effectiveGPU, effectiveMemory)
+			fmt.Printf("  Replicas: %d-%d\n", effectiveMinReplicas, effectiveMaxReplicas)
 
 			if dryRun {
 				yamlBytes, err := generateInferenceServiceYAML(isvcCfg)
@@ -292,6 +347,7 @@ See Also:
 	}
 
 	cmd.Flags().StringVarP(&environment, "environment", "e", "", "target environment (required)")
+	cmd.Flags().StringVar(&engineConfig, "engine-config", "", "engine configuration profile (e.g., vllm/default)")
 	cmd.Flags().IntVar(&gpuCount, "gpu-count", 1, "number of GPUs")
 	cmd.Flags().IntVar(&memoryGB, "memory", 24, "memory allocation in GB")
 	cmd.Flags().IntVar(&minReplicas, "min-replicas", 1, "minimum replica count")
