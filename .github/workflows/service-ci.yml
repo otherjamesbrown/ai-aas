@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - develop
+      - staging
     paths:
       - 'services/**'
       - 'shared/**'
@@ -181,6 +182,7 @@ jobs:
             type=sha,prefix={{branch}}-
             type=sha,format=short
             type=raw,value=dev,enable=${{ github.ref == 'refs/heads/develop' }}
+            type=raw,value=staging,enable=${{ github.ref == 'refs/heads/staging' }}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
       - name: Build and Push Docker Image
