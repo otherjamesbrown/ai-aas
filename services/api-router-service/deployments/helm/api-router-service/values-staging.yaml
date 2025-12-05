@@ -60,21 +60,27 @@ prometheus:
   path: /metrics
 
 redis:
-  address: redis-staging:6379
+  address: redis-master.staging.svc.cluster.local:6379
   passwordSecretName: redis-staging-secret
 
+# Kafka disabled for staging (not deployed yet)
 kafka:
-  brokers: kafka-staging:9092
+  brokers: ""
   topic: usage.records.v1
   auditTopic: audit.router
-  brokersSecretName: kafka-staging-secret
 
 configService:
-  endpoint: etcd-staging:2379
+  endpoint: etcd-service.staging.svc.cluster.local:2379
   watchEnabled: true
   cachePath: /tmp/api-router-config.db
 
+# Budget service disabled for staging
 budget:
-  endpoint: budget-service-staging:8080
+  endpoint: ""
   timeout: 2s
+
+# Use Admin API for routing config instead of etcd in staging
+adminApi:
+  endpoint: http://admin-api-service-staging.admin-api-service.svc.cluster.local:8080
+  syncInterval: 30s
 

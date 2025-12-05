@@ -42,11 +42,16 @@ autoscaling:
 ingress:
   enabled: true
 
+# Database configuration - reference staging secret
+database:
+  urlSecretName: analytics-service-secrets
+
 # Redis configuration - uses staging Redis
 redis:
-  url: "redis://redis.staging.svc.cluster.local:6379"
+  url: "redis://redis-master.staging.svc.cluster.local:6379"
 
-# RabbitMQ configuration
+# RabbitMQ configuration (optional for staging - using stub endpoint)
 rabbitmq:
+  url: "amqp://guest:guest@localhost:5672/"
   stream: usage.events.v1
   consumer: analytics-service-staging
