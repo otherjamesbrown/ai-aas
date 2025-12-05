@@ -130,6 +130,13 @@ See Also:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
+			// If no environment specified, try to get from active profile
+			if environment == "" {
+				if profile, _, err := config.GetActiveProfile(); err == nil && profile != nil && profile.Environment != "" {
+					environment = profile.Environment
+				}
+			}
+
 			adminEndpoint := cfg.AdminAPIEndpoint
 			if adminEndpoint == "" {
 				adminEndpoint = cfg.APIEndpoint
@@ -284,7 +291,7 @@ See Also:
 
 			fmt.Printf("\nTotal: %d model(s)\n", len(models))
 			if environment == "" {
-				muted.Println("\nTip: Use -e <environment> to see deployment status")
+				muted.Println("\nTip: Use -e <environment> or set a profile with 'ai-aas-cli profile use <profile>'")
 			}
 
 			return nil
@@ -338,6 +345,17 @@ See Also:
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
+
+			// If no environment specified, try to get from active profile
+			if environment == "" {
+				if profile, _, err := config.GetActiveProfile(); err == nil && profile != nil && profile.Environment != "" {
+					environment = profile.Environment
+				}
+			}
+			if environment == "" {
+				return fmt.Errorf("environment is required. Use -e <environment> or set a profile")
+			}
+
 			s3Bucket := viper.GetString("s3.bucket")
 
 			adminEndpoint := cfg.AdminAPIEndpoint
@@ -444,11 +462,10 @@ See Also:
 		},
 	}
 
-	cmd.Flags().StringVarP(&environment, "environment", "e", "", "target environment (required)")
+	cmd.Flags().StringVarP(&environment, "environment", "e", "", "target environment (uses profile if not specified)")
 	cmd.Flags().IntVar(&gpuCount, "gpu-count", 1, "number of GPUs")
 	cmd.Flags().IntVar(&memoryGB, "memory", 24, "memory allocation in GB")
 	cmd.Flags().BoolVar(&wait, "wait", false, "wait for models to be ready")
-	_ = cmd.MarkFlagRequired("environment")
 
 	return cmd
 }
@@ -484,6 +501,16 @@ See Also:
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			modelName := args[0]
+
+			// If no environment specified, try to get from active profile
+			if environment == "" {
+				if profile, _, err := config.GetActiveProfile(); err == nil && profile != nil && profile.Environment != "" {
+					environment = profile.Environment
+				}
+			}
+			if environment == "" {
+				return fmt.Errorf("environment is required. Use -e <environment> or set a profile")
+			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
@@ -539,10 +566,9 @@ See Also:
 		},
 	}
 
-	cmd.Flags().StringVarP(&environment, "environment", "e", "", "target environment (required)")
+	cmd.Flags().StringVarP(&environment, "environment", "e", "", "target environment (uses profile if not specified)")
 	cmd.Flags().BoolVar(&force, "force", false, "skip confirmation")
 	cmd.Flags().StringVar(&reason, "reason", "", "reason for disabling")
-	_ = cmd.MarkFlagRequired("environment")
 
 	return cmd
 }
@@ -582,6 +608,16 @@ See Also:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			disableModel := args[0]
 			enableModel := args[1]
+
+			// If no environment specified, try to get from active profile
+			if environment == "" {
+				if profile, _, err := config.GetActiveProfile(); err == nil && profile != nil && profile.Environment != "" {
+					environment = profile.Environment
+				}
+			}
+			if environment == "" {
+				return fmt.Errorf("environment is required. Use -e <environment> or set a profile")
+			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 			defer cancel()
@@ -731,10 +767,9 @@ See Also:
 		},
 	}
 
-	cmd.Flags().StringVarP(&environment, "environment", "e", "", "target environment (required)")
+	cmd.Flags().StringVarP(&environment, "environment", "e", "", "target environment (uses profile if not specified)")
 	cmd.Flags().BoolVar(&force, "force", false, "skip confirmation")
 	cmd.Flags().StringVar(&reason, "reason", "", "reason for swap (for audit)")
-	_ = cmd.MarkFlagRequired("environment")
 
 	return cmd
 }
