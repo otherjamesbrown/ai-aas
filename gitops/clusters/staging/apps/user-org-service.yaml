@@ -20,8 +20,8 @@ spec:
       # Staging-specific overrides
       values: |
         image:
-          repository: ghcr.io/otherjamesbrown/user-org-service
-          tag: latest
+          repository: ghcr.io/otherjamesbrown/ai-aas/user-org-service
+          tag: staging
           pullPolicy: Always
         env:
           - name: ENVIRONMENT
