@@ -143,6 +143,14 @@ configService:
   watchEnabled: false
   cachePath: /tmp/api-router-config.db
 
+# Admin API sync for routing policies (alternative to etcd)
+adminApi:
+  endpoint: "http://admin-api-service-development.admin-api-service.svc.cluster.local:8080"
+  syncInterval: "30s"
+  # Use the admin API key from local secret (copied from admin-api-service)
+  apiKeySecretName: "admin-api-sync-secrets"
+  apiKeySecretKey: "api-key"
+
 # Rate limiting configuration
 rateLimit:
   defaultRPS: 100
