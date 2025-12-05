@@ -187,6 +187,12 @@ See Also:
 			errorColor := color.New(color.FgRed, color.Bold)
 			info := color.New(color.FgCyan)
 
+			// Print environment header if set
+			if environment != "" {
+				info.Printf("Environment: %s\n", environment)
+				fmt.Println()
+			}
+
 			// Print header
 			header.Printf("%-20s %-10s %-12s %-10s %s\n", "MODEL", "CACHED", "STATUS", "AVAILABLE", "NEXT STEP")
 			muted.Println("─────────────────────────────────────────────────────────────────────────────────────────────")
