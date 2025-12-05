@@ -45,15 +45,15 @@ func TestWorkerStartStop(t *testing.T) {
 func TestMockCredentialGetter(t *testing.T) {
 	mock := &mockCredentialGetter{
 		credentials: map[string]string{
-			"huggingface_token": "hf_test_token",
-			"s3_access_key":     "test_access_key",
+			"hf-token":   "hf_test_token",
+			"s3-access":  "test_access_key",
 		},
 	}
 
 	ctx := context.Background()
 
 	// Test existing credential
-	token, err := mock.GetCredential(ctx, "huggingface_token")
+	token, err := mock.GetCredential(ctx, "hf-token")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}

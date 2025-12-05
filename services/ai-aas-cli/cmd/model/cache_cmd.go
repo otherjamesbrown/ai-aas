@@ -777,6 +777,7 @@ func runServerSidePull(ctx context.Context, apiClient *api.Client, modelName, re
 	defer ticker.Stop()
 
 	lastStatus := ""
+	lastProgress := -1.0
 	for {
 		select {
 		case <-cancelCtx.Done():
@@ -787,25 +788,26 @@ func runServerSidePull(ctx context.Context, apiClient *api.Client, modelName, re
 				return fmt.Errorf("get job status: %w", err)
 			}
 
-			// Print progress
+			// Print status change
 			if updatedJob.Status != lastStatus {
-				fmt.Printf("\nStatus: %s\n", updatedJob.Status)
+				if lastStatus != "" {
+					fmt.Println() // End previous progress line
+				}
+				fmt.Printf("  Status: %s\n", updatedJob.Status)
 				lastStatus = updatedJob.Status
+				lastProgress = -1.0 // Reset progress display
 			}
 
-			if updatedJob.BytesTotal > 0 {
-				fmt.Printf("\r  Progress: %.1f%% (%s / %s)    ",
-					updatedJob.Progress,
-					formatBytes(updatedJob.BytesCompleted),
-					formatBytes(updatedJob.BytesTotal))
-			} else {
-				fmt.Printf("\r  Progress: %.1f%%    ", updatedJob.Progress)
+			// Print progress bar (only when progress changes significantly)
+			if updatedJob.Progress != lastProgress {
+				lastProgress = updatedJob.Progress
+				printProgressBar(updatedJob.Progress, updatedJob.BytesCompleted, updatedJob.BytesTotal)
 			}
 
 			// Check if complete
 			switch updatedJob.Status {
 			case "complete":
-				fmt.Println()
+				fmt.Println() // End progress line
 				cli.PrintModelCached(modelName, updatedJob.BytesTotal)
 				return nil
 			case "failed":
@@ -817,4 +819,25 @@ func runServerSidePull(ctx context.Context, apiClient *api.Client, modelName, re
 			}
 		}
 	}
+}
+
+// printProgressBar prints a visual progress bar
+func printProgressBar(progress float64, completed, total int64) {
+	barWidth := 40
+	filledWidth := int(progress / 100.0 * float64(barWidth))
+	if filledWidth > barWidth {
+		filledWidth = barWidth
+	}
+
+	bar := strings.Repeat("█", filledWidth) + strings.Repeat("░", barWidth-filledWidth)
+
+	if total > 0 {
+		fmt.Printf("\r  [%s] %.1f%% (%s / %s)   ",
+			bar, progress,
+			formatBytes(completed),
+			formatBytes(total))
+	} else {
+		fmt.Printf("\r  [%s] %.1f%%   ", bar, progress)
+	}
+	os.Stdout.Sync()
 }

@@ -207,33 +207,34 @@ func (w *Worker) claimJob(ctx context.Context) (*Job, error) {
 
 // executeJob performs the actual model pull
 func (w *Worker) executeJob(ctx context.Context, job *Job) error {
-	// Get credentials
-	hfToken, err := w.credGetter.GetCredential(ctx, "huggingface_token")
+	// Get credentials - credential types must match database constraint:
+	// 'hf-token', 's3-access', 's3-secret', 's3-endpoint', 's3-bucket'
+	hfToken, err := w.credGetter.GetCredential(ctx, "hf-token")
 	if err != nil && !errors.Is(err, ErrCredentialNotFound) {
 		return fmt.Errorf("get HuggingFace token: %w", err)
 	}
 
-	s3AccessKey, err := w.credGetter.GetCredential(ctx, "s3_access_key")
+	s3AccessKey, err := w.credGetter.GetCredential(ctx, "s3-access")
 	if err != nil {
 		return fmt.Errorf("get S3 access key: %w", err)
 	}
 
-	s3SecretKey, err := w.credGetter.GetCredential(ctx, "s3_secret_key")
+	s3SecretKey, err := w.credGetter.GetCredential(ctx, "s3-secret")
 	if err != nil {
 		return fmt.Errorf("get S3 secret key: %w", err)
 	}
 
-	s3Endpoint, err := w.credGetter.GetCredential(ctx, "s3_endpoint")
+	s3Endpoint, err := w.credGetter.GetCredential(ctx, "s3-endpoint")
 	if err != nil {
 		return fmt.Errorf("get S3 endpoint: %w", err)
 	}
 
-	s3Bucket, err := w.credGetter.GetCredential(ctx, "s3_bucket")
+	s3Bucket, err := w.credGetter.GetCredential(ctx, "s3-bucket")
 	if err != nil {
 		return fmt.Errorf("get S3 bucket: %w", err)
 	}
 
-	s3Region, _ := w.credGetter.GetCredential(ctx, "s3_region")
+	s3Region, _ := w.credGetter.GetCredential(ctx, "s3-region")
 	if s3Region == "" {
 		s3Region = "us-east-1"
 	}

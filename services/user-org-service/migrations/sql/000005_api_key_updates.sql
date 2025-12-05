@@ -3,6 +3,8 @@
 -- The key_id is a shorter, more user-friendly identifier than the UUID api_key_id
 -- Notes provides a human-readable description (like GitHub's token name)
 
+-- +goose Up
+-- +goose StatementBegin
 DO $$
 BEGIN
   -- Add key_id column if it doesn't exist (12 char alphanumeric identifier)
@@ -25,3 +27,23 @@ BEGIN
     ALTER TABLE api_keys ADD COLUMN notes TEXT NOT NULL DEFAULT '';
   END IF;
 END $$;
+-- +goose StatementEnd
+
+-- +goose Down
+-- +goose StatementBegin
+DO $$
+BEGIN
+  -- Remove notes column if it exists
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_name = 'api_keys' AND column_name = 'notes') THEN
+    ALTER TABLE api_keys DROP COLUMN notes;
+  END IF;
+
+  -- Remove key_id column and index if they exist
+  DROP INDEX IF EXISTS api_keys_key_id_idx;
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_name = 'api_keys' AND column_name = 'key_id') THEN
+    ALTER TABLE api_keys DROP COLUMN key_id;
+  END IF;
+END $$;
+-- +goose StatementEnd

@@ -265,6 +265,7 @@ func userCreateCommand() *cobra.Command {
 	var flagQuiet bool
 	var flagUserOrgEndpoint string
 	var flagAPIKey string
+	var flagProfile string
 
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -303,6 +304,9 @@ Examples:
   # Idempotent create (won't fail if user exists)
   ai-aas-cli user create --org-id acme --email user@example.com --upsert
 
+  # Create user and save to profile (uses org_id from profile)
+  ai-aas-cli user create --email user@example.com --direct --profile acme-admin
+
 Next Steps:
   After creating a user with --direct:
   1. Securely share the password with the user
@@ -319,7 +323,7 @@ See Also:
   ai-aas-cli apikey create   Create API key for user`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runUserCreate(cmd, args, flagOrgID, flagEmail, flagDisplayName, flagRoles, flagExpiresInHours, flagDirect, flagForcePwdChange, flagUpsert,
-				flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey)
+				flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey, flagProfile)
 		},
 	}
 
@@ -336,12 +340,13 @@ See Also:
 	cmd.Flags().BoolVar(&flagQuiet, "quiet", false, "Suppress non-error output")
 	cmd.Flags().StringVar(&flagUserOrgEndpoint, "user-org-endpoint", "", "User-org-service endpoint (overrides config)")
 	cmd.Flags().StringVar(&flagAPIKey, "api-key", "", "API key for authentication (overrides config)")
+	cmd.Flags().StringVar(&flagProfile, "profile", "", "Use org_id from profile and save user_id to it")
 
 	return cmd
 }
 
 func runUserCreate(cmd *cobra.Command, args []string, flagOrgID, flagEmail, flagDisplayName string, flagRoles []string, flagExpiresInHours int, flagDirect, flagForcePwdChange, flagUpsert bool,
-	flagFormat string, flagVerbose, flagQuiet bool, flagUserOrgEndpoint, flagAPIKey string) error {
+	flagFormat string, flagVerbose, flagQuiet bool, flagUserOrgEndpoint, flagAPIKey string, flagProfile string) error {
 	startTime := time.Now()
 
 	// Load configuration
@@ -378,8 +383,14 @@ func runUserCreate(cmd *cobra.Command, args []string, flagOrgID, flagEmail, flag
 		)
 	}
 
-	// Use default org if not specified
+	// Use profile org_id if --profile is set
 	orgID := flagOrgID
+	if orgID == "" && flagProfile != "" {
+		if profile, err := config.GetProfile(flagProfile); err == nil && profile.OrgID != "" {
+			orgID = profile.OrgID
+		}
+	}
+	// Fall back to default org
 	if orgID == "" {
 		orgID = cfg.DefaultOrgID
 	}
@@ -415,15 +426,15 @@ func runUserCreate(cmd *cobra.Command, args []string, flagOrgID, flagEmail, flag
 
 	// Handle DIRECT user creation (bypasses invite flow)
 	if flagDirect {
-		return runDirectUserCreate(cmd, cfg, userOrgClient, orgID, flagEmail, flagDisplayName, flagRoles, flagForcePwdChange, flagUpsert, startTime)
+		return runDirectUserCreate(cmd, cfg, userOrgClient, orgID, flagEmail, flagDisplayName, flagRoles, flagForcePwdChange, flagUpsert, flagProfile, startTime)
 	}
 
 	// Handle INVITE user creation (default)
-	return runInviteUserCreate(cmd, cfg, userOrgClient, orgID, flagEmail, flagRoles, flagExpiresInHours, flagUpsert, startTime)
+	return runInviteUserCreate(cmd, cfg, userOrgClient, orgID, flagEmail, flagRoles, flagExpiresInHours, flagUpsert, flagProfile, startTime)
 }
 
 // runDirectUserCreate handles direct user creation with temporary password.
-func runDirectUserCreate(cmd *cobra.Command, cfg *config.Config, userOrgClient *userorg.Client, orgID, email, displayName string, roles []string, forcePwdChange, upsert bool, startTime time.Time) error {
+func runDirectUserCreate(cmd *cobra.Command, cfg *config.Config, userOrgClient *userorg.Client, orgID, email, displayName string, roles []string, forcePwdChange, upsert bool, profileName string, startTime time.Time) error {
 	// Check if user exists (for upsert)
 	if upsert {
 		existingUser, err := userOrgClient.GetUserByEmail(cmd.Context(), orgID, email)
@@ -472,6 +483,26 @@ func runDirectUserCreate(cmd *cobra.Command, cfg *config.Config, userOrgClient *
 		Outcome:  "success",
 		Duration: time.Since(startTime),
 	})
+
+	// Save to profile if --profile flag is set
+	if profileName != "" {
+		if err := config.UpdateProfile(profileName, func(p *config.Profile) {
+			p.UserID = createdUser.UserID
+			p.Email = createdUser.Email
+		}); err != nil {
+			if !cfg.Quiet {
+				fmt.Printf("Warning: failed to update profile '%s': %v\n", profileName, err)
+			}
+		} else if !cfg.Quiet {
+			fmt.Printf("\nSaved to profile '%s'\n", profileName)
+			if profile, err := config.GetProfile(profileName); err == nil {
+				fmt.Printf("  org_id:   %s\n", valueOrNotSet(profile.OrgID))
+				fmt.Printf("  user_id:  %s\n", profile.UserID)
+				fmt.Printf("  email:    %s\n", profile.Email)
+				fmt.Printf("  api_key:  %s\n", valueOrNotSet(profile.APIKey))
+			}
+		}
+	}
 
 	// Format output
 	if cfg.OutputFormat == "json" {
@@ -523,7 +554,7 @@ func runDirectUserCreate(cmd *cobra.Command, cfg *config.Config, userOrgClient *
 }
 
 // runInviteUserCreate handles invite-based user creation (sends email).
-func runInviteUserCreate(cmd *cobra.Command, cfg *config.Config, userOrgClient *userorg.Client, orgID, email string, roles []string, expiresInHours int, upsert bool, startTime time.Time) error {
+func runInviteUserCreate(cmd *cobra.Command, cfg *config.Config, userOrgClient *userorg.Client, orgID, email string, roles []string, expiresInHours int, upsert bool, profileName string, startTime time.Time) error {
 	// Check if user exists (for upsert)
 	var user *userorg.UserResponse
 	if upsert {
@@ -572,6 +603,26 @@ func runInviteUserCreate(cmd *cobra.Command, cfg *config.Config, userOrgClient *
 		Outcome:  "success",
 		Duration: time.Since(startTime),
 	})
+
+	// Save to profile if --profile flag is set
+	if profileName != "" {
+		if err := config.UpdateProfile(profileName, func(p *config.Profile) {
+			p.UserID = user.UserID
+			p.Email = user.Email
+		}); err != nil {
+			if !cfg.Quiet {
+				fmt.Printf("Warning: failed to update profile '%s': %v\n", profileName, err)
+			}
+		} else if !cfg.Quiet {
+			fmt.Printf("\nSaved to profile '%s'\n", profileName)
+			if profile, err := config.GetProfile(profileName); err == nil {
+				fmt.Printf("  org_id:   %s\n", valueOrNotSet(profile.OrgID))
+				fmt.Printf("  user_id:  %s\n", profile.UserID)
+				fmt.Printf("  email:    %s\n", profile.Email)
+				fmt.Printf("  api_key:  %s\n", valueOrNotSet(profile.APIKey))
+			}
+		}
+	}
 
 	// Format output
 	if cfg.OutputFormat == "json" {

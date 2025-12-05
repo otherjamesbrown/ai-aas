@@ -162,8 +162,10 @@ func Save(cfg *Config) error {
 		viper.Set("admin_api_endpoint", cfg.AdminAPIEndpoint)
 	}
 
-	// Don't persist HF token in config file - it's stored server-side
-	// viper.Set("hf_token", cfg.HFToken)
+	// Store HF token locally as well (also synced to server via credentials command)
+	if cfg.HFToken != "" {
+		viper.Set("hf_token", cfg.HFToken)
+	}
 
 	if err := viper.WriteConfigAs(configPath); err != nil {
 		return fmt.Errorf("write config: %w", err)
