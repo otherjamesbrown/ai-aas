@@ -92,10 +92,15 @@ else
   echo "No AppProject manifests found in $PROJECT_DIR; skipping"
 fi
 
-echo "Applying ApplicationSet/App manifests..."
-kubectl "${KUBECTL_ARGS[@]}" apply -f "$APPS_DIR/infrastructure-appset.yaml"
+echo "Applying Application manifests..."
+if ls "$APPS_DIR"/*.yaml >/dev/null 2>&1; then
+  kubectl "${KUBECTL_ARGS[@]}" apply -f "$APPS_DIR/" --recursive
+  echo "Applied all Applications from $APPS_DIR"
+else
+  echo "No Application manifests found in $APPS_DIR; skipping"
+fi
 
 echo "Ensure the GitOps repository is registered with ArgoCD CLI:"
 echo "  argocd login <ARGOCD_SERVER>"
 echo "  argocd repo add <REPO_URL> --username <user> --password <token>"
-echo "Then sync the ApplicationSet via:\n  argocd app sync platform-${ENV_NAME}-infrastructure"
+echo "Then sync applications via:\n  argocd app sync <app-name>"
