@@ -47,6 +47,7 @@ This document provides a map of all platform documentation to help the infra-ops
 
 | Document | Purpose | Use When |
 |----------|---------|----------|
+| [knative-configuration.md](knative-configuration.md) | Knative Serving setup, autoscaling, config | Knative issues, model serving, scaling |
 | [cache-salt-security.md](cache-salt-security.md) | Cache security for vLLM | Model caching security |
 | [ci-remote-cli.md](ci-remote-cli.md) | Remote CI dispatch | Triggering remote CI jobs |
 | [ui-pages.md](ui-pages.md) | Web portal pages, admin CLI | Understanding UI structure |
