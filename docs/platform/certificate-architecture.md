@@ -1,5 +1,10 @@
 # Certificate Architecture
 
+---
+last_updated: 2025-12-08
+document_type: overview
+---
+
 This document describes the certificate management architecture for the AI-AAS platform.
 
 ## Overview

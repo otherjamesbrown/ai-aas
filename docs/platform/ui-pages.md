@@ -1,5 +1,10 @@
 # Web Portal UI Pages
 
+---
+last_updated: 2025-12-08
+document_type: reference
+---
+
 This document describes all pages in the web portal, their functionality, and the corresponding admin-cli commands where applicable.
 
 ## Page Overview
@@ -166,6 +171,7 @@ Shown when a user attempts to access a page without required permissions:
 
 ## Related Documentation
 
-- [Web Portal Spec](../../specs/008-web-portal/spec.md) - Full feature specification
-- [Admin CLI](../technical/services/admin-cli.md) - CLI installation and usage
-- [Access Control](./access-control.md) - Role-based access policies
+- [Access Control](access-control.md) - Role-based access policies
+- [Endpoints and URLs](endpoints-and-urls.md) - Web portal URL
+- Web Portal source: `web/portal/`
+- Admin CLI: `services/admin-cli/`
