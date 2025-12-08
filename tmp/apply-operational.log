@@ -1,0 +1,21 @@
+2025/11/11 09:41:28 telemetry disabled: OTEL_EXPORTER_OTLP_ENDPOINT not set
+2025/11/11 09:41:28 migration_start component=operational direction=up version= dry_run=false
+2025/11/11 09:41:28 migration_pre_checks component=operational direction=up version= dry_run=false
+2025/11/11 09:41:28 [WARN] long-running query detected: pid=101 state=active age=15h26m28s query=<insufficient privilege>
+2025/11/11 09:41:28 pre_check_rowcount table=organizations count=1
+2025/11/11 09:41:28 pre_check_rowcount table=users count=2
+2025/11/11 09:41:29 pre_check_rowcount table=api_keys count=1
+2025/11/11 09:41:29 pre_check_rowcount table=model_registry_entries count=1
+2025/11/11 09:41:29 pre_check_rowcount table=usage_events count=3
+2025/11/11 09:41:29 pre_check_rowcount table=audit_log_entries count=9
+2025/11/11 09:41:29 migration_applied component=operational version=20251115001 slug=core_entities
+2025/11/11 09:41:29 migration_applied component=operational version=20251115002 slug=usage_events
+2025/11/11 09:41:29 migration_post_checks component=operational direction=up version= dry_run=false duration_ms=1599
+2025/11/11 09:41:30 post_check_rowcount table=organizations count=1 delta=0
+2025/11/11 09:41:30 post_check_rowcount table=users count=2 delta=0
+2025/11/11 09:41:30 post_check_rowcount table=api_keys count=1 delta=0
+2025/11/11 09:41:30 post_check_rowcount table=model_registry_entries count=1 delta=0
+2025/11/11 09:41:30 post_check_rowcount table=usage_events count=3 delta=0
+2025/11/11 09:41:30 post_check_rowcount table=audit_log_entries count=9 delta=0
+2025/11/11 09:41:30 audit_log recorded component=operational direction=up version= actor=jabrown
+2025/11/11 09:41:30 migration_finish component=operational direction=up version= dry_run=false status=success duration_ms=1599

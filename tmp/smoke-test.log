@@ -1,0 +1,27 @@
++ /Users/jabrown/Documents/GitHub/otherjamesbrown/ai-aas/scripts/../scripts/db/apply.sh --component operational --env migrate.env --yes
+2025/11/11 09:43:14 telemetry disabled: OTEL_EXPORTER_OTLP_ENDPOINT not set
+2025/11/11 09:43:15 migration_start component=operational direction=up version= dry_run=false
+2025/11/11 09:43:15 migration_pre_checks component=operational direction=up version= dry_run=false
+2025/11/11 09:43:15 [WARN] long-running query detected: pid=101 state=active age=15h28m15s query=<insufficient privilege>
+2025/11/11 09:43:15 pre_check_rowcount table=organizations count=1
+2025/11/11 09:43:15 pre_check_rowcount table=users count=3
+2025/11/11 09:43:15 pre_check_rowcount table=api_keys count=1
+2025/11/11 09:43:15 pre_check_rowcount table=model_registry_entries count=1
+2025/11/11 09:43:15 pre_check_rowcount table=usage_events count=5
+2025/11/11 09:43:15 pre_check_rowcount table=audit_log_entries count=12
+2025/11/11 09:43:16 migration_post_checks component=operational direction=up version= dry_run=false duration_ms=1011
+2025/11/11 09:43:16 post_check_rowcount table=organizations count=1 delta=0
+2025/11/11 09:43:16 post_check_rowcount table=users count=3 delta=0
+2025/11/11 09:43:16 post_check_rowcount table=api_keys count=1 delta=0
+2025/11/11 09:43:16 post_check_rowcount table=model_registry_entries count=1 delta=0
+2025/11/11 09:43:16 post_check_rowcount table=usage_events count=5 delta=0
+2025/11/11 09:43:16 post_check_rowcount table=audit_log_entries count=12 delta=0
+2025/11/11 09:43:16 audit_log recorded component=operational direction=up version= actor=jabrown
+2025/11/11 09:43:16 migration_finish component=operational direction=up version= dry_run=false status=success duration_ms=1011
++ /Users/jabrown/Documents/GitHub/otherjamesbrown/ai-aas/scripts/../scripts/db/apply.sh --status --component operational --env migrate.env
+2025/11/11 09:43:17 telemetry disabled: OTEL_EXPORTER_OTLP_ENDPOINT not set
+2025/11/11 09:43:17 migration_status component=operational
++ [[ -n '' ]]
++ echo '[INFO] No --version supplied; skipping rollback/reapply step'
+[INFO] No --version supplied; skipping rollback/reapply step
++ set +x
