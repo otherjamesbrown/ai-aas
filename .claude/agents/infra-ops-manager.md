@@ -95,6 +95,37 @@ Follow the three-branch promotion workflow:
 
 **NEVER reference feature branches in ArgoCD Applications.**
 
+## Service Deployment Specifications
+
+**CRITICAL**: Before deploying or updating a Go service, read its deployment specification:
+
+```
+services/<service-name>/DEPLOYMENT.md
+```
+
+This file is maintained by the go-services-developer agent and contains:
+- Health endpoint paths
+- Required environment variables
+- Resource requirements
+- Dependencies
+- Ports
+- Notes specific to that service
+
+**Available DEPLOYMENT.md files:**
+| Service | Location |
+|---------|----------|
+| admin-api-service | `services/admin-api-service/DEPLOYMENT.md` |
+| api-router-service | `services/api-router-service/DEPLOYMENT.md` |
+| analytics-service | `services/analytics-service/DEPLOYMENT.md` |
+| user-org-service | `services/user-org-service/DEPLOYMENT.md` |
+
+**When deploying a service:**
+1. Read the service's DEPLOYMENT.md first
+2. Use the health endpoints specified (don't assume /health or /ready)
+3. Configure all required environment variables
+4. Set resource limits as specified
+5. Ensure dependencies are available
+
 ## Service Creation Requirements
 
 When creating a new deployable service, you MUST include:
@@ -109,21 +140,29 @@ When creating a new deployable service, you MUST include:
 
 ### 2. ArgoCD Application at `gitops/clusters/<env>/apps/<service-name>.yaml`
 
-### 3. Health Probes (MANDATORY):
+### 3. Health Probes from DEPLOYMENT.md
+**Read the service's DEPLOYMENT.md to get the correct health endpoints.** Example:
 ```yaml
 livenessProbe:
   httpGet:
-    path: /health
+    path: /healthz  # Get from DEPLOYMENT.md
     port: http
   initialDelaySeconds: 10
   periodSeconds: 10
 readinessProbe:
   httpGet:
-    path: /ready
+    path: /readyz  # Get from DEPLOYMENT.md
     port: http
   initialDelaySeconds: 5
   periodSeconds: 5
 ```
+
+### 4. Request DEPLOYMENT.md if Missing
+If a service doesn't have a DEPLOYMENT.md, create a beads issue:
+```bash
+bd create "Create DEPLOYMENT.md for <service-name>" --type task --priority 1
+```
+Then ask the go-services-developer agent to create it.
 
 ## ArgoCD Application Template
 
@@ -246,9 +285,30 @@ Before completing any infrastructure change:
 - [ ] Create beads issues for any documentation gaps you couldn't address
 - [ ] Create beads issues for any improvements identified during the task
 
-### 4. Final Report
-Include in your completion report:
+### 4. Final Report (REQUIRED FORMAT)
+Your completion report MUST include these sections with explicit details:
+
+**Summary**
 - What was accomplished
-- What documentation was updated (list files)
-- What beads issues were created (if any)
-- Any follow-up items for the user
+- Any remaining issues or known limitations
+
+**Git Commits**
+List all commits made during this task:
+- `<commit-hash>`: <commit message>
+
+**Documentation Updates**
+Explicitly state what documentation was updated, corrected, or created:
+- If documentation was updated: list each file and what was changed
+- If incorrect documentation was found and fixed: explicitly state what was wrong and how it was corrected
+- If no documentation changes were needed: state "No documentation updates required"
+
+**Beads Issues**
+List all beads activity during this task:
+- Issues created: `<issue-id>`: <title>
+- Issues updated: `<issue-id>`: <status change or update made>
+- Issues closed: `<issue-id>`: <reason for closure>
+- If no beads activity: state "No beads issues created, updated, or closed"
+
+**Follow-up Items**
+- Any items requiring user attention or decision
+- Suggested next steps

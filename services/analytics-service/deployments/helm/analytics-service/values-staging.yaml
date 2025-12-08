@@ -9,9 +9,8 @@ global:
 replicaCount: 2
 
 image:
-  repository: ghcr.io/otherjamesbrown/analytics-service
-  # Use 'latest' until CI builds staging tags (see beads issue)
-  tag: latest
+  repository: ghcr.io/otherjamesbrown/ai-aas/analytics-service
+  tag: staging
   pullPolicy: Always
 
 env:
@@ -41,6 +40,28 @@ autoscaling:
 
 ingress:
   enabled: true
+
+# Increase startup time for database connection to remote Linode Postgres
+livenessProbe:
+  path: /analytics/v1/status/healthz
+  initialDelaySeconds: 60
+  periodSeconds: 15
+  timeoutSeconds: 10
+  failureThreshold: 5
+
+readinessProbe:
+  path: /analytics/v1/status/readyz
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 10
+  failureThreshold: 5
+
+# Telemetry configuration
+otel:
+  enabled: true
+  collectorEndpoint: otel-collector.observability.svc.cluster.local:4317
+  protocol: grpc
+  insecure: true
 
 # Database configuration - reference staging secret
 database:

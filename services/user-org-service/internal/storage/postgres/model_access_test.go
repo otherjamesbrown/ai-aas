@@ -28,10 +28,12 @@ func TestModelAccessRepository(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create test user
-	user, err := store.CreateUser(ctx, org.ID, CreateUserParams{
-		Email:       "testuser@example.com",
-		DisplayName: "Test User",
-		Status:      "active",
+	user, err := store.CreateUser(ctx, CreateUserParams{
+		OrgID:        org.ID,
+		Email:        "testuser@example.com",
+		DisplayName:  "Test User",
+		PasswordHash: "test-hash",
+		Status:       "active",
 	})
 	require.NoError(t, err)
 
@@ -186,10 +188,12 @@ func TestModelAccessRepository(t *testing.T) {
 
 	t.Run("GetUserAccessMode_DefaultsToRestricted", func(t *testing.T) {
 		// Create new user without access mode set
-		newUser, err := store.CreateUser(ctx, org.ID, CreateUserParams{
-			Email:       "newuser@example.com",
-			DisplayName: "New User",
-			Status:      "active",
+		newUser, err := store.CreateUser(ctx, CreateUserParams{
+			OrgID:        org.ID,
+			Email:        "newuser@example.com",
+			DisplayName:  "New User",
+			PasswordHash: "test-hash",
+			Status:       "active",
 		})
 		require.NoError(t, err)
 
@@ -224,17 +228,21 @@ func TestModelAccessRepository_TenantIsolation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create users in each org
-	user1, err := store.CreateUser(ctx, org1.ID, CreateUserParams{
-		Email:       "user@org1.com",
-		DisplayName: "User Org1",
-		Status:      "active",
+	user1, err := store.CreateUser(ctx, CreateUserParams{
+		OrgID:        org1.ID,
+		Email:        "user@org1.com",
+		DisplayName:  "User Org1",
+		PasswordHash: "test-hash",
+		Status:       "active",
 	})
 	require.NoError(t, err)
 
-	user2, err := store.CreateUser(ctx, org2.ID, CreateUserParams{
-		Email:       "user@org2.com",
-		DisplayName: "User Org2",
-		Status:      "active",
+	user2, err := store.CreateUser(ctx, CreateUserParams{
+		OrgID:        org2.ID,
+		Email:        "user@org2.com",
+		DisplayName:  "User Org2",
+		PasswordHash: "test-hash",
+		Status:       "active",
 	})
 	require.NoError(t, err)
 

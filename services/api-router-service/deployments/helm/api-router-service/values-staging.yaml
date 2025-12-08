@@ -2,8 +2,7 @@
 replicaCount: 3
 
 image:
-  # Use 'latest' until CI builds staging tags (see beads issue)
-  tag: latest
+  tag: staging
 
 service:
   type: ClusterIP
@@ -14,14 +13,14 @@ ingress:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-staging
   hosts:
-    - host: router.api.ai-aas.dev
+    - host: api.staging.otherjamesbrown.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - secretName: api-router-service-tls
       hosts:
-        - router.api.ai-aas.dev
+        - api.staging.otherjamesbrown.com
 
 resources:
   limits:
@@ -47,12 +46,31 @@ env:
     value: staging
   - name: LOG_LEVEL
     value: info
+  - name: USER_ORG_SERVICE_URL
+    value: "http://user-org-service-staging-user-org-service.user-org-service.svc.cluster.local:8081"
+  - name: USER_ORG_SERVICE_TIMEOUT
+    value: "5s"
+
+# Increase startup time for connections to remote services
+livenessProbe:
+  path: /v1/status/healthz
+  initialDelaySeconds: 60
+  periodSeconds: 15
+  timeoutSeconds: 10
+  failureThreshold: 5
+
+readinessProbe:
+  path: /v1/status/readyz
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 10
+  failureThreshold: 5
 
 otel:
   enabled: true
-  collectorEndpoint: otel-collector.observability:4317
+  collectorEndpoint: otel-collector.observability.svc.cluster.local:4317
   protocol: grpc
-  insecure: false
+  insecure: true
 
 prometheus:
   enabled: true
