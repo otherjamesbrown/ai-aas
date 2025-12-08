@@ -1,0 +1,176 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: istio-base-staging
+  namespace: argocd
+  labels:
+    environment: staging
+    app: istio
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform-staging
+  source:
+    repoURL: https://istio-release.storage.googleapis.com/charts
+    targetRevision: 1.19.0
+    chart: base
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: istio-system
+  # Ignore differences in ValidatingWebhookConfiguration modified by istiod
+  ignoreDifferences:
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      name: istiod-default-validator
+      jsonPointers:
+        - /webhooks/0/clientConfig/caBundle
+        - /webhooks/0/failurePolicy
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: istiod-staging
+  namespace: argocd
+  labels:
+    environment: staging
+    app: istio
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform-staging
+  source:
+    repoURL: https://istio-release.storage.googleapis.com/charts
+    targetRevision: 1.19.0
+    chart: istiod
+    helm:
+      values: |
+        # Minimal profile for reduced overhead
+        pilot:
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 2Gi
+
+        # Enable telemetry and metrics
+        telemetry:
+          enabled: true
+          v2:
+            enabled: true
+
+        meshConfig:
+          accessLogFile: /dev/stdout
+          enableTracing: true
+          defaultConfig:
+            tracing:
+              sampling: 1.0
+
+        # Resource configuration
+        global:
+          proxy:
+            resources:
+              requests:
+                cpu: 50m
+                memory: 128Mi
+              limits:
+                cpu: 200m
+                memory: 256Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: istio-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: istio-ingressgateway-staging
+  namespace: argocd
+  labels:
+    environment: staging
+    app: istio
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform-staging
+  source:
+    repoURL: https://istio-release.storage.googleapis.com/charts
+    targetRevision: 1.19.0
+    chart: gateway
+    helm:
+      values: |
+        # Add standard label for knative-local-gateway compatibility
+        # The gateway chart uses release name for labels (istio-ingressgateway-staging)
+        # but knative-local-gateway expects istio=ingressgateway
+        labels:
+          istio: ingressgateway
+
+        service:
+          type: LoadBalancer
+          ports:
+            - name: http
+              port: 80
+              targetPort: 8080
+            - name: https
+              port: 443
+              targetPort: 8443
+            # Port 8081 for knative-local-gateway (internal cluster traffic)
+            - name: http-internal
+              port: 8081
+              targetPort: 8081
+
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: istio-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
