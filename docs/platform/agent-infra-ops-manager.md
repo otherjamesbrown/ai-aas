@@ -25,6 +25,7 @@ This document provides a map of all platform documentation to help the infra-ops
 | Document | Purpose | Use When |
 |----------|---------|----------|
 | [ci-cd-pipeline.md](ci-cd-pipeline.md) | GitHub Actions, ArgoCD, deployment flow | Understanding CI/CD, fixing pipelines |
+| [branching-workflow.md](branching-workflow.md) | Branching strategy and PR workflow | Understanding git workflow |
 | [argocd-testing-guide.md](argocd-testing-guide.md) | ArgoCD validation, health checks | Debugging ArgoCD sync issues |
 | [github-actions-guide.md](github-actions-guide.md) | Workflow patterns, troubleshooting | Fixing GitHub Actions issues |
 
@@ -41,6 +42,7 @@ This document provides a map of all platform documentation to help the infra-ops
 | Document | Purpose | Use When |
 |----------|---------|----------|
 | [observability-guide.md](observability-guide.md) | Prometheus, Grafana, Loki, logging | Monitoring issues, log queries |
+| [vllm-observability.md](vllm-observability.md) | vLLM specific metrics and dashboards | Debugging model inference performance |
 | [data-classification.md](data-classification.md) | Data retention, log redaction | Data handling policies |
 
 ### Specialized Topics
@@ -49,6 +51,8 @@ This document provides a map of all platform documentation to help the infra-ops
 |----------|---------|----------|
 | [istio-integration.md](istio-integration.md) | Istio service mesh, gateways, VirtualServices | Istio issues, ingress gateway, traffic routing |
 | [knative-configuration.md](knative-configuration.md) | Knative Serving setup, autoscaling, config | Knative issues, model serving, scaling |
+| [kserve-management.md](kserve-management.md) | KServe InferenceService management | Managing model deployments |
+| [vllm-best-practices.md](vllm-best-practices.md) | vLLM deployment optimization | Optimizing model inference |
 | [cache-salt-security.md](cache-salt-security.md) | Cache security for vLLM | Model caching security |
 | [ci-remote-cli.md](ci-remote-cli.md) | Remote CI dispatch | Triggering remote CI jobs |
 | [ui-pages.md](ui-pages.md) | Web portal pages, admin CLI | Understanding UI structure |
@@ -106,7 +110,7 @@ This document provides a map of all platform documentation to help the infra-ops
 ### Deploying a Service
 
 1. **Read deployment spec first**: `services/<name>/DEPLOYMENT.md`
-2. Check branch workflow: [ci-cd-pipeline.md](ci-cd-pipeline.md) or `docs/development/branching-workflow.md`
+2. Check branch workflow: [branching-workflow.md](branching-workflow.md)
 3. Find Helm chart: `services/<name>/deployments/helm/<name>/`
 4. Check ArgoCD app: `gitops/clusters/<env>/apps/<name>.yaml`
 5. Verify endpoint: [endpoints-and-urls.md](endpoints-and-urls.md)
