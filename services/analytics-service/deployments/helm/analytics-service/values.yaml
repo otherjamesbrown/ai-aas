@@ -143,6 +143,10 @@ database:
   url: ""
   urlSecretName: ""
 
+# Database migrations
+migrations:
+  enabled: true
+
 # Redis configuration for caching
 redis:
   url: ""

@@ -115,6 +115,10 @@ secrets:
   apiKeyHashSaltSecretName: admin-api-secrets
   apiKeyHashSaltSecretKey: api-key-hash-salt
 
+# Database migrations
+migrations:
+  enabled: true
+
 userOrgService:
   endpoint: "http://user-org-service-development-user-org-service.user-org-service.svc.cluster.local:8081"
 

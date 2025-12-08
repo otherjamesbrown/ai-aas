@@ -36,12 +36,27 @@ WORKDIR /app
 # Install runtime dependencies
 RUN apk add --no-cache ca-certificates tzdata wget
 
+# Install goose for migrations (installed as root before switching user)
+RUN apk --no-cache add go
+WORKDIR /tmp
+RUN go install github.com/pressly/goose/v3/cmd/goose@latest
+RUN cp /root/go/bin/goose /usr/local/bin/goose
+
 # Create non-root user
 RUN adduser -D -g '' appuser
-USER appuser
+
+WORKDIR /app
 
 # Copy binary from builder
 COPY --from=builder /admin-api /app/admin-api
+
+# Copy migrations directory for init container
+COPY db/migrations/operational /app/migrations/sql
+
+# Change ownership to appuser
+RUN chown -R appuser:appuser /app
+
+USER appuser
 
 # Expose port
 EXPOSE 8080
