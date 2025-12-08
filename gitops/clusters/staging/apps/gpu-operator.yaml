@@ -34,6 +34,15 @@ spec:
           enabled: true
         gfd:
           enabled: true
+        daemonsets:
+          tolerations:
+          - key: "nvidia.com/gpu"
+            operator: "Exists"
+            effect: "NoSchedule"
+          - key: "gpu-workload"
+            operator: "Equal"
+            value: "true"
+            effect: "NoSchedule"
         node-feature-discovery:
           worker:
             tolerations:
