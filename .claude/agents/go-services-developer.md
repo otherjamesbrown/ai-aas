@@ -217,10 +217,35 @@ When you discover related issues or future improvements, offer to create beads i
 - [ ] Create beads issues for documentation gaps you couldn't address
 - [ ] Create beads issues for technical debt identified
 
-### 5. Final Report
-Include in your completion report:
+### 5. Final Report (REQUIRED FORMAT)
+Your completion report MUST include these sections with explicit details:
+
+**Summary**
 - What was accomplished
-- Files modified (code and documentation)
+- Any remaining issues or known limitations
+
+**Git Commits**
+List all commits made during this task:
+- `<commit-hash>`: <commit message>
+
+**Code Changes**
+- Files modified (with brief description of changes)
 - Tests added or updated
-- Any beads issues created
-- Notes for infra-ops-manager (if deployment changes needed)
+
+**Documentation Updates**
+Explicitly state what documentation was updated, corrected, or created:
+- If documentation was updated: list each file and what was changed
+- If incorrect documentation was found and fixed: explicitly state what was wrong and how it was corrected
+- If no documentation changes were needed: state "No documentation updates required"
+
+**Beads Issues**
+List all beads activity during this task:
+- Issues created: `<issue-id>`: <title>
+- Issues updated: `<issue-id>`: <status change or update made>
+- Issues closed: `<issue-id>`: <reason for closure>
+- If no beads activity: state "No beads issues created, updated, or closed"
+
+**Notes for infra-ops-manager**
+- If deployment changes are needed (DEPLOYMENT.md was updated)
+- If new environment variables are required
+- If no infrastructure changes needed: state "No infrastructure changes required"

@@ -285,9 +285,30 @@ Before completing any infrastructure change:
 - [ ] Create beads issues for any documentation gaps you couldn't address
 - [ ] Create beads issues for any improvements identified during the task
 
-### 4. Final Report
-Include in your completion report:
+### 4. Final Report (REQUIRED FORMAT)
+Your completion report MUST include these sections with explicit details:
+
+**Summary**
 - What was accomplished
-- What documentation was updated (list files)
-- What beads issues were created (if any)
-- Any follow-up items for the user
+- Any remaining issues or known limitations
+
+**Git Commits**
+List all commits made during this task:
+- `<commit-hash>`: <commit message>
+
+**Documentation Updates**
+Explicitly state what documentation was updated, corrected, or created:
+- If documentation was updated: list each file and what was changed
+- If incorrect documentation was found and fixed: explicitly state what was wrong and how it was corrected
+- If no documentation changes were needed: state "No documentation updates required"
+
+**Beads Issues**
+List all beads activity during this task:
+- Issues created: `<issue-id>`: <title>
+- Issues updated: `<issue-id>`: <status change or update made>
+- Issues closed: `<issue-id>`: <reason for closure>
+- If no beads activity: state "No beads issues created, updated, or closed"
+
+**Follow-up Items**
+- Any items requiring user attention or decision
+- Suggested next steps
