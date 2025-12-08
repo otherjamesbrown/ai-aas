@@ -1,29 +1,93 @@
 # API Router Service
 
-The `api-router-service` is the main entry point for all API requests. It is responsible for routing, authentication, rate limiting, and more.
+Main API gateway for the AI-AAS platform.
 
-## Purpose
+## Overview
 
-This service provides the primary entrypoint for inference requests, routing them to appropriate model backends while enforcing authentication, budgets, quotas, and usage tracking.
+The API Router Service is the primary entry point for all inference requests. It handles:
+- Request routing to model backends
+- Authentication and authorization
+- Rate limiting
+- Budget enforcement
+- Usage tracking
 
-## Running the Service
-
-To run the service locally, you first need to start the local development environment:
+## Quick Start
 
 ```bash
+# Start local development environment
 make up
-```
 
-Then, you can run the service with the following command:
+# Run locally
+go run ./cmd/router
 
-```bash
-go run ./services/api-router-service/cmd/router
-```
+# Build
+go build -o router ./cmd/router
 
-## Running Tests
-
-To run the tests for this service, use the following command:
-
-```bash
+# Run tests
+go test ./...
 make test SERVICE=api-router-service
 ```
+
+## API Endpoints
+
+### Inference
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/v1/chat/completions` | OpenAI-compatible chat endpoint |
+| POST | `/v1/completions` | OpenAI-compatible completions endpoint |
+
+### Status
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/v1/status/healthz` | Liveness probe |
+| GET | `/v1/status/readyz` | Readiness probe |
+| GET | `/v1/models` | List available models |
+| GET | `/metrics` | Prometheus metrics |
+
+## Authentication
+
+Requests require an API key via:
+- Header: `Authorization: Bearer <api-key>`
+- Header: `X-API-Key: <api-key>`
+
+## Configuration
+
+Key environment variables:
+- `HTTP_PORT` - HTTP port (default: 8080)
+- `REDIS_ADDRESS` - Redis for rate limiting
+- `KAFKA_BROKERS` - Kafka for usage records
+- `CONFIG_SERVICE_ENDPOINT` - etcd for configuration
+- `BACKEND_ENDPOINTS` - Comma-separated backend URLs
+- `LOG_LEVEL` - Logging level (default: info)
+
+## Architecture
+
+```
+cmd/router/             # Entry point
+internal/
+├── handlers/           # HTTP handlers
+├── router/             # Request routing logic
+├── auth/               # Authentication
+├── ratelimit/          # Rate limiting
+├── budget/             # Budget enforcement
+└── middleware/         # HTTP middleware
+```
+
+## Request Flow
+
+1. Request arrives at `/v1/chat/completions`
+2. Authentication middleware validates API key
+3. Rate limiter checks request limits
+4. Budget service verifies spending limits
+5. Router selects backend based on model/policy
+6. Request forwarded to vLLM backend
+7. Response streamed back to client
+8. Usage record sent to Kafka
+
+## Related Documentation
+
+- [DEPLOYMENT.md](DEPLOYMENT.md) - Deployment requirements
+- [docs/go-services/api-patterns.md](../../docs/go-services/api-patterns.md) - API conventions
+- [docs/platform/routing-policies.md](../../docs/platform/routing-policies.md) - Routing configuration

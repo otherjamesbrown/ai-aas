@@ -95,6 +95,37 @@ Follow the three-branch promotion workflow:
 
 **NEVER reference feature branches in ArgoCD Applications.**
 
+## Service Deployment Specifications
+
+**CRITICAL**: Before deploying or updating a Go service, read its deployment specification:
+
+```
+services/<service-name>/DEPLOYMENT.md
+```
+
+This file is maintained by the go-services-developer agent and contains:
+- Health endpoint paths
+- Required environment variables
+- Resource requirements
+- Dependencies
+- Ports
+- Notes specific to that service
+
+**Available DEPLOYMENT.md files:**
+| Service | Location |
+|---------|----------|
+| admin-api-service | `services/admin-api-service/DEPLOYMENT.md` |
+| api-router-service | `services/api-router-service/DEPLOYMENT.md` |
+| analytics-service | `services/analytics-service/DEPLOYMENT.md` |
+| user-org-service | `services/user-org-service/DEPLOYMENT.md` |
+
+**When deploying a service:**
+1. Read the service's DEPLOYMENT.md first
+2. Use the health endpoints specified (don't assume /health or /ready)
+3. Configure all required environment variables
+4. Set resource limits as specified
+5. Ensure dependencies are available
+
 ## Service Creation Requirements
 
 When creating a new deployable service, you MUST include:
@@ -109,21 +140,29 @@ When creating a new deployable service, you MUST include:
 
 ### 2. ArgoCD Application at `gitops/clusters/<env>/apps/<service-name>.yaml`
 
-### 3. Health Probes (MANDATORY):
+### 3. Health Probes from DEPLOYMENT.md
+**Read the service's DEPLOYMENT.md to get the correct health endpoints.** Example:
 ```yaml
 livenessProbe:
   httpGet:
-    path: /health
+    path: /healthz  # Get from DEPLOYMENT.md
     port: http
   initialDelaySeconds: 10
   periodSeconds: 10
 readinessProbe:
   httpGet:
-    path: /ready
+    path: /readyz  # Get from DEPLOYMENT.md
     port: http
   initialDelaySeconds: 5
   periodSeconds: 5
 ```
+
+### 4. Request DEPLOYMENT.md if Missing
+If a service doesn't have a DEPLOYMENT.md, create a beads issue:
+```bash
+bd create "Create DEPLOYMENT.md for <service-name>" --type task --priority 1
+```
+Then ask the go-services-developer agent to create it.
 
 ## ArgoCD Application Template
 

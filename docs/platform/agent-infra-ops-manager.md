@@ -72,10 +72,13 @@ This document provides a map of all platform documentation to help the infra-ops
 
 | Information | Location |
 |-------------|----------|
+| **Service deployment specs** | `services/<name>/DEPLOYMENT.md` **(READ THIS FIRST!)** |
 | Service Helm charts | `services/<name>/deployments/helm/<name>/` |
 | Service values (dev) | `services/<name>/deployments/helm/<name>/values-development.yaml` |
 | Service values (staging) | `services/<name>/deployments/helm/<name>/values-staging.yaml` |
 | Web portal Helm | `web/portal/deployments/helm/web-portal/` |
+
+**IMPORTANT**: The `DEPLOYMENT.md` file is maintained by the go-services-developer agent and contains the deployment contract: health endpoints, env vars, dependencies, resources, and ports.
 
 ### GitHub Actions
 
@@ -99,17 +102,19 @@ This document provides a map of all platform documentation to help the infra-ops
 
 ### Deploying a Service
 
-1. Check branch workflow: [ci-cd-pipeline.md](ci-cd-pipeline.md) or `docs/development/branching-workflow.md`
-2. Find Helm chart: `services/<name>/deployments/helm/<name>/`
-3. Check ArgoCD app: `gitops/clusters/<env>/apps/<name>.yaml`
-4. Verify endpoint: [endpoints-and-urls.md](endpoints-and-urls.md)
+1. **Read deployment spec first**: `services/<name>/DEPLOYMENT.md`
+2. Check branch workflow: [ci-cd-pipeline.md](ci-cd-pipeline.md) or `docs/development/branching-workflow.md`
+3. Find Helm chart: `services/<name>/deployments/helm/<name>/`
+4. Check ArgoCD app: `gitops/clusters/<env>/apps/<name>.yaml`
+5. Verify endpoint: [endpoints-and-urls.md](endpoints-and-urls.md)
 
 ### Debugging Pod Issues
 
 1. Get cluster access: [environment-access.md](environment-access.md)
-2. Check service config: `services/<name>/deployments/helm/<name>/values-<env>.yaml`
-3. View logs: [observability-guide.md](observability-guide.md)
-4. Check health endpoints: [endpoints-and-urls.md](endpoints-and-urls.md)
+2. **Check deployment spec**: `services/<name>/DEPLOYMENT.md` (for health endpoints, env vars)
+3. Check service config: `services/<name>/deployments/helm/<name>/values-<env>.yaml`
+4. View logs: [observability-guide.md](observability-guide.md)
+5. Check health endpoints: [endpoints-and-urls.md](endpoints-and-urls.md)
 
 ### Fixing ArgoCD Sync
 
