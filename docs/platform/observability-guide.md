@@ -1,8 +1,9 @@
-# Infrastructure Observability Guide
+# Observability Guide
 
-**Feature**: `001-infrastructure`  
-**Last Updated**: 2025-11-08  
-**Owner**: Platform Engineering
+---
+last_updated: 2025-12-08
+document_type: guide
+---
 
 ## Stack Components
 
@@ -137,11 +138,14 @@ Alert definitions codified in `infra/helm/charts/observability-stack/templates/a
 
 ## Onboarding Checklist
 
-- [ ] Grafana user added to `platform-observers` team.  
-- [ ] Access package includes dashboard URLs (`observability-links.json`).  
-- [ ] Alert routing documented in PagerDuty service directory.  
-- [ ] Synthetic monitors configured in Checkly (HTTP uptime per environment).  
-- [ ] Observability section in `specs/001-infrastructure/quickstart.md` reviewed.
+- [ ] Grafana user added to `platform-observers` team
+- [ ] Access package includes dashboard URLs
+- [ ] Alert routing documented in PagerDuty service directory
+- [ ] Synthetic monitors configured (HTTP uptime per environment)
 
-Update this guide whenever alert thresholds, dashboards, or tooling change.
+## Related Documentation
+
+- [Environment Access](environment-access.md) - Grafana/Loki URLs and credentials
+- [Endpoints and URLs](endpoints-and-urls.md) - All service endpoints
+- [Infrastructure Overview](infrastructure-overview.md) - Architecture context
 

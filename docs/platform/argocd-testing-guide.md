@@ -1,7 +1,9 @@
-# ArgoCD Testing Guide for Beginners
+# ArgoCD Testing Guide
 
-**Last Updated**: 2025-11-16  
-**Audience**: Beginners to ArgoCD
+---
+last_updated: 2025-12-08
+document_type: guide
+---
 
 ## Quick Answer
 
@@ -374,6 +376,31 @@ readinessProbe:
 3. ✅ **Health checks** ensure pods/services are running correctly
 4. ✅ **Sync monitoring** ensures cluster matches Git state
 5. ✅ **Pre-sync hooks** can validate deployment, but shouldn't replace CI tests
+
+## Known Issues & Workarounds
+
+### GPU Operator: nvidia-container-toolkit CrashLoopBackOff
+
+**Issue**: nvidia-container-toolkit pods fail with "unsupported config version: 3" error on nodes running containerd 2.1.5+
+
+**Root Cause**: nvidia-container-toolkit v1.17.x (included in GPU operator v24.9.0 and earlier) does not properly support containerd 2.x which uses config version 2/3
+
+**Solution**: Upgrade to GPU operator v25.10.1 or later, which includes nvidia-container-toolkit v1.18.1+ with proper containerd 2.x support
+
+**Fixed in**: ai-aas-9yl (2025-12-08)
+
+```bash
+# Verify the fix
+kubectl get clusterpolicy cluster-policy -o jsonpath='{.spec.toolkit.version}'
+# Should show: v1.18.1 or later
+
+kubectl get pods -n gpu-operator | grep nvidia-container-toolkit
+# Should show: Running status
+```
+
+**References**:
+- [NVIDIA Container Toolkit Issue #803](https://github.com/NVIDIA/nvidia-container-toolkit/issues/803)
+- [GPU Operator Release Notes](https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/release-notes.html)
 
 ## Next Steps
 

@@ -1,113 +1,139 @@
 # Infrastructure Architecture Overview
 
-**Feature**: `001-infrastructure`  
-**Last Updated**: 2025-11-08  
-**Owner**: Platform Engineering
+---
+last_updated: 2025-12-08
+document_type: overview
+---
 
 ## High-Level Architecture
 
-- **Provider**: Akamai Linode Kubernetes Engine (LKE) in `fr-par` (configurable via `default_region` / `region_overrides` in Terraform).
-- **Environments**: `development`, `staging`, `production`, `system` share a single control plane with dedicated namespaces and resource quotas.
-- **Node Pools**:
-  - Baseline: `g6-standard-8` (3–6 nodes per environment, autoscaling to 10).
-  - GPU (system): `g1-gpu-rtx6000` (2 nodes) reserved for vLLM workloads.
-- **Networking**:
-  - Calico NetworkPolicies implement default-deny stance.
-  - Ingress via NGINX Ingress Controller + cert-manager (Let's Encrypt for production).
-  - Self-signed certificates for local development (see `infra/secrets/certs/README.md`).
-  - External DNS records served through Linode DNS (production) or local hosts file (development).
-- **GitOps**:
-  - Terraform provisions clusters, networking, secrets scaffolding.
-  - ArgoCD reconciles Helm charts (`infra/helm/charts/*`), including observability, ingress, and sample service.
+- **Provider**: Akamai Linode Kubernetes Engine (LKE) in `fr-par` region
+- **Environments**: `development`, `staging`, `production` (separate clusters)
+- **GitOps**: ArgoCD reconciles Helm charts from this repository
+
+## Directory Structure
+
+```
+infra/
+├── terraform/
+│   └── environments/
+│       ├── _shared/          # Shared Terraform modules
+│       ├── development/      # Development cluster config
+│       ├── staging/          # Staging cluster config
+│       ├── production/       # Production cluster config
+│       └── system/           # Shared system components
+├── secrets/
+│   ├── certs/               # Self-signed certificates for local dev
+│   └── README.md
+└── helm/
+    └── charts/              # Shared Helm charts (ingress configs)
+
+gitops/
+└── clusters/
+    ├── development/         # ArgoCD apps for development
+    │   ├── apps/            # Application definitions
+    │   └── projects/        # AppProject definitions
+    ├── staging/             # ArgoCD apps for staging
+    │   ├── apps/
+    │   └── projects/
+    └── production/          # ArgoCD apps for production
+        ├── apps/
+        └── projects/
+
+services/
+├── admin-api-service/       # Admin API
+├── admin-cli/               # Admin CLI tool
+├── ai-aas-cli/              # Platform CLI
+├── analytics-service/       # Analytics
+├── api-router-service/      # API routing/gateway
+├── user-org-service/        # User & org management
+└── _template/               # Service template
+```
+
+## Node Pools
+
+| Pool Type | Instance Type | Purpose |
+|-----------|--------------|---------|
+| Baseline | `g6-standard-8` | General workloads |
+| GPU | `g1-gpu-rtx6000` | vLLM/ML workloads |
+
+Node pool configuration is in Terraform: `infra/terraform/environments/<env>/`
+
+## Networking
+
+- **Ingress**: NGINX Ingress Controller + cert-manager
+- **TLS**: Let's Encrypt (production), self-signed (development)
+- **Network Policies**: Calico with default-deny stance
+- **DNS**:
+  - Production: Linode DNS
+  - Development: Local hosts file (`.ai-aas.local` domains)
 
 ## Change Management Flow
 
-1. **Plan**: Contributor opens PR modifying `infra/terraform` or `infra/helm`.
-2. **Validation**: GitHub Actions runs `terraform fmt/validate/plan`, `tflint`, `tfsec`, Terratest, and Helm lint.
-3. **Approval**: Production changes require two approvals plus environment protection.
+1. **PR**: Modify files in `infra/terraform/`, `gitops/`, or `services/*/deployments/helm/`
+2. **Validation**: GitHub Actions runs lint, validate, plan
+3. **Approval**: Required for production changes
 4. **Apply**:
-   - Terraform: `make -C infra/terraform apply ENV=<env>` executed by GitHub Actions with OIDC.
-   - ArgoCD: Syncs Git changes automatically (production gated via manual `argocd app sync`).
-5. **Verification**: Automated smoke tests deploy sample service and confirm metrics/alerts.
-6. **Audit**: Every change emits audit events to Loki (`infra_change_applied`) and posts summary to `#platform-infra`.
+   - **Terraform**: `make -C infra/terraform apply ENV=<env>`
+   - **ArgoCD**: Auto-sync (dev/staging) or manual sync (production)
+5. **Verification**: Health checks validate deployment
 
 ## Secrets & Access
 
-- Linode Secret Manager is source-of-truth. Secret bundles defined under `infra/secrets/bundles/*.yaml`.
-- Sealed Secrets controller encrypts bundle payloads; ArgoCD applies manifests per environment.
-- Access packages described in `specs/001-infrastructure/contracts/environment-access.md`. Packages expire within 24 hours and require Slack request logged in `#platform-access`.
+- **Sealed Secrets**: Encrypts secrets for GitOps
+- **Certificate Storage**: `infra/secrets/certs/`
+- **Access Setup**: See [Environment Access](environment-access.md)
 
 ## Observability Stack
 
-- **Prometheus/Grafana**: `kube-prometheus-stack` with environment-tagged dashboards.
-- **Logs**: Loki with tenant per environment; Tempo enabled for tracing (optional by environment).
-- **Alert Routing**: Alertmanager routes to Slack (`#platform-infra` primary, `#platform-pager` on-call).
-- **Dashboards**: Overview dashboards named `<env>-overview`, stored under Grafana UID `env-<env>`.
+| Component | Purpose | Namespace |
+|-----------|---------|-----------|
+| Prometheus | Metrics collection | `observability` |
+| Grafana | Dashboards | `observability` |
+| Loki | Log aggregation | `observability` |
+| Alertmanager | Alert routing | `observability` |
 
-## Sample Service Validation
+Configuration: `gitops/clusters/<env>/apps/` (kube-prometheus-stack, loki applications)
 
-- Helm chart: `infra/helm/charts/sample-service`.
-- Validates ingress, secrets mount, metrics emission, and alert pipeline.
-- Terratest pipeline asserts:
-  - Deployment becomes `Available` within 5 minutes.
-  - `/healthz` endpoint returns 200.
-  - Prometheus scrape discovers `sample_service_up` metric.
-
-## Compliance & Auditing
-
-- Terraform state stored in Linode Object Storage bucket `ai-aas` (path `terraform/environments/<env>/terraform.tfstate`). Export `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` from the `.env` entries (`LINODE_OBJECT_STORAGE_ACCESS_KEY`, `LINODE_OBJECT_STORAGE_SECRET_KEY`) before running Terraform so the backend is accessible.
-- Drift detection job (`scripts/infra/drift-detect.sh`) runs hourly; severity `major` opens incident automatically.
-- ArgoCD application events forward to Loki (label `argo_app`).
-- Quarterly controls: secrets rotation check, rollback drill (SC-007), alert simulation.
+See [Observability Guide](observability-guide.md) for details.
 
 ## TLS/SSL Certificates
 
-### Production
-- **Let's Encrypt**: Automatic certificate issuance and renewal via cert-manager
-- **DNS**: Public DNS records required for Let's Encrypt validation
-- **Ingress**: NGINX Ingress Controller with TLS termination
+| Environment | Method | Details |
+|-------------|--------|---------|
+| Production | Let's Encrypt | Automatic via cert-manager |
+| Development | Self-signed | See `infra/secrets/certs/` |
 
-### Local Development
-- **Self-Signed Certificates**: CA and TLS certificates in `infra/secrets/certs/`
-- **Local DNS**: Hosts file entries for `.ai-aas.local` domains
-- **Firewall-Restricted**: Access limited to authorized machines (no VPN required)
-- **Setup**: See `infra/secrets/certs/README.md` for certificate generation and trust instructions
+Setup instructions: [TLS/SSL Setup](tls-ssl-setup.md)
 
-## Dependencies
+## Terraform State
 
-- `docs/platform/linode-access.md`: Token creation and CLI setup.
-- `docs/platform/access-control.md`: Detailed RBAC and package issuance procedures.
-- `docs/platform/observability-guide.md`: Dashboard conventions, alert tuning.
-- `docs/platform/endpoints-and-urls.md`: Complete endpoint and URL configuration guide.
-- `docs/platform/tls-ssl-setup.md`: TLS/SSL certificate setup and management.
-- `docs/runbooks/infrastructure-rollback.md`: Step-by-step rollback instructions.
-- `docs/runbooks/infrastructure-troubleshooting.md`: Issue resolution catalog.
-- `infra/secrets/certs/README.md`: Self-signed certificate setup and management.
+State is stored in Linode Object Storage:
+- Bucket: `ai-aas`
+- Path: `terraform/environments/<env>/terraform.tfstate`
 
-Keep this document updated alongside infrastructure changes to ensure context for downstream specs (`005-user-org-service`, `010-vllm-deployment`, `011-observability`).
+Generated artifacts are written to: `infra/terraform/environments/<env>/.generated/`
 
-## Capacity Validation
+## Related Documentation
 
-- Terraform module `infra/terraform/modules/lke-cluster/quotas.tf` defines per-environment quotas supporting 30 services.  
-- Performance harness `tests/infra/perf/capacity_test.go` deploys placeholder workloads to verify scheduling and HPA thresholds.  
-- Record results and tuning notes in this guide after each significant scaling event.
+### Platform Docs
+- [Environment Access](environment-access.md) - Credentials and access setup
+- [Endpoints and URLs](endpoints-and-urls.md) - Service endpoints
+- [TLS/SSL Setup](tls-ssl-setup.md) - Certificate management
+- [Observability Guide](observability-guide.md) - Monitoring and logging
+- [CI/CD Pipeline](ci-cd-pipeline.md) - Deployment workflow
 
-## Cluster Inventory
+### Runbooks
+- [Linode Setup](../runbooks/linode-setup.md) - Linode CLI and token setup
+- [Infrastructure Rollback](../runbooks/infrastructure-rollback.md) - Rollback procedures
+- [Infrastructure Troubleshooting](../runbooks/infrastructure-troubleshooting.md) - Issue resolution
 
-- **Development**: LKE cluster `531921`, kubeconfig context `lke531921-ctx`. GitHub secrets: `DEV_KUBECONFIG_B64`, `DEV_KUBE_CONTEXT`.
-- **Production**: LKE cluster `531922`, kubeconfig context `lke531922-ctx`. GitHub secrets: `PROD_KUBECONFIG_B64`, `PROD_KUBE_CONTEXT`.
-- **Staging/System**: Defined in Terraform for future rollout; keep configuration in sync but defer `terraform apply` until post-launch objectives require additional environments.
-- Kubeconfigs are stored in 1Password and replicated into GitHub Actions secrets for automation (availability probes, scripted applies).
+### Source of Truth Locations
 
-## Generated Artifacts
-
-- Terraform renders manifests into `infra/generated/<environment>/` for GitOps promotion.
-- Running Terraform per environment writes manifests and values into `infra/terraform/environments/<env>/.generated/`:
-  - Network policies and firewall specs (`network/`).
-  - Sealed secrets bootstrap manifests (`secrets/`).
-  - Observability values overlays (`observability/`).
-  - ArgoCD ApplicationSet manifests (`argo/`).
-- Copy the contents into `infra/generated/<environment>/` (already committed) and promote those files into the GitOps repository that ArgoCD watches.
-
-
-
+| Information | Location |
+|-------------|----------|
+| Cluster configuration | `infra/terraform/environments/<env>/` |
+| ArgoCD applications | `gitops/clusters/<env>/apps/` |
+| Service Helm charts | `services/<name>/deployments/helm/<name>/` |
+| Shared Helm charts | `infra/helm/charts/` |
+| Self-signed certs | `infra/secrets/certs/` |

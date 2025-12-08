@@ -1,0 +1,10 @@
+2025/11/11 09:41:31 telemetry disabled: OTEL_EXPORTER_OTLP_ENDPOINT not set
+2025/11/11 09:41:31 migration_start component=analytics direction=up version= dry_run=false
+2025/11/11 09:41:31 migration_pre_checks component=analytics direction=up version= dry_run=false
+2025/11/11 09:41:31 [WARN] long-running query detected: pid=101 state=active age=15h26m31s query=<insufficient privilege>
+2025/11/11 09:41:31 pre_check_rowcount table=usage_events count=3
+2025/11/11 09:41:32 migration_applied component=analytics version=20251116001 slug=rollups
+2025/11/11 09:41:32 migration_post_checks component=analytics direction=up version= dry_run=false duration_ms=889
+2025/11/11 09:41:32 post_check_rowcount table=usage_events count=3 delta=0
+2025/11/11 09:41:33 audit_log recorded component=analytics direction=up version= actor=jabrown
+2025/11/11 09:41:33 migration_finish component=analytics direction=up version= dry_run=false status=success duration_ms=889

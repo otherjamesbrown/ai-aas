@@ -2,7 +2,7 @@
 replicaCount: 3
 
 image:
-  tag: latest  # TODO: Use staging tag once CI builds it
+  tag: staging
 
 service:
   type: ClusterIP
@@ -13,14 +13,14 @@ ingress:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-staging
   hosts:
-    - host: router.api.ai-aas.dev
+    - host: api.staging.otherjamesbrown.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - secretName: api-router-service-tls
       hosts:
-        - router.api.ai-aas.dev
+        - api.staging.otherjamesbrown.com
 
 resources:
   limits:
@@ -46,12 +46,31 @@ env:
     value: staging
   - name: LOG_LEVEL
     value: info
+  - name: USER_ORG_SERVICE_URL
+    value: "http://user-org-service-staging-user-org-service.user-org-service.svc.cluster.local:8081"
+  - name: USER_ORG_SERVICE_TIMEOUT
+    value: "5s"
+
+# Increase startup time for connections to remote services
+livenessProbe:
+  path: /v1/status/healthz
+  initialDelaySeconds: 60
+  periodSeconds: 15
+  timeoutSeconds: 10
+  failureThreshold: 5
+
+readinessProbe:
+  path: /v1/status/readyz
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 10
+  failureThreshold: 5
 
 otel:
   enabled: true
-  collectorEndpoint: otel-collector.observability:4317
+  collectorEndpoint: otel-collector.observability.svc.cluster.local:4317
   protocol: grpc
-  insecure: false
+  insecure: true
 
 prometheus:
   enabled: true
@@ -59,21 +78,27 @@ prometheus:
   path: /metrics
 
 redis:
-  address: redis-staging:6379
+  address: redis-master.staging.svc.cluster.local:6379
   passwordSecretName: redis-staging-secret
 
+# Kafka disabled for staging (not deployed yet)
 kafka:
-  brokers: kafka-staging:9092
+  brokers: ""
   topic: usage.records.v1
   auditTopic: audit.router
-  brokersSecretName: kafka-staging-secret
 
 configService:
-  endpoint: etcd-staging:2379
+  endpoint: etcd-service.staging.svc.cluster.local:2379
   watchEnabled: true
   cachePath: /tmp/api-router-config.db
 
+# Budget service disabled for staging
 budget:
-  endpoint: budget-service-staging:8080
+  endpoint: ""
   timeout: 2s
+
+# Use Admin API for routing config instead of etcd in staging
+adminApi:
+  endpoint: http://admin-api-service-staging.admin-api-service.svc.cluster.local:8080
+  syncInterval: 30s
 

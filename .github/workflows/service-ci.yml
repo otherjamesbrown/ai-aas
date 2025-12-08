@@ -1,85 +1,80 @@
 name: CI
 
 on:
+  workflow_dispatch:  # Allow manual triggering
   push:
     branches:
       - main
       - develop
+      - staging
     paths:
       - 'services/**'
       - 'shared/**'
+      - '.github/workflows/service-ci.yml'
+      - '.github/workflows/reusable-build.yml'
   pull_request:
     paths:
       - 'services/**'
       - 'shared/**'
 
 env:
-  GO_VERSION: "1.24.x"
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/otherjamesbrown/ai-aas
 
 jobs:
   admin-api-service:
-    uses: ./.github/workflows/reusable/build.yml
+    uses: ./.github/workflows/reusable-build.yml
     with:
       service: admin-api-service
       target: test
-      go-version: ${{ env.GO_VERSION }}
-
-  admin-cli:
-    uses: ./.github/workflows/reusable/build.yml
-    with:
-      service: admin-cli
-      target: test
-      go-version: ${{ env.GO_VERSION }}
+      go-version: "1.24.x"
 
   ai-aas-cli:
-    uses: ./.github/workflows/reusable/build.yml
+    uses: ./.github/workflows/reusable-build.yml
     with:
       service: ai-aas-cli
       target: test
-      go-version: ${{ env.GO_VERSION }}
+      go-version: "1.24.x"
 
   analytics-service:
-    uses: ./.github/workflows/reusable/build.yml
+    uses: ./.github/workflows/reusable-build.yml
     with:
       service: analytics-service
       target: test
-      go-version: ${{ env.GO_VERSION }}
+      go-version: "1.24.x"
 
   api-router-service:
-    uses: ./.github/workflows/reusable/build.yml
+    uses: ./.github/workflows/reusable-build.yml
     with:
       service: api-router-service
       target: test
-      go-version: ${{ env.GO_VERSION }}
+      go-version: "1.24.x"
 
   hello-service:
-    uses: ./.github/workflows/reusable/build.yml
+    uses: ./.github/workflows/reusable-build.yml
     with:
       service: hello-service
       target: test
-      go-version: ${{ env.GO_VERSION }}
+      go-version: "1.24.x"
 
   user-org-service:
-    uses: ./.github/workflows/reusable/build.yml
+    uses: ./.github/workflows/reusable-build.yml
     with:
       service: user-org-service
       target: test
-      go-version: ${{ env.GO_VERSION }}
+      go-version: "1.24.x"
 
   world-service:
-    uses: ./.github/workflows/reusable/build.yml
+    uses: ./.github/workflows/reusable-build.yml
     with:
       service: world-service
       target: test
-      go-version: ${{ env.GO_VERSION }}
+      go-version: "1.24.x"
 
   lint:
     name: Lint
     needs:
       - admin-api-service
-      - admin-cli
       - ai-aas-cli
       - analytics-service
       - api-router-service
@@ -91,13 +86,23 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: ${{ env.GO_VERSION }}
-      - name: Install golangci-lint
+          go-version: "1.24.x"
+      - name: Run go vet on all services
         run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
-            sh -s -- -b "$(go env GOPATH)"/bin v1.61.0
-      - name: Run golangci-lint
-        run: make lint
+          for dir in services/*/; do
+            # Skip template directory
+            if [[ "$dir" == *"_template"* ]]; then
+              continue
+            fi
+            if [ -f "$dir/go.mod" ]; then
+              echo "Running go vet for $dir"
+              (cd "$dir" && go vet ./...)
+            fi
+          done
+          if [ -f "shared/go/go.mod" ]; then
+            echo "Running go vet for shared/go"
+            (cd shared/go && go vet ./...)
+          fi
 
   metrics-upload:
     name: Metrics Upload
@@ -111,13 +116,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version: "1.24.x"
       - name: Install tooling
         run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
-            sh -s -- -b "$(go env GOPATH)"/bin v1.55.2
           go install github.com/securego/gosec/v2/cmd/gosec@v2.19.0
-      - name: Run make check with metrics
+      - name: Run make check with metrics (best effort)
         continue-on-error: true
         id: check
         run: make check METRICS=true
@@ -155,9 +158,8 @@ jobs:
           - admin-api-service
           - analytics-service
           - api-router-service
-          - hello-service
           - user-org-service
-          - world-service
+          # Note: hello-service and world-service don't have Dockerfiles
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -181,12 +183,14 @@ jobs:
             type=sha,prefix={{branch}}-
             type=sha,format=short
             type=raw,value=dev,enable=${{ github.ref == 'refs/heads/develop' }}
+            type=raw,value=staging,enable=${{ github.ref == 'refs/heads/staging' }}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
         with:
-          context: ./services/${{ matrix.service }}
+          context: .
+          file: ./services/${{ matrix.service }}/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

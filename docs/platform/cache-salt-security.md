@@ -1,6 +1,11 @@
-# Comprehensive Summary: The Use of the `cache_salt` Parameter
+# Cache Salt Security
 
-This document provides a comprehensive summary of the `cache_salt` parameter, explaining its function as a critical security feature designed to overcome the prompt leakage vulnerability inherent in caching systems used by stateless LLMs during inference.
+---
+last_updated: 2025-12-08
+document_type: guide
+---
+
+This document explains the `cache_salt` parameter - a security feature designed to prevent prompt leakage in LLM caching systems.
 
 ## 1. The Fundamental Problem: Statelessness and the Prefill Bottleneck
 
@@ -81,7 +86,7 @@ The `cache_salt` parameter operates within the **Hot Layer** of a multi-tiered m
 
 ## 6. Implementation in AI-AAS Platform
 
-In the AI-AAS platform, `cache_salt` is configured and validated through the load testing harness (see `specs/014-load-testing-harness/spec.md`). The platform supports:
+In the AI-AAS platform, `cache_salt` is configured and validated through the load testing harness. The platform supports:
 
 *   **Organization-level isolation**: Using `org_id` as the cache salt value, allowing cache sharing within an organization while maintaining isolation between organizations.
 
@@ -125,9 +130,8 @@ The `cache_salt` is passed via the `extra_body` parameter in API requests to the
 
 *   **Validation**: The platform includes validation mechanisms to detect and report any cache salt isolation violations, ensuring the security mechanism is functioning correctly.
 
-## References
+## Related Documentation
 
-*   [Load Testing Harness Specification](../specs/014-load-testing-harness/spec.md) - Cache salt configuration and testing
-*   [vLLM Documentation](https://docs.vllm.ai/) - vLLM Automatic Prefix Caching
-*   [API Router vLLM Integration](../API_ROUTER_VLLM_INTEGRATION.md) - Platform integration details
+- [API Router vLLM Integration](../API_ROUTER_VLLM_INTEGRATION.md) - Platform integration details
+- [vLLM Documentation](https://docs.vllm.ai/) - vLLM Automatic Prefix Caching
 
