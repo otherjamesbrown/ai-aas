@@ -24,7 +24,6 @@ spec:
           version: "550.127.05"
         toolkit:
           enabled: true
-          version: v1.18.1-ubuntu20.04
         devicePlugin:
           enabled: true
         dcgmExporter:
