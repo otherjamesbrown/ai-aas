@@ -1,7 +1,9 @@
-# ArgoCD Testing Guide for Beginners
+# ArgoCD Testing Guide
 
-**Last Updated**: 2025-11-16  
-**Audience**: Beginners to ArgoCD
+---
+last_updated: 2025-12-08
+document_type: guide
+---
 
 ## Quick Answer
 

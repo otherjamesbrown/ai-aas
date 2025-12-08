@@ -1,5 +1,10 @@
 # Environment Access Guide
 
+---
+last_updated: 2025-12-08
+document_type: reference
+---
+
 This document provides quick access information for all environments and services in the AI-AAS platform.
 
 ## Important Note on Credentials
@@ -243,11 +248,11 @@ psql -h ${DATABASE_HOST} -p ${DATABASE_PORT} -U ${DATABASE_USER} -d ${DATABASE_N
 - Use OAuth for user authentication
 - Master admin credentials are for emergency access only
 
-## References
+## Related Documentation
 
-- GitOps Workflow: `docs/runbooks/argocd-deployment-workflow.md`
-- Database Setup: `docs/runbooks/migrations.md`
-- Infrastructure: `docs/platform/infrastructure-overview.md`
-- Service Deployment: `docs/runbooks/deploy-to-environments.md`
-- Debugging with Logs: `docs/ai-assistant/debugging-with-logs.md`
-- Observability Overview: `docs/platform/observability.md`
+- [Infrastructure Overview](infrastructure-overview.md) - Architecture and directory structure
+- [Endpoints and URLs](endpoints-and-urls.md) - All service endpoints
+- [Observability Guide](observability-guide.md) - Monitoring, logging, dashboards
+- [ArgoCD Deployment Workflow](../runbooks/argocd-deployment-workflow.md) - Deployment procedures
+- [Database Migrations](../runbooks/migrations.md) - Database setup
+- [Deploy to Environments](../runbooks/deploy-to-environments.md) - Environment deployments

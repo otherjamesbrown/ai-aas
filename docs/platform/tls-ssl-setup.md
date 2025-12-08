@@ -1,8 +1,9 @@
 # TLS/SSL Certificate Setup Guide
 
-**Feature**: `013-ingress-tls`  
-**Last Updated**: 2025-11-16  
-**Owner**: Platform Engineering
+---
+last_updated: 2025-12-08
+document_type: guide
+---
 
 ## Overview
 
@@ -168,8 +169,8 @@ sudo ./scripts/infra/update-hosts-file.sh
 
 ## Related Documentation
 
-- `infra/secrets/certs/README.md` - Detailed certificate management
-- `docs/platform/endpoints-and-urls.md` - Complete endpoint configuration guide
-- `tmp_md/KUBECONFIG_SETUP_SIMPLE.md` - Kubeconfig setup
-- `specs/013-ingress-tls/spec.md` - Ingress TLS specification
+- [Endpoints and URLs](endpoints-and-urls.md) - Complete endpoint configuration
+- [Environment Access](environment-access.md) - Kubeconfig and credentials
+- [Certificate Architecture](certificate-architecture.md) - Certificate design details
+- Certificate files: `infra/secrets/certs/`
 

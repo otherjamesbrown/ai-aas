@@ -1,7 +1,9 @@
-# Data Classification & Retention for Development Environments
+# Data Classification & Retention
 
-**Last Updated**: 2025-01-20  
-**Applies To**: Local and remote development workspaces
+---
+last_updated: 2025-12-08
+document_type: guide
+---
 
 ## Overview
 
@@ -250,19 +252,12 @@ This document defines data classification levels and retention policies for arti
 - Secrets detected in logs (pattern matching)
 - Audit log failures
 
-## References
+## Related Documentation
 
-- `configs/log-redaction.yaml` - Log redaction patterns
-- `scripts/dev/vector-agent.toml` - Vector agent configuration
-- `specs/002-local-dev-environment/` - Development environment specification
-- `specs/011-observability/` - Observability and logging specification
+- [Observability Guide](observability-guide.md) - Monitoring and logging
+- [Environment Access](environment-access.md) - Credentials and access
 
-## Updates
+---
 
-This policy is reviewed and updated as needed. Last update: 2025-01-20
-
-Changes:
-- Initial version: Defines classification levels and retention for dev environments
-- Integrates with remote workspace TTL enforcement
-- Aligns with observability stack requirements
+*Last updated: 2025-12-08*
 
