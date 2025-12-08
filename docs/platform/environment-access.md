@@ -62,7 +62,7 @@ git-crypt unlock
   ```bash
   # Configure CLI for an environment
   ai-aas-cli profile create dev \
-    --admin-api-url=https://admin-api.dev.otherjamesbrown.com \
+    --admin-api-endpoint=https://admin-api.dev.otherjamesbrown.com \
     --api-key=$(grep MASTER_ADMIN_API_KEY secrets/env/.env | cut -d'=' -f2)
   ai-aas-cli profile use dev
   ```
