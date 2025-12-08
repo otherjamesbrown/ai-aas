@@ -50,6 +50,7 @@ This document provides a map of all platform documentation to help the infra-ops
 | [cache-salt-security.md](cache-salt-security.md) | Cache security for vLLM | Model caching security |
 | [ci-remote-cli.md](ci-remote-cli.md) | Remote CI dispatch | Triggering remote CI jobs |
 | [ui-pages.md](ui-pages.md) | Web portal pages, admin CLI | Understanding UI structure |
+| [new-environment-checklist.md](new-environment-checklist.md) | Comprehensive verification checklist | Setting up or auditing environments |
 
 ### Meta Documentation
 
@@ -134,6 +135,13 @@ This document provides a map of all platform documentation to help the infra-ops
 1. Find workflow: `.github/workflows/`
 2. Understand patterns: [github-actions-guide.md](github-actions-guide.md)
 3. Check branch rules: [ci-cd-pipeline.md](ci-cd-pipeline.md)
+
+### Provisioning or Auditing an Environment
+
+1. Follow comprehensive checklist: [new-environment-checklist.md](new-environment-checklist.md)
+2. Run provisioning script: `scripts/infra/provision-environment.sh <environment>`
+3. Verify all components: Use verification commands from checklist
+4. Check ArgoCD sync status: `kubectl get applications -n argocd`
 
 ## Environment Quick Reference
 

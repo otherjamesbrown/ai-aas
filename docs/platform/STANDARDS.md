@@ -133,3 +133,4 @@ Before committing documentation changes:
 | TLS/certificates | [tls-ssl-setup.md](tls-ssl-setup.md), [certificate-architecture.md](certificate-architecture.md) |
 | Observability | [observability-guide.md](observability-guide.md) |
 | GitHub Actions | [github-actions-guide.md](github-actions-guide.md) |
+| Provisioning/auditing environments | [new-environment-checklist.md](new-environment-checklist.md) |
