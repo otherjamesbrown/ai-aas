@@ -56,15 +56,17 @@ git-crypt unlock
 - Master Admin User ID: Found in `secrets/env/.env` as `MASTER_ADMIN_USER_ID`
 - Master Admin Org ID: Found in `secrets/env/.env` as `MASTER_ADMIN_ORG_ID`
 
-**Admin CLI**
-- Binary: `bin/admin-cli` (or `bin/admin-cli-mac` for macOS)
-- Configuration:
+**AI-AAS CLI**
+- Binary: `services/ai-aas-cli/bin/ai-aas-cli` (build with `cd services/ai-aas-cli && make build`)
+- Configuration: Uses profile-based configuration
   ```bash
-  # Load from secrets/env/.env
-  export ADMIN_CLI_USER_ORG_ENDPOINT=http://172.232.58.222
-  export ADMIN_CLI_API_KEY=$(grep MASTER_ADMIN_API_KEY secrets/env/.env | cut -d'=' -f2)
+  # Configure CLI for an environment
+  ai-aas-cli profile create dev \
+    --admin-api-url=https://admin-api.dev.otherjamesbrown.com \
+    --api-key=$(grep MASTER_ADMIN_API_KEY secrets/env/.env | cut -d'=' -f2)
+  ai-aas-cli profile use dev
   ```
-- Usage: `./bin/admin-cli org list` or `./bin/admin-cli user list --org-id=<uuid>`
+- Usage: `ai-aas-cli status`, `ai-aas-cli model list`, `ai-aas-cli model deploy create <model>`
 
 ### Production Environment
 

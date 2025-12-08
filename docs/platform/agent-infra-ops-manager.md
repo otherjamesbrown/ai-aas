@@ -50,6 +50,7 @@ This document provides a map of all platform documentation to help the infra-ops
 | [cache-salt-security.md](cache-salt-security.md) | Cache security for vLLM | Model caching security |
 | [ci-remote-cli.md](ci-remote-cli.md) | Remote CI dispatch | Triggering remote CI jobs |
 | [ui-pages.md](ui-pages.md) | Web portal pages, admin CLI | Understanding UI structure |
+| [new-environment-checklist.md](new-environment-checklist.md) | Comprehensive verification checklist | Setting up or auditing environments |
 
 ### Meta Documentation
 
@@ -135,6 +136,13 @@ This document provides a map of all platform documentation to help the infra-ops
 2. Understand patterns: [github-actions-guide.md](github-actions-guide.md)
 3. Check branch rules: [ci-cd-pipeline.md](ci-cd-pipeline.md)
 
+### Provisioning or Auditing an Environment
+
+1. **Bootstrap from scratch**: Follow [bootstrap-new-environment.md](../runbooks/bootstrap-new-environment.md) runbook
+2. **Quick provision**: Run `scripts/infra/provision-environment.sh <environment>`
+3. **Verify deployment**: Use [new-environment-checklist.md](new-environment-checklist.md) (30+ checks)
+4. **Check ArgoCD sync status**: `kubectl get applications -n argocd`
+
 ## Environment Quick Reference
 
 ### Development
@@ -201,6 +209,7 @@ helm list -A
 
 | Runbook | Location | Purpose |
 |---------|----------|---------|
+| **Bootstrap New Environment** | `docs/runbooks/bootstrap-new-environment.md` | **End-to-end environment bootstrap (START HERE)** |
 | Linode Setup | `docs/runbooks/linode-setup.md` | Initial Linode/LKE setup |
 | ArgoCD Deployment | `docs/runbooks/argocd-deployment-workflow.md` | Deployment procedures |
 | ArgoCD Bootstrap | `docs/runbooks/argocd-bootstrap.md` | Bootstrap ArgoCD |

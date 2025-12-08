@@ -11,7 +11,6 @@ use (
 	./samples/service-template/go
 	./services/_template
 	./services/admin-api-service
-	./services/admin-cli
 	./services/ai-aas-cli
 	./services/analytics-service
 	./services/analytics-service/test/integration-phase5

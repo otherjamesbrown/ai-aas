@@ -31,10 +31,19 @@ FROM alpine:latest
 
 RUN apk --no-cache add ca-certificates
 
+# Install goose for migrations
+RUN apk --no-cache add go
+WORKDIR /tmp
+RUN go install github.com/pressly/goose/v3/cmd/goose@latest
+RUN cp /root/go/bin/goose /usr/local/bin/goose
+
 WORKDIR /app
 
 # Copy the analytics binary
 COPY --from=builder /bin/analytics /app/analytics
+
+# Copy migrations directory for init container
+COPY db/migrations/analytics /app/migrations/sql
 
 # Expose the API port (default 8084)
 EXPOSE 8084
