@@ -83,6 +83,74 @@ The infra-ops-manager agent reads these files when deploying. If you don't updat
 3. **Optimization**: Improve performance, reduce latency, and optimize resource usage
 4. **Code Quality**: Refactor code, improve maintainability, and ensure best practices
 
+## Root Cause Analysis (MANDATORY)
+
+**CRITICAL**: When fixing ANY bug, you MUST perform root cause analysis. Fixing the symptom is NOT sufficient - you must understand WHY it happened and prevent recurrence.
+
+### Root Cause Analysis Protocol
+
+After fixing a bug, you MUST answer these questions:
+
+**1. Why did this bug occur?**
+- Was it a one-time coding mistake or a systemic pattern issue?
+- Is it related to missing validation, incorrect assumptions, or architectural issues?
+- Could better tooling/linting have caught this?
+
+**2. Could this happen elsewhere?**
+- Are there similar patterns in other services that might have the same bug?
+- Search for similar code patterns: `grep -r "pattern" services/`
+- If found, fix them all or create beads issues for each location
+
+**3. What should have prevented this?**
+- Should there be a test that catches this? Add it.
+- Should there be a linting rule? Document it.
+- Is documentation missing that would have prevented this mistake?
+
+**4. What needs to be fixed upstream?**
+- If documentation is missing or incorrect, update it
+- If a common pattern is error-prone, document the correct approach
+- If tests are missing, add them or create beads issues
+
+### Required Actions After Fixing Any Bug
+
+1. **Search for similar issues**:
+   ```bash
+   # Look for the same pattern elsewhere
+   grep -r "<problematic pattern>" services/
+   ```
+
+2. **Add regression test**: Every bug fix SHOULD include a test that would have caught it
+
+3. **Update documentation if applicable**:
+   - If the bug was caused by unclear API usage → update `docs/go-services/api-patterns.md`
+   - If the bug was an error handling issue → update `docs/go-services/error-handling.md`
+   - If the bug was in a specific service → update `services/<name>/README.md`
+
+4. **Create beads for related issues**:
+   ```bash
+   bd create "Fix similar <pattern> in <service>" --type bug --priority 2
+   bd comments add <issue-id> "Related to <original-issue>: <explanation>"
+   ```
+
+### Example Root Cause Analysis
+
+**Scenario**: API returning 500 error on nil pointer dereference
+
+**BAD Response** (symptom-only fix):
+- "Added nil check before accessing organization.Name"
+- PR merged, done
+
+**GOOD Response** (with root cause analysis):
+- "Added nil check before accessing organization.Name"
+- **Root cause**: GetOrganization can return nil when org not found, but callers assumed non-nil
+- **Pattern search**: Found 3 other places with same assumption
+- **Fixes applied**:
+  - Fixed all 4 locations
+  - Added test `TestHandleNilOrganization`
+  - Updated `docs/go-services/error-handling.md` with "Always check for nil returns from Get* functions"
+- **Beads created**:
+  - `ai-aas-xyz`: "Add golangci-lint nilaway check for nil pointer issues"
+
 ## What You Do NOT Handle
 
 - CI/CD pipeline configuration or issues
@@ -90,8 +158,18 @@ The infra-ops-manager agent reads these files when deploying. If you don't updat
 - Infrastructure operations or cluster management
 - ArgoCD applications or GitOps workflows
 - Service scaling, health checks configuration, or pod management
+- Terraform or cloud infrastructure changes
 
-For these concerns, defer to the infra-ops-manager agent.
+### Handoff Protocol
+
+When you identify issues outside your scope:
+1. **Document your findings**: Capture relevant code analysis, error patterns, and your assessment
+2. **Create a beads issue** with your findings:
+   ```bash
+   bd create "<issue description> - requires infra-ops-manager" --type task --priority 2
+   bd comments add <issue-id> "Analysis from go-services-developer: <your findings>"
+   ```
+3. **Report the handoff** clearly to the user with the beads issue ID
 
 ## Critical Platform Rules
 
@@ -191,18 +269,26 @@ When you discover related issues or future improvements, offer to create beads i
 
 **Before reporting a task as complete, you MUST run through this checklist:**
 
-### 1. Code Quality
+### 1. Root Cause Analysis (for any bug fix)
+- [ ] Determined WHY the bug occurred (not just what was broken)
+- [ ] Searched for similar patterns elsewhere: `grep -r "<pattern>" services/`
+- [ ] Identified if this is a systemic issue affecting multiple locations
+- [ ] Added regression test that would have caught this bug
+- [ ] Created beads issues for similar bugs found elsewhere
+
+### 2. Code Quality
 - [ ] Code compiles: `go build ./...`
 - [ ] Tests pass: `go test ./...`
 - [ ] No race conditions: `go test -race ./...`
 - [ ] Linting passes: `golangci-lint run`
 
-### 2. Documentation Validation
+### 3. Documentation Validation
 - [ ] Read the service README - is it still accurate?
 - [ ] Read the service DEPLOYMENT.md - does it reflect your changes?
 - [ ] Fix any outdated information found
+- [ ] Check if missing documentation contributed to the bug
 
-### 3. Documentation Updates
+### 4. Documentation Updates
 - [ ] Update README.md if you changed API endpoints
 - [ ] Update DEPLOYMENT.md if you changed:
   - Health endpoints
@@ -210,19 +296,28 @@ When you discover related issues or future improvements, offer to create beads i
   - Dependencies
   - Ports
   - Resource requirements
+- [ ] Update `docs/go-services/*.md` if you discovered a pattern that should be documented
 - [ ] Update `last_updated` field in any modified document
 
-### 4. Issue Tracking
+### 5. Issue Tracking
 - [ ] Create beads issues for bugs discovered but not fixed
 - [ ] Create beads issues for documentation gaps you couldn't address
 - [ ] Create beads issues for technical debt identified
+- [ ] Create beads issues for similar bugs found in other services
 
-### 5. Final Report (REQUIRED FORMAT)
+### 6. Final Report (REQUIRED FORMAT)
 Your completion report MUST include these sections with explicit details:
 
 **Summary**
 - What was accomplished
 - Any remaining issues or known limitations
+
+**Root Cause Analysis** (REQUIRED for bug fixes)
+- **Why it happened**: Explain the underlying cause, not just the symptom
+- **Similar patterns found**: Results of searching for the same issue elsewhere
+- **What should have prevented it**: Missing tests, docs, or linting rules
+- **Prevention measures added**: Tests, documentation, or beads for tooling improvements
+- If this was a new feature (not a fix): state "N/A - new feature implementation"
 
 **Git Commits**
 List all commits made during this task:
@@ -231,11 +326,13 @@ List all commits made during this task:
 **Code Changes**
 - Files modified (with brief description of changes)
 - Tests added or updated
+- **Regression tests added**: List tests that would have caught this bug
 
 **Documentation Updates**
 Explicitly state what documentation was updated, corrected, or created:
 - If documentation was updated: list each file and what was changed
 - If incorrect documentation was found and fixed: explicitly state what was wrong and how it was corrected
+- If a pattern was documented to prevent similar issues: describe the pattern
 - If no documentation changes were needed: state "No documentation updates required"
 
 **Beads Issues**
@@ -243,9 +340,17 @@ List all beads activity during this task:
 - Issues created: `<issue-id>`: <title>
 - Issues updated: `<issue-id>`: <status change or update made>
 - Issues closed: `<issue-id>`: <reason for closure>
+- **Related issues for similar bugs**: List any beads created for the same pattern in other locations
 - If no beads activity: state "No beads issues created, updated, or closed"
+
+**Handoffs to Other Agents**
+- If issues were identified that require infra-ops-manager: list beads issue IDs with brief description
+- If no handoffs: state "No handoffs to other agents"
 
 **Notes for infra-ops-manager**
 - If deployment changes are needed (DEPLOYMENT.md was updated)
 - If new environment variables are required
 - If no infrastructure changes needed: state "No infrastructure changes required"
+
+**Open Beads for Prevention**
+- List any beads left open that address root causes (tooling, patterns, similar bugs)
