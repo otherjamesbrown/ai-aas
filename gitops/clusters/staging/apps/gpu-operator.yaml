@@ -13,7 +13,7 @@ spec:
   source:
     repoURL: https://nvidia.github.io/gpu-operator
     chart: gpu-operator
-    targetRevision: v24.9.0
+    targetRevision: v25.10.1
     helm:
       releaseName: gpu-operator
       values: |
@@ -24,6 +24,7 @@ spec:
           version: "550.127.05"
         toolkit:
           enabled: true
+          version: v1.18.1-ubuntu20.04
         devicePlugin:
           enabled: true
         dcgmExporter:
