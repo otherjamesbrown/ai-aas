@@ -74,10 +74,11 @@ Getting Help:
   ai-aas-cli model deploy create --help   Show create deployment options
 
 Environment Variables:
-  AI_AAS_ENVIRONMENT    Target environment (dev/staging/prod)
-  AI_AAS_API_KEY        API key for authentication
-  AI_AAS_API_ENDPOINT   Admin API endpoint URL
-  AI_AAS_PROFILE        Active profile name`,
+  AI_AAS_ENVIRONMENT        Target environment (dev/staging/prod)
+  AI_AAS_API_KEY            API key for authentication
+  AI_AAS_API_ENDPOINT       Admin API endpoint URL (primary endpoint for all operations)
+  AI_AAS_ADMIN_API_ENDPOINT Advanced override for Admin API endpoint (rarely needed)
+  AI_AAS_PROFILE            Active profile name`,
 		Version: fmt.Sprintf("%s (build: %s, commit: %s)", version, buildTime, gitCommit),
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			return initConfig()
@@ -279,14 +280,14 @@ func showInitStatus() error {
 	// Required settings
 	label.Println("Required Settings:")
 
-	// API Endpoint
+	// API Endpoint (Admin API)
 	if cfg.APIEndpoint != "" && cfg.APIEndpoint != "http://localhost:8080" {
-		fmt.Printf("  %s API Endpoint:     %s\n", checkMark, cfg.APIEndpoint)
+		fmt.Printf("  %s Admin API Endpoint: %s\n", checkMark, cfg.APIEndpoint)
 		configuredCount++
 	} else if cfg.APIEndpoint == "http://localhost:8080" {
-		fmt.Printf("  %s API Endpoint:     %s %s\n", warning.Sprint("~"), cfg.APIEndpoint, muted.Sprint("(default)"))
+		fmt.Printf("  %s Admin API Endpoint: %s %s\n", warning.Sprint("~"), cfg.APIEndpoint, muted.Sprint("(default)"))
 	} else {
-		fmt.Printf("  %s API Endpoint:     %s\n", crossMark, muted.Sprint("(not set)"))
+		fmt.Printf("  %s Admin API Endpoint: %s\n", crossMark, muted.Sprint("(not set)"))
 	}
 
 	// API Key
@@ -326,12 +327,12 @@ func showInitStatus() error {
 		fmt.Printf("  %s User-Org Service: %s\n", muted.Sprint("-"), muted.Sprint("(not set - uses API endpoint)"))
 	}
 
-	// Admin API Endpoint override
+	// Admin API Endpoint override (advanced)
 	if cfg.AdminAPIEndpoint != "" {
-		fmt.Printf("  %s Admin API:        %s\n", checkMark, cfg.AdminAPIEndpoint)
+		fmt.Printf("  %s Admin API Override: %s\n", checkMark, cfg.AdminAPIEndpoint)
 		optionalConfigured++
 	} else {
-		fmt.Printf("  %s Admin API:        %s\n", muted.Sprint("-"), muted.Sprint("(not set - uses API endpoint)"))
+		fmt.Printf("  %s Admin API Override: %s\n", muted.Sprint("-"), muted.Sprint("(not set - uses main endpoint)"))
 	}
 
 	// TLS Settings
@@ -393,12 +394,14 @@ func runPartialInit(domain, apiKey, env, hfToken, adminAPI, userOrgAPI string) e
 		domain = strings.TrimPrefix(domain, "https://")
 		domain = strings.TrimPrefix(domain, "http://")
 		domain = strings.TrimSuffix(domain, "/")
+		domain = strings.TrimPrefix(domain, "admin-api.")
+		domain = strings.TrimPrefix(domain, "api.")
 
 		cfg.APIEndpoint = fmt.Sprintf("https://admin-api.%s", domain)
 		cfg.UserOrgEndpoint = fmt.Sprintf("https://user-org.%s", domain)
 		fmt.Printf("%s Base domain set: %s\n", checkMark, domain)
-		fmt.Printf("    → API Endpoint: %s\n", cfg.APIEndpoint)
-		fmt.Printf("    → User-Org:     %s\n", cfg.UserOrgEndpoint)
+		fmt.Printf("    → Admin API Endpoint: %s\n", cfg.APIEndpoint)
+		fmt.Printf("    → User-Org Service:   %s\n", cfg.UserOrgEndpoint)
 		updated = true
 	}
 
@@ -504,11 +507,14 @@ func newConfigCommand() *cobra.Command {
 			}
 
 			fmt.Println("Configuration:")
-			fmt.Printf("  API Endpoint:  %s\n", cfg.APIEndpoint)
-			fmt.Printf("  Environment:   %s\n", cfg.Environment)
-			fmt.Printf("  API Key:       %s\n", config.MaskSecret(cfg.APIKey))
-			fmt.Printf("  Output Format: %s\n", cfg.OutputFormat)
-			fmt.Printf("  Verbose:       %v\n", cfg.Verbose)
+			fmt.Printf("  Admin API Endpoint: %s\n", cfg.APIEndpoint)
+			fmt.Printf("  Environment:        %s\n", cfg.Environment)
+			fmt.Printf("  API Key:            %s\n", config.MaskSecret(cfg.APIKey))
+			fmt.Printf("  Output Format:      %s\n", cfg.OutputFormat)
+			fmt.Printf("  Verbose:            %v\n", cfg.Verbose)
+			if cfg.AdminAPIEndpoint != "" {
+				fmt.Printf("  Admin API Override: %s\n", cfg.AdminAPIEndpoint)
+			}
 
 			configPath, _ := config.GetConfigPath()
 			fmt.Printf("\n  Config File:   %s\n", configPath)
@@ -543,18 +549,25 @@ func newConfigCommand() *cobra.Command {
 			}
 
 			fmt.Println("Testing configuration...")
-			fmt.Printf("  API Endpoint: %s\n", cfg.APIEndpoint)
-			fmt.Printf("  API Key:      %s\n", config.MaskSecret(cfg.APIKey))
-			fmt.Printf("  Environment:  %s\n", cfg.Environment)
+			fmt.Printf("  Admin API Endpoint: %s\n", cfg.APIEndpoint)
+			fmt.Printf("  API Key:            %s\n", config.MaskSecret(cfg.APIKey))
+			fmt.Printf("  Environment:        %s\n", cfg.Environment)
+			if cfg.AdminAPIEndpoint != "" {
+				fmt.Printf("  Admin API Override: %s\n", cfg.AdminAPIEndpoint)
+			}
 			fmt.Println()
 
-			// Test API connection
-			fmt.Print("  API connection: testing... ")
+			// Test API connection (use AdminAPIEndpoint if set, otherwise APIEndpoint)
+			testEndpoint := cfg.APIEndpoint
+			if cfg.AdminAPIEndpoint != "" {
+				testEndpoint = cfg.AdminAPIEndpoint
+			}
+			fmt.Print("  Admin API connection: testing... ")
 			opts := []api.ClientOption{}
 			if cfg.TLSInsecure {
 				opts = append(opts, api.WithInsecureSkipVerify())
 			}
-			client := api.NewClient(cfg.APIEndpoint, cfg.APIKey, opts...)
+			client := api.NewClient(testEndpoint, cfg.APIKey, opts...)
 			ctx := context.Background()
 
 			if err := client.Ping(ctx); err != nil {
