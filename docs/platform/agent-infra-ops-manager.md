@@ -47,6 +47,7 @@ This document provides a map of all platform documentation to help the infra-ops
 
 | Document | Purpose | Use When |
 |----------|---------|----------|
+| [istio-integration.md](istio-integration.md) | Istio service mesh, gateways, VirtualServices | Istio issues, ingress gateway, traffic routing |
 | [knative-configuration.md](knative-configuration.md) | Knative Serving setup, autoscaling, config | Knative issues, model serving, scaling |
 | [cache-salt-security.md](cache-salt-security.md) | Cache security for vLLM | Model caching security |
 | [ci-remote-cli.md](ci-remote-cli.md) | Remote CI dispatch | Triggering remote CI jobs |
