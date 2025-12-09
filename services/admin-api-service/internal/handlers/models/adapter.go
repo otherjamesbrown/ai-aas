@@ -3,6 +3,7 @@ package models
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -89,6 +90,42 @@ func (a *ServiceAdapter) AddModel(req AddModelRequest) (*Model, error) {
 // RemoveModel deletes a model from the registry
 func (a *ServiceAdapter) RemoveModel(name string, force bool) error {
 	return a.svc.RemoveModel(a.ctx, name, force)
+}
+
+// RenameModel renames a model in the registry
+func (a *ServiceAdapter) RenameModel(name string, req RenameModelRequest) (*RenameModelResponse, error) {
+	svcReq := svcModels.RenameModelRequest{
+		NewName:      req.NewName,
+		MigrateCache: req.MigrateCache,
+	}
+
+	// Use the service as a credential getter (it implements the interface)
+	result, err := a.svc.RenameModel(a.ctx, name, svcReq, a.svc)
+	if err != nil {
+		// Translate service-layer errors to handler-layer errors
+		if errors.Is(err, svcModels.ErrModelNotFound) {
+			return nil, ErrModelNotFound
+		}
+		if errors.Is(err, svcModels.ErrModelDeployed) {
+			return nil, ErrModelDeployed
+		}
+		if errors.Is(err, svcModels.ErrModelNameExists) {
+			return nil, ErrModelNameExists
+		}
+		// Translate validation errors
+		if errors.Is(err, svcModels.ErrNameEmpty) || errors.Is(err, svcModels.ErrNameTooLong) || errors.Is(err, svcModels.ErrInvalidKServeName) {
+			return nil, ErrInvalidModelName
+		}
+		return nil, err
+	}
+
+	return &RenameModelResponse{
+		OldName:        result.OldName,
+		NewName:        result.NewName,
+		CacheMigrated:  result.CacheMigrated,
+		CacheSizeBytes: result.CacheSizeBytes,
+		CacheFileCount: result.CacheFileCount,
+	}, nil
 }
 
 // GetModelCache returns cache entries for a model

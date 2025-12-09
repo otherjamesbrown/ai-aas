@@ -64,7 +64,24 @@ func (m *mockService) RemoveModel(name string, force bool) error {
 			return nil
 		}
 	}
-	return ErrModelNotFound
+	return testErrModelNotFound
+}
+
+func (m *mockService) RenameModel(name string, req RenameModelRequest) (*RenameModelResponse, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	for i, model := range m.models {
+		if model.Name == name {
+			m.models[i].Name = req.NewName
+			return &RenameModelResponse{
+				OldName:       name,
+				NewName:       req.NewName,
+				CacheMigrated: req.MigrateCache,
+			}, nil
+		}
+	}
+	return nil, testErrModelNotFound
 }
 
 func (m *mockService) GetModelCache(name string) ([]CacheEntry, error) {
@@ -161,12 +178,12 @@ func (m *mockService) DeleteCredential(credType string) error {
 			return nil
 		}
 	}
-	return ErrCredentialNotFound
+	return testErrCredentialNotFound
 }
 
-// Sentinel errors for mock
-var ErrModelNotFound = &modelError{"model not found"}
-var ErrCredentialNotFound = &modelError{"credential not found"}
+// Sentinel errors for mock (use different names from handler.go)
+var testErrModelNotFound = &modelError{"model not found"}
+var testErrCredentialNotFound = &modelError{"credential not found"}
 
 type modelError struct {
 	msg string

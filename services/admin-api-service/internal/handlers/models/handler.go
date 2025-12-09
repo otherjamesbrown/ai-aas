@@ -4,9 +4,19 @@ package models
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+)
+
+// Error variables for handler error mapping
+var (
+	ErrModelNotFound   = errors.New("model not found")
+	ErrModelDeployed   = errors.New("model has active deployments")
+	ErrModelNameExists = errors.New("model name already exists")
+	ErrInvalidModelName = errors.New("invalid model name format")
 )
 
 // Handler handles model management HTTP requests
@@ -21,6 +31,7 @@ type Service interface {
 	GetModel(name string) (*Model, error)
 	AddModel(req AddModelRequest) (*Model, error)
 	RemoveModel(name string, force bool) error
+	RenameModel(name string, req RenameModelRequest) (*RenameModelResponse, error)
 
 	// Cache operations
 	GetModelCache(name string) ([]CacheEntry, error)
@@ -51,6 +62,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/models", h.AddModel)
 	r.Get("/models/{name}", h.GetModel)
 	r.Delete("/models/{name}", h.DeleteModel)
+	r.Post("/models/{name}/rename", h.RenameModel)
 
 	// Cache endpoints
 	r.Get("/models/{name}/cache", h.GetModelCache)
@@ -266,6 +278,43 @@ func (h *Handler) DeleteCredential(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// RenameModel handles POST /models/{name}/rename
+func (h *Handler) RenameModel(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+
+	var req RenameModelRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body", err)
+		return
+	}
+
+	// Validate request
+	if req.NewName == "" {
+		writeError(w, http.StatusBadRequest, "new_name is required", fmt.Errorf("new_name cannot be empty"))
+		return
+	}
+
+	result, err := h.service.RenameModel(name, req)
+	if err != nil {
+		// Map specific errors to appropriate HTTP status codes
+		switch {
+		case errors.Is(err, ErrModelNotFound):
+			writeError(w, http.StatusNotFound, "model not found", err)
+		case errors.Is(err, ErrModelDeployed):
+			writeError(w, http.StatusConflict, "cannot rename model with active deployments", err)
+		case errors.Is(err, ErrModelNameExists):
+			writeError(w, http.StatusConflict, "model name already exists", err)
+		case errors.Is(err, ErrInvalidModelName):
+			writeError(w, http.StatusBadRequest, "invalid model name format", err)
+		default:
+			writeError(w, http.StatusInternalServerError, "failed to rename model", err)
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
 }
 
 // Helper functions

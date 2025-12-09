@@ -167,19 +167,20 @@ func (w *InitWizard) collectAPIEndpoint() error {
 		// Base domain provided - construct endpoints
 		baseDomain := strings.TrimPrefix(input, "api.")
 		baseDomain = strings.TrimPrefix(baseDomain, "www.")
+		baseDomain = strings.TrimPrefix(baseDomain, "admin-api.")
 
 		// Construct all endpoints from base domain
-		w.config.APIEndpoint = fmt.Sprintf("https://api.%s", baseDomain)
+		// APIEndpoint is the primary Admin API endpoint
+		w.config.APIEndpoint = fmt.Sprintf("https://admin-api.%s", baseDomain)
 		w.config.UserOrgEndpoint = fmt.Sprintf("https://user-org.%s", baseDomain)
 		w.config.InferenceEndpoint = fmt.Sprintf("https://api.%s", baseDomain)
-		w.config.AdminAPIEndpoint = fmt.Sprintf("https://admin-api.%s", baseDomain)
+		// Don't set AdminAPIEndpoint - it should remain empty (only used for advanced overrides)
 
 		fmt.Println()
 		fmt.Println("  Constructed endpoints from base domain:")
-		fmt.Printf("    API Endpoint:      %s\n", w.config.APIEndpoint)
-		fmt.Printf("    User-Org Service:  %s\n", w.config.UserOrgEndpoint)
-		fmt.Printf("    Inference API:     %s\n", w.config.InferenceEndpoint)
-		fmt.Printf("    Admin API:         %s\n", w.config.AdminAPIEndpoint)
+		fmt.Printf("    Admin API Endpoint: %s\n", w.config.APIEndpoint)
+		fmt.Printf("    User-Org Service:   %s\n", w.config.UserOrgEndpoint)
+		fmt.Printf("    Inference API:      %s\n", w.config.InferenceEndpoint)
 	}
 
 	fmt.Println()

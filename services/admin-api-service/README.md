@@ -1,5 +1,9 @@
 # Admin API Service
 
+---
+last_updated: 2025-12-09
+---
+
 Internal HTTP API for platform administration.
 
 ## Overview
@@ -40,6 +44,37 @@ All endpoints are versioned under `/v1/` and require API key authentication via 
 | GET | `/v1/registry/models/{name}` | Get model by name |
 | PATCH | `/v1/registry/models/{name}` | Update model |
 | DELETE | `/v1/registry/models/{name}` | Delete model |
+| POST | `/v1/models/{name}/rename` | Rename a model and optionally migrate cache |
+
+#### Model Rename Endpoint
+
+**POST `/v1/models/{name}/rename`**
+
+Renames a model in the registry and optionally migrates its cached files in S3.
+
+Request body:
+```json
+{
+  "new_name": "mistral-7b-instruct-v03",
+  "migrate_cache": true
+}
+```
+
+Response:
+```json
+{
+  "old_name": "mistral-7b-instruct-v0.3",
+  "new_name": "mistral-7b-instruct-v03",
+  "cache_migrated": true,
+  "cache_size_bytes": 27000000000,
+  "cache_file_count": 42
+}
+```
+
+Validation:
+- New name must match KServe naming regex: `[a-z]([-a-z0-9]*[a-z0-9])?`
+- Model must not have active deployments
+- New name must not already exist
 
 ### Organizations
 

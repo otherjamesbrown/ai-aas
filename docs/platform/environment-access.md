@@ -1,7 +1,7 @@
 # Environment Access Guide
 
 ---
-last_updated: 2025-12-08
+last_updated: 2025-12-09
 document_type: reference
 ---
 
@@ -43,7 +43,12 @@ git-crypt unlock
 - API Router: https://api.dev.otherjamesbrown.com or https://api.dev.ai-aas.local
 - Admin API: https://admin-api.dev.otherjamesbrown.com or https://admin-api.dev.ai-aas.local
 - User Org Service: https://user-org.dev.otherjamesbrown.com or https://user-org.dev.ai-aas.local
-- Ingress IP: `172.232.58.222`
+
+**Ingress Architecture** (Dual-Ingress)
+- NGINX Ingress IP: `172.232.58.222` - PRIMARY for all external HTTP/HTTPS traffic
+- Istio Gateway IP: `172.232.48.93` - Internal only for KServe/Knative routing
+- All service ingresses use `ingressClassName: nginx`
+- See `docs/technical/platform/ingress-best-practices.md` for architecture details
 
 **Monitoring & Observability**
 - Grafana: https://grafana.dev.otherjamesbrown.com or https://grafana.dev.ai-aas.local
@@ -62,11 +67,58 @@ git-crypt unlock
   ```bash
   # Configure CLI for an environment
   ai-aas-cli profile create dev \
-    --admin-api-url=https://admin-api.dev.otherjamesbrown.com \
+    --admin-api-endpoint=https://admin-api.dev.otherjamesbrown.com \
     --api-key=$(grep MASTER_ADMIN_API_KEY secrets/env/.env | cut -d'=' -f2)
   ai-aas-cli profile use dev
   ```
 - Usage: `ai-aas-cli status`, `ai-aas-cli model list`, `ai-aas-cli model deploy create <model>`
+
+### Staging Environment
+
+**Kubernetes Cluster**
+- Kubeconfig: `secrets/kubeconfigs/kubeconfig-staging.yaml` (encrypted with git-crypt)
+- Context: Use with `--kubeconfig` flag
+- Access: `kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-staging.yaml`
+
+**ArgoCD**
+- URL: https://argocd.staging.otherjamesbrown.com
+- Username: `admin`
+- Password: Retrieve with `kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-staging.yaml -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode`
+
+**Database (PostgreSQL)**
+- Host: Akamai managed database
+- Connection String: Found in Kubernetes secret `user-org-service/user-org-service-db-secret` key `database-url`
+- Retrieve: `kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-staging.yaml get secret -n user-org-service user-org-service-db-secret -o jsonpath='{.data.database-url}' | base64 -d`
+
+**API Endpoints**
+- API Router: https://api.staging.otherjamesbrown.com
+- Admin API: https://admin-api.staging.otherjamesbrown.com
+- User Org Service: https://user-org.staging.otherjamesbrown.com
+
+**Ingress Architecture** (Dual-Ingress)
+- NGINX Ingress IP: `172.236.135.55` - PRIMARY for all external HTTP/HTTPS traffic
+- Istio Gateway IP: `172.236.132.56` - Internal only for KServe/Knative routing
+- All service ingresses use `ingressClassName: nginx`
+- See `docs/technical/platform/ingress-best-practices.md` for architecture details
+
+**Monitoring & Observability**
+- Grafana: https://grafana.staging.otherjamesbrown.com
+- Loki: https://loki.staging.otherjamesbrown.com
+
+**API Keys**
+- Master Admin API Key: Found in `secrets/env/.env` as `STAGING_MASTER_ADMIN_API_KEY`
+- API Key ID: Found in `secrets/env/.env` as `STAGING_MASTER_ADMIN_API_KEY_ID`
+- Master Admin User ID: `39255f13-e223-4c80-8242-3fc37e12e717`
+- Master Admin Org ID: `b6fc81af-a245-4599-b3e1-7d2b8745c148`
+- Master Admin Org Slug: `master-admin-org`
+
+**AI-AAS CLI**
+- Use the `staging-master` profile for full admin access:
+  ```bash
+  ai-aas-cli --profile staging-master org list
+  ai-aas-cli --profile staging-master user list
+  ```
+- Configuration in `~/.ai-aas-cli.yaml` under `profiles.staging-master`
 
 ### Production Environment
 

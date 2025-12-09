@@ -13,8 +13,10 @@ import (
 	modelsHandler "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/handlers/models"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/config"
 	enginesSvc "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/services/engines"
+	modelsSvc "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/services/models"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/repository"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/service"
+	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/storage"
 	"go.uber.org/zap"
 )
 
@@ -101,6 +103,10 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 
 		// Model management routes for ai-aas-cli (spec 020)
 		modelsSvc := modelsHandler.CreateModelsService(db.Pool())
+
+		// Set up S3 client factory for model rename operations
+		modelsSvc.SetS3ClientFactory(createS3ClientFactory())
+
 		modelsAdapter := modelsHandler.NewServiceAdapter(modelsSvc)
 		modelsHdlr := modelsHandler.NewHandler(modelsAdapter)
 		modelsHdlr.RegisterRoutes(r)
@@ -131,5 +137,20 @@ func (v *masterKeyValidator) ValidateKey(ctx context.Context, key string) (strin
 	}
 
 	return "", false, nil
+}
+
+// createS3ClientFactory creates a factory function for S3 clients
+// This factory will be used by the models service for rename operations
+func createS3ClientFactory() modelsSvc.S3ClientFactory {
+	return func(ctx context.Context, endpoint, accessKey, secretKey, bucket, region string) (modelsSvc.S3Client, error) {
+		return storage.NewS3Client(ctx, storage.S3Config{
+			Endpoint:       endpoint,
+			AccessKey:      accessKey,
+			SecretKey:      secretKey,
+			Bucket:         bucket,
+			Region:         region,
+			ForcePathStyle: true, // Required for Linode Object Storage and MinIO
+		})
+	}
 }
 

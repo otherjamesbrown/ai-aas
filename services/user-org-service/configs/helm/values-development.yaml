@@ -1,9 +1,9 @@
 # Development environment overrides
 image:
   repository: ghcr.io/otherjamesbrown/ai-aas/user-org-service
-  # Using 'latest' tag intentionally for development to auto-update on each push.
-  # Production environments should pin to specific version tags (e.g., v1.2.3).
-  tag: latest
+  # Using 'dev' tag to match CI build output for develop branch.
+  # Staging uses 'staging' tag, production uses 'latest' tag.
+  tag: dev
   pullPolicy: Always
 
 env:

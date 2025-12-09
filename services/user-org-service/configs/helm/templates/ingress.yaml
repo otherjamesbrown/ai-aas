@@ -29,9 +29,7 @@ spec:
     - secretName: {{ $tlsSecretName }}
       hosts:
         - {{ $publicHost | quote }}
-        {{- if $localDomain }}
-        - {{ printf "%s.%s" $subdomain $localDomain | quote }}
-        {{- end }}
+        {{- /* Do not include local domain in TLS cert - Let's Encrypt cannot issue for .local domains */ -}}
   {{- end }}
   rules:
     {{- /* Use explicit hosts if provided, otherwise compute from subdomain */ -}}
