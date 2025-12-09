@@ -43,7 +43,12 @@ git-crypt unlock
 - API Router: https://api.dev.otherjamesbrown.com or https://api.dev.ai-aas.local
 - Admin API: https://admin-api.dev.otherjamesbrown.com or https://admin-api.dev.ai-aas.local
 - User Org Service: https://user-org.dev.otherjamesbrown.com or https://user-org.dev.ai-aas.local
-- Ingress IP: `172.232.58.222`
+
+**Ingress Architecture** (Dual-Ingress)
+- NGINX Ingress IP: `172.232.58.222` - PRIMARY for all external HTTP/HTTPS traffic
+- Istio Gateway IP: `172.232.48.93` - Internal only for KServe/Knative routing
+- All service ingresses use `ingressClassName: nginx`
+- See `docs/technical/platform/ingress-best-practices.md` for architecture details
 
 **Monitoring & Observability**
 - Grafana: https://grafana.dev.otherjamesbrown.com or https://grafana.dev.ai-aas.local
@@ -85,7 +90,12 @@ git-crypt unlock
 - Admin API: https://admin-api.staging.otherjamesbrown.com
 - User Org Service: https://user-org.staging.otherjamesbrown.com
 - Analytics: https://analytics.staging.otherjamesbrown.com
-- Ingress IP: `172.236.135.55`
+
+**Ingress Architecture** (Dual-Ingress)
+- NGINX Ingress IP: `172.236.135.55` - PRIMARY for all external HTTP/HTTPS traffic
+- Istio Gateway IP: `172.236.132.56` - Internal only for KServe/Knative routing
+- All service ingresses use `ingressClassName: nginx`
+- See `docs/technical/platform/ingress-best-practices.md` for architecture details
 
 **TLS Certificates**
 - Uses Let's Encrypt staging certificates (not trusted by browsers)
