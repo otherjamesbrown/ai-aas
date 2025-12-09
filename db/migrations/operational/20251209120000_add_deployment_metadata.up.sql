@@ -1,5 +1,5 @@
 -- Add deployment metadata to model_registry_entries table
--- Migration: 20250127120000_add_deployment_metadata.up.sql
+-- Migration: 20251209120000_add_deployment_metadata.up.sql
 
 BEGIN;
 
