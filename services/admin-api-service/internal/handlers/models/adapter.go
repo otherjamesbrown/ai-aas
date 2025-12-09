@@ -3,6 +3,7 @@ package models
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -101,6 +102,20 @@ func (a *ServiceAdapter) RenameModel(name string, req RenameModelRequest) (*Rena
 	// Use the service as a credential getter (it implements the interface)
 	result, err := a.svc.RenameModel(a.ctx, name, svcReq, a.svc)
 	if err != nil {
+		// Translate service-layer errors to handler-layer errors
+		if errors.Is(err, svcModels.ErrModelNotFound) {
+			return nil, ErrModelNotFound
+		}
+		if errors.Is(err, svcModels.ErrModelDeployed) {
+			return nil, ErrModelDeployed
+		}
+		if errors.Is(err, svcModels.ErrModelNameExists) {
+			return nil, ErrModelNameExists
+		}
+		// Translate validation errors
+		if errors.Is(err, svcModels.ErrNameEmpty) || errors.Is(err, svcModels.ErrNameTooLong) || errors.Is(err, svcModels.ErrInvalidKServeName) {
+			return nil, ErrInvalidModelName
+		}
 		return nil, err
 	}
 

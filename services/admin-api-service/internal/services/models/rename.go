@@ -39,7 +39,7 @@ type CredentialGetter interface {
 func (s *Service) RenameModel(ctx context.Context, oldName string, req RenameModelRequest, credGetter CredentialGetter) (*RenameModelResponse, error) {
 	// Validate new name format (KServe naming requirements)
 	if err := ValidateKServeName(req.NewName); err != nil {
-		return nil, fmt.Errorf("invalid new name: %w", err)
+		return nil, err
 	}
 
 	// Start a transaction for atomic database updates

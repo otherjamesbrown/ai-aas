@@ -3,11 +3,19 @@ package models
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"time"
 
 	"github.com/google/uuid"
+)
+
+// KServe naming validation errors
+var (
+	ErrNameEmpty            = errors.New("name cannot be empty")
+	ErrNameTooLong          = errors.New("name too long (max 253 characters)")
+	ErrInvalidKServeName    = errors.New("invalid kserve name format: must match [a-z]([-a-z0-9]*[a-z0-9])?")
 )
 
 // KServe naming regex: lowercase alphanumeric with hyphens, starting with letter
@@ -16,13 +24,13 @@ var kserveNameRegex = regexp.MustCompile(`^[a-z]([-a-z0-9]*[a-z0-9])?$`)
 // ValidateKServeName checks if a name is valid for KServe resources
 func ValidateKServeName(name string) error {
 	if name == "" {
-		return fmt.Errorf("name cannot be empty")
+		return ErrNameEmpty
 	}
 	if len(name) > 253 {
-		return fmt.Errorf("name too long (max 253 characters)")
+		return ErrNameTooLong
 	}
 	if !kserveNameRegex.MatchString(name) {
-		return fmt.Errorf("invalid name format: must match [a-z]([-a-z0-9]*[a-z0-9])?")
+		return ErrInvalidKServeName
 	}
 	return nil
 }
