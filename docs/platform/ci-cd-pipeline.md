@@ -1,7 +1,7 @@
 # CI/CD Pipeline
 
 ---
-last_updated: 2025-12-08
+last_updated: 2025-12-09
 document_type: overview
 ---
 
@@ -60,6 +60,35 @@ Stages:
 3. **Test** - Runs unit and integration tests
 4. **Lint** - Static analysis via `golangci-lint`
 5. **Metrics Upload** - Archives build metrics
+6. **Build & Push Images** - Builds and pushes Docker images with branch-specific tags (push events only)
+
+#### Docker Image Tagging Strategy
+
+CI automatically tags Docker images based on the branch being built:
+
+| Branch | Image Tag | Environment | Example |
+|--------|-----------|-------------|---------|
+| `develop` | `dev` | development | `ghcr.io/otherjamesbrown/ai-aas/admin-api-service:dev` |
+| `staging` | `staging` | staging | `ghcr.io/otherjamesbrown/ai-aas/admin-api-service:staging` |
+| `main` | `latest` | production | `ghcr.io/otherjamesbrown/ai-aas/admin-api-service:latest` |
+
+**Helm values files MUST match these tags:**
+
+```yaml
+# services/<name>/deployments/helm/<name>/values-development.yaml
+image:
+  tag: dev  # NOT 'latest'
+
+# services/<name>/deployments/helm/<name>/values-staging.yaml
+image:
+  tag: staging
+
+# services/<name>/deployments/helm/<name>/values.yaml (production default)
+image:
+  tag: latest
+```
+
+See `.github/workflows/service-ci.yml` (lines 182-187) for the exact tagging configuration.
 
 ### Web Portal CI (`web-portal.yml`)
 
