@@ -19,9 +19,18 @@ CREATE INDEX idx_model_state_history_executed_at ON model_state_history(executed
 CREATE INDEX idx_model_state_history_action ON model_state_history(action);
 CREATE INDEX idx_model_state_history_performed_by ON model_state_history(performed_by);
 
--- Constraint for valid actions
-ALTER TABLE model_state_history ADD CONSTRAINT chk_model_state_history_action 
-    CHECK (action IN ('enabled', 'disabled', 'swapped_out', 'swapped_in'));
+-- Constraint for valid actions (idempotent)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'chk_model_state_history_action'
+        AND table_name = 'model_state_history'
+    ) THEN
+        ALTER TABLE model_state_history ADD CONSTRAINT chk_model_state_history_action
+            CHECK (action IN ('enabled', 'disabled', 'swapped_out', 'swapped_in'));
+    END IF;
+END $$;
 
 COMMENT ON TABLE model_state_history IS 'Audit trail for enable/disable operations';
 COMMENT ON COLUMN model_state_history.action IS 'Action type: enabled, disabled, swapped_out, swapped_in';

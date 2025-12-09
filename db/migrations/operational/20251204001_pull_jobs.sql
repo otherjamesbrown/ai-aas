@@ -21,9 +21,18 @@ CREATE INDEX IF NOT EXISTS idx_pull_jobs_model_id ON pull_jobs(model_id);
 CREATE INDEX IF NOT EXISTS idx_pull_jobs_status ON pull_jobs(status);
 CREATE INDEX IF NOT EXISTS idx_pull_jobs_started_at ON pull_jobs(started_at DESC);
 
--- Constraint for valid status values
-ALTER TABLE pull_jobs ADD CONSTRAINT chk_pull_jobs_status
-    CHECK (status IN ('pending', 'downloading', 'uploading', 'complete', 'failed', 'cancelled'));
+-- Constraint for valid status values (idempotent)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'chk_pull_jobs_status'
+        AND table_name = 'pull_jobs'
+    ) THEN
+        ALTER TABLE pull_jobs ADD CONSTRAINT chk_pull_jobs_status
+            CHECK (status IN ('pending', 'downloading', 'uploading', 'complete', 'failed', 'cancelled'));
+    END IF;
+END $$;
 
 -- Partial unique index: Ensures only one active pull job can exist per model/revision.
 -- This prevents race conditions and redundant downloads by constraining uniqueness

@@ -66,10 +66,45 @@ CREATE TABLE IF NOT EXISTS audit_log_entries (
     occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_users_org ON users (organization_id);
-CREATE INDEX IF NOT EXISTS idx_api_keys_org ON api_keys (organization_id);
-CREATE INDEX IF NOT EXISTS idx_model_registry_org ON model_registry_entries (organization_id, model_name);
-CREATE INDEX IF NOT EXISTS idx_audit_log_entries_target ON audit_log_entries (target);
+-- Create indexes only if columns exist
+-- This handles cases where tables exist with different schemas
+DO $$
+BEGIN
+    -- Index on users.organization_id (only if column exists)
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'users' AND column_name = 'organization_id'
+    ) THEN
+        CREATE INDEX IF NOT EXISTS idx_users_org ON users (organization_id);
+    END IF;
+
+    -- Index on api_keys.organization_id (only if column exists)
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'api_keys' AND column_name = 'organization_id'
+    ) THEN
+        CREATE INDEX IF NOT EXISTS idx_api_keys_org ON api_keys (organization_id);
+    END IF;
+
+    -- Index on model_registry_entries.organization_id and model_name (only if columns exist)
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'model_registry_entries' AND column_name = 'organization_id'
+    ) AND EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'model_registry_entries' AND column_name = 'model_name'
+    ) THEN
+        CREATE INDEX IF NOT EXISTS idx_model_registry_org ON model_registry_entries (organization_id, model_name);
+    END IF;
+
+    -- Index on audit_log_entries.target (only if column exists)
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'audit_log_entries' AND column_name = 'target'
+    ) THEN
+        CREATE INDEX IF NOT EXISTS idx_audit_log_entries_target ON audit_log_entries (target);
+    END IF;
+END $$;
 
 COMMIT;
 

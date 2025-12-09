@@ -15,9 +15,18 @@ CREATE TABLE IF NOT EXISTS platform_credentials (
 -- Index for lookups
 CREATE INDEX idx_platform_credentials_type ON platform_credentials(credential_type);
 
--- Constraint for known credential types
-ALTER TABLE platform_credentials ADD CONSTRAINT chk_platform_credentials_type 
-    CHECK (credential_type IN ('hf-token', 's3-access', 's3-secret', 's3-endpoint', 's3-bucket'));
+-- Constraint for known credential types (idempotent)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'chk_platform_credentials_type'
+        AND table_name = 'platform_credentials'
+    ) THEN
+        ALTER TABLE platform_credentials ADD CONSTRAINT chk_platform_credentials_type
+            CHECK (credential_type IN ('hf-token', 's3-access', 's3-secret', 's3-endpoint', 's3-bucket'));
+    END IF;
+END $$;
 
 -- Trigger to update updated_at
 CREATE OR REPLACE FUNCTION update_platform_credentials_updated_at()

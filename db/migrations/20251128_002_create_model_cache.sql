@@ -23,9 +23,18 @@ CREATE INDEX idx_model_cache_model_id ON model_cache(model_id);
 CREATE INDEX idx_model_cache_status ON model_cache(status);
 CREATE INDEX idx_model_cache_version ON model_cache(version);
 
--- Constraint for valid status values
-ALTER TABLE model_cache ADD CONSTRAINT chk_model_cache_status 
-    CHECK (status IN ('downloading', 'ready', 'failed', 'deleted'));
+-- Constraint for valid status values (idempotent)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'chk_model_cache_status'
+        AND table_name = 'model_cache'
+    ) THEN
+        ALTER TABLE model_cache ADD CONSTRAINT chk_model_cache_status
+            CHECK (status IN ('downloading', 'ready', 'failed', 'deleted'));
+    END IF;
+END $$;
 
 COMMENT ON TABLE model_cache IS 'Tracks cached model versions in object storage';
 COMMENT ON COLUMN model_cache.version IS 'HuggingFace commit hash for this cached version';
