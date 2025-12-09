@@ -34,14 +34,32 @@ CREATE INDEX idx_model_deployments_environment ON model_deployments(environment)
 CREATE INDEX idx_model_deployments_status ON model_deployments(status);
 CREATE INDEX idx_model_deployments_enabled ON model_deployments(enabled);
 
--- Constraints
-ALTER TABLE model_deployments ADD CONSTRAINT chk_model_deployments_environment 
-    CHECK (environment IN ('development', 'staging', 'production'));
+-- Constraints (idempotent)
+-- +goose StatementBegin
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'chk_model_deployments_environment'
+        AND table_name = 'model_deployments'
+    ) THEN
+        ALTER TABLE model_deployments ADD CONSTRAINT chk_model_deployments_environment
+            CHECK (environment IN ('development', 'staging', 'production'));
+    END IF;
 
-ALTER TABLE model_deployments ADD CONSTRAINT chk_model_deployments_status 
-    CHECK (status IN ('pending', 'deploying', 'ready', 'failed', 'disabled', 'terminated'));
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'chk_model_deployments_status'
+        AND table_name = 'model_deployments'
+    ) THEN
+        ALTER TABLE model_deployments ADD CONSTRAINT chk_model_deployments_status
+            CHECK (status IN ('pending', 'deploying', 'ready', 'failed', 'disabled', 'terminated'));
+    END IF;
+END $$;
+-- +goose StatementEnd
 
 -- Trigger to update updated_at
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION update_model_deployments_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -49,6 +67,7 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
 CREATE TRIGGER trigger_model_deployments_updated_at
     BEFORE UPDATE ON model_deployments

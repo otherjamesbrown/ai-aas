@@ -18,7 +18,7 @@ env:
 jobs:
   build:
     name: Build
-    uses: ./.github/workflows/reusable/build.yml
+    uses: ./.github/workflows/reusable-build.yml
     with:
       service: ${{ github.event.inputs.service }}
       target: build
@@ -27,7 +27,7 @@ jobs:
   test:
     name: Test
     needs: build
-    uses: ./.github/workflows/reusable/build.yml
+    uses: ./.github/workflows/reusable-build.yml
     with:
       service: ${{ github.event.inputs.service }}
       target: test
@@ -125,7 +125,7 @@ jobs:
             const commentLines = [
               `🚀 Remote CI completed for **${service}**`,
               ``,
-      - Status: **${STATUS || 'UNKNOWN'}**`,
+              `- Status: **${STATUS || 'UNKNOWN'}**`,
               `- Workflow: [Run Log](${runUrl})`
             ];
             if (notes) {

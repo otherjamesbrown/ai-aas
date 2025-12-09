@@ -27,6 +27,7 @@ CREATE INDEX idx_model_registry_name ON model_registry(name);
 CREATE INDEX idx_model_registry_hf_model_id ON model_registry(hf_model_id);
 
 -- Trigger to update updated_at
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION update_model_registry_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -34,6 +35,7 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
 CREATE TRIGGER trigger_model_registry_updated_at
     BEFORE UPDATE ON model_registry

@@ -2,7 +2,7 @@
 replicaCount: 5
 
 image:
-  tag: production
+  tag: latest
   pullPolicy: Always
 
 service:

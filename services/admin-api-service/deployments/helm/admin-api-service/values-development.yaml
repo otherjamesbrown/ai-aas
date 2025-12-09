@@ -6,9 +6,9 @@ replicaCount: 1
 
 image:
   repository: ghcr.io/otherjamesbrown/ai-aas/admin-api-service
-  # Using 'staging' tag to match CI build output for staging branch.
-  # Production environments should pin to specific version tags (e.g., v1.2.3).
-  tag: staging
+  # Using 'dev' tag to match CI build output for develop branch.
+  # Staging uses 'staging' tag, production uses 'latest' tag.
+  tag: dev
   pullPolicy: Always
 
 env:
@@ -26,6 +26,9 @@ secrets:
   apiKeyHashSaltSecretKey: api-key-hash-salt
   masterAdminApiKeySecretName: admin-api-secrets
   masterAdminApiKeySecretKey: master-admin-api-key
+
+migrations:
+  enabled: true
 
 userOrgService:
   endpoint: "http://user-org-service-development-user-org-service.user-org-service.svc.cluster.local:8081"

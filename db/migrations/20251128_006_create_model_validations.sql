@@ -22,12 +22,29 @@ CREATE INDEX idx_model_validations_status ON model_validations(status);
 CREATE INDEX idx_model_validations_validated_at ON model_validations(validated_at);
 CREATE INDEX idx_model_validations_validation_type ON model_validations(validation_type);
 
--- Constraints
-ALTER TABLE model_validations ADD CONSTRAINT chk_model_validations_status 
-    CHECK (status IN ('pass', 'warn', 'fail', 'skip'));
+-- Constraints (idempotent)
+-- +goose StatementBegin
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'chk_model_validations_status'
+        AND table_name = 'model_validations'
+    ) THEN
+        ALTER TABLE model_validations ADD CONSTRAINT chk_model_validations_status
+            CHECK (status IN ('pass', 'warn', 'fail', 'skip'));
+    END IF;
 
-ALTER TABLE model_validations ADD CONSTRAINT chk_model_validations_type 
-    CHECK (validation_type IN ('registry', 'cache', 'deployment', 'endpoint', 'router'));
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'chk_model_validations_type'
+        AND table_name = 'model_validations'
+    ) THEN
+        ALTER TABLE model_validations ADD CONSTRAINT chk_model_validations_type
+            CHECK (validation_type IN ('registry', 'cache', 'deployment', 'endpoint', 'router'));
+    END IF;
+END $$;
+-- +goose StatementEnd
 
 COMMENT ON TABLE model_validations IS 'Records validation check results for audit and debugging';
 COMMENT ON COLUMN model_validations.validation_type IS 'Layer being validated: registry, cache, deployment, endpoint, router';

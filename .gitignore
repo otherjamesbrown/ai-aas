@@ -34,3 +34,13 @@ migrate.env.tmp
 
 # Claude Code extension
 .cxp/
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+**/.generated/
+
+# Local binaries
+bin/
