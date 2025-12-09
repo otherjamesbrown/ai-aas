@@ -34,13 +34,11 @@ FROM alpine:3.19
 WORKDIR /app
 
 # Install runtime dependencies
-RUN apk add --no-cache ca-certificates tzdata wget
+RUN apk add --no-cache ca-certificates tzdata wget curl
 
-# Install goose for migrations (installed as root before switching user)
-RUN apk --no-cache add go
-WORKDIR /tmp
-RUN go install github.com/pressly/goose/v3/cmd/goose@latest
-RUN cp /root/go/bin/goose /usr/local/bin/goose
+# Install goose for migrations (pre-built binary to avoid Go version issues)
+RUN curl -fsSL https://github.com/pressly/goose/releases/download/v3.22.1/goose_linux_x86_64 -o /usr/local/bin/goose && \
+    chmod +x /usr/local/bin/goose
 
 # Create non-root user
 RUN adduser -D -g '' appuser
