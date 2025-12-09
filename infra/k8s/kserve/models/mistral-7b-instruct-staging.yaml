@@ -30,6 +30,16 @@ spec:
     minReplicas: 1
     maxReplicas: 3
 
+    # GPU node scheduling
+    tolerations:
+      - key: gpu-workload
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+
     containers:
       - name: kserve-container
         image: vllm/vllm-openai:v0.6.3
