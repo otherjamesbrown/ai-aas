@@ -36,9 +36,13 @@ WORKDIR /app
 # Install runtime dependencies
 RUN apk add --no-cache ca-certificates tzdata wget curl
 
-# Install goose for migrations (pre-built binary to avoid Go version issues)
-# Using v3.26.0 to fix duplicate version detection bug with split .up/.down files
-RUN curl -fsSL https://github.com/pressly/goose/releases/download/v3.26.0/goose_linux_x86_64 -o /usr/local/bin/goose && \
+# Install goose for migrations
+# NOTE: Using v3.x requires combined migration files with -- +goose Up/Down annotations
+# Our migrations use split .up.sql/.down.sql format which requires goose v2.x
+# TODO: Migrate to goose v3 format and update to latest version
+# SEE: https://github.com/pressly/goose - goose v3 uses single-file format
+# Temporarily using v2.7.0 which supports split files
+RUN curl -fsSL https://github.com/pressly/goose/releases/download/v2.7.0/goose-linux64 -o /usr/local/bin/goose && \
     chmod +x /usr/local/bin/goose
 
 # Create non-root user
