@@ -24,11 +24,38 @@ PLATFORMS=linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
 all: deps lint test build
 
 ## Build targets
-build: ## Build the CLI binary
-	@echo "Building $(BINARY_NAME)..."
+build: build-dev ## Build for Linux and macOS (development default)
+
+build-native: ## Build for current platform only
+	@echo "Building $(BINARY_NAME) for current platform..."
 	@mkdir -p $(BINARY_DIR)
 	$(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(BINARY_NAME) .
 	@chmod +x $(BINARY_DIR)/$(BINARY_NAME)
+
+build-dev: ## Build for Linux and macOS (amd64)
+	@echo "Building $(BINARY_NAME) for Linux and macOS..."
+	@mkdir -p $(BINARY_DIR)
+	@echo "Building for linux/amd64..."
+	GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(BINARY_NAME)-linux-amd64 .
+	@chmod +x $(BINARY_DIR)/$(BINARY_NAME)-linux-amd64
+	@echo "Building for darwin/amd64..."
+	GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(BINARY_NAME)-darwin-amd64 .
+	@chmod +x $(BINARY_DIR)/$(BINARY_NAME)-darwin-amd64
+	@echo "Building for darwin/arm64..."
+	GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(BINARY_NAME)-darwin-arm64 .
+	@chmod +x $(BINARY_DIR)/$(BINARY_NAME)-darwin-arm64
+	@echo "Creating wrapper script..."
+	@echo '#!/bin/bash' > $(BINARY_DIR)/$(BINARY_NAME)
+	@echo '# Auto-detect OS and architecture and run the correct binary' >> $(BINARY_DIR)/$(BINARY_NAME)
+	@echo 'SCRIPT_DIR="$$(cd "$$(dirname "$$0")" && pwd)"' >> $(BINARY_DIR)/$(BINARY_NAME)
+	@echo 'OS=$$(uname -s | tr "[:upper:]" "[:lower:]")' >> $(BINARY_DIR)/$(BINARY_NAME)
+	@echo 'ARCH=$$(uname -m)' >> $(BINARY_DIR)/$(BINARY_NAME)
+	@echo 'case "$$ARCH" in x86_64) ARCH="amd64";; aarch64|arm64) ARCH="arm64";; esac' >> $(BINARY_DIR)/$(BINARY_NAME)
+	@echo 'BINARY="$$SCRIPT_DIR/ai-aas-cli-$$OS-$$ARCH"' >> $(BINARY_DIR)/$(BINARY_NAME)
+	@echo 'if [ ! -f "$$BINARY" ]; then echo "Error: Binary not found for $$OS/$$ARCH: $$BINARY"; exit 1; fi' >> $(BINARY_DIR)/$(BINARY_NAME)
+	@echo 'exec "$$BINARY" "$$@"' >> $(BINARY_DIR)/$(BINARY_NAME)
+	@chmod +x $(BINARY_DIR)/$(BINARY_NAME)
+	@echo "Done! Use bin/$(BINARY_NAME) on any platform."
 
 build-all: ## Cross-compile for all platforms
 	@echo "Building for all platforms..."
