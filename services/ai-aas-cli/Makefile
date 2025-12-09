@@ -45,15 +45,17 @@ build-dev: ## Build for Linux and macOS (amd64)
 	GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(BINARY_NAME)-darwin-arm64 .
 	@chmod +x $(BINARY_DIR)/$(BINARY_NAME)-darwin-arm64
 	@echo "Creating wrapper script..."
-	@echo '#!/bin/bash' > $(BINARY_DIR)/$(BINARY_NAME)
-	@echo '# Auto-detect OS and architecture and run the correct binary' >> $(BINARY_DIR)/$(BINARY_NAME)
-	@echo 'SCRIPT_DIR="$$(cd "$$(dirname "$$0")" && pwd)"' >> $(BINARY_DIR)/$(BINARY_NAME)
-	@echo 'OS=$$(uname -s | tr "[:upper:]" "[:lower:]")' >> $(BINARY_DIR)/$(BINARY_NAME)
-	@echo 'ARCH=$$(uname -m)' >> $(BINARY_DIR)/$(BINARY_NAME)
-	@echo 'case "$$ARCH" in x86_64) ARCH="amd64";; aarch64|arm64) ARCH="arm64";; esac' >> $(BINARY_DIR)/$(BINARY_NAME)
-	@echo 'BINARY="$$SCRIPT_DIR/ai-aas-cli-$$OS-$$ARCH"' >> $(BINARY_DIR)/$(BINARY_NAME)
-	@echo 'if [ ! -f "$$BINARY" ]; then echo "Error: Binary not found for $$OS/$$ARCH: $$BINARY"; exit 1; fi' >> $(BINARY_DIR)/$(BINARY_NAME)
-	@echo 'exec "$$BINARY" "$$@"' >> $(BINARY_DIR)/$(BINARY_NAME)
+	@cat > $(BINARY_DIR)/$(BINARY_NAME) <<'EOF'
+#!/bin/bash
+# Auto-detect OS and architecture and run the correct binary
+SCRIPT_DIR="$$(cd "$$(dirname "$$0")" && pwd)"
+OS=$$(uname -s | tr "[:upper:]" "[:lower:]")
+ARCH=$$(uname -m)
+case "$$ARCH" in x86_64) ARCH="amd64";; aarch64|arm64) ARCH="arm64";; esac
+BINARY="$$SCRIPT_DIR/ai-aas-cli-$$OS-$$ARCH"
+if [ ! -f "$$BINARY" ]; then echo "Error: Binary not found for $$OS/$$ARCH: $$BINARY"; exit 1; fi
+exec "$$BINARY" "$$@"
+EOF
 	@chmod +x $(BINARY_DIR)/$(BINARY_NAME)
 	@echo "Done! Use bin/$(BINARY_NAME) on any platform."
 

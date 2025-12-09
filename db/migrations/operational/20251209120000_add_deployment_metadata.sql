@@ -1,6 +1,6 @@
 -- +goose Up
 -- Add deployment metadata to model_registry_entries table
--- Migration: 20251209120000_add_deployment_metadata.up.sql
+-- Migration: 20251209120000_add_deployment_metadata.sql
 
 BEGIN;
 
@@ -8,15 +8,43 @@ BEGIN;
 ALTER TABLE model_registry_entries
 ADD COLUMN IF NOT EXISTS deployment_endpoint TEXT;
 
--- Add deployment status
+-- Add deployment status column (without constraint first)
 ALTER TABLE model_registry_entries
-ADD COLUMN IF NOT EXISTS deployment_status TEXT
-CHECK (deployment_status IN ('pending', 'deploying', 'ready', 'degraded', 'failed', 'disabled'));
+ADD COLUMN IF NOT EXISTS deployment_status TEXT;
 
--- Add deployment environment
+-- Add deployment status constraint (idempotent)
+-- +goose StatementBegin
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'chk_deployment_status'
+        AND table_name = 'model_registry_entries'
+    ) THEN
+        ALTER TABLE model_registry_entries ADD CONSTRAINT chk_deployment_status
+            CHECK (deployment_status IN ('pending', 'deploying', 'ready', 'degraded', 'failed', 'disabled'));
+    END IF;
+END $$;
+-- +goose StatementEnd
+
+-- Add deployment environment column (without constraint first)
 ALTER TABLE model_registry_entries
-ADD COLUMN IF NOT EXISTS deployment_environment TEXT
-CHECK (deployment_environment IN ('development', 'staging', 'production'));
+ADD COLUMN IF NOT EXISTS deployment_environment TEXT;
+
+-- Add deployment environment constraint (idempotent)
+-- +goose StatementBegin
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'chk_deployment_environment'
+        AND table_name = 'model_registry_entries'
+    ) THEN
+        ALTER TABLE model_registry_entries ADD CONSTRAINT chk_deployment_environment
+            CHECK (deployment_environment IN ('development', 'staging', 'production'));
+    END IF;
+END $$;
+-- +goose StatementEnd
 
 -- Add deployment namespace
 ALTER TABLE model_registry_entries
@@ -45,12 +73,15 @@ COMMIT;
 
 -- +goose Down
 -- Rollback deployment metadata from model_registry_entries table
--- Migration: 20251209120000_add_deployment_metadata.down.sql
 
 BEGIN;
 
 -- Drop unique constraint
 ALTER TABLE model_registry_entries DROP CONSTRAINT IF EXISTS model_registry_entries_unique_deployment;
+
+-- Drop check constraints
+ALTER TABLE model_registry_entries DROP CONSTRAINT IF EXISTS chk_deployment_status;
+ALTER TABLE model_registry_entries DROP CONSTRAINT IF EXISTS chk_deployment_environment;
 
 DROP INDEX IF EXISTS idx_model_registry_environment;
 DROP INDEX IF EXISTS idx_model_registry_deployment_status;
