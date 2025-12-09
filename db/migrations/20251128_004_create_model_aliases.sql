@@ -17,6 +17,7 @@ CREATE INDEX idx_model_aliases_model_id ON model_aliases(model_id);
 CREATE INDEX idx_model_aliases_alias_name ON model_aliases(alias_name);
 
 -- Trigger to update updated_at
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION update_model_aliases_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -24,6 +25,7 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
 CREATE TRIGGER trigger_model_aliases_updated_at
     BEFORE UPDATE ON model_aliases
@@ -31,6 +33,7 @@ CREATE TRIGGER trigger_model_aliases_updated_at
     EXECUTE FUNCTION update_model_aliases_updated_at();
 
 -- Prevent creating alias with same name as existing model
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION check_alias_not_model_name()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -40,6 +43,7 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
 CREATE TRIGGER trigger_check_alias_not_model_name
     BEFORE INSERT OR UPDATE ON model_aliases

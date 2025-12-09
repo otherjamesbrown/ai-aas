@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS inference_engines (
 CREATE INDEX idx_inference_engines_name ON inference_engines(name);
 
 -- Trigger to update updated_at
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION update_inference_engines_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -28,6 +29,7 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
 CREATE TRIGGER trigger_inference_engines_updated_at
     BEFORE UPDATE ON inference_engines
@@ -97,6 +99,7 @@ CREATE INDEX idx_inference_engine_configs_name ON inference_engine_configs(name)
 CREATE INDEX idx_inference_engine_configs_is_default ON inference_engine_configs(is_default) WHERE is_default = true;
 
 -- Trigger to update updated_at
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION update_inference_engine_configs_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -104,6 +107,7 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
 CREATE TRIGGER trigger_inference_engine_configs_updated_at
     BEFORE UPDATE ON inference_engine_configs

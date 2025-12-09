@@ -59,6 +59,7 @@ END $$;
 -- +goose StatementEnd
 
 -- Trigger to update updated_at
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION update_model_deployments_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -66,6 +67,7 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
 CREATE TRIGGER trigger_model_deployments_updated_at
     BEFORE UPDATE ON model_deployments

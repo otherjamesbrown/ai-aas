@@ -31,6 +31,7 @@ END $$;
 -- +goose StatementEnd
 
 -- Trigger to update updated_at
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION update_platform_credentials_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -38,6 +39,7 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
 CREATE TRIGGER trigger_platform_credentials_updated_at
     BEFORE UPDATE ON platform_credentials

@@ -119,6 +119,7 @@ CREATE INDEX IF NOT EXISTS idx_model_validations_model_id ON model_validations(m
 CREATE INDEX IF NOT EXISTS idx_model_aliases_model_id ON model_aliases(model_id);
 
 -- Triggers for updated_at
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -126,6 +127,7 @@ BEGIN
     RETURN NEW;
 END;
 $$ language 'plpgsql';
+-- +goose StatementEnd
 
 CREATE TRIGGER update_model_registry_updated_at
     BEFORE UPDATE ON model_registry
