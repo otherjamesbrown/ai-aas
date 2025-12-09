@@ -129,18 +129,22 @@ END;
 $$ language 'plpgsql';
 -- +goose StatementEnd
 
+DROP TRIGGER IF EXISTS update_model_registry_updated_at ON model_registry;
 CREATE TRIGGER update_model_registry_updated_at
     BEFORE UPDATE ON model_registry
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_model_aliases_updated_at ON model_aliases;
 CREATE TRIGGER update_model_aliases_updated_at
     BEFORE UPDATE ON model_aliases
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_model_deployments_updated_at ON model_deployments;
 CREATE TRIGGER update_model_deployments_updated_at
     BEFORE UPDATE ON model_deployments
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_platform_credentials_updated_at ON platform_credentials;
 CREATE TRIGGER update_platform_credentials_updated_at
     BEFORE UPDATE ON platform_credentials
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
