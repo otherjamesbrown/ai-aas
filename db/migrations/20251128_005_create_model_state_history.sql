@@ -20,6 +20,7 @@ CREATE INDEX idx_model_state_history_action ON model_state_history(action);
 CREATE INDEX idx_model_state_history_performed_by ON model_state_history(performed_by);
 
 -- Constraint for valid actions (idempotent)
+-- +goose StatementBegin
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -31,6 +32,7 @@ BEGIN
             CHECK (action IN ('enabled', 'disabled', 'swapped_out', 'swapped_in'));
     END IF;
 END $$;
+-- +goose StatementEnd
 
 COMMENT ON TABLE model_state_history IS 'Audit trail for enable/disable operations';
 COMMENT ON COLUMN model_state_history.action IS 'Action type: enabled, disabled, swapped_out, swapped_in';

@@ -24,6 +24,7 @@ CREATE INDEX idx_model_cache_status ON model_cache(status);
 CREATE INDEX idx_model_cache_version ON model_cache(version);
 
 -- Constraint for valid status values (idempotent)
+-- +goose StatementBegin
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -35,6 +36,7 @@ BEGIN
             CHECK (status IN ('downloading', 'ready', 'failed', 'deleted'));
     END IF;
 END $$;
+-- +goose StatementEnd
 
 COMMENT ON TABLE model_cache IS 'Tracks cached model versions in object storage';
 COMMENT ON COLUMN model_cache.version IS 'HuggingFace commit hash for this cached version';

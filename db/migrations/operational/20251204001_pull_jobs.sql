@@ -22,6 +22,7 @@ CREATE INDEX IF NOT EXISTS idx_pull_jobs_status ON pull_jobs(status);
 CREATE INDEX IF NOT EXISTS idx_pull_jobs_started_at ON pull_jobs(started_at DESC);
 
 -- Constraint for valid status values (idempotent)
+-- +goose StatementBegin
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -33,6 +34,7 @@ BEGIN
             CHECK (status IN ('pending', 'downloading', 'uploading', 'complete', 'failed', 'cancelled'));
     END IF;
 END $$;
+-- +goose StatementEnd
 
 -- Partial unique index: Ensures only one active pull job can exist per model/revision.
 -- This prevents race conditions and redundant downloads by constraining uniqueness

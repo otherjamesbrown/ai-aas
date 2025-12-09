@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS audit_log_entries (
 
 -- Create indexes only if columns exist
 -- This handles cases where tables exist with different schemas
+-- +goose StatementBegin
 DO $$
 BEGIN
     -- Index on users.organization_id (only if column exists)
@@ -105,6 +106,7 @@ BEGIN
         CREATE INDEX IF NOT EXISTS idx_audit_log_entries_target ON audit_log_entries (target);
     END IF;
 END $$;
+-- +goose StatementEnd
 
 COMMIT;
 

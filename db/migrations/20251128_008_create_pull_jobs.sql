@@ -28,6 +28,7 @@ CREATE INDEX idx_pull_jobs_status ON pull_jobs(status);
 CREATE INDEX idx_pull_jobs_started_at ON pull_jobs(started_at DESC);
 
 -- Constraint for valid status values (idempotent)
+-- +goose StatementBegin
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -39,6 +40,7 @@ BEGIN
             CHECK (status IN ('pending', 'downloading', 'uploading', 'complete', 'failed', 'cancelled'));
     END IF;
 END $$;
+-- +goose StatementEnd
 
 COMMENT ON TABLE pull_jobs IS 'Tracks model pull/download operations from HuggingFace to object storage';
 COMMENT ON COLUMN pull_jobs.revision IS 'HuggingFace branch/tag/commit being pulled';

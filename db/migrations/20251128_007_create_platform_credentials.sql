@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS platform_credentials (
 CREATE INDEX idx_platform_credentials_type ON platform_credentials(credential_type);
 
 -- Constraint for known credential types (idempotent)
+-- +goose StatementBegin
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -27,6 +28,7 @@ BEGIN
             CHECK (credential_type IN ('hf-token', 's3-access', 's3-secret', 's3-endpoint', 's3-bucket'));
     END IF;
 END $$;
+-- +goose StatementEnd
 
 -- Trigger to update updated_at
 CREATE OR REPLACE FUNCTION update_platform_credentials_updated_at()

@@ -35,6 +35,7 @@ CREATE INDEX idx_model_deployments_status ON model_deployments(status);
 CREATE INDEX idx_model_deployments_enabled ON model_deployments(enabled);
 
 -- Constraints (idempotent)
+-- +goose StatementBegin
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -55,6 +56,7 @@ BEGIN
             CHECK (status IN ('pending', 'deploying', 'ready', 'failed', 'disabled', 'terminated'));
     END IF;
 END $$;
+-- +goose StatementEnd
 
 -- Trigger to update updated_at
 CREATE OR REPLACE FUNCTION update_model_deployments_updated_at()
