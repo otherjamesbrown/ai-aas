@@ -1,7 +1,7 @@
 # Database Patterns
 
 ---
-last_updated: 2025-12-08
+last_updated: 2025-12-09
 document_type: guide
 ---
 
@@ -152,20 +152,24 @@ func (r *Repository) BulkInsertUsageRecords(ctx context.Context, records []*Usag
 
 ## Migrations
 
+We use [goose](https://github.com/pressly/goose) v3 for database migrations.
+
 ### File Structure
 
 ```
-services/<name>/migrations/
-├── 001_create_models_table.up.sql
-├── 001_create_models_table.down.sql
-├── 002_add_status_column.up.sql
-└── 002_add_status_column.down.sql
+db/migrations/operational/
+├── 20251115001_core_entities.sql
+├── 20251115002_usage_events.sql
+└── 20251126001_routing_policies.sql
 ```
 
-### Migration Format
+### Migration Format (Goose v3)
+
+Goose v3 uses a single file with `-- +goose Up` and `-- +goose Down` annotations:
 
 ```sql
--- 001_create_models_table.up.sql
+-- +goose Up
+-- Create models table
 CREATE TABLE IF NOT EXISTS models (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL UNIQUE,
@@ -176,36 +180,45 @@ CREATE TABLE IF NOT EXISTS models (
 );
 
 CREATE INDEX idx_models_status ON models(status);
-```
 
-```sql
--- 001_create_models_table.down.sql
+-- +goose Down
+-- Drop models table
 DROP TABLE IF EXISTS models;
 ```
 
+### Migration File Naming
+
+Migration files follow the format: `<timestamp>_<description>.sql`
+
+Example: `20251115001_core_entities.sql`
+
 ### Running Migrations
 
-Migrations are typically run at service startup or via CLI:
+Migrations are run automatically via init container in Kubernetes deployments:
 
-```go
-import "github.com/golang-migrate/migrate/v4"
-
-func RunMigrations(dbURL, migrationsPath string) error {
-    m, err := migrate.New(
-        "file://"+migrationsPath,
-        dbURL,
-    )
-    if err != nil {
-        return fmt.Errorf("failed to create migrator: %w", err)
-    }
-
-    if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-        return fmt.Errorf("migration failed: %w", err)
-    }
-
-    return nil
-}
+```bash
+goose -dir /app/migrations/sql postgres "$DATABASE_URL" up
 ```
+
+For local development:
+
+```bash
+goose -dir db/migrations/operational postgres "$DATABASE_URL" up
+goose -dir db/migrations/operational postgres "$DATABASE_URL" down  # Rollback last
+goose -dir db/migrations/operational postgres "$DATABASE_URL" status
+```
+
+### Migration Configuration
+
+Migrations are configured in Helm values:
+
+```yaml
+# values-development.yaml
+migrations:
+  enabled: true  # Run migrations via init container
+```
+
+The init container runs before the main application container starts, ensuring the database schema is up to date.
 
 ## Using sqlc
 

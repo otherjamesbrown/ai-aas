@@ -1,3 +1,4 @@
+-- +goose Up
 -- Usage event fact table and supporting indexes
 BEGIN;
 
@@ -19,5 +20,17 @@ CREATE TABLE IF NOT EXISTS usage_events (
 CREATE INDEX IF NOT EXISTS idx_usage_events_org_time ON usage_events USING BRIN (organization_id, occurred_at);
 CREATE INDEX IF NOT EXISTS idx_usage_events_model_time ON usage_events (model_id, occurred_at DESC);
 CREATE INDEX IF NOT EXISTS idx_usage_events_status ON usage_events (status, occurred_at);
+
+COMMIT;
+
+-- +goose Down
+-- Drop usage event fact table
+BEGIN;
+
+DROP INDEX IF EXISTS idx_usage_events_status;
+DROP INDEX IF EXISTS idx_usage_events_model_time;
+DROP INDEX IF EXISTS idx_usage_events_org_time;
+
+DROP TABLE IF EXISTS usage_events;
 
 COMMIT;

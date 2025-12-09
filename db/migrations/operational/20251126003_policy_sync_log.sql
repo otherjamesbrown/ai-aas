@@ -1,3 +1,4 @@
+-- +goose Up
 -- Migration: Create policy_sync_log table for admin-api-service
 -- Feature: 017-admin-api-service
 
@@ -14,3 +15,6 @@ CREATE TABLE IF NOT EXISTS policy_sync_log (
 CREATE INDEX IF NOT EXISTS idx_sync_log_instance ON policy_sync_log(router_instance_id, synced_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sync_log_policy ON policy_sync_log(policy_id, synced_at DESC);
 
+-- +goose Down
+-- Rollback: Drop policy_sync_log table
+DROP TABLE IF EXISTS policy_sync_log;

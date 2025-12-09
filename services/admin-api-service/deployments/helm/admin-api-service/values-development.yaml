@@ -28,10 +28,7 @@ secrets:
   masterAdminApiKeySecretKey: master-admin-api-key
 
 migrations:
-  # Temporarily disabled due to goose v2/v3 format incompatibility
-  # Database is already migrated by previous deployment
-  # TODO: Re-enable after migrations are converted to goose v3 format (ai-aas-fo4)
-  enabled: false
+  enabled: true
 
 userOrgService:
   endpoint: "http://user-org-service-development-user-org-service.user-org-service.svc.cluster.local:8081"

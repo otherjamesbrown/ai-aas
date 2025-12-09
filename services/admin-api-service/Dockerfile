@@ -36,10 +36,8 @@ WORKDIR /app
 # Install runtime dependencies
 RUN apk add --no-cache ca-certificates tzdata wget curl
 
-# Install goose for migrations
-# NOTE: Migrations are temporarily disabled in development (see values-development.yaml)
-# TODO: Convert migrations to goose v3 format then re-enable (ai-aas-fo4)
-RUN curl -fsSL https://github.com/pressly/goose/releases/download/v3.22.1/goose_linux_x86_64 -o /usr/local/bin/goose && \
+# Install goose v3.26.0 for migrations
+RUN curl -fsSL https://github.com/pressly/goose/releases/download/v3.26.0/goose_linux_x86_64 -o /usr/local/bin/goose && \
     chmod +x /usr/local/bin/goose
 
 # Create non-root user
