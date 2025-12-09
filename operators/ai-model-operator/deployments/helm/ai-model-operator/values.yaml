@@ -1,0 +1,64 @@
+# Default values for ai-model-operator.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: ai-model-operator/ai-model-operator # Placeholder, replace with your actual image repo
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "latest"
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use. If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+rules:
+  # Add additional RBAC rules for the operator here if needed
+  # For example, to allow the operator to manage Ingresses:
+  # - apiGroups: ["networking.k8s.io"]
+  #   resources: ["ingresses"]
+  #   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Controller specific configuration
+manager:
+  metrics:
+    bindAddress: ":8080"
+  healthProbe:
+    bindAddress: ":8081"
+  leaderElection:
+    enabled: false
+    id: "98a4bc88.ai-aas.io"
+
+# S3 credentials secret name (must exist in the same namespace as the operator)
+s3CredentialsSecretName: "ai-aas-s3-credentials"
+
+# HuggingFace token secret name (optional, must exist in the same namespace as the operator)
+huggingFaceTokenSecretName: "ai-aas-huggingface-token"
+
+# Model Downloader Image
+modelDownloaderImage:
+  repository: ai-model-operator/model-downloader
+  tag: "latest"

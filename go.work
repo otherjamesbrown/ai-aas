@@ -1,4 +1,4 @@
-go 1.24.0
+go 1.24.6
 
 toolchain go1.24.2
 
@@ -29,6 +29,7 @@ use (
 	./tests/infra/synthetics
 	./tests/infra/terratest
 	./tests/infra/vllm
+	./operators/ai-model-operator
 )
 
 replace github.com/ai-aas/shared-go v0.0.0 => ./shared/go

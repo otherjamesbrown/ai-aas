@@ -1,0 +1,70 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "ai-model-operator.fullname" . }}-manager-role
+  labels:
+    {{- include "ai-model-operator.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - aimodel.ai-aas.io
+  resources:
+  - aimodels
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - aimodel.ai-aas.io
+  resources:
+  - aimodels/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - aimodel.ai-aas.io
+  resources:
+  - aimodels/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - core
+  resources:
+  - services
+  - pods
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch

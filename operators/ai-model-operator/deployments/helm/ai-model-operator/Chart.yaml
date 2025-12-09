@@ -1,0 +1,22 @@
+apiVersion: v2
+name: ai-model-operator
+description: A Helm chart for the AI Model Operator
+
+# A chart can be either an 'application' or a 'library' chart.
+#
+# Application charts provide a Kubernetes-native application experience. They typically
+# deploy one or more workloads (such as Deployments or StatefulSets) that form a
+# cohesive application.
+#
+# Library charts provide reusable APIs, services, or functions to other charts.
+# They don't (typically) deploy any workloads or other tools that users would directly
+# interact with.
+type: application
+
+# This is the chart version. This version number should be incremented each time you make changes
+# to the chart and want to release a new version. Versions are usually semantic, but this is
+# flexible.
+version: 0.1.0
+
+# This is the API version of the chart that Helm will use. Helm 3 requires this field.
+appVersion: "0.1.0"

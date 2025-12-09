@@ -1,0 +1,109 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: aimodels.aimodel.ai-aas.io
+spec:
+  group: aimodel.ai-aas.io
+  names:
+    kind: AIModel
+    listKind: AIModelList
+    plural: aimodels
+    shortNames:
+    - aim
+    singular: aimodel
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: HuggingFace Model ID
+      jsonPath: .spec.modelID
+      name: ModelID
+      type: string
+    - description: Model Revision
+      jsonPath: .spec.revision
+      name: Revision
+      type: string
+    - description: Inference Image
+      jsonPath: .spec.image
+      name: Image
+      type: string
+    - description: Is Model Enabled
+      jsonPath: .spec.enabled
+      name: Enabled
+      type: boolean
+    - description: Current status of the AI Model
+      jsonPath: .status.phase
+      name: Status
+      type: string
+    - description: Inference Endpoint URL
+      jsonPath: .status.inferenceEndpoint
+      name: Endpoint
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: AIModel is the Schema for the aimodels API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AIModelSpec defines the desired state of AIModel
+            properties:
+              enabled:
+                default: false
+                type: boolean
+              image:
+                minLength: 1
+                type: string
+              modelID:
+                description: INSERT FIE
+                minLength: 1
+                type: string
+              replicas:
+                format: int32
+                minimum: 0
+                type: integer
+              revision:
+                minLength: 1
+                type: string
+            required:
+            - image
+            - modelID
+            type: object
+          status:
+            description: AIModelStatus defines the observed state of AIModel
+            properties:
+              inferenceEndpoint:
+                type: string
+              observedGeneration:
+                format: int64
+                type: integer
+              phase:
+                description: INSERT FIELDS HERE (e.g. status detail for the Model)
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
