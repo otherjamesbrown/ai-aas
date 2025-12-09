@@ -125,7 +125,7 @@ jobs:
             const commentLines = [
               `🚀 Remote CI completed for **${service}**`,
               ``,
-      - Status: **${STATUS || 'UNKNOWN'}**`,
+              `- Status: **${STATUS || 'UNKNOWN'}**`,
               `- Workflow: [Run Log](${runUrl})`
             ];
             if (notes) {
