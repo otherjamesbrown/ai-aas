@@ -37,7 +37,8 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates tzdata wget curl
 
 # Install goose for migrations (pre-built binary to avoid Go version issues)
-RUN curl -fsSL https://github.com/pressly/goose/releases/download/v3.22.1/goose_linux_x86_64 -o /usr/local/bin/goose && \
+# Using v3.26.0 to fix duplicate version detection bug with split .up/.down files
+RUN curl -fsSL https://github.com/pressly/goose/releases/download/v3.26.0/goose_linux_x86_64 -o /usr/local/bin/goose && \
     chmod +x /usr/local/bin/goose
 
 # Create non-root user
