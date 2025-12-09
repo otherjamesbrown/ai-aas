@@ -1,7 +1,7 @@
 # Environment Access Guide
 
 ---
-last_updated: 2025-12-08
+last_updated: 2025-12-09
 document_type: reference
 ---
 
@@ -67,6 +67,39 @@ git-crypt unlock
   ai-aas-cli profile use dev
   ```
 - Usage: `ai-aas-cli status`, `ai-aas-cli model list`, `ai-aas-cli model deploy create <model>`
+
+### Staging Environment
+
+**Kubernetes Cluster**
+- Kubeconfig: `secrets/kubeconfigs/kubeconfig-staging.yaml` (encrypted with git-crypt)
+- Context: Use with `--kubeconfig` flag
+- Access: `kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-staging.yaml`
+
+**ArgoCD**
+- URL: https://argocd.staging.ai-aas.local
+- Username: `admin`
+- Password: Retrieve with `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode`
+
+**API Endpoints**
+- API Router: https://api.staging.otherjamesbrown.com
+- Admin API: https://admin-api.staging.otherjamesbrown.com
+- User Org Service: https://user-org.staging.otherjamesbrown.com
+- Analytics: https://analytics.staging.otherjamesbrown.com
+- Ingress IP: `172.236.135.55`
+
+**TLS Certificates**
+- Uses Let's Encrypt staging certificates (not trusted by browsers)
+- All services use `letsencrypt-staging` ClusterIssuer
+- Test with `curl -k` to skip certificate verification
+
+**AI-AAS CLI**
+- Configure for staging:
+  ```bash
+  ai-aas-cli profile create staging-sg \
+    --admin-api-endpoint=https://admin-api.staging.otherjamesbrown.com \
+    --api-key=$(grep STAGING_ADMIN_API_KEY secrets/env/.env | cut -d'=' -f2)
+  ai-aas-cli profile use staging-sg
+  ```
 
 ### Production Environment
 
