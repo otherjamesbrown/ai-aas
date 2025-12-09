@@ -20,8 +20,9 @@ var ErrCredentialNotFound = errors.New("credential not found")
 
 // Service provides model management operations
 type Service struct {
-	pool      *pgxpool.Pool
-	encryptor Encryptor
+	pool            *pgxpool.Pool
+	encryptor       Encryptor
+	s3ClientFactory S3ClientFactory
 }
 
 // Encryptor provides encryption/decryption for credentials
@@ -36,6 +37,12 @@ func NewService(pool *pgxpool.Pool, encryptor Encryptor) *Service {
 		pool:      pool,
 		encryptor: encryptor,
 	}
+}
+
+// SetS3ClientFactory sets the S3 client factory for the service
+// This allows for dependency injection and easier testing
+func (s *Service) SetS3ClientFactory(factory S3ClientFactory) {
+	s.s3ClientFactory = factory
 }
 
 // Model represents a registered model

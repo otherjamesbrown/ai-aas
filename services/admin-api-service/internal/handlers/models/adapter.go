@@ -91,6 +91,28 @@ func (a *ServiceAdapter) RemoveModel(name string, force bool) error {
 	return a.svc.RemoveModel(a.ctx, name, force)
 }
 
+// RenameModel renames a model in the registry
+func (a *ServiceAdapter) RenameModel(name string, req RenameModelRequest) (*RenameModelResponse, error) {
+	svcReq := svcModels.RenameModelRequest{
+		NewName:      req.NewName,
+		MigrateCache: req.MigrateCache,
+	}
+
+	// Use the service as a credential getter (it implements the interface)
+	result, err := a.svc.RenameModel(a.ctx, name, svcReq, a.svc)
+	if err != nil {
+		return nil, err
+	}
+
+	return &RenameModelResponse{
+		OldName:        result.OldName,
+		NewName:        result.NewName,
+		CacheMigrated:  result.CacheMigrated,
+		CacheSizeBytes: result.CacheSizeBytes,
+		CacheFileCount: result.CacheFileCount,
+	}, nil
+}
+
 // GetModelCache returns cache entries for a model
 func (a *ServiceAdapter) GetModelCache(name string) ([]CacheEntry, error) {
 	svcEntries, err := a.svc.GetModelCache(a.ctx, name)
