@@ -1,0 +1,79 @@
+# NGINX Ingress Controller ArgoCD Application
+# Primary ingress controller for all external HTTP/HTTPS traffic
+# Istio is only used for KServe/Knative internal routing
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nginx-ingress-staging
+  namespace: argocd
+  labels:
+    environment: staging
+    app: nginx-ingress
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform-staging
+  source:
+    repoURL: https://kubernetes.github.io/ingress-nginx
+    chart: ingress-nginx
+    targetRevision: 4.11.3
+    helm:
+      releaseName: ingress-nginx
+      values: |
+        controller:
+          # Set as default ingress class
+          ingressClassResource:
+            name: nginx
+            enabled: true
+            default: true
+            controllerValue: "k8s.io/ingress-nginx"
+
+          # Service configuration
+          service:
+            type: LoadBalancer
+            # Existing LoadBalancer IP: 172.236.135.55
+            # Note: IP is assigned by cloud provider, not managed here
+
+          # Resource limits (slightly higher for staging)
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          # Metrics for Prometheus
+          metrics:
+            enabled: true
+            serviceMonitor:
+              enabled: false  # Enable when Prometheus is configured
+
+          # Config for better logging
+          config:
+            use-forwarded-headers: "true"
+            compute-full-forwarded-for: "true"
+            log-format-upstream: '$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent" $request_length $request_time [$proxy_upstream_name] [$proxy_alternative_upstream_name] $upstream_addr $upstream_response_length $upstream_response_time $upstream_status $req_id'
+
+        # Admission webhook configuration
+        admissionWebhooks:
+          enabled: true
+          failurePolicy: Fail
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ingress-nginx
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

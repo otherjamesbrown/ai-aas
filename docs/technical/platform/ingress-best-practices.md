@@ -2,6 +2,32 @@
 
 This document outlines best practices for configuring Kubernetes Ingress resources in the AI-AAS platform.
 
+## Architecture Overview
+
+The platform uses a **dual-ingress architecture**:
+
+| Component | Purpose | LoadBalancer IP (Dev) | LoadBalancer IP (Staging) |
+|-----------|---------|----------------------|---------------------------|
+| **NGINX Ingress** | Primary - All external HTTP/HTTPS traffic | 172.232.58.222 | 172.236.135.55 |
+| **Istio Gateway** | Internal only - KServe/Knative routing | 172.232.48.93 | 172.236.132.56 |
+
+### Why Dual Ingress?
+
+1. **NGINX for External Traffic**: Battle-tested, simple configuration, excellent for standard HTTP/HTTPS routing
+2. **Istio for KServe/Knative**: Required for ML model serving - KServe uses Knative which requires Istio for internal service mesh routing
+
+### Key Rules
+
+- **All service ingresses MUST use `className: nginx`**
+- **Never route external traffic through Istio** - it's only for internal KServe/Knative communication
+- **Istio Gateway is used by `knative-local-gateway`** for internal cluster routing between Knative components
+
+### GitOps Management
+
+Both ingress controllers are managed via ArgoCD:
+- NGINX: `gitops/clusters/<env>/apps/nginx-ingress.yaml`
+- Istio: `gitops/clusters/<env>/apps/istio.yaml`
+
 ## Overview
 
 The platform uses NGINX Ingress Controller for routing external traffic to services. Proper ingress configuration ensures:

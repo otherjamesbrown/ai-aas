@@ -1,7 +1,7 @@
 # Infrastructure Operations Manager - Document Map
 
 ---
-last_updated: 2025-12-08
+last_updated: 2025-12-09
 document_type: reference
 purpose: Navigation index for infra-ops-manager AI agent
 ---
@@ -158,7 +158,8 @@ This document provides a map of all platform documentation to help the infra-ops
 | Branch | `develop` |
 | ArgoCD sync | Automated |
 | Kubeconfig | `~/kubeconfigs/kubeconfig-development.yaml` |
-| Ingress IP | `172.232.58.222` |
+| NGINX Ingress IP | `172.232.58.222` (PRIMARY - all external traffic) |
+| Istio Gateway IP | `172.232.48.93` (Internal - KServe/Knative only) |
 | Apps location | `gitops/clusters/development/apps/` |
 
 ### Staging
@@ -168,6 +169,8 @@ This document provides a map of all platform documentation to help the infra-ops
 | Branch | `staging` |
 | ArgoCD sync | Automated |
 | Kubeconfig | `~/kubeconfigs/kubeconfig-staging.yaml` |
+| NGINX Ingress IP | `172.236.135.55` (PRIMARY - all external traffic) |
+| Istio Gateway IP | `172.236.132.56` (Internal - KServe/Knative only) |
 | Apps location | `gitops/clusters/staging/apps/` |
 
 ### Production
@@ -181,6 +184,8 @@ This document provides a map of all platform documentation to help the infra-ops
 
 ## Services Inventory
 
+### Application Services
+
 | Service | Namespace | Helm Chart Location |
 |---------|-----------|---------------------|
 | api-router-service | development | `services/api-router-service/deployments/helm/api-router-service/` |
@@ -188,6 +193,15 @@ This document provides a map of all platform documentation to help the infra-ops
 | analytics-service | development | `services/analytics-service/deployments/helm/analytics-service/` |
 | admin-api-service | admin-api-service | `services/admin-api-service/deployments/helm/admin-api-service/` |
 | web-portal | development | `web/portal/deployments/helm/web-portal/` |
+
+### Infrastructure Services (Dual-Ingress Architecture)
+
+| Service | Namespace | ArgoCD App Location | Purpose |
+|---------|-----------|---------------------|---------|
+| nginx-ingress | ingress-nginx | `gitops/clusters/<env>/apps/nginx-ingress.yaml` | **PRIMARY** - All external HTTP/HTTPS traffic |
+| istio | istio-system | `gitops/clusters/<env>/apps/istio.yaml` | Internal KServe/Knative routing only |
+
+**Important**: All service ingresses MUST use `ingressClassName: nginx`. See `docs/technical/platform/ingress-best-practices.md` for architecture details.
 
 ## Verification Commands
 
