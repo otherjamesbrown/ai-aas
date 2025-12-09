@@ -211,17 +211,17 @@ func runRoutingPolicyCreate(orgID, model, backends string, global bool, flagForm
 		)
 	}
 
-	if cfg.AdminAPIEndpoint == "" {
+	if cfg.APIEndpoint == "" {
 		return errors.NewOperationError(
-			"Admin API Service endpoint not configured",
-			"Set ADMIN_CLI_API_ENDPOINTS_ADMIN_API_SERVICE or configure api-endpoints.admin-api-service in config file.",
+			"Admin API endpoint not configured",
+			"Set AI_AAS_API_ENDPOINT environment variable or configure api_endpoint in ~/.ai-aas-cli.yaml",
 		)
 	}
 
 	if cfg.APIKey == "" {
 		return errors.NewOperationError(
 			"API key not configured",
-			"Set ADMIN_CLI_AUTH_API_KEY or configure auth.api-key in config file.",
+			"Set AI_AAS_API_KEY environment variable or configure api_key in ~/.ai-aas-cli.yaml",
 		)
 	}
 
@@ -242,7 +242,7 @@ func runRoutingPolicyCreate(orgID, model, backends string, global bool, flagForm
 	}
 
 	// Call Admin API Service
-	url := fmt.Sprintf("%s/v1/routing/policies", cfg.AdminAPIEndpoint)
+	url := fmt.Sprintf("%s/v1/routing/policies", cfg.APIEndpoint)
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(reqJSON))
 	if err != nil {
 		return errors.NewOperationError(
@@ -259,7 +259,7 @@ func runRoutingPolicyCreate(orgID, model, backends string, global bool, flagForm
 	if err != nil {
 		return errors.NewOperationError(
 			fmt.Sprintf("failed to call Admin API Service: %v", err),
-			"Check your ADMIN_CLI_API_ENDPOINTS_ADMIN_API_SERVICE configuration and network connectivity.",
+			"Check your AI_AAS_API_ENDPOINT configuration and network connectivity.",
 		)
 	}
 	defer resp.Body.Close()
@@ -340,22 +340,22 @@ func runRoutingPolicyList(flagFormat, filterModel, filterOrgID string) error {
 		)
 	}
 
-	if cfg.AdminAPIEndpoint == "" {
+	if cfg.APIEndpoint == "" {
 		return errors.NewOperationError(
-			"Admin API Service endpoint not configured",
-			"Set ADMIN_CLI_API_ENDPOINTS_ADMIN_API_SERVICE or configure api-endpoints.admin-api-service in config file.",
+			"Admin API endpoint not configured",
+			"Set AI_AAS_API_ENDPOINT environment variable or configure api_endpoint in ~/.ai-aas-cli.yaml",
 		)
 	}
 
 	if cfg.APIKey == "" {
 		return errors.NewOperationError(
 			"API key not configured",
-			"Set ADMIN_CLI_AUTH_API_KEY or configure auth.api-key in config file.",
+			"Set AI_AAS_API_KEY environment variable or configure api_key in ~/.ai-aas-cli.yaml",
 		)
 	}
 
 	// Build URL with query parameters
-	url := fmt.Sprintf("%s/v1/routing/policies", cfg.AdminAPIEndpoint)
+	url := fmt.Sprintf("%s/v1/routing/policies", cfg.APIEndpoint)
 	params := []string{}
 	if filterModel != "" {
 		params = append(params, fmt.Sprintf("model=%s", filterModel))
@@ -382,7 +382,7 @@ func runRoutingPolicyList(flagFormat, filterModel, filterOrgID string) error {
 	if err != nil {
 		return errors.NewOperationError(
 			fmt.Sprintf("failed to call Admin API Service: %v", err),
-			"Check your ADMIN_CLI_API_ENDPOINTS_ADMIN_API_SERVICE configuration and network connectivity.",
+			"Check your AI_AAS_API_ENDPOINT configuration and network connectivity.",
 		)
 	}
 	defer resp.Body.Close()
@@ -486,22 +486,22 @@ func runRoutingPolicyDelete(policyID string, quiet bool) error {
 		)
 	}
 
-	if cfg.AdminAPIEndpoint == "" {
+	if cfg.APIEndpoint == "" {
 		return errors.NewOperationError(
-			"Admin API Service endpoint not configured",
-			"Set ADMIN_CLI_API_ENDPOINTS_ADMIN_API_SERVICE or configure api-endpoints.admin-api-service in config file.",
+			"Admin API endpoint not configured",
+			"Set AI_AAS_API_ENDPOINT environment variable or configure api_endpoint in ~/.ai-aas-cli.yaml",
 		)
 	}
 
 	if cfg.APIKey == "" {
 		return errors.NewOperationError(
 			"API key not configured",
-			"Set ADMIN_CLI_AUTH_API_KEY or configure auth.api-key in config file.",
+			"Set AI_AAS_API_KEY environment variable or configure api_key in ~/.ai-aas-cli.yaml",
 		)
 	}
 
 	// Call Admin API Service
-	url := fmt.Sprintf("%s/v1/routing/policies/%s", cfg.AdminAPIEndpoint, policyID)
+	url := fmt.Sprintf("%s/v1/routing/policies/%s", cfg.APIEndpoint, policyID)
 	req, err := http.NewRequest(http.MethodDelete, url, nil)
 	if err != nil {
 		return errors.NewOperationError(
@@ -517,7 +517,7 @@ func runRoutingPolicyDelete(policyID string, quiet bool) error {
 	if err != nil {
 		return errors.NewOperationError(
 			fmt.Sprintf("failed to call Admin API Service: %v", err),
-			"Check your ADMIN_CLI_API_ENDPOINTS_ADMIN_API_SERVICE configuration and network connectivity.",
+			"Check your AI_AAS_API_ENDPOINT configuration and network connectivity.",
 		)
 	}
 	defer resp.Body.Close()

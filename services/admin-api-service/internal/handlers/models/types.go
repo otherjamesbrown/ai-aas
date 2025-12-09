@@ -233,3 +233,18 @@ type UpdateAliasRequest struct {
 	Description *string `json:"description,omitempty"`
 }
 
+// RenameModelRequest represents a request to rename a model
+type RenameModelRequest struct {
+	NewName      string `json:"new_name"`
+	MigrateCache bool   `json:"migrate_cache"`
+}
+
+// RenameModelResponse represents the result of a rename operation
+type RenameModelResponse struct {
+	OldName        string `json:"old_name"`
+	NewName        string `json:"new_name"`
+	CacheMigrated  bool   `json:"cache_migrated"`
+	CacheSizeBytes int64  `json:"cache_size_bytes,omitempty"`
+	CacheFileCount int    `json:"cache_file_count,omitempty"`
+}
+

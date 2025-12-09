@@ -29,6 +29,7 @@ type Profile struct {
 	APIKey string `yaml:"api_key,omitempty" json:"api_key,omitempty"`
 
 	// Endpoints - when set, these override the global defaults
+	// AdminAPIEndpoint is the primary Admin API endpoint for this profile
 	AdminAPIEndpoint  string `yaml:"admin_api_endpoint,omitempty" json:"admin_api_endpoint,omitempty"`
 	InferenceEndpoint string `yaml:"inference_endpoint,omitempty" json:"inference_endpoint,omitempty"`
 	UserOrgEndpoint   string `yaml:"user_org_endpoint,omitempty" json:"user_org_endpoint,omitempty"`
@@ -303,10 +304,11 @@ func GetEffectiveConfig(profileName string) (*Config, *Profile, error) {
 		// Load environment-specific endpoints for fallback
 		envEndpoints := viper.GetStringMapString(fmt.Sprintf("environments.%s", profile.Environment))
 
+		// Profile's AdminAPIEndpoint becomes the primary APIEndpoint in Config
 		if profile.AdminAPIEndpoint != "" {
-			cfg.AdminAPIEndpoint = profile.AdminAPIEndpoint
+			cfg.APIEndpoint = profile.AdminAPIEndpoint
 		} else if envEndpoints["admin_api_endpoint"] != "" {
-			cfg.AdminAPIEndpoint = envEndpoints["admin_api_endpoint"]
+			cfg.APIEndpoint = envEndpoints["admin_api_endpoint"]
 		}
 
 		if profile.InferenceEndpoint != "" {

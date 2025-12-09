@@ -19,7 +19,8 @@ const (
 
 // Config holds the CLI configuration
 type Config struct {
-	// Primary API endpoint (Admin API Service)
+	// Primary Admin API endpoint - this is the main API endpoint for all CLI operations
+	// Set via config file key 'api_endpoint' or environment variable 'AI_AAS_API_ENDPOINT'
 	APIEndpoint string `mapstructure:"api_endpoint" json:"api_endpoint"`
 	APIKey      string `mapstructure:"api_key" json:"api_key"`
 	Environment string `mapstructure:"environment" json:"environment"`
@@ -31,10 +32,14 @@ type Config struct {
 	// Default organization (set with 'ai-aas-cli org use <org-id>')
 	DefaultOrgID string `mapstructure:"default_org_id" json:"default_org_id,omitempty"`
 
-	// Service-specific endpoints (for admin commands)
+	// Service-specific endpoints (optional overrides for advanced use cases)
+	// These are rarely needed - APIEndpoint is used for Admin API operations by default
 	UserOrgEndpoint   string `mapstructure:"user_org_endpoint" json:"user_org_endpoint,omitempty"`
 	AnalyticsEndpoint string `mapstructure:"analytics_endpoint" json:"analytics_endpoint,omitempty"`
 	InferenceEndpoint string `mapstructure:"inference_endpoint" json:"inference_endpoint,omitempty"`
+	// AdminAPIEndpoint is deprecated - use APIEndpoint instead. Kept for backward compatibility only.
+	// If set, this overrides APIEndpoint for admin operations.
+	// Set via config file key 'admin_api_endpoint' or environment variable 'AI_AAS_ADMIN_API_ENDPOINT'
 	AdminAPIEndpoint  string `mapstructure:"admin_api_endpoint" json:"admin_api_endpoint,omitempty"`
 
 	// TLS Configuration
@@ -108,6 +113,11 @@ func Load() (*Config, error) {
 	// AI_AAS_API_ENDPOINT overrides config file endpoint
 	if endpointOverride := os.Getenv("AI_AAS_API_ENDPOINT"); endpointOverride != "" {
 		cfg.APIEndpoint = endpointOverride
+	}
+
+	// AI_AAS_ADMIN_API_ENDPOINT overrides admin API endpoint (advanced override)
+	if adminEndpointOverride := os.Getenv("AI_AAS_ADMIN_API_ENDPOINT"); adminEndpointOverride != "" {
+		cfg.AdminAPIEndpoint = adminEndpointOverride
 	}
 
 	// AI_AAS_DEFAULT_ORG_ID overrides config file default org

@@ -51,6 +51,7 @@ Workflow:
 	cmd.AddCommand(newRegistryListCommand())
 	cmd.AddCommand(newRegistryInfoCommand())
 	cmd.AddCommand(newRegistryRemoveCommand())
+	cmd.AddCommand(newRegistryRenameCommand())
 	cmd.AddCommand(newRegistryStatusCommand())
 
 	return cmd
@@ -608,6 +609,105 @@ See Also:
 
 	cmd.Flags().StringVarP(&environment, "environment", "e", "", "filter by environment")
 	cmd.Flags().StringVarP(&format, "format", "f", "table", "output format (table, json)")
+
+	return cmd
+}
+
+// newRegistryRenameCommand creates the registry rename subcommand
+func newRegistryRenameCommand() *cobra.Command {
+	var skipCacheMigration bool
+
+	cmd := &cobra.Command{
+		Use:   "rename <old-name> <new-name>",
+		Short: "Rename a model in the registry",
+		Long: `Rename a model in the platform registry.
+
+This updates the model name in the registry and optionally migrates cached files
+to the new name. Model names must follow naming conventions (alphanumeric, hyphens,
+underscores only - no dots or special characters).
+
+Common use case: Fixing model names with problematic characters (e.g., dots in version numbers).
+
+Examples:
+  # Rename a model with invalid characters
+  ai-aas model registry rename mistral-7b-instruct-v0.3 mistral-7b-instruct-v03
+
+  # Rename without migrating cache (faster, use if not cached)
+  ai-aas model registry rename old-name new-name --skip-cache-migration
+
+Warning:
+  - Model cannot be renamed if it has active deployments
+  - Cache migration may take time for large models
+  - Deployments using the old name must be updated manually
+
+See Also:
+  ai-aas model registry list      List all models
+  ai-aas model deploy update      Update deployment after rename`,
+		Args: cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			oldName := args[0]
+			newName := args[1]
+
+			cfg, err := config.Load()
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			adminEndpoint := cfg.AdminAPIEndpoint
+			if adminEndpoint == "" {
+				adminEndpoint = cfg.APIEndpoint
+			}
+
+			if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
+				return fmt.Errorf("Admin API endpoint not configured. Run 'ai-aas-cli --init' first")
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+			defer cancel()
+
+			opts := []api.ClientOption{}
+			if cfg.TLSInsecure {
+				opts = append(opts, api.WithInsecureSkipVerify())
+			}
+			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+			regClient := registry.NewClient(apiClient)
+
+			// Display operation
+			fmt.Printf("Renaming model: %s → %s\n\n", oldName, newName)
+
+			// Call API to rename
+			resp, err := regClient.Rename(ctx, oldName, registry.RenameRequest{
+				NewName:      newName,
+				MigrateCache: !skipCacheMigration,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to rename model: %w", err)
+			}
+
+			// Show results
+			cli.PrintSuccess("Registry entry updated")
+
+			if resp.CacheMigrated {
+				sizeStr := cli.FormatBytes(resp.CacheSizeBytes)
+				cli.PrintSuccess(fmt.Sprintf("Cache migrated (%s)", sizeStr))
+			} else if !skipCacheMigration {
+				cli.PrintWarning("No cache to migrate")
+			}
+
+			fmt.Println()
+			fmt.Println("Model renamed successfully.")
+
+			// Next steps
+			fmt.Println()
+			fmt.Println("Next steps:")
+			fmt.Printf("  ai-aas model registry info %s     # Verify the rename\n", newName)
+			fmt.Printf("  ai-aas model deploy create %s -e <env>  # Deploy with new name\n", newName)
+
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVar(&skipCacheMigration, "skip-cache-migration", false, "don't migrate cached files (use if cache is empty)")
 
 	return cmd
 }

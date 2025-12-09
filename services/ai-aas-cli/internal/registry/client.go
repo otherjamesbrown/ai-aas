@@ -317,3 +317,27 @@ func (c *Client) RecordState(ctx context.Context, name string, req RecordStateRe
 	return nil
 }
 
+// RenameRequest contains parameters for renaming a model
+type RenameRequest struct {
+	NewName      string `json:"new_name"`
+	MigrateCache bool   `json:"migrate_cache"`
+}
+
+// RenameResponse contains the result of a model rename operation
+type RenameResponse struct {
+	OldName        string `json:"old_name"`
+	NewName        string `json:"new_name"`
+	CacheMigrated  bool   `json:"cache_migrated"`
+	CacheSizeBytes int64  `json:"cache_size_bytes,omitempty"`
+	CacheFileCount int    `json:"cache_file_count,omitempty"`
+}
+
+// Rename renames a model in the registry
+func (c *Client) Rename(ctx context.Context, oldName string, req RenameRequest) (*RenameResponse, error) {
+	var response RenameResponse
+	if err := c.api.Post(ctx, "/v1/models/"+oldName+"/rename", req, &response); err != nil {
+		return nil, fmt.Errorf("rename model %s: %w", oldName, err)
+	}
+	return &response, nil
+}
+
