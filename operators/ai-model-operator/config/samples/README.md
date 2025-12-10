@@ -13,11 +13,13 @@ The AI Model Operator manages AI model deployments by creating KServe InferenceS
 Example AIModel CR for Mistral-7B-Instruct-v0.2 in staging environment.
 
 **Key features:**
-- Public HuggingFace model (no S3 required)
+- Public HuggingFace model with S3 caching (S3 is always required per spec FR-3)
 - vLLM runtime with GPU acceleration
 - Keeps 1 replica warm (minReplicas=1) for fast testing
 - Autoscales to 3 replicas under load (maxReplicas=3)
 - GPU node scheduling with appropriate tolerations
+
+> **Note:** S3 caching is mandatory for all models. The operator downloads models from HuggingFace to S3 on first deployment, then vLLM loads from S3. This prevents re-downloading on pod restarts.
 
 **To apply:**
 ```bash

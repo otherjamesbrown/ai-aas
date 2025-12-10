@@ -95,6 +95,7 @@
 
 **Differences Explained**:
 - **Name**: The AIModel uses `mistral-7b-instruct` (without `-staging` suffix) since the namespace already indicates the environment. The operator will create an InferenceService with the same name in the same namespace.
+- **S3 fields**: The AIModel CR requires `s3Bucket` and `s3Key` for model caching (per spec FR-3). The manual InferenceService loads directly from HuggingFace, but the operator-managed approach uses S3 as a cache layer for reliability.
 
 ## Equivalence Confidence: HIGH ✅
 
@@ -106,3 +107,5 @@ The AIModel CR will produce an InferenceService that is functionally equivalent 
 - Same GPU scheduling (tolerations)
 
 The operator handles Knative annotations and health probes using standard patterns, which should match or improve upon the manual configuration.
+
+> **Note:** The operator adds S3 caching as an architectural improvement. Models are downloaded from HuggingFace to S3 once, then loaded from S3 on pod restarts. This provides faster cold starts and resilience against HuggingFace rate limiting.

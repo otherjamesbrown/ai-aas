@@ -19,9 +19,10 @@ spec:
   modelName: mistral-7b-instruct
   modelID: mistralai/Mistral-7B-Instruct-v0.2
 
-  # S3 not used - model pulled directly from HuggingFace (public model)
-  s3Bucket: ""
-  s3Key: ""
+  # S3 cache for model artifacts (required - see spec FR-3)
+  # Models are downloaded from HuggingFace and cached in S3
+  s3Bucket: "ai-aas-models-staging"
+  s3Key: "models/mistral-7b-instruct-v0.2"
 
   # Deployment configuration
   enabled: true

@@ -1,3 +1,8 @@
+# LEGACY: This Application deploys a raw InferenceService directly.
+# Once the AI Model Operator is deployed to staging, this should be replaced
+# by an Application that deploys an AIModel CR instead. See:
+# - operators/ai-model-operator/config/samples/mistral-7b-instruct-staging.yaml
+# - infra/k8s/kserve/models/mistral-7b-instruct-staging.yaml (migration steps)
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -7,6 +12,7 @@ metadata:
     environment: staging
     app: vllm-inference
     model: mistral-7b-instruct
+    legacy: "true"  # Mark as legacy for future cleanup
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:

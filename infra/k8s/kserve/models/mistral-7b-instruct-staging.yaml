@@ -1,5 +1,17 @@
 # KServe InferenceService for Mistral-7B-Instruct-v0.2 (Staging)
 # Public model - no HuggingFace token required
+#
+# LEGACY: This raw InferenceService is deployed directly via ArgoCD.
+# Once the AI Model Operator is deployed to staging, this should be replaced
+# by an AIModel CR (see operators/ai-model-operator/config/samples/mistral-7b-instruct-staging.yaml)
+# which provides GitOps-native lifecycle management via the operator.
+#
+# Migration steps:
+# 1. Deploy AI Model Operator to staging via ArgoCD
+# 2. Create S3 credentials secret in staging namespace
+# 3. Apply the AIModel CR from config/samples/
+# 4. Verify InferenceService is created by the operator
+# 5. Delete this raw InferenceService and its ArgoCD Application (gitops/clusters/staging/apps/vllm-mistral-7b.yaml)
 apiVersion: serving.kserve.io/v1beta1
 kind: InferenceService
 metadata:
