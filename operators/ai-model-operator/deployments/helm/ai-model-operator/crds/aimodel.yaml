@@ -303,6 +303,20 @@ spec:
                 - Ready
                 - Failed
                 - Disabled
+                - RetryPending
+              retryCount:
+                description: RetryCount tracks the number of download retry attempts.
+                type: integer
+                format: int32
+                minimum: 0
+              lastRetryTime:
+                description: LastRetryTime is when the last retry was attempted.
+                format: date-time
+                type: string
+              nextRetryTime:
+                description: NextRetryTime is when the next retry will be attempted (if in RetryPending phase).
+                format: date-time
+                type: string
               inferenceServiceName:
                 description: InferenceServiceName is the name of the associated KServe InferenceService.
                 type: string
