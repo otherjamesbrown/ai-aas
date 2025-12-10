@@ -95,7 +95,3 @@ type AIModelList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []AIModel `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&AIModel{}, &AIModelList{})
-}
