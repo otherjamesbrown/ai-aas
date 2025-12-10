@@ -1,6 +1,4 @@
-go 1.24.0
-
-toolchain go1.24.2
+go 1.24.6
 
 use (
 	./analytics/tests
@@ -8,6 +6,7 @@ use (
 	./db/tools/lint
 	./db/tools/migrate
 	./db/tools/sqlrunner
+	./operators/ai-model-operator
 	./samples/service-template/go
 	./services/_template
 	./services/admin-api-service

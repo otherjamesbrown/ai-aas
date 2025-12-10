@@ -30,6 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -40,7 +41,7 @@ import (
 )
 
 const aiModelFinalizer = "aimodel.ai-aas.io/finalizer"
-const modelDownloaderImage = "curlimages/curl:latest" // Placeholder, replace with actual image
+const modelDownloaderImage = "python:3.11-slim" // Python image for HuggingFace Hub downloads
 
 var (
 	reconcileTotal = prometheus.NewCounterVec(
@@ -349,8 +350,41 @@ func (r *AIModelReconciler) finalizeAIModel(ctx context.Context, aiModel *aimode
 	return nil
 }
 
-// modelDownloaderJob creates a Kubernetes Job to download model artifacts.
+// modelDownloaderJob creates a Kubernetes Job to download model artifacts from HuggingFace Hub
+// and upload them to S3.
 func (r *AIModelReconciler) modelDownloaderJob(aiModel *aimodelv1alpha1.AIModel, jobName string) *batchv1.Job {
+	// Python script that downloads from HuggingFace Hub and uploads to S3
+	downloadScript := `
+pip install -q huggingface_hub boto3 &&
+python3 -c "
+from huggingface_hub import snapshot_download
+import boto3
+import os
+
+model_id = os.environ['MODEL_ID']
+s3_bucket = os.environ['S3_BUCKET']
+s3_key = os.environ['S3_KEY']
+
+print(f'Downloading {model_id} from HuggingFace Hub...')
+local_dir = snapshot_download(
+    model_id,
+    local_dir='/tmp/model',
+    token=os.environ.get('HF_TOKEN'),
+)
+
+print(f'Uploading to s3://{s3_bucket}/{s3_key}/')
+s3 = boto3.client('s3')
+for root, dirs, files in os.walk(local_dir):
+    for file in files:
+        local_path = os.path.join(root, file)
+        rel_path = os.path.relpath(local_path, local_dir)
+        s3_path = f'{s3_key}/{rel_path}'
+        print(f'  Uploading {rel_path}...')
+        s3.upload_file(local_path, s3_bucket, s3_path)
+print('Upload complete!')
+"
+`
+
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -363,16 +397,67 @@ func (r *AIModelReconciler) modelDownloaderJob(aiModel *aimodelv1alpha1.AIModel,
 					Containers: []corev1.Container{{
 						Name:  "downloader",
 						Image: modelDownloaderImage,
-						Command: []string{"curl", "-o", fmt.Sprintf("/model/%s", aiModel.Spec.ModelID), fmt.Sprintf("s3://%s/%s", aiModel.Spec.S3Bucket, aiModel.Spec.S3Key)},
+						Command: []string{"/bin/sh", "-c"},
+						Args: []string{downloadScript},
+						Env: []corev1.EnvVar{
+							{
+								Name:  "MODEL_ID",
+								Value: aiModel.Spec.ModelID,
+							},
+							{
+								Name:  "S3_BUCKET",
+								Value: aiModel.Spec.S3Bucket,
+							},
+							{
+								Name:  "S3_KEY",
+								Value: aiModel.Spec.S3Key,
+							},
+							{
+								Name: "HF_TOKEN",
+								ValueFrom: &corev1.EnvVarSource{
+									SecretKeyRef: &corev1.SecretKeySelector{
+										LocalObjectReference: corev1.LocalObjectReference{
+											Name: "hf-credentials",
+										},
+										Key: "token",
+										Optional: func() *bool {
+											opt := true
+											return &opt
+										}(),
+									},
+								},
+							},
+							{
+								Name: "AWS_ACCESS_KEY_ID",
+								ValueFrom: &corev1.EnvVarSource{
+									SecretKeyRef: &corev1.SecretKeySelector{
+										LocalObjectReference: corev1.LocalObjectReference{
+											Name: "s3-credentials",
+										},
+										Key: "access-key-id",
+									},
+								},
+							},
+							{
+								Name: "AWS_SECRET_ACCESS_KEY",
+								ValueFrom: &corev1.EnvVarSource{
+									SecretKeyRef: &corev1.SecretKeySelector{
+										LocalObjectReference: corev1.LocalObjectReference{
+											Name: "s3-credentials",
+										},
+										Key: "secret-access-key",
+									},
+								},
+							},
+						},
 						VolumeMounts: []corev1.VolumeMount{{
-							Name: "model-storage",
-							MountPath: "/model",
+							Name:      "model-storage",
+							MountPath: "/tmp/model",
 						}},
 					}},
 					RestartPolicy: corev1.RestartPolicyOnFailure,
 					Volumes: []corev1.Volume{{
 						Name: "model-storage",
-						// TODO: Use a persistent volume claim or host path for actual storage
 						VolumeSource: corev1.VolumeSource{
 							EmptyDir: &corev1.EmptyDirVolumeSource{},
 						},
@@ -408,14 +493,65 @@ func (r *AIModelReconciler) vllmDeployment(aiModel *aimodelv1alpha1.AIModel, dep
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
 						Name:  "vllm",
-						// TODO: Use a configurable vLLM image and expose model path
-						Image: "vllm/vllm-openai:latest", // Placeholder
+						Image: "vllm/vllm-openai:v0.6.3",
+						Args: []string{
+							"--model", fmt.Sprintf("s3://%s/%s", aiModel.Spec.S3Bucket, aiModel.Spec.S3Key),
+							"--served-model-name", aiModel.Spec.ModelName,
+							"--dtype", "auto",
+							"--max-model-len", "4096",
+							"--gpu-memory-utilization", "0.9",
+							"--trust-remote-code",
+						},
 						Ports: []corev1.ContainerPort{{
 							ContainerPort: 8000,
 							Name:          "http",
 						}},
-						// TODO: Mount model from shared volume, configure VLLM to load it
+						Env: []corev1.EnvVar{
+							{
+								Name: "AWS_ACCESS_KEY_ID",
+								ValueFrom: &corev1.EnvVarSource{
+									SecretKeyRef: &corev1.SecretKeySelector{
+										LocalObjectReference: corev1.LocalObjectReference{
+											Name: "s3-credentials",
+										},
+										Key: "access-key-id",
+									},
+								},
+							},
+							{
+								Name: "AWS_SECRET_ACCESS_KEY",
+								ValueFrom: &corev1.EnvVarSource{
+									SecretKeyRef: &corev1.SecretKeySelector{
+										LocalObjectReference: corev1.LocalObjectReference{
+											Name: "s3-credentials",
+										},
+										Key: "secret-access-key",
+									},
+								},
+							},
+						},
+						Resources: corev1.ResourceRequirements{
+							Limits: corev1.ResourceList{
+								"nvidia.com/gpu": resource.MustParse("1"),
+							},
+							Requests: corev1.ResourceList{
+								"nvidia.com/gpu": resource.MustParse("1"),
+							},
+						},
 					}},
+					Tolerations: []corev1.Toleration{
+						{
+							Key:      "nvidia.com/gpu",
+							Operator: corev1.TolerationOpExists,
+							Effect:   corev1.TaintEffectNoSchedule,
+						},
+						{
+							Key:      "gpu-workload",
+							Operator: corev1.TolerationOpEqual,
+							Value:    "true",
+							Effect:   corev1.TaintEffectNoSchedule,
+						},
+					},
 				},
 			},
 		},
