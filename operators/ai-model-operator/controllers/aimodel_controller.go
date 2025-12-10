@@ -440,7 +440,7 @@ print('Upload complete!')
 										LocalObjectReference: corev1.LocalObjectReference{
 											Name: "s3-credentials",
 										},
-										Key: "access-key-id",
+										Key: "AWS_ACCESS_KEY_ID",
 									},
 								},
 							},
@@ -451,7 +451,7 @@ print('Upload complete!')
 										LocalObjectReference: corev1.LocalObjectReference{
 											Name: "s3-credentials",
 										},
-										Key: "secret-access-key",
+										Key: "AWS_SECRET_ACCESS_KEY",
 									},
 								},
 							},
@@ -550,7 +550,7 @@ func (r *AIModelReconciler) vllmDeployment(aiModel *aimodelv1alpha1.AIModel, dep
 					LocalObjectReference: corev1.LocalObjectReference{
 						Name: "s3-credentials",
 					},
-					Key: "access-key-id",
+					Key: "AWS_ACCESS_KEY_ID",
 				},
 			},
 		},
@@ -561,7 +561,7 @@ func (r *AIModelReconciler) vllmDeployment(aiModel *aimodelv1alpha1.AIModel, dep
 					LocalObjectReference: corev1.LocalObjectReference{
 						Name: "s3-credentials",
 					},
-					Key: "secret-access-key",
+					Key: "AWS_SECRET_ACCESS_KEY",
 				},
 			},
 		},
@@ -838,7 +838,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 					LocalObjectReference: corev1.LocalObjectReference{
 						Name: "s3-credentials",
 					},
-					Key: "access-key-id",
+					Key: "AWS_ACCESS_KEY_ID",
 				},
 			},
 		},
@@ -849,7 +849,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 					LocalObjectReference: corev1.LocalObjectReference{
 						Name: "s3-credentials",
 					},
-					Key: "secret-access-key",
+					Key: "AWS_SECRET_ACCESS_KEY",
 				},
 			},
 		},
