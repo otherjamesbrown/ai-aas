@@ -75,6 +75,9 @@ func TestAIModelReconciler_InitialReconciliation(t *testing.T) {
 
 	// Create the Reconciler
 	r := &AIModelReconciler{
+		MaxDownloadRetries: 5,
+		InitialRetryDelay:  1 * time.Minute,
+		MaxRetryDelay:      16 * time.Minute,
 		Client: cl,
 		Scheme: s,
 	}
@@ -180,6 +183,9 @@ func TestAIModelReconciler_CreatesInferenceService(t *testing.T) {
 
 	// Create the Reconciler
 	r := &AIModelReconciler{
+		MaxDownloadRetries: 5,
+		InitialRetryDelay:  1 * time.Minute,
+		MaxRetryDelay:      16 * time.Minute,
 		Client: cl,
 		Scheme: s,
 	}
@@ -371,6 +377,9 @@ func TestAIModelReconciler_StatusUpdateFromInferenceService(t *testing.T) {
 
 	// Create the Reconciler
 	r := &AIModelReconciler{
+		MaxDownloadRetries: 5,
+		InitialRetryDelay:  1 * time.Minute,
+		MaxRetryDelay:      16 * time.Minute,
 		Client: cl,
 		Scheme: s,
 	}
@@ -462,6 +471,9 @@ func TestAIModelReconciler_FinalizerDeletesInferenceService(t *testing.T) {
 
 	// Create the Reconciler
 	r := &AIModelReconciler{
+		MaxDownloadRetries: 5,
+		InitialRetryDelay:  1 * time.Minute,
+		MaxRetryDelay:      16 * time.Minute,
 		Client: cl,
 		Scheme: s,
 	}
@@ -547,6 +559,9 @@ func TestAIModelReconciler_DisabledModel(t *testing.T) {
 
 	// Create the Reconciler
 	r := &AIModelReconciler{
+		MaxDownloadRetries: 5,
+		InitialRetryDelay:  1 * time.Minute,
+		MaxRetryDelay:      16 * time.Minute,
 		Client: cl,
 		Scheme: s,
 	}
@@ -633,6 +648,9 @@ func TestAIModelReconciler_JobFailureTriggersRetry(t *testing.T) {
 		Build()
 
 	r := &AIModelReconciler{
+		MaxDownloadRetries: 5,
+		InitialRetryDelay:  1 * time.Minute,
+		MaxRetryDelay:      16 * time.Minute,
 		Client: cl,
 		Scheme: s,
 	}
@@ -690,6 +708,16 @@ func TestAIModelReconciler_JobFailureTriggersRetry(t *testing.T) {
 
 // Test: Exponential backoff calculation
 func TestCalculateRetryBackoff(t *testing.T) {
+	s := setupScheme()
+
+	r := &AIModelReconciler{
+		Client:             fake.NewClientBuilder().WithScheme(s).Build(),
+		Scheme:             s,
+		MaxDownloadRetries: 5,
+		InitialRetryDelay:  1 * time.Minute,
+		MaxRetryDelay:      16 * time.Minute,
+	}
+
 	tests := []struct {
 		retryCount      int32
 		expectedBackoff string
@@ -705,7 +733,7 @@ func TestCalculateRetryBackoff(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run("retry_"+string(rune(tt.retryCount+'0')), func(t *testing.T) {
-			backoff := calculateRetryBackoff(tt.retryCount)
+			backoff := r.calculateRetryBackoff(tt.retryCount)
 			if backoff.String() != tt.expectedBackoff {
 				t.Errorf("retry %d: expected backoff %s, got %s", tt.retryCount, tt.expectedBackoff, backoff)
 			}
@@ -765,6 +793,9 @@ func TestAIModelReconciler_MaxRetriesExceeded(t *testing.T) {
 		Build()
 
 	r := &AIModelReconciler{
+		MaxDownloadRetries: 5,
+		InitialRetryDelay:  1 * time.Minute,
+		MaxRetryDelay:      16 * time.Minute,
 		Client: cl,
 		Scheme: s,
 	}
@@ -857,6 +888,9 @@ func TestAIModelReconciler_RetryPendingWaitsForTime(t *testing.T) {
 		Build()
 
 	r := &AIModelReconciler{
+		MaxDownloadRetries: 5,
+		InitialRetryDelay:  1 * time.Minute,
+		MaxRetryDelay:      16 * time.Minute,
 		Client: cl,
 		Scheme: s,
 	}
@@ -942,6 +976,9 @@ func TestAIModelReconciler_RetryPendingCreatesJobWhenReady(t *testing.T) {
 		Build()
 
 	r := &AIModelReconciler{
+		MaxDownloadRetries: 5,
+		InitialRetryDelay:  1 * time.Minute,
+		MaxRetryDelay:      16 * time.Minute,
 		Client: cl,
 		Scheme: s,
 	}

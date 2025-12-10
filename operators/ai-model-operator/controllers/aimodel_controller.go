@@ -86,6 +86,11 @@ func init() {
 type AIModelReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+
+	// Retry configuration
+	MaxDownloadRetries int32
+	InitialRetryDelay  time.Duration
+	MaxRetryDelay      time.Duration
 }
 
 //+kubebuilder:rbac:groups=aimodel.ai-aas.io,resources=aimodels,verbs=get;list;watch;create;update;patch;delete
@@ -271,7 +276,11 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			log.Error(fmt.Errorf("job failed"), "Model Downloader Job failed", "Job.Name", jobName)
 
 			// Check if we should retry
-			if aiModel.Status.RetryCount < maxDownloadRetries {
+			maxRetries := r.MaxDownloadRetries
+			if maxRetries == 0 {
+				maxRetries = maxDownloadRetries // Use default if not configured
+			}
+			if aiModel.Status.RetryCount < maxRetries {
 				// Delete the failed job so a new one can be created
 				log.Info("Deleting failed job to prepare for retry", "Job.Name", jobName, "retryCount", aiModel.Status.RetryCount)
 				if err := r.Delete(ctx, foundJob, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
@@ -282,7 +291,7 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 				// Increment retry count and calculate backoff
 				aiModel.Status.RetryCount++
-				backoffDuration := calculateRetryBackoff(aiModel.Status.RetryCount - 1) // Use previous count for backoff
+				backoffDuration := r.calculateRetryBackoff(aiModel.Status.RetryCount - 1) // Use previous count for backoff
 				now := metav1.Now()
 				nextRetry := metav1.NewTime(now.Add(backoffDuration))
 
@@ -290,7 +299,7 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 				aiModel.Status.LastRetryTime = &now
 				aiModel.Status.NextRetryTime = &nextRetry
 				aiModel.Status.Message = fmt.Sprintf("Download failed, retry %d/%d scheduled in %v",
-					aiModel.Status.RetryCount, maxDownloadRetries, backoffDuration)
+					aiModel.Status.RetryCount, maxRetries, backoffDuration)
 
 				if err := r.Status().Update(ctx, aiModel); err != nil {
 					log.Error(err, "unable to update AIModel status to RetryPending")
@@ -305,9 +314,9 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			} else {
 				// Max retries exceeded, mark as permanently failed
 				log.Error(fmt.Errorf("max retries exceeded"), "Download failed after maximum retries",
-					"Job.Name", jobName, "maxRetries", maxDownloadRetries)
+					"Job.Name", jobName, "maxRetries", maxRetries)
 				aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
-				aiModel.Status.Message = fmt.Sprintf("Download failed after %d retry attempts. Manual intervention required.", maxDownloadRetries)
+				aiModel.Status.Message = fmt.Sprintf("Download failed after %d retry attempts. Manual intervention required.", maxRetries)
 				if err := r.Status().Update(ctx, aiModel); err != nil {
 					log.Error(err, "unable to update AIModel status to Failed")
 					reconcileTotal.WithLabelValues("error").Inc()
@@ -751,10 +760,20 @@ func jobIsFailed(job *batchv1.Job) bool {
 
 // calculateRetryBackoff calculates the exponential backoff duration for a given retry count.
 // Returns min(initialRetryDelay * 2^retryCount, maxRetryDelay)
-func calculateRetryBackoff(retryCount int32) time.Duration {
-	backoff := initialRetryDelay * time.Duration(1<<retryCount)
-	if backoff > maxRetryDelay {
-		return maxRetryDelay
+// Uses configured values from the reconciler, falling back to defaults if not set.
+func (r *AIModelReconciler) calculateRetryBackoff(retryCount int32) time.Duration {
+	initial := r.InitialRetryDelay
+	if initial == 0 {
+		initial = initialRetryDelay // Use default
+	}
+	max := r.MaxRetryDelay
+	if max == 0 {
+		max = maxRetryDelay // Use default
+	}
+
+	backoff := initial * time.Duration(1<<retryCount)
+	if backoff > max {
+		return max
 	}
 	return backoff
 }

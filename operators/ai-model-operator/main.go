@@ -19,6 +19,7 @@ package main
 import (
 	"flag"
 	"os"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g., Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -54,12 +55,22 @@ func main() {
 	var enableLeaderElection bool
 	var probeAddr string
 	var leaderElectionID string
+	var maxDownloadRetries int
+	var initialRetryDelay time.Duration
+	var maxRetryDelay time.Duration
+
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
-		"Enable leader election for controller manager. " +
+		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&leaderElectionID, "leader-election-id", "98a4bc88.ai-aas.io", "The name of the resource that manages leader election")
+
+	// Retry configuration flags
+	flag.IntVar(&maxDownloadRetries, "max-download-retries", 5, "Maximum number of download retry attempts before marking as failed")
+	flag.DurationVar(&initialRetryDelay, "initial-retry-delay", 1*time.Minute, "Initial delay before first retry (exponentially increases)")
+	flag.DurationVar(&maxRetryDelay, "max-retry-delay", 16*time.Minute, "Maximum retry delay (caps exponential backoff)")
+
 	opts := zap.Options{
 		Development: true,
 	}
@@ -86,12 +97,20 @@ func main() {
 	}
 
 	if err = (&controllers.AIModelReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:             mgr.GetClient(),
+		Scheme:             mgr.GetScheme(),
+		MaxDownloadRetries: int32(maxDownloadRetries),
+		InitialRetryDelay:  initialRetryDelay,
+		MaxRetryDelay:      maxRetryDelay,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AIModel")
 		os.Exit(1)
 	}
+
+	setupLog.Info("AIModel controller configuration",
+		"maxDownloadRetries", maxDownloadRetries,
+		"initialRetryDelay", initialRetryDelay,
+		"maxRetryDelay", maxRetryDelay)
 	//+kubebuilder:scaffold:builder
 
 	if err = mgr.AddHealthzCheck("healthz", healthz.Ping);
