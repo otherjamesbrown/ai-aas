@@ -109,6 +109,9 @@ budget:
 adminApi:
   endpoint: http://admin-api-service-staging.admin-api-service.svc.cluster.local:8080
   syncInterval: 30s
+  # Use the admin API key from local secret (copied from admin-api-service)
+  apiKeySecretName: "admin-api-sync-secrets"
+  apiKeySecretKey: "api-key"
 
 # Backend endpoints - configure vLLM service
 backends:
