@@ -65,11 +65,25 @@ func TestAIModelReconciler_InitialReconciliation(t *testing.T) {
 		},
 	}
 
+	// Create S3 credentials secret required by checkS3ArtifactExists
+	s3Secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "s3-credentials",
+			Namespace: aiModelNamespace,
+		},
+		Data: map[string][]byte{
+			"AWS_ACCESS_KEY_ID":     []byte("test-access-key"),
+			"AWS_SECRET_ACCESS_KEY": []byte("test-secret-key"),
+			"AWS_ENDPOINT_URL_S3":   []byte("http://localhost:9000"),
+			"S3_REGION":             []byte("us-east-1"),
+		},
+	}
+
 	// Create a fake client with the sample object
 	// Use WithStatusSubresource to handle status updates properly
 	cl := fake.NewClientBuilder().
 		WithScheme(s).
-		WithObjects(aiModel).
+		WithObjects(aiModel, s3Secret).
 		WithStatusSubresource(aiModel).
 		Build()
 
@@ -875,9 +889,10 @@ func TestAIModelReconciler_RetryPendingWaitsForTime(t *testing.T) {
 			Namespace: aiModelNamespace,
 		},
 		Data: map[string][]byte{
-			"access-key-id":     []byte("test-key"),
-			"secret-access-key": []byte("test-secret"),
-			"endpoint-url":      []byte("http://test-s3:9000"),
+			"AWS_ACCESS_KEY_ID":     []byte("test-key"),
+			"AWS_SECRET_ACCESS_KEY": []byte("test-secret"),
+			"AWS_ENDPOINT_URL_S3":   []byte("http://test-s3:9000"),
+			"S3_REGION":             []byte("us-east-1"),
 		},
 	}
 
@@ -963,9 +978,10 @@ func TestAIModelReconciler_RetryPendingCreatesJobWhenReady(t *testing.T) {
 			Namespace: aiModelNamespace,
 		},
 		Data: map[string][]byte{
-			"access-key-id":     []byte("test-key"),
-			"secret-access-key": []byte("test-secret"),
-			"endpoint-url":      []byte("http://test-s3:9000"),
+			"AWS_ACCESS_KEY_ID":     []byte("test-key"),
+			"AWS_SECRET_ACCESS_KEY": []byte("test-secret"),
+			"AWS_ENDPOINT_URL_S3":   []byte("http://test-s3:9000"),
+			"S3_REGION":             []byte("us-east-1"),
 		},
 	}
 

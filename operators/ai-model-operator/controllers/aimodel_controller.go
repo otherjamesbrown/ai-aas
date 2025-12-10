@@ -219,7 +219,20 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 		// Check if S3 artifacts already exist (e.g., from a previous download or manual upload)
 		// If they exist, we can skip the downloader job and proceed to InferenceService creation
-		if err := r.checkS3ArtifactExists(ctx, aiModel); err == nil {
+		exists, err := r.checkS3ArtifactExists(ctx, aiModel)
+		if err != nil {
+			// Actual error (credentials, network, etc.) - not just missing artifacts
+			log.Error(err, "Failed to check S3 artifacts", "Bucket", aiModel.Spec.S3Bucket, "Key", aiModel.Spec.S3Key)
+			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
+			aiModel.Status.Message = fmt.Sprintf("S3 check failed: %v", err)
+			if statusErr := r.Status().Update(ctx, aiModel); statusErr != nil {
+				log.Error(statusErr, "unable to update AIModel status to Failed")
+			}
+			reconcileTotal.WithLabelValues("error").Inc()
+			return ctrl.Result{Requeue: true}, nil
+		}
+
+		if exists {
 			// Artifacts already exist in S3, skip download phase
 			log.Info("S3 artifacts already exist, skipping download", "Bucket", aiModel.Spec.S3Bucket, "Key", aiModel.Spec.S3Key)
 			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
@@ -778,7 +791,7 @@ func (r *AIModelReconciler) calculateRetryBackoff(retryCount int32) time.Duratio
 	return backoff
 }
 
-func (r *AIModelReconciler) checkS3ArtifactExists(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) error {
+func (r *AIModelReconciler) checkS3ArtifactExists(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) (bool, error) {
 	log := log.FromContext(ctx)
 
 	// Read S3 credentials secret to get endpoint URL
@@ -788,7 +801,7 @@ func (r *AIModelReconciler) checkS3ArtifactExists(ctx context.Context, aiModel *
 		Namespace: aiModel.Namespace,
 	}
 	if err := r.Get(ctx, secretName, secret); err != nil {
-		return fmt.Errorf("failed to get s3-credentials secret: %w", err)
+		return false, fmt.Errorf("failed to get s3-credentials secret: %w", err)
 	}
 
 	// Extract S3 endpoint from secret
@@ -798,7 +811,7 @@ func (r *AIModelReconciler) checkS3ArtifactExists(ctx context.Context, aiModel *
 		endpointURL = string(secret.Data["S3_ENDPOINT"])
 	}
 	if endpointURL == "" {
-		return fmt.Errorf("S3 endpoint not found in secret (expected AWS_ENDPOINT_URL_S3 or S3_ENDPOINT)")
+		return false, fmt.Errorf("S3 endpoint not found in secret (expected AWS_ENDPOINT_URL_S3 or S3_ENDPOINT)")
 	}
 
 	// Extract S3 region from secret, fallback to us-east-1
@@ -811,7 +824,7 @@ func (r *AIModelReconciler) checkS3ArtifactExists(ctx context.Context, aiModel *
 	accessKeyID := string(secret.Data["AWS_ACCESS_KEY_ID"])
 	secretAccessKey := string(secret.Data["AWS_SECRET_ACCESS_KEY"])
 	if accessKeyID == "" || secretAccessKey == "" {
-		return fmt.Errorf("S3 credentials not found in secret (expected AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)")
+		return false, fmt.Errorf("S3 credentials not found in secret (expected AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)")
 	}
 
 	// Create static credentials provider
@@ -823,7 +836,7 @@ func (r *AIModelReconciler) checkS3ArtifactExists(ctx context.Context, aiModel *
 		config.WithCredentialsProvider(staticCreds),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to load AWS config: %w", err)
+		return false, fmt.Errorf("failed to load AWS config: %w", err)
 	}
 
 	// Create S3 client with custom endpoint and path-style addressing
@@ -843,16 +856,19 @@ func (r *AIModelReconciler) checkS3ArtifactExists(ctx context.Context, aiModel *
 		MaxKeys: aws.Int32(1), // We only need to know if at least one object exists
 	})
 	if err != nil {
-		return fmt.Errorf("failed to check S3 artifacts: %w", err)
+		// Network/connection errors are treated as "unknown - assume missing"
+		// This allows the download job to proceed and attempt to fetch the model
+		log.Info("Failed to check S3 artifacts, assuming they don't exist", "bucket", aiModel.Spec.S3Bucket, "prefix", prefix, "error", err)
+		return false, nil
 	}
 
 	if len(result.Contents) == 0 {
 		log.Info("S3 artifacts not found, will need to download", "bucket", aiModel.Spec.S3Bucket, "prefix", prefix)
-		return fmt.Errorf("model artifacts not found at s3://%s/%s", aiModel.Spec.S3Bucket, prefix)
+		return false, nil // Missing artifacts is not an error - just return false
 	}
 
 	log.Info("S3 artifacts found", "bucket", aiModel.Spec.S3Bucket, "prefix", prefix, "objectCount", *result.KeyCount)
-	return nil
+	return true, nil
 }
 
 // createOrUpdateInferenceService creates or updates a KServe InferenceService for the AIModel
