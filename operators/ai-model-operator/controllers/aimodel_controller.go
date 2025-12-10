@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -31,10 +32,15 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	aimodelv1alpha1 "github.com/ai-aas/ai-model-operator/api/v1alpha1"
 	// +kubebuilder:scaffold:imports
@@ -343,8 +349,38 @@ func (r *AIModelReconciler) finalizeAIModel(ctx context.Context, aiModel *aimode
 	log := log.FromContext(ctx)
 	log.Info("Performing finalization for AIModel", "name", aiModel.Name)
 
-	// TODO(user): Add here the cleanup logic.
-	// Delete associated Deployments, Services, Jobs
+	// Delete vLLM Deployment
+	deploymentName := fmt.Sprintf("%s-vllm", aiModel.Name)
+	dep := &appsv1.Deployment{}
+	if err := r.Get(ctx, client.ObjectKey{Name: deploymentName, Namespace: aiModel.Namespace}, dep); err == nil {
+		log.Info("Deleting Deployment", "name", deploymentName)
+		if err := r.Delete(ctx, dep); err != nil && !errors.IsNotFound(err) {
+			log.Error(err, "Failed to delete Deployment", "name", deploymentName)
+		}
+	}
+
+	// Delete vLLM Service
+	serviceName := fmt.Sprintf("%s-vllm-svc", aiModel.Name)
+	svc := &corev1.Service{}
+	if err := r.Get(ctx, client.ObjectKey{Name: serviceName, Namespace: aiModel.Namespace}, svc); err == nil {
+		log.Info("Deleting Service", "name", serviceName)
+		if err := r.Delete(ctx, svc); err != nil && !errors.IsNotFound(err) {
+			log.Error(err, "Failed to delete Service", "name", serviceName)
+		}
+	}
+
+	// Delete Downloader Job
+	jobName := fmt.Sprintf("%s-downloader", aiModel.Name)
+	job := &batchv1.Job{}
+	if err := r.Get(ctx, client.ObjectKey{Name: jobName, Namespace: aiModel.Namespace}, job); err == nil {
+		log.Info("Deleting Job", "name", jobName)
+		propagationPolicy := metav1.DeletePropagationBackground
+		if err := r.Delete(ctx, job, &client.DeleteOptions{
+			PropagationPolicy: &propagationPolicy,
+		}); err != nil && !errors.IsNotFound(err) {
+			log.Error(err, "Failed to delete Job", "name", jobName)
+		}
+	}
 
 	log.Info("Successfully finalized AIModel", "name", aiModel.Name)
 	return nil
@@ -606,14 +642,34 @@ func jobIsFailed(job *batchv1.Job) bool {
 
 
 func (r *AIModelReconciler) checkS3ArtifactExists(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) error {
-	// TODO: Implement actual S3 HEAD request using AWS SDK
-	// Requires AWS credentials to be configured in the operator's environment.
-	// For now, we assume the artifact exists.
-	// Example logic:
-	// sess := session.Must(session.NewSession())
-	// svc := s3.New(sess)
-	// _, err := svc.HeadObject(&s3.HeadObjectInput{Bucket: &aiModel.Spec.S3Bucket, Key: &aiModel.Spec.S3Key})
-	// return err
+	log := log.FromContext(ctx)
+
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to load AWS config: %w", err)
+	}
+
+	client := s3.NewFromConfig(cfg)
+	prefix := aiModel.Spec.S3Key
+	if !strings.HasSuffix(prefix, "/") {
+		prefix = prefix + "/"
+	}
+
+	result, err := client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
+		Bucket:  &aiModel.Spec.S3Bucket,
+		Prefix:  &prefix,
+		MaxKeys: aws.Int32(1), // We only need to know if at least one object exists
+	})
+	if err != nil {
+		return fmt.Errorf("failed to check S3 artifacts: %w", err)
+	}
+
+	if len(result.Contents) == 0 {
+		log.Info("S3 artifacts not found, will need to download", "bucket", aiModel.Spec.S3Bucket, "prefix", prefix)
+		return fmt.Errorf("model artifacts not found at s3://%s/%s", aiModel.Spec.S3Bucket, prefix)
+	}
+
+	log.Info("S3 artifacts found", "bucket", aiModel.Spec.S3Bucket, "prefix", prefix, "objectCount", *result.KeyCount)
 	return nil
 }
 
