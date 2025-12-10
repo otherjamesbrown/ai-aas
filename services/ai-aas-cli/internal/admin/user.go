@@ -266,6 +266,7 @@ func userCreateCommand() *cobra.Command {
 	var flagUserOrgEndpoint string
 	var flagAPIKey string
 	var flagProfile string
+	var flagModelAccess string
 
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -281,6 +282,12 @@ Two creation methods are available:
    The password is shown once and must be distributed to the user manually.
    By default, no password change is required on first login.
    Use --force-pwd-change to require the user to change their password.
+
+Model Access Control:
+  Use --model-access to set the user's model access mode:
+    all:        User has access to all models in the organization (auto_grant mode)
+    restricted: User only has access to explicitly granted models (restricted mode)
+  Default: restricted for non-admin users, all for users with admin role
 
 Examples:
   # Invite a user (sends email)
@@ -307,6 +314,14 @@ Examples:
   # Create user and save to profile (uses org_id from profile)
   ai-aas-cli user create --email user@example.com --direct --profile acme-admin
 
+  # Create user with model access mode
+  ai-aas-cli user create --org-id acme --email user@example.com --direct \
+    --model-access all
+
+  # Create restricted user (explicit)
+  ai-aas-cli user create --org-id acme --email user@example.com --direct \
+    --model-access restricted
+
 Next Steps:
   After creating a user with --direct:
   1. Securely share the password with the user
@@ -323,7 +338,7 @@ See Also:
   ai-aas-cli apikey create   Create API key for user`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runUserCreate(cmd, args, flagOrgID, flagEmail, flagDisplayName, flagRoles, flagExpiresInHours, flagDirect, flagForcePwdChange, flagUpsert,
-				flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey, flagProfile)
+				flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey, flagProfile, flagModelAccess)
 		},
 	}
 
@@ -341,12 +356,13 @@ See Also:
 	cmd.Flags().StringVar(&flagUserOrgEndpoint, "user-org-endpoint", "", "User-org-service endpoint (overrides config)")
 	cmd.Flags().StringVar(&flagAPIKey, "api-key", "", "API key for authentication (overrides config)")
 	cmd.Flags().StringVar(&flagProfile, "profile", "", "Use org_id from profile and save user_id to it")
+	cmd.Flags().StringVarP(&flagModelAccess, "model-access", "m", "", "Model access mode: 'all' or 'restricted' (default: auto for admin, restricted otherwise)")
 
 	return cmd
 }
 
 func runUserCreate(cmd *cobra.Command, args []string, flagOrgID, flagEmail, flagDisplayName string, flagRoles []string, flagExpiresInHours int, flagDirect, flagForcePwdChange, flagUpsert bool,
-	flagFormat string, flagVerbose, flagQuiet bool, flagUserOrgEndpoint, flagAPIKey string, flagProfile string) error {
+	flagFormat string, flagVerbose, flagQuiet bool, flagUserOrgEndpoint, flagAPIKey string, flagProfile string, flagModelAccess string) error {
 	startTime := time.Now()
 
 	// Load configuration with profile support
@@ -407,6 +423,14 @@ func runUserCreate(cmd *cobra.Command, args []string, flagOrgID, flagEmail, flag
 		)
 	}
 
+	// Validate model-access flag if provided
+	if flagModelAccess != "" && flagModelAccess != "all" && flagModelAccess != "restricted" {
+		return errors.NewValidationError(
+			"--model-access must be 'all' or 'restricted'",
+			"Use --model-access all for auto_grant mode or --model-access restricted for restricted mode",
+		)
+	}
+
 	// Create HTTP client with TLS config (reused for all operations)
 	httpClient, err := createHTTPClient(cfg)
 	if err != nil {
@@ -424,17 +448,25 @@ func runUserCreate(cmd *cobra.Command, args []string, flagOrgID, flagEmail, flag
 
 	userOrgClient := createUserOrgClientWithHTTPClient(cfg, httpClient)
 
+	// Validate --model-access flag if provided
+	if flagModelAccess != "" && flagModelAccess != "all" && flagModelAccess != "restricted" {
+		return errors.NewValidationError(
+			"--model-access must be 'all' or 'restricted'",
+			"Provide a valid model access mode with --model-access flag",
+		)
+	}
+
 	// Handle DIRECT user creation (bypasses invite flow)
 	if flagDirect {
-		return runDirectUserCreate(cmd, cfg, userOrgClient, orgID, flagEmail, flagDisplayName, flagRoles, flagForcePwdChange, flagUpsert, flagProfile, startTime)
+		return runDirectUserCreate(cmd, cfg, userOrgClient, orgID, flagEmail, flagDisplayName, flagRoles, flagForcePwdChange, flagUpsert, flagProfile, flagModelAccess, startTime)
 	}
 
 	// Handle INVITE user creation (default)
-	return runInviteUserCreate(cmd, cfg, userOrgClient, orgID, flagEmail, flagRoles, flagExpiresInHours, flagUpsert, flagProfile, startTime)
+	return runInviteUserCreate(cmd, cfg, userOrgClient, orgID, flagEmail, flagRoles, flagExpiresInHours, flagUpsert, flagProfile, flagModelAccess, startTime)
 }
 
 // runDirectUserCreate handles direct user creation with temporary password.
-func runDirectUserCreate(cmd *cobra.Command, cfg *config.Config, userOrgClient *userorg.Client, orgID, email, displayName string, roles []string, forcePwdChange, upsert bool, profileName string, startTime time.Time) error {
+func runDirectUserCreate(cmd *cobra.Command, cfg *config.Config, userOrgClient *userorg.Client, orgID, email, displayName string, roles []string, forcePwdChange, upsert bool, profileName string, modelAccess string, startTime time.Time) error {
 	// Check if user exists (for upsert)
 	if upsert {
 		existingUser, err := userOrgClient.GetUserByEmail(cmd.Context(), orgID, email)
@@ -466,6 +498,20 @@ func runDirectUserCreate(cmd *cobra.Command, cfg *config.Config, userOrgClient *
 			fmt.Sprintf("failed to create user: %v", err),
 			"Verify your API key is valid and you have permission to create users.",
 		)
+	}
+
+	// Set model access mode if specified
+	if modelAccess != "" {
+		accessMode := determineAccessMode(modelAccess, roles)
+		_, err := userOrgClient.SetUserAccessMode(cmd.Context(), orgID, createdUser.UserID, accessMode)
+		if err != nil {
+			// Log warning but don't fail user creation
+			if !cfg.Quiet {
+				fmt.Printf("Warning: failed to set model access mode: %v\n", err)
+			}
+		} else if !cfg.Quiet && cfg.Verbose {
+			fmt.Printf("Model access mode set to: %s\n", accessMode)
+		}
 	}
 
 	// Audit logging
@@ -554,7 +600,7 @@ func runDirectUserCreate(cmd *cobra.Command, cfg *config.Config, userOrgClient *
 }
 
 // runInviteUserCreate handles invite-based user creation (sends email).
-func runInviteUserCreate(cmd *cobra.Command, cfg *config.Config, userOrgClient *userorg.Client, orgID, email string, roles []string, expiresInHours int, upsert bool, profileName string, startTime time.Time) error {
+func runInviteUserCreate(cmd *cobra.Command, cfg *config.Config, userOrgClient *userorg.Client, orgID, email string, roles []string, expiresInHours int, upsert bool, profileName string, modelAccess string, startTime time.Time) error {
 	// Check if user exists (for upsert)
 	var user *userorg.UserResponse
 	if upsert {
@@ -586,6 +632,20 @@ func runInviteUserCreate(cmd *cobra.Command, cfg *config.Config, userOrgClient *
 			)
 		}
 		user = invitedUser
+	}
+
+	// Set model access mode if specified
+	if modelAccess != "" {
+		accessMode := determineAccessMode(modelAccess, roles)
+		_, err := userOrgClient.SetUserAccessMode(cmd.Context(), orgID, user.UserID, accessMode)
+		if err != nil {
+			// Log warning but don't fail user creation
+			if !cfg.Quiet {
+				fmt.Printf("Warning: failed to set model access mode: %v\n", err)
+			}
+		} else if !cfg.Quiet && cfg.Verbose {
+			fmt.Printf("Model access mode set to: %s\n", accessMode)
+		}
 	}
 
 	// Audit logging
@@ -900,6 +960,41 @@ func runUserUpdate(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 	return nil
 }
 
+// determineAccessMode converts the --model-access flag value to the API access mode.
+// Returns "auto_grant" for "all" or "restricted" for "restricted".
+// If the flag value is empty, returns default based on roles:
+// - "auto_grant" if roles contain "admin"
+// - "restricted" otherwise
+func determineAccessMode(flagValue string, roles []string) string {
+	// If flag is explicitly set
+	if flagValue != "" {
+		if flagValue == "all" {
+			return "auto_grant"
+		}
+		return "restricted"
+	}
+
+	// Default: check if user has admin role
+	for _, role := range roles {
+		if role == "admin" {
+			return "auto_grant"
+		}
+	}
+
+	// Default for non-admin users
+	return "restricted"
+}
+
+// hasAdminRole checks if the roles slice contains "admin"
+func hasAdminRole(roles []string) bool {
+	for _, role := range roles {
+		if role == "admin" {
+			return true
+		}
+	}
+	return false
+}
+
 func userDeleteCommand() *cobra.Command {
 	var flagOrgID string
 	var flagUserID string
@@ -1105,5 +1200,28 @@ func runUserDelete(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 		}
 	}
 	return nil
+}
+
+// determineAccessMode determines the access mode based on the flag and user roles.
+// - If modelAccess is "all", returns "auto_grant"
+// - If modelAccess is "restricted", returns "restricted"
+// - If modelAccess is empty and user has admin role, returns "auto_grant"
+// - Otherwise returns "restricted"
+func determineAccessMode(modelAccess string, roles []string) string {
+	if modelAccess == "all" {
+		return "auto_grant"
+	}
+	if modelAccess == "restricted" {
+		return "restricted"
+	}
+
+	// If not explicitly set, check if user has admin role
+	for _, role := range roles {
+		if role == "admin" {
+			return "auto_grant"
+		}
+	}
+
+	return "restricted"
 }
 
