@@ -32,28 +32,196 @@ spec:
           spec:
             description: AIModelSpec defines the desired state of AIModel
             properties:
-              enabled:
-                description: Enabled determines if the model deployment should be active.
-                  If false, associated resources will be scaled down or deleted.
-                type: boolean
-              modelID:
-                description: ModelID is the unique identifier for the model, typically
-                  a hash or UUID.
-                type: string
               modelName:
-                description: ModelName is the name of the AI model.
+                description: ModelName is the human-readable name of the AI model.
                 minLength: 1
                 type: string
-              replicas:
-                description: Replicas is the number of vLLM instances to deploy.
-                minimum: 0
-                type: integer
+              modelID:
+                description: ModelID is the unique identifier for the model (e.g., HuggingFace model ID).
+                type: string
               s3Bucket:
                 description: S3Bucket is the S3 bucket where model artifacts are stored.
                 type: string
               s3Key:
                 description: S3Key is the S3 key (path) to the model artifacts.
                 type: string
+              enabled:
+                description: Enabled determines if the model deployment should be active.
+                  If false, the InferenceService will be scaled to zero replicas.
+                type: boolean
+                default: true
+              runtime:
+                description: Runtime specifies the inference runtime to use.
+                type: string
+                enum:
+                - vllm
+                - triton
+                - tgi
+                default: vllm
+              minReplicas:
+                description: MinReplicas is the minimum number of replicas for autoscaling.
+                  Set to 0 to enable scale-to-zero.
+                type: integer
+                minimum: 0
+                default: 0
+              maxReplicas:
+                description: MaxReplicas is the maximum number of replicas for autoscaling.
+                type: integer
+                minimum: 1
+                default: 1
+              resources:
+                description: Resources specifies the compute resources required by the inference container.
+                type: object
+                properties:
+                  limits:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: 'Limits describes the maximum amount of compute resources
+                      allowed. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                    type: object
+                  requests:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: 'Requests describes the minimum amount of compute
+                      resources required. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                    type: object
+              nodeSelector:
+                description: NodeSelector specifies node labels for pod scheduling.
+                type: object
+                additionalProperties:
+                  type: string
+              tolerations:
+                description: Tolerations specifies tolerations for pod scheduling.
+                type: array
+                items:
+                  description: The pod this Toleration is attached to tolerates any
+                    taint that matches the triple <key,value,effect> using the matching
+                    operator <operator>.
+                  properties:
+                    effect:
+                      description: Effect indicates the taint effect to match. Empty
+                        means match all taint effects.
+                      type: string
+                    key:
+                      description: Key is the taint key that the toleration applies
+                        to. Empty means match all taint keys.
+                      type: string
+                    operator:
+                      description: Operator represents a key's relationship to the
+                        value. Valid operators are Exists and Equal. Defaults to Equal.
+                      type: string
+                    tolerationSeconds:
+                      description: TolerationSeconds represents the period of time
+                        the toleration tolerates the taint.
+                      format: int64
+                      type: integer
+                    value:
+                      description: Value is the taint value the toleration matches
+                        to.
+                      type: string
+                  type: object
+              runtimeArgs:
+                description: RuntimeArgs specifies additional command-line arguments for the runtime.
+                  For vLLM, these are passed to the vllm serve command.
+                type: array
+                items:
+                  type: string
+              runtimeEnv:
+                description: RuntimeEnv specifies additional environment variables for the runtime container.
+                type: array
+                items:
+                  description: EnvVar represents an environment variable present in a Container.
+                  properties:
+                    name:
+                      description: Name of the environment variable. Must be a C_IDENTIFIER.
+                      type: string
+                    value:
+                      description: Variable references $(VAR_NAME) are expanded.
+                      type: string
+                    valueFrom:
+                      description: Source for the environment variable's value.
+                      properties:
+                        configMapKeyRef:
+                          description: Selects a key of a ConfigMap.
+                          properties:
+                            key:
+                              description: The key to select.
+                              type: string
+                            name:
+                              description: Name of the referent.
+                              type: string
+                            optional:
+                              description: Specify whether the ConfigMap or its key must be defined
+                              type: boolean
+                          required:
+                          - key
+                          type: object
+                        fieldRef:
+                          description: 'Selects a field of the pod: supports metadata.name,
+                            metadata.namespace, `metadata.labels[''<KEY>'']`, `metadata.annotations[''<KEY>'']`,
+                            spec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP, status.podIPs.'
+                          properties:
+                            apiVersion:
+                              description: Version of the schema the FieldPath is written in terms of, defaults to "v1".
+                              type: string
+                            fieldPath:
+                              description: Path of the field to select in the specified API version.
+                              type: string
+                          required:
+                          - fieldPath
+                          type: object
+                        resourceFieldRef:
+                          description: 'Selects a resource of the container: only
+                            resources limits and requests are currently supported.'
+                          properties:
+                            containerName:
+                              description: 'Container name: required for volumes, optional for env vars'
+                              type: string
+                            divisor:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              description: Specifies the output format of the exposed resources, defaults to "1"
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            resource:
+                              description: 'Required: resource to select'
+                              type: string
+                          required:
+                          - resource
+                          type: object
+                        secretKeyRef:
+                          description: Selects a key of a secret in the pod's namespace
+                          properties:
+                            key:
+                              description: The key of the secret to select from.  Must be a valid secret key.
+                              type: string
+                            name:
+                              description: Name of the referent.
+                              type: string
+                            optional:
+                              description: Specify whether the Secret or its key must be defined
+                              type: boolean
+                          required:
+                          - key
+                          type: object
+                      type: object
+                  required:
+                  - name
+                  type: object
+              replicas:
+                description: 'DEPRECATED: Use MinReplicas/MaxReplicas instead.
+                  Replicas is the number of inference instances to deploy.'
+                type: integer
+                minimum: 0
             required:
             - modelID
             - modelName
@@ -115,7 +283,7 @@ spec:
                         (see .node.status.conditions), the ability to deconflict is
                         important. The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
                       maxLength: 316
-                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$ 
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                       type: string
                   required:
                   - lastTransitionTime
@@ -126,18 +294,70 @@ spec:
                   type: object
                 type: array
               phase:
-                description: Phase indicates the current phase of the AIModel deployment
-                  (e.g., Pending, Downloading, Deploying, Ready, Failed).
+                description: Phase indicates the current phase of the AIModel deployment.
+                type: string
+                enum:
+                - Pending
+                - Downloading
+                - Deploying
+                - Ready
+                - Failed
+                - Disabled
+              inferenceServiceName:
+                description: InferenceServiceName is the name of the associated KServe InferenceService.
+                type: string
+              inferenceEndpoint:
+                description: InferenceEndpoint is the URL where the model can be accessed for inference.
+                type: string
+              readyReplicas:
+                description: ReadyReplicas is the number of replicas that are ready to serve requests.
+                type: integer
+              downloadProgress:
+                description: DownloadProgress indicates the progress of model artifact download (0-100).
+                type: integer
+                minimum: 0
+                maximum: 100
+              lastTransitionTime:
+                description: LastTransitionTime is the last time the Phase transitioned.
+                format: date-time
+                type: string
+              message:
+                description: Message provides additional information about the current phase.
                 type: string
               vllmDeploymentName:
-                description: VLLMDeploymentName is the name of the associated vLLM
-                  Deployment.
+                description: 'DEPRECATED: Use InferenceServiceName instead.
+                  VLLMDeploymentName is the name of the associated vLLM Deployment.'
                 type: string
               vllmServiceName:
-                description: VLLMServiceName is the name of the associated vLLM Service.
+                description: 'DEPRECATED: Use InferenceEndpoint instead.
+                  VLLMServiceName is the name of the associated vLLM Service.'
                 type: string
             type: object
     served: true
     storage: true
     subresources:
       status: {}
+    additionalPrinterColumns:
+    - name: Model
+      type: string
+      jsonPath: .spec.modelName
+      description: Name of the AI Model
+    - name: Runtime
+      type: string
+      jsonPath: .spec.runtime
+      description: Inference runtime (vllm, triton, tgi)
+    - name: Enabled
+      type: boolean
+      jsonPath: .spec.enabled
+      description: Is the model deployment enabled?
+    - name: Ready
+      type: integer
+      jsonPath: .status.readyReplicas
+      description: Number of ready replicas
+    - name: Phase
+      type: string
+      jsonPath: .status.phase
+      description: Current phase of the AI Model deployment
+    - name: Age
+      type: date
+      jsonPath: .metadata.creationTimestamp
