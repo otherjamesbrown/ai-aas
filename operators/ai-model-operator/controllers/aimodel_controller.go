@@ -472,12 +472,16 @@ func (r *AIModelReconciler) finalizeAIModel(ctx context.Context, aiModel *aimode
 // and upload them to S3.
 func (r *AIModelReconciler) modelDownloaderJob(aiModel *aimodelv1alpha1.AIModel, jobName string) *batchv1.Job {
 	// Python script that downloads from HuggingFace Hub and uploads to S3
+	// Uses multipart upload with retries for resilience against network issues
 	downloadScript := `
 pip install -q huggingface_hub boto3 &&
 python3 -c "
 from huggingface_hub import snapshot_download
 import boto3
+from boto3.s3.transfer import TransferConfig
+from botocore.config import Config
 import os
+import time
 
 model_id = os.environ['MODEL_ID']
 s3_bucket = os.environ['S3_BUCKET']
@@ -492,18 +496,51 @@ local_dir = snapshot_download(
 )
 
 print(f'Uploading to s3://{s3_bucket}/{s3_key}/')
-s3_config = {}
+
+# Configure boto3 with retries and timeouts
+boto_config = Config(
+    retries={'max_attempts': 10, 'mode': 'adaptive'},
+    connect_timeout=30,
+    read_timeout=60,
+)
+
+s3_config = {'config': boto_config}
 if s3_endpoint:
     s3_config['endpoint_url'] = s3_endpoint
     print(f'Using custom S3 endpoint: {s3_endpoint}')
+
 s3 = boto3.client('s3', **s3_config)
+
+# Configure multipart upload: 8MB chunks, max 4 concurrent uploads
+transfer_config = TransferConfig(
+    multipart_threshold=8 * 1024 * 1024,  # 8MB
+    multipart_chunksize=8 * 1024 * 1024,  # 8MB chunks
+    max_concurrency=4,
+    use_threads=True,
+)
+
+def upload_with_retry(local_path, bucket, key, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            s3.upload_file(local_path, bucket, key, Config=transfer_config)
+            return True
+        except Exception as e:
+            if attempt < max_retries - 1:
+                wait_time = (attempt + 1) * 5
+                print(f'    Retry {attempt + 1}/{max_retries} after {wait_time}s: {e}')
+                time.sleep(wait_time)
+            else:
+                raise
+
 for root, dirs, files in os.walk(local_dir):
     for file in files:
         local_path = os.path.join(root, file)
         rel_path = os.path.relpath(local_path, local_dir)
         s3_path = f'{s3_key}/{rel_path}'
-        print(f'  Uploading {rel_path}...')
-        s3.upload_file(local_path, s3_bucket, s3_path)
+        file_size = os.path.getsize(local_path)
+        size_mb = file_size / (1024 * 1024)
+        print(f'  Uploading {rel_path} ({size_mb:.1f} MB)...')
+        upload_with_retry(local_path, s3_bucket, s3_path)
 print('Upload complete!')
 "
 `
