@@ -42,6 +42,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	aimodelv1alpha1 "github.com/ai-aas/ai-model-operator/api/v1alpha1"
@@ -708,9 +709,20 @@ func (r *AIModelReconciler) checkS3ArtifactExists(ctx context.Context, aiModel *
 		region = "us-east-1"
 	}
 
-	// Load AWS config with custom endpoint
+	// Extract S3 credentials from secret
+	accessKeyID := string(secret.Data["AWS_ACCESS_KEY_ID"])
+	secretAccessKey := string(secret.Data["AWS_SECRET_ACCESS_KEY"])
+	if accessKeyID == "" || secretAccessKey == "" {
+		return fmt.Errorf("S3 credentials not found in secret (expected AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)")
+	}
+
+	// Create static credentials provider
+	staticCreds := credentials.NewStaticCredentialsProvider(accessKeyID, secretAccessKey, "")
+
+	// Load AWS config with static credentials
 	cfg, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion(region),
+		config.WithCredentialsProvider(staticCreds),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to load AWS config: %w", err)
