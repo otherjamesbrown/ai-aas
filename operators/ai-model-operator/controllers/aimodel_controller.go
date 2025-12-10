@@ -187,41 +187,42 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		log.Error(err, "Failed to get Job", "Job.Name", jobName)
 		reconcileTotal.WithLabelValues("error").Inc()
 		return ctrl.Result{}, err
-	} else if err != nil { // Job not found, create it
-		// Validate S3 artifact existence before creating the job
-		// This prevents creating jobs that will inevitably fail if the artifact is missing.
-		if err := r.checkS3ArtifactExists(ctx, aiModel); err != nil {
-			log.Error(err, "S3 artifact check failed", "Bucket", aiModel.Spec.S3Bucket, "Key", aiModel.Spec.S3Key)
-			reconcileTotal.WithLabelValues("error").Inc()
-			// Update status to indicate failure
-			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
-			aiModel.Status.Message = fmt.Sprintf("S3 artifact check failed: %v", err)
+	} else if err != nil { // Job not found, check if artifacts already exist in S3
+		// Check if S3 artifacts already exist (e.g., from a previous download or manual upload)
+		// If they exist, we can skip the downloader job and proceed to InferenceService creation
+		if err := r.checkS3ArtifactExists(ctx, aiModel); err == nil {
+			// Artifacts already exist in S3, skip download phase
+			log.Info("S3 artifacts already exist, skipping download", "Bucket", aiModel.Spec.S3Bucket, "Key", aiModel.Spec.S3Key)
+			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
 			if statusErr := r.Status().Update(ctx, aiModel); statusErr != nil {
-				log.Error(statusErr, "unable to update AIModel status to Failed")
+				log.Error(statusErr, "unable to update AIModel status to Deploying")
+				return ctrl.Result{}, statusErr
 			}
-			return ctrl.Result{}, nil // Stop reconciliation until fixed
+			// Continue to InferenceService creation (fall through)
+		} else {
+			// Artifacts not found in S3, create downloader job to fetch from HuggingFace
+			log.Info("S3 artifacts not found, creating downloader job", "Bucket", aiModel.Spec.S3Bucket, "Key", aiModel.Spec.S3Key)
+			log.Info("Creating a new Model Downloader Job", "Job.Namespace", aiModel.Namespace, "Job.Name", jobName)
+			job := r.modelDownloaderJob(aiModel, jobName)
+			if err := ctrl.SetControllerReference(aiModel, job, r.Scheme); err != nil {
+				log.Error(err, "Failed to set controller reference for Job", "Job.Name", job.Name)
+				reconcileTotal.WithLabelValues("error").Inc()
+				return ctrl.Result{}, err
+			}
+			if err := r.Create(ctx, job); err != nil {
+				log.Error(err, "Failed to create Job", "Job.Name", job.Name)
+				reconcileTotal.WithLabelValues("error").Inc()
+				return ctrl.Result{}, err
+			}
+			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDownloading
+			if err := r.Status().Update(ctx, aiModel); err != nil {
+				log.Error(err, "unable to update AIModel status to Downloading")
+				reconcileTotal.WithLabelValues("error").Inc()
+				return ctrl.Result{}, err
+			}
+			reconcileTotal.WithLabelValues("success").Inc()
+			return ctrl.Result{Requeue: true}, nil // Requeue to wait for Job completion
 		}
-
-		log.Info("Creating a new Model Downloader Job", "Job.Namespace", aiModel.Namespace, "Job.Name", jobName)
-		job := r.modelDownloaderJob(aiModel, jobName)
-		if err := ctrl.SetControllerReference(aiModel, job, r.Scheme); err != nil {
-			log.Error(err, "Failed to set controller reference for Job", "Job.Name", job.Name)
-			reconcileTotal.WithLabelValues("error").Inc()
-			return ctrl.Result{}, err
-		}
-		if err := r.Create(ctx, job); err != nil {
-			log.Error(err, "Failed to create Job", "Job.Name", job.Name)
-			reconcileTotal.WithLabelValues("error").Inc()
-			return ctrl.Result{}, err
-		}
-		aiModel.Status.Phase = "Downloading"
-		if err := r.Status().Update(ctx, aiModel); err != nil {
-			log.Error(err, "unable to update AIModel status to Downloading")
-			reconcileTotal.WithLabelValues("error").Inc()
-			return ctrl.Result{}, err
-		}
-		reconcileTotal.WithLabelValues("success").Inc()
-		return ctrl.Result{Requeue: true}, nil // Requeue to wait for Job completion
 	} else {
 		// Job found, check its status
 		if jobIsComplete(foundJob) {

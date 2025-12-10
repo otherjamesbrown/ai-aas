@@ -87,31 +87,31 @@ func TestAIModelReconciler_InitialReconciliation(t *testing.T) {
 	}
 
 	// Test: Initial Reconciliation
-	// Note: In unit tests, the S3 artifact check will fail (no real AWS connection),
-	// so the controller will set phase to "Failed" instead of creating a job.
-	// This is expected behavior and validates the S3 check logic.
+	// Note: In unit tests, the S3 artifact check will fail (no real AWS/S3 connection),
+	// so the controller will create a downloader job to fetch from HuggingFace.
+	// This validates that missing S3 artifacts trigger the download workflow.
 	t.Log("Test: Initial Reconciliation")
 	res, err := r.Reconcile(context.Background(), req)
 	if err != nil {
 		t.Fatalf("reconcile: (%v)", err)
 	}
 
-	// Check result: Should NOT requeue (artifact missing stops reconciliation)
-	if res.Requeue {
-		t.Error("expected no requeue when artifact is missing")
+	// Check result: Should requeue to wait for downloader job completion
+	if !res.Requeue {
+		t.Error("expected requeue when downloader job is created")
 	}
 
-	// Check Status Update: Phase should be "Failed" due to failed S3 check
+	// Check Status Update: Phase should be "Downloading" as job is being created
 	updatedAIModel := &aimodelv1alpha1.AIModel{}
 	err = cl.Get(context.Background(), types.NamespacedName{Name: aiModelName, Namespace: aiModelNamespace}, updatedAIModel)
 	if err != nil {
 		t.Fatalf("get aimodel: (%v)", err)
 	}
-	if updatedAIModel.Status.Phase != aimodelv1alpha1.AIModelPhaseFailed {
-		t.Errorf("expected phase 'Failed', got '%s'", updatedAIModel.Status.Phase)
+	if updatedAIModel.Status.Phase != aimodelv1alpha1.AIModelPhaseDownloading {
+		t.Errorf("expected phase 'Downloading', got '%s'", updatedAIModel.Status.Phase)
 	}
 
-	t.Log("Test passed: Controller correctly handles missing S3 artifacts")
+	t.Log("Test passed: Controller correctly creates downloader job for missing S3 artifacts")
 }
 
 func TestAIModelReconciler_CreatesInferenceService(t *testing.T) {
