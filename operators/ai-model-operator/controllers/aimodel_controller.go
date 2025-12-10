@@ -467,10 +467,98 @@ print('Upload complete!')
 }
 
 // vllmDeployment creates a Kubernetes Deployment for the vLLM model server.
+// NOTE: This function is kept for backward compatibility with legacy deployments.
+// New deployments should use KServe InferenceService via createOrUpdateInferenceService.
 func (r *AIModelReconciler) vllmDeployment(aiModel *aimodelv1alpha1.AIModel, deploymentName string) *appsv1.Deployment {
 	replicas := int32(1)
 	if aiModel.Spec.Replicas != nil {
 		replicas = *aiModel.Spec.Replicas
+	}
+
+	// Determine runtime image from spec, with defaults
+	image := "vllm/vllm-openai:v0.6.3"
+	switch aiModel.Spec.Runtime {
+	case "tgi":
+		image = "ghcr.io/huggingface/text-generation-inference:latest"
+	case "triton":
+		image = "nvcr.io/nvidia/tritonserver:latest"
+	case "vllm", "":
+		image = "vllm/vllm-openai:v0.6.3"
+	}
+
+	// Build args: start with required args, then append user-specified RuntimeArgs
+	args := []string{
+		"--model", fmt.Sprintf("s3://%s/%s", aiModel.Spec.S3Bucket, aiModel.Spec.S3Key),
+		"--served-model-name", aiModel.Spec.ModelName,
+	}
+	if len(aiModel.Spec.RuntimeArgs) > 0 {
+		args = append(args, aiModel.Spec.RuntimeArgs...)
+	} else {
+		// Default args if none specified
+		args = append(args,
+			"--dtype", "auto",
+			"--max-model-len", "4096",
+			"--gpu-memory-utilization", "0.9",
+			"--trust-remote-code",
+		)
+	}
+
+	// Build env vars: S3 credentials + user-specified RuntimeEnv
+	env := []corev1.EnvVar{
+		{
+			Name: "AWS_ACCESS_KEY_ID",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: "s3-credentials",
+					},
+					Key: "access-key-id",
+				},
+			},
+		},
+		{
+			Name: "AWS_SECRET_ACCESS_KEY",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: "s3-credentials",
+					},
+					Key: "secret-access-key",
+				},
+			},
+		},
+	}
+	env = append(env, aiModel.Spec.RuntimeEnv...)
+
+	// Use resources from spec if specified, otherwise defaults
+	resources := aiModel.Spec.Resources
+	if len(resources.Requests) == 0 && len(resources.Limits) == 0 {
+		resources = corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{
+				"nvidia.com/gpu": resource.MustParse("1"),
+			},
+			Requests: corev1.ResourceList{
+				"nvidia.com/gpu": resource.MustParse("1"),
+			},
+		}
+	}
+
+	// Use tolerations from spec if specified, otherwise defaults
+	tolerations := aiModel.Spec.Tolerations
+	if len(tolerations) == 0 {
+		tolerations = []corev1.Toleration{
+			{
+				Key:      "nvidia.com/gpu",
+				Operator: corev1.TolerationOpExists,
+				Effect:   corev1.TaintEffectNoSchedule,
+			},
+			{
+				Key:      "gpu-workload",
+				Operator: corev1.TolerationOpEqual,
+				Value:    "true",
+				Effect:   corev1.TaintEffectNoSchedule,
+			},
+		}
 	}
 
 	return &appsv1.Deployment{
@@ -491,65 +579,17 @@ func (r *AIModelReconciler) vllmDeployment(aiModel *aimodelv1alpha1.AIModel, dep
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
 						Name:  "vllm",
-						Image: "vllm/vllm-openai:v0.6.3",
-						Args: []string{
-							"--model", fmt.Sprintf("s3://%s/%s", aiModel.Spec.S3Bucket, aiModel.Spec.S3Key),
-							"--served-model-name", aiModel.Spec.ModelName,
-							"--dtype", "auto",
-							"--max-model-len", "4096",
-							"--gpu-memory-utilization", "0.9",
-							"--trust-remote-code",
-						},
+						Image: image,
+						Args:  args,
 						Ports: []corev1.ContainerPort{{
 							ContainerPort: 8000,
 							Name:          "http",
 						}},
-						Env: []corev1.EnvVar{
-							{
-								Name: "AWS_ACCESS_KEY_ID",
-								ValueFrom: &corev1.EnvVarSource{
-									SecretKeyRef: &corev1.SecretKeySelector{
-										LocalObjectReference: corev1.LocalObjectReference{
-											Name: "s3-credentials",
-										},
-										Key: "access-key-id",
-									},
-								},
-							},
-							{
-								Name: "AWS_SECRET_ACCESS_KEY",
-								ValueFrom: &corev1.EnvVarSource{
-									SecretKeyRef: &corev1.SecretKeySelector{
-										LocalObjectReference: corev1.LocalObjectReference{
-											Name: "s3-credentials",
-										},
-										Key: "secret-access-key",
-									},
-								},
-							},
-						},
-						Resources: corev1.ResourceRequirements{
-							Limits: corev1.ResourceList{
-								"nvidia.com/gpu": resource.MustParse("1"),
-							},
-							Requests: corev1.ResourceList{
-								"nvidia.com/gpu": resource.MustParse("1"),
-							},
-						},
+						Env:       env,
+						Resources: resources,
 					}},
-					Tolerations: []corev1.Toleration{
-						{
-							Key:      "nvidia.com/gpu",
-							Operator: corev1.TolerationOpExists,
-							Effect:   corev1.TaintEffectNoSchedule,
-						},
-						{
-							Key:      "gpu-workload",
-							Operator: corev1.TolerationOpEqual,
-							Value:    "true",
-							Effect:   corev1.TaintEffectNoSchedule,
-						},
-					},
+					Tolerations:  tolerations,
+					NodeSelector: aiModel.Spec.NodeSelector,
 				},
 			},
 		},
