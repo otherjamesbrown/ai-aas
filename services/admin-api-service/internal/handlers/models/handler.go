@@ -7,16 +7,16 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
 
 // Error variables for handler error mapping
 var (
-	ErrModelNotFound  = errors.New("model not found")
-	ErrModelDeployed  = errors.New("model has active deployments")
+	ErrModelNotFound   = errors.New("model not found")
+	ErrModelDeployed   = errors.New("model has active deployments")
 	ErrModelNameExists = errors.New("model name already exists")
+	ErrInvalidModelName = errors.New("invalid model name format")
 )
 
 // Handler handles model management HTTP requests
@@ -306,7 +306,7 @@ func (h *Handler) RenameModel(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusConflict, "cannot rename model with active deployments", err)
 		case errors.Is(err, ErrModelNameExists):
 			writeError(w, http.StatusConflict, "model name already exists", err)
-		case strings.Contains(err.Error(), "invalid new name"):
+		case errors.Is(err, ErrInvalidModelName):
 			writeError(w, http.StatusBadRequest, "invalid model name format", err)
 		default:
 			writeError(w, http.StatusInternalServerError, "failed to rename model", err)

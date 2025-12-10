@@ -65,9 +65,20 @@ ON model_registry_entries(deployment_environment, deployment_status);
 
 -- Create unique constraint for model_name + environment (for upsert in registration)
 -- This allows the same model to be deployed in different environments
-ALTER TABLE model_registry_entries
-ADD CONSTRAINT model_registry_entries_unique_deployment
-UNIQUE (model_name, deployment_environment);
+-- +goose StatementBegin
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'model_registry_entries_unique_deployment'
+        AND table_name = 'model_registry_entries'
+    ) THEN
+        ALTER TABLE model_registry_entries
+        ADD CONSTRAINT model_registry_entries_unique_deployment
+        UNIQUE (model_name, deployment_environment);
+    END IF;
+END $$;
+-- +goose StatementEnd
 
 COMMIT;
 
