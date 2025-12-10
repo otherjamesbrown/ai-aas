@@ -193,9 +193,10 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			log.Error(err, "S3 artifact check failed", "Bucket", aiModel.Spec.S3Bucket, "Key", aiModel.Spec.S3Key)
 			reconcileTotal.WithLabelValues("error").Inc()
 			// Update status to indicate failure
-			aiModel.Status.Phase = "ArtifactMissing"
+			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
+			aiModel.Status.Message = fmt.Sprintf("S3 artifact check failed: %v", err)
 			if statusErr := r.Status().Update(ctx, aiModel); statusErr != nil {
-				log.Error(statusErr, "unable to update AIModel status to ArtifactMissing")
+				log.Error(statusErr, "unable to update AIModel status to Failed")
 			}
 			return ctrl.Result{}, nil // Stop reconciliation until fixed
 		}
@@ -362,6 +363,7 @@ import os
 model_id = os.environ['MODEL_ID']
 s3_bucket = os.environ['S3_BUCKET']
 s3_key = os.environ['S3_KEY']
+s3_endpoint = os.environ.get('AWS_ENDPOINT_URL_S3') or os.environ.get('S3_ENDPOINT')
 
 print(f'Downloading {model_id} from HuggingFace Hub...')
 local_dir = snapshot_download(
@@ -371,7 +373,11 @@ local_dir = snapshot_download(
 )
 
 print(f'Uploading to s3://{s3_bucket}/{s3_key}/')
-s3 = boto3.client('s3')
+s3_config = {}
+if s3_endpoint:
+    s3_config['endpoint_url'] = s3_endpoint
+    print(f'Using custom S3 endpoint: {s3_endpoint}')
+s3 = boto3.client('s3', **s3_config)
 for root, dirs, files in os.walk(local_dir):
     for file in files:
         local_path = os.path.join(root, file)
@@ -444,6 +450,36 @@ print('Upload complete!')
 											Name: "s3-credentials",
 										},
 										Key: "secret-access-key",
+									},
+								},
+							},
+							{
+								Name: "AWS_ENDPOINT_URL_S3",
+								ValueFrom: &corev1.EnvVarSource{
+									SecretKeyRef: &corev1.SecretKeySelector{
+										LocalObjectReference: corev1.LocalObjectReference{
+											Name: "s3-credentials",
+										},
+										Key: "AWS_ENDPOINT_URL_S3",
+										Optional: func() *bool {
+											opt := true
+											return &opt
+										}(),
+									},
+								},
+							},
+							{
+								Name: "S3_ENDPOINT",
+								ValueFrom: &corev1.EnvVarSource{
+									SecretKeyRef: &corev1.SecretKeySelector{
+										LocalObjectReference: corev1.LocalObjectReference{
+											Name: "s3-credentials",
+										},
+										Key: "S3_ENDPOINT",
+										Optional: func() *bool {
+											opt := true
+											return &opt
+										}(),
 									},
 								},
 							},
@@ -646,12 +682,46 @@ func jobIsFailed(job *batchv1.Job) bool {
 func (r *AIModelReconciler) checkS3ArtifactExists(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) error {
 	log := log.FromContext(ctx)
 
-	cfg, err := config.LoadDefaultConfig(ctx)
+	// Read S3 credentials secret to get endpoint URL
+	secret := &corev1.Secret{}
+	secretName := types.NamespacedName{
+		Name:      "s3-credentials",
+		Namespace: aiModel.Namespace,
+	}
+	if err := r.Get(ctx, secretName, secret); err != nil {
+		return fmt.Errorf("failed to get s3-credentials secret: %w", err)
+	}
+
+	// Extract S3 endpoint from secret
+	// Try AWS_ENDPOINT_URL_S3 first, then S3_ENDPOINT
+	endpointURL := string(secret.Data["AWS_ENDPOINT_URL_S3"])
+	if endpointURL == "" {
+		endpointURL = string(secret.Data["S3_ENDPOINT"])
+	}
+	if endpointURL == "" {
+		return fmt.Errorf("S3 endpoint not found in secret (expected AWS_ENDPOINT_URL_S3 or S3_ENDPOINT)")
+	}
+
+	// Extract S3 region from secret, fallback to us-east-1
+	region := string(secret.Data["S3_REGION"])
+	if region == "" {
+		region = "us-east-1"
+	}
+
+	// Load AWS config with custom endpoint
+	cfg, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion(region),
+	)
 	if err != nil {
 		return fmt.Errorf("failed to load AWS config: %w", err)
 	}
 
-	client := s3.NewFromConfig(cfg)
+	// Create S3 client with custom endpoint and path-style addressing
+	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(endpointURL)
+		o.UsePathStyle = true
+	})
+
 	prefix := aiModel.Spec.S3Key
 	if !strings.HasSuffix(prefix, "/") {
 		prefix = prefix + "/"
@@ -746,7 +816,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 
 	// Build runtime env with S3 credentials
 	runtimeEnv := aiModel.Spec.RuntimeEnv
-	// Add S3 credentials
+	// Add S3 credentials and endpoint configuration
 	runtimeEnv = append(runtimeEnv,
 		corev1.EnvVar{
 			Name: "AWS_ACCESS_KEY_ID",
@@ -767,6 +837,36 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 						Name: "s3-credentials",
 					},
 					Key: "secret-access-key",
+				},
+			},
+		},
+		corev1.EnvVar{
+			Name: "AWS_ENDPOINT_URL_S3",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: "s3-credentials",
+					},
+					Key: "AWS_ENDPOINT_URL_S3",
+					Optional: func() *bool {
+						opt := true
+						return &opt
+					}(),
+				},
+			},
+		},
+		corev1.EnvVar{
+			Name: "S3_ENDPOINT",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: "s3-credentials",
+					},
+					Key: "S3_ENDPOINT",
+					Optional: func() *bool {
+						opt := true
+						return &opt
+					}(),
 				},
 			},
 		},
