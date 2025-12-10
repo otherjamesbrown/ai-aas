@@ -175,11 +175,33 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	// Handle model deletion if Enabled is false
 	if !aiModel.Spec.Enabled {
-		log.Info("AIModel is disabled, scaling down/deleting resources", "name", aiModel.Name)
-		// TODO: Implement logic to scale down or delete vLLM deployment and service
-		// For now, let's just update the status
+		log.Info("AIModel is disabled, deleting InferenceService to release resources", "name", aiModel.Name)
+
+		// Delete InferenceService to stop all pods and release GPU resources
+		isvc := &unstructured.Unstructured{}
+		isvc.SetGroupVersionKind(kserve.InferenceServiceGVK)
+		err := r.Get(ctx, types.NamespacedName{Name: aiModel.Name, Namespace: aiModel.Namespace}, isvc)
+		if err == nil {
+			// InferenceService exists, delete it
+			log.Info("Deleting InferenceService for disabled model", "name", aiModel.Name)
+			if err := r.Delete(ctx, isvc); err != nil && !errors.IsNotFound(err) {
+				log.Error(err, "Failed to delete InferenceService for disabled model")
+				reconcileTotal.WithLabelValues("error").Inc()
+				return ctrl.Result{}, err
+			}
+		} else if !errors.IsNotFound(err) {
+			log.Error(err, "Failed to get InferenceService for disabled model")
+			reconcileTotal.WithLabelValues("error").Inc()
+			return ctrl.Result{}, err
+		}
+
+		// Update status to Disabled
 		if aiModel.Status.Phase != "Disabled" {
 			aiModel.Status.Phase = "Disabled"
+			aiModel.Status.Message = "Model is disabled, InferenceService deleted"
+			aiModel.Status.InferenceServiceName = ""
+			aiModel.Status.InferenceEndpoint = ""
+			aiModel.Status.ReadyReplicas = 0
 			if err := r.Status().Update(ctx, aiModel); err != nil {
 				log.Error(err, "unable to update AIModel status to Disabled")
 				reconcileTotal.WithLabelValues("error").Inc()
@@ -187,7 +209,7 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			}
 		}
 		reconcileTotal.WithLabelValues("success").Inc()
-		return ctrl.Result{}, nil // Requeue if necessary to ensure cleanup
+		return ctrl.Result{}, nil
 	}
 
 	// 1. Reconcile Model Artifact Downloader Job (if not already successful)
