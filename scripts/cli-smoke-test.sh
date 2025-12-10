@@ -17,19 +17,17 @@ ENV_FILE="$PROJECT_ROOT/secrets/env/.env"
 
 # Build CLI to ensure we have the latest version
 build_cli() {
-    echo "Building CLI..."
+    local quiet="${1:-false}"
+    [[ "$quiet" != "true" ]] && echo "Building CLI..."
     pushd "$CLI_DIR" > /dev/null
     if CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ai-aas-cli . 2>&1; then
-        echo "CLI built successfully"
+        [[ "$quiet" != "true" ]] && echo "CLI built successfully"
     else
-        echo "Error: Failed to build CLI"
+        echo "Error: Failed to build CLI" >&2
         exit 1
     fi
     popd > /dev/null
 }
-
-# Build CLI before running tests
-build_cli
 
 # Environment endpoints
 DEV_USER_ORG="https://user-org.dev.otherjamesbrown.com"
@@ -51,6 +49,7 @@ NC='\033[0m' # No Color
 RUN_DEV=true
 RUN_STAGING=true
 JSON_OUTPUT=false
+VERBOSE=false
 
 for arg in "$@"; do
     case $arg in
@@ -63,13 +62,17 @@ for arg in "$@"; do
         --json)
             JSON_OUTPUT=true
             ;;
+        --verbose|-v)
+            VERBOSE=true
+            ;;
         --help|-h)
-            echo "Usage: $0 [--dev-only|--staging-only] [--json]"
+            echo "Usage: $0 [--dev-only|--staging-only] [--json] [--verbose]"
             echo ""
             echo "Options:"
             echo "  --dev-only      Run only development environment tests"
             echo "  --staging-only  Run only staging environment tests"
             echo "  --json          Output results as JSON"
+            echo "  --verbose, -v   Show detailed model list and inference token usage"
             exit 0
             ;;
     esac
@@ -87,6 +90,7 @@ fi
 
 # Results storage
 declare -A RESULTS
+declare -A VERBOSE_DATA
 
 # Helper function to check health endpoint
 check_health() {
@@ -253,6 +257,8 @@ run_environment_tests() {
     fi
 
     # Test 5: List Models (with new API key)
+    local models_json=""
+    local first_model_id=""
     if [[ -n "$new_api_key" ]]; then
         local models_output
         models_output=$(curl -sk --connect-timeout 5 --max-time 10 \
@@ -270,7 +276,11 @@ run_environment_tests() {
             else
                 local model_ids
                 model_ids=$(echo "$models_output" | jq -r '[.data[].id] | join(", ")' | cut -c1-60)
-                results+=("list_models:PASS:$model_count models ($model_ids)")
+                results+=("list_models:PASS:${model_count}_models")
+                # Store full models JSON for verbose output
+                models_json="$models_output"
+                # Get first model for inference test
+                first_model_id=$(echo "$models_output" | jq -r '.data[0].id // empty')
             fi
         else
             results+=("list_models:FAIL:invalid response")
@@ -279,7 +289,50 @@ run_environment_tests() {
         results+=("list_models:SKIP:no API key")
     fi
 
-    # Test 6: Inference Health
+    # Test 6: Inference Test (chat completion)
+    local inference_json=""
+    if [[ -n "$new_api_key" && -n "$first_model_id" ]]; then
+        local start_time end_time duration_ms
+        start_time=$(date +%s%3N)
+
+        local inference_output
+        inference_output=$(curl -sk --connect-timeout 10 --max-time 30 \
+            "$api_router_endpoint/v1/chat/completions" \
+            -H "Authorization: Bearer $new_api_key" \
+            -H "Content-Type: application/json" \
+            -d "{
+                \"model\": \"$first_model_id\",
+                \"messages\": [{\"role\": \"user\", \"content\": \"Say hello in exactly 5 words.\"}],
+                \"max_tokens\": 50
+            }" 2>&1)
+
+        end_time=$(date +%s%3N)
+        duration_ms=$((end_time - start_time))
+
+        if echo "$inference_output" | jq -e '.choices[0].message.content' >/dev/null 2>&1; then
+            local prompt_tokens completion_tokens total_tokens response_text
+            prompt_tokens=$(echo "$inference_output" | jq -r '.usage.prompt_tokens // 0')
+            completion_tokens=$(echo "$inference_output" | jq -r '.usage.completion_tokens // 0')
+            total_tokens=$(echo "$inference_output" | jq -r '.usage.total_tokens // 0')
+            response_text=$(echo "$inference_output" | jq -r '.choices[0].message.content // empty' | head -c 50)
+
+            results+=("inference:PASS:${duration_ms}ms,${total_tokens}tok")
+            # Store inference details for verbose output
+            inference_json="{\"model\":\"$first_model_id\",\"prompt_tokens\":$prompt_tokens,\"completion_tokens\":$completion_tokens,\"total_tokens\":$total_tokens,\"duration_ms\":$duration_ms,\"response\":\"$response_text\"}"
+        else
+            local error_msg
+            error_msg=$(echo "$inference_output" | jq -r '.error.message // "unknown error"' 2>/dev/null | head -c 50)
+            results+=("inference:FAIL:$error_msg")
+        fi
+    else
+        if [[ -z "$new_api_key" ]]; then
+            results+=("inference:SKIP:no API key")
+        else
+            results+=("inference:SKIP:no models available")
+        fi
+    fi
+
+    # Test 7: Inference Health
     local health_output
     health_output=$(curl -sk --connect-timeout 5 --max-time 10 \
         "$api_router_endpoint/v1/status/healthz" 2>&1)
@@ -308,6 +361,12 @@ run_environment_tests() {
 
     # Return results as space-separated string
     echo "${results[*]}"
+
+    # Write verbose data to temp files (always write, cleanup happens in print_verbose_details)
+    local verbose_dir="/tmp/smoke-test-verbose-${SMOKE_TEST_ID:-$$}"
+    mkdir -p "$verbose_dir"
+    [[ -n "$models_json" ]] && echo "$models_json" > "$verbose_dir/${env_name}_models.json"
+    [[ -n "$inference_json" ]] && echo "$inference_json" > "$verbose_dir/${env_name}_inference.json"
 }
 
 # Parse results string into associative array
@@ -346,7 +405,7 @@ print_results() {
     printf "%-20s %-8s %s\n" "Test" "Result" "Details"
     printf "%-20s %-8s %s\n" "----" "------" "-------"
 
-    for test in create_org create_user grant_model_access activate_user create_apikey list_models inference_health cleanup; do
+    for test in $TESTS; do
         local value="${RESULTS[${env_name}_${test}]}"
         local result="${value%%:*}"
         local details="${value#*:}"
@@ -377,6 +436,7 @@ print_json_results() {
         "activate_user": "${RESULTS[dev_activate_user]}",
         "create_apikey": "${RESULTS[dev_create_apikey]}",
         "list_models": "${RESULTS[dev_list_models]}",
+        "inference": "${RESULTS[dev_inference]}",
         "inference_health": "${RESULTS[dev_inference_health]}",
         "cleanup": "${RESULTS[dev_cleanup]}"
       }
@@ -400,6 +460,7 @@ EOF
         "activate_user": "${RESULTS[staging_activate_user]}",
         "create_apikey": "${RESULTS[staging_create_apikey]}",
         "list_models": "${RESULTS[staging_list_models]}",
+        "inference": "${RESULTS[staging_inference]}",
         "inference_health": "${RESULTS[staging_inference_health]}",
         "cleanup": "${RESULTS[staging_cleanup]}"
       }
@@ -420,12 +481,15 @@ EOF
     echo "}"
 }
 
+# Test list
+TESTS="create_org create_user grant_model_access activate_user create_apikey list_models inference inference_health cleanup"
+
 # Count failures
 count_failures() {
     local env_name="$1"
     local count=0
 
-    for test in create_org create_user grant_model_access activate_user create_apikey list_models inference_health cleanup; do
+    for test in $TESTS; do
         local value="${RESULTS[${env_name}_${test}]}"
         local result="${value%%:*}"
         [[ "$result" == "FAIL" ]] && ((count++))
@@ -439,7 +503,7 @@ count_passes() {
     local env_name="$1"
     local count=0
 
-    for test in create_org create_user grant_model_access activate_user create_apikey list_models inference_health cleanup; do
+    for test in $TESTS; do
         local value="${RESULTS[${env_name}_${test}]}"
         local result="${value%%:*}"
         [[ "$result" == "PASS" ]] && ((count++))
@@ -493,7 +557,7 @@ print_summary_table() {
     echo "│ Test                 │ Development │ Staging     │"
     echo "├──────────────────────┼─────────────┼─────────────┤"
 
-    for test in create_org create_user grant_model_access activate_user create_apikey list_models inference_health cleanup; do
+    for test in $TESTS; do
         local dev_result="-"
         local staging_result="-"
 
@@ -527,10 +591,97 @@ print_summary_table() {
     echo "└──────────────────────┴─────────────┴─────────────┘"
 }
 
+# Print verbose details (models and inference)
+print_verbose_details() {
+    local verbose_dir="/tmp/smoke-test-verbose-${SMOKE_TEST_ID:-$$}"
+
+    # Models table
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════════════════════╗"
+    echo "║                              PUBLISHED MODELS                                ║"
+    echo "╠═════════════╦══════════════════════════════════════════════════╦════════════╣"
+    echo "║ Environment ║ Model ID                                         ║ Owner      ║"
+    echo "╠═════════════╬══════════════════════════════════════════════════╬════════════╣"
+
+    for env in dev staging; do
+        local env_label="Development"
+        [[ "$env" == "staging" ]] && env_label="Staging"
+
+        local models_file="$verbose_dir/${env}_models.json"
+        if [[ -f "$models_file" ]]; then
+            local models
+            models=$(cat "$models_file" | jq -r '.data[] | "\(.id)|\(.owned_by // "unknown")"' 2>/dev/null)
+            local first=true
+            while IFS='|' read -r model_id owner; do
+                if [[ -n "$model_id" ]]; then
+                    local display_env=""
+                    if [[ "$first" == "true" ]]; then
+                        display_env="$env_label"
+                        first=false
+                    fi
+                    # Truncate model_id if too long
+                    local truncated_model="${model_id:0:48}"
+                    printf "║ %-11s ║ %-48s ║ %-10s ║\n" "$display_env" "$truncated_model" "${owner:0:10}"
+                fi
+            done <<< "$models"
+        fi
+    done
+
+    echo "╚═════════════╩══════════════════════════════════════════════════╩════════════╝"
+
+    # Inference details table
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════════════════════╗"
+    echo "║                             INFERENCE DETAILS                               ║"
+    echo "╠═════════════╦════════════════════════════════╦════════╦════════╦════════════╣"
+    echo "║ Environment ║ Model                          ║ Prompt ║ Compl. ║ Time (ms)  ║"
+    echo "╠═════════════╬════════════════════════════════╬════════╬════════╬════════════╣"
+
+    for env in dev staging; do
+        local env_label="Development"
+        [[ "$env" == "staging" ]] && env_label="Staging"
+
+        local inference_file="$verbose_dir/${env}_inference.json"
+        if [[ -f "$inference_file" ]]; then
+            local model prompt_tokens completion_tokens duration_ms response
+            model=$(cat "$inference_file" | jq -r '.model // "unknown"' 2>/dev/null)
+            prompt_tokens=$(cat "$inference_file" | jq -r '.prompt_tokens // 0' 2>/dev/null)
+            completion_tokens=$(cat "$inference_file" | jq -r '.completion_tokens // 0' 2>/dev/null)
+            duration_ms=$(cat "$inference_file" | jq -r '.duration_ms // 0' 2>/dev/null)
+            response=$(cat "$inference_file" | jq -r '.response // ""' 2>/dev/null)
+
+            # Truncate model name
+            local truncated_model="${model:0:30}"
+            printf "║ %-11s ║ %-30s ║ %6s ║ %6s ║ %10s ║\n" \
+                "$env_label" "$truncated_model" "$prompt_tokens" "$completion_tokens" "$duration_ms"
+
+            if [[ -n "$response" ]]; then
+                echo "╟─────────────╨────────────────────────────────────────────────────────────────╢"
+                printf "║ Response: %-67s ║\n" "${response:0:67}"
+                echo "╟─────────────╥────────────────────────────────────────────────────────────────╢"
+            fi
+        else
+            printf "║ %-11s ║ %-30s ║ %6s ║ %6s ║ %10s ║\n" \
+                "$env_label" "(no inference test)" "-" "-" "-"
+        fi
+    done
+
+    echo "╚═════════════╩════════════════════════════════╩════════╩════════╩════════════╝"
+
+    # Cleanup temp files
+    rm -rf "$verbose_dir"
+}
+
 # Main execution
 main() {
     local dev_results_str=""
     local staging_results_str=""
+
+    # Build CLI (quiet in JSON mode)
+    build_cli "$JSON_OUTPUT"
+
+    # Set a unique ID for this test run (used for temp file paths across subshells)
+    export SMOKE_TEST_ID="$$-$(date +%s)"
 
     if [[ "$JSON_OUTPUT" != "true" ]]; then
         echo "CLI Smoke Tests - $(date)"
@@ -576,6 +727,11 @@ main() {
     else
         # Print the summary table
         print_summary_table
+
+        # Print verbose details if requested
+        if [[ "$VERBOSE" == "true" ]]; then
+            print_verbose_details
+        fi
 
         # Final status
         local total_failures=0
