@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -52,6 +53,13 @@ import (
 
 const aiModelFinalizer = "aimodel.ai-aas.io/finalizer"
 const modelDownloaderImage = "python:3.11-slim" // Python image for HuggingFace Hub downloads
+
+// Retry configuration for failed download jobs
+const (
+	maxDownloadRetries = 5
+	initialRetryDelay  = 1 * time.Minute
+	maxRetryDelay      = 16 * time.Minute
+)
 
 var (
 	reconcileTotal = prometheus.NewCounterVec(
@@ -187,13 +195,33 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		log.Error(err, "Failed to get Job", "Job.Name", jobName)
 		reconcileTotal.WithLabelValues("error").Inc()
 		return ctrl.Result{}, err
-	} else if err != nil { // Job not found, check if artifacts already exist in S3
+	} else if err != nil { // Job not found
+		// Handle RetryPending phase - check if it's time to retry
+		if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhaseRetryPending {
+			if aiModel.Status.NextRetryTime != nil {
+				now := metav1.Now()
+				if now.Time.Before(aiModel.Status.NextRetryTime.Time) {
+					// Not yet time to retry, requeue with remaining wait time
+					waitDuration := aiModel.Status.NextRetryTime.Time.Sub(now.Time)
+					log.Info("Retry not yet due, waiting", "waitDuration", waitDuration)
+					reconcileTotal.WithLabelValues("success").Inc()
+					return ctrl.Result{RequeueAfter: waitDuration}, nil
+				}
+				// Time to retry - fall through to job creation logic
+				log.Info("Retry time reached, creating new download job", "retryCount", aiModel.Status.RetryCount)
+			}
+		}
+
 		// Check if S3 artifacts already exist (e.g., from a previous download or manual upload)
 		// If they exist, we can skip the downloader job and proceed to InferenceService creation
 		if err := r.checkS3ArtifactExists(ctx, aiModel); err == nil {
 			// Artifacts already exist in S3, skip download phase
 			log.Info("S3 artifacts already exist, skipping download", "Bucket", aiModel.Spec.S3Bucket, "Key", aiModel.Spec.S3Key)
 			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
+			// Reset retry count on success
+			aiModel.Status.RetryCount = 0
+			aiModel.Status.LastRetryTime = nil
+			aiModel.Status.NextRetryTime = nil
 			if statusErr := r.Status().Update(ctx, aiModel); statusErr != nil {
 				log.Error(statusErr, "unable to update AIModel status to Deploying")
 				return ctrl.Result{}, statusErr
@@ -229,6 +257,10 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			log.Info("Model Downloader Job completed successfully", "Job.Name", jobName)
 			if aiModel.Status.Phase == "Downloading" || aiModel.Status.Phase == "Pending" {
 				aiModel.Status.Phase = "Downloaded"
+				// Reset retry tracking on success
+				aiModel.Status.RetryCount = 0
+				aiModel.Status.LastRetryTime = nil
+				aiModel.Status.NextRetryTime = nil
 				if err := r.Status().Update(ctx, aiModel); err != nil {
 					log.Error(err, "unable to update AIModel status to Downloaded")
 					reconcileTotal.WithLabelValues("error").Inc()
@@ -237,16 +269,53 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			}
 		} else if jobIsFailed(foundJob) {
 			log.Error(fmt.Errorf("job failed"), "Model Downloader Job failed", "Job.Name", jobName)
-			if aiModel.Status.Phase != "Failed" {
-				aiModel.Status.Phase = "Failed"
+
+			// Check if we should retry
+			if aiModel.Status.RetryCount < maxDownloadRetries {
+				// Delete the failed job so a new one can be created
+				log.Info("Deleting failed job to prepare for retry", "Job.Name", jobName, "retryCount", aiModel.Status.RetryCount)
+				if err := r.Delete(ctx, foundJob, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
+					log.Error(err, "Failed to delete failed Job", "Job.Name", jobName)
+					reconcileTotal.WithLabelValues("error").Inc()
+					return ctrl.Result{}, err
+				}
+
+				// Increment retry count and calculate backoff
+				aiModel.Status.RetryCount++
+				backoffDuration := calculateRetryBackoff(aiModel.Status.RetryCount - 1) // Use previous count for backoff
+				now := metav1.Now()
+				nextRetry := metav1.NewTime(now.Add(backoffDuration))
+
+				aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseRetryPending
+				aiModel.Status.LastRetryTime = &now
+				aiModel.Status.NextRetryTime = &nextRetry
+				aiModel.Status.Message = fmt.Sprintf("Download failed, retry %d/%d scheduled in %v",
+					aiModel.Status.RetryCount, maxDownloadRetries, backoffDuration)
+
+				if err := r.Status().Update(ctx, aiModel); err != nil {
+					log.Error(err, "unable to update AIModel status to RetryPending")
+					reconcileTotal.WithLabelValues("error").Inc()
+					return ctrl.Result{}, err
+				}
+
+				log.Info("Retry scheduled", "retryCount", aiModel.Status.RetryCount,
+					"backoffDuration", backoffDuration, "nextRetryTime", nextRetry.Time)
+				reconcileTotal.WithLabelValues("retry").Inc()
+				return ctrl.Result{RequeueAfter: backoffDuration}, nil
+			} else {
+				// Max retries exceeded, mark as permanently failed
+				log.Error(fmt.Errorf("max retries exceeded"), "Download failed after maximum retries",
+					"Job.Name", jobName, "maxRetries", maxDownloadRetries)
+				aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
+				aiModel.Status.Message = fmt.Sprintf("Download failed after %d retry attempts. Manual intervention required.", maxDownloadRetries)
 				if err := r.Status().Update(ctx, aiModel); err != nil {
 					log.Error(err, "unable to update AIModel status to Failed")
 					reconcileTotal.WithLabelValues("error").Inc()
 					return ctrl.Result{}, err
 				}
+				reconcileTotal.WithLabelValues("error").Inc()
+				return ctrl.Result{}, nil // Do not requeue - permanent failure
 			}
-			reconcileTotal.WithLabelValues("error").Inc()
-			return ctrl.Result{}, nil // Do not requeue on failed job, manual intervention needed.
 		} else {
 			log.Info("Model Downloader Job still running", "Job.Name", jobName)
 			reconcileTotal.WithLabelValues("success").Inc()
@@ -680,6 +749,15 @@ func jobIsFailed(job *batchv1.Job) bool {
 	return false
 }
 
+// calculateRetryBackoff calculates the exponential backoff duration for a given retry count.
+// Returns min(initialRetryDelay * 2^retryCount, maxRetryDelay)
+func calculateRetryBackoff(retryCount int32) time.Duration {
+	backoff := initialRetryDelay * time.Duration(1<<retryCount)
+	if backoff > maxRetryDelay {
+		return maxRetryDelay
+	}
+	return backoff
+}
 
 func (r *AIModelReconciler) checkS3ArtifactExists(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) error {
 	log := log.FromContext(ctx)
