@@ -110,3 +110,12 @@ adminApi:
   endpoint: http://admin-api-service-staging.admin-api-service.svc.cluster.local:8080
   syncInterval: 30s
 
+# Backend endpoints - configure vLLM service
+backends:
+  # Format: model-id:http://service-name.namespace.svc.cluster.local:port
+  # KServe InferenceServices are exposed via Knative Services
+  #
+  # IMPORTANT: Use the -private service on port 8012 (queue-proxy port)
+  # - Port 80 on regular services routes through Istio which causes timeouts
+  # - Port 8012 on -private services connects directly to the queue-proxy sidecar
+  endpoints: "mistralai/Mistral-7B-Instruct-v0.3:http://mistral-7b-instruct-staging-predictor-00002-private.staging.svc.cluster.local:8012"

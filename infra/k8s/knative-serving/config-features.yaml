@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-features
+  namespace: knative-serving
+  labels:
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/name: knative-serving
+data:
+  # Enable Kubernetes tolerations support in Knative Serving
+  # This allows InferenceServices to specify tolerations that will be
+  # propagated to the pods, enabling scheduling on tainted GPU nodes
+  kubernetes.podspec-tolerations: "enabled"
+
+  # Enable multi-container support (already enabled in most installations)
+  multi-container: "enabled"
+
+  # Enable EmptyDir volume support
+  kubernetes.podspec-volumes-emptydir: "enabled"
