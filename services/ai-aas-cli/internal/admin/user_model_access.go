@@ -209,7 +209,14 @@ Modes:
 			}
 
 			if cfg.OutputFormat == "json" {
-				return output.PrintJSON(access)
+				// Wrap in standard CLI response format for consistency
+				response := map[string]interface{}{
+					"timestamp": time.Now().Format(time.RFC3339),
+					"operation": "set_access_mode",
+					"outcome":   "success",
+					"result":    access,
+				}
+				return output.PrintJSON(response)
 			}
 
 			fmt.Printf("Access mode updated successfully:\n")

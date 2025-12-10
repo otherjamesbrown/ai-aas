@@ -11,8 +11,25 @@ set -o pipefail
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-CLI="$PROJECT_ROOT/services/ai-aas-cli/ai-aas-cli"
+CLI_DIR="$PROJECT_ROOT/services/ai-aas-cli"
+CLI="$CLI_DIR/ai-aas-cli"
 ENV_FILE="$PROJECT_ROOT/secrets/env/.env"
+
+# Build CLI to ensure we have the latest version
+build_cli() {
+    echo "Building CLI..."
+    pushd "$CLI_DIR" > /dev/null
+    if CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ai-aas-cli . 2>&1; then
+        echo "CLI built successfully"
+    else
+        echo "Error: Failed to build CLI"
+        exit 1
+    fi
+    popd > /dev/null
+}
+
+# Build CLI before running tests
+build_cli
 
 # Environment endpoints
 DEV_USER_ORG="https://user-org.dev.otherjamesbrown.com"
@@ -181,6 +198,23 @@ run_environment_tests() {
         return 1
     fi
 
+    # Test 2.5: Grant Model Access (set to auto_grant mode)
+    local model_access_output
+    model_access_output=$(run_cli user model-access set-mode \
+        --org-id "$org_slug" \
+        --user-id "$user_id" \
+        --mode auto_grant \
+        --user-org-endpoint "$user_org_endpoint" \
+        --api-key "$api_key" 2>&1)
+
+    if echo "$model_access_output" | grep -q '"outcome": "success"'; then
+        results+=("grant_model_access:PASS:auto_grant")
+    else
+        local error_msg
+        error_msg=$(echo "$model_access_output" | grep -o '"error":[^,}]*' | head -1 || echo "unknown error")
+        results+=("grant_model_access:FAIL:$error_msg")
+    fi
+
     # Test 3: Activate User
     local activate_output
     activate_output=$(run_cli user update \
@@ -312,7 +346,7 @@ print_results() {
     printf "%-20s %-8s %s\n" "Test" "Result" "Details"
     printf "%-20s %-8s %s\n" "----" "------" "-------"
 
-    for test in create_org create_user activate_user create_apikey list_models inference_health cleanup; do
+    for test in create_org create_user grant_model_access activate_user create_apikey list_models inference_health cleanup; do
         local value="${RESULTS[${env_name}_${test}]}"
         local result="${value%%:*}"
         local details="${value#*:}"
@@ -339,6 +373,7 @@ print_json_results() {
       "tests": {
         "create_org": "${RESULTS[dev_create_org]}",
         "create_user": "${RESULTS[dev_create_user]}",
+        "grant_model_access": "${RESULTS[dev_grant_model_access]}",
         "activate_user": "${RESULTS[dev_activate_user]}",
         "create_apikey": "${RESULTS[dev_create_apikey]}",
         "list_models": "${RESULTS[dev_list_models]}",
@@ -361,6 +396,7 @@ EOF
       "tests": {
         "create_org": "${RESULTS[staging_create_org]}",
         "create_user": "${RESULTS[staging_create_user]}",
+        "grant_model_access": "${RESULTS[staging_grant_model_access]}",
         "activate_user": "${RESULTS[staging_activate_user]}",
         "create_apikey": "${RESULTS[staging_create_apikey]}",
         "list_models": "${RESULTS[staging_list_models]}",
@@ -389,7 +425,7 @@ count_failures() {
     local env_name="$1"
     local count=0
 
-    for test in create_org create_user activate_user create_apikey list_models inference_health cleanup; do
+    for test in create_org create_user grant_model_access activate_user create_apikey list_models inference_health cleanup; do
         local value="${RESULTS[${env_name}_${test}]}"
         local result="${value%%:*}"
         [[ "$result" == "FAIL" ]] && ((count++))
@@ -403,7 +439,7 @@ count_passes() {
     local env_name="$1"
     local count=0
 
-    for test in create_org create_user activate_user create_apikey list_models inference_health cleanup; do
+    for test in create_org create_user grant_model_access activate_user create_apikey list_models inference_health cleanup; do
         local value="${RESULTS[${env_name}_${test}]}"
         local result="${value%%:*}"
         [[ "$result" == "PASS" ]] && ((count++))
@@ -453,11 +489,11 @@ print_summary_table() {
     echo ""
 
     # Print detailed test breakdown
-    echo "┌─────────────────────┬─────────────┬─────────────┐"
-    echo "│ Test                │ Development │ Staging     │"
-    echo "├─────────────────────┼─────────────┼─────────────┤"
+    echo "┌──────────────────────┬─────────────┬─────────────┐"
+    echo "│ Test                 │ Development │ Staging     │"
+    echo "├──────────────────────┼─────────────┼─────────────┤"
 
-    for test in create_org create_user activate_user create_apikey list_models inference_health cleanup; do
+    for test in create_org create_user grant_model_access activate_user create_apikey list_models inference_health cleanup; do
         local dev_result="-"
         local staging_result="-"
 
@@ -485,10 +521,10 @@ print_summary_table() {
             fi
         fi
 
-        printf "│ %-19s │ %-11s │ %-11s │\n" "$test" "$dev_result" "$staging_result"
+        printf "│ %-20s │ %-11s │ %-11s │\n" "$test" "$dev_result" "$staging_result"
     done
 
-    echo "└─────────────────────┴─────────────┴─────────────┘"
+    echo "└──────────────────────┴─────────────┴─────────────┘"
 }
 
 # Main execution
