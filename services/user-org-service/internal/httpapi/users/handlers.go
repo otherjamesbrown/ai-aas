@@ -830,3 +830,13 @@ func (h *Handler) requireOrgAccess(ctx context.Context, orgID uuid.UUID) error {
 	// Otherwise, verify user is a member of the target org
 	return h.runtime.Postgres.ValidateUserOrgMembership(ctx, userID, orgID)
 }
+
+// containsRole checks if a role exists in the roles slice (case-insensitive).
+func containsRole(roles []string, target string) bool {
+	for _, r := range roles {
+		if strings.EqualFold(r, target) {
+			return true
+		}
+	}
+	return false
+}
