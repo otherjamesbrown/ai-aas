@@ -107,6 +107,8 @@ const (
 	AIModelPhaseFailed AIModelPhase = "Failed"
 	// AIModelPhaseDisabled indicates the model is disabled (scaled to zero).
 	AIModelPhaseDisabled AIModelPhase = "Disabled"
+	// AIModelPhaseRetryPending indicates a retry is scheduled after a download failure.
+	AIModelPhaseRetryPending AIModelPhase = "RetryPending"
 )
 
 // AIModelStatus defines the observed state of AIModel
@@ -139,6 +141,15 @@ type AIModelStatus struct {
 
 	// Message provides additional information about the current phase.
 	Message string `json:"message,omitempty"`
+
+	// RetryCount tracks the number of download retry attempts.
+	RetryCount int32 `json:"retryCount,omitempty"`
+
+	// LastRetryTime is when the last retry was attempted.
+	LastRetryTime *metav1.Time `json:"lastRetryTime,omitempty"`
+
+	// NextRetryTime is when the next retry will be attempted (if in retry state).
+	NextRetryTime *metav1.Time `json:"nextRetryTime,omitempty"`
 
 	// DEPRECATED: Use InferenceServiceName instead.
 	VLLMDeploymentName string `json:"vllmDeploymentName,omitempty"`
