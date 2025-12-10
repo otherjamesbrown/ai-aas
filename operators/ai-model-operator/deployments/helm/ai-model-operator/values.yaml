@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: ai-model-operator/ai-model-operator
+  repository: ghcr.io/otherjamesbrown/ai-aas/ai-model-operator
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: "latest"
@@ -13,3 +13,6 @@ resources:
   requests:
     cpu: 10m
     memory: 64Mi
+
+# Environment variables for the operator
+env: []
