@@ -1202,26 +1202,3 @@ func runUserDelete(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 	return nil
 }
 
-// determineAccessMode determines the access mode based on the flag and user roles.
-// - If modelAccess is "all", returns "auto_grant"
-// - If modelAccess is "restricted", returns "restricted"
-// - If modelAccess is empty and user has admin role, returns "auto_grant"
-// - Otherwise returns "restricted"
-func determineAccessMode(modelAccess string, roles []string) string {
-	if modelAccess == "all" {
-		return "auto_grant"
-	}
-	if modelAccess == "restricted" {
-		return "restricted"
-	}
-
-	// If not explicitly set, check if user has admin role
-	for _, role := range roles {
-		if role == "admin" {
-			return "auto_grant"
-		}
-	}
-
-	return "restricted"
-}
-
