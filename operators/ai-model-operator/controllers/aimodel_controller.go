@@ -33,6 +33,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -43,6 +45,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	aimodelv1alpha1 "github.com/ai-aas/ai-model-operator/api/v1alpha1"
+	"github.com/ai-aas/ai-model-operator/internal/kserve"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -79,6 +82,8 @@ type AIModelReconciler struct {
 //+kubebuilder:rbac:groups=aimodel.ai-aas.io,resources=aimodels,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=aimodel.ai-aas.io,resources=aimodels/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=aimodel.ai-aas.io,resources=aimodels/finalizers,verbs=update
+//+kubebuilder:rbac:groups=serving.kserve.io,resources=inferenceservices,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=serving.kserve.io,resources=inferenceservices/status,verbs=get
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
@@ -248,96 +253,43 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 
 
-	// 2. Reconcile vLLM Deployment
-	deploymentName := fmt.Sprintf("%s-vllm", aiModel.Name)
-	vllmDeployment := &appsv1.Deployment{}
-	err = r.Get(ctx, client.ObjectKey{Name: deploymentName, Namespace: aiModel.Namespace}, vllmDeployment)
-	if err != nil && client.IgnoreNotFound(err) != nil {
-		log.Error(err, "Failed to get vLLM Deployment", "Deployment.Name", deploymentName)
-		reconcileTotal.WithLabelValues("error").Inc()
-		return ctrl.Result{}, err
-	} else if err != nil { // Deployment not found, create it
-		log.Info("Creating a new vLLM Deployment", "Deployment.Namespace", aiModel.Namespace, "Deployment.Name", deploymentName)
-		dep := r.vllmDeployment(aiModel, deploymentName)
-		if err := ctrl.SetControllerReference(aiModel, dep, r.Scheme); err != nil {
-			log.Error(err, "Failed to set controller reference for Deployment", "Deployment.Name", dep.Name)
-			reconcileTotal.WithLabelValues("error").Inc()
-			return ctrl.Result{}, err
-		}
-		if err := r.Create(ctx, dep); err != nil {
-			log.Error(err, "Failed to create vLLM Deployment", "Deployment.Name", dep.Name)
-			reconcileTotal.WithLabelValues("error").Inc()
-			return ctrl.Result{}, err
-		}
-		aiModel.Status.VLLMDeploymentName = deploymentName
-		aiModel.Status.Phase = "Deploying"
+	// 2. Reconcile KServe InferenceService (replaces vLLM Deployment + Service)
+	log.Info("Reconciling InferenceService", "name", aiModel.Name)
+
+	// Update phase to Deploying if not already set
+	if aiModel.Status.Phase == "Downloaded" || aiModel.Status.Phase == "Pending" {
+		aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
 		if err := r.Status().Update(ctx, aiModel); err != nil {
 			log.Error(err, "unable to update AIModel status to Deploying")
 			reconcileTotal.WithLabelValues("error").Inc()
 			return ctrl.Result{}, err
 		}
-		reconcileTotal.WithLabelValues("success").Inc()
-		return ctrl.Result{Requeue: true}, nil // Requeue to wait for Deployment readiness
-	} else {
-		// Deployment found, update if necessary (e.g., replicas, image, etc.)
-		expectedReplicas := int32(1)
-		if aiModel.Spec.Replicas != nil {
-			expectedReplicas = *aiModel.Spec.Replicas
-		}
-
-		if *vllmDeployment.Spec.Replicas != expectedReplicas {
-			log.Info("Updating vLLM Deployment replicas", "Deployment.Name", deploymentName, "OldReplicas", *vllmDeployment.Spec.Replicas, "NewReplicas", expectedReplicas)
-			vllmDeployment.Spec.Replicas = &expectedReplicas
-			if err := r.Update(ctx, vllmDeployment); err != nil {
-				log.Error(err, "Failed to update vLLM Deployment replicas", "Deployment.Name", deploymentName)
-				reconcileTotal.WithLabelValues("error").Inc()
-				return ctrl.Result{}, err
-			}
-			reconcileTotal.WithLabelValues("success").Inc()
-			return ctrl.Result{Requeue: true}, nil // Requeue to observe update
-		}
-
-		if vllmDeployment.Status.ReadyReplicas == expectedReplicas && aiModel.Status.Phase == "Deploying" {
-			log.Info("vLLM Deployment is ready", "Deployment.Name", deploymentName)
-			aiModel.Status.Phase = "Ready"
-			if err := r.Status().Update(ctx, aiModel); err != nil {
-				log.Error(err, "unable to update AIModel status to Ready")
-				reconcileTotal.WithLabelValues("error").Inc()
-				return ctrl.Result{}, err
-			}
-		}
 	}
 
-
-	// 3. Reconcile vLLM Service
-	serviceName := fmt.Sprintf("%s-vllm-svc", aiModel.Name)
-	vllmService := &corev1.Service{}
-	err = r.Get(ctx, client.ObjectKey{Name: serviceName, Namespace: aiModel.Namespace}, vllmService)
-	if err != nil && client.IgnoreNotFound(err) != nil {
-		log.Error(err, "Failed to get vLLM Service", "Service.Name", serviceName)
+	// Create or update the InferenceService
+	if err := r.createOrUpdateInferenceService(ctx, aiModel); err != nil {
+		log.Error(err, "Failed to reconcile InferenceService", "name", aiModel.Name)
+		aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
+		aiModel.Status.Message = fmt.Sprintf("Failed to create InferenceService: %v", err)
+		if statusErr := r.Status().Update(ctx, aiModel); statusErr != nil {
+			log.Error(statusErr, "unable to update AIModel status to Failed")
+		}
 		reconcileTotal.WithLabelValues("error").Inc()
 		return ctrl.Result{}, err
-	} else if err != nil { // Service not found, create it
-		log.Info("Creating a new vLLM Service", "Service.Namespace", aiModel.Namespace, "Service.Name", serviceName)
-		svc := r.vllmService(aiModel, serviceName)
-		if err := ctrl.SetControllerReference(aiModel, svc, r.Scheme); err != nil {
-			log.Error(err, "Failed to set controller reference for Service", "Service.Name", svc.Name)
-			reconcileTotal.WithLabelValues("error").Inc()
-			return ctrl.Result{}, err
-		}
-		if err := r.Create(ctx, svc); err != nil {
-			log.Error(err, "Failed to create vLLM Service", "Service.Name", svc.Name)
-			reconcileTotal.WithLabelValues("error").Inc()
-			return ctrl.Result{}, err
-		}
-		aiModel.Status.VLLMServiceName = serviceName
-		if err := r.Status().Update(ctx, aiModel); err != nil {
-			log.Error(err, "unable to update AIModel status with Service name")
-			reconcileTotal.WithLabelValues("error").Inc()
-			return ctrl.Result{}, err
-		}
+	}
+
+	// Update status from InferenceService
+	if err := r.updateStatusFromInferenceService(ctx, aiModel); err != nil {
+		log.Error(err, "Failed to update status from InferenceService", "name", aiModel.Name)
+		reconcileTotal.WithLabelValues("error").Inc()
+		return ctrl.Result{}, err
+	}
+
+	// Requeue if not ready yet
+	if aiModel.Status.Phase != aimodelv1alpha1.AIModelPhaseReady {
+		log.Info("InferenceService not ready yet, requeuing", "name", aiModel.Name, "phase", aiModel.Status.Phase)
 		reconcileTotal.WithLabelValues("success").Inc()
-		return ctrl.Result{Requeue: true}, nil // Requeue to ensure service is ready (though services are usually quick)
+		return ctrl.Result{Requeue: true}, nil
 	}
 
 	reconcileTotal.WithLabelValues("success").Inc()
@@ -349,21 +301,31 @@ func (r *AIModelReconciler) finalizeAIModel(ctx context.Context, aiModel *aimode
 	log := log.FromContext(ctx)
 	log.Info("Performing finalization for AIModel", "name", aiModel.Name)
 
-	// Delete vLLM Deployment
+	// Delete InferenceService
+	isvc := &unstructured.Unstructured{}
+	isvc.SetGroupVersionKind(kserve.InferenceServiceGVK)
+	if err := r.Get(ctx, client.ObjectKey{Name: aiModel.Name, Namespace: aiModel.Namespace}, isvc); err == nil {
+		log.Info("Deleting InferenceService", "name", aiModel.Name)
+		if err := r.Delete(ctx, isvc); err != nil && !errors.IsNotFound(err) {
+			log.Error(err, "Failed to delete InferenceService", "name", aiModel.Name)
+		}
+	}
+
+	// Delete legacy vLLM Deployment (for backward compatibility)
 	deploymentName := fmt.Sprintf("%s-vllm", aiModel.Name)
 	dep := &appsv1.Deployment{}
 	if err := r.Get(ctx, client.ObjectKey{Name: deploymentName, Namespace: aiModel.Namespace}, dep); err == nil {
-		log.Info("Deleting Deployment", "name", deploymentName)
+		log.Info("Deleting legacy Deployment", "name", deploymentName)
 		if err := r.Delete(ctx, dep); err != nil && !errors.IsNotFound(err) {
 			log.Error(err, "Failed to delete Deployment", "name", deploymentName)
 		}
 	}
 
-	// Delete vLLM Service
+	// Delete legacy vLLM Service (for backward compatibility)
 	serviceName := fmt.Sprintf("%s-vllm-svc", aiModel.Name)
 	svc := &corev1.Service{}
 	if err := r.Get(ctx, client.ObjectKey{Name: serviceName, Namespace: aiModel.Namespace}, svc); err == nil {
-		log.Info("Deleting Service", "name", serviceName)
+		log.Info("Deleting legacy Service", "name", serviceName)
 		if err := r.Delete(ctx, svc); err != nil && !errors.IsNotFound(err) {
 			log.Error(err, "Failed to delete Service", "name", serviceName)
 		}
@@ -670,6 +632,211 @@ func (r *AIModelReconciler) checkS3ArtifactExists(ctx context.Context, aiModel *
 	}
 
 	log.Info("S3 artifacts found", "bucket", aiModel.Spec.S3Bucket, "prefix", prefix, "objectCount", *result.KeyCount)
+	return nil
+}
+
+// createOrUpdateInferenceService creates or updates a KServe InferenceService for the AIModel
+func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) error {
+	log := log.FromContext(ctx)
+
+	// Determine runtime image based on spec
+	runtimeImage := "vllm/vllm-openai:v0.6.3" // Default vLLM image
+	if aiModel.Spec.Runtime == "tgi" {
+		runtimeImage = "ghcr.io/huggingface/text-generation-inference:latest"
+	} else if aiModel.Spec.Runtime == "triton" {
+		runtimeImage = "nvcr.io/nvidia/tritonserver:latest"
+	}
+
+	// Get min/max replicas with defaults
+	minReplicas := int32(0)
+	if aiModel.Spec.MinReplicas != nil {
+		minReplicas = *aiModel.Spec.MinReplicas
+	}
+
+	maxReplicas := int32(1)
+	if aiModel.Spec.MaxReplicas != nil {
+		maxReplicas = *aiModel.Spec.MaxReplicas
+	}
+
+	// Build resources with defaults if not specified
+	resources := aiModel.Spec.Resources
+	if len(resources.Requests) == 0 && len(resources.Limits) == 0 {
+		resources = corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("4"),
+				corev1.ResourceMemory: resource.MustParse("16Gi"),
+				"nvidia.com/gpu":      resource.MustParse("1"),
+			},
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("8"),
+				corev1.ResourceMemory: resource.MustParse("32Gi"),
+				"nvidia.com/gpu":      resource.MustParse("1"),
+			},
+		}
+	}
+
+	// Build tolerations with defaults if not specified
+	tolerations := aiModel.Spec.Tolerations
+	if len(tolerations) == 0 {
+		tolerations = []corev1.Toleration{
+			{
+				Key:      "gpu-workload",
+				Operator: corev1.TolerationOpEqual,
+				Value:    "true",
+				Effect:   corev1.TaintEffectNoSchedule,
+			},
+			{
+				Key:      "nvidia.com/gpu",
+				Operator: corev1.TolerationOpExists,
+				Effect:   corev1.TaintEffectNoSchedule,
+			},
+		}
+	}
+
+	// Build runtime args with defaults
+	runtimeArgs := aiModel.Spec.RuntimeArgs
+	if len(runtimeArgs) == 0 {
+		runtimeArgs = []string{
+			"--dtype=auto",
+			"--max-model-len=4096",
+			"--gpu-memory-utilization=0.9",
+			"--trust-remote-code",
+		}
+	}
+
+	// Build runtime env with S3 credentials
+	runtimeEnv := aiModel.Spec.RuntimeEnv
+	// Add S3 credentials
+	runtimeEnv = append(runtimeEnv,
+		corev1.EnvVar{
+			Name: "AWS_ACCESS_KEY_ID",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: "s3-credentials",
+					},
+					Key: "access-key-id",
+				},
+			},
+		},
+		corev1.EnvVar{
+			Name: "AWS_SECRET_ACCESS_KEY",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: "s3-credentials",
+					},
+					Key: "secret-access-key",
+				},
+			},
+		},
+	)
+
+	// Build the S3 model path
+	modelID := fmt.Sprintf("s3://%s/%s", aiModel.Spec.S3Bucket, aiModel.Spec.S3Key)
+
+	// Create owner reference
+	ownerRef := &metav1.OwnerReference{
+		APIVersion:         aiModel.APIVersion,
+		Kind:               aiModel.Kind,
+		Name:               aiModel.Name,
+		UID:                aiModel.UID,
+		Controller:         func() *bool { b := true; return &b }(),
+		BlockOwnerDeletion: func() *bool { b := true; return &b }(),
+	}
+
+	// Build the InferenceService
+	isvc, err := kserve.NewInferenceServiceBuilder(aiModel.Name, aiModel.Namespace).
+		WithModelID(modelID).
+		WithServedName(aiModel.Spec.ModelName).
+		WithRuntime(runtimeImage).
+		WithScaling(minReplicas, maxReplicas).
+		WithResources(resources).
+		WithTolerations(tolerations).
+		WithNodeSelector(aiModel.Spec.NodeSelector).
+		WithRuntimeArgs(runtimeArgs).
+		WithRuntimeEnv(runtimeEnv).
+		WithOwnerReference(ownerRef).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to build InferenceService: %w", err)
+	}
+
+	// Check if InferenceService already exists
+	existing := &unstructured.Unstructured{}
+	existing.SetGroupVersionKind(kserve.InferenceServiceGVK)
+	err = r.Get(ctx, types.NamespacedName{Name: aiModel.Name, Namespace: aiModel.Namespace}, existing)
+
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Create new InferenceService
+			log.Info("Creating InferenceService", "name", aiModel.Name)
+			if err := r.Create(ctx, isvc); err != nil {
+				return fmt.Errorf("failed to create InferenceService: %w", err)
+			}
+			return nil
+		}
+		return fmt.Errorf("failed to get InferenceService: %w", err)
+	}
+
+	// Update existing InferenceService
+	log.Info("Updating InferenceService", "name", aiModel.Name)
+	isvc.SetResourceVersion(existing.GetResourceVersion())
+	if err := r.Update(ctx, isvc); err != nil {
+		return fmt.Errorf("failed to update InferenceService: %w", err)
+	}
+
+	return nil
+}
+
+// updateStatusFromInferenceService updates the AIModel status based on the InferenceService status
+func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) error {
+	log := log.FromContext(ctx)
+
+	// Get the InferenceService
+	isvc := &unstructured.Unstructured{}
+	isvc.SetGroupVersionKind(kserve.InferenceServiceGVK)
+
+	err := r.Get(ctx, types.NamespacedName{Name: aiModel.Name, Namespace: aiModel.Namespace}, isvc)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			log.Info("InferenceService not found, skipping status update", "name", aiModel.Name)
+			return nil
+		}
+		return fmt.Errorf("failed to get InferenceService: %w", err)
+	}
+
+	// Extract status from InferenceService
+	status, err := kserve.GetStatus(isvc)
+	if err != nil {
+		return fmt.Errorf("failed to extract InferenceService status: %w", err)
+	}
+
+	// Update AIModel status
+	aiModel.Status.InferenceServiceName = aiModel.Name
+	aiModel.Status.InferenceEndpoint = status.URL
+	aiModel.Status.ReadyReplicas = status.ReadyReplicas
+
+	// Update phase based on status
+	if status.Ready {
+		if aiModel.Status.Phase != aimodelv1alpha1.AIModelPhaseReady {
+			log.Info("InferenceService is ready", "name", aiModel.Name, "url", status.URL)
+			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseReady
+			aiModel.Status.Message = fmt.Sprintf("Model is ready at %s", status.URL)
+		}
+	} else {
+		if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhaseReady {
+			// Transition from Ready to Deploying
+			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
+		}
+		aiModel.Status.Message = status.String()
+	}
+
+	// Update status
+	if err := r.Status().Update(ctx, aiModel); err != nil {
+		return fmt.Errorf("failed to update AIModel status: %w", err)
+	}
+
 	return nil
 }
 
