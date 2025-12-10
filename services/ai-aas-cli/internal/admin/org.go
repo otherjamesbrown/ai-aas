@@ -111,8 +111,10 @@ See Also:
 func runOrgList(cmd *cobra.Command, args []string, flagFormat string, flagVerbose, flagQuiet bool, flagUserOrgEndpoint, flagAPIKey string) error {
 	startTime := time.Now()
 
-	// Load configuration
-	cfg, err := config.Load()
+	// Load configuration with profile support
+	// Get profile from global flag via root command's ProfileName()
+	profileName := cmd.Root().PersistentFlags().Lookup("profile").Value.String()
+	cfg, _, err := config.GetEffectiveConfig(profileName)
 	if err != nil {
 		cliErr := errors.NewOperationError(
 			fmt.Sprintf("failed to load configuration: %v", err),
@@ -306,8 +308,8 @@ func runOrgCreate(cmd *cobra.Command, args []string, flagName, flagSlug, flagBil
 	flagDryRun bool, flagFormat string, flagVerbose, flagQuiet bool, flagUserOrgEndpoint, flagAPIKey string, flagUse bool, flagProfile string) error {
 	startTime := time.Now()
 
-	// Load configuration
-	cfg, err := config.Load()
+	// Load configuration with profile support
+	cfg, _, err := config.GetEffectiveConfig(flagProfile)
 	if err != nil {
 		return errors.NewOperationError(
 			fmt.Sprintf("failed to load configuration: %v", err),

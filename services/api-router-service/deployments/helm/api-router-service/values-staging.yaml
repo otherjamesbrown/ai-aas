@@ -109,4 +109,18 @@ budget:
 adminApi:
   endpoint: http://admin-api-service-staging.admin-api-service.svc.cluster.local:8080
   syncInterval: 30s
+  # Use the admin API key from local secret (copied from admin-api-service)
+  apiKeySecretName: "admin-api-sync-secrets"
+  apiKeySecretKey: "api-key"
 
+# Backend endpoints - configure vLLM service
+backends:
+  # Format: backend-id:http://service-name.namespace.svc.cluster.local:port
+  # The backend-id must match:
+  # 1. The routing policy's backend_id
+  # 2. The model name vLLM was started with (--served-model-name)
+  #
+  # IMPORTANT: Use the -private service on port 8012 (queue-proxy port)
+  # - Port 80 on regular services routes through Istio which causes timeouts
+  # - Port 8012 on -private services connects directly to the queue-proxy sidecar
+  endpoints: "mistral-7b-instruct:http://mistral-7b-instruct-staging-predictor-00002-private.staging.svc.cluster.local:8012"

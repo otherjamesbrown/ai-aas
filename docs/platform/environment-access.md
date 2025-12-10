@@ -94,12 +94,18 @@ git-crypt unlock
 - API Router: https://api.staging.otherjamesbrown.com
 - Admin API: https://admin-api.staging.otherjamesbrown.com
 - User Org Service: https://user-org.staging.otherjamesbrown.com
+- Analytics: https://analytics.staging.otherjamesbrown.com
 
 **Ingress Architecture** (Dual-Ingress)
 - NGINX Ingress IP: `172.236.135.55` - PRIMARY for all external HTTP/HTTPS traffic
 - Istio Gateway IP: `172.236.132.56` - Internal only for KServe/Knative routing
 - All service ingresses use `ingressClassName: nginx`
 - See `docs/technical/platform/ingress-best-practices.md` for architecture details
+
+**TLS Certificates**
+- Uses Let's Encrypt staging certificates (not trusted by browsers)
+- All services use `letsencrypt-staging` ClusterIssuer
+- Test with `curl -k` to skip certificate verification
 
 **Monitoring & Observability**
 - Grafana: https://grafana.staging.otherjamesbrown.com
