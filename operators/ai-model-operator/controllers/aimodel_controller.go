@@ -91,6 +91,10 @@ type AIModelReconciler struct {
 	MaxDownloadRetries int32
 	InitialRetryDelay  time.Duration
 	MaxRetryDelay      time.Duration
+
+	// Image configuration
+	DownloaderImage string // Docker image for model downloader (default: "python:3.11-slim")
+	DefaultRuntime  string // Default runtime if not specified in AIModel spec (default: "vllm")
 }
 
 //+kubebuilder:rbac:groups=aimodel.ai-aas.io,resources=aimodels,verbs=get;list;watch;create;update;patch;delete
@@ -504,6 +508,12 @@ print('Upload complete!')
 "
 `
 
+	// Determine downloader image (use configured value or default)
+	downloaderImage := r.DownloaderImage
+	if downloaderImage == "" {
+		downloaderImage = modelDownloaderImage
+	}
+
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -515,7 +525,7 @@ print('Upload complete!')
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
 						Name:  "downloader",
-						Image: modelDownloaderImage,
+						Image: downloaderImage,
 						Command: []string{"/bin/sh", "-c"},
 						Args: []string{downloadScript},
 						Env: []corev1.EnvVar{
@@ -897,12 +907,28 @@ func (r *AIModelReconciler) checkS3ArtifactExists(ctx context.Context, aiModel *
 func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) error {
 	log := log.FromContext(ctx)
 
-	// Determine runtime image based on spec
+	// Determine runtime to use (from spec or default)
+	runtime := aiModel.Spec.Runtime
+	if runtime == "" {
+		// Use configured default runtime or fallback to "vllm"
+		runtime = r.DefaultRuntime
+		if runtime == "" {
+			runtime = "vllm"
+		}
+	}
+
+	// Map runtime name to container image
 	runtimeImage := "vllm/vllm-openai:v0.6.3" // Default vLLM image
-	if aiModel.Spec.Runtime == "tgi" {
+	switch runtime {
+	case "tgi":
 		runtimeImage = "ghcr.io/huggingface/text-generation-inference:latest"
-	} else if aiModel.Spec.Runtime == "triton" {
+	case "triton":
 		runtimeImage = "nvcr.io/nvidia/tritonserver:latest"
+	case "vllm":
+		runtimeImage = "vllm/vllm-openai:v0.6.3"
+	default:
+		// If runtime doesn't match known values, treat it as a custom image
+		runtimeImage = runtime
 	}
 
 	// Get min/max replicas with defaults

@@ -58,6 +58,8 @@ func main() {
 	var maxDownloadRetries int
 	var initialRetryDelay time.Duration
 	var maxRetryDelay time.Duration
+	var downloaderImage string
+	var defaultRuntime string
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -70,6 +72,10 @@ func main() {
 	flag.IntVar(&maxDownloadRetries, "max-download-retries", 5, "Maximum number of download retry attempts before marking as failed")
 	flag.DurationVar(&initialRetryDelay, "initial-retry-delay", 1*time.Minute, "Initial delay before first retry (exponentially increases)")
 	flag.DurationVar(&maxRetryDelay, "max-retry-delay", 16*time.Minute, "Maximum retry delay (caps exponential backoff)")
+
+	// Image configuration flags
+	flag.StringVar(&downloaderImage, "downloader-image", "python:3.11-slim", "Container image for model downloader job")
+	flag.StringVar(&defaultRuntime, "default-runtime", "vllm", "Default runtime to use when not specified in AIModel (vllm, tgi, triton, or custom image)")
 
 	opts := zap.Options{
 		Development: true,
@@ -102,6 +108,8 @@ func main() {
 		MaxDownloadRetries: int32(maxDownloadRetries),
 		InitialRetryDelay:  initialRetryDelay,
 		MaxRetryDelay:      maxRetryDelay,
+		DownloaderImage:    downloaderImage,
+		DefaultRuntime:     defaultRuntime,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AIModel")
 		os.Exit(1)
@@ -110,7 +118,9 @@ func main() {
 	setupLog.Info("AIModel controller configuration",
 		"maxDownloadRetries", maxDownloadRetries,
 		"initialRetryDelay", initialRetryDelay,
-		"maxRetryDelay", maxRetryDelay)
+		"maxRetryDelay", maxRetryDelay,
+		"downloaderImage", downloaderImage,
+		"defaultRuntime", defaultRuntime)
 	//+kubebuilder:scaffold:builder
 
 	if err = mgr.AddHealthzCheck("healthz", healthz.Ping);
