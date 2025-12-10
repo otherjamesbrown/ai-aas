@@ -88,7 +88,7 @@ func TestAIModelReconciler_InitialReconciliation(t *testing.T) {
 
 	// Test: Initial Reconciliation
 	// Note: In unit tests, the S3 artifact check will fail (no real AWS connection),
-	// so the controller will set phase to "ArtifactMissing" instead of creating a job.
+	// so the controller will set phase to "Failed" instead of creating a job.
 	// This is expected behavior and validates the S3 check logic.
 	t.Log("Test: Initial Reconciliation")
 	res, err := r.Reconcile(context.Background(), req)
@@ -101,14 +101,14 @@ func TestAIModelReconciler_InitialReconciliation(t *testing.T) {
 		t.Error("expected no requeue when artifact is missing")
 	}
 
-	// Check Status Update: Phase should be "ArtifactMissing" due to failed S3 check
+	// Check Status Update: Phase should be "Failed" due to failed S3 check
 	updatedAIModel := &aimodelv1alpha1.AIModel{}
 	err = cl.Get(context.Background(), types.NamespacedName{Name: aiModelName, Namespace: aiModelNamespace}, updatedAIModel)
 	if err != nil {
 		t.Fatalf("get aimodel: (%v)", err)
 	}
-	if updatedAIModel.Status.Phase != "ArtifactMissing" {
-		t.Errorf("expected phase 'ArtifactMissing', got '%s'", updatedAIModel.Status.Phase)
+	if updatedAIModel.Status.Phase != aimodelv1alpha1.AIModelPhaseFailed {
+		t.Errorf("expected phase 'Failed', got '%s'", updatedAIModel.Status.Phase)
 	}
 
 	t.Log("Test passed: Controller correctly handles missing S3 artifacts")
