@@ -11,8 +11,25 @@ set -o pipefail
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-CLI="$PROJECT_ROOT/services/ai-aas-cli/ai-aas-cli"
+CLI_DIR="$PROJECT_ROOT/services/ai-aas-cli"
+CLI="$CLI_DIR/ai-aas-cli"
 ENV_FILE="$PROJECT_ROOT/secrets/env/.env"
+
+# Build CLI to ensure we have the latest version
+build_cli() {
+    echo "Building CLI..."
+    pushd "$CLI_DIR" > /dev/null
+    if CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ai-aas-cli . 2>&1; then
+        echo "CLI built successfully"
+    else
+        echo "Error: Failed to build CLI"
+        exit 1
+    fi
+    popd > /dev/null
+}
+
+# Build CLI before running tests
+build_cli
 
 # Environment endpoints
 DEV_USER_ORG="https://user-org.dev.otherjamesbrown.com"
