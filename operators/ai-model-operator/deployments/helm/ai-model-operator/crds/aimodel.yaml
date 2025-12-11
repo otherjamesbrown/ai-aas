@@ -38,7 +38,7 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
-    name: ""
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: AIModel is the Schema for the aimodels API
