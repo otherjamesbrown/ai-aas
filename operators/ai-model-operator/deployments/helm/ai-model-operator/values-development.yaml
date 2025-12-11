@@ -6,6 +6,9 @@ image:
   pullPolicy: Always
   tag: "develop"  # Use develop branch builds
 
+# Model downloader image (Go-based, supports Linode Object Storage)
+downloaderImage: "ghcr.io/otherjamesbrown/ai-aas/model-downloader:dev"
+
 # Development gets slightly more resources for debugging
 resources:
   limits:

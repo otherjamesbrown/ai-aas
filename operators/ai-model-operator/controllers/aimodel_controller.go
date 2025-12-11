@@ -551,6 +551,20 @@ print('Upload complete!')
 		downloaderImage = modelDownloaderImage
 	}
 
+	// Determine command and args based on image type
+	// Go-based model-downloader uses entrypoint, Python image needs shell script
+	var command []string
+	var args []string
+	if strings.Contains(downloaderImage, "model-downloader") {
+		// Go binary - uses ENTRYPOINT, no command/args needed
+		command = nil
+		args = nil
+	} else {
+		// Python image - run embedded script via shell
+		command = []string{"/bin/sh", "-c"}
+		args = []string{downloadScript}
+	}
+
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -563,8 +577,8 @@ print('Upload complete!')
 					Containers: []corev1.Container{{
 						Name:  "downloader",
 						Image: downloaderImage,
-						Command: []string{"/bin/sh", "-c"},
-						Args: []string{downloadScript},
+						Command: command,
+						Args: args,
 						Env: []corev1.EnvVar{
 							{
 								Name:  "MODEL_ID",

@@ -24,6 +24,9 @@ spec:
         - /manager
         args:
         - --leader-elect
+        {{- if .Values.downloaderImage }}
+        - --downloader-image={{ .Values.downloaderImage }}
+        {{- end }}
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         name: manager
