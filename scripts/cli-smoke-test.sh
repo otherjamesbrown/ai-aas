@@ -290,46 +290,60 @@ run_environment_tests() {
     fi
 
     # Test 6: Inference Test (chat completion)
+    # Try each model until one works - some models may be published but not deployed
     local inference_json=""
-    if [[ -n "$new_api_key" && -n "$first_model_id" ]]; then
-        local start_time end_time duration_ms
-        start_time=$(date +%s%3N)
+    if [[ -n "$new_api_key" ]]; then
+        local all_model_ids
+        all_model_ids=$(echo "$models_output" | jq -r '.data[].id' 2>/dev/null)
+        local inference_success=false
+        local last_error_msg=""
 
-        local inference_output
-        inference_output=$(curl -sk --connect-timeout 10 --max-time 30 \
-            "$api_router_endpoint/v1/chat/completions" \
-            -H "Authorization: Bearer $new_api_key" \
-            -H "Content-Type: application/json" \
-            -d "{
-                \"model\": \"$first_model_id\",
-                \"messages\": [{\"role\": \"user\", \"content\": \"Say hello in exactly 5 words.\"}],
-                \"max_tokens\": 50
-            }" 2>&1)
+        for model_id in $all_model_ids; do
+            [[ -z "$model_id" ]] && continue
 
-        end_time=$(date +%s%3N)
-        duration_ms=$((end_time - start_time))
+            local start_time end_time duration_ms
+            start_time=$(date +%s%3N)
 
-        if echo "$inference_output" | jq -e '.choices[0].message.content' >/dev/null 2>&1; then
-            local prompt_tokens completion_tokens total_tokens response_text
-            prompt_tokens=$(echo "$inference_output" | jq -r '.usage.prompt_tokens // 0')
-            completion_tokens=$(echo "$inference_output" | jq -r '.usage.completion_tokens // 0')
-            total_tokens=$(echo "$inference_output" | jq -r '.usage.total_tokens // 0')
-            response_text=$(echo "$inference_output" | jq -r '.choices[0].message.content // empty' | head -c 50)
+            local inference_output
+            inference_output=$(curl -sk --connect-timeout 10 --max-time 30 \
+                "$api_router_endpoint/v1/chat/completions" \
+                -H "Authorization: Bearer $new_api_key" \
+                -H "Content-Type: application/json" \
+                -d "{
+                    \"model\": \"$model_id\",
+                    \"messages\": [{\"role\": \"user\", \"content\": \"Say hello in exactly 5 words.\"}],
+                    \"max_tokens\": 50
+                }" 2>&1)
 
-            results+=("inference:PASS:${duration_ms}ms,${total_tokens}tok")
-            # Store inference details for verbose output
-            inference_json="{\"model\":\"$first_model_id\",\"prompt_tokens\":$prompt_tokens,\"completion_tokens\":$completion_tokens,\"total_tokens\":$total_tokens,\"duration_ms\":$duration_ms,\"response\":\"$response_text\"}"
-        else
-            local error_msg
-            error_msg=$(echo "$inference_output" | jq -r '.error.message // "unknown error"' 2>/dev/null | head -c 50)
-            results+=("inference:FAIL:$error_msg")
+            end_time=$(date +%s%3N)
+            duration_ms=$((end_time - start_time))
+
+            if echo "$inference_output" | jq -e '.choices[0].message.content' >/dev/null 2>&1; then
+                local prompt_tokens completion_tokens total_tokens response_text
+                prompt_tokens=$(echo "$inference_output" | jq -r '.usage.prompt_tokens // 0')
+                completion_tokens=$(echo "$inference_output" | jq -r '.usage.completion_tokens // 0')
+                total_tokens=$(echo "$inference_output" | jq -r '.usage.total_tokens // 0')
+                response_text=$(echo "$inference_output" | jq -r '.choices[0].message.content // empty' | head -c 50)
+
+                results+=("inference:PASS:${duration_ms}ms,${total_tokens}tok")
+                # Store inference details for verbose output
+                inference_json="{\"model\":\"$model_id\",\"prompt_tokens\":$prompt_tokens,\"completion_tokens\":$completion_tokens,\"total_tokens\":$total_tokens,\"duration_ms\":$duration_ms,\"response\":\"$response_text\"}"
+                inference_success=true
+                break
+            else
+                last_error_msg=$(echo "$inference_output" | jq -r '.error // "unknown error"' 2>/dev/null | head -c 50)
+            fi
+        done
+
+        if [[ "$inference_success" != "true" ]]; then
+            if [[ -z "$all_model_ids" ]]; then
+                results+=("inference:SKIP:no models available")
+            else
+                results+=("inference:FAIL:$last_error_msg")
+            fi
         fi
     else
-        if [[ -z "$new_api_key" ]]; then
-            results+=("inference:SKIP:no API key")
-        else
-            results+=("inference:SKIP:no models available")
-        fi
+        results+=("inference:SKIP:no API key")
     fi
 
     # Test 7: Inference Health

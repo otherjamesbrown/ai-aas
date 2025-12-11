@@ -123,7 +123,7 @@ backends:
   # - This bypasses Istio routing and provides direct pod connectivity
   #
   # Note: Don't include path - it's added by the router based on request type
-  endpoints: "mistralai/Mistral-7B-Instruct-v0.3:http://mistral-7b-development-predictor-00001-private.development.svc.cluster.local:8012,unsloth/gpt-oss-20b:http://gpt-oss-20b-development-predictor-00002-private.development.svc.cluster.local:8012"
+  endpoints: "unsloth/gpt-oss-20b:http://gpt-oss-20b-development-predictor-00002-private.development.svc.cluster.local:8012"
 
 # Redis configuration
 redis:
