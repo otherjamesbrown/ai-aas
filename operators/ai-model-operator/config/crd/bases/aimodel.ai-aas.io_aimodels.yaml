@@ -347,6 +347,13 @@ spec:
               s3Key:
                 description: S3Key is the S3 key (path) to the model artifacts.
                 type: string
+              trustRemoteCode:
+                default: false
+                description: |-
+                  TrustRemoteCode allows the runtime to execute custom model code from the model repository.
+                  Required for models with custom architectures not built into transformers.
+                  For vLLM, this adds the --trust-remote-code flag.
+                type: boolean
               tolerations:
                 description: Tolerations specifies tolerations for pod scheduling.
                 items:

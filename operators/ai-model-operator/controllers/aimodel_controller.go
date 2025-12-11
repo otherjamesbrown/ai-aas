@@ -1040,7 +1040,21 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 			"--dtype=float16",
 			"--max-model-len=4096",
 			"--gpu-memory-utilization=0.9",
-			"--trust-remote-code",
+		}
+	}
+
+	// Add --trust-remote-code flag if TrustRemoteCode is enabled
+	if aiModel.Spec.TrustRemoteCode {
+		// Check if the flag is not already present to avoid duplicates
+		hasFlag := false
+		for _, arg := range runtimeArgs {
+			if arg == "--trust-remote-code" {
+				hasFlag = true
+				break
+			}
+		}
+		if !hasFlag {
+			runtimeArgs = append(runtimeArgs, "--trust-remote-code")
 		}
 	}
 

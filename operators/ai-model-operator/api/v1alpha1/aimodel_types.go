@@ -89,6 +89,13 @@ type AIModelSpec struct {
 	// +optional
 	RuntimeEnv []corev1.EnvVar `json:"runtimeEnv,omitempty"`
 
+	// TrustRemoteCode allows the runtime to execute custom model code from the model repository.
+	// Required for models with custom architectures not built into transformers.
+	// For vLLM, this adds the --trust-remote-code flag.
+	// +kubebuilder:default=false
+	// +optional
+	TrustRemoteCode bool `json:"trustRemoteCode,omitempty"`
+
 	// DEPRECATED: Use MinReplicas/MaxReplicas instead.
 	// Replicas is the number of inference instances to deploy.
 	// +kubebuilder:validation:Minimum=0
