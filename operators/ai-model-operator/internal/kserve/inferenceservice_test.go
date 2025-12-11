@@ -265,10 +265,6 @@ func TestInferenceServiceBuilder_Build(t *testing.T) {
 		t.Errorf("Expected annotation 'serving.kserve.io/deploymentMode: Serverless', got '%s'",
 			annotations["serving.kserve.io/deploymentMode"])
 	}
-	if annotations["serving.knative.dev/progress-deadline"] != "360s" {
-		t.Errorf("Expected annotation 'serving.knative.dev/progress-deadline: 360s', got '%s'",
-			annotations["serving.knative.dev/progress-deadline"])
-	}
 
 	// Verify spec.predictor
 	predictor, found, err := unstructured.NestedMap(obj.Object, "spec", "predictor")
@@ -296,57 +292,41 @@ func TestInferenceServiceBuilder_Build(t *testing.T) {
 		t.Errorf("Expected maxReplicas 3, got %d", maxReplicas)
 	}
 
-	// Verify containers
-	containers, found, err := unstructured.NestedSlice(predictor, "containers")
+	// Verify model spec (KServe native)
+	model, found, err := unstructured.NestedMap(predictor, "model")
 	if err != nil || !found {
-		t.Fatal("Expected containers in predictor")
-	}
-	if len(containers) != 1 {
-		t.Fatalf("Expected 1 container, got %d", len(containers))
+		t.Fatal("Expected model in predictor")
 	}
 
-	container, ok := containers[0].(map[string]interface{})
-	if !ok {
-		t.Fatal("Expected container to be a map")
-	}
-
-	// Verify container image
-	image, found, err := unstructured.NestedString(container, "image")
+	// Verify storageUri
+	storageUri, found, err := unstructured.NestedString(model, "storageUri")
 	if err != nil || !found {
-		t.Fatal("Expected image in container")
+		t.Fatal("Expected storageUri in model")
 	}
-	if image != "vllm/vllm-openai:v0.6.3" {
-		t.Errorf("Expected image 'vllm/vllm-openai:v0.6.3', got '%s'", image)
+	if storageUri != "s3://my-bucket/models/mistral-7b" {
+		t.Errorf("Expected storageUri 's3://my-bucket/models/mistral-7b', got '%s'", storageUri)
 	}
 
-	// Verify container args include model
-	args, found, err := unstructured.NestedSlice(container, "args")
+	// Verify runtime
+	runtime, found, err := unstructured.NestedString(model, "runtime")
 	if err != nil || !found {
-		t.Fatal("Expected args in container")
+		t.Fatal("Expected runtime in model")
 	}
-	if len(args) == 0 {
-		t.Fatal("Expected non-empty args")
-	}
-
-	// First arg should be --model
-	firstArg, ok := args[0].(string)
-	if !ok {
-		t.Fatal("Expected first arg to be string")
-	}
-	expectedArg := "--model=mistralai/Mistral-7B-Instruct-v0.2"
-	if firstArg != expectedArg {
-		t.Errorf("Expected first arg '%s', got '%s'", expectedArg, firstArg)
+	if runtime != "vllm/vllm-openai:v0.6.3" {
+		t.Errorf("Expected runtime 'vllm/vllm-openai:v0.6.3', got '%s'", runtime)
 	}
 
-	// Verify health probes
-	if _, found, _ := unstructured.NestedMap(container, "startupProbe"); !found {
-		t.Error("Expected startupProbe in container")
+	// Verify modelFormat
+	modelFormat, found, err := unstructured.NestedMap(model, "modelFormat")
+	if err != nil || !found {
+		t.Fatal("Expected modelFormat in model")
 	}
-	if _, found, _ := unstructured.NestedMap(container, "readinessProbe"); !found {
-		t.Error("Expected readinessProbe in container")
+	formatName, found, err := unstructured.NestedString(modelFormat, "name")
+	if err != nil || !found {
+		t.Fatal("Expected name in modelFormat")
 	}
-	if _, found, _ := unstructured.NestedMap(container, "livenessProbe"); !found {
-		t.Error("Expected livenessProbe in container")
+	if formatName != "vllm" {
+		t.Errorf("Expected modelFormat name 'vllm', got '%s'", formatName)
 	}
 
 	// Verify tolerations

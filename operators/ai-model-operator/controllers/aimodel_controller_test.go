@@ -272,41 +272,44 @@ func TestAIModelReconciler_CreatesInferenceService(t *testing.T) {
 		t.Errorf("expected maxReplicas %d, got %d", maxReplicas, maxReplicasVal)
 	}
 
-	// Check containers
-	containers, found, err := unstructured.NestedSlice(predictor, "containers")
-	if err != nil || !found || len(containers) == 0 {
-		t.Fatalf("failed to get containers: %v", err)
-	}
-
-	container, ok := containers[0].(map[string]interface{})
-	if !ok {
-		t.Fatal("container is not a map")
-	}
-
-	// Check image
-	image, found, err := unstructured.NestedString(container, "image")
+	// Check model spec (KServe native)
+	model, found, err := unstructured.NestedMap(predictor, "model")
 	if err != nil || !found {
-		t.Fatalf("failed to get image: %v", err)
-	}
-	expectedImage := "vllm/vllm-openai:v0.6.3"
-	if image != expectedImage {
-		t.Errorf("expected image '%s', got '%s'", expectedImage, image)
+		t.Fatalf("failed to get model: %v", err)
 	}
 
-	// Check args contain model ID
-	args, found, err := unstructured.NestedStringSlice(container, "args")
+	// Check storageUri
+	storageUri, found, err := unstructured.NestedString(model, "storageUri")
 	if err != nil || !found {
-		t.Fatalf("failed to get args: %v", err)
+		t.Fatalf("failed to get storageUri: %v", err)
 	}
-	modelArgFound := false
-	for _, arg := range args {
-		if arg == "--model=s3://ai-models/mistral-7b" {
-			modelArgFound = true
-			break
-		}
+	expectedStorageUri := "s3://ai-models/mistral-7b"
+	if storageUri != expectedStorageUri {
+		t.Errorf("expected storageUri '%s', got '%s'", expectedStorageUri, storageUri)
 	}
-	if !modelArgFound {
-		t.Errorf("expected --model arg with S3 path, got args: %v", args)
+
+	// Check runtime
+	runtime, found, err := unstructured.NestedString(model, "runtime")
+	if err != nil || !found {
+		t.Fatalf("failed to get runtime: %v", err)
+	}
+	expectedRuntime := "vllm-runtime"
+	if runtime != expectedRuntime {
+		t.Errorf("expected runtime '%s', got '%s'", expectedRuntime, runtime)
+	}
+
+	// Check modelFormat
+	modelFormat, found, err := unstructured.NestedMap(model, "modelFormat")
+	if err != nil || !found {
+		t.Fatalf("failed to get modelFormat: %v", err)
+	}
+	formatName, found, err := unstructured.NestedString(modelFormat, "name")
+	if err != nil || !found {
+		t.Fatalf("failed to get modelFormat name: %v", err)
+	}
+	expectedFormat := "vllm"
+	if formatName != expectedFormat {
+		t.Errorf("expected modelFormat '%s', got '%s'", expectedFormat, formatName)
 	}
 
 	// Check Status Update: Phase should be "Deploying"
