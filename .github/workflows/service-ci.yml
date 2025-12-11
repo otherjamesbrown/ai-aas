@@ -57,6 +57,13 @@ jobs:
       target: test
       go-version: "1.24.x"
 
+  model-downloader:
+    uses: ./.github/workflows/reusable-build.yml
+    with:
+      service: model-downloader
+      target: test
+      go-version: "1.24.x"
+
   user-org-service:
     uses: ./.github/workflows/reusable-build.yml
     with:
@@ -79,6 +86,7 @@ jobs:
       - analytics-service
       - api-router-service
       - hello-service
+      - model-downloader
       - user-org-service
       - world-service
     runs-on: ubuntu-latest
@@ -158,6 +166,7 @@ jobs:
           - admin-api-service
           - analytics-service
           - api-router-service
+          - model-downloader
           - user-org-service
           # Note: hello-service and world-service don't have Dockerfiles
     steps:
