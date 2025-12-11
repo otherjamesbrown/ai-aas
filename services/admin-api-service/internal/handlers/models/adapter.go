@@ -532,6 +532,12 @@ func convertModel(m svcModels.Model) Model {
 	if m.PinnedVersion != nil {
 		model.PinnedVersion = *m.PinnedVersion
 	}
+	if m.CacheStatus != nil {
+		model.CacheStatus = *m.CacheStatus
+	}
+	if m.DeploymentStatus != nil {
+		model.DeploymentStatus = *m.DeploymentStatus
+	}
 
 	return model
 }
