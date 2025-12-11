@@ -35,6 +35,7 @@ import (
 
 	aimodelv1alpha1 "github.com/ai-aas/ai-model-operator/api/v1alpha1"
 	"github.com/ai-aas/ai-model-operator/controllers"
+	"github.com/ai-aas/ai-model-operator/internal/adminapi"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -102,6 +103,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Initialize Admin API client if configured
+	var adminAPIClient *adminapi.Client
+	adminAPIBaseURL := os.Getenv("ADMIN_API_BASE_URL")
+	adminAPIKey := os.Getenv("ADMIN_API_KEY")
+	if adminAPIBaseURL != "" && adminAPIKey != "" {
+		adminAPIClient = adminapi.NewClient(adminAPIBaseURL, adminAPIKey)
+		setupLog.Info("Admin API client configured for deployment sync",
+			"baseURL", adminAPIBaseURL)
+	} else {
+		setupLog.Info("Admin API client not configured - deployment sync disabled",
+			"reason", "ADMIN_API_BASE_URL or ADMIN_API_KEY not set")
+	}
+
 	if err = (&controllers.AIModelReconciler{
 		Client:             mgr.GetClient(),
 		Scheme:             mgr.GetScheme(),
@@ -110,6 +124,7 @@ func main() {
 		MaxRetryDelay:      maxRetryDelay,
 		DownloaderImage:    downloaderImage,
 		DefaultRuntime:     defaultRuntime,
+		AdminAPIClient:     adminAPIClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AIModel")
 		os.Exit(1)

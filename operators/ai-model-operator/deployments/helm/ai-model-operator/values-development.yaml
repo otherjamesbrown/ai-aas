@@ -22,3 +22,10 @@ resources:
 env:
   - name: LOG_LEVEL
     value: "debug"
+  - name: ADMIN_API_BASE_URL
+    value: "http://admin-api-service.system.svc.cluster.local:8080"
+  - name: ADMIN_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: admin-api-credentials
+        key: api-key

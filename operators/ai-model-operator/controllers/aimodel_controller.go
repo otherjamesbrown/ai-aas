@@ -47,6 +47,7 @@ import (
 
 	aimodelv1alpha1 "github.com/ai-aas/ai-model-operator/api/v1alpha1"
 	"github.com/ai-aas/ai-model-operator/internal/kserve"
+	"github.com/ai-aas/ai-model-operator/internal/adminapi"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -106,6 +107,16 @@ type AIModelReconciler struct {
 	// Image configuration
 	DownloaderImage string // Docker image for model downloader (default: "python:3.11-slim")
 	DefaultRuntime  string // Default runtime if not specified in AIModel spec (default: "vllm")
+
+	// Admin API client for deployment sync (optional - sync is disabled if nil)
+	AdminAPIClient AdminAPIClient
+}
+
+// AdminAPIClient defines the interface for syncing deployment state with the Admin API
+type AdminAPIClient interface {
+	CreateDeployment(ctx context.Context, req adminapi.CreateDeploymentRequest) error
+	UpdateDeploymentStatus(ctx context.Context, modelName, environment string, status adminapi.DeploymentStatus) error
+	DeleteDeployment(ctx context.Context, modelName, environment string) error
 }
 
 //+kubebuilder:rbac:groups=aimodel.ai-aas.io,resources=aimodels,verbs=get;list;watch;create;update;patch;delete
@@ -460,6 +471,12 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 func (r *AIModelReconciler) finalizeAIModel(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) error {
 	log := log.FromContext(ctx)
 	log.Info("Performing finalization for AIModel", "name", aiModel.Name)
+
+	// Delete deployment record from Admin API
+	if err := r.deleteDeploymentFromAdminAPI(ctx, aiModel); err != nil {
+		// Log error but don't fail finalization - Admin API sync is best-effort
+		log.Error(err, "Failed to delete deployment from Admin API", "name", aiModel.Name)
+	}
 
 	// Delete InferenceService
 	isvc := &unstructured.Unstructured{}
@@ -1113,7 +1130,8 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 
 	// Update phase based on status
 	if status.Ready {
-		if aiModel.Status.Phase != aimodelv1alpha1.AIModelPhaseReady {
+		wasNotReady := aiModel.Status.Phase != aimodelv1alpha1.AIModelPhaseReady
+		if wasNotReady {
 			log.Info("InferenceService is ready", "name", aiModel.Name, "url", status.URL)
 			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseReady
 			aiModel.Status.Message = fmt.Sprintf("Model is ready at %s", status.URL)
@@ -1121,6 +1139,12 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 			aiModel.Status.RetryCount = 0
 			aiModel.Status.LastRetryTime = nil
 			aiModel.Status.NextRetryTime = nil
+		}
+
+		// Sync deployment state to Admin API when ready
+		if err := r.syncDeploymentToAdminAPI(ctx, aiModel, status); err != nil {
+			// Log error but don't fail reconciliation - Admin API sync is best-effort
+			log.Error(err, "Failed to sync deployment to Admin API", "name", aiModel.Name)
 		}
 	} else {
 		// InferenceService is not ready - determine if it's a transient or permanent failure
@@ -1199,6 +1223,98 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 	}
 
 	return nil
+}
+
+// syncDeploymentToAdminAPI syncs the deployment state to the Admin API database.
+// This function is best-effort and errors are logged but don't fail reconciliation.
+func (r *AIModelReconciler) syncDeploymentToAdminAPI(ctx context.Context, aiModel *aimodelv1alpha1.AIModel, status *kserve.InferenceServiceStatus) error {
+	// Skip if Admin API client is not configured
+	if r.AdminAPIClient == nil {
+		return nil
+	}
+
+	log := log.FromContext(ctx)
+
+	// Determine environment from namespace
+	// Convention: namespace format is "system" or "ai-aas-<environment>"
+	environment := "development"
+	if aiModel.Namespace != "system" {
+		environment = aiModel.Namespace
+	}
+
+	// Map AIModel phase to deployment status
+	deploymentStatus := "pending"
+	switch aiModel.Status.Phase {
+	case aimodelv1alpha1.AIModelPhaseReady:
+		deploymentStatus = "ready"
+	case aimodelv1alpha1.AIModelPhaseDeploying:
+		deploymentStatus = "deploying"
+	case aimodelv1alpha1.AIModelPhaseFailed:
+		deploymentStatus = "failed"
+	case aimodelv1alpha1.AIModelPhaseDisabled:
+		deploymentStatus = "disabled"
+	}
+
+	// Try to update existing deployment first
+	err := r.AdminAPIClient.UpdateDeploymentStatus(ctx, aiModel.Name, environment, adminapi.DeploymentStatus{
+		Status:               deploymentStatus,
+		InferenceServiceName: aiModel.Status.InferenceServiceName,
+		Endpoint:             status.URL,
+		ReplicasReady:        int(status.ReadyReplicas),
+	})
+
+	// If deployment doesn't exist (404), create it
+	if err != nil && (contains(err.Error(), "404") || contains(err.Error(), "not found")) {
+		log.Info("Deployment record not found in Admin API, creating", "name", aiModel.Name, "environment", environment)
+
+		// Get min replicas for the create request
+		replicas := 1
+		if aiModel.Spec.MinReplicas != nil {
+			replicas = int(*aiModel.Spec.MinReplicas)
+		}
+
+		createErr := r.AdminAPIClient.CreateDeployment(ctx, adminapi.CreateDeploymentRequest{
+			ModelName:   aiModel.Name,
+			Environment: environment,
+			Namespace:   aiModel.Namespace,
+			Replicas:    replicas,
+		})
+		if createErr != nil {
+			return fmt.Errorf("failed to create deployment: %w", createErr)
+		}
+
+		// After creating, update with current status
+		return r.AdminAPIClient.UpdateDeploymentStatus(ctx, aiModel.Name, environment, adminapi.DeploymentStatus{
+			Status:               deploymentStatus,
+			InferenceServiceName: aiModel.Status.InferenceServiceName,
+			Endpoint:             status.URL,
+			ReplicasReady:        int(status.ReadyReplicas),
+		})
+	}
+
+	return err
+}
+
+// deleteDeploymentFromAdminAPI removes the deployment record from the Admin API database.
+// This function is best-effort and errors are logged but don't fail finalization.
+func (r *AIModelReconciler) deleteDeploymentFromAdminAPI(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) error {
+	// Skip if Admin API client is not configured
+	if r.AdminAPIClient == nil {
+		return nil
+	}
+
+	// Determine environment from namespace
+	environment := "development"
+	if aiModel.Namespace != "system" {
+		environment = aiModel.Namespace
+	}
+
+	return r.AdminAPIClient.DeleteDeployment(ctx, aiModel.Name, environment)
+}
+
+// contains is a helper function to check if a string contains a substring
+func contains(s, substr string) bool {
+	return strings.Contains(s, substr)
 }
 
 // SetupWithManager sets up the controller with the Manager.
