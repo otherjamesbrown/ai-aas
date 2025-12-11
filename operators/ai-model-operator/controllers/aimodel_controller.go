@@ -666,6 +666,10 @@ print('Upload complete!')
 						}},
 					}},
 					RestartPolicy: corev1.RestartPolicyOnFailure,
+					// Add imagePullSecrets for private container registries (GHCR)
+					ImagePullSecrets: []corev1.LocalObjectReference{
+						{Name: "ghcr-pull-secret"},
+					},
 					Volumes: []corev1.Volume{{
 						Name: "model-storage",
 						VolumeSource: corev1.VolumeSource{
