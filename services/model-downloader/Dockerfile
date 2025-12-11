@@ -23,7 +23,9 @@ RUN go mod download
 COPY services/model-downloader/ /app/services/model-downloader/
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+# Use TARGETARCH from buildx for multi-arch builds
+ARG TARGETARCH
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH:-amd64} go build \
     -ldflags="-w -s" \
     -o /model-downloader \
     ./cmd/model-downloader
