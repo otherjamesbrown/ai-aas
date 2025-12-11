@@ -21,7 +21,8 @@ var InferenceServiceGVK = schema.GroupVersionKind{
 type InferenceServiceBuilder struct {
 	name         string
 	namespace    string
-	modelID      string
+	storageUri   string
+	modelFormat  string
 	servedName   string
 	runtime      string
 	minReplicas  int32
@@ -78,9 +79,15 @@ func NewInferenceServiceBuilder(name, namespace string) *InferenceServiceBuilder
 	}
 }
 
-// WithModelID sets the model ID (HuggingFace path)
-func (b *InferenceServiceBuilder) WithModelID(id string) *InferenceServiceBuilder {
-	b.modelID = id
+// WithStorageUri sets the S3 storage URI for the model
+func (b *InferenceServiceBuilder) WithStorageUri(uri string) *InferenceServiceBuilder {
+	b.storageUri = uri
+	return b
+}
+
+// WithModelFormat sets the model format name (e.g., "vllm", "vllm-gpt-oss")
+func (b *InferenceServiceBuilder) WithModelFormat(format string) *InferenceServiceBuilder {
+	b.modelFormat = format
 	return b
 }
 
@@ -145,17 +152,20 @@ func (b *InferenceServiceBuilder) WithEnvironment(env string) *InferenceServiceB
 	return b
 }
 
-// Build constructs the unstructured InferenceService resource
+// Build constructs the unstructured InferenceService resource using KServe native model serving
 func (b *InferenceServiceBuilder) Build() (*unstructured.Unstructured, error) {
 	// Validate required fields
-	if b.modelID == "" {
-		return nil, fmt.Errorf("modelID is required")
-	}
-	if b.servedName == "" {
-		return nil, fmt.Errorf("servedName is required")
+	if b.storageUri == "" {
+		return nil, fmt.Errorf("storageUri is required")
 	}
 	if b.runtime == "" {
-		return nil, fmt.Errorf("runtime image is required")
+		return nil, fmt.Errorf("runtime is required")
+	}
+
+	// Default modelFormat to "vllm" if not specified
+	modelFormat := b.modelFormat
+	if modelFormat == "" {
+		modelFormat = "vllm"
 	}
 
 	// Build labels
@@ -167,35 +177,17 @@ func (b *InferenceServiceBuilder) Build() (*unstructured.Unstructured, error) {
 	}
 
 	// Build annotations
+	// Note: Revision garbage collection is configured cluster-wide via the
+	// config-gc ConfigMap in knative-serving namespace. For GPU workloads,
+	// we use aggressive GC settings (min=1, max=2 non-active revisions) to
+	// prevent old revisions from holding GPU resources. See:
+	// infra/k8s/knative-serving/config-gc.yaml
 	annotations := map[string]interface{}{
-		"serving.kserve.io/deploymentMode":           "Serverless",
-		"serving.knative.dev/progress-deadline":      "360s",
-		"autoscaling.knative.dev/class":              "kpa.autoscaling.knative.dev",
-		"autoscaling.knative.dev/metric":             "concurrency",
-		"autoscaling.knative.dev/target":             "1",
-		"autoscaling.knative.dev/scaleDownDelay":     "2m",
-		"autoscaling.knative.dev/window":             "30s",
-		"autoscaling.knative.dev/panicThreshold":     "150",
-		"autoscaling.knative.dev/panicWindowPercentage": "10",
-		"autoscaling.knative.dev/targetUtilizationPercentage": "70",
+		"serving.kserve.io/deploymentMode": "Serverless",
 	}
 
-	// Build runtime arguments
-	args := make([]interface{}, 0, len(b.runtimeArgs)+2)
-	args = append(args, fmt.Sprintf("--model=%s", b.modelID))
-	for _, arg := range b.runtimeArgs {
-		args = append(args, arg)
-	}
-	args = append(args, fmt.Sprintf("--served-model-name=%s", b.servedName))
-
-	// Build environment variables
-	env := make([]interface{}, 0, len(b.runtimeEnv)+1)
-	// Add default HF_HOME
-	env = append(env, map[string]interface{}{
-		"name":  "HF_HOME",
-		"value": "/tmp/hf_home",
-	})
-	// Add custom env vars
+	// Build environment variables for the model
+	env := make([]interface{}, 0, len(b.runtimeEnv))
 	for _, e := range b.runtimeEnv {
 		envVar := map[string]interface{}{
 			"name": e.Name,
@@ -229,56 +221,32 @@ func (b *InferenceServiceBuilder) Build() (*unstructured.Unstructured, error) {
 		tolerations = append(tolerations, toleration)
 	}
 
-	// Build container
-	container := map[string]interface{}{
-		"name":  "kserve-container",
-		"image": b.runtime,
-		"args":  args,
-		"env":   env,
+	// Build model spec using KServe native model serving
+	// This leverages KServe's storage initializer to download from S3
+	model := map[string]interface{}{
+		"storageUri": b.storageUri,
+		"runtime":    b.runtime,
+		"modelFormat": map[string]interface{}{
+			"name": modelFormat,
+		},
 		"resources": resources,
-		"ports": []interface{}{
-			map[string]interface{}{
-				"containerPort": int64(8000),
-				"name":          "http1",
-				"protocol":      "TCP",
-			},
-		},
-		"startupProbe": map[string]interface{}{
-			"httpGet": map[string]interface{}{
-				"path": "/health",
-				"port": int64(8000),
-			},
-			"initialDelaySeconds": int64(30),
-			"periodSeconds":       int64(10),
-			"failureThreshold":    int64(36),
-			"timeoutSeconds":      int64(5),
-		},
-		"readinessProbe": map[string]interface{}{
-			"httpGet": map[string]interface{}{
-				"path": "/health",
-				"port": int64(8000),
-			},
-			"periodSeconds":    int64(10),
-			"failureThreshold": int64(3),
-			"timeoutSeconds":   int64(5),
-		},
-		"livenessProbe": map[string]interface{}{
-			"httpGet": map[string]interface{}{
-				"path": "/health",
-				"port": int64(8000),
-			},
-			"periodSeconds":    int64(30),
-			"failureThreshold": int64(3),
-			"timeoutSeconds":   int64(5),
-		},
 	}
 
-	// Build predictor spec
+	// Add environment variables if specified
+	if len(env) > 0 {
+		model["env"] = env
+	}
+
+	// Build predictor spec using native model serving
 	predictor := map[string]interface{}{
 		"minReplicas": int64(b.minReplicas),
 		"maxReplicas": int64(b.maxReplicas),
-		"tolerations": tolerations,
-		"containers":  []interface{}{container},
+		"model":       model,
+	}
+
+	// Add tolerations if specified
+	if len(tolerations) > 0 {
+		predictor["tolerations"] = tolerations
 	}
 
 	// Add node selector if provided

@@ -61,6 +61,13 @@ const (
 	maxRetryDelay      = 16 * time.Minute
 )
 
+// Retry configuration for InferenceService deployment failures
+const (
+	maxDeploymentRetries        = 10             // More retries for transient resource issues
+	initialDeploymentRetryDelay = 30 * time.Second // Shorter initial delay for scheduling
+	maxDeploymentRetryDelay     = 10 * time.Minute // Max wait between retries
+)
+
 var (
 	reconcileTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -87,10 +94,15 @@ type AIModelReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 
-	// Retry configuration
+	// Download retry configuration
 	MaxDownloadRetries int32
 	InitialRetryDelay  time.Duration
 	MaxRetryDelay      time.Duration
+
+	// Deployment retry configuration
+	MaxDeploymentRetries        int32
+	InitialDeploymentRetryDelay time.Duration
+	MaxDeploymentRetryDelay     time.Duration
 
 	// Image configuration
 	DownloaderImage string // Docker image for model downloader (default: "python:3.11-slim")
@@ -403,6 +415,35 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		log.Error(err, "Failed to update status from InferenceService", "name", aiModel.Name)
 		reconcileTotal.WithLabelValues("error").Inc()
 		return ctrl.Result{}, err
+	}
+
+	// Handle deployment retry pending state
+	if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhaseRetryPending {
+		if aiModel.Status.NextRetryTime != nil {
+			now := metav1.Now()
+			if now.Time.Before(aiModel.Status.NextRetryTime.Time) {
+				// Not yet time to retry, requeue with remaining wait time
+				waitDuration := aiModel.Status.NextRetryTime.Time.Sub(now.Time)
+				log.Info("Deployment retry not yet due, waiting",
+					"waitDuration", waitDuration,
+					"retryCount", aiModel.Status.RetryCount)
+				reconcileTotal.WithLabelValues("success").Inc()
+				return ctrl.Result{RequeueAfter: waitDuration}, nil
+			}
+			// Time to retry - transition back to Deploying phase
+			log.Info("Deployment retry time reached, retrying",
+				"retryCount", aiModel.Status.RetryCount)
+			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
+			aiModel.Status.Message = fmt.Sprintf("Retrying deployment (attempt %d)", aiModel.Status.RetryCount)
+			if err := r.Status().Update(ctx, aiModel); err != nil {
+				log.Error(err, "unable to update AIModel status to Deploying for retry")
+				reconcileTotal.WithLabelValues("error").Inc()
+				return ctrl.Result{}, err
+			}
+			// Requeue immediately to trigger reconciliation in Deploying phase
+			reconcileTotal.WithLabelValues("success").Inc()
+			return ctrl.Result{Requeue: true}, nil
+		}
 	}
 
 	// Requeue if not ready yet
@@ -858,7 +899,7 @@ func jobIsFailed(job *batchv1.Job) bool {
 	return false
 }
 
-// calculateRetryBackoff calculates the exponential backoff duration for a given retry count.
+// calculateRetryBackoff calculates the exponential backoff duration for download retry.
 // Returns min(initialRetryDelay * 2^retryCount, maxRetryDelay)
 // Uses configured values from the reconciler, falling back to defaults if not set.
 func (r *AIModelReconciler) calculateRetryBackoff(retryCount int32) time.Duration {
@@ -869,6 +910,26 @@ func (r *AIModelReconciler) calculateRetryBackoff(retryCount int32) time.Duratio
 	max := r.MaxRetryDelay
 	if max == 0 {
 		max = maxRetryDelay // Use default
+	}
+
+	backoff := initial * time.Duration(1<<retryCount)
+	if backoff > max {
+		return max
+	}
+	return backoff
+}
+
+// calculateDeploymentRetryBackoff calculates the exponential backoff duration for deployment retry.
+// Returns min(initialDeploymentRetryDelay * 2^retryCount, maxDeploymentRetryDelay)
+// Uses configured values from the reconciler, falling back to defaults if not set.
+func (r *AIModelReconciler) calculateDeploymentRetryBackoff(retryCount int32) time.Duration {
+	initial := r.InitialDeploymentRetryDelay
+	if initial == 0 {
+		initial = initialDeploymentRetryDelay // Use default
+	}
+	max := r.MaxDeploymentRetryDelay
+	if max == 0 {
+		max = maxDeploymentRetryDelay // Use default
 	}
 
 	backoff := initial * time.Duration(1<<retryCount)
@@ -972,20 +1033,6 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		}
 	}
 
-	// Map runtime name to container image
-	runtimeImage := "vllm/vllm-openai:v0.6.3" // Default vLLM image
-	switch runtime {
-	case "tgi":
-		runtimeImage = "ghcr.io/huggingface/text-generation-inference:latest"
-	case "triton":
-		runtimeImage = "nvcr.io/nvidia/tritonserver:latest"
-	case "vllm":
-		runtimeImage = "vllm/vllm-openai:v0.6.3"
-	default:
-		// If runtime doesn't match known values, treat it as a custom image
-		runtimeImage = runtime
-	}
-
 	// Get min/max replicas with defaults
 	minReplicas := int32(0)
 	if aiModel.Spec.MinReplicas != nil {
@@ -1029,17 +1076,6 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 				Operator: corev1.TolerationOpExists,
 				Effect:   corev1.TaintEffectNoSchedule,
 			},
-		}
-	}
-
-	// Build runtime args with defaults
-	runtimeArgs := aiModel.Spec.RuntimeArgs
-	if len(runtimeArgs) == 0 {
-		runtimeArgs = []string{
-			"--dtype=auto",
-			"--max-model-len=4096",
-			"--gpu-memory-utilization=0.9",
-			"--trust-remote-code",
 		}
 	}
 
@@ -1101,8 +1137,28 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		},
 	)
 
-	// Build the S3 model path
-	modelID := fmt.Sprintf("s3://%s/%s", aiModel.Spec.S3Bucket, aiModel.Spec.S3Key)
+	// Build the S3 storage URI
+	storageUri := fmt.Sprintf("s3://%s/%s", aiModel.Spec.S3Bucket, aiModel.Spec.S3Key)
+
+	// Determine the model format and runtime name based on the runtime
+	modelFormat := "vllm"
+	runtimeName := "vllm-runtime"
+
+	// Map runtime to appropriate KServe ClusterServingRuntime name
+	switch runtime {
+	case "vllm":
+		modelFormat = "vllm"
+		runtimeName = "vllm-runtime"
+	case "tgi":
+		modelFormat = "huggingface"
+		runtimeName = "tgi-runtime"
+	case "triton":
+		modelFormat = "tensorrt"
+		runtimeName = "kserve-tritonserver"
+	default:
+		// For custom runtimes, use the runtime value as the runtime name
+		runtimeName = runtime
+	}
 
 	// Create owner reference
 	ownerRef := &metav1.OwnerReference{
@@ -1114,16 +1170,17 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		BlockOwnerDeletion: func() *bool { b := true; return &b }(),
 	}
 
-	// Build the InferenceService
+	// Build the InferenceService using KServe native model serving
+	// This leverages KServe's storage initializer to download from S3
 	isvc, err := kserve.NewInferenceServiceBuilder(aiModel.Name, aiModel.Namespace).
-		WithModelID(modelID).
+		WithStorageUri(storageUri).
+		WithModelFormat(modelFormat).
 		WithServedName(aiModel.Spec.ModelName).
-		WithRuntime(runtimeImage).
+		WithRuntime(runtimeName).
 		WithScaling(minReplicas, maxReplicas).
 		WithResources(resources).
 		WithTolerations(tolerations).
 		WithNodeSelector(aiModel.Spec.NodeSelector).
-		WithRuntimeArgs(runtimeArgs).
 		WithRuntimeEnv(runtimeEnv).
 		WithOwnerReference(ownerRef).
 		Build()
@@ -1192,13 +1249,80 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 			log.Info("InferenceService is ready", "name", aiModel.Name, "url", status.URL)
 			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseReady
 			aiModel.Status.Message = fmt.Sprintf("Model is ready at %s", status.URL)
+			// Reset retry tracking on success
+			aiModel.Status.RetryCount = 0
+			aiModel.Status.LastRetryTime = nil
+			aiModel.Status.NextRetryTime = nil
 		}
 	} else {
-		if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhaseReady {
-			// Transition from Ready to Deploying
-			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
+		// InferenceService is not ready - determine if it's a transient or permanent failure
+
+		// Check for transient failures (retryable)
+		if status.IsTransientFailure() {
+			log.Info("InferenceService has transient failure, will retry",
+				"name", aiModel.Name,
+				"status", status.String(),
+				"retryCount", aiModel.Status.RetryCount)
+
+			// Get max retries configuration
+			maxRetries := r.MaxDeploymentRetries
+			if maxRetries == 0 {
+				maxRetries = int32(maxDeploymentRetries) // Use default
+			}
+
+			// Check if we should retry
+			if aiModel.Status.RetryCount < maxRetries {
+				// Only increment retry count and schedule retry if we're in Deploying phase
+				// (not if we're already in RetryPending waiting for the timer)
+				if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhaseDeploying {
+					aiModel.Status.RetryCount++
+					backoffDuration := r.calculateDeploymentRetryBackoff(aiModel.Status.RetryCount - 1)
+					now := metav1.Now()
+					nextRetry := metav1.NewTime(now.Add(backoffDuration))
+
+					aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseRetryPending
+					aiModel.Status.LastRetryTime = &now
+					aiModel.Status.NextRetryTime = &nextRetry
+					aiModel.Status.Message = fmt.Sprintf("Transient deployment failure (retry %d/%d scheduled in %v): %s",
+						aiModel.Status.RetryCount, maxRetries, backoffDuration, status.String())
+
+					log.Info("Deployment retry scheduled",
+						"retryCount", aiModel.Status.RetryCount,
+						"backoffDuration", backoffDuration,
+						"nextRetryTime", nextRetry.Time)
+				} else {
+					// Already in RetryPending, keep the existing message
+					aiModel.Status.Message = fmt.Sprintf("Waiting for retry %d/%d: %s",
+						aiModel.Status.RetryCount, maxRetries, status.String())
+				}
+			} else {
+				// Max retries exceeded for transient failure
+				log.Error(fmt.Errorf("max deployment retries exceeded"),
+					"InferenceService failed after maximum retries",
+					"name", aiModel.Name,
+					"maxRetries", maxRetries,
+					"status", status.String())
+				aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
+				aiModel.Status.Message = fmt.Sprintf("Deployment failed after %d retry attempts: %s. Manual intervention required.",
+					maxRetries, status.String())
+			}
+		} else if status.IsPermanentFailure() {
+			// Permanent failure - don't retry
+			log.Error(fmt.Errorf("permanent failure detected"),
+				"InferenceService has permanent failure",
+				"name", aiModel.Name,
+				"status", status.String())
+			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
+			aiModel.Status.Message = fmt.Sprintf("Permanent deployment failure: %s. Manual intervention required.", status.String())
+		} else {
+			// Not ready, but not clearly a failure yet (e.g., still creating)
+			// Keep in Deploying phase
+			if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhaseReady {
+				// Transition from Ready to Deploying
+				aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
+			}
+			aiModel.Status.Message = status.String()
 		}
-		aiModel.Status.Message = status.String()
 	}
 
 	// Update status

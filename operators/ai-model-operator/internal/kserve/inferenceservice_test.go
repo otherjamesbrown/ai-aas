@@ -38,12 +38,12 @@ func TestNewInferenceServiceBuilder(t *testing.T) {
 	}
 }
 
-func TestInferenceServiceBuilder_WithModelID(t *testing.T) {
+func TestInferenceServiceBuilder_WithStorageUri(t *testing.T) {
 	builder := NewInferenceServiceBuilder("test", "test-ns").
-		WithModelID("meta-llama/Llama-2-7b-hf")
+		WithStorageUri("s3://my-bucket/models/llama-2-7b")
 
-	if builder.modelID != "meta-llama/Llama-2-7b-hf" {
-		t.Errorf("Expected modelID 'meta-llama/Llama-2-7b-hf', got '%s'", builder.modelID)
+	if builder.storageUri != "s3://my-bucket/models/llama-2-7b" {
+		t.Errorf("Expected storageUri 's3://my-bucket/models/llama-2-7b', got '%s'", builder.storageUri)
 	}
 }
 
@@ -209,7 +209,7 @@ func TestInferenceServiceBuilder_WithEnvironment(t *testing.T) {
 
 func TestInferenceServiceBuilder_Build(t *testing.T) {
 	builder := NewInferenceServiceBuilder("test-model", "test-namespace").
-		WithModelID("mistralai/Mistral-7B-Instruct-v0.2").
+		WithStorageUri("s3://my-bucket/models/mistral-7b").
 		WithServedName("mistral-7b").
 		WithRuntime("vllm/vllm-openai:v0.6.3").
 		WithScaling(1, 3).
@@ -359,45 +359,29 @@ func TestInferenceServiceBuilder_Build(t *testing.T) {
 	}
 }
 
-func TestInferenceServiceBuilder_Build_MissingModelID(t *testing.T) {
+func TestInferenceServiceBuilder_Build_MissingStorageUri(t *testing.T) {
 	builder := NewInferenceServiceBuilder("test", "test-ns").
-		WithServedName("test-model").
 		WithRuntime("vllm/vllm-openai:v0.6.3")
 
 	_, err := builder.Build()
 	if err == nil {
-		t.Fatal("Expected error for missing modelID")
+		t.Fatal("Expected error for missing storageUri")
 	}
-	if err.Error() != "modelID is required" {
-		t.Errorf("Expected error 'modelID is required', got '%s'", err.Error())
-	}
-}
-
-func TestInferenceServiceBuilder_Build_MissingServedName(t *testing.T) {
-	builder := NewInferenceServiceBuilder("test", "test-ns").
-		WithModelID("test-model-id").
-		WithRuntime("vllm/vllm-openai:v0.6.3")
-
-	_, err := builder.Build()
-	if err == nil {
-		t.Fatal("Expected error for missing servedName")
-	}
-	if err.Error() != "servedName is required" {
-		t.Errorf("Expected error 'servedName is required', got '%s'", err.Error())
+	if err.Error() != "storageUri is required" {
+		t.Errorf("Expected error 'storageUri is required', got '%s'", err.Error())
 	}
 }
 
 func TestInferenceServiceBuilder_Build_MissingRuntime(t *testing.T) {
 	builder := NewInferenceServiceBuilder("test", "test-ns").
-		WithModelID("test-model-id").
-		WithServedName("test-model")
+		WithStorageUri("s3://my-bucket/models/test")
 
 	_, err := builder.Build()
 	if err == nil {
 		t.Fatal("Expected error for missing runtime")
 	}
-	if err.Error() != "runtime image is required" {
-		t.Errorf("Expected error 'runtime image is required', got '%s'", err.Error())
+	if err.Error() != "runtime is required" {
+		t.Errorf("Expected error 'runtime is required', got '%s'", err.Error())
 	}
 }
 

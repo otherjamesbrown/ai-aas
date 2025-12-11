@@ -230,6 +230,21 @@ KServe uses Knative Pod Autoscaler (KPA) for autoscaling:
 - **Load-based**: Scales based on concurrency metrics
 - **Max replicas**: Enforced by `maxReplicas`
 
+### Revision Garbage Collection
+
+When InferenceServices are updated, Knative creates new revisions. For GPU workloads, old revisions can hold expensive GPU resources even when not receiving traffic.
+
+The platform configures aggressive garbage collection via the `config-gc` ConfigMap in the `knative-serving` namespace:
+
+- **min-non-active-revisions: 1** - Keep only 1 old revision for rollback
+- **max-non-active-revisions: 2** - Never keep more than 2 old revisions
+- **retain-since-last-active-time: 5m** - Clean up revisions 5 minutes after they become inactive
+- **retain-since-create-time: 10m** - Clean up created-but-never-active revisions after 10 minutes
+
+This prevents scenarios where multiple revisions hold GPUs unnecessarily. For example, if `mistral-7b-instruct` has 3 revisions (00001, 00002, 00003), each holding 1 GPU, only the active revision should consume GPU resources.
+
+Configuration: `/infra/k8s/knative-serving/config-gc.yaml`
+
 ## Configuration
 
 ### Environment Variables (Operator)

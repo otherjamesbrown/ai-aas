@@ -123,3 +123,129 @@ func (s *InferenceServiceStatus) String() string {
 
 	return "Not Ready"
 }
+
+// IsTransientFailure determines if the failure is transient (retryable) or permanent
+// Transient failures include resource constraints, scheduling issues, etc.
+// Permanent failures include invalid configuration, bad model paths, etc.
+func (s *InferenceServiceStatus) IsTransientFailure() bool {
+	// If Ready, it's not a failure at all
+	if s.Ready {
+		return false
+	}
+
+	// Check for transient failure indicators in conditions
+	for _, cond := range s.Conditions {
+		// Scheduling failures are transient
+		if cond.Reason == "InsufficientResources" ||
+			cond.Reason == "Unschedulable" ||
+			cond.Reason == "PodUnschedulable" {
+			return true
+		}
+
+		// Check message content for common transient errors
+		if containsTransientError(cond.Message) {
+			return true
+		}
+
+		// Image pull backoff is often transient (network issues, registry throttling)
+		if cond.Reason == "ImagePullBackOff" || cond.Reason == "ErrImagePull" {
+			return true
+		}
+
+		// Pending states are often transient
+		if cond.Reason == "Pending" || cond.Reason == "ContainerCreating" {
+			return true
+		}
+	}
+
+	return false
+}
+
+// IsPermanentFailure determines if the failure is permanent (not retryable)
+func (s *InferenceServiceStatus) IsPermanentFailure() bool {
+	if s.Ready {
+		return false
+	}
+
+	// Check for permanent failure indicators
+	for _, cond := range s.Conditions {
+		// Configuration errors are permanent
+		if cond.Reason == "InvalidSpec" ||
+			cond.Reason == "InvalidConfiguration" ||
+			cond.Reason == "ValidationFailed" {
+			return true
+		}
+
+		// Check message for permanent error patterns
+		if containsPermanentError(cond.Message) {
+			return true
+		}
+
+		// CrashLoopBackOff might be permanent (bad model config, missing files)
+		// We'll treat this as permanent after several occurrences
+		if cond.Reason == "CrashLoopBackOff" {
+			return true
+		}
+	}
+
+	return false
+}
+
+// containsTransientError checks if a message contains transient error patterns
+func containsTransientError(message string) bool {
+	transientPatterns := []string{
+		"Insufficient",
+		"insufficient",
+		"does not have enough",
+		"no nodes available",
+		"FailedScheduling",
+		"pending",
+		"waiting for",
+	}
+
+	for _, pattern := range transientPatterns {
+		if contains(message, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+// containsPermanentError checks if a message contains permanent error patterns
+func containsPermanentError(message string) bool {
+	permanentPatterns := []string{
+		"invalid",
+		"Invalid",
+		"not found",
+		"does not exist",
+		"forbidden",
+		"Forbidden",
+		"unauthorized",
+		"Unauthorized",
+		"validation failed",
+		"Validation failed",
+	}
+
+	for _, pattern := range permanentPatterns {
+		if contains(message, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+// contains is a simple string contains helper
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
+		(len(s) > 0 && len(substr) > 0 && indexOf(s, substr) >= 0))
+}
+
+// indexOf returns the index of substr in s, or -1 if not found
+func indexOf(s, substr string) int {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
+}
