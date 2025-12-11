@@ -204,8 +204,8 @@ func TestAIModelReconciler_CreatesInferenceService(t *testing.T) {
 		Scheme: s,
 	}
 
-	// Update AIModel status to "Downloaded" (as if the job completed earlier)
-	aiModel.Status.Phase = "Downloaded"
+	// Update AIModel status to "Deploying" (as if the download job completed)
+	aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
 	err := cl.Status().Update(context.Background(), aiModel)
 	if err != nil {
 		t.Fatalf("update aimodel status: (%v)", err)

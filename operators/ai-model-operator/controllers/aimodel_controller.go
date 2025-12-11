@@ -299,14 +299,14 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		// Job found, check its status
 		if jobIsComplete(foundJob) {
 			log.Info("Model Downloader Job completed successfully", "Job.Name", jobName)
-			if aiModel.Status.Phase == "Downloading" || aiModel.Status.Phase == "Pending" {
-				aiModel.Status.Phase = "Downloaded"
+			if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhaseDownloading || aiModel.Status.Phase == aimodelv1alpha1.AIModelPhasePending {
+				aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
 				// Reset retry tracking on success
 				aiModel.Status.RetryCount = 0
 				aiModel.Status.LastRetryTime = nil
 				aiModel.Status.NextRetryTime = nil
 				if err := r.Status().Update(ctx, aiModel); err != nil {
-					log.Error(err, "unable to update AIModel status to Downloaded")
+					log.Error(err, "unable to update AIModel status to Deploying")
 					reconcileTotal.WithLabelValues("error").Inc()
 					return ctrl.Result{}, err
 				}
@@ -377,7 +377,7 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	log.Info("Reconciling InferenceService", "name", aiModel.Name)
 
 	// Update phase to Deploying if not already set
-	if aiModel.Status.Phase == "Downloaded" || aiModel.Status.Phase == "Pending" {
+	if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhasePending {
 		aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
 		if err := r.Status().Update(ctx, aiModel); err != nil {
 			log.Error(err, "unable to update AIModel status to Deploying")
