@@ -992,20 +992,39 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 	modelFormat := "vllm"
 	runtimeName := "vllm-runtime"
 
-	// Map runtime to appropriate KServe ClusterServingRuntime name
-	switch runtime {
-	case "vllm":
-		modelFormat = "vllm"
-		runtimeName = "vllm-runtime"
-	case "tgi":
-		modelFormat = "huggingface"
-		runtimeName = "tgi-runtime"
-	case "triton":
-		modelFormat = "tensorrt"
-		runtimeName = "kserve-tritonserver"
-	default:
-		// For custom runtimes, use the runtime value as the runtime name
-		runtimeName = runtime
+	// Check if a custom runtime name is specified
+	if aiModel.Spec.RuntimeName != "" {
+		runtimeName = aiModel.Spec.RuntimeName
+		// For custom runtime names, use default vllm modelFormat unless specified otherwise
+		// Users can override this by explicitly setting the runtime field
+	} else {
+		// Map runtime to appropriate KServe ClusterServingRuntime name
+		switch runtime {
+		case "vllm":
+			modelFormat = "vllm"
+			runtimeName = "vllm-runtime"
+		case "tgi":
+			modelFormat = "huggingface"
+			runtimeName = "tgi-runtime"
+		case "triton":
+			modelFormat = "tensorrt"
+			runtimeName = "kserve-tritonserver"
+		default:
+			// For custom runtimes, use the runtime value as the runtime name
+			runtimeName = runtime
+		}
+	}
+
+	// Use runtime args from spec, or fall back to defaults
+	runtimeArgs := aiModel.Spec.RuntimeArgs
+	if len(runtimeArgs) == 0 {
+		// Use default vLLM args if none specified
+		runtimeArgs = []string{
+			"--dtype=float16",
+			"--max-model-len=4096",
+			"--gpu-memory-utilization=0.9",
+			"--trust-remote-code",
+		}
 	}
 
 	// Create owner reference
@@ -1029,6 +1048,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		WithResources(resources).
 		WithTolerations(tolerations).
 		WithNodeSelector(aiModel.Spec.NodeSelector).
+		WithRuntimeArgs(runtimeArgs).
 		WithRuntimeEnv(runtimeEnv).
 		WithOwnerReference(ownerRef).
 		Build()

@@ -69,12 +69,7 @@ func NewInferenceServiceBuilder(name, namespace string) *InferenceServiceBuilder
 				Effect:   corev1.TaintEffectNoSchedule,
 			},
 		},
-		runtimeArgs: []string{
-			"--dtype=float16",
-			"--max-model-len=4096",
-			"--gpu-memory-utilization=0.9",
-			"--trust-remote-code",
-		},
+		runtimeArgs: []string{}, // Runtime args are now set per-model in the controller
 		environment: "development",
 	}
 }
@@ -230,6 +225,16 @@ func (b *InferenceServiceBuilder) Build() (*unstructured.Unstructured, error) {
 			"name": modelFormat,
 		},
 		"resources": resources,
+	}
+
+	// Add runtime arguments if specified
+	if len(b.runtimeArgs) > 0 {
+		// Convert []string to []interface{} for unstructured
+		args := make([]interface{}, len(b.runtimeArgs))
+		for i, arg := range b.runtimeArgs {
+			args[i] = arg
+		}
+		model["args"] = args
 	}
 
 	// Add environment variables if specified

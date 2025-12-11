@@ -52,6 +52,11 @@ type AIModelSpec struct {
 	// +kubebuilder:default=vllm
 	Runtime string `json:"runtime,omitempty"`
 
+	// RuntimeName specifies the name of the ClusterServingRuntime to use.
+	// If not specified, the operator will use the default runtime based on the Runtime field.
+	// +optional
+	RuntimeName string `json:"runtimeName,omitempty"`
+
 	// MinReplicas is the minimum number of replicas for autoscaling.
 	// Set to 0 to enable scale-to-zero.
 	// +kubebuilder:validation:Minimum=0
