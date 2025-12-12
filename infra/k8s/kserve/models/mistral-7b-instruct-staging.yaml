@@ -88,25 +88,22 @@ spec:
             name: http1
             protocol: TCP
         # Health probes to prevent traffic before model is loaded
-        startupProbe:
-          httpGet:
-            path: /health
-            port: 8000
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          failureThreshold: 36  # 30s + 36×10s = 6 min max for 7B model
-          timeoutSeconds: 5
+        # NOTE: KServe/Knative does NOT support startupProbe - it will be ignored!
+        # We must use readinessProbe with long enough timeout for initial model loading
         readinessProbe:
           httpGet:
             path: /health
             port: 8000
+          initialDelaySeconds: 30  # Give model time to start loading
           periodSeconds: 10
-          failureThreshold: 3
+          failureThreshold: 36  # 30s + 36×10s = 6 min max for 7B model
           timeoutSeconds: 5
+        # Liveness probe with lenient settings to avoid killing during startup
         livenessProbe:
           httpGet:
             path: /health
             port: 8000
+          initialDelaySeconds: 120  # Don't check for first 2 minutes
           periodSeconds: 30
-          failureThreshold: 3
+          failureThreshold: 6  # Allow 3 minutes of downtime
           timeoutSeconds: 5
