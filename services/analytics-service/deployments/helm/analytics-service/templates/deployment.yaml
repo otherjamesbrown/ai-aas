@@ -33,28 +33,10 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
+              set -e
               echo "Running database migrations..."
-              # Check current migration state
-              echo "Current goose status:"
-              goose -dir /app/migrations/sql postgres "$DATABASE_URL" status || true
-
-              # Run migrations
-              if goose -dir /app/migrations/sql postgres "$DATABASE_URL" up; then
-                echo "Migrations completed successfully"
-                exit 0
-              fi
-
-              # Check if this is the "missing migrations" error from goose v3
-              # This happens when migrations were converted from v2 to v3 format
-              # and the database has a newer version but no records for older ones
-              RESULT=$(goose -dir /app/migrations/sql postgres "$DATABASE_URL" status 2>&1)
-              if echo "$RESULT" | grep -q "Pending.*false" && echo "$RESULT" | grep -q "20251209"; then
-                echo "Schema is up-to-date (version 20251209+), skipping migration errors"
-                exit 0
-              fi
-
-              echo "Migration failed and schema verification failed"
-              exit 1
+              goose -dir /app/migrations/sql postgres "$DATABASE_URL" up
+              echo "Migrations completed successfully"
           env:
             {{- range .Values.env }}
             {{- if .valueFrom }}
