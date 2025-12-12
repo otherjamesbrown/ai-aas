@@ -10,6 +10,7 @@ on:
     paths:
       - 'services/**'
       - 'shared/**'
+      - 'db/migrations/**'
       - '.github/workflows/service-ci.yml'
       - '.github/workflows/reusable-build.yml'
   pull_request:
