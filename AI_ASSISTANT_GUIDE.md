@@ -127,4 +127,39 @@ This is the core functionality of the platform.
 *   **`docs/workflows/model-registration-workflow.md`**: How to register a new model so it can be served by the platform.
 *   **`docs/guides/kserve-management-guide.md`**: A quick reference for managing KServe deployments.
 
+### 4. Observability & Debugging
+
+The platform has a unified observability stack for logs, traces, metrics, and error tracking:
+
+*   **`docs/architecture/observability-architecture.md`**: Comprehensive architecture documentation for the observability stack (Loki, Tempo, Promtail, OTEL Collector, Grafana, Sentry).
+*   **`docs/platform/observability-guide.md`**: Operational guide for logging standards, data flows, retention policies, and accessing dashboards.
+*   **`docs/runbooks/ai-debugging-workflow.md`**: Debug workflow for AI assistants with LogQL commands and common scenarios.
+
+**Quick Reference**:
+- **Logs**: Access via Grafana (`https://grafana.dev.ai-aas.local`) or kubectl
+- **Traces**: Tempo integration with trace-to-logs correlation
+- **Frontend Errors**: Sentry captures React errors with session replay
+- **vLLM Logs**: Special dashboard for inference backend monitoring with GPU error detection
+
+**Common Log Queries (LogQL)**:
+```bash
+# Find errors across all services
+{namespace="system"} | json | level="error"
+
+# Search by trace ID
+{namespace="system"} | json | trace_id="abc123"
+
+# vLLM GPU errors
+{namespace=~"ai-models|system|kserve"} | json | gpu_error="true"
+```
+
+**Accessing Logs**:
+```bash
+# Real-time tailing (kubectl)
+kubectl logs -n system -l app=api-router -f
+
+# Historical search (Grafana)
+# Navigate to Grafana → Explore → Loki datasource → Enter LogQL query
+```
+
 By familiarizing yourself with these documents and following the core principles, you will be well-equipped to answer questions and perform tasks related to the AI-AAS platform.
