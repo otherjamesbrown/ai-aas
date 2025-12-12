@@ -1,4 +1,4 @@
-# Spec 001: Logging & Observability Improvements
+# Spec 024: Logging & Observability Improvements
 
 ## Overview
 
@@ -124,6 +124,39 @@ Update the existing collector to:
 - Export logs to Loki (via OTLP)
 - Add service graph generation
 
+#### 6. Inference Backend Logging (vLLM)
+
+**Critical for debugging model deployment and inference issues.**
+
+vLLM and other inference backends output logs to stdout/stderr. These logs are essential for debugging:
+- Model loading failures (OOM, missing files, architecture mismatches)
+- GPU allocation issues (CUDA errors, memory fragmentation)
+- Inference errors (token limits, malformed inputs)
+- Performance problems (queue depth, batch sizing)
+
+**Components:**
+- **Promtail scrape config for vLLM pods**: Collect logs from `ai-models` namespace
+- **vLLM log parsing pipeline**: Extract model name, GPU metrics, inference timing
+- **Dedicated Grafana dashboard**: Model health, inference latency, error rates
+
+**vLLM Log Categories:**
+| Log Pattern | Severity | Indicates |
+|-------------|----------|-----------|
+| `Loading model` | info | Model initialization starting |
+| `Model loaded successfully` | info | Model ready for inference |
+| `CUDA out of memory` | error | GPU memory exhaustion |
+| `torch.cuda.OutOfMemoryError` | error | GPU OOM during inference |
+| `KV cache` | info/warn | Memory allocation for context |
+| `Request timed out` | warn | Inference exceeded timeout |
+| `AsyncEngineDeadError` | error | vLLM engine crashed |
+| `ValueError` | error | Invalid input/configuration |
+
+**Required Promtail Labels for Inference Logs:**
+- `namespace`: `ai-models` or inference namespace
+- `model`: Model deployment name
+- `pod`: Pod name for instance identification
+- `container`: `vllm` or inference container name
+
 ## Design Decisions
 
 ### Decision 1: Loki vs ELK vs CloudWatch
@@ -153,6 +186,57 @@ Update the existing collector to:
 | Development | 7 days | 14 days | 30 days |
 | Production | 14 days | 30 days | 90 days |
 
+## Log Field Schema
+
+All platform services MUST output structured JSON logs with consistent fields to enable automated debugging and correlation.
+
+### Required Fields (Always Present)
+
+| Field | Type | Description | Example |
+|-------|------|-------------|---------|
+| `level` | string | Log level | `debug`, `info`, `warn`, `error` |
+| `ts` | string | ISO8601 timestamp | `2024-01-15T10:30:00.123Z` |
+| `msg` | string | Human-readable message | `request completed` |
+| `service` | string | Service name | `api-router-service` |
+
+### Contextual Fields (Present When Applicable)
+
+| Field | Type | When Present | Description |
+|-------|------|--------------|-------------|
+| `request_id` | string | HTTP requests | Unique request correlation ID |
+| `trace_id` | string | Traced requests | OpenTelemetry trace ID |
+| `span_id` | string | Traced requests | OpenTelemetry span ID |
+| `method` | string | HTTP requests | HTTP method |
+| `path` | string | HTTP requests | Request path |
+| `status` | int | Request completion | HTTP response status |
+| `duration_ms` | float | Request completion | Request duration in milliseconds |
+| `error` | string | On errors | Error message |
+| `stack` | string | On panics/exceptions | Stack trace |
+| `user_id` | string | Authenticated requests | User identifier |
+| `org_id` | string | Authenticated requests | Organization identifier |
+
+### Inference Backend Fields (vLLM/Model Serving)
+
+| Field | Type | When Present | Description |
+|-------|------|--------------|-------------|
+| `model` | string | Model operations | Model name/ID |
+| `model_version` | string | Model operations | Model version |
+| `gpu_id` | int | GPU operations | GPU device ID |
+| `gpu_memory_used_mb` | int | GPU operations | GPU memory usage |
+| `tokens_in` | int | Inference requests | Input token count |
+| `tokens_out` | int | Inference requests | Output token count |
+| `inference_time_ms` | float | Inference completion | Model inference time |
+| `queue_time_ms` | float | Inference completion | Time spent in queue |
+
+### Error Context Fields (On 4xx/5xx Responses)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `error_code` | string | Application error code |
+| `error_type` | string | Error classification |
+| `request_body_sample` | string | First 1KB of request body (redacted) |
+| `response_body_sample` | string | First 1KB of response body |
+
 ## Success Criteria
 
 1. **Log Search**: Can search logs across all services for the past 14 days
@@ -160,6 +244,7 @@ Update the existing collector to:
 3. **Error Alerting**: Production errors trigger notifications within 5 minutes
 4. **Debug Workflow**: Can reproduce and debug an issue reported by a user within 1 hour
 5. **No Log Loss**: Logs persist through pod restarts and deployments
+6. **Inference Visibility**: Can query vLLM logs for model loading, inference errors, and GPU issues
 
 ## Risks and Mitigations
 
