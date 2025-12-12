@@ -1106,10 +1106,13 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		// Use vLLM image - v0.10.2 has native support for GPT-OSS and other modern architectures
 		containerImage := "vllm/vllm-openai:v0.10.2"
 
+		// Use the HuggingFace model ID as the served name so vLLM accepts requests
+		// with the full HF ID (e.g., "unsloth/gpt-oss-20b"). This allows multiple
+		// models with the same base name but different sources to coexist.
 		isvc, err = kserve.NewInferenceServiceBuilder(aiModel.Name, aiModel.Namespace).
 			WithContainerImage(containerImage).
 			WithModelID(aiModel.Spec.ModelID).
-			WithServedName(aiModel.Spec.ModelName).
+			WithServedName(aiModel.Spec.ModelID).
 			WithScaling(minReplicas, maxReplicas).
 			WithResources(resources).
 			WithTolerations(tolerations).
@@ -1124,10 +1127,16 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 	} else {
 		// Build the InferenceService using KServe native model serving
 		// This leverages KServe's storage initializer to download from S3
+		// Use the HuggingFace model ID as the served name to allow coexistence
+		// of models with the same base name from different sources.
+		servedName := aiModel.Spec.ModelID
+		if servedName == "" {
+			servedName = aiModel.Spec.ModelName // Fallback for legacy models
+		}
 		isvc, err = kserve.NewInferenceServiceBuilder(aiModel.Name, aiModel.Namespace).
 			WithStorageUri(storageUri).
 			WithModelFormat(modelFormat).
-			WithServedName(aiModel.Spec.ModelName).
+			WithServedName(servedName).
 			WithRuntime(runtimeName).
 			WithScaling(minReplicas, maxReplicas).
 			WithResources(resources).
