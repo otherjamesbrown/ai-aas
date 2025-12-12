@@ -1,5 +1,10 @@
 # KServe Management Guide
 
+---
+last_updated: 2025-12-12
+document_type: guide
+---
+
 Quick reference for managing KServe InferenceServices on the AI-AAS platform.
 
 ## Table of Contents
@@ -255,6 +260,7 @@ spec:
 - **Don't use public service URLs** internally (adds unnecessary latency via Istio)
 - **Don't ignore resource limits** (GPU OOM kills are hard to debug)
 - **Don't commit secrets** to git (use Sealed Secrets for HF tokens)
+- **Don't use startupProbe** - KServe/Knative ignores it (see Health Probes section below)
 
 ### Resource Guidelines
 
@@ -271,6 +277,50 @@ For models with slow cold starts (>30s):
 2. Implement model caching with persistent volumes
 3. Use smaller quantized models (int8, int4)
 4. Pre-download models to nodes
+
+### Health Probes for Large Models
+
+**CRITICAL LIMITATION**: KServe/Knative does NOT support `startupProbe`. Any startupProbe defined in the InferenceService spec will be **silently ignored**.
+
+**Problem**: Large models (20B+ parameters) can take 5-10 minutes to initialize. Without startupProbe support, the liveness probe starts immediately and may kill the pod during initialization.
+
+**Solution**: Use lenient readinessProbe and livenessProbe settings:
+
+```yaml
+spec:
+  predictor:
+    containers:
+      - name: kserve-container
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60  # Delay before first check
+          periodSeconds: 10        # Check every 10 seconds
+          failureThreshold: 90     # Total: 60s + 90*10s = 16 minutes
+          timeoutSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 600  # Don't check for first 10 minutes
+          periodSeconds: 60         # Check every minute
+          failureThreshold: 10      # Allow 10 minutes of downtime
+          timeoutSeconds: 5
+```
+
+**Rationale**:
+- **readinessProbe**: Prevents traffic routing until model is loaded (can take 16 min)
+- **livenessProbe**: Avoids killing pod during initialization (10 min grace + 10 min tolerance)
+- **Without proper settings**: Pod enters crash loop, restarting repeatedly
+
+**Model Load Time Estimates** (GPU memory loading):
+- 7B params: 30-60 seconds
+- 13B params: 1-2 minutes
+- 20B params: 5-10 minutes
+- 70B+ params: 10-20 minutes
+
+Adjust `initialDelaySeconds` and `failureThreshold` based on observed model load times.
 
 ---
 
