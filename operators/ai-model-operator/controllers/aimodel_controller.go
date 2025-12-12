@@ -262,12 +262,28 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, nil
 	}
 
-	// 1. Reconcile Model Artifact Downloader Job (if not already successful)
-	// TODO: Implement actual downloader job creation and status checking
-	// For now, simulate success.
-	jobName := fmt.Sprintf("%s-downloader", aiModel.Name)
-	foundJob := &batchv1.Job{}
-	err := r.Get(ctx, client.ObjectKey{Name: jobName, Namespace: aiModel.Namespace}, foundJob)
+	// 1. Reconcile Model Artifact Downloader Job (only for S3-based deployments)
+	// For trustRemoteCode models, skip the downloader as they load directly from HuggingFace
+	if aiModel.Spec.TrustRemoteCode && aiModel.Spec.ModelID != "" {
+		// Skip downloader job - model will be loaded directly from HuggingFace
+		log.Info("Skipping downloader job for trustRemoteCode model",
+			"name", aiModel.Name, "modelID", aiModel.Spec.ModelID)
+		// Set phase to Deploying to proceed to InferenceService creation
+		if aiModel.Status.Phase != aimodelv1alpha1.AIModelPhaseDeploying &&
+			aiModel.Status.Phase != aimodelv1alpha1.AIModelPhaseReady {
+			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
+			if err := r.Status().Update(ctx, aiModel); err != nil {
+				log.Error(err, "unable to update AIModel status to Deploying")
+				reconcileTotal.WithLabelValues("error").Inc()
+				return ctrl.Result{}, err
+			}
+		}
+		// Fall through to InferenceService creation
+	} else {
+		// S3-based deployment - proceed with downloader job logic
+		jobName := fmt.Sprintf("%s-downloader", aiModel.Name)
+		foundJob := &batchv1.Job{}
+		err := r.Get(ctx, client.ObjectKey{Name: jobName, Namespace: aiModel.Namespace}, foundJob)
 	if err != nil && client.IgnoreNotFound(err) != nil {
 		log.Error(err, "Failed to get Job", "Job.Name", jobName)
 		reconcileTotal.WithLabelValues("error").Inc()
@@ -416,6 +432,7 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			return ctrl.Result{Requeue: true}, nil // Requeue to wait for Job completion
 		}
 	}
+	} // End of S3-based deployment else block
 
 
 

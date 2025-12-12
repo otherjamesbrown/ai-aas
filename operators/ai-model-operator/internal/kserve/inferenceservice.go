@@ -2,6 +2,7 @@ package kserve
 
 import (
 	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -75,6 +76,15 @@ func NewInferenceServiceBuilder(name, namespace string) *InferenceServiceBuilder
 		runtimeArgs: []string{}, // Runtime args are now set per-model in the controller
 		environment: "development",
 	}
+}
+
+// sanitizeLabelValue converts a string to be valid as a Kubernetes label value.
+// Kubernetes labels must be alphanumeric with '-', '_', or '.', starting and ending
+// with an alphanumeric character. This function replaces "/" with "-" to handle
+// HuggingFace model IDs like "unsloth/gpt-oss-20b".
+func sanitizeLabelValue(value string) string {
+	// Replace "/" with "-" to handle HF model IDs
+	return strings.ReplaceAll(value, "/", "-")
 }
 
 // WithStorageUri sets the S3 storage URI for the model
@@ -181,7 +191,7 @@ func (b *InferenceServiceBuilder) Build() (*unstructured.Unstructured, error) {
 	// Build labels
 	labels := map[string]interface{}{
 		"app":         "vllm-inference",
-		"model":       b.servedName,
+		"model":       sanitizeLabelValue(b.servedName),
 		"environment": b.environment,
 		"managed-by":  "ai-model-operator",
 	}
@@ -354,7 +364,7 @@ func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructu
 	// Build labels
 	labels := map[string]interface{}{
 		"app":         "vllm-inference",
-		"model":       b.servedName,
+		"model":       sanitizeLabelValue(b.servedName),
 		"environment": b.environment,
 		"managed-by":  "ai-model-operator",
 	}
