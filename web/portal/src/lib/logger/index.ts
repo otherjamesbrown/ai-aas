@@ -345,3 +345,40 @@ export const logger = new Logger();
 
 // Export for creating custom instances
 export { Logger };
+
+/**
+ * React hook for using the logger with automatic component context
+ *
+ * Usage:
+ * ```typescript
+ * import { useLogger } from '@/lib/logger';
+ *
+ * function MyComponent() {
+ *   const logger = useLogger('MyComponent');
+ *
+ *   useEffect(() => {
+ *     logger.info('Component mounted');
+ *   }, []);
+ *
+ *   const handleClick = () => {
+ *     logger.debug('Button clicked', { action: 'click', target: 'submitButton' });
+ *   };
+ *
+ *   return <button onClick={handleClick}>Submit</button>;
+ * }
+ * ```
+ *
+ * @param component - Component name or additional context
+ * @returns Logger instance with component context
+ */
+export function useLogger(component?: string | LogContext): Logger {
+  // Import React hook here to avoid requiring React in environments where it's not needed
+  const { useMemo } = require('react');
+
+  return useMemo(() => {
+    const context: LogContext =
+      typeof component === 'string' ? { component } : component || {};
+
+    return logger.withContext(context);
+  }, [component]);
+}

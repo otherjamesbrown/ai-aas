@@ -6,6 +6,7 @@ import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { ZoneContextManager } from '@opentelemetry/context-zone';
 import { trace, Span, SpanStatusCode } from '@opentelemetry/api';
+import { logger } from '@/lib/logger';
 
 interface TelemetryContextValue {
   startSpan: <T>(name: string, fn: (span: Span) => Promise<T>) => Promise<T>;
@@ -40,7 +41,7 @@ export function TelemetryProvider({
 
   useEffect(() => {
     if (!enabled || !endpoint) {
-      console.warn('OpenTelemetry disabled: endpoint not configured');
+      logger.warn('OpenTelemetry disabled: endpoint not configured', { component: 'TelemetryProvider', serviceName });
       setIsInitialized(true);
       return;
     }
@@ -85,9 +86,9 @@ export function TelemetryProvider({
       setTracerProvider(provider);
       setIsInitialized(true);
 
-      console.log(`OpenTelemetry initialized: ${serviceName}@${serviceVersion} -> ${endpoint}`);
+      logger.info('OpenTelemetry initialized', { component: 'TelemetryProvider', serviceName, serviceVersion, endpoint });
     } catch (error) {
-      console.error('Failed to initialize OpenTelemetry:', error);
+      logger.error('Failed to initialize OpenTelemetry', { component: 'TelemetryProvider', serviceName, endpoint }, error instanceof Error ? error : undefined);
       setIsInitialized(true); // Still mark as initialized to prevent blocking
     }
 
@@ -95,7 +96,7 @@ export function TelemetryProvider({
     return () => {
       if (tracerProvider) {
         tracerProvider.shutdown().catch((error) => {
-          console.error('Telemetry shutdown error:', error);
+          logger.error('Telemetry shutdown error', { component: 'TelemetryProvider', serviceName }, error instanceof Error ? error : undefined);
         });
       }
     };

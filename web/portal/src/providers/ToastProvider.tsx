@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { Toast } from '@/components/Toast';
+import { logger } from '@/lib/logger';
 
 interface ToastContextValue {
   showToast: (toast: Omit<Toast, 'id'>) => void;
@@ -21,7 +22,7 @@ export function ToastProvider({ children }: ToastProviderProps) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const showToast = useCallback((toast: Omit<Toast, 'id'>) => {
-    console.log('ToastProvider.showToast called:', toast);
+    logger.debug('Toast notification triggered', { component: 'ToastProvider', type: toast.type, title: toast.title });
     const id = crypto.randomUUID();
     const newToast: Toast = {
       ...toast,
@@ -29,10 +30,10 @@ export function ToastProvider({ children }: ToastProviderProps) {
       duration: toast.duration ?? 5000, // Default 5 seconds
     };
 
-    console.log('Adding toast to state:', newToast);
+    logger.debug('Adding toast to state', { component: 'ToastProvider', toastId: id });
     setToasts((prev) => {
       const updated = [...prev, newToast];
-      console.log('Toast state updated, total toasts:', updated.length);
+      logger.debug('Toast state updated', { component: 'ToastProvider', totalToasts: updated.length });
       return updated;
     });
   }, []);
@@ -55,12 +56,14 @@ interface ToastContainerProps {
 }
 
 function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
-  console.log('ToastContainer rendering with toasts:', toasts.length);
-  
+  if (toasts.length > 0) {
+    logger.debug('Rendering toast container', { component: 'ToastContainer', toastCount: toasts.length });
+  }
+
   if (toasts.length === 0) {
     return null;
   }
-  
+
   return (
     <div
       className="fixed top-4 right-4 z-50 flex flex-col space-y-2 pointer-events-none"
@@ -69,7 +72,6 @@ function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
       style={{ zIndex: 9999 }} // Ensure it's on top
     >
       {toasts.map((toast) => {
-        console.log('Rendering toast:', toast.id, toast.type, toast.title);
         return <Toast key={toast.id} toast={toast} onDismiss={onDismiss} />;
       })}
     </div>
@@ -94,12 +96,11 @@ export function useToast() {
 
   const showError = useCallback(
     (title: string, message?: string, duration?: number) => {
-      console.log('showError called:', { title, message, duration: duration ?? 7000 });
+      logger.debug('Error toast requested', { component: 'useToast', title, message });
       try {
         context.showToast({ type: 'error', title, message, duration: duration ?? 7000 }); // Errors stay longer
-        console.log('showToast called successfully, toast should be visible');
       } catch (error) {
-        console.error('Error in showError/showToast:', error);
+        logger.error('Failed to show error toast', { component: 'useToast', title }, error instanceof Error ? error : undefined);
         throw error;
       }
     },

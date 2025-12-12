@@ -1,5 +1,6 @@
 import { usageApi } from '../api';
 import type { UsageFilters } from '../types';
+import { logger } from '@/lib/logger';
 
 /**
  * Export usage data as CSV
@@ -28,7 +29,7 @@ export async function exportUsageCsv(filters: UsageFilters = {}): Promise<void> 
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
   } catch (error) {
-    console.error('CSV export failed:', error);
+    logger.error('CSV export failed', { component: 'exportUsageCsv', filters }, error instanceof Error ? error : undefined);
     throw error;
   }
 }
