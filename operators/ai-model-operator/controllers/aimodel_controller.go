@@ -1068,23 +1068,54 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		BlockOwnerDeletion: func() *bool { b := true; return &b }(),
 	}
 
-	// Build the InferenceService using KServe native model serving
-	// This leverages KServe's storage initializer to download from S3
-	isvc, err := kserve.NewInferenceServiceBuilder(aiModel.Name, aiModel.Namespace).
-		WithStorageUri(storageUri).
-		WithModelFormat(modelFormat).
-		WithServedName(aiModel.Spec.ModelName).
-		WithRuntime(runtimeName).
-		WithScaling(minReplicas, maxReplicas).
-		WithResources(resources).
-		WithTolerations(tolerations).
-		WithNodeSelector(aiModel.Spec.NodeSelector).
-		WithRuntimeArgs(runtimeArgs).
-		WithRuntimeEnv(runtimeEnv).
-		WithOwnerReference(ownerRef).
-		Build()
-	if err != nil {
-		return fmt.Errorf("failed to build InferenceService: %w", err)
+	var isvc *unstructured.Unstructured
+	var err error
+
+	// For models with trust_remote_code, use container-based deployment
+	// that loads directly from HuggingFace instead of S3. This is required
+	// because vLLM needs to download and execute custom Python model code
+	// from the HuggingFace repo, which isn't preserved in S3 storage.
+	if aiModel.Spec.TrustRemoteCode && aiModel.Spec.ModelID != "" {
+		log.Info("Using container-based deployment for trust_remote_code model",
+			"name", aiModel.Name, "modelID", aiModel.Spec.ModelID)
+
+		// Use vLLM image - default to a stable version if not specified
+		containerImage := "vllm/vllm-openai:v0.6.4"
+
+		isvc, err = kserve.NewInferenceServiceBuilder(aiModel.Name, aiModel.Namespace).
+			WithContainerImage(containerImage).
+			WithModelID(aiModel.Spec.ModelID).
+			WithServedName(aiModel.Spec.ModelName).
+			WithScaling(minReplicas, maxReplicas).
+			WithResources(resources).
+			WithTolerations(tolerations).
+			WithNodeSelector(aiModel.Spec.NodeSelector).
+			WithRuntimeArgs(runtimeArgs).
+			WithRuntimeEnv(runtimeEnv).
+			WithOwnerReference(ownerRef).
+			BuildContainerBased()
+		if err != nil {
+			return fmt.Errorf("failed to build container-based InferenceService: %w", err)
+		}
+	} else {
+		// Build the InferenceService using KServe native model serving
+		// This leverages KServe's storage initializer to download from S3
+		isvc, err = kserve.NewInferenceServiceBuilder(aiModel.Name, aiModel.Namespace).
+			WithStorageUri(storageUri).
+			WithModelFormat(modelFormat).
+			WithServedName(aiModel.Spec.ModelName).
+			WithRuntime(runtimeName).
+			WithScaling(minReplicas, maxReplicas).
+			WithResources(resources).
+			WithTolerations(tolerations).
+			WithNodeSelector(aiModel.Spec.NodeSelector).
+			WithRuntimeArgs(runtimeArgs).
+			WithRuntimeEnv(runtimeEnv).
+			WithOwnerReference(ownerRef).
+			Build()
+		if err != nil {
+			return fmt.Errorf("failed to build InferenceService: %w", err)
+		}
 	}
 
 	// Check if InferenceService already exists

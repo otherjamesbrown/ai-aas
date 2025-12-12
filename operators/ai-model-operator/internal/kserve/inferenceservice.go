@@ -34,6 +34,9 @@ type InferenceServiceBuilder struct {
 	runtimeEnv   []corev1.EnvVar
 	ownerRef     *metav1.OwnerReference
 	environment  string
+	// Container-based deployment fields (for trust_remote_code models)
+	containerImage string
+	modelID        string // HuggingFace model ID for direct loading
 }
 
 // NewInferenceServiceBuilder creates a new InferenceServiceBuilder
@@ -144,6 +147,18 @@ func (b *InferenceServiceBuilder) WithOwnerReference(ref *metav1.OwnerReference)
 // WithEnvironment sets the environment label (development, staging, production)
 func (b *InferenceServiceBuilder) WithEnvironment(env string) *InferenceServiceBuilder {
 	b.environment = env
+	return b
+}
+
+// WithContainerImage sets the container image for container-based deployment
+func (b *InferenceServiceBuilder) WithContainerImage(image string) *InferenceServiceBuilder {
+	b.containerImage = image
+	return b
+}
+
+// WithModelID sets the HuggingFace model ID for direct loading
+func (b *InferenceServiceBuilder) WithModelID(modelID string) *InferenceServiceBuilder {
+	b.modelID = modelID
 	return b
 }
 
@@ -320,4 +335,175 @@ func convertValueFrom(source *corev1.EnvVarSource) map[string]interface{} {
 	}
 
 	return result
+}
+
+// BuildContainerBased constructs an InferenceService that uses a custom container
+// instead of KServe's native model serving. This is required for models that need
+// trust_remote_code because vLLM must load directly from HuggingFace to execute
+// custom model Python code. The native model serving downloads to /mnt/models
+// which doesn't preserve the HuggingFace repo metadata needed for trust_remote_code.
+func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructured, error) {
+	// Validate required fields
+	if b.containerImage == "" {
+		return nil, fmt.Errorf("containerImage is required for container-based deployment")
+	}
+	if b.modelID == "" {
+		return nil, fmt.Errorf("modelID is required for container-based deployment")
+	}
+
+	// Build labels
+	labels := map[string]interface{}{
+		"app":         "vllm-inference",
+		"model":       b.servedName,
+		"environment": b.environment,
+		"managed-by":  "ai-model-operator",
+	}
+
+	// Build annotations with extended timeout for model loading
+	annotations := map[string]interface{}{
+		"serving.kserve.io/deploymentMode":      "Serverless",
+		"serving.knative.dev/progress-deadline": "900s", // 15 min for large model download
+	}
+
+	// Build environment variables
+	env := []interface{}{
+		map[string]interface{}{
+			"name":  "HF_HOME",
+			"value": "/tmp/hf_home",
+		},
+	}
+	for _, e := range b.runtimeEnv {
+		envVar := map[string]interface{}{
+			"name": e.Name,
+		}
+		if e.Value != "" {
+			envVar["value"] = e.Value
+		}
+		if e.ValueFrom != nil {
+			envVar["valueFrom"] = convertValueFrom(e.ValueFrom)
+		}
+		env = append(env, envVar)
+	}
+
+	// Build resources
+	resources := map[string]interface{}{
+		"requests": convertResourceList(b.resources.Requests),
+		"limits":   convertResourceList(b.resources.Limits),
+	}
+
+	// Build tolerations
+	tolerations := make([]interface{}, 0, len(b.tolerations))
+	for _, t := range b.tolerations {
+		toleration := map[string]interface{}{
+			"key":      t.Key,
+			"operator": string(t.Operator),
+			"effect":   string(t.Effect),
+		}
+		if t.Value != "" {
+			toleration["value"] = t.Value
+		}
+		tolerations = append(tolerations, toleration)
+	}
+
+	// Build args: prepend --model=<modelID> to ensure it's used
+	// Also add --served-model-name for API compatibility
+	args := []interface{}{
+		fmt.Sprintf("--model=%s", b.modelID),
+	}
+	if b.servedName != "" {
+		args = append(args, fmt.Sprintf("--served-model-name=%s", b.servedName))
+	}
+	for _, arg := range b.runtimeArgs {
+		args = append(args, arg)
+	}
+
+	// Build container spec
+	container := map[string]interface{}{
+		"name":      "kserve-container",
+		"image":     b.containerImage,
+		"args":      args,
+		"env":       env,
+		"resources": resources,
+		"ports": []interface{}{
+			map[string]interface{}{
+				"containerPort": int64(8000),
+				"name":          "http1",
+				"protocol":      "TCP",
+			},
+		},
+		// Startup probe with extended timeout for model download
+		"startupProbe": map[string]interface{}{
+			"httpGet": map[string]interface{}{
+				"path": "/health",
+				"port": int64(8000),
+			},
+			"initialDelaySeconds": int64(30),
+			"periodSeconds":       int64(10),
+			"failureThreshold":    int64(90), // 30s + 90*10s = 15 min max
+			"timeoutSeconds":      int64(5),
+		},
+		"readinessProbe": map[string]interface{}{
+			"httpGet": map[string]interface{}{
+				"path": "/health",
+				"port": int64(8000),
+			},
+			"periodSeconds":    int64(10),
+			"failureThreshold": int64(3),
+			"timeoutSeconds":   int64(5),
+		},
+		"livenessProbe": map[string]interface{}{
+			"httpGet": map[string]interface{}{
+				"path": "/health",
+				"port": int64(8000),
+			},
+			"periodSeconds":    int64(30),
+			"failureThreshold": int64(3),
+			"timeoutSeconds":   int64(5),
+		},
+	}
+
+	// Build predictor spec using containers (not native model serving)
+	predictor := map[string]interface{}{
+		"minReplicas": int64(b.minReplicas),
+		"maxReplicas": int64(b.maxReplicas),
+		"containers":  []interface{}{container},
+	}
+
+	// Add tolerations if specified
+	if len(tolerations) > 0 {
+		predictor["tolerations"] = tolerations
+	}
+
+	// Add node selector if provided
+	if len(b.nodeSelector) > 0 {
+		nodeSelector := make(map[string]interface{})
+		for k, v := range b.nodeSelector {
+			nodeSelector[k] = v
+		}
+		predictor["nodeSelector"] = nodeSelector
+	}
+
+	// Build the unstructured object
+	obj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": InferenceServiceGVK.GroupVersion().String(),
+			"kind":       InferenceServiceGVK.Kind,
+			"metadata": map[string]interface{}{
+				"name":        b.name,
+				"namespace":   b.namespace,
+				"labels":      labels,
+				"annotations": annotations,
+			},
+			"spec": map[string]interface{}{
+				"predictor": predictor,
+			},
+		},
+	}
+
+	// Add owner reference if provided
+	if b.ownerRef != nil {
+		obj.SetOwnerReferences([]metav1.OwnerReference{*b.ownerRef})
+	}
+
+	return obj, nil
 }

@@ -300,7 +300,7 @@ kubectl logs -l serving.kserve.io/inferenceservice=gpt2-quickstart
 
 ## Next Steps
 
-- Read the [full operator guide](../../docs/platform/ai-model-operator-guide.md) for detailed configuration
+- Read the [full operator guide](../../docs/operators/ai-model-operator-guide.md) for detailed configuration
 - Explore the [PRD](./spec.md) for architecture and design decisions
 - Check the [operator README](../../operators/ai-model-operator/README.md) for development
 

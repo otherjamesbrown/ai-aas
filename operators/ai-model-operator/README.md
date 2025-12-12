@@ -39,7 +39,7 @@ AIModel CR → Operator → [Downloader Job] → S3 Storage
 
 See the [Quickstart Guide](../../specs/023-model-gitops/quickstart.md) for a 5-minute walkthrough.
 
-For detailed usage, see the [Operator Guide](../../docs/platform/ai-model-operator-guide.md).
+For detailed usage, see the [Operator Guide](../../docs/operators/ai-model-operator-guide.md).
 
 ## Development
 
@@ -363,7 +363,7 @@ kubectl get validatingwebhookconfigurations inferenceservice.serving.kserve.io
 ## Documentation
 
 - [Quickstart Guide](../../specs/023-model-gitops/quickstart.md) - 5-minute getting started
-- [Operator Guide](../../docs/platform/ai-model-operator-guide.md) - Detailed usage guide
+- [Operator Guide](../../docs/operators/ai-model-operator-guide.md) - Detailed usage guide
 - [PRD](../../specs/023-model-gitops/spec.md) - Product requirements and architecture
 
 ## License

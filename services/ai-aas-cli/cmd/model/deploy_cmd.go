@@ -68,23 +68,27 @@ Workflow:
 // newDeployCreateCommand creates the deploy create subcommand
 func newDeployCreateCommand() *cobra.Command {
 	var (
-		environment    string
-		engineConfig   string
-		gpuCount       int
-		memoryGB       int
-		minReplicas    int
-		maxReplicas    int
-		revision       string
-		dryRun         bool
-		skipValidation bool
-		wait           bool
-		timeout        time.Duration
+		environment     string
+		engineConfig    string
+		gpuCount        int
+		memoryGB        int
+		minReplicas     int
+		maxReplicas     int
+		revision        string
+		dryRun          bool
+		skipValidation  bool
+		wait            bool
+		timeout         time.Duration
+		trustRemoteCode bool
 	)
 
 	cmd := &cobra.Command{
 		Use:   "create <model-name>",
 		Short: "Deploy a model to Kubernetes",
-		Long: `Deploy a model to Kubernetes using KServe InferenceService.
+		Long: `Deploy a model to Kubernetes using AIModel custom resource.
+
+The AIModel CR is managed by the ai-model-operator, which creates the underlying
+KServe InferenceService and syncs deployment status to the Admin API.
 
 The model can be loaded from the object storage cache (faster) or directly
 from HuggingFace. GPU and memory resources are allocated based on flags
@@ -102,6 +106,9 @@ Examples:
 
   # Deploy with auto-scaling
   ai-aas model deploy create mistral-7b -e production --min-replicas 2 --max-replicas 5
+
+  # Deploy with trust remote code (for custom model architectures)
+  ai-aas model deploy create mistral-7b -e development --trust-remote-code
 
   # Preview deployment YAML
   ai-aas model deploy create mistral-7b -e development --dry-run
@@ -156,16 +163,11 @@ See Also:
 				revision = "main"
 			}
 
-			// Build storage URI
-			var storageURI string
-			if s3Bucket != "" {
-				storageURI = fmt.Sprintf("s3://%s/models/%s/%s/", s3Bucket, modelName, revision)
-			} else {
-				storageURI = fmt.Sprintf("hf://%s", model.HFModelID)
-			}
+			// Build S3 key for model storage
+			s3Key := fmt.Sprintf("models/%s/%s/", modelName, revision)
 
 			// Determine runtime and resource settings
-			runtime := "vllm-runtime"
+			runtime := "vllm"
 			effectiveGPU := gpuCount
 			effectiveMemory := memoryGB
 			effectiveMinReplicas := minReplicas
@@ -181,8 +183,8 @@ See Also:
 					return fmt.Errorf("engine config not found: %s\n\nTo list available configs:\n  ai-aas engine config list", engineConfig)
 				}
 
-				// Use runtime based on engine name (e.g., vllm -> vllm-runtime)
-				runtime = ecfg.EngineName + "-runtime"
+				// Use engine name directly (e.g., vllm)
+				runtime = ecfg.EngineName
 				configName = ecfg.Name
 
 				// Apply config values unless explicitly overridden by flags
@@ -203,22 +205,25 @@ See Also:
 					ecfg.Name, ecfg.EngineName, effectiveGPU, effectiveMemory)
 			}
 
-			// Create InferenceService config
-			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
+			// Create AIModel config
+			aimodelName := fmt.Sprintf("%s-%s", modelName, environment)
 			namespace := environment
 
-			isvcCfg := kubernetes.InferenceServiceConfig{
-				Name:        isvcName,
-				Namespace:   namespace,
-				ModelName:   modelName,
-				StorageURI:  storageURI,
-				HFModelID:   model.HFModelID,
-				Runtime:     runtime,
-				GPUCount:    effectiveGPU,
-				MemoryGB:    effectiveMemory,
-				MinReplicas: effectiveMinReplicas,
-				MaxReplicas: effectiveMaxReplicas,
-				Environment: environment,
+			aimodelCfg := kubernetes.AIModelConfig{
+				Name:            aimodelName,
+				Namespace:       namespace,
+				ModelName:       modelName,
+				ModelID:         model.HFModelID,
+				S3Bucket:        s3Bucket,
+				S3Key:           s3Key,
+				Runtime:         runtime,
+				Enabled:         true,
+				MinReplicas:     effectiveMinReplicas,
+				MaxReplicas:     effectiveMaxReplicas,
+				GPUCount:        effectiveGPU,
+				MemoryGB:        effectiveMemory,
+				TrustRemoteCode: trustRemoteCode,
+				Environment:     environment,
 				Labels: map[string]string{
 					"ai-aas.io/model":       modelName,
 					"ai-aas.io/revision":    revision,
@@ -231,24 +236,27 @@ See Also:
 
 			// Add engine config label if specified
 			if configName != "" {
-				isvcCfg.Labels["ai-aas.io/engine-config"] = configName
+				aimodelCfg.Labels["ai-aas.io/engine-config"] = configName
 			}
 
 			// Show configuration
 			fmt.Printf("\nDeployment Configuration:\n")
 			fmt.Printf("  Model: %s (%s)\n", modelName, model.HFModelID)
 			fmt.Printf("  Environment: %s\n", environment)
-			fmt.Printf("  InferenceService: %s/%s\n", namespace, isvcName)
-			fmt.Printf("  Storage: %s\n", storageURI)
+			fmt.Printf("  AIModel CR: %s/%s\n", namespace, aimodelName)
+			fmt.Printf("  S3 Location: s3://%s/%s\n", s3Bucket, s3Key)
 			fmt.Printf("  Runtime: %s\n", runtime)
 			if configName != "" {
 				fmt.Printf("  Engine Config: %s\n", configName)
 			}
 			fmt.Printf("  Resources: %d GPU(s), %dGB memory\n", effectiveGPU, effectiveMemory)
 			fmt.Printf("  Replicas: %d-%d\n", effectiveMinReplicas, effectiveMaxReplicas)
+			if trustRemoteCode {
+				fmt.Printf("  Trust Remote Code: enabled\n")
+			}
 
 			if dryRun {
-				yamlBytes, err := generateInferenceServiceYAML(isvcCfg)
+				yamlBytes, err := generateAIModelYAML(aimodelCfg)
 				if err != nil {
 					return fmt.Errorf("generate YAML: %w", err)
 				}
@@ -296,11 +304,14 @@ See Also:
 				return fmt.Errorf("cannot connect to cluster: %w", err)
 			}
 
-			// Check if already deployed
-			existing, err := k8sClient.GetInferenceService(ctx, isvcName, namespace)
+			// Check if already deployed (check for AIModel first, then InferenceService)
+			existing, err := k8sClient.GetAIModel(ctx, aimodelName, namespace)
 			if err == nil && existing != nil {
-				fmt.Printf("\nInferenceService %s already exists.\n", isvcName)
-				fmt.Printf("  Status: Ready=%v, URL=%s\n", existing.Ready, existing.URL)
+				fmt.Printf("\nAIModel %s already exists.\n", aimodelName)
+				fmt.Printf("  Phase: %s\n", existing.Phase)
+				if existing.InferenceEndpoint != "" {
+					fmt.Printf("  Endpoint: %s\n", existing.InferenceEndpoint)
+				}
 				fmt.Println("\nTo update, delete first:")
 				fmt.Printf("  ai-aas model deploy delete %s -e %s\n", modelName, environment)
 				fmt.Println("\nOr restart:")
@@ -308,17 +319,19 @@ See Also:
 				return nil
 			}
 
-			// Create InferenceService
-			fmt.Println("\nCreating InferenceService...")
-			if err := k8sClient.CreateInferenceService(ctx, isvcCfg); err != nil {
-				return fmt.Errorf("create inferenceservice: %w", err)
+			// Create AIModel CR
+			fmt.Println("\nCreating AIModel custom resource...")
+			fmt.Println("The ai-model-operator will create the InferenceService and sync status to Admin API.")
+			if err := k8sClient.CreateAIModel(ctx, aimodelCfg); err != nil {
+				return fmt.Errorf("create aimodel: %w", err)
 			}
 
-			fmt.Printf("Created InferenceService: %s/%s\n", namespace, isvcName)
+			fmt.Printf("Created AIModel: %s/%s\n", namespace, aimodelName)
 
 			// Wait for ready if requested
 			if wait {
 				fmt.Println("\nWaiting for deployment to be ready...")
+				fmt.Println("(The operator will download the model, create InferenceService, and wait for pods)")
 				spinner := output.NewSpinner("Deploying")
 				spinner.Start()
 
@@ -327,17 +340,21 @@ See Also:
 					PollInterval: 5 * time.Second,
 				}
 
-				err := k8sClient.WaitForReady(ctx, isvcName, namespace, waitOpts)
+				err := k8sClient.WaitForAIModelReady(ctx, aimodelName, namespace, waitOpts)
 				spinner.Stop()
 
 				if err != nil {
 					return fmt.Errorf("deployment failed: %w\n\nTo check logs:\n  ai-aas model troubleshoot logs %s -e %s", err, modelName, environment)
 				}
 
-				status, _ := k8sClient.GetInferenceService(ctx, isvcName, namespace)
+				status, _ := k8sClient.GetAIModel(ctx, aimodelName, namespace)
 				if status != nil {
 					fmt.Printf("\nDeployment ready!\n")
-					fmt.Printf("  URL: %s\n", status.URL)
+					fmt.Printf("  Phase: %s\n", status.Phase)
+					if status.InferenceEndpoint != "" {
+						fmt.Printf("  Endpoint: %s\n", status.InferenceEndpoint)
+					}
+					fmt.Printf("  Ready Replicas: %d\n", status.ReadyReplicas)
 				}
 			}
 
@@ -359,6 +376,7 @@ See Also:
 	cmd.Flags().BoolVar(&skipValidation, "skip-validation", false, "skip pre-deploy validation")
 	cmd.Flags().BoolVar(&wait, "wait", false, "wait for deployment to be ready")
 	cmd.Flags().DurationVar(&timeout, "timeout", 10*time.Minute, "timeout when waiting")
+	cmd.Flags().BoolVar(&trustRemoteCode, "trust-remote-code", false, "allow execution of custom model code (required for some models)")
 	_ = cmd.MarkFlagRequired("environment")
 
 	return cmd
@@ -377,7 +395,8 @@ func newDeployDeleteCommand() *cobra.Command {
 		Short: "Remove a model deployment",
 		Long: `Remove a model deployment from Kubernetes.
 
-This removes the InferenceService but preserves the cached model files.
+This removes the AIModel custom resource, which triggers the operator to
+clean up the InferenceService. Model cache files are preserved.
 
 Examples:
   # Remove deployment
@@ -399,7 +418,7 @@ See Also:
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
 
-			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
+			aimodelName := fmt.Sprintf("%s-%s", modelName, environment)
 			namespace := environment
 
 			kubeconfig := viper.GetString(fmt.Sprintf("environments.%s.kubeconfig", environment))
@@ -414,17 +433,56 @@ See Also:
 				return fmt.Errorf("create k8s client: %w", err)
 			}
 
-			status, err := k8sClient.GetInferenceService(ctx, isvcName, namespace)
+			// Try to get AIModel first
+			status, err := k8sClient.GetAIModel(ctx, aimodelName, namespace)
 			if err != nil {
-				fmt.Printf("Deployment %s not found in %s\n", isvcName, namespace)
+				// Fall back to checking for InferenceService (legacy deployments)
+				isvcStatus, isvcErr := k8sClient.GetInferenceService(ctx, aimodelName, namespace)
+				if isvcErr != nil {
+					fmt.Printf("Deployment %s not found in %s\n", aimodelName, namespace)
+					return nil
+				}
+				// Legacy InferenceService exists, delete it directly
+				fmt.Printf("Removing legacy InferenceService: %s/%s\n", namespace, aimodelName)
+				fmt.Printf("  Ready: %v\n", isvcStatus.Ready)
+				if isvcStatus.URL != "" {
+					fmt.Printf("  URL: %s\n", isvcStatus.URL)
+				}
+
+				if !force {
+					fmt.Print("\nAre you sure? [y/N]: ")
+					var response string
+					fmt.Scanln(&response)
+					if strings.ToLower(response) != "y" {
+						fmt.Println("Cancelled.")
+						return nil
+					}
+				}
+
+				fmt.Println("\nDeleting InferenceService...")
+				if err := k8sClient.DeleteInferenceService(ctx, aimodelName, namespace); err != nil {
+					return fmt.Errorf("delete inferenceservice: %w", err)
+				}
+
+				if wait {
+					fmt.Println("Waiting for deletion...")
+					if err := k8sClient.WaitForDelete(ctx, aimodelName, namespace, 5*time.Minute); err != nil {
+						return fmt.Errorf("wait for delete: %w", err)
+					}
+				}
+
+				fmt.Println()
+				cli.PrintDeploymentDeleted(modelName, environment)
 				return nil
 			}
 
-			fmt.Printf("Removing deployment: %s/%s\n", namespace, isvcName)
-			fmt.Printf("  Ready: %v\n", status.Ready)
-			if status.URL != "" {
-				fmt.Printf("  URL: %s\n", status.URL)
+			// AIModel found, delete it (operator will clean up InferenceService)
+			fmt.Printf("Removing AIModel: %s/%s\n", namespace, aimodelName)
+			fmt.Printf("  Phase: %s\n", status.Phase)
+			if status.InferenceEndpoint != "" {
+				fmt.Printf("  Endpoint: %s\n", status.InferenceEndpoint)
 			}
+			fmt.Printf("  Ready Replicas: %d\n", status.ReadyReplicas)
 
 			if !force {
 				fmt.Print("\nAre you sure? [y/N]: ")
@@ -436,20 +494,22 @@ See Also:
 				}
 			}
 
-			fmt.Println("\nDeleting InferenceService...")
-			if err := k8sClient.DeleteInferenceService(ctx, isvcName, namespace); err != nil {
-				return fmt.Errorf("delete inferenceservice: %w", err)
+			fmt.Println("\nDeleting AIModel...")
+			fmt.Println("The operator will automatically clean up the InferenceService.")
+			if err := k8sClient.DeleteAIModel(ctx, aimodelName, namespace); err != nil {
+				return fmt.Errorf("delete aimodel: %w", err)
 			}
 
 			if wait {
 				fmt.Println("Waiting for deletion...")
-				if err := k8sClient.WaitForDelete(ctx, isvcName, namespace, 5*time.Minute); err != nil {
-					return fmt.Errorf("wait for delete: %w", err)
-				}
+				// Give the operator time to clean up
+				time.Sleep(5 * time.Second)
+				fmt.Println("AIModel deleted. The operator will continue cleaning up resources.")
 			}
 
 			fmt.Println()
 			cli.PrintDeploymentDeleted(modelName, environment)
+			fmt.Println("Note: Model cache is preserved. Use 'model cache delete' to remove cache.")
 
 			return nil
 		},
