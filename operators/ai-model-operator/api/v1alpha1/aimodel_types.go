@@ -37,10 +37,14 @@ type AIModelSpec struct {
 	ModelID string `json:"modelID"`
 
 	// S3Bucket is the S3 bucket where model artifacts are stored.
-	S3Bucket string `json:"s3Bucket"`
+	// Optional when TrustRemoteCode is true (model loads directly from HuggingFace).
+	// +optional
+	S3Bucket string `json:"s3Bucket,omitempty"`
 
 	// S3Key is the S3 key (path) to the model artifacts.
-	S3Key string `json:"s3Key"`
+	// Optional when TrustRemoteCode is true (model loads directly from HuggingFace).
+	// +optional
+	S3Key string `json:"s3Key,omitempty"`
 
 	// Enabled determines if the model deployment should be active.
 	// If false, the InferenceService will be scaled to zero replicas.
@@ -92,9 +96,9 @@ type AIModelSpec struct {
 	// TrustRemoteCode allows the runtime to execute custom model code from the model repository.
 	// Required for models with custom architectures not built into transformers.
 	// For vLLM, this adds the --trust-remote-code flag.
-	// +kubebuilder:default=false
+	// When true, S3Bucket and S3Key become optional as the model loads directly from HuggingFace.
 	// +optional
-	TrustRemoteCode bool `json:"trustRemoteCode,omitempty"`
+	TrustRemoteCode bool `json:"trustRemoteCode"`
 
 	// DEPRECATED: Use MinReplicas/MaxReplicas instead.
 	// Replicas is the number of inference instances to deploy.

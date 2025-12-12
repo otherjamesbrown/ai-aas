@@ -156,6 +156,13 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, nil
 	}
 
+	// DEBUG: Log trustRemoteCode value as received from API
+	log.Info("DEBUG: AIModel fetched from API",
+		"name", aiModel.Name,
+		"trustRemoteCode", aiModel.Spec.TrustRemoteCode,
+		"modelID", aiModel.Spec.ModelID,
+		"s3Bucket", aiModel.Spec.S3Bucket)
+
 	// Set default phase if not already set
 	if aiModel.Status.Phase == "" {
 		aiModel.Status.Phase = "Pending"
@@ -198,6 +205,23 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 	}
 
+	// Validate spec: either S3 fields OR trustRemoteCode must be provided
+	hasS3Config := aiModel.Spec.S3Bucket != "" && aiModel.Spec.S3Key != ""
+	hasTrustRemoteCode := aiModel.Spec.TrustRemoteCode && aiModel.Spec.ModelID != ""
+	if !hasS3Config && !hasTrustRemoteCode {
+		log.Error(nil, "Invalid AIModel spec: must provide either S3Bucket+S3Key or TrustRemoteCode=true with ModelID",
+			"name", aiModel.Name, "s3Bucket", aiModel.Spec.S3Bucket, "s3Key", aiModel.Spec.S3Key,
+			"trustRemoteCode", aiModel.Spec.TrustRemoteCode, "modelID", aiModel.Spec.ModelID)
+		aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
+		aiModel.Status.Message = "Invalid spec: must provide either S3Bucket+S3Key for S3-based deployment, or TrustRemoteCode=true with ModelID for HuggingFace-based deployment"
+		if err := r.Status().Update(ctx, aiModel); err != nil {
+			log.Error(err, "unable to update AIModel status")
+			reconcileTotal.WithLabelValues("error").Inc()
+			return ctrl.Result{}, err
+		}
+		reconcileTotal.WithLabelValues("error").Inc()
+		return ctrl.Result{}, nil // Don't requeue - user must fix the spec
+	}
 
 	// Handle model deletion if Enabled is false
 	if !aiModel.Spec.Enabled {
