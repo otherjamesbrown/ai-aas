@@ -178,7 +178,76 @@ aws s3 rm s3://ai-aas-models-dev/test.txt
 
 ### 4.1 AIModel CRD Reference
 
-The `AIModel` CRD supports flexible configuration for different deployment scenarios. Below is a comprehensive reference of all available fields:
+The `AIModel` CRD supports flexible configuration for different deployment scenarios. The operator supports two deployment modes:
+
+### Deployment Modes
+
+#### 1. S3-Based Deployment (Default)
+
+Models are downloaded from HuggingFace, cached in S3, and loaded via KServe's storage initializer.
+
+**Use when:**
+- Standard models with built-in architecture support
+- Production deployments (predictable startup)
+- Air-gapped or offline environments
+- Cost optimization (download once, reuse many times)
+
+**Required fields:** `modelName`, `modelID`, `s3Bucket`, `s3Key`
+
+```yaml
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
+spec:
+  modelName: llama-7b
+  modelID: meta-llama/Llama-2-7b-hf
+  s3Bucket: ai-aas-models
+  s3Key: llama-2-7b
+```
+
+#### 2. HuggingFace-Direct Deployment (TrustRemoteCode)
+
+Models are downloaded directly from HuggingFace at container startup. Required for models with custom architectures.
+
+**Use when (REQUIRED for):**
+- Models with custom architectures (e.g., GPT-OSS, custom LLMs)
+- Models that need `trust_remote_code=True`
+- Models with custom tokenizers or processors
+- Rapid development/testing
+
+**Required fields:** `modelName`, `modelID`, `trustRemoteCode: true`
+
+```yaml
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
+spec:
+  modelName: gpt-oss-20b
+  modelID: openai/gpt-oss-20b
+  trustRemoteCode: true
+  # s3Bucket and s3Key are optional with trustRemoteCode
+```
+
+**Why trustRemoteCode needs direct HuggingFace access:**
+
+When a model uses custom architecture code, vLLM needs to:
+1. Download Python files from HuggingFace (e.g., `modeling_*.py`)
+2. Execute that code to define the model class
+3. Load weights into the custom architecture
+
+S3-based deployment only caches model weights, not the HuggingFace repo structure and Python files that custom architectures require.
+
+### Comparison
+
+| Aspect | S3-Based | HuggingFace-Direct |
+|--------|----------|-------------------|
+| Startup time | Fast (seconds) | Slow (minutes) |
+| Custom architectures | Not supported | Supported |
+| Offline operation | Yes | No |
+| Storage costs | S3 storage | None |
+| Model updates | Re-download needed | Automatic |
+
+### AIModel Spec Reference
+
+Below is a comprehensive reference of all available fields:
 
 ```yaml
 apiVersion: aimodel.ai-aas.io/v1alpha1
@@ -190,8 +259,13 @@ spec:
   # Required fields
   modelName: <display-name>    # Human-readable name for the model
   modelID: <huggingface-id>    # HuggingFace model ID (e.g., "mistralai/Mistral-7B-Instruct-v0.2")
+
+  # S3 fields (required for S3-based deployment, optional with trustRemoteCode)
   s3Bucket: <bucket-name>      # S3 bucket for model cache
   s3Key: <path/to/model>       # S3 prefix for this model's artifacts
+
+  # Custom architecture support
+  trustRemoteCode: false       # Set to true for models with custom architectures (default: false)
 
   # Deployment control
   enabled: true                # Set to false to disable without deleting (default: true)
@@ -239,8 +313,9 @@ spec:
 |-------|------|----------|---------|-------------|
 | `modelName` | string | Yes | - | Human-readable display name for the model |
 | `modelID` | string | Yes | - | HuggingFace model ID (e.g., "meta-llama/Llama-2-7b-hf") |
-| `s3Bucket` | string | Yes | - | S3 bucket for caching model artifacts |
-| `s3Key` | string | Yes | - | S3 path prefix for this model's artifacts |
+| `s3Bucket` | string | Conditional* | - | S3 bucket for caching model artifacts |
+| `s3Key` | string | Conditional* | - | S3 path prefix for this model's artifacts |
+| `trustRemoteCode` | bool | No | false | Enable custom architecture support (loads from HuggingFace directly) |
 | `enabled` | bool | No | true | Whether to deploy the model (false scales to zero) |
 | `runtime` | string | No | vllm | Inference runtime: `vllm`, `triton`, or `tgi` |
 | `minReplicas` | int32 | No | 0 | Minimum replicas (0 enables scale-to-zero via Knative) |
@@ -250,6 +325,8 @@ spec:
 | `tolerations` | []Toleration | No | - | Tolerations for pod scheduling on tainted nodes |
 | `runtimeArgs` | []string | No | - | Additional CLI arguments passed to the runtime |
 | `runtimeEnv` | []EnvVar | No | - | Additional environment variables for the runtime |
+
+*`s3Bucket` and `s3Key` are required for S3-based deployment, but optional when `trustRemoteCode: true`
 
 **Deprecated fields** (still supported but not recommended):
 - `replicas`: Use `minReplicas` and `maxReplicas` instead
