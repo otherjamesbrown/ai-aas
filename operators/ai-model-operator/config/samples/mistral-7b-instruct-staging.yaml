@@ -4,6 +4,23 @@
 #
 # When applied, the AI Model Operator will create a KServe InferenceService
 # with equivalent configuration to the original manual deployment.
+#
+# ⚠️  SECURITY WARNING: This configuration uses --trust-remote-code
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# The --trust-remote-code flag allows the model to execute arbitrary Python
+# code from the HuggingFace repository. This is required for some models
+# (e.g., those with custom architectures) but poses security risks:
+#
+# - Malicious code could be executed during model loading
+# - The model repository owner could push harmful updates
+#
+# Only use --trust-remote-code when:
+# 1. You trust the model source (e.g., official HuggingFace organizations)
+# 2. You have reviewed the model's code for safety
+# 3. The model requires custom code to function correctly
+#
+# For production deployments, prefer S3-cached models without trust-remote-code
+# when possible, as S3 caching provides a stable, reviewed model snapshot.
 apiVersion: ai.ai-aas.io/v1alpha1
 kind: AIModel
 metadata:

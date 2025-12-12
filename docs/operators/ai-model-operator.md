@@ -84,10 +84,9 @@ status:
   inferenceServiceName: gpt2-test
   inferenceEndpoint: "http://gpt2-test.development.svc.cluster.local"
   readyReplicas: 1
-  # Planned fields (ai-aas-hqx):
-  # retryCount: 0
-  # lastRetryTime: null
-  # nextRetryTime: null
+  retryCount: 0             # Number of retry attempts
+  lastRetryTime: null       # Timestamp of last retry
+  nextRetryTime: null       # Scheduled next retry time
 ```
 
 ## Source Code Structure
@@ -181,7 +180,7 @@ Key functions:
 │     │   ├─ S3 artifacts exist? → Skip to step 6                │
 │     │   └─ Create downloader job, phase=Downloading            │
 │     ├─ Job complete? → phase=Downloaded                        │
-│     ├─ Job failed? → phase=Failed, return (no retry currently) │
+│     ├─ Job failed? → phase=RetryPending, schedule retry        │
 │     └─ Job running? → Requeue                                  │
 │                                                                  │
 │  6. Create/Update InferenceService                              │
@@ -259,14 +258,36 @@ Job configuration:
 - Backoff limit: 6 (Kubernetes default)
 - Restart policy: OnFailure
 
+## Retry Logic
+
+The operator implements automatic retry with exponential backoff for failed download jobs:
+
+| Configuration | Default Value | Description |
+|--------------|---------------|-------------|
+| `maxDownloadRetries` | 5 | Maximum retry attempts for download jobs |
+| `initialRetryDelay` | 1 minute | Initial delay before first retry |
+| `maxRetryDelay` | 16 minutes | Maximum delay between retries |
+
+When a download job fails:
+1. The operator sets phase to `RetryPending`
+2. Calculates next retry time using exponential backoff: `min(initialDelay * 2^retryCount, maxDelay)`
+3. Deletes the failed job
+4. Creates a new download job when the retry time is reached
+5. After `maxDownloadRetries` attempts, sets phase to `Failed`
+
+Status fields for retry tracking:
+- `retryCount`: Number of retry attempts made
+- `lastRetryTime`: Timestamp of the last retry attempt
+- `nextRetryTime`: Scheduled time for the next retry
+
 ## Known Issues / Planned Improvements
 
 | Issue ID | Description | Status |
 |----------|-------------|--------|
-| ai-aas-evb | No automatic retry for failed download jobs | Planned |
-| ai-aas-hqx | Add RetryCount/LastRetryTime status fields | Planned |
-| ai-aas-p04 | Add RetryPending phase | Planned |
-| ai-aas-ujh | Implement retry logic with exponential backoff | Planned |
+| ai-aas-evb | Automatic retry for failed download jobs | ✅ Implemented |
+| ai-aas-hqx | RetryCount/LastRetryTime status fields | ✅ Implemented |
+| ai-aas-p04 | RetryPending phase | ✅ Implemented |
+| ai-aas-ujh | Retry logic with exponential backoff | ✅ Implemented |
 
 ## Debugging
 
