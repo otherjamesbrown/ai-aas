@@ -1079,8 +1079,8 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		log.Info("Using container-based deployment for trust_remote_code model",
 			"name", aiModel.Name, "modelID", aiModel.Spec.ModelID)
 
-		// Use vLLM image - default to a stable version if not specified
-		containerImage := "vllm/vllm-openai:v0.6.4"
+		// Use vLLM image - v0.10.2 has native support for GPT-OSS and other modern architectures
+		containerImage := "vllm/vllm-openai:v0.10.2"
 
 		isvc, err = kserve.NewInferenceServiceBuilder(aiModel.Name, aiModel.Namespace).
 			WithContainerImage(containerImage).
