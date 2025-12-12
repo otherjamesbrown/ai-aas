@@ -1,3 +1,4 @@
+-- +goose Up
 -- Initial analytics schema: usage_events, ingestion_batches, freshness_status
 BEGIN;
 
@@ -33,12 +34,12 @@ SELECT create_hypertable('analytics.usage_events', 'occurred_at',
 );
 
 -- Indexes for common query patterns
-CREATE INDEX IF NOT EXISTS idx_usage_events_org_model_time 
+CREATE INDEX IF NOT EXISTS idx_usage_events_org_model_time
     ON analytics.usage_events (org_id, model_id, occurred_at DESC);
-CREATE INDEX IF NOT EXISTS idx_usage_events_status 
-    ON analytics.usage_events (status) 
+CREATE INDEX IF NOT EXISTS idx_usage_events_status
+    ON analytics.usage_events (status)
     WHERE status != 'success';
-CREATE INDEX IF NOT EXISTS idx_usage_events_batch 
+CREATE INDEX IF NOT EXISTS idx_usage_events_batch
     ON analytics.usage_events (batch_id);
 
 -- ingestion_batches: Track consumer offsets and dedupe status
@@ -53,9 +54,9 @@ CREATE TABLE IF NOT EXISTS analytics.ingestion_batches (
     retry_count INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE INDEX IF NOT EXISTS idx_ingestion_batches_completed 
+CREATE INDEX IF NOT EXISTS idx_ingestion_batches_completed
     ON analytics.ingestion_batches (completed_at);
-CREATE INDEX IF NOT EXISTS idx_ingestion_batches_late 
+CREATE INDEX IF NOT EXISTS idx_ingestion_batches_late
     ON analytics.ingestion_batches (late_arrival, completed_at);
 
 -- freshness_status: Track latest ingestion and aggregation timestamps
@@ -70,8 +71,28 @@ CREATE TABLE IF NOT EXISTS analytics.freshness_status (
     PRIMARY KEY (org_id, model_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_freshness_status_status 
+CREATE INDEX IF NOT EXISTS idx_freshness_status_status
     ON analytics.freshness_status (status, updated_at DESC);
 
 COMMIT;
 
+-- +goose Down
+-- Rollback initial analytics schema
+BEGIN;
+
+DROP INDEX IF EXISTS analytics.idx_freshness_status_status;
+DROP TABLE IF EXISTS analytics.freshness_status;
+
+DROP INDEX IF EXISTS analytics.idx_ingestion_batches_late;
+DROP INDEX IF EXISTS analytics.idx_ingestion_batches_completed;
+DROP TABLE IF EXISTS analytics.ingestion_batches;
+
+DROP INDEX IF EXISTS analytics.idx_usage_events_batch;
+DROP INDEX IF EXISTS analytics.idx_usage_events_status;
+DROP INDEX IF EXISTS analytics.idx_usage_events_org_model_time;
+-- Note: Hypertable drop handled automatically when table is dropped
+DROP TABLE IF EXISTS analytics.usage_events;
+
+-- Note: We don't drop the schema or extension as they may be used by other objects
+
+COMMIT;
