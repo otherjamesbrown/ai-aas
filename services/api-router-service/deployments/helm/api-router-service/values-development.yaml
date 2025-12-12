@@ -172,3 +172,17 @@ prometheus:
   enabled: false  # Disable Prometheus monitoring (CRDs not installed in dev)
   port: 8080
   path: /metrics
+
+# Node scheduling - prefer CPU nodes (avoid GPU nodes)
+# GPU nodes have taint nvidia.com/gpu=true:NoSchedule
+# CPU nodes are in pool 770211, GPU nodes are in pool 776664
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - key: lke.linode.com/pool-id
+              operator: In
+              values:
+                - "770211"  # CPU node pool
