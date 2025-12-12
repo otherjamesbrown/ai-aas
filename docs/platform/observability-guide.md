@@ -74,11 +74,30 @@ The AI-AAS platform uses a comprehensive observability stack deployed in the `sy
   - React hook: `useLogger(componentName)`
   - Implementation: `web/portal/src/lib/logger/`
 
-### Alert Routing
+### Alert Routing & Alerting Rules
 
 - **Alertmanager**:
-  - Routes alerts to Slack (`#platform-infra`), PagerDuty (critical), and email (low priority).
-  - Silence windows managed via `maintenance.ai-aas.dev/enabled` annotation or Alertmanager UI.
+  - Routes alerts to Slack channels, PagerDuty (critical), and email (low priority)
+  - Silence windows managed via `maintenance.ai-aas.dev/enabled` annotation or Alertmanager UI
+  - Configuration: `infra/k8s/monitoring/alerts/alertmanager-config.yaml`
+
+- **Log-Based Alerts** (PrometheusRule):
+  - **Service Errors**: High error rate (>10/min), critical error bursts (fatal/panic)
+  - **Loki Health**: Ingestion down, ingestion slowdown, Promtail failures
+  - **Storage**: Disk space warnings (80%, 90% thresholds)
+  - **vLLM Inference**: GPU errors, model loading failures, OOM events, timeouts
+  - **API Issues**: Backend connection failures, database errors
+  - **Security**: High authentication failure rates
+  - **Crashes**: Service panics, crash loops
+  - **Observability**: Low correlation ID coverage (<95%)
+  - Alert latency target: <2 minutes from log event to alert state
+  - Documentation: `infra/k8s/monitoring/alerts/README.md`
+
+- **Alert Channels**:
+  - `severity: critical` → PagerDuty + Slack #platform-critical
+  - `category: inference` → Slack #ai-models
+  - `category: infrastructure` → Slack #platform-infra
+  - `category: security` → Slack #platform-infra
 
 ## Data Flow
 
