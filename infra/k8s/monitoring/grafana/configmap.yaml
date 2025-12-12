@@ -69,6 +69,16 @@ data:
               name: TraceID
               url: "$${__value.raw}"
 
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://otel-collector.monitoring.svc.cluster.local:8889
+        uid: prometheus
+        editable: false
+        jsonData:
+          httpMethod: POST
+          timeInterval: 30s
+
       - name: Tempo
         type: tempo
         access: proxy
