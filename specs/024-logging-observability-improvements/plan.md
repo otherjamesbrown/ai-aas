@@ -108,6 +108,7 @@ web/portal/src/lib/
 - Deploy Promtail DaemonSet with scrape configs
 - Configure Grafana with Loki datasource
 - **Add vLLM log collection** (ai-models, system, kserve namespaces)
+- Configure OTEL Collector for Loki/Tempo export
 
 ### Phase 2: Backend Enhancements (High)
 - Create request logger middleware with error body logging
