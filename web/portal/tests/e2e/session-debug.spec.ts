@@ -71,7 +71,7 @@ test.describe('Session Debug Tests', () => {
       const url = response.url();
       if (url.includes('api.dev.otherjamesbrown.com') || url.includes('/api/') || url.includes('/v1/')) {
         requests.push({
-          url: url.replace(/https?:\/\/[^\/]+/, ''),
+          url: url.replace(/https?:\/\/[^/]+/, ''),
           status: response.status(),
         });
       }

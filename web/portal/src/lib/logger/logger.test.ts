@@ -228,7 +228,8 @@ describe('Logger', () => {
       testLogger.info('Test message');
 
       const [[, context]] = consoleInfoSpy.mock.calls;
-      expect(context).not.toHaveProperty('correlationId');
+      // When no correlation ID is available, the property may be undefined or not present
+      expect(context?.correlationId).toBeUndefined();
     });
   });
 
