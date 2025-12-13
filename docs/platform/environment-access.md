@@ -81,9 +81,14 @@ git-crypt unlock
 - Access: `kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-staging.yaml`
 
 **ArgoCD**
-- URL: https://argocd.staging.ai-aas.local
+- URL: https://argocd.staging.otherjamesbrown.com
 - Username: `admin`
-- Password: Retrieve with `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode`
+- Password: Retrieve with `kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-staging.yaml -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode`
+
+**Database (PostgreSQL)**
+- Host: Akamai managed database
+- Connection String: Found in Kubernetes secret `user-org-service/user-org-service-db-secret` key `database-url`
+- Retrieve: `kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-staging.yaml get secret -n user-org-service user-org-service-db-secret -o jsonpath='{.data.database-url}' | base64 -d`
 
 **API Endpoints**
 - API Router: https://api.staging.otherjamesbrown.com
@@ -102,14 +107,24 @@ git-crypt unlock
 - All services use `letsencrypt-staging` ClusterIssuer
 - Test with `curl -k` to skip certificate verification
 
+**Monitoring & Observability**
+- Grafana: https://grafana.staging.otherjamesbrown.com
+- Loki: https://loki.staging.otherjamesbrown.com
+
+**API Keys**
+- Master Admin API Key: Found in `secrets/env/.env` as `STAGING_MASTER_ADMIN_API_KEY`
+- API Key ID: Found in `secrets/env/.env` as `STAGING_MASTER_ADMIN_API_KEY_ID`
+- Master Admin User ID: `39255f13-e223-4c80-8242-3fc37e12e717`
+- Master Admin Org ID: `b6fc81af-a245-4599-b3e1-7d2b8745c148`
+- Master Admin Org Slug: `master-admin-org`
+
 **AI-AAS CLI**
-- Configure for staging:
+- Use the `staging-master` profile for full admin access:
   ```bash
-  ai-aas-cli profile create staging-sg \
-    --admin-api-endpoint=https://admin-api.staging.otherjamesbrown.com \
-    --api-key=$(grep STAGING_ADMIN_API_KEY secrets/env/.env | cut -d'=' -f2)
-  ai-aas-cli profile use staging-sg
+  ai-aas-cli --profile staging-master org list
+  ai-aas-cli --profile staging-master user list
   ```
+- Configuration in `~/.ai-aas-cli.yaml` under `profiles.staging-master`
 
 ### Production Environment
 

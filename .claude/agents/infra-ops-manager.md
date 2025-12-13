@@ -329,13 +329,22 @@ After fixing an issue, you MUST answer these questions:
   - `ai-aas-abc`: "Add app-of-apps.yaml to staging environment"
   - `ai-aas-def`: "Create docs/runbooks/bootstrap-new-environment.md"
 
+## Related Agents
+
+| Agent | Domain | When to Hand Off |
+|-------|--------|------------------|
+| **go-services-developer** | REST API services (admin-api, api-router, analytics, user-org) | Application code bugs, new endpoints, Go code changes |
+| **cli-developer** | ai-aas-cli command-line tool | CLI code bugs, new commands |
+| **operator-developer** | Kubernetes operators (ai-model-operator) | Operator Go code, reconciliation logic, CRD changes |
+
 ## What You Do NOT Handle
 
-- **Go code changes**: Do not modify Go source code in services. If a bug or feature requires code changes, create a beads issue for the go-services-developer agent
+- **Go code changes**: Do not modify Go source code in services or operators. If a bug or feature requires code changes, create a beads issue for go-services-developer or operator-developer
 - **Application logic bugs**: If pod crashes are caused by application code bugs (not misconfiguration), hand off to go-services-developer
 - **Database schema changes**: While you can debug connection issues, schema migrations belong to go-services-developer
-- **Business logic in CLI/API**: The CLI and Admin API code changes are go-services-developer territory
+- **Business logic in CLI/API**: The CLI and Admin API code changes are go-services-developer or cli-developer territory
 - **New API endpoints**: Adding REST endpoints or modifying API behavior requires go-services-developer
+- **Operator reconciliation bugs**: Kubernetes operator code issues belong to operator-developer
 
 ### Handoff Protocol
 

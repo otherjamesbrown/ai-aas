@@ -1,5 +1,17 @@
 # KServe InferenceService for Mistral-7B-Instruct-v0.2 (Staging)
 # Public model - no HuggingFace token required
+#
+# LEGACY: This raw InferenceService is deployed directly via ArgoCD.
+# Once the AI Model Operator is deployed to staging, this should be replaced
+# by an AIModel CR (see operators/ai-model-operator/config/samples/mistral-7b-instruct-staging.yaml)
+# which provides GitOps-native lifecycle management via the operator.
+#
+# Migration steps:
+# 1. Deploy AI Model Operator to staging via ArgoCD
+# 2. Create S3 credentials secret in staging namespace
+# 3. Apply the AIModel CR from config/samples/
+# 4. Verify InferenceService is created by the operator
+# 5. Delete this raw InferenceService and its ArgoCD Application (gitops/clusters/staging/apps/vllm-mistral-7b.yaml)
 apiVersion: serving.kserve.io/v1beta1
 kind: InferenceService
 metadata:
@@ -76,25 +88,22 @@ spec:
             name: http1
             protocol: TCP
         # Health probes to prevent traffic before model is loaded
-        startupProbe:
-          httpGet:
-            path: /health
-            port: 8000
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          failureThreshold: 36  # 30s + 36×10s = 6 min max for 7B model
-          timeoutSeconds: 5
+        # NOTE: KServe/Knative does NOT support startupProbe - it will be ignored!
+        # We must use readinessProbe with long enough timeout for initial model loading
         readinessProbe:
           httpGet:
             path: /health
             port: 8000
+          initialDelaySeconds: 30  # Give model time to start loading
           periodSeconds: 10
-          failureThreshold: 3
+          failureThreshold: 36  # 30s + 36×10s = 6 min max for 7B model
           timeoutSeconds: 5
+        # Liveness probe with lenient settings to avoid killing during startup
         livenessProbe:
           httpGet:
             path: /health
             port: 8000
+          initialDelaySeconds: 120  # Don't check for first 2 minutes
           periodSeconds: 30
-          failureThreshold: 3
+          failureThreshold: 6  # Allow 3 minutes of downtime
           timeoutSeconds: 5

@@ -87,6 +87,72 @@ scrape_configs:
             - drop:
                 expression: ".*"
                 drop_counter_reason: debug_logs_filtered
+
+  # vLLM / Inference Backend Logs
+  - job_name: inference-backends
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - ai-models
+            - system
+            - kserve
+    relabel_configs:
+      # Only scrape pods with vllm or inference containers
+      - source_labels: [__meta_kubernetes_pod_container_name]
+        action: keep
+        regex: "(vllm|kserve-container|inference|transformer)"
+      # Extract labels
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_pod_container_name]
+        target_label: container
+      # Extract model name from pod label or deployment
+      - source_labels: [__meta_kubernetes_pod_label_serving_kserve_io_inferenceservice]
+        target_label: model
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        target_label: app
+    pipeline_stages:
+      # vLLM outputs mixed format - some JSON, some plain text
+      # Try JSON first
+      - json:
+          expressions:
+            level: level
+            message: message
+            model: model
+            gpu_id: gpu_id
+      # Fallback: detect log level from text patterns
+      - match:
+          selector: '{container=~"vllm|kserve-container"}'
+          stages:
+            - regex:
+                expression: '(?P<level>INFO|WARNING|ERROR|DEBUG|CRITICAL):?\s*(?P<message>.*)'
+            - labels:
+                level:
+      # Normalize log levels
+      - template:
+          source: level
+          template: '{{ ToLower .Value }}'
+      - labels:
+          level:
+      # Extract CUDA/GPU errors
+      - match:
+          selector: '{container=~"vllm|kserve-container"}'
+          stages:
+            - regex:
+                expression: '(?i)(?P<gpu_error>CUDA|OutOfMemory|GPU|torch\.cuda)'
+            - labels:
+                gpu_error:
+      # Extract model loading status
+      - match:
+          selector: '{container=~"vllm|kserve-container"}'
+          stages:
+            - regex:
+                expression: '(?i)(?P<model_status>Loading model|Model loaded|Failed to load)'
+            - labels:
+                model_status:
 ```
 
 #### Loki StatefulSet
@@ -284,8 +350,10 @@ package middleware
 
 import (
     "bytes"
+    "fmt"
     "io"
     "net/http"
+    "regexp"
     "time"
 
     "go.uber.org/zap"
@@ -297,12 +365,16 @@ type RequestLoggerConfig struct {
     LogRequestBody bool
     // LogResponseBody enables response body logging (use with caution)
     LogResponseBody bool
+    // LogBodyOnError always logs request/response body on 4xx/5xx (recommended)
+    LogBodyOnError bool
     // MaxBodyLogSize limits body logging size (default 1KB)
     MaxBodyLogSize int
     // SkipPaths excludes paths from logging (e.g., health checks)
     SkipPaths []string
     // SensitiveHeaders won't be logged
     SensitiveHeaders []string
+    // SensitiveBodyFields fields to redact from body logs
+    SensitiveBodyFields []string
 }
 
 // DefaultConfig returns sensible defaults
@@ -310,6 +382,7 @@ func DefaultConfig() RequestLoggerConfig {
     return RequestLoggerConfig{
         LogRequestBody:  false,
         LogResponseBody: false,
+        LogBodyOnError:  true,  // Always log bodies on errors for debugging
         MaxBodyLogSize:  1024,
         SkipPaths:       []string{"/healthz", "/readyz", "/metrics"},
         SensitiveHeaders: []string{
@@ -317,6 +390,15 @@ func DefaultConfig() RequestLoggerConfig {
             "X-API-Key",
             "Cookie",
             "Set-Cookie",
+        },
+        SensitiveBodyFields: []string{
+            "password",
+            "token",
+            "secret",
+            "api_key",
+            "apiKey",
+            "credit_card",
+            "ssn",
         },
     }
 }
@@ -354,8 +436,22 @@ func RequestLogger(logger *zap.Logger, config RequestLoggerConfig) func(http.Han
                 }
             }
 
-            // Wrap response writer to capture status
-            wrapped := &responseWriter{ResponseWriter: w, statusCode: 200}
+            // Capture request body if needed (for error logging)
+            var requestBodySample string
+            if config.LogRequestBody || config.LogBodyOnError {
+                bodyBytes, _ := io.ReadAll(io.LimitReader(r.Body, int64(config.MaxBodyLogSize)))
+                r.Body.Close()
+                r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+                requestBodySample = redactSensitiveFields(string(bodyBytes), config.SensitiveBodyFields)
+            }
+
+            // Wrap response writer to capture status and body
+            wrapped := &responseWriter{
+                ResponseWriter:    w,
+                statusCode:        200,
+                captureBody:       config.LogResponseBody || config.LogBodyOnError,
+                maxBodySize:       config.MaxBodyLogSize,
+            }
 
             // Log request start
             logger.Debug("request_started",
@@ -374,28 +470,63 @@ func RequestLogger(logger *zap.Logger, config RequestLoggerConfig) func(http.Han
             duration := time.Since(start)
 
             logFunc := logger.Info
+            isError := wrapped.statusCode >= 400
             if wrapped.statusCode >= 500 {
                 logFunc = logger.Error
             } else if wrapped.statusCode >= 400 {
                 logFunc = logger.Warn
             }
 
-            logFunc("request_completed",
+            // Build log fields
+            fields := []zap.Field{
                 zap.String("method", r.Method),
                 zap.String("path", r.URL.Path),
                 zap.Int("status", wrapped.statusCode),
-                zap.Duration("duration", duration),
+                zap.Float64("duration_ms", float64(duration.Milliseconds())),
                 zap.String("request_id", requestID),
                 zap.Int64("response_bytes", wrapped.bytesWritten),
-            )
+            }
+
+            // Add body samples on errors for debugging
+            if isError && config.LogBodyOnError {
+                if requestBodySample != "" {
+                    fields = append(fields, zap.String("request_body_sample", requestBodySample))
+                }
+                if wrapped.bodySample != "" {
+                    responseBodySample := redactSensitiveFields(wrapped.bodySample, config.SensitiveBodyFields)
+                    fields = append(fields, zap.String("response_body_sample", responseBodySample))
+                }
+            }
+
+            logFunc("request_completed", fields...)
         })
     }
+}
+
+// redactSensitiveFields replaces sensitive field values with [REDACTED]
+func redactSensitiveFields(body string, sensitiveFields []string) string {
+    result := body
+    for _, field := range sensitiveFields {
+        // Simple JSON field redaction: "field": "value" -> "field": "[REDACTED]"
+        patterns := []string{
+            fmt.Sprintf(`"%s"\s*:\s*"[^"]*"`, field),
+            fmt.Sprintf(`"%s"\s*:\s*'[^']*'`, field),
+        }
+        for _, pattern := range patterns {
+            re := regexp.MustCompile(pattern)
+            result = re.ReplaceAllString(result, fmt.Sprintf(`"%s": "[REDACTED]"`, field))
+        }
+    }
+    return result
 }
 
 type responseWriter struct {
     http.ResponseWriter
     statusCode   int
     bytesWritten int64
+    captureBody  bool
+    maxBodySize  int
+    bodySample   string
 }
 
 func (rw *responseWriter) WriteHeader(code int) {
@@ -406,6 +537,17 @@ func (rw *responseWriter) WriteHeader(code int) {
 func (rw *responseWriter) Write(b []byte) (int, error) {
     n, err := rw.ResponseWriter.Write(b)
     rw.bytesWritten += int64(n)
+
+    // Capture body sample for error logging
+    if rw.captureBody && len(rw.bodySample) < rw.maxBodySize {
+        remaining := rw.maxBodySize - len(rw.bodySample)
+        if len(b) <= remaining {
+            rw.bodySample += string(b)
+        } else {
+            rw.bodySample += string(b[:remaining])
+        }
+    }
+
     return n, err
 }
 ```

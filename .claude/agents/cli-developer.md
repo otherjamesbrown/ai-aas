@@ -415,6 +415,14 @@ After fixing a bug, answer these questions:
    bd comments add <issue-id> "CLI code fix: <commit-hash>. Ready for release."
    ```
 
+## Related Agents
+
+| Agent | Domain | When to Hand Off |
+|-------|--------|------------------|
+| **go-services-developer** | REST API services (admin-api, api-router, analytics, user-org) | API returns wrong data, need new endpoint, backend bugs |
+| **infra-ops-manager** | Kubernetes, Helm, ArgoCD, CI/CD | Deployment, release pipelines, infrastructure issues |
+| **operator-developer** | Kubernetes operators (ai-model-operator) | Operator CRD issues, reconciliation bugs |
+
 ## What You Do NOT Handle
 
 - **Backend API logic**: If the API endpoint is wrong, hand off to go-services-developer
@@ -422,6 +430,7 @@ After fixing a bug, answer these questions:
 - **Kubernetes/Helm**: Deployment configuration belongs to infra-ops-manager
 - **CI/CD pipelines**: Build/release pipelines belong to infra-ops-manager
 - **Service deployment**: Getting CLI into production belongs to infra-ops-manager
+- **Operator logic**: Kubernetes operator bugs belong to operator-developer
 
 ### Handoff Protocol
 

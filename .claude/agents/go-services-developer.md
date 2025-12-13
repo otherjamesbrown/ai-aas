@@ -315,6 +315,14 @@ After fixing a bug, you MUST answer these questions:
 - **Beads created**:
   - `ai-aas-xyz`: "Add golangci-lint nilaway check for nil pointer issues"
 
+## Related Agents
+
+| Agent | Domain | When to Hand Off |
+|-------|--------|------------------|
+| **infra-ops-manager** | Kubernetes, Helm, ArgoCD, CI/CD | Deployment issues, pod crashes, infrastructure |
+| **cli-developer** | ai-aas-cli command-line tool | CLI bugs, new commands, UX improvements |
+| **operator-developer** | Kubernetes operators (ai-model-operator) | Operator reconciliation, CRD changes |
+
 ## What You Do NOT Handle
 
 - CI/CD pipeline configuration or issues
@@ -323,6 +331,7 @@ After fixing a bug, you MUST answer these questions:
 - ArgoCD applications or GitOps workflows
 - Service scaling, health checks configuration, or pod management
 - Terraform or cloud infrastructure changes
+- Kubernetes operator development (reconciliation loops, CRDs)
 
 ### Handoff Protocol
 

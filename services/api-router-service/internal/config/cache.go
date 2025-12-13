@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"go.etcd.io/bbolt"
@@ -122,6 +123,46 @@ func (c *Cache) LoadPolicies(ctx context.Context) ([]*RoutingPolicy, error) {
 	})
 
 	return policies, err
+}
+
+// GetPolicyByAlias searches for a policy by alias (model name suffix).
+// For example, alias "gpt-oss-20b" matches policy with model "unsloth/gpt-oss-20b".
+func (c *Cache) GetPolicyByAlias(organizationID, alias string) (*RoutingPolicy, error) {
+	var policy *RoutingPolicy
+	suffix := "/" + alias
+	keyPrefix := organizationID + ":"
+
+	err := c.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket([]byte("policies"))
+		if bucket == nil {
+			return fmt.Errorf("policies bucket not found")
+		}
+
+		return bucket.ForEach(func(k, v []byte) error {
+			key := string(k)
+			// Check if this key is for the right org and model ends with alias
+			if strings.HasPrefix(key, keyPrefix) {
+				var p RoutingPolicy
+				if err := json.Unmarshal(v, &p); err != nil {
+					return nil // Skip malformed entries
+				}
+				if strings.HasSuffix(p.Model, suffix) {
+					policy = &p
+					return fmt.Errorf("found") // Use error to break iteration
+				}
+			}
+			return nil
+		})
+	})
+
+	// "found" error means we found the policy
+	if err != nil && err.Error() == "found" {
+		return policy, nil
+	}
+	if policy != nil {
+		return policy, nil
+	}
+	return nil, fmt.Errorf("no policy found with alias %s", alias)
 }
 
 // cacheKey generates a cache key for a policy.

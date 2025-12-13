@@ -92,6 +92,61 @@
 
 ---
 
+### Task 1.4: Configure vLLM/Inference Backend Log Collection
+**Priority:** Critical
+**Estimate:** Medium complexity
+
+- [ ] Add Promtail scrape config for `ai-models` namespace
+- [ ] Add Promtail scrape config for `system` namespace (vLLM deployments)
+- [ ] Add Promtail scrape config for `kserve` namespace
+- [ ] Configure pipeline to parse vLLM mixed-format logs (JSON + text)
+- [ ] Extract model name from pod labels
+- [ ] Extract GPU error patterns (CUDA, OOM)
+- [ ] Extract model loading status
+- [ ] Create Grafana dashboard for inference backends
+- [ ] Test log collection with deployed vLLM model
+
+**Files to modify:**
+- `infra/k8s/monitoring/promtail/configmap.yaml`
+
+**Files to create:**
+- `infra/k8s/monitoring/grafana/dashboards/inference-backends.json`
+
+**Promtail Labels to Extract:**
+- `namespace`: ai-models, system, kserve
+- `model`: From pod label `serving.kserve.io/inferenceservice`
+- `pod`: Pod name
+- `container`: vllm, kserve-container
+- `gpu_error`: CUDA/OOM patterns
+- `model_status`: Loading/Loaded/Failed
+
+**LogQL Queries for Testing:**
+```bash
+# All inference backend logs
+{namespace=~"ai-models|system|kserve", container=~"vllm|kserve-container"}
+
+# Model loading events
+{container=~"vllm|kserve-container"} |~ "(?i)loading model|model loaded|failed to load"
+
+# GPU/CUDA errors
+{container=~"vllm|kserve-container"} |~ "(?i)cuda|out.?of.?memory|oom|gpu"
+
+# Specific model logs
+{model="gpt-oss-20b"}
+
+# Inference errors
+{container=~"vllm|kserve-container", level="error"}
+```
+
+**Acceptance Criteria:**
+- vLLM logs visible in Loki with correct labels
+- Can filter by model name
+- GPU errors are labeled and easily queryable
+- Model loading status is extractable
+- Dashboard shows model health and error rates
+
+---
+
 ## Phase 2: Backend Enhancements
 
 ### Task 2.1: Create Request Logger Middleware
@@ -491,6 +546,7 @@ kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-development.yaml \
   logs -f deployment/user-org-service -n default --tail=100
 
 ### Query Loki via HTTP Endpoint (Recommended)
+
 # Find all errors in last 15 minutes
 curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
   --data-urlencode 'query={level="error"}' \
@@ -512,9 +568,87 @@ curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
   --data-urlencode 'query={level="error"} | json | line_format "{{.msg}} {{.error}}"' \
   --data-urlencode 'limit=20' | jq -r '.data.result[].values[][1]'
 
+### Time-Based Queries (Specific Time Windows)
+
+# Query a specific time window (ISO8601 format, nanoseconds)
+# Use: date -d "2024-01-15T10:30:00Z" +%s to convert to unix timestamp
+curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+  --data-urlencode 'query={level="error"}' \
+  --data-urlencode 'start=1705314600000000000' \
+  --data-urlencode 'end=1705315500000000000' \
+  --data-urlencode 'limit=100' | jq '.data.result'
+
+# Last N minutes/hours/days
+curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+  --data-urlencode 'query={service="api-router-service"}' \
+  --data-urlencode 'since=1h' \       # 1 hour
+  --data-urlencode 'limit=200' | jq '.data.result'
+
+# Helper: Convert ISO8601 to nanoseconds for Loki
+# date -d "2024-01-15T10:30:00Z" +%s%N
+
+### Aggregation Queries (Metrics from Logs)
+
+# Count errors by service in last hour
+curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query' \
+  --data-urlencode 'query=sum by(service) (count_over_time({level="error"}[1h]))' \
+  | jq '.data.result'
+
+# Error rate over time (for graphing)
+curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+  --data-urlencode 'query=sum(rate({level="error"}[5m]))' \
+  --data-urlencode 'since=1h' \
+  --data-urlencode 'step=60' | jq '.data.result'
+
+# Top error messages
+curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query' \
+  --data-urlencode 'query=topk(10, sum by(msg) (count_over_time({level="error"} | json [1h])))' \
+  | jq '.data.result'
+
+# Log volume by service
+curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query' \
+  --data-urlencode 'query=sum by(service) (count_over_time({}[1h]))' \
+  | jq '.data.result'
+
+### Inference Backend / vLLM Log Queries
+
+# All vLLM logs
+curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+  --data-urlencode 'query={container=~"vllm|kserve-container"}' \
+  --data-urlencode 'limit=100' | jq '.data.result'
+
+# Model loading events
+curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+  --data-urlencode 'query={container=~"vllm|kserve-container"} |~ "(?i)loading model|model loaded|failed to load"' \
+  --data-urlencode 'limit=50' | jq '.data.result'
+
+# GPU/CUDA errors (CRITICAL)
+curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+  --data-urlencode 'query={container=~"vllm|kserve-container"} |~ "(?i)cuda|out.?of.?memory|oom|gpu"' \
+  --data-urlencode 'limit=50' | jq '.data.result'
+
+# Specific model logs
+curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+  --data-urlencode 'query={model="gpt-oss-20b"}' \
+  --data-urlencode 'limit=100' | jq '.data.result'
+
+# vLLM errors only
+curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+  --data-urlencode 'query={container=~"vllm|kserve-container"} |~ "(?i)error|exception|failed|traceback"' \
+  --data-urlencode 'limit=50' | jq '.data.result'
+
+# AsyncEngineDeadError (vLLM crash)
+curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+  --data-urlencode 'query={container=~"vllm|kserve-container"} |~ "AsyncEngineDeadError"' \
+  --data-urlencode 'limit=20' | jq '.data.result'
+
 ### Quick method - tail recent pod logs and grep (fallback)
 kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-development.yaml \
   logs deployment/api-router-service -n default --tail=500 | grep -i error
+
+# vLLM pod logs directly (when Loki unavailable)
+kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-development.yaml \
+  logs -l app=vllm -n system --tail=200 | grep -i "error\|cuda\|oom"
 
 ## Debug Workflow
 
@@ -593,6 +727,50 @@ curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
 3. Check events:
    kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-development.yaml \
      describe pod <pod-name> -n default
+
+### Model Loading Failure (vLLM/Inference)
+1. Check model pod status:
+   kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-development.yaml \
+     get pods -n system -l app=vllm
+2. Query Loki for model loading events:
+   curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+     --data-urlencode 'query={container=~"vllm|kserve-container"} |~ "(?i)loading|failed|error"' \
+     --data-urlencode 'since=30m' | jq '.data.result'
+3. Check for GPU/CUDA issues:
+   curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+     --data-urlencode 'query={container=~"vllm|kserve-container"} |~ "(?i)cuda|oom|gpu|memory"' \
+     --data-urlencode 'since=30m' | jq '.data.result'
+4. Check pod events for resource issues:
+   kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-development.yaml \
+     describe pod -n system -l app=vllm | grep -A5 Events
+
+### Inference Returns Error / Slow Response
+1. Get request_id from API response
+2. Trace through api-router to vLLM:
+   curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+     --data-urlencode 'query={} |= "<request_id>"' \
+     --data-urlencode 'limit=50' | jq '.data.result'
+3. Check vLLM queue/inference timing:
+   curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+     --data-urlencode 'query={container=~"vllm|kserve-container"} | json | duration_ms > 5000' \
+     --data-urlencode 'since=15m' | jq '.data.result'
+4. Check for OOM during inference:
+   curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+     --data-urlencode 'query={container=~"vllm|kserve-container"} |~ "OutOfMemory"' \
+     --data-urlencode 'since=15m' | jq '.data.result'
+
+### GPU Memory Exhaustion
+1. Check current GPU memory:
+   kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-development.yaml \
+     exec -n system deployment/vllm -- nvidia-smi
+2. Query for OOM events:
+   curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+     --data-urlencode 'query={container=~"vllm|kserve-container"} |~ "(?i)out.?of.?memory|oom|cuda.*memory"' \
+     --data-urlencode 'since=1h' | jq '.data.result'
+3. Check for KV cache warnings:
+   curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+     --data-urlencode 'query={container=~"vllm|kserve-container"} |~ "KV cache"' \
+     --data-urlencode 'since=1h' | jq '.data.result'
 
 ## Grafana Dashboard Access (Visual Log Exploration)
 # Open directly in browser - no port-forward needed:
@@ -692,13 +870,13 @@ All services output JSON logs with these fields:
 
 | Phase | Tasks | Priority | Dependencies |
 |-------|-------|----------|--------------|
-| Phase 1 | 1.1, 1.2, 1.3 | Critical | None |
+| Phase 1 | 1.1, 1.2, 1.3, 1.4 | Critical | None |
 | Phase 2 | 2.1, 2.2, 2.3, 2.4 | High | Phase 1 |
 | Phase 3 | 3.1, 3.2, 3.3, 3.4, 3.5 | High | None (parallel) |
 | Phase 4 | 4.1, 4.2, 4.3 | Medium | Phase 1, 2 |
 | Phase 5 | 5.1, 5.2, 5.3, 5.4, 5.5 | Medium-High | Phase 1-4 |
 
-### Task Count: 20 tasks across 5 phases
+### Task Count: 21 tasks across 5 phases
 
 **Recommended Order:**
 1. Phase 1 (Infrastructure) - unblocks everything

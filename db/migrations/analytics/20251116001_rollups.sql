@@ -1,3 +1,4 @@
+-- +goose Up
 BEGIN;
 
 CREATE TABLE IF NOT EXISTS analytics_hourly_rollups (
@@ -26,5 +27,15 @@ CREATE TABLE IF NOT EXISTS analytics_daily_rollups (
 
 CREATE INDEX IF NOT EXISTS idx_hourly_rollups_org ON analytics_hourly_rollups (organization_id, bucket_start DESC);
 CREATE INDEX IF NOT EXISTS idx_daily_rollups_org ON analytics_daily_rollups (organization_id, bucket_start DESC);
+
+COMMIT;
+
+-- +goose Down
+BEGIN;
+
+DROP INDEX IF EXISTS idx_daily_rollups_org;
+DROP INDEX IF EXISTS idx_hourly_rollups_org;
+DROP TABLE IF EXISTS analytics_daily_rollups;
+DROP TABLE IF EXISTS analytics_hourly_rollups;
 
 COMMIT;

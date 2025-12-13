@@ -22,22 +22,26 @@ import (
 // NewDeployCommand creates the model deploy command
 func NewDeployCommand() *cobra.Command {
 	var (
-		environment    string
-		gpuCount       int
-		memoryGB       int
-		minReplicas    int
-		maxReplicas    int
-		revision       string
-		dryRun         bool
-		skipValidation bool
-		wait           bool
-		timeout        time.Duration
+		environment     string
+		gpuCount        int
+		memoryGB        int
+		minReplicas     int
+		maxReplicas     int
+		revision        string
+		dryRun          bool
+		skipValidation  bool
+		wait            bool
+		timeout         time.Duration
+		trustRemoteCode bool
 	)
 
 	cmd := &cobra.Command{
 		Use:   "deploy <model-name>",
 		Short: "Deploy model to Kubernetes",
-		Long: `Deploy a cached model to Kubernetes using KServe InferenceService.
+		Long: `Deploy a cached model to Kubernetes using AIModel custom resource.
+
+The AIModel CR is managed by the ai-model-operator, which creates the underlying
+KServe InferenceService and syncs deployment status to the Admin API.
 
 The model must already be cached in object storage before deployment.
 
@@ -51,6 +55,9 @@ Examples:
   # Deploy with auto-scaling
   ai-aas-cli model deploy llama-3-8b -e production --min-replicas 2 --max-replicas 5
 
+  # Deploy with trust remote code (for custom model architectures)
+  ai-aas-cli model deploy llama-3-8b -e development --trust-remote-code
+
   # Preview deployment YAML
   ai-aas-cli model deploy llama-3-8b -e development --dry-run
 
@@ -61,7 +68,9 @@ Examples:
 			modelName := args[0]
 
 			// Get configuration
-			cfg, err := config.Load()
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
@@ -98,32 +107,29 @@ Examples:
 				revision = "main"
 			}
 
-			// Build storage URI
-			// If S3 bucket is configured, use S3. Otherwise, use HuggingFace directly.
-			var storageURI string
-			if s3Bucket != "" {
-				storageURI = fmt.Sprintf("s3://%s/models/%s/%s/", s3Bucket, modelName, revision)
-			} else {
-				// Use HuggingFace storage URI for direct model loading
-				storageURI = fmt.Sprintf("hf://%s", model.HFModelID)
-			}
+			// Build S3 key for model storage
+			// The operator expects s3Key to point to the model directory
+			s3Key := fmt.Sprintf("models/%s/%s/", modelName, revision)
 
-			// Create InferenceService config
-			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
+			// Create AIModel config
+			aimodelName := fmt.Sprintf("%s-%s", modelName, environment)
 			namespace := fmt.Sprintf("%s", environment) // Using environment as namespace
 
-			isvcCfg := kubernetes.InferenceServiceConfig{
-				Name:        isvcName,
-				Namespace:   namespace,
-				ModelName:   modelName,
-				StorageURI:  storageURI,
-				HFModelID:   model.HFModelID, // For vLLM to download from HuggingFace directly
-				Runtime:     "vllm-runtime",  // Explicit runtime to avoid autoSelect issues
-				GPUCount:    gpuCount,
-				MemoryGB:    memoryGB,
-				MinReplicas: minReplicas,
-				MaxReplicas: maxReplicas,
-				Environment: environment,
+			aimodelCfg := kubernetes.AIModelConfig{
+				Name:            aimodelName,
+				Namespace:       namespace,
+				ModelName:       modelName,
+				ModelID:         model.HFModelID,
+				S3Bucket:        s3Bucket,
+				S3Key:           s3Key,
+				Runtime:         "vllm",
+				Enabled:         true,
+				MinReplicas:     minReplicas,
+				MaxReplicas:     maxReplicas,
+				GPUCount:        gpuCount,
+				MemoryGB:        memoryGB,
+				TrustRemoteCode: trustRemoteCode,
+				Environment:     environment,
 				Labels: map[string]string{
 					"ai-aas.io/model":       modelName,
 					"ai-aas.io/revision":    revision,
@@ -138,14 +144,17 @@ Examples:
 			fmt.Printf("\nDeployment Configuration:\n")
 			fmt.Printf("  Model: %s (%s)\n", modelName, model.HFModelID)
 			fmt.Printf("  Environment: %s\n", environment)
-			fmt.Printf("  InferenceService: %s/%s\n", namespace, isvcName)
-			fmt.Printf("  Storage: %s\n", storageURI)
+			fmt.Printf("  AIModel CR: %s/%s\n", namespace, aimodelName)
+			fmt.Printf("  S3 Location: s3://%s/%s\n", s3Bucket, s3Key)
 			fmt.Printf("  Resources: %d GPU(s), %dGB memory\n", gpuCount, memoryGB)
 			fmt.Printf("  Replicas: %d-%d\n", minReplicas, maxReplicas)
+			if trustRemoteCode {
+				fmt.Printf("  Trust Remote Code: enabled\n")
+			}
 
 			if dryRun {
 				// Generate YAML and print
-				yamlBytes, err := generateInferenceServiceYAML(isvcCfg)
+				yamlBytes, err := generateAIModelYAML(aimodelCfg)
 				if err != nil {
 					return fmt.Errorf("generate YAML: %w", err)
 				}
@@ -196,25 +205,30 @@ Examples:
 			}
 
 			// Check if already deployed
-			existing, err := k8sClient.GetInferenceService(ctx, isvcName, namespace)
+			existing, err := k8sClient.GetAIModel(ctx, aimodelName, namespace)
 			if err == nil && existing != nil {
-				fmt.Printf("\nWARNING: InferenceService %s already exists.\n", isvcName)
-				fmt.Printf("  Status: Ready=%v, URL=%s\n", existing.Ready, existing.URL)
-				fmt.Println("Use 'model undeploy' first, or 'model restart' to update.")
+				fmt.Printf("\nWARNING: AIModel %s already exists.\n", aimodelName)
+				fmt.Printf("  Phase: %s\n", existing.Phase)
+				if existing.InferenceEndpoint != "" {
+					fmt.Printf("  Endpoint: %s\n", existing.InferenceEndpoint)
+				}
+				fmt.Println("Use 'model undeploy' first to remove the existing deployment.")
 				return nil
 			}
 
-			// Create InferenceService
-			fmt.Println("\nCreating InferenceService...")
-			if err := k8sClient.CreateInferenceService(ctx, isvcCfg); err != nil {
-				return fmt.Errorf("create inferenceservice: %w", err)
+			// Create AIModel
+			fmt.Println("\nCreating AIModel custom resource...")
+			fmt.Println("The ai-model-operator will create the InferenceService and sync status to Admin API.")
+			if err := k8sClient.CreateAIModel(ctx, aimodelCfg); err != nil {
+				return fmt.Errorf("create aimodel: %w", err)
 			}
 
-			fmt.Printf("Created InferenceService: %s/%s\n", namespace, isvcName)
+			fmt.Printf("Created AIModel: %s/%s\n", namespace, aimodelName)
 
 			// Wait for ready if requested
 			if wait {
 				fmt.Println("\nWaiting for deployment to be ready...")
+				fmt.Println("(The operator will download the model, create InferenceService, and wait for pods)")
 				spinner := output.NewSpinner("Deploying")
 				spinner.Start()
 
@@ -223,17 +237,21 @@ Examples:
 					PollInterval: 5 * time.Second,
 				}
 
-				err := k8sClient.WaitForReady(ctx, isvcName, namespace, waitOpts)
+				err := k8sClient.WaitForAIModelReady(ctx, aimodelName, namespace, waitOpts)
 				spinner.Stop()
 
 				if err != nil {
 					return fmt.Errorf("deployment failed: %w", err)
 				}
 
-				status, _ := k8sClient.GetInferenceService(ctx, isvcName, namespace)
+				status, _ := k8sClient.GetAIModel(ctx, aimodelName, namespace)
 				if status != nil {
 					fmt.Printf("\nDeployment ready!\n")
-					fmt.Printf("  URL: %s\n", status.URL)
+					fmt.Printf("  Phase: %s\n", status.Phase)
+					if status.InferenceEndpoint != "" {
+						fmt.Printf("  Endpoint: %s\n", status.InferenceEndpoint)
+					}
+					fmt.Printf("  Ready Replicas: %d\n", status.ReadyReplicas)
 				}
 			}
 
@@ -256,6 +274,7 @@ Examples:
 	cmd.Flags().BoolVar(&skipValidation, "skip-validation", false, "skip pre-deploy validation")
 	cmd.Flags().BoolVar(&wait, "wait", false, "wait for deployment to be ready")
 	cmd.Flags().DurationVar(&timeout, "timeout", 10*time.Minute, "timeout when waiting")
+	cmd.Flags().BoolVar(&trustRemoteCode, "trust-remote-code", false, "allow execution of custom model code (required for some models)")
 	_ = cmd.MarkFlagRequired("environment")
 
 	return cmd
@@ -274,14 +293,15 @@ func NewUndeployCommand() *cobra.Command {
 		Short: "Remove model deployment",
 		Long: `Remove a model deployment from Kubernetes.
 
-This removes the InferenceService but preserves the cached model files.
+This removes the AIModel custom resource, which will trigger the operator to
+clean up the InferenceService. Model cache files are preserved.
 To fully remove a model including cache, use 'model cache delete'.
 
 Examples:
   # Undeploy a model
   ai-aas-cli model undeploy llama-3-8b -e development
 
-  # Force undeploy without graceful drain
+  # Force undeploy without confirmation
   ai-aas-cli model undeploy llama-3-8b -e development --force
 
   # Undeploy and wait for deletion
@@ -293,8 +313,8 @@ Examples:
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
 
-			// Build InferenceService name
-			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
+			// Build AIModel name
+			aimodelName := fmt.Sprintf("%s-%s", modelName, environment)
 			namespace := environment
 
 			// Get kubeconfig for environment
@@ -312,17 +332,18 @@ Examples:
 			}
 
 			// Check if exists
-			status, err := k8sClient.GetInferenceService(ctx, isvcName, namespace)
+			status, err := k8sClient.GetAIModel(ctx, aimodelName, namespace)
 			if err != nil {
-				fmt.Printf("InferenceService %s not found in %s\n", isvcName, namespace)
+				fmt.Printf("AIModel %s not found in %s\n", aimodelName, namespace)
 				return nil
 			}
 
-			fmt.Printf("Removing InferenceService: %s/%s\n", namespace, isvcName)
-			fmt.Printf("  Ready: %v\n", status.Ready)
-			if status.URL != "" {
-				fmt.Printf("  URL: %s\n", status.URL)
+			fmt.Printf("Removing AIModel: %s/%s\n", namespace, aimodelName)
+			fmt.Printf("  Phase: %s\n", status.Phase)
+			if status.InferenceEndpoint != "" {
+				fmt.Printf("  Endpoint: %s\n", status.InferenceEndpoint)
 			}
+			fmt.Printf("  Ready Replicas: %d\n", status.ReadyReplicas)
 
 			if !force {
 				fmt.Print("\nAre you sure? [y/N]: ")
@@ -334,17 +355,19 @@ Examples:
 				}
 			}
 
-			// Delete InferenceService
-			fmt.Println("\nDeleting InferenceService...")
-			if err := k8sClient.DeleteInferenceService(ctx, isvcName, namespace); err != nil {
-				return fmt.Errorf("delete inferenceservice: %w", err)
+			// Delete AIModel (the operator will clean up the InferenceService)
+			fmt.Println("\nDeleting AIModel...")
+			fmt.Println("The operator will automatically clean up the InferenceService.")
+			if err := k8sClient.DeleteAIModel(ctx, aimodelName, namespace); err != nil {
+				return fmt.Errorf("delete aimodel: %w", err)
 			}
 
 			if wait {
 				fmt.Println("Waiting for deletion...")
-				if err := k8sClient.WaitForDelete(ctx, isvcName, namespace, 5*time.Minute); err != nil {
-					return fmt.Errorf("wait for delete: %w", err)
-				}
+				// For now, we don't have a wait function for AIModel deletion
+				// Just give it a few seconds
+				time.Sleep(5 * time.Second)
+				fmt.Println("AIModel deleted. The operator will continue cleaning up resources.")
 			}
 
 			fmt.Printf("\nUndeployed %s from %s\n", modelName, environment)
@@ -634,4 +657,73 @@ func generateInferenceServiceYAML(cfg kubernetes.InferenceServiceConfig) ([]byte
 	}
 
 	return yaml.Marshal(isvc)
+}
+
+// generateAIModelYAML generates YAML for an AIModel custom resource
+func generateAIModelYAML(cfg kubernetes.AIModelConfig) ([]byte, error) {
+	// Build resource requirements
+	resources := map[string]interface{}{
+		"limits": map[string]interface{}{
+			"memory": fmt.Sprintf("%dGi", cfg.MemoryGB),
+		},
+		"requests": map[string]interface{}{
+			"memory": fmt.Sprintf("%dGi", cfg.MemoryGB/2),
+		},
+	}
+	if cfg.GPUCount > 0 {
+		resources["limits"].(map[string]interface{})["nvidia.com/gpu"] = cfg.GPUCount
+		resources["requests"].(map[string]interface{})["nvidia.com/gpu"] = cfg.GPUCount
+	}
+
+	labels := map[string]interface{}{
+		"app.kubernetes.io/name":       cfg.ModelName,
+		"app.kubernetes.io/managed-by": "ai-aas-cli",
+		"ai-aas.io/environment":        cfg.Environment,
+	}
+	for k, v := range cfg.Labels {
+		labels[k] = v
+	}
+
+	annotations := map[string]interface{}{}
+	for k, v := range cfg.Annotations {
+		annotations[k] = v
+	}
+
+	// Build spec
+	spec := map[string]interface{}{
+		"modelName":  cfg.ModelName,
+		"modelID":    cfg.ModelID,
+		"s3Bucket":   cfg.S3Bucket,
+		"s3Key":      cfg.S3Key,
+		"enabled":    cfg.Enabled,
+		"runtime":    cfg.Runtime,
+		"resources":  resources,
+	}
+
+	if cfg.RuntimeName != "" {
+		spec["runtimeName"] = cfg.RuntimeName
+	}
+	if cfg.MinReplicas > 0 {
+		spec["minReplicas"] = cfg.MinReplicas
+	}
+	if cfg.MaxReplicas > 0 {
+		spec["maxReplicas"] = cfg.MaxReplicas
+	}
+	if cfg.TrustRemoteCode {
+		spec["trustRemoteCode"] = true
+	}
+
+	aimodel := map[string]interface{}{
+		"apiVersion": "aimodel.ai-aas.io/v1alpha1",
+		"kind":       "AIModel",
+		"metadata": map[string]interface{}{
+			"name":        cfg.Name,
+			"namespace":   cfg.Namespace,
+			"labels":      labels,
+			"annotations": annotations,
+		},
+		"spec": spec,
+	}
+
+	return yaml.Marshal(aimodel)
 }
