@@ -2,7 +2,7 @@
 
 ## Overview
 
-A centralized configuration system for AI model deployment "recipes" that captures the specific requirements, runtime configurations, and resource needs for each model type. This enables consistent, repeatable deployments across environments while supporting diverse model types (LLMs, vision models, embedding models) and runtimes (vLLM, Triton, TGI).
+A centralized configuration system for AI model deployment "recipes" that captures the specific requirements, runtime configurations, and resource needs for each model type. This enables consistent, repeatable deployments across environments while supporting diverse model types (LLMs, vision models, multimodal) and runtimes (vLLM, Triton, TGI).
 
 ## Problem Statement
 
@@ -165,9 +165,6 @@ infra/model-recipes/
 │   │   └── sam-vit-huge.yaml
 │   └── yolo/
 │       └── yolov8x.yaml
-├── embedding/
-│   ├── bge-large-en.yaml
-│   └── e5-mistral-7b-instruct.yaml
 └── multimodal/
     ├── llava-1.5-7b.yaml
     └── qwen-vl-chat.yaml
@@ -223,6 +220,57 @@ spec:
     memory:
       requests: "8Gi"
       limits: "16Gi"
+```
+
+### TGI Runtime Support
+
+For models that work better with HuggingFace's Text Generation Inference:
+
+```yaml
+apiVersion: ai.ai-aas.io/v1alpha1
+kind: ModelRecipe
+metadata:
+  name: falcon-7b-instruct
+  labels:
+    ai.ai-aas.io/task: text-generation
+    ai.ai-aas.io/runtime: tgi
+spec:
+  modelID: tiiuae/falcon-7b-instruct
+  displayName: "Falcon 7B Instruct"
+  runtime: tgi
+
+  # TGI-specific configuration
+  runtimeArgs:
+    tgi:
+      # Quantization options
+      quantize: null  # null | bitsandbytes | gptq | awq
+      # Maximum input length
+      maxInputLength: 1024
+      # Maximum total tokens (input + output)
+      maxTotalTokens: 2048
+      # Maximum batch size for prefill
+      maxBatchPrefillTokens: 4096
+      # Sharding for multi-GPU
+      numShard: 1
+      # Flash attention
+      disableFlashAttention: false
+
+  resources:
+    gpu:
+      type: nvidia
+      count: 1
+      minMemoryGB: 16
+    cpu:
+      requests: "4"
+      limits: "8"
+    memory:
+      requests: "16Gi"
+      limits: "32Gi"
+
+  healthCheck:
+    startupProbeSeconds: 300
+    livenessPath: /health
+    readinessPath: /health
 ```
 
 ### Recipe Validation
@@ -285,15 +333,21 @@ POST /api/v1/recipes/{name}/validate    # Validate recipe
 ### Phase 1: Recipe CRD and Basic Support
 - Define ModelRecipe CRD
 - Update AI Model Operator to read recipes
-- Create initial recipe library for existing models
+- Create initial recipe library for existing models (vLLM)
 - Basic CLI commands
 
-### Phase 2: Triton Runtime Support
-- Add Triton InferenceService builder
+### Phase 2: Triton Runtime Support (Vision Models)
+- Add Triton InferenceService builder to operator
 - Create vision model recipes (Florence, SAM, YOLO)
-- Model repository management for Triton
+- Model repository management for Triton (S3/Object Storage)
+- Triton model config generation
 
-### Phase 3: Advanced Features
+### Phase 3: TGI Runtime Support
+- Add TGI container builder to operator
+- Create TGI-specific recipes for compatible models
+- Support for quantization options (bitsandbytes, GPTQ, AWQ)
+
+### Phase 4: Advanced Features
 - Recipe versioning and rollback
 - Recipe inheritance (base recipes + variants)
 - Automatic recipe generation from HuggingFace model cards
@@ -304,7 +358,7 @@ POST /api/v1/recipes/{name}/validate    # Validate recipe
 1. **Knowledge Capture**: Learned settings (tokenizer-mode, memory tuning) are preserved
 2. **Consistency**: Same recipe across all environments
 3. **Flexibility**: Easy overrides for environment-specific needs
-4. **Multi-Runtime**: Single abstraction for vLLM, Triton, TGI, etc.
+4. **Multi-Runtime**: Single abstraction for vLLM, Triton, TGI
 5. **Discoverability**: Browse available recipes, see what's supported
 6. **Validation**: Catch misconfigurations before deployment
 
@@ -314,6 +368,10 @@ POST /api/v1/recipes/{name}/validate    # Validate recipe
 2. Update AIModels to reference recipes
 3. Deprecate inline configs (keep for backwards compatibility)
 4. New models must use recipes
+
+## Related Specs
+
+- **[026-rag-infrastructure](../026-rag-infrastructure/spec.md)**: RAG support including embedding models, rerankers, and vector database infrastructure
 
 ## Open Questions
 

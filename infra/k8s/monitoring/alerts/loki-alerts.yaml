@@ -1,0 +1,281 @@
+# Loki Log-Based Alerting Rules
+# ================================
+# PrometheusRule for log-based alerts using LogQL queries
+# Targets: Platform services, vLLM inference backends, infrastructure
+#
+# Alert Latency Target: < 2 minutes (per spec 024 success criteria)
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: loki-log-alerts
+  namespace: monitoring
+  labels:
+    app: prometheus
+    release: prometheus
+    prometheus: kube-prometheus
+spec:
+  groups:
+    # Service Error Rate Alerts
+    - name: service-error-rates
+      interval: 30s
+      rules:
+        - alert: HighServiceErrorRate
+          expr: |
+            sum(rate({namespace=~"development|staging|production"} |= "error" | json | level="error" [5m])) by (service) > 10
+          for: 2m
+          labels:
+            severity: warning
+            category: application
+            alert_type: log-based
+          annotations:
+            summary: "High error rate detected in {{ $labels.service }}"
+            description: "Service {{ $labels.service }} is logging errors at {{ $value | humanize }} errors/min (threshold: 10/min)"
+            runbook_url: "https://docs.ai-aas.local/runbooks/high-error-rate"
+            dashboard: "https://grafana.dev.ai-aas.local/d/service-logs"
+
+        - alert: CriticalErrorBurst
+          expr: |
+            sum(count_over_time({namespace=~"development|staging|production"} |= "fatal" or "panic" or "critical" [1m])) by (service, pod) > 5
+          for: 1m
+          labels:
+            severity: critical
+            category: application
+            alert_type: log-based
+          annotations:
+            summary: "Critical error burst in {{ $labels.service }}"
+            description: "Pod {{ $labels.pod }} logged {{ $value }} critical errors in the last minute"
+            runbook_url: "https://docs.ai-aas.local/runbooks/critical-errors"
+
+    # Log Ingestion Health
+    - name: loki-ingestion
+      interval: 1m
+      rules:
+        - alert: LokiIngestionDown
+          expr: |
+            absent(loki_distributor_bytes_received_total{job="loki"}) == 1
+          for: 5m
+          labels:
+            severity: critical
+            category: infrastructure
+            alert_type: component-health
+          annotations:
+            summary: "Loki log ingestion is down"
+            description: "No log ingestion activity detected for 5 minutes. Logs may be lost."
+            runbook_url: "https://docs.ai-aas.local/runbooks/loki-ingestion-down"
+
+        - alert: LokiIngestionSlowdown
+          expr: |
+            rate(loki_distributor_bytes_received_total{job="loki"}[5m]) < 1000
+          for: 10m
+          labels:
+            severity: warning
+            category: infrastructure
+            alert_type: performance
+          annotations:
+            summary: "Loki ingestion rate is unusually low"
+            description: "Log ingestion rate is {{ $value | humanize }} bytes/sec (expected >1000)"
+
+        - alert: PromtailTargetDown
+          expr: |
+            up{job="promtail"} == 0
+          for: 5m
+          labels:
+            severity: warning
+            category: infrastructure
+            alert_type: component-health
+          annotations:
+            summary: "Promtail instance is down"
+            description: "Promtail on {{ $labels.instance }} is not responding"
+
+    # Loki Storage Health
+    - name: loki-storage
+      interval: 1m
+      rules:
+        - alert: LokiDiskSpaceWarning
+          expr: |
+            (
+              kubelet_volume_stats_used_bytes{persistentvolumeclaim=~"loki.*"}
+              /
+              kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=~"loki.*"}
+            ) > 0.80
+          for: 5m
+          labels:
+            severity: warning
+            category: infrastructure
+            alert_type: resource
+          annotations:
+            summary: "Loki PersistentVolume disk space warning"
+            description: "Loki PV {{ $labels.persistentvolumeclaim }} is {{ $value | humanizePercentage }} full (threshold: 80%)"
+            runbook_url: "https://docs.ai-aas.local/runbooks/loki-disk-space"
+
+        - alert: LokiDiskSpaceCritical
+          expr: |
+            (
+              kubelet_volume_stats_used_bytes{persistentvolumeclaim=~"loki.*"}
+              /
+              kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=~"loki.*"}
+            ) > 0.90
+          for: 5m
+          labels:
+            severity: critical
+            category: infrastructure
+            alert_type: resource
+          annotations:
+            summary: "Loki PersistentVolume disk space critical"
+            description: "Loki PV {{ $labels.persistentvolumeclaim }} is {{ $value | humanizePercentage }} full (threshold: 90%). Immediate action required."
+
+    # vLLM Inference Backend Alerts
+    - name: vllm-inference-errors
+      interval: 30s
+      rules:
+        - alert: vLLMGPUErrorDetected
+          expr: |
+            sum(count_over_time({namespace=~"ai-models|system|kserve"} |~ "(?i)(gpu error|cuda error|out of memory|device-side assert)" [5m])) by (pod, node) > 0
+          for: 1m
+          labels:
+            severity: critical
+            category: inference
+            alert_type: gpu-error
+            channel: ai-models
+          annotations:
+            summary: "GPU error detected in vLLM pod {{ $labels.pod }}"
+            description: "Pod {{ $labels.pod }} on node {{ $labels.node }} logged {{ $value }} GPU errors in the last 5 minutes"
+            runbook_url: "https://docs.ai-aas.local/runbooks/vllm-gpu-errors"
+            dashboard: "https://grafana.dev.ai-aas.local/d/inference-backends"
+
+        - alert: vLLMModelLoadingFailure
+          expr: |
+            sum(count_over_time({namespace=~"ai-models|system|kserve"} |~ "(?i)(failed to load model|model loading failed|safetensors.*error)" [10m])) by (pod, inferenceservice) > 0
+          for: 2m
+          labels:
+            severity: critical
+            category: inference
+            alert_type: model-loading
+            channel: ai-models
+          annotations:
+            summary: "Model loading failure in {{ $labels.inferenceservice }}"
+            description: "InferenceService {{ $labels.inferenceservice }} failed to load model (pod: {{ $labels.pod }})"
+            runbook_url: "https://docs.ai-aas.local/runbooks/model-loading-failure"
+
+        - alert: vLLMHighOOMRate
+          expr: |
+            sum(count_over_time({namespace=~"ai-models|system|kserve"} |~ "(?i)(out of memory|oom|cuda out of memory)" [5m])) by (pod) > 3
+          for: 2m
+          labels:
+            severity: warning
+            category: inference
+            alert_type: resource
+            channel: ai-models
+          annotations:
+            summary: "High OOM rate in vLLM pod {{ $labels.pod }}"
+            description: "Pod {{ $labels.pod }} logged {{ $value }} OOM errors in 5 minutes. Consider increasing GPU memory or reducing batch size."
+
+        - alert: vLLMRequestTimeouts
+          expr: |
+            sum(rate({namespace=~"ai-models|system|kserve"} |~ "(?i)(request timeout|timed out|deadline exceeded)" [5m])) by (inferenceservice) > 5
+          for: 3m
+          labels:
+            severity: warning
+            category: inference
+            alert_type: performance
+            channel: ai-models
+          annotations:
+            summary: "High request timeout rate in {{ $labels.inferenceservice }}"
+            description: "InferenceService {{ $labels.inferenceservice }} is timing out at {{ $value | humanize }} requests/min"
+
+    # API Router & Backend Service Errors
+    - name: api-service-errors
+      interval: 30s
+      rules:
+        - alert: APIRouterBackendConnectionFailure
+          expr: |
+            sum(count_over_time({namespace=~"development|staging|production", service="api-router-service"} |~ "(?i)(connection refused|connection timeout|dial tcp.*failed)" [5m])) by (backend) > 10
+          for: 2m
+          labels:
+            severity: critical
+            category: connectivity
+            alert_type: backend-failure
+          annotations:
+            summary: "API Router cannot reach backend {{ $labels.backend }}"
+            description: "{{ $value }} connection failures to backend in 5 minutes"
+            runbook_url: "https://docs.ai-aas.local/runbooks/backend-connection-failure"
+
+        - alert: AdminAPIDatabaseErrors
+          expr: |
+            sum(rate({namespace=~"development|staging|production", service="admin-api-service"} |~ "(?i)(database.*error|postgres.*error|connection pool)" [5m])) > 5
+          for: 2m
+          labels:
+            severity: critical
+            category: database
+            alert_type: connectivity
+          annotations:
+            summary: "Admin API database connection errors"
+            description: "{{ $value }} database errors per minute detected in Admin API logs"
+
+    # Authentication & Authorization Errors
+    - name: auth-errors
+      interval: 30s
+      rules:
+        - alert: HighAuthenticationFailureRate
+          expr: |
+            sum(rate({namespace=~"development|staging|production"} |~ "(?i)(authentication failed|unauthorized|invalid.*token|jwt.*error)" [5m])) by (service) > 20
+          for: 5m
+          labels:
+            severity: warning
+            category: security
+            alert_type: auth-failure
+          annotations:
+            summary: "High authentication failure rate in {{ $labels.service }}"
+            description: "{{ $value }} authentication failures per minute. Possible attack or misconfiguration."
+            runbook_url: "https://docs.ai-aas.local/runbooks/auth-failures"
+
+    # Panic and Crash Detection
+    - name: crash-detection
+      interval: 30s
+      rules:
+        - alert: ServicePanicDetected
+          expr: |
+            sum(count_over_time({namespace=~"development|staging|production"} |~ "(?i)(panic:|runtime error:|fatal error:)" [2m])) by (service, pod) > 0
+          for: 30s
+          labels:
+            severity: critical
+            category: application
+            alert_type: crash
+          annotations:
+            summary: "Service panic detected in {{ $labels.service }}"
+            description: "Pod {{ $labels.pod }} experienced a Go panic. Service may be restarting."
+            runbook_url: "https://docs.ai-aas.local/runbooks/service-panic"
+
+        - alert: PodCrashLooping
+          expr: |
+            sum(count_over_time({namespace=~"development|staging|production"} |~ "(?i)(crashloopbackoff|back-off restarting failed container)" [10m])) by (pod) > 5
+          for: 5m
+          labels:
+            severity: critical
+            category: infrastructure
+            alert_type: crash-loop
+          annotations:
+            summary: "Pod {{ $labels.pod }} is crash looping"
+            description: "Pod has restarted {{ $value }} times in 10 minutes"
+
+    # Correlation ID Coverage
+    - name: observability-health
+      interval: 5m
+      rules:
+        - alert: LowCorrelationIDCoverage
+          expr: |
+            (
+              sum(rate({namespace=~"development|staging|production"} | json | correlation_id != "" [10m]))
+              /
+              sum(rate({namespace=~"development|staging|production"}[10m]))
+            ) < 0.95
+          for: 15m
+          labels:
+            severity: warning
+            category: observability
+            alert_type: instrumentation
+          annotations:
+            summary: "Low correlation ID coverage"
+            description: "Only {{ $value | humanizePercentage }} of logs have correlation IDs (target: 95%)"
+            runbook_url: "https://docs.ai-aas.local/runbooks/correlation-id-coverage"

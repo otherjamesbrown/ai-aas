@@ -72,13 +72,15 @@ kubectl delete inferenceservice mistral-7b-instruct -n development
 
 ## Deploying New Models
 
-### 1. Create InferenceService Manifest
+### 1. Create AIModel Custom Resource
 
-Use the template from `infra/k8s/kserve/templates/inference-service-vllm-template.yaml`:
+The platform uses AIModel CRs (managed by the AI Model Operator) to deploy models. The operator automatically creates and manages the underlying KServe InferenceServices.
+
+Use the template from `infra/k8s/aimodels/staging/mistral-7b-instruct-v03.yaml`:
 
 ```yaml
-apiVersion: serving.kserve.io/v1beta1
-kind: InferenceService
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
 metadata:
   name: <model-name>
   namespace: development
@@ -86,51 +88,69 @@ metadata:
     app: vllm-inference
     model: <model-name>
     environment: development
-  annotations:
-    serving.kserve.io/deploymentMode: "Serverless"
-    autoscaling.knative.dev/target: "5"
-    autoscaling.knative.dev/scaleDownDelay: "5m"
 spec:
-  predictor:
-    minReplicas: 1
-    maxReplicas: 3
-    containers:
-      - name: kserve-container
-        image: vllm/vllm-openai:v0.6.3
-        args:
-          - --model=<huggingface-model-id>
-          - --dtype=float16
-          - --max-model-len=4096
-          - --gpu-memory-utilization=0.9
-          - --trust-remote-code
-          - --served-model-name=<model-name>
-        resources:
-          requests:
-            cpu: "4"
-            memory: "16Gi"
-            nvidia.com/gpu: 1
-          limits:
-            cpu: "8"
-            memory: "32Gi"
-            nvidia.com/gpu: 1
+  # Model identification
+  modelName: <model-name>
+  modelID: <huggingface-model-id>
+
+  # Deployment configuration
+  enabled: true
+  runtime: vllm
+
+  # Replica configuration
+  minReplicas: 1
+  maxReplicas: 3
+
+  # Resource requirements
+  resources:
+    requests:
+      cpu: "4"
+      memory: "16Gi"
+      nvidia.com/gpu: "1"
+    limits:
+      cpu: "8"
+      memory: "32Gi"
+      nvidia.com/gpu: "1"
+
+  # GPU node scheduling
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+    - key: gpu-workload
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+
+  # vLLM runtime arguments
+  runtimeArgs:
+    - --dtype=auto
+    - --max-model-len=4096
+    - --gpu-memory-utilization=0.9
+
+  # Security: only enable for trusted models
+  trustRemoteCode: true
 ```
 
 ### 2. Apply via GitOps
 
 ```bash
-# Save to infra/k8s/kserve/models/<model-name>.yaml
-git add infra/k8s/kserve/models/<model-name>.yaml
-git commit -m "Add <model-name> InferenceService"
+# Save to infra/k8s/aimodels/development/<model-name>.yaml
+git add infra/k8s/aimodels/development/<model-name>.yaml
+git commit -m "Add <model-name> AIModel CR"
 git push origin develop
 ```
 
-ArgoCD will automatically sync and deploy the model.
+ArgoCD will automatically sync and deploy the model. The AI Model Operator will create the KServe InferenceService and manage its lifecycle.
 
 ### 3. Verify Deployment
 
 ```bash
-# Watch status
-kubectl get inferenceservice <model-name> -n development -w
+# Check AIModel status
+kubectl get aimodel <model-name> -n development -w
+
+# Check InferenceService created by the operator
+kubectl get inferenceservice <model-name> -n development
 
 # Check pods
 kubectl get pods -n development -l serving.kserve.io/inferenceservice=<model-name>

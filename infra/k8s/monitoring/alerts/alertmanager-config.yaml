@@ -1,0 +1,189 @@
+# Alertmanager Configuration for AI-AAS Platform
+# ===============================================
+# Routes alerts to appropriate channels based on severity and category
+#
+# Alert Routing Strategy:
+# - Critical alerts → PagerDuty (immediate response)
+# - vLLM/inference alerts → Slack #ai-models
+# - Infrastructure warnings → Slack #platform-infra
+# - Application errors → Slack #platform-infra
+#
+# NOTE: This is a template. Actual Slack/PagerDuty endpoints should be
+# configured via secrets or external configuration management.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: monitoring
+  labels:
+    app: alertmanager
+    component: observability
+data:
+  alertmanager.yml: |
+    global:
+      resolve_timeout: 5m
+      slack_api_url: '{{ .SLACK_WEBHOOK_URL }}'  # Set via environment or secret
+
+    # Alert routing tree
+    route:
+      receiver: 'default-receiver'
+      group_by: ['alertname', 'severity', 'service']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+
+      routes:
+        # Critical alerts → PagerDuty
+        - match:
+            severity: critical
+          receiver: 'pagerduty-critical'
+          continue: true  # Also send to Slack
+
+        # vLLM/Inference alerts → #ai-models Slack channel
+        - match:
+            category: inference
+          receiver: 'slack-ai-models'
+          group_by: ['alertname', 'inferenceservice', 'pod']
+
+        # GPU errors → #ai-models Slack channel (high priority)
+        - match:
+            alert_type: gpu-error
+          receiver: 'slack-ai-models'
+          group_by: ['alertname', 'node', 'pod']
+
+        # Infrastructure warnings → #platform-infra
+        - match:
+            category: infrastructure
+          receiver: 'slack-platform-infra'
+
+        # Database/connectivity issues → #platform-infra (high priority)
+        - match_re:
+            category: 'database|connectivity'
+          receiver: 'slack-platform-infra'
+          group_by: ['alertname', 'service']
+
+        # Security/auth alerts → #platform-infra
+        - match:
+            category: security
+          receiver: 'slack-platform-infra'
+          group_by: ['alertname', 'service']
+
+        # Observability health (low priority)
+        - match:
+            category: observability
+          receiver: 'slack-platform-infra'
+          repeat_interval: 12h
+
+    # Inhibition rules (suppress dependent alerts)
+    inhibit_rules:
+      # Suppress warning if critical is firing
+      - source_match:
+          severity: 'critical'
+        target_match:
+          severity: 'warning'
+        equal: ['alertname', 'service']
+
+      # Suppress high error rate if service is down
+      - source_match:
+          alertname: 'ServiceDown'
+        target_match:
+          alertname: 'HighServiceErrorRate'
+        equal: ['service']
+
+      # Suppress ingestion slowdown if Loki is down
+      - source_match:
+          alertname: 'LokiIngestionDown'
+        target_match:
+          alertname: 'LokiIngestionSlowdown'
+
+    # Alert receivers
+    receivers:
+      - name: 'default-receiver'
+        slack_configs:
+          - channel: '#platform-alerts'
+            title: 'AI-AAS Alert: {{ .GroupLabels.alertname }}'
+            text: |-
+              {{ range .Alerts }}
+              *Alert:* {{ .Labels.alertname }}
+              *Severity:* {{ .Labels.severity }}
+              *Service:* {{ .Labels.service }}
+              *Summary:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              {{ if .Annotations.dashboard }}*Dashboard:* {{ .Annotations.dashboard }}{{ end }}
+              {{ if .Annotations.runbook_url }}*Runbook:* {{ .Annotations.runbook_url }}{{ end }}
+              {{ end }}
+
+      - name: 'pagerduty-critical'
+        pagerduty_configs:
+          - service_key: '{{ .PAGERDUTY_SERVICE_KEY }}'  # Set via secret
+            description: '{{ .GroupLabels.alertname }}: {{ .CommonAnnotations.summary }}'
+            details:
+              severity: '{{ .GroupLabels.severity }}'
+              service: '{{ .GroupLabels.service }}'
+              description: '{{ .CommonAnnotations.description }}'
+              runbook: '{{ .CommonAnnotations.runbook_url }}'
+        slack_configs:
+          - channel: '#platform-critical'
+            title: ':rotating_light: CRITICAL: {{ .GroupLabels.alertname }}'
+            text: |-
+              {{ range .Alerts }}
+              *Service:* {{ .Labels.service }}
+              *Summary:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Runbook:* {{ .Annotations.runbook_url }}
+              {{ end }}
+
+      - name: 'slack-ai-models'
+        slack_configs:
+          - channel: '#ai-models'
+            title: ':robot_face: AI Model Alert: {{ .GroupLabels.alertname }}'
+            text: |-
+              {{ range .Alerts }}
+              *Alert:* {{ .Labels.alertname }}
+              *Severity:* {{ .Labels.severity }}
+              {{ if .Labels.inferenceservice }}*InferenceService:* {{ .Labels.inferenceservice }}{{ end }}
+              {{ if .Labels.pod }}*Pod:* {{ .Labels.pod }}{{ end }}
+              {{ if .Labels.node }}*Node:* {{ .Labels.node }}{{ end }}
+              *Summary:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              {{ if .Annotations.dashboard }}*Dashboard:* {{ .Annotations.dashboard }}{{ end }}
+              {{ if .Annotations.runbook_url }}*Runbook:* {{ .Annotations.runbook_url }}{{ end }}
+              {{ end }}
+
+      - name: 'slack-platform-infra'
+        slack_configs:
+          - channel: '#platform-infra'
+            title: ':construction: Infrastructure Alert: {{ .GroupLabels.alertname }}'
+            text: |-
+              {{ range .Alerts }}
+              *Alert:* {{ .Labels.alertname }}
+              *Severity:* {{ .Labels.severity }}
+              {{ if .Labels.service }}*Service:* {{ .Labels.service }}{{ end }}
+              {{ if .Labels.pod }}*Pod:* {{ .Labels.pod }}{{ end }}
+              *Summary:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              {{ if .Annotations.dashboard }}*Dashboard:* {{ .Annotations.dashboard }}{{ end }}
+              {{ if .Annotations.runbook_url }}*Runbook:* {{ .Annotations.runbook_url }}{{ end }}
+              {{ end }}
+---
+# Alertmanager Secrets (TEMPLATE - DO NOT COMMIT WITH REAL VALUES)
+# ================================================================
+# Create this secret manually or via external secret management
+#
+# kubectl create secret generic alertmanager-secrets \
+#   --from-literal=slack-webhook-url='https://hooks.slack.com/services/YOUR/WEBHOOK/URL' \
+#   --from-literal=pagerduty-service-key='YOUR_PAGERDUTY_KEY' \
+#   -n monitoring
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: alertmanager-secrets
+  namespace: monitoring
+  labels:
+    app: alertmanager
+type: Opaque
+stringData:
+  slack-webhook-url: ""  # Set via kubectl or sealed-secrets
+  pagerduty-service-key: ""  # Set via kubectl or sealed-secrets

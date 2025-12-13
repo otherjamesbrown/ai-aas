@@ -18,6 +18,9 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/service"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/storage"
 	"go.uber.org/zap"
+
+	sharedMiddleware "github.com/ai-aas/shared-go/middleware"
+	"github.com/ai-aas/shared-go/observability"
 )
 
 // NewRouter creates and configures the HTTP router
@@ -27,7 +30,13 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 	// Global middleware
 	r.Use(chiMiddleware.RealIP)
 	r.Use(chiMiddleware.Recoverer)
-	r.Use(middleware.RequestLogging(logger))
+
+	// Request context middleware (for request IDs and correlation)
+	r.Use(observability.RequestContextMiddleware)
+
+	// Request logger middleware (structured logging for all requests)
+	requestLoggerConfig := sharedMiddleware.DefaultRequestLoggerConfig()
+	r.Use(sharedMiddleware.RequestLogger(logger, requestLoggerConfig))
 
 	// Rate limiter
 	rateLimiter := middleware.NewRateLimiter(cfg.RateLimitPerMin)

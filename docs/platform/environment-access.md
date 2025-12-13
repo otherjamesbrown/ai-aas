@@ -1,7 +1,7 @@
 # Environment Access Guide
 
 ---
-last_updated: 2025-12-09
+last_updated: 2025-12-13
 document_type: reference
 ---
 
@@ -29,7 +29,8 @@ git-crypt unlock
 - Access: `kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-development.yaml`
 
 **ArgoCD**
-- URL: https://argocd.dev.ai-aas.local
+- URL: https://argocd.dev.otherjamesbrown.com (pending - see ai-aas-jas)
+- Fallback: Port-forward with `kubectl port-forward -n argocd svc/argocd-server 8080:443` then access https://localhost:8080
 - Username: `admin`
 - Password: Retrieve with `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode`
 - Alternative: Check `secrets/env/.env` for stored credentials
@@ -40,9 +41,9 @@ git-crypt unlock
 - Format: `postgresql://username:password@host:port/database?sslmode=require`
 
 **API Endpoints**
-- API Router: https://api.dev.otherjamesbrown.com or https://api.dev.ai-aas.local
-- Admin API: https://admin-api.dev.otherjamesbrown.com or https://admin-api.dev.ai-aas.local
-- User Org Service: https://user-org.dev.otherjamesbrown.com or https://user-org.dev.ai-aas.local
+- API Router: https://api.dev.otherjamesbrown.com
+- Admin API: https://admin-api.dev.otherjamesbrown.com
+- User Org Service: https://user-org.dev.otherjamesbrown.com
 
 **Ingress Architecture** (Dual-Ingress)
 - NGINX Ingress IP: `172.232.58.222` - PRIMARY for all external HTTP/HTTPS traffic
@@ -51,9 +52,26 @@ git-crypt unlock
 - See `docs/technical/platform/ingress-best-practices.md` for architecture details
 
 **Monitoring & Observability**
-- Grafana: https://grafana.dev.otherjamesbrown.com or https://grafana.dev.ai-aas.local
-- Loki (Log Aggregation): https://loki.dev.otherjamesbrown.com or https://loki.dev.ai-aas.local
+- Grafana: https://grafana.dev.otherjamesbrown.com
+- Loki (Log Aggregation): https://loki.dev.otherjamesbrown.com
 - Loki API: `https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range`
+- Tempo (Tracing): `http://tempo.system.svc.cluster.local:3100` (cluster internal only)
+
+**Quick Access (nip.io - no TLS/DNS setup required)**:
+```bash
+# Open Grafana in browser
+open http://grafana.172.232.58.222.nip.io
+
+# Test Loki readiness
+curl http://loki.172.232.58.222.nip.io/ready
+
+# Query Loki logs (last 1 hour errors)
+curl -G http://loki.172.232.58.222.nip.io/loki/api/v1/query_range \
+  --data-urlencode 'query={level="error"}' \
+  --data-urlencode 'start='$(date -d '1 hour ago' +%s)000000000 \
+  --data-urlencode 'end='$(date +%s)000000000 \
+  --data-urlencode 'limit=100'
+```
 
 **API Keys**
 - Master Admin API Key: Found in `secrets/env/.env` as `MASTER_ADMIN_API_KEY`
@@ -133,7 +151,8 @@ git-crypt unlock
 - Context: Use with `--kubeconfig` flag
 
 **ArgoCD**
-- URL: https://argocd.prod.ai-aas.local
+- URL: https://argocd.prod.otherjamesbrown.com (pending - see ai-aas-jas)
+- Fallback: Port-forward method (same as development)
 - Username: `admin`
 - Password: Same retrieval method as development
 

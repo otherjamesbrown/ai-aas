@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { logger } from '@/lib/logger';
 
 interface ConfirmDestructiveModalProps {
   isOpen: boolean;
@@ -52,7 +53,7 @@ export function ConfirmDestructiveModal({
       await onConfirm();
       onClose();
     } catch (error) {
-      console.error('Confirmation action failed:', error);
+      logger.error('Confirmation action failed', { component: 'ConfirmDestructiveModal', title }, error instanceof Error ? error : undefined);
     } finally {
       setIsSubmitting(false);
     }

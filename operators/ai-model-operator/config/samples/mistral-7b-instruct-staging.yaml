@@ -1,9 +1,7 @@
 # AIModel CR for Mistral-7B-Instruct-v0.2 (Staging)
-# This AIModel CR replaces the manual InferenceService at:
-# infra/k8s/kserve/models/mistral-7b-instruct-staging.yaml
 #
 # When applied, the AI Model Operator will create a KServe InferenceService
-# with equivalent configuration to the original manual deployment.
+# with this configuration.
 #
 # ⚠️  SECURITY WARNING: This configuration uses --trust-remote-code
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

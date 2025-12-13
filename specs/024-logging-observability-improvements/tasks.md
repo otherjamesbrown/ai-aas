@@ -147,6 +147,30 @@
 
 ---
 
+### Task 1.5: Configure OTEL Collector for Loki/Tempo Export
+**Priority:** Medium
+**Estimate:** Low complexity
+
+- [ ] Review existing OTEL Collector configuration
+- [ ] Add Loki exporter for OTLP log ingestion
+- [ ] Configure Tempo exporter for trace storage
+- [ ] Enable service graph processor
+- [ ] Add Tempo datasource to Grafana
+- [ ] Verify traces appear in Grafana via Tempo datasource
+- [ ] Verify logs flow through OTLP pipeline to Loki
+
+**Files to modify:**
+- `infra/k8s/monitoring/otel-collector.yaml`
+- `infra/k8s/monitoring/grafana/` (Tempo datasource)
+
+**Acceptance Criteria:**
+- OTEL Collector exports logs to Loki via OTLP
+- Traces visible in Tempo/Grafana
+- Service graph generated in Grafana
+- Existing trace correlation (trace_id) works end-to-end
+
+---
+
 ## Phase 2: Backend Enhancements
 
 ### Task 2.1: Create Request Logger Middleware
@@ -870,13 +894,13 @@ All services output JSON logs with these fields:
 
 | Phase | Tasks | Priority | Dependencies |
 |-------|-------|----------|--------------|
-| Phase 1 | 1.1, 1.2, 1.3, 1.4 | Critical | None |
+| Phase 1 | 1.1, 1.2, 1.3, 1.4, 1.5 | Critical | None |
 | Phase 2 | 2.1, 2.2, 2.3, 2.4 | High | Phase 1 |
 | Phase 3 | 3.1, 3.2, 3.3, 3.4, 3.5 | High | None (parallel) |
 | Phase 4 | 4.1, 4.2, 4.3 | Medium | Phase 1, 2 |
 | Phase 5 | 5.1, 5.2, 5.3, 5.4, 5.5 | Medium-High | Phase 1-4 |
 
-### Task Count: 21 tasks across 5 phases
+### Task Count: 22 tasks across 5 phases
 
 **Recommended Order:**
 1. Phase 1 (Infrastructure) - unblocks everything
