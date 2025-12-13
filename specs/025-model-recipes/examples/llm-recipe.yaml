@@ -1,0 +1,69 @@
+# Example: LLM Recipe for Mistral 7B Instruct v0.3
+# This captures all the learned settings for deploying this model
+apiVersion: ai.ai-aas.io/v1alpha1
+kind: ModelRecipe
+metadata:
+  name: mistral-7b-instruct-v03
+  namespace: ai-model-system
+  labels:
+    ai.ai-aas.io/model-family: mistral
+    ai.ai-aas.io/model-size: 7b
+    ai.ai-aas.io/task: text-generation
+    ai.ai-aas.io/runtime: vllm
+spec:
+  modelID: mistralai/Mistral-7B-Instruct-v0.3
+  displayName: "Mistral 7B Instruct v0.3"
+  description: |
+    Mistral AI's instruction-tuned 7B parameter model.
+    Good for general-purpose chat and instruction following.
+
+  runtime: vllm
+  image: vllm/vllm-openai:v0.10.2
+
+  resources:
+    gpu:
+      type: nvidia
+      count: 1
+      minMemoryGB: 16  # Needs ~14GB for weights + KV cache
+    cpu:
+      requests: "4"
+      limits: "8"
+    memory:
+      requests: "16Gi"
+      limits: "32Gi"
+
+  runtimeArgs:
+    vllm:
+      dtype: auto
+      maxModelLen: 8192
+      gpuMemoryUtilization: 0.9
+      trustRemoteCode: true
+      # IMPORTANT: Mistral models require this for correct tokenization!
+      tokenizerMode: mistral
+      extraArgs: []
+
+  scheduling:
+    tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      - key: gpu-workload
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+
+  healthCheck:
+    startupProbeSeconds: 300  # Model loading takes ~2-3 min
+    livenessPath: /health
+    readinessPath: /health
+
+  metadata:
+    parameters: "7.3B"
+    contextLength: 32768
+    architecture: "MistralForCausalLM"
+    license: "Apache-2.0"
+    sourceURL: "https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3"
+    notes: |
+      - Use tokenizer-mode=mistral for correct behavior
+      - Supports 32K context but 8K is more memory-efficient
+      - Works well with 0.9 GPU memory utilization on 20GB GPUs
