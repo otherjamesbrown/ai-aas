@@ -1,0 +1,102 @@
+# Example: Vision Model Recipe for Florence 2 (Triton Runtime)
+# This shows how to deploy vision models with Triton Inference Server
+apiVersion: ai.ai-aas.io/v1alpha1
+kind: ModelRecipe
+metadata:
+  name: florence-2-large
+  namespace: ai-model-system
+  labels:
+    ai.ai-aas.io/model-family: florence
+    ai.ai-aas.io/task: image-captioning
+    ai.ai-aas.io/task: visual-qa
+    ai.ai-aas.io/runtime: triton
+spec:
+  modelID: microsoft/Florence-2-large
+  displayName: "Florence 2 Large"
+  description: |
+    Microsoft's Florence 2 vision-language model.
+    Supports image captioning, OCR, object detection, and visual QA.
+
+  runtime: triton
+  image: nvcr.io/nvidia/tritonserver:24.08-py3
+
+  resources:
+    gpu:
+      type: nvidia
+      count: 1
+      minMemoryGB: 8
+    cpu:
+      requests: "2"
+      limits: "4"
+    memory:
+      requests: "8Gi"
+      limits: "16Gi"
+
+  runtimeArgs:
+    triton:
+      backend: python
+      modelRepository:
+        type: s3
+        bucket: ai-aas-models
+        path: triton/florence-2-large
+
+      # Triton model config
+      modelConfig:
+        maxBatchSize: 8
+        input:
+          - name: image
+            dataType: TYPE_UINT8
+            dims: [-1, -1, 3]  # Variable H x W x RGB
+          - name: task_prompt
+            dataType: TYPE_STRING
+            dims: [1]
+        output:
+          - name: result
+            dataType: TYPE_STRING
+            dims: [-1]
+
+        instanceGroup:
+          - kind: KIND_GPU
+            count: 1
+            gpus: [0]
+
+        dynamicBatching:
+          maxQueueDelayMicroseconds: 100000
+          preferredBatchSize: [4, 8]
+
+        # Python backend specific
+        parameters:
+          EXECUTION_ENV_PATH: /opt/tritonserver/backends/python/conda_envs/florence2
+
+  scheduling:
+    tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      - key: gpu-workload
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+
+  healthCheck:
+    startupProbeSeconds: 120
+    livenessPath: /v2/health/live
+    readinessPath: /v2/health/ready
+
+  metadata:
+    parameters: "0.77B"
+    architecture: "Florence2ForConditionalGeneration"
+    license: "MIT"
+    sourceURL: "https://huggingface.co/microsoft/Florence-2-large"
+    supportedTasks:
+      - "<CAPTION>"           # Image captioning
+      - "<DETAILED_CAPTION>"  # Detailed captioning
+      - "<MORE_DETAILED_CAPTION>"
+      - "<OCR>"               # Text recognition
+      - "<OD>"                # Object detection
+      - "<DENSE_REGION_CAPTION>"
+      - "<REGION_PROPOSAL>"
+    notes: |
+      - Requires Python backend with transformers installed
+      - Model repository must contain model.py and config.pbtxt
+      - Input images are preprocessed by the Python backend
