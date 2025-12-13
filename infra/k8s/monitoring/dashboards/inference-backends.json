@@ -24,7 +24,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "loki"
+        "uid": "P8E80F9AEF21F6940"
       },
       "description": "Monitor vLLM inference backends, model loading, and GPU health",
       "gridPos": {
@@ -48,7 +48,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "loki"
+        "uid": "P8E80F9AEF21F6940"
       },
       "fieldConfig": {
         "defaults": {
@@ -92,7 +92,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "loki"
+            "uid": "P8E80F9AEF21F6940"
           },
           "expr": "count(count by (pod) ({namespace=\"development\",app=\"vllm-inference\"}))",
           "refId": "A"
@@ -104,7 +104,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "loki"
+        "uid": "P8E80F9AEF21F6940"
       },
       "fieldConfig": {
         "defaults": {
@@ -148,7 +148,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "loki"
+            "uid": "P8E80F9AEF21F6940"
           },
           "expr": "sum(count_over_time({namespace=~\"development|system|ai-models|kserve\",container=~\"vllm|kserve-container\"} |~ \"(?i)error|exception|failed|traceback\"[$__range]))",
           "refId": "A"
@@ -160,7 +160,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "loki"
+        "uid": "P8E80F9AEF21F6940"
       },
       "fieldConfig": {
         "defaults": {
@@ -204,7 +204,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "loki"
+            "uid": "P8E80F9AEF21F6940"
           },
           "expr": "sum(count_over_time({namespace=~\"development|system|ai-models|kserve\",container=~\"vllm|kserve-container\"} |~ \"(?i)cuda|out.?of.?memory|oom|gpu.*error\"[$__range]))",
           "refId": "A"
@@ -216,7 +216,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "loki"
+        "uid": "P8E80F9AEF21F6940"
       },
       "fieldConfig": {
         "defaults": {
@@ -260,7 +260,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "loki"
+            "uid": "P8E80F9AEF21F6940"
           },
           "expr": "sum(count_over_time({namespace=~\"development|system|ai-models|kserve\",container=~\"vllm|kserve-container\"} |~ \"(?i)model loaded|loading complete|ready to serve\"[$__range]))",
           "refId": "A"
@@ -272,7 +272,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "loki"
+        "uid": "P8E80F9AEF21F6940"
       },
       "fieldConfig": {
         "defaults": {
@@ -348,7 +348,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "loki"
+            "uid": "P8E80F9AEF21F6940"
           },
           "expr": "sum by (pod) (count_over_time({namespace=~\"development|system|ai-models|kserve\",container=~\"vllm|kserve-container\",pod=~\".*$model.*\"}[$__interval]))",
           "legendFormat": "{{pod}}",
@@ -361,7 +361,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "loki"
+        "uid": "P8E80F9AEF21F6940"
       },
       "fieldConfig": {
         "defaults": {
@@ -441,7 +441,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "loki"
+            "uid": "P8E80F9AEF21F6940"
           },
           "expr": "sum by (pod) (count_over_time({namespace=~\"development|system|ai-models|kserve\",container=~\"vllm|kserve-container\",pod=~\".*$model.*\"} |~ \"(?i)error|exception|failed\"[$__interval]))",
           "legendFormat": "{{pod}}",
@@ -454,7 +454,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "loki"
+        "uid": "P8E80F9AEF21F6940"
       },
       "gridPos": {
         "h": 8,
@@ -477,7 +477,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "loki"
+            "uid": "P8E80F9AEF21F6940"
           },
           "expr": "{namespace=~\"development|system|ai-models|kserve\",container=~\"vllm|kserve-container\",pod=~\".*$model.*\"} |~ \"(?i)loading model|model loaded|failed to load|ready to serve|warming up\"",
           "refId": "A"
@@ -489,7 +489,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "loki"
+        "uid": "P8E80F9AEF21F6940"
       },
       "gridPos": {
         "h": 8,
@@ -512,7 +512,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "loki"
+            "uid": "P8E80F9AEF21F6940"
           },
           "expr": "{namespace=~\"development|system|ai-models|kserve\",container=~\"vllm|kserve-container\",pod=~\".*$model.*\"} |~ \"(?i)cuda|out.?of.?memory|oom|gpu|AsyncEngineDeadError|nvml\"",
           "refId": "A"
@@ -524,7 +524,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "loki"
+        "uid": "P8E80F9AEF21F6940"
       },
       "gridPos": {
         "h": 10,
@@ -547,7 +547,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "loki"
+            "uid": "P8E80F9AEF21F6940"
           },
           "expr": "{namespace=~\"development|system|ai-models|kserve\",container=~\"vllm|kserve-container\",pod=~\".*$model.*\"} |~ \"(?i)error|exception|failed|traceback\"",
           "refId": "A"
@@ -559,7 +559,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "loki"
+        "uid": "P8E80F9AEF21F6940"
       },
       "gridPos": {
         "h": 10,
@@ -582,7 +582,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "loki"
+            "uid": "P8E80F9AEF21F6940"
           },
           "expr": "{namespace=~\"development|system|ai-models|kserve\",container=~\"vllm|kserve-container\",pod=~\".*$model.*\"}",
           "refId": "A"

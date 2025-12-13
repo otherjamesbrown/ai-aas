@@ -24,7 +24,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "loki"
+        "uid": "P8E80F9AEF21F6940"
       },
       "fieldConfig": {
         "defaults": {
@@ -100,7 +100,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "loki"
+            "uid": "P8E80F9AEF21F6940"
           },
           "expr": "sum by (namespace) (count_over_time({namespace=~\"$namespace\"}[$__interval]))",
           "legendFormat": "{{namespace}}",
@@ -113,7 +113,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "loki"
+        "uid": "P8E80F9AEF21F6940"
       },
       "fieldConfig": {
         "defaults": {
@@ -193,7 +193,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "loki"
+            "uid": "P8E80F9AEF21F6940"
           },
           "expr": "sum by (namespace) (count_over_time({namespace=~\"$namespace\"} |~ \"(?i)error|ERROR|\\\"level\\\":\\\"error\\\"\"[$__interval]))",
           "legendFormat": "{{namespace}}",
@@ -206,7 +206,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "loki"
+        "uid": "P8E80F9AEF21F6940"
       },
       "fieldConfig": {
         "defaults": {
@@ -250,7 +250,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "loki"
+            "uid": "P8E80F9AEF21F6940"
           },
           "expr": "sum(count_over_time({namespace=~\"$namespace\"}[$__range]))",
           "refId": "A"
@@ -262,7 +262,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "loki"
+        "uid": "P8E80F9AEF21F6940"
       },
       "fieldConfig": {
         "defaults": {
@@ -314,7 +314,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "loki"
+            "uid": "P8E80F9AEF21F6940"
           },
           "expr": "sum(count_over_time({namespace=~\"$namespace\"} |~ \"(?i)error|ERROR|\\\"level\\\":\\\"error\\\"\"[$__range]))",
           "refId": "A"
@@ -326,7 +326,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "loki"
+        "uid": "P8E80F9AEF21F6940"
       },
       "fieldConfig": {
         "defaults": {
@@ -370,7 +370,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "loki"
+            "uid": "P8E80F9AEF21F6940"
           },
           "expr": "sum(count_over_time({namespace=~\"$namespace\"} |~ \"(?i)warn|WARN|\\\"level\\\":\\\"warn\\\"\"[$__range]))",
           "refId": "A"
@@ -382,7 +382,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "loki"
+        "uid": "P8E80F9AEF21F6940"
       },
       "fieldConfig": {
         "defaults": {
@@ -426,7 +426,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "loki"
+            "uid": "P8E80F9AEF21F6940"
           },
           "expr": "count(count by (pod) ({namespace=~\"$namespace\"}))",
           "refId": "A"
@@ -438,7 +438,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "loki"
+        "uid": "P8E80F9AEF21F6940"
       },
       "gridPos": {
         "h": 14,
@@ -461,7 +461,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "loki"
+            "uid": "P8E80F9AEF21F6940"
           },
           "expr": "{namespace=~\"$namespace\"} |~ \"$search\"",
           "refId": "A"
@@ -473,7 +473,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "loki"
+        "uid": "P8E80F9AEF21F6940"
       },
       "gridPos": {
         "h": 10,
@@ -496,7 +496,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "loki"
+            "uid": "P8E80F9AEF21F6940"
           },
           "expr": "{namespace=~\"$namespace\"} |~ \"(?i)error|ERROR|\\\"level\\\":\\\"error\\\"\"",
           "refId": "A"
@@ -519,7 +519,7 @@
         },
         "datasource": {
           "type": "loki",
-          "uid": "loki"
+          "uid": "P8E80F9AEF21F6940"
         },
         "definition": "",
         "hide": 0,
