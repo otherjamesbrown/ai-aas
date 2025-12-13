@@ -35,7 +35,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "P8E80F9AEF21F6940"
+        "uid": "${DS_LOKI}"
       },
       "description": "Enter a request_id or trace_id to trace a request across services",
       "gridPos": {
@@ -59,7 +59,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "P8E80F9AEF21F6940"
+        "uid": "${DS_LOKI}"
       },
       "fieldConfig": {
         "defaults": {
@@ -135,7 +135,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "P8E80F9AEF21F6940"
+            "uid": "${DS_LOKI}"
           },
           "expr": "sum by (namespace) (count_over_time({namespace=~\"development|admin-api-service|user-org-service\"} |= \"$trace_id\"[$__interval]))",
           "legendFormat": "{{namespace}}",
@@ -148,7 +148,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "P8E80F9AEF21F6940"
+        "uid": "${DS_LOKI}"
       },
       "fieldConfig": {
         "defaults": {
@@ -232,7 +232,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "P8E80F9AEF21F6940"
+            "uid": "${DS_LOKI}"
           },
           "expr": "avg by (namespace) (avg_over_time({namespace=~\"development|admin-api-service|user-org-service\"} | json | unwrap duration_ms[$__interval]))",
           "legendFormat": "{{namespace}}",
@@ -245,7 +245,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "P8E80F9AEF21F6940"
+        "uid": "${DS_LOKI}"
       },
       "fieldConfig": {
         "defaults": {
@@ -289,7 +289,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "P8E80F9AEF21F6940"
+            "uid": "${DS_LOKI}"
           },
           "expr": "sum(count_over_time({namespace=~\"development|admin-api-service|user-org-service\"} |= \"$trace_id\"[$__range]))",
           "refId": "A"
@@ -301,7 +301,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "P8E80F9AEF21F6940"
+        "uid": "${DS_LOKI}"
       },
       "fieldConfig": {
         "defaults": {
@@ -345,7 +345,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "P8E80F9AEF21F6940"
+            "uid": "${DS_LOKI}"
           },
           "expr": "count(count by (namespace) ({namespace=~\"development|admin-api-service|user-org-service\"} |= \"$trace_id\"))",
           "refId": "A"
@@ -357,7 +357,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "P8E80F9AEF21F6940"
+        "uid": "${DS_LOKI}"
       },
       "fieldConfig": {
         "defaults": {
@@ -401,7 +401,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "P8E80F9AEF21F6940"
+            "uid": "${DS_LOKI}"
           },
           "expr": "sum(count_over_time({namespace=~\"development|admin-api-service|user-org-service\"} |= \"$trace_id\" |~ \"(?i)error|\\\"level\\\":\\\"error\\\"\"[$__range]))",
           "refId": "A"
@@ -413,7 +413,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "P8E80F9AEF21F6940"
+        "uid": "${DS_LOKI}"
       },
       "gridPos": {
         "h": 14,
@@ -436,7 +436,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "P8E80F9AEF21F6940"
+            "uid": "${DS_LOKI}"
           },
           "expr": "{namespace=~\"development|admin-api-service|user-org-service\"} |= \"$trace_id\"",
           "refId": "A"
@@ -448,7 +448,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "P8E80F9AEF21F6940"
+        "uid": "${DS_LOKI}"
       },
       "gridPos": {
         "h": 8,
@@ -471,7 +471,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "P8E80F9AEF21F6940"
+            "uid": "${DS_LOKI}"
           },
           "expr": "{namespace=~\"development|admin-api-service|user-org-service\"} |~ \"request_id|trace_id\" | json | line_format \"{{.request_id}} | {{.method}} {{.path}} | {{.status}} | {{.duration_ms}}\"",
           "refId": "A"
@@ -486,6 +486,25 @@
   "tags": ["tracing", "requests", "observability"],
   "templating": {
     "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "Loki",
+          "value": "Loki"
+        },
+        "hide": 2,
+        "includeAll": false,
+        "label": "Loki Datasource",
+        "multi": false,
+        "name": "DS_LOKI",
+        "options": [],
+        "query": "loki",
+        "queryValue": "",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
       {
         "current": {
           "selected": false,
