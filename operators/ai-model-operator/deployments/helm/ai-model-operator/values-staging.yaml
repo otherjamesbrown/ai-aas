@@ -1,0 +1,30 @@
+# Staging environment values for AI Model Operator
+replicaCount: 1
+
+image:
+  repository: ghcr.io/otherjamesbrown/ai-aas/ai-model-operator
+  pullPolicy: Always
+  tag: "staging"  # Use staging branch builds
+
+# Model downloader image (Go-based, supports Linode Object Storage)
+downloaderImage: "ghcr.io/otherjamesbrown/ai-aas/model-downloader:staging"
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Environment-specific configuration
+env:
+  - name: LOG_LEVEL
+    value: "info"
+  - name: ADMIN_API_BASE_URL
+    value: "http://admin-api-service-staging.admin-api-service.svc.cluster.local:8080"
+  - name: ADMIN_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: admin-api-credentials
+        key: api-key

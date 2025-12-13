@@ -1,0 +1,40 @@
+# AIModel CR for unsloth/gpt-oss-20b (Staging)
+#
+# SECURITY WARNING: This configuration uses trustRemoteCode
+# which allows the model to execute arbitrary Python code from HuggingFace.
+# Only use with trusted model sources.
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: unsloth-gpt-oss-20b
+  namespace: staging
+  labels:
+    app: vllm-inference
+    model: gpt-oss-20b
+    provider: unsloth
+    environment: staging
+spec:
+  modelName: unsloth-gpt-oss-20b
+  modelID: unsloth/gpt-oss-20b
+  enabled: true
+  runtime: vllm
+  minReplicas: 1
+  maxReplicas: 1
+  resources:
+    requests:
+      cpu: "4"
+      memory: "16Gi"
+      nvidia.com/gpu: "1"
+    limits:
+      cpu: "8"
+      memory: "32Gi"
+      nvidia.com/gpu: "1"
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+  runtimeArgs:
+    - --dtype=auto
+    - --max-model-len=4096
+    - --gpu-memory-utilization=0.9
+  trustRemoteCode: true
