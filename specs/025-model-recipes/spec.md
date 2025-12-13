@@ -376,16 +376,17 @@ POST /api/v1/recipes/{name}/validate    # Validate recipe
 - Create initial recipe library for existing models
 - Basic CLI commands
 
-### Phase 2: TEI Runtime Support (Embeddings & Rerankers)
+### Phase 2: Triton Runtime Support (Vision Models)
+- Add Triton InferenceService builder to operator
+- Create vision model recipes (Florence, SAM, YOLO)
+- Model repository management for Triton (S3/Object Storage)
+- Triton model config generation
+
+### Phase 3: TEI Runtime Support (Embeddings & Rerankers)
 - Add TEI container builder to operator
 - Create embedding model recipes (BGE, E5)
 - Create reranker model recipes (BGE Reranker)
 - OpenAI-compatible embedding API endpoint
-
-### Phase 3: Triton Runtime Support
-- Add Triton InferenceService builder
-- Create vision model recipes (Florence, SAM, YOLO)
-- Model repository management for Triton
 
 ### Phase 4: Advanced Features
 - Recipe versioning and rollback
