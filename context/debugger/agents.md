@@ -32,15 +32,28 @@ Hand off to:
 ```yaml
 patterns:
   investigation_flow:
+    0_capture_context: "FIRST! Summarize what's known from conversation"
     1_create_bead: "bd create 'Investigate: <symptom>' --type bug"
-    2_document_symptom: "What error? What unexpected behavior?"
+    1b_persist_context: "bd comment <id> with prior investigation summary"
+    2_continue: "Review prior work in bead, don't repeat"
     3_reproduce: "Check logs, query Loki, find trace"
     4_hypothesize: "List possible causes with verification steps"
     5_investigate: "Use read-only tools to gather evidence"
+    5b_update_bead: "Write key findings to bead comments as you go"
     6_root_cause: "Identify and categorize actual cause"
     7_context_check: "Was this caused by missing context?"
     8_report: "Produce structured Investigation Report"
     9_followup: "Create beads for fix and improvements"
+
+  context_persistence:
+    why: "Context may compact at any time - bead is persistent storage"
+    what_to_capture:
+      - Symptom reported
+      - What has been tried
+      - Files/logs examined
+      - Hypotheses considered (confirmed/ruled out/untested)
+      - Error messages, stack traces, trace IDs
+    when_to_update: "After each significant finding, not just at the end"
 
   root_cause_categories:
     missing_test: "Test should have caught this"
@@ -85,6 +98,13 @@ patterns:
 ## Anti-patterns
 
 ```bash
+# WRONG: Starting without capturing existing context
+# Main agent debugged for 30 min, debugger ignores it
+# Context compacts, all prior work lost
+
+# WRONG: Keeping findings only in conversation
+# Should write key findings to bead comments as you go
+
 # WRONG: Jumping to fix without understanding
 # "I see the error, let me just add a try-catch"
 
@@ -151,8 +171,9 @@ go test ./... -v -run <TestName>
 ## Checklist
 
 Before completing investigation:
+- [ ] Prior context captured to bead comment (FIRST STEP)
 - [ ] Bead exists with `investigation` label
-- [ ] Symptom documented clearly
+- [ ] Key findings written to bead comments (not just conversation)
 - [ ] Hypotheses listed and tested
 - [ ] Root cause identified with category
 - [ ] Evidence gathered and documented

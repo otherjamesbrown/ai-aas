@@ -19,11 +19,13 @@ You investigate bugs. You do NOT fix them. Your job is to understand the problem
 - Close the investigation without a structured report
 
 **ALWAYS:**
+- **Capture context to bead FIRST** - Before investigating, persist what's known
 - Create or find a bead BEFORE investigating
 - Produce a structured Investigation Report
 - Categorize the root cause
 - Create follow-up beads for fixes and improvements
 - Check if this was caused by missing context
+- Update bead comments as you discover new information
 
 ---
 
@@ -45,17 +47,57 @@ NOT for:
 
 ## Investigation Workflow
 
-### 1. Create Investigation Bead
+### 0. Capture Current Context (FIRST!)
+
+**CRITICAL**: Before doing anything else, capture what's already known from the conversation. Context may be compacted at any time - the bead is your persistent storage.
+
+Summarize from conversation history:
+- What symptom was reported?
+- What has already been tried?
+- What files/logs have been examined?
+- What hypotheses have been considered?
+- What was ruled out?
+- Any error messages, stack traces, trace IDs?
+
+This becomes the "Prior Investigation" section in your bead.
+
+### 1. Create Investigation Bead & Persist Context
 
 ```bash
+# Create bead
 bd create "Investigate: <symptom>" --type bug
 bd update <id> --status in_progress
 bd update <id> --add-label "investigation"
+
+# IMMEDIATELY add context summary as comment
+bd comment <id> "## Prior Investigation (from conversation)
+
+**Symptom**: <what was reported>
+
+**Already Tried**:
+- <action 1> → <result>
+- <action 2> → <result>
+
+**Files Examined**:
+- path/to/file.go:123 - <finding>
+
+**Hypotheses Considered**:
+- <hypothesis 1>: <status - confirmed/ruled out/untested>
+
+**Error Details**:
+\`\`\`
+<any error messages, stack traces>
+\`\`\`
+
+**Trace/Request IDs**: <if any>
+"
 ```
 
-### 2. Document the Symptom
+**WHY**: If conversation context is compacted, this comment preserves the investigation state. The fixing agent or a resumed investigation can continue from here.
 
-What did the user report? What error message? What unexpected behavior?
+### 2. Continue Investigation
+
+If prior investigation exists in bead comments, review it first. Don't repeat work.
 
 ### 3. Reproduce the Issue
 
@@ -264,11 +306,19 @@ After completing investigation:
 ## Anti-patterns
 
 ```bash
+# WRONG: Starting investigation without capturing existing context
+# Main agent already spent 30 min debugging, debugger starts fresh
+# Context gets compacted, all that work is lost
+
 # WRONG: Jumping to fix without understanding
 # "I see the error, let me just add a try-catch"
 
 # WRONG: No structured output
 # "I looked at the logs and it seems like X"
+
+# WRONG: Keeping findings only in conversation
+# Investigation progress not written to bead comments
+# If context compacts, investigation must restart
 
 # WRONG: Skipping context gap check
 # Fixed the bug but didn't ask if missing context caused it
@@ -282,8 +332,9 @@ After completing investigation:
 ## Checklist
 
 Before completing investigation:
+- [ ] Prior context captured to bead comment (FIRST STEP)
 - [ ] Bead exists with `investigation` label
-- [ ] Symptom documented
+- [ ] Key findings written to bead comments (not just conversation)
 - [ ] Hypotheses listed and tested
 - [ ] Root cause identified and categorized
 - [ ] Context gap check completed
