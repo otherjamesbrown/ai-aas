@@ -96,6 +96,112 @@ If infrastructure or service changes:
 
 ---
 
+---
+
+## Context Quality Audit
+
+Run this audit when invoked with "full review" or periodically (weekly).
+
+### Check Each Level 2 File
+
+```yaml
+quality_checks:
+  line_count:
+    target: "<200 lines"
+    action: "Flag if over 200, recommend extraction to Level 3"
+
+  structure:
+    required_sections:
+      - "## Domain"
+      - "## Key Patterns"
+      - "## Anti-patterns"
+      - "## Commands"
+      - "## Sources"
+      - "## Checklist"
+    action: "Flag missing sections"
+
+  format:
+    yaml_patterns: "Key Patterns MUST be YAML, not prose"
+    anti_patterns: "WRONG examples only, no CORRECT (agent knows the rules)"
+    no_ascii_diagrams: "Use YAML hierarchies instead"
+    no_prose_paragraphs: "Bullets and tables only"
+
+  links:
+    all_sources_valid: "Check each path in Sources table exists"
+    no_broken_links: "Verify markdown links resolve"
+    no_duplicated_content: "If >10 lines match another doc, should be a link"
+
+  freshness:
+    last_verified_date: "Header should have date within 30 days"
+    commit_hash_valid: "Header commit should exist in git history"
+```
+
+### Check Level 3 Reference Docs
+
+```yaml
+reference_quality:
+  ARCHITECTURE.md:
+    max_lines: 300
+    format: "YAML blocks, no ASCII diagrams"
+    links_to_source: "Should link to code, not describe it"
+
+  docs/operators/*.md:
+    links_to_crd_source: "Must link to actual Go types file"
+    examples_current: "YAML examples should match current CRD"
+
+  docs/runbooks/*.md:
+    commands_tested: "Shell commands should be copy-pasteable"
+    no_stale_urls: "Check URLs still resolve"
+```
+
+### Quality Report Format
+
+```markdown
+## Context Quality Audit
+
+### Line Count Check
+
+| File | Lines | Limit | Status |
+|------|-------|-------|--------|
+| cli-developer/agents.md | 128 | 200 | ✅ OK |
+| go-services-developer/agents.md | 202 | 200 | ⚠️ OVER |
+| operator-developer/agents.md | 171 | 200 | ✅ OK |
+
+### Structure Check
+
+| File | Missing Sections |
+|------|-----------------|
+| web-portal/agents.md | None |
+
+### Format Issues
+
+| File | Issue | Line |
+|------|-------|------|
+| go-services-developer/agents.md | Prose paragraph | 45-52 |
+| infra-ops-manager/agents.md | ASCII diagram | 78-95 |
+
+### Broken Links
+
+| File | Link | Status |
+|------|------|--------|
+| operator-developer/agents.md | `docs/foo.md` | ❌ NOT FOUND |
+
+### Stale Content
+
+| File | Last Verified | Days Stale |
+|------|---------------|------------|
+| cli-developer/agents.md | 2025-12-13 | 0 |
+| ARCHITECTURE.md | 2025-11-01 | 42 ⚠️ |
+
+### Recommendations
+
+1. **go-services-developer/agents.md**: Extract api_endpoints to separate reference doc
+2. **ARCHITECTURE.md**: Update last_verified date after review
+3. **infra-ops-manager/agents.md**: Convert ASCII diagram at line 78 to YAML
+```
+
+---
+
 ## Output Report
 
 Generate a report in this format:
