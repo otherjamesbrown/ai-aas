@@ -2,7 +2,7 @@
 
 ## Overview
 
-A centralized configuration system for AI model deployment "recipes" that captures the specific requirements, runtime configurations, and resource needs for each model type. This enables consistent, repeatable deployments across environments while supporting diverse model types (LLMs, vision models, embedding models) and runtimes (vLLM, Triton, TGI).
+A centralized configuration system for AI model deployment "recipes" that captures the specific requirements, runtime configurations, and resource needs for each model type. This enables consistent, repeatable deployments across environments while supporting diverse model types (LLMs, vision models, embedding models, rerankers) and runtimes (vLLM, Triton, TGI, TEI).
 
 ## Problem Statement
 
@@ -41,7 +41,7 @@ spec:
   description: "Mistral AI's instruction-tuned 7B parameter model"
 
   # Runtime configuration
-  runtime: vllm  # vllm | triton | tgi | custom
+  runtime: vllm  # vllm | triton | tgi | tei | custom
 
   # Container image (optional - defaults based on runtime)
   image: vllm/vllm-openai:latest
@@ -166,8 +166,12 @@ infra/model-recipes/
 │   └── yolo/
 │       └── yolov8x.yaml
 ├── embedding/
-│   ├── bge-large-en.yaml
+│   ├── bge-large-en-v1.5.yaml
+│   ├── bge-m3.yaml
 │   └── e5-mistral-7b-instruct.yaml
+├── reranker/
+│   ├── bge-reranker-v2-m3.yaml
+│   └── ms-marco-minilm.yaml
 └── multimodal/
     ├── llava-1.5-7b.yaml
     └── qwen-vl-chat.yaml
@@ -223,6 +227,90 @@ spec:
     memory:
       requests: "8Gi"
       limits: "16Gi"
+```
+
+### TEI Runtime Support (Text Embeddings Inference)
+
+For embedding models and rerankers, HuggingFace's TEI provides optimized inference:
+
+```yaml
+apiVersion: ai.ai-aas.io/v1alpha1
+kind: ModelRecipe
+metadata:
+  name: bge-large-en-v1.5
+  labels:
+    ai.ai-aas.io/task: embedding
+    ai.ai-aas.io/runtime: tei
+spec:
+  modelID: BAAI/bge-large-en-v1.5
+  displayName: "BGE Large English v1.5"
+  runtime: tei
+
+  # TEI-specific configuration
+  runtimeArgs:
+    tei:
+      # Model type: embedding or reranker
+      modelType: embedding
+      # Maximum batch size for dynamic batching
+      maxBatchTokens: 16384
+      # Maximum concurrent requests
+      maxConcurrentRequests: 512
+      # Quantization (optional): float16, int8
+      dtype: float16
+      # Pooling strategy: cls, mean, splade
+      pooling: cls
+
+  resources:
+    gpu:
+      type: nvidia
+      count: 1
+      minMemoryGB: 4  # Embedding models are typically smaller
+    cpu:
+      requests: "2"
+      limits: "4"
+    memory:
+      requests: "4Gi"
+      limits: "8Gi"
+
+  healthCheck:
+    startupProbeSeconds: 60
+    livenessPath: /health
+    readinessPath: /health
+```
+
+#### Reranker Example
+
+```yaml
+apiVersion: ai.ai-aas.io/v1alpha1
+kind: ModelRecipe
+metadata:
+  name: bge-reranker-v2-m3
+  labels:
+    ai.ai-aas.io/task: reranking
+    ai.ai-aas.io/runtime: tei
+spec:
+  modelID: BAAI/bge-reranker-v2-m3
+  displayName: "BGE Reranker v2 M3"
+  runtime: tei
+
+  runtimeArgs:
+    tei:
+      modelType: reranker  # Key difference from embedding
+      maxBatchTokens: 8192
+      maxConcurrentRequests: 128
+      dtype: float16
+
+  resources:
+    gpu:
+      type: nvidia
+      count: 1
+      minMemoryGB: 4
+    cpu:
+      requests: "2"
+      limits: "4"
+    memory:
+      requests: "4Gi"
+      limits: "8Gi"
 ```
 
 ### Recipe Validation
@@ -288,12 +376,18 @@ POST /api/v1/recipes/{name}/validate    # Validate recipe
 - Create initial recipe library for existing models
 - Basic CLI commands
 
-### Phase 2: Triton Runtime Support
+### Phase 2: TEI Runtime Support (Embeddings & Rerankers)
+- Add TEI container builder to operator
+- Create embedding model recipes (BGE, E5)
+- Create reranker model recipes (BGE Reranker)
+- OpenAI-compatible embedding API endpoint
+
+### Phase 3: Triton Runtime Support
 - Add Triton InferenceService builder
 - Create vision model recipes (Florence, SAM, YOLO)
 - Model repository management for Triton
 
-### Phase 3: Advanced Features
+### Phase 4: Advanced Features
 - Recipe versioning and rollback
 - Recipe inheritance (base recipes + variants)
 - Automatic recipe generation from HuggingFace model cards
