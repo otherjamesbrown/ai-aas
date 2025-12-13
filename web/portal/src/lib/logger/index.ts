@@ -18,6 +18,8 @@
  * ```
  */
 
+import { useMemo } from 'react';
+
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export interface LogContext {
@@ -372,9 +374,6 @@ export { Logger };
  * @returns Logger instance with component context
  */
 export function useLogger(component?: string | LogContext): Logger {
-  // Import React hook here to avoid requiring React in environments where it's not needed
-  const { useMemo } = require('react');
-
   return useMemo(() => {
     const context: LogContext =
       typeof component === 'string' ? { component } : component || {};
