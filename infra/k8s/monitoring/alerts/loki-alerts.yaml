@@ -22,7 +22,7 @@ spec:
       rules:
         - alert: HighServiceErrorRate
           expr: |
-            sum(rate({namespace="development"} |= "error" | json | level="error" [5m])) by (service) > 10
+            sum(rate({namespace=~"development|staging|production"} |= "error" | json | level="error" [5m])) by (service) > 10
           for: 2m
           labels:
             severity: warning
@@ -36,7 +36,7 @@ spec:
 
         - alert: CriticalErrorBurst
           expr: |
-            sum(count_over_time({namespace="development"} |= "fatal" or "panic" or "critical" [1m])) by (service, pod) > 5
+            sum(count_over_time({namespace=~"development|staging|production"} |= "fatal" or "panic" or "critical" [1m])) by (service, pod) > 5
           for: 1m
           labels:
             severity: critical
@@ -190,7 +190,7 @@ spec:
       rules:
         - alert: APIRouterBackendConnectionFailure
           expr: |
-            sum(count_over_time({namespace="development", service="api-router-service"} |~ "(?i)(connection refused|connection timeout|dial tcp.*failed)" [5m])) by (backend) > 10
+            sum(count_over_time({namespace=~"development|staging|production", service="api-router-service"} |~ "(?i)(connection refused|connection timeout|dial tcp.*failed)" [5m])) by (backend) > 10
           for: 2m
           labels:
             severity: critical
@@ -203,7 +203,7 @@ spec:
 
         - alert: AdminAPIDatabaseErrors
           expr: |
-            sum(rate({namespace="development", service="admin-api-service"} |~ "(?i)(database.*error|postgres.*error|connection pool)" [5m])) > 5
+            sum(rate({namespace=~"development|staging|production", service="admin-api-service"} |~ "(?i)(database.*error|postgres.*error|connection pool)" [5m])) > 5
           for: 2m
           labels:
             severity: critical
@@ -219,7 +219,7 @@ spec:
       rules:
         - alert: HighAuthenticationFailureRate
           expr: |
-            sum(rate({namespace="development"} |~ "(?i)(authentication failed|unauthorized|invalid.*token|jwt.*error)" [5m])) by (service) > 20
+            sum(rate({namespace=~"development|staging|production"} |~ "(?i)(authentication failed|unauthorized|invalid.*token|jwt.*error)" [5m])) by (service) > 20
           for: 5m
           labels:
             severity: warning
@@ -236,7 +236,7 @@ spec:
       rules:
         - alert: ServicePanicDetected
           expr: |
-            sum(count_over_time({namespace="development"} |~ "(?i)(panic:|runtime error:|fatal error:)" [2m])) by (service, pod) > 0
+            sum(count_over_time({namespace=~"development|staging|production"} |~ "(?i)(panic:|runtime error:|fatal error:)" [2m])) by (service, pod) > 0
           for: 30s
           labels:
             severity: critical
@@ -249,7 +249,7 @@ spec:
 
         - alert: PodCrashLooping
           expr: |
-            sum(count_over_time({namespace="development"} |~ "(?i)(crashloopbackoff|back-off restarting failed container)" [10m])) by (pod) > 5
+            sum(count_over_time({namespace=~"development|staging|production"} |~ "(?i)(crashloopbackoff|back-off restarting failed container)" [10m])) by (pod) > 5
           for: 5m
           labels:
             severity: critical
@@ -266,9 +266,9 @@ spec:
         - alert: LowCorrelationIDCoverage
           expr: |
             (
-              sum(rate({namespace="development"} | json | correlation_id != "" [10m]))
+              sum(rate({namespace=~"development|staging|production"} | json | correlation_id != "" [10m]))
               /
-              sum(rate({namespace="development"}[10m]))
+              sum(rate({namespace=~"development|staging|production"}[10m]))
             ) < 0.95
           for: 15m
           labels:

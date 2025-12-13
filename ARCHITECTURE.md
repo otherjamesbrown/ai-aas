@@ -88,24 +88,24 @@ metadata:
   name: mistral-7b-instruct-v03
   namespace: development
 spec:
-  modelName: mistralai/Mistral-7B-Instruct-v0.3
-  source:
-    type: huggingface
-    huggingface:
-      modelId: mistralai/Mistral-7B-Instruct-v0.3
-  runtime:
-    type: vllm
-    vllm:
-      args:
-        - "--max-model-len=4096"
-        - "--dtype=half"
+  modelName: mistral-7b-instruct-v03
+  modelID: mistralai/Mistral-7B-Instruct-v0.3
+  enabled: true
+  runtime: vllm
+  minReplicas: 1
+  maxReplicas: 1
   resources:
     requests:
-      nvidia.com/gpu: "1"
+      cpu: "4"
       memory: "16Gi"
-    limits:
       nvidia.com/gpu: "1"
-      memory: "24Gi"
+    limits:
+      cpu: "8"
+      memory: "32Gi"
+      nvidia.com/gpu: "1"
+  runtimeArgs:
+    - --dtype=auto
+    - --max-model-len=8192
 ```
 
 ### Operator Architecture
