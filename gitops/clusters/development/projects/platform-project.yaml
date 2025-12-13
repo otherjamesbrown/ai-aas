@@ -36,6 +36,7 @@ spec:
   # Explicitly list allowed source repositories
   sourceRepos:
     - https://github.com/otherjamesbrown/ai-aas
+    - https://github.com/otherjamesbrown/ai-aas-config
     - https://istio-release.storage.googleapis.com/charts
     - https://knative.github.io/operator
     - https://grafana.github.io/helm-charts

@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: aimodels-config-staging
+  namespace: argocd
+  labels:
+    environment: staging
+    app: aimodels-config
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform-staging
+  source:
+    repoURL: https://github.com/otherjamesbrown/ai-aas-config
+    targetRevision: staging
+    path: environments/staging/models
+    directory:
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: true  # Allow empty directory initially
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
