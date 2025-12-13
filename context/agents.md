@@ -69,6 +69,62 @@ bd update <new-id> --add-label "agent:target-agent"
 
 ---
 
+## Tracking Context Gaps
+
+When fixing a bug, ask: **"Was this caused by missing or stale context?"**
+
+### Indicators of Context Gap
+
+- Agent didn't know a rule existed
+- Context doc said X but code does Y
+- Pattern not documented, agent guessed wrong
+- Anti-pattern not shown, agent made the mistake
+
+### Tagging Context Gaps
+
+```bash
+# Add label to bug bead
+bd update <id> --add-label "context-gap"
+
+# In close reason, specify what was missing
+bd close <id> --reason "IMPLEMENTED: commit abc123. CONTEXT-GAP: No anti-pattern for N+1 queries in go-services-developer/agents.md"
+```
+
+### Required Close Fields for Context Gaps
+
+When closing a bead with `context-gap` label:
+
+```
+IMPLEMENTED: <commit hash>
+CONTEXT-GAP: <what was missing>
+CONTEXT-FILE: <which file needs update>
+CONTEXT-FIX: <what to add - pattern, anti-pattern, rule>
+```
+
+### Finding Context Gaps
+
+```bash
+# Find all bugs caused by missing context
+bd list --label "context-gap"
+
+# Review for patterns - what's commonly missing?
+bd list --label "context-gap" --status closed
+```
+
+### Closing the Loop
+
+After fixing a context gap bug:
+1. Add `context-gap` label to the bead
+2. Close with CONTEXT-GAP details
+3. Create follow-up task to update context doc:
+   ```bash
+   bd create "Update context: add N+1 anti-pattern" --type task
+   bd update <new-id> --add-label "agent:go-services-developer"
+   bd update <new-id> --add-label "context-update"
+   ```
+
+---
+
 ## Agent Domains
 
 | Agent | Owns | Hand Off To |
@@ -111,6 +167,8 @@ bd close <id> --reason "IMPLEMENTED: commit <hash>, <summary>"
 bd update <id> --add-label "agent:go-services-developer"
 bd update <id> --add-label "component:api-router"
 bd update <id> --add-label "env:development"
+bd update <id> --add-label "context-gap"      # Bug caused by missing context
+bd update <id> --add-label "context-update"   # Task to fix context docs
 ```
 
 ---
