@@ -1,12 +1,21 @@
 ---
 title: AI Model Operator
-last_updated: 2025-12-10
+last_updated: 2025-12-13
 owner: operator-developer
 ---
 
 # AI Model Operator
 
 The AI Model Operator manages the lifecycle of AI models on the platform. It handles downloading models from HuggingFace Hub, caching them in S3, and deploying them via KServe InferenceServices.
+
+## Quick Links
+
+| Resource | Location |
+|----------|----------|
+| **CRD Source** | `operators/ai-model-operator/api/v1alpha1/aimodel_types.go` |
+| **Controller** | `operators/ai-model-operator/controllers/aimodel_controller.go` |
+| **Agent Context** | `context/operator-developer/agents.md` (condensed spec + patterns) |
+| **AIModel Examples** | `infra/k8s/aimodels/development/` |
 
 ## Custom Resource Definition
 

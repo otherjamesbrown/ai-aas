@@ -1,12 +1,17 @@
 # Claude Rules for AI-AAS Platform
 
-This document provides a set of specific, critical rules for interacting with the AI-AAS Platform repository.
+This document provides Claude-specific configuration for the AI-AAS Platform repository.
 
-For a general overview of the architecture, development workflow, and key documents, please first read the main guide:
+## Related Documents
 
-➡️ **[AI_ASSISTANT_GUIDE.md](./AI_ASSISTANT_GUIDE.md)**
+| Document | Purpose |
+|----------|---------|
+| **[context/agents.md](./context/agents.md)** | Core agent rules (NEVER/ALWAYS, beads workflow, domains) |
+| **[context/context_map.md](./context/context_map.md)** | Navigation index for all context docs |
+| **[AI_ASSISTANT_GUIDE.md](./AI_ASSISTANT_GUIDE.md)** | Onboarding guide (repo structure, CLI commands) |
+| **[ARCHITECTURE.md](./ARCHITECTURE.md)** | System architecture (YAML format) |
 
-After reading the main guide, adhere to the following critical rules below.
+> **Note**: Rules in `context/agents.md` apply to ALL AI agents. This file contains Claude-specific extensions.
 
 ## Issue Tracking with Beads
 
