@@ -253,6 +253,62 @@ Generate a report in this format:
 
 ---
 
+## Context Effectiveness Log
+
+Maintain `context/CONTEXT_EFFECTIVENESS_LOG.md` to track gaps and measure improvement.
+
+### When to Update the Log
+
+1. **After fixing a context-gap bug**: Add entry with gap details
+2. **When a bug is prevented**: Update `prevented_bugs` in original entry
+3. **Monthly**: Review all closed `context-gap` beads, ensure logged
+4. **Quarterly**: Calculate effectiveness metrics
+
+### Adding a Log Entry
+
+```yaml
+- date: 2025-12-13
+  bug_bead: ai-aas-xxx
+  gap_type: missing_antipattern  # missing_pattern | missing_antipattern | stale_content | missing_rule
+  context_file: context/go-services-developer/agents.md
+  what_was_missing: "No example showing N+1 query anti-pattern"
+  fix_applied: "Added WRONG example for N+1 queries in Anti-patterns section"
+  fix_bead: ai-aas-yyy
+  prevented_bugs: []  # Update later when similar bugs don't happen
+```
+
+### Tracking Prevention
+
+When reviewing a bug, check: "Did existing context prevent this from being worse?"
+
+If an agent correctly avoided a mistake because of documented anti-pattern:
+1. Find the log entry that added that anti-pattern
+2. Add current bead to `prevented_bugs`
+3. This proves the context fix worked
+
+### Effectiveness Metrics
+
+```
+Effectiveness = prevented_bugs / (prevented_bugs + new_context_gaps)
+```
+
+Target: >50% of context fixes should prevent future bugs within 3 months.
+
+### Monthly Review Checklist
+
+```bash
+# 1. Find all closed context-gap bugs
+bd list --label "context-gap" --status closed
+
+# 2. Ensure each is logged in CONTEXT_EFFECTIVENESS_LOG.md
+
+# 3. Update metrics tables in the log
+
+# 4. Check for prevented bugs - did any agent avoid a mistake?
+```
+
+---
+
 ## Key Files to Read
 
 ```yaml
@@ -260,6 +316,7 @@ context_files:
   level_1:
     - context/agents.md
     - context/context_map.md
+    - context/CONTEXT_EFFECTIVENESS_LOG.md
 
   level_2:
     - context/cli-developer/agents.md
