@@ -33,6 +33,10 @@ spec:
     - key: nvidia.com/gpu
       operator: Exists
       effect: NoSchedule
+    - key: gpu-workload
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
   runtimeArgs:
     - --dtype=auto
     - --max-model-len=8192
