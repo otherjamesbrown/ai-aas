@@ -1,18 +1,11 @@
-# LEGACY: This Application deploys a raw InferenceService directly.
-# Once the AI Model Operator is deployed to staging, this should be replaced
-# by an Application that deploys an AIModel CR instead. See:
-# - operators/ai-model-operator/config/samples/mistral-7b-instruct-staging.yaml
-# - infra/k8s/kserve/models/mistral-7b-instruct-staging.yaml (migration steps)
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: vllm-mistral-7b-staging
+  name: aimodels-staging
   namespace: argocd
   labels:
     environment: staging
-    app: vllm-inference
-    model: mistral-7b-instruct
-    legacy: "true"  # Mark as legacy for future cleanup
+    app: aimodels
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
@@ -20,9 +13,9 @@ spec:
   source:
     repoURL: https://github.com/otherjamesbrown/ai-aas
     targetRevision: staging
-    path: infra/k8s/kserve/models
+    path: infra/k8s/aimodels/staging
     directory:
-      include: mistral-7b-instruct-staging.yaml
+      recurse: false
   destination:
     server: https://kubernetes.default.svc
     namespace: staging
