@@ -2,7 +2,7 @@
 
 ## Overview
 
-A centralized configuration system for AI model deployment "recipes" that captures the specific requirements, runtime configurations, and resource needs for each model type. This enables consistent, repeatable deployments across environments while supporting diverse model types (LLMs, vision models, embedding models, rerankers) and runtimes (vLLM, Triton, TGI, TEI).
+A centralized configuration system for AI model deployment "recipes" that captures the specific requirements, runtime configurations, and resource needs for each model type. This enables consistent, repeatable deployments across environments while supporting diverse model types (LLMs, vision models, multimodal) and runtimes (vLLM, Triton, TGI).
 
 ## Problem Statement
 
@@ -41,7 +41,7 @@ spec:
   description: "Mistral AI's instruction-tuned 7B parameter model"
 
   # Runtime configuration
-  runtime: vllm  # vllm | triton | tgi | tei | custom
+  runtime: vllm  # vllm | triton | tgi | custom
 
   # Container image (optional - defaults based on runtime)
   image: vllm/vllm-openai:latest
@@ -165,13 +165,6 @@ infra/model-recipes/
 │   │   └── sam-vit-huge.yaml
 │   └── yolo/
 │       └── yolov8x.yaml
-├── embedding/
-│   ├── bge-large-en-v1.5.yaml
-│   ├── bge-m3.yaml
-│   └── e5-mistral-7b-instruct.yaml
-├── reranker/
-│   ├── bge-reranker-v2-m3.yaml
-│   └── ms-marco-minilm.yaml
 └── multimodal/
     ├── llava-1.5-7b.yaml
     └── qwen-vl-chat.yaml
@@ -229,88 +222,55 @@ spec:
       limits: "16Gi"
 ```
 
-### TEI Runtime Support (Text Embeddings Inference)
+### TGI Runtime Support
 
-For embedding models and rerankers, HuggingFace's TEI provides optimized inference:
+For models that work better with HuggingFace's Text Generation Inference:
 
 ```yaml
 apiVersion: ai.ai-aas.io/v1alpha1
 kind: ModelRecipe
 metadata:
-  name: bge-large-en-v1.5
+  name: falcon-7b-instruct
   labels:
-    ai.ai-aas.io/task: embedding
-    ai.ai-aas.io/runtime: tei
+    ai.ai-aas.io/task: text-generation
+    ai.ai-aas.io/runtime: tgi
 spec:
-  modelID: BAAI/bge-large-en-v1.5
-  displayName: "BGE Large English v1.5"
-  runtime: tei
+  modelID: tiiuae/falcon-7b-instruct
+  displayName: "Falcon 7B Instruct"
+  runtime: tgi
 
-  # TEI-specific configuration
+  # TGI-specific configuration
   runtimeArgs:
-    tei:
-      # Model type: embedding or reranker
-      modelType: embedding
-      # Maximum batch size for dynamic batching
-      maxBatchTokens: 16384
-      # Maximum concurrent requests
-      maxConcurrentRequests: 512
-      # Quantization (optional): float16, int8
-      dtype: float16
-      # Pooling strategy: cls, mean, splade
-      pooling: cls
+    tgi:
+      # Quantization options
+      quantize: null  # null | bitsandbytes | gptq | awq
+      # Maximum input length
+      maxInputLength: 1024
+      # Maximum total tokens (input + output)
+      maxTotalTokens: 2048
+      # Maximum batch size for prefill
+      maxBatchPrefillTokens: 4096
+      # Sharding for multi-GPU
+      numShard: 1
+      # Flash attention
+      disableFlashAttention: false
 
   resources:
     gpu:
       type: nvidia
       count: 1
-      minMemoryGB: 4  # Embedding models are typically smaller
+      minMemoryGB: 16
     cpu:
-      requests: "2"
-      limits: "4"
+      requests: "4"
+      limits: "8"
     memory:
-      requests: "4Gi"
-      limits: "8Gi"
+      requests: "16Gi"
+      limits: "32Gi"
 
   healthCheck:
-    startupProbeSeconds: 60
+    startupProbeSeconds: 300
     livenessPath: /health
     readinessPath: /health
-```
-
-#### Reranker Example
-
-```yaml
-apiVersion: ai.ai-aas.io/v1alpha1
-kind: ModelRecipe
-metadata:
-  name: bge-reranker-v2-m3
-  labels:
-    ai.ai-aas.io/task: reranking
-    ai.ai-aas.io/runtime: tei
-spec:
-  modelID: BAAI/bge-reranker-v2-m3
-  displayName: "BGE Reranker v2 M3"
-  runtime: tei
-
-  runtimeArgs:
-    tei:
-      modelType: reranker  # Key difference from embedding
-      maxBatchTokens: 8192
-      maxConcurrentRequests: 128
-      dtype: float16
-
-  resources:
-    gpu:
-      type: nvidia
-      count: 1
-      minMemoryGB: 4
-    cpu:
-      requests: "2"
-      limits: "4"
-    memory:
-      requests: "4Gi"
-      limits: "8Gi"
 ```
 
 ### Recipe Validation
@@ -373,7 +333,7 @@ POST /api/v1/recipes/{name}/validate    # Validate recipe
 ### Phase 1: Recipe CRD and Basic Support
 - Define ModelRecipe CRD
 - Update AI Model Operator to read recipes
-- Create initial recipe library for existing models
+- Create initial recipe library for existing models (vLLM)
 - Basic CLI commands
 
 ### Phase 2: Triton Runtime Support (Vision Models)
@@ -382,11 +342,10 @@ POST /api/v1/recipes/{name}/validate    # Validate recipe
 - Model repository management for Triton (S3/Object Storage)
 - Triton model config generation
 
-### Phase 3: TEI Runtime Support (Embeddings & Rerankers)
-- Add TEI container builder to operator
-- Create embedding model recipes (BGE, E5)
-- Create reranker model recipes (BGE Reranker)
-- OpenAI-compatible embedding API endpoint
+### Phase 3: TGI Runtime Support
+- Add TGI container builder to operator
+- Create TGI-specific recipes for compatible models
+- Support for quantization options (bitsandbytes, GPTQ, AWQ)
 
 ### Phase 4: Advanced Features
 - Recipe versioning and rollback
@@ -399,7 +358,7 @@ POST /api/v1/recipes/{name}/validate    # Validate recipe
 1. **Knowledge Capture**: Learned settings (tokenizer-mode, memory tuning) are preserved
 2. **Consistency**: Same recipe across all environments
 3. **Flexibility**: Easy overrides for environment-specific needs
-4. **Multi-Runtime**: Single abstraction for vLLM, Triton, TGI, etc.
+4. **Multi-Runtime**: Single abstraction for vLLM, Triton, TGI
 5. **Discoverability**: Browse available recipes, see what's supported
 6. **Validation**: Catch misconfigurations before deployment
 
@@ -409,6 +368,10 @@ POST /api/v1/recipes/{name}/validate    # Validate recipe
 2. Update AIModels to reference recipes
 3. Deprecate inline configs (keep for backwards compatibility)
 4. New models must use recipes
+
+## Related Specs
+
+- **[026-rag-infrastructure](../026-rag-infrastructure/spec.md)**: RAG support including embedding models, rerankers, and vector database infrastructure
 
 ## Open Questions
 
