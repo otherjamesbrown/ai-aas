@@ -9,6 +9,7 @@ Unified logging package for all Go services using zap with standardized configur
 - **Structured Logging**: JSON output with standardized field names
 - **Log Redaction**: Built-in patterns for masking sensitive data
 - **Environment-Aware**: Different encoder configs for development vs production
+- **Log Sampling**: Configurable sampling to reduce log volume in high-traffic scenarios
 
 ## Usage
 
@@ -76,6 +77,54 @@ fields := map[string]interface{}{
 safeFields := logging.RedactFields(fields)
 ```
 
+### Log Sampling
+
+Log sampling reduces log volume in high-traffic scenarios by sampling debug and info logs while **always logging warnings and errors**.
+
+```go
+import "github.com/ai-aas/shared-go/logging"
+
+// Create logger with default sampling (1-in-100 after initial threshold)
+cfg := logging.DefaultConfig().
+    WithServiceName("my-service").
+    WithSampling(logging.DefaultSamplingConfig())
+
+logger, err := logging.New(cfg)
+if err != nil {
+    log.Fatal(err)
+}
+defer logger.Sync()
+
+// Custom sampling rates
+customSampling := &logging.SamplingConfig{
+    Enabled:    true,
+    Initial:    50,  // Log first 50 messages per second
+    Thereafter: 10,  // Then log 1 in every 10 messages
+}
+
+cfg = logging.DefaultConfig().
+    WithServiceName("my-service").
+    WithSampling(customSampling)
+
+logger, _ := logging.New(cfg)
+```
+
+**Sampling Behavior:**
+- **Debug and Info levels**: Sampled based on configuration
+- **Warn and Error levels**: NEVER sampled (always logged)
+- **Initial threshold**: Number of messages to log each second before sampling
+- **Thereafter rate**: Sample 1 in N messages after initial threshold
+
+**When to use sampling:**
+- High-traffic endpoints (e.g., `/healthz`, `/metrics`)
+- Verbose debug logging in production
+- Rate-limited info logs for common operations
+
+**When NOT to use sampling:**
+- Development environments (disable sampling)
+- Low-traffic services (overhead not worth it)
+- Critical business logic logging (use warn/error levels instead)
+
 ## Standardized Fields
 
 All loggers automatically include:
@@ -115,6 +164,27 @@ The logger automatically detects environment from `ENVIRONMENT` environment vari
 - `development`: Development encoder config (more readable)
 - `production`: Production encoder config (optimized JSON)
 
+### Sampling Configuration
+
+Sampling can be configured to reduce log volume:
+
+```go
+type SamplingConfig struct {
+    Enabled    bool  // Enable/disable sampling
+    Initial    int   // Number of messages to log per second before sampling
+    Thereafter int   // Sample 1 in N messages after initial threshold
+}
+```
+
+**Default sampling** (via `DefaultSamplingConfig()`):
+- `Initial: 100` - Log first 100 messages per second
+- `Thereafter: 100` - After that, log 1 in every 100 messages
+
+**Environment-specific recommendations:**
+- **Development**: Disable sampling (set `Sampling: nil`)
+- **Staging**: Use default sampling
+- **Production**: Use default or custom sampling based on traffic
+
 ## Integration with OpenTelemetry
 
 The logger automatically extracts trace context from `context.Context`:
@@ -146,6 +216,9 @@ Patterns are based on `configs/log-redaction.yaml`.
 3. **Redact sensitive data**: Use redaction helpers for user input or config values
 4. **Set appropriate levels**: Use `debug` for development, `info` for production
 5. **Sync on shutdown**: Call `logger.Sync()` before application exit
+6. **Use sampling wisely**: Enable sampling for high-traffic endpoints in production
+7. **Never sample errors**: Use `warn` or `error` levels for critical logs that must never be sampled
+8. **Test sampling configuration**: Verify sampling doesn't hide important diagnostic information
 
 ## Migration from Service-Specific Loggers
 

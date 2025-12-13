@@ -1,7 +1,7 @@
 # Environment Access Guide
 
 ---
-last_updated: 2025-12-09
+last_updated: 2025-12-12
 document_type: reference
 ---
 
@@ -52,8 +52,27 @@ git-crypt unlock
 
 **Monitoring & Observability**
 - Grafana: https://grafana.dev.otherjamesbrown.com or https://grafana.dev.ai-aas.local
+- Grafana (nip.io - no TLS): http://grafana.172.232.58.222.nip.io
 - Loki (Log Aggregation): https://loki.dev.otherjamesbrown.com or https://loki.dev.ai-aas.local
+- Loki (nip.io - no TLS): http://loki.172.232.58.222.nip.io
 - Loki API: `https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range`
+- Tempo (Tracing): `http://tempo.system.svc.cluster.local:3100` (cluster internal only)
+
+**Quick Access (nip.io - no TLS/DNS setup required)**:
+```bash
+# Open Grafana in browser
+open http://grafana.172.232.58.222.nip.io
+
+# Test Loki readiness
+curl http://loki.172.232.58.222.nip.io/ready
+
+# Query Loki logs (last 1 hour errors)
+curl -G http://loki.172.232.58.222.nip.io/loki/api/v1/query_range \
+  --data-urlencode 'query={level="error"}' \
+  --data-urlencode 'start='$(date -d '1 hour ago' +%s)000000000 \
+  --data-urlencode 'end='$(date +%s)000000000 \
+  --data-urlencode 'limit=100'
+```
 
 **API Keys**
 - Master Admin API Key: Found in `secrets/env/.env` as `MASTER_ADMIN_API_KEY`

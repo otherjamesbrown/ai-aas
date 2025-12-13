@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { impersonationApi } from '../api/impersonation';
 import type { ImpersonationSession } from '../api/impersonation';
+import { logger } from '@/lib/logger';
 
 interface ImpersonationBannerProps {
   session: ImpersonationSession;
@@ -48,7 +49,7 @@ export function ImpersonationBanner({ session, onRevoke }: ImpersonationBannerPr
         onRevoke();
         navigate({ to: '/support' });
       } catch (error) {
-        console.error('Failed to revoke session:', error);
+        logger.error('Failed to revoke impersonation session', { component: 'ImpersonationBanner', sessionId: session.session_id }, error instanceof Error ? error : undefined);
         alert('Failed to revoke session. Please try again.');
       } finally {
         setIsRevoking(false);

@@ -23,19 +23,66 @@ data:
         timeout: 10s
         send_batch_size: 1024
 
+      # Service graph processor - generates service topology from traces
+      servicegraph:
+        metrics_exporter: prometheus
+        latency_histogram_buckets: [100us, 1ms, 2ms, 6ms, 10ms, 100ms, 250ms, 1s, 2s, 5s, 10s]
+        dimensions:
+          - request.path
+          - request.method
+          - response.status_code
+        store:
+          ttl: 2s
+          max_items: 1000
+
     exporters:
       # Logging exporter for debugging
       logging:
         verbosity: basic
-      # No-op exporter - just accepts and drops traces
-      # Can be replaced with real backends later (Jaeger, Prometheus, etc.)
+
+      # Loki exporter for OTLP logs
+      loki:
+        endpoint: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
+        labels:
+          resource:
+            service.name: "service"
+            service.namespace: "namespace"
+          attributes:
+            level: "level"
+            trace_id: "trace_id"
+        default_labels_enabled:
+          exporter: true
+          job: true
+
+      # Tempo exporter for trace storage
+      otlp/tempo:
+        endpoint: tempo.monitoring.svc.cluster.local:4317
+        tls:
+          insecure: true
+
+      # Prometheus exporter for service graph metrics
+      prometheus:
+        endpoint: "0.0.0.0:8889"
+        namespace: otel
+        const_labels:
+          cluster: ai-aas-dev
 
     service:
       pipelines:
         traces:
           receivers: [otlp]
+          processors: [servicegraph, batch]
+          exporters: [logging, otlp/tempo]
+
+        logs:
+          receivers: [otlp]
           processors: [batch]
-          exporters: [logging]
+          exporters: [logging, loki]
+
+        metrics:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [prometheus]
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -54,7 +101,7 @@ spec:
     spec:
       containers:
       - name: otel-collector
-        image: otel/opentelemetry-collector:0.91.0
+        image: otel/opentelemetry-collector-contrib:0.91.0
         args:
         - --config=/conf/otel-collector-config.yaml
         ports:
@@ -63,6 +110,9 @@ spec:
           protocol: TCP
         - containerPort: 4318
           name: otlp-http
+          protocol: TCP
+        - containerPort: 8889
+          name: prometheus
           protocol: TCP
         volumeMounts:
         - name: config
@@ -95,5 +145,9 @@ spec:
     targetPort: 4318
     protocol: TCP
     name: otlp-http
+  - port: 8889
+    targetPort: 8889
+    protocol: TCP
+    name: prometheus
   selector:
     app: otel-collector

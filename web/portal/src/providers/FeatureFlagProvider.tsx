@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { httpClient } from '@/lib/http/client';
+import { logger } from '@/lib/logger';
 
 interface FeatureFlagContextValue {
   isEnabled: (flag: string) => boolean;
@@ -67,9 +68,11 @@ export function FeatureFlagProvider({
     } catch (err) {
       // Silently fall back to defaults - the feature flags endpoint is optional
       // and may not be available in all environments
-      if (import.meta.env.DEV) {
-        console.debug('Feature flags fetch failed, using defaults:', err);
-      }
+      logger.debug('Feature flags fetch failed, using defaults', {
+        component: 'FeatureFlagProvider',
+        userId,
+        organizationId
+      });
 
       // Use default flags on error
       setFlags(getDefaultFlags());

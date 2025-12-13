@@ -47,6 +47,16 @@ spec:
                 name: grafana
                 port:
                   number: 3000
+    - host: grafana.172.232.58.222.nip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 3000
   tls:
     - secretName: grafana-tls
       hosts:
