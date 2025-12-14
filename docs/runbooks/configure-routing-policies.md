@@ -144,9 +144,41 @@ kubectl run -n admin-api-service psql-client \
 EOF
 ```
 
-## Backend ID Alignment
+## Backend ID Alignment (CRITICAL)
 
-**CRITICAL**: The `backend_id` in routing policies MUST match the backend ID in `BACKEND_ENDPOINTS`.
+**The backend_id flows through the entire system and must match at THREE points:**
+
+```
+Request (model: "mistralai/Mistral-7B-Instruct-v0.3")
+   ↓
+Routing Policy (backend_id: "mistralai/Mistral-7B-Instruct-v0.3")  ← MUST MATCH
+   ↓
+BACKEND_ENDPOINTS key ("mistralai/Mistral-7B-Instruct-v0.3":http://...)  ← MUST MATCH
+   ↓
+vLLM served model name (--served-model-name or HuggingFace ID)  ← MUST MATCH
+```
+
+### Why This Matters
+
+1. **Routing Policy `backend_id`**: Used to look up the backend URL in `BACKEND_ENDPOINTS`
+2. **BACKEND_ENDPOINTS key**: Maps to the service URL
+3. **vLLM model name**: The api-router passes the `backend_id` as the `model` parameter to vLLM
+
+If any of these don't match, you get:
+- `backend_id` ≠ `BACKEND_ENDPOINTS` key → `localhost:8001` fallback (connection refused)
+- `backend_id` ≠ vLLM model name → 404 "The model 'X' does not exist"
+
+### Check What vLLM is Serving
+
+```bash
+# Get the actual model name from vLLM
+kubectl exec -n $NAMESPACE deploy/$MODEL-predictor-00001-deployment \
+  -- curl -s http://localhost:8000/v1/models | jq -r '.data[].id'
+```
+
+Example outputs:
+- `mistralai/Mistral-7B-Instruct-v0.3` (HuggingFace ID - default)
+- `openai/gpt-oss-20b` (custom --served-model-name)
 
 ### Check Current Backend Endpoints
 
@@ -155,14 +187,42 @@ kubectl get deployment -n $NAMESPACE api-router-service-$ENV-api-router-service 
   -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="BACKEND_ENDPOINTS")].value}'
 ```
 
-Example output:
-```
-mistral-7b-instruct:http://...:8012,unsloth/gpt-oss-20b:http://...:8012
+### Correct Configuration Example
+
+If vLLM serves `mistralai/Mistral-7B-Instruct-v0.3`:
+
+**BACKEND_ENDPOINTS (Helm values):**
+```yaml
+backends:
+  endpoints: "mistralai/Mistral-7B-Instruct-v0.3:http://mistral-7b-instruct-v03-predictor-00001-private.staging.svc.cluster.local:8012"
 ```
 
-Then create policies with matching backend_ids:
-- Policy for `mistral-7b-instruct-v03` → backend_id: `mistral-7b-instruct`
-- Policy for `unsloth/gpt-oss-20b` → backend_id: `unsloth/gpt-oss-20b`
+**Routing Policy:**
+```json
+{
+  "model": "mistralai/Mistral-7B-Instruct-v0.3",
+  "backends": [{"backend_id": "mistralai/Mistral-7B-Instruct-v0.3", "weight": 100}]
+}
+```
+
+### Common Mistake
+
+**WRONG** (caused ai-aas-f3ju bug):
+```yaml
+# Helm values
+backends:
+  endpoints: "mistral-7b-instruct:http://..."  # Custom short name
+
+# But vLLM serves: mistralai/Mistral-7B-Instruct-v0.3
+# Result: 404 "The model 'mistral-7b-instruct' does not exist"
+```
+
+**CORRECT**:
+```yaml
+# Helm values - use the EXACT model name vLLM serves
+backends:
+  endpoints: "mistralai/Mistral-7B-Instruct-v0.3:http://..."
+```
 
 ## Policy Sync
 
