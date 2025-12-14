@@ -213,89 +213,67 @@ jobs:
         run: |
           set -e
           echo "Checking for ArgoCD Applications managing the same resources..."
+          echo ""
+          echo "NOTE: Only checking for duplicates WITHIN each environment."
+          echo "Apps in different environments (development vs staging) are expected to manage same resources."
+          echo ""
 
-          # Collect all ArgoCD Applications with their target paths and namespaces
-          declare -A RESOURCE_MAP
           DUPLICATES_FOUND=0
 
-          for app in $(find gitops -name "*.yaml" -path "*/apps/*"); do
-            KIND=$(yq e '.kind' "$app" 2>/dev/null || echo "")
-            if [ "$KIND" != "Application" ]; then
+          # Check each environment separately
+          for env_dir in gitops/clusters/*/apps; do
+            if [ ! -d "$env_dir" ]; then
               continue
             fi
 
-            APP_NAME=$(yq e '.metadata.name' "$app" 2>/dev/null || echo "unknown")
-            REPO_URL=$(yq e '.spec.source.repoURL' "$app" 2>/dev/null || echo "")
-            SOURCE_PATH=$(yq e '.spec.source.path' "$app" 2>/dev/null || echo "")
-            DEST_NS=$(yq e '.spec.destination.namespace' "$app" 2>/dev/null || echo "default")
+            # Extract environment name from path (e.g., gitops/clusters/development/apps -> development)
+            ENV_NAME=$(echo "$env_dir" | cut -d'/' -f3)
+            echo "Checking environment: $ENV_NAME"
 
-            # Create a key based on destination namespace (resources managed)
-            # Apps in same namespace with overlapping resource types can conflict
-            KEY="${DEST_NS}"
+            # Track resources within this environment
+            declare -A ENV_RESOURCES
 
-            if [ -n "${RESOURCE_MAP[$KEY]:-}" ]; then
-              # Check if paths might contain overlapping resources
-              EXISTING="${RESOURCE_MAP[$KEY]}"
-              EXISTING_APP=$(echo "$EXISTING" | cut -d'|' -f1)
-              EXISTING_PATH=$(echo "$EXISTING" | cut -d'|' -f2)
-
-              # If both apps target the same namespace, check for resource type overlap
-              echo "⚠️  Potential conflict detected in namespace '$DEST_NS':"
-              echo "   - $EXISTING_APP (path: $EXISTING_PATH)"
-              echo "   - $APP_NAME (path: $SOURCE_PATH)"
-              echo ""
-
-              # Check if both paths contain similar resource types
-              # This is a heuristic - checking for common patterns
-              if [[ "$SOURCE_PATH" == *"aimodel"* ]] && [[ "$EXISTING_PATH" == *"aimodel"* ]]; then
-                echo "❌ ERROR: Multiple apps managing AIModel resources in namespace '$DEST_NS'"
-                echo "   This will cause race conditions and config drift!"
-                DUPLICATES_FOUND=$((DUPLICATES_FOUND + 1))
+            for app in $(find "$env_dir" -name "*.yaml" 2>/dev/null); do
+              KIND=$(yq e '.kind' "$app" 2>/dev/null || echo "")
+              if [ "$KIND" != "Application" ]; then
+                continue
               fi
-            else
-              RESOURCE_MAP[$KEY]="${APP_NAME}|${SOURCE_PATH}"
-            fi
-          done
 
-          # Additional check: Look for apps pointing to paths with same resource names
-          echo ""
-          echo "Checking for duplicate resource definitions across repos..."
+              APP_NAME=$(yq e '.metadata.name' "$app" 2>/dev/null || echo "unknown")
+              SOURCE_PATH=$(yq e '.spec.source.path' "$app" 2>/dev/null || echo "")
+              DEST_NS=$(yq e '.spec.destination.namespace' "$app" 2>/dev/null || echo "default")
 
-          # Find all paths referenced by ArgoCD apps
-          declare -A PATH_RESOURCES
-          for app in $(find gitops -name "*.yaml" -path "*/apps/*"); do
-            KIND=$(yq e '.kind' "$app" 2>/dev/null || echo "")
-            if [ "$KIND" != "Application" ]; then
-              continue
-            fi
+              # If path exists locally, check resource names
+              if [ -d "$SOURCE_PATH" ]; then
+                for resource in $(find "$SOURCE_PATH" -name "*.yaml" 2>/dev/null); do
+                  RES_KIND=$(yq e '.kind' "$resource" 2>/dev/null || echo "")
+                  RES_NAME=$(yq e '.metadata.name' "$resource" 2>/dev/null || echo "")
 
-            APP_NAME=$(yq e '.metadata.name' "$app" 2>/dev/null || echo "unknown")
-            SOURCE_PATH=$(yq e '.spec.source.path' "$app" 2>/dev/null || echo "")
-            DEST_NS=$(yq e '.spec.destination.namespace' "$app" 2>/dev/null || echo "default")
+                  if [ -n "$RES_KIND" ] && [ "$RES_KIND" != "null" ] && [ -n "$RES_NAME" ] && [ "$RES_NAME" != "null" ]; then
+                    RES_KEY="${DEST_NS}/${RES_KIND}/${RES_NAME}"
 
-            # If path exists locally, check resource names
-            if [ -d "$SOURCE_PATH" ]; then
-              for resource in $(find "$SOURCE_PATH" -name "*.yaml" 2>/dev/null); do
-                RES_KIND=$(yq e '.kind' "$resource" 2>/dev/null || echo "")
-                RES_NAME=$(yq e '.metadata.name' "$resource" 2>/dev/null || echo "")
-
-                if [ -n "$RES_KIND" ] && [ "$RES_KIND" != "null" ] && [ -n "$RES_NAME" ] && [ "$RES_NAME" != "null" ]; then
-                  RES_KEY="${DEST_NS}/${RES_KIND}/${RES_NAME}"
-
-                  if [ -n "${PATH_RESOURCES[$RES_KEY]:-}" ]; then
-                    EXISTING_APP="${PATH_RESOURCES[$RES_KEY]}"
-                    if [ "$EXISTING_APP" != "$APP_NAME" ]; then
-                      echo "❌ ERROR: Resource '$RES_KIND/$RES_NAME' in namespace '$DEST_NS' managed by multiple apps:"
-                      echo "   - $EXISTING_APP"
-                      echo "   - $APP_NAME"
-                      DUPLICATES_FOUND=$((DUPLICATES_FOUND + 1))
+                    if [ -n "${ENV_RESOURCES[$RES_KEY]:-}" ]; then
+                      EXISTING_APP="${ENV_RESOURCES[$RES_KEY]}"
+                      if [ "$EXISTING_APP" != "$APP_NAME" ]; then
+                        echo "❌ ERROR: Resource '$RES_KIND/$RES_NAME' in namespace '$DEST_NS' managed by multiple apps in $ENV_NAME:"
+                        echo "   - $EXISTING_APP"
+                        echo "   - $APP_NAME"
+                        echo "   Files: $app"
+                        DUPLICATES_FOUND=$((DUPLICATES_FOUND + 1))
+                      fi
+                    else
+                      ENV_RESOURCES[$RES_KEY]="$APP_NAME"
                     fi
-                  else
-                    PATH_RESOURCES[$RES_KEY]="$APP_NAME"
                   fi
-                fi
-              done
-            fi
+                done
+              fi
+            done
+
+            # Clear the associative array for next environment
+            unset ENV_RESOURCES
+            declare -A ENV_RESOURCES
+
+            echo "  ✓ $ENV_NAME environment checked"
           done
 
           echo ""
@@ -307,7 +285,7 @@ jobs:
             echo "  - Config drift and unpredictable behavior"
             echo "  - Failed rollouts (like the ai-aas-53sw incident)"
             echo ""
-            echo "Fix: Ensure each resource is managed by exactly ONE ArgoCD Application"
+            echo "Fix: Ensure each resource is managed by exactly ONE ArgoCD Application per environment"
             exit 1
           fi
 

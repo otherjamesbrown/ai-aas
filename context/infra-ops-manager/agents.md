@@ -129,9 +129,7 @@ gitops/clusters/development/apps/aimodels-config.yaml  # Points to ai-aas-config
 ```bash
 # Check for SharedResourceWarning
 kubectl get applications -n argocd -o json | \
-  jq -r '.items[] | select(.status.conditions) |
-    "\(.metadata.name): \(.status.conditions[].message)"' | \
-  grep -i "part of applications"
+  jq -r '.items[] | .metadata.name as $name | .status.conditions[]? | select(.message | test("part of applications"; "i")) | "\($name): \(.message)"'
 
 # CI check runs automatically on gitops/ changes
 # See: .github/workflows/infra-validation.yml (argocd-duplicate-check job)
