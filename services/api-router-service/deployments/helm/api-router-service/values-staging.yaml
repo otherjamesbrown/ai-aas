@@ -125,4 +125,4 @@ backends:
   # IMPORTANT: Use the -private service on port 8012 (queue-proxy port)
   # - Port 80 on regular services routes through Istio which causes timeouts
   # - Port 8012 on -private services connects directly to the queue-proxy sidecar
-  endpoints: "mistral-7b-instruct:http://mistral-7b-instruct-v03-predictor-00001-private.staging.svc.cluster.local:8012,unsloth/gpt-oss-20b:http://unsloth-gpt-oss-20b-predictor-00001-private.staging.svc.cluster.local:8012,openai/gpt-oss-20b:http://openai-gpt-oss-20b-predictor-00001-private.staging.svc.cluster.local:8012"
+  endpoints: "mistralai/Mistral-7B-Instruct-v0.3:http://mistral-7b-instruct-v03-predictor-00001-private.staging.svc.cluster.local:8012,unsloth/gpt-oss-20b:http://unsloth-gpt-oss-20b-predictor-00001-private.staging.svc.cluster.local:8012,openai/gpt-oss-20b:http://openai-gpt-oss-20b-predictor-00001-private.staging.svc.cluster.local:8012"
