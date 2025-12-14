@@ -600,3 +600,112 @@ func TestGetString(t *testing.T) {
 		t.Errorf("Expected empty string for nil map, got '%s'", val)
 	}
 }
+
+// TestInferenceServiceBuilder_BuildContainerBased_HasLivenessProbe verifies that
+// container-based InferenceServices have proper liveness probe configuration to
+// prevent pod restarts during model initialization.
+//
+// This test addresses ai-aas-jkwm: Verifies proper initialDelaySeconds for liveness probe.
+func TestInferenceServiceBuilder_BuildContainerBased_HasLivenessProbe(t *testing.T) {
+	builder := NewInferenceServiceBuilder("test-model", "test-namespace").
+		WithContainerImage("vllm/vllm-openai:v0.6.3").
+		WithModelID("unsloth/gpt-oss-20b").
+		WithServedName("gpt-oss-20b").
+		WithScaling(1, 3)
+
+	obj, err := builder.BuildContainerBased()
+	if err != nil {
+		t.Fatalf("BuildContainerBased failed: %v", err)
+	}
+
+	// Get predictor.containers[0]
+	predictor, found, err := unstructured.NestedMap(obj.Object, "spec", "predictor")
+	if err != nil || !found {
+		t.Fatal("Expected predictor in spec")
+	}
+
+	containers, found, err := unstructured.NestedSlice(predictor, "containers")
+	if err != nil || !found {
+		t.Fatal("Expected containers in predictor")
+	}
+
+	if len(containers) != 1 {
+		t.Fatalf("Expected 1 container, got %d", len(containers))
+	}
+
+	container, ok := containers[0].(map[string]interface{})
+	if !ok {
+		t.Fatal("Container is not a map")
+	}
+
+	// Verify livenessProbe exists
+	livenessProbe, found, err := unstructured.NestedMap(container, "livenessProbe")
+	if err != nil || !found {
+		t.Fatal("Expected livenessProbe in container")
+	}
+
+	// Verify initialDelaySeconds is set to 300 (5 minutes)
+	initialDelaySeconds, found, err := unstructured.NestedInt64(livenessProbe, "initialDelaySeconds")
+	if err != nil || !found {
+		t.Fatal("Expected initialDelaySeconds in livenessProbe")
+	}
+	if initialDelaySeconds != 300 {
+		t.Errorf("Expected initialDelaySeconds 300 (5 min), got %d", initialDelaySeconds)
+	}
+
+	// Verify periodSeconds
+	periodSeconds, found, err := unstructured.NestedInt64(livenessProbe, "periodSeconds")
+	if err != nil || !found {
+		t.Fatal("Expected periodSeconds in livenessProbe")
+	}
+	if periodSeconds != 30 {
+		t.Errorf("Expected periodSeconds 30, got %d", periodSeconds)
+	}
+
+	// Verify failureThreshold
+	failureThreshold, found, err := unstructured.NestedInt64(livenessProbe, "failureThreshold")
+	if err != nil || !found {
+		t.Fatal("Expected failureThreshold in livenessProbe")
+	}
+	if failureThreshold != 3 {
+		t.Errorf("Expected failureThreshold 3, got %d", failureThreshold)
+	}
+
+	// Verify httpGet path and port
+	httpGet, found, err := unstructured.NestedMap(livenessProbe, "httpGet")
+	if err != nil || !found {
+		t.Fatal("Expected httpGet in livenessProbe")
+	}
+
+	path, found, err := unstructured.NestedString(httpGet, "path")
+	if err != nil || !found {
+		t.Fatal("Expected path in httpGet")
+	}
+	if path != "/health" {
+		t.Errorf("Expected path '/health', got '%s'", path)
+	}
+
+	port, found, err := unstructured.NestedInt64(httpGet, "port")
+	if err != nil || !found {
+		t.Fatal("Expected port in httpGet")
+	}
+	if port != 8000 {
+		t.Errorf("Expected port 8000, got %d", port)
+	}
+
+	// Verify startupProbe also exists (for initial model loading)
+	startupProbe, found, err := unstructured.NestedMap(container, "startupProbe")
+	if err != nil || !found {
+		t.Fatal("Expected startupProbe in container")
+	}
+
+	startupFailureThreshold, found, err := unstructured.NestedInt64(startupProbe, "failureThreshold")
+	if err != nil || !found {
+		t.Fatal("Expected failureThreshold in startupProbe")
+	}
+	if startupFailureThreshold != 90 {
+		t.Errorf("Expected startupProbe failureThreshold 90, got %d", startupFailureThreshold)
+	}
+
+	t.Log("Test passed: Container-based InferenceService has proper liveness probe configuration")
+}
