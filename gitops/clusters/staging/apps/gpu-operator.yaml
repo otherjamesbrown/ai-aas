@@ -65,10 +65,10 @@ spec:
     server: https://kubernetes.default.svc
     namespace: gpu-operator
   ignoreDifferences:
-  - group: nvidia.com
-    kind: ClusterPolicy
-    jsonPointers:
-    - /status
+    - group: nvidia.com
+      kind: ClusterPolicy
+      jsonPointers:
+        - /status
   syncPolicy:
     automated:
       prune: true
