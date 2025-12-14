@@ -65,6 +65,40 @@ patterns:
   environment_access:
     reference: docs/platform/environment-access.md
     kubeconfig: "~/kubeconfigs/kubeconfig-development.yaml"
+
+  cert_manager_webhooks:
+    rule: Use ignoreDifferences for cert-manager caBundle injection
+    why: ArgoCD v3 detects cert-manager's runtime injection as drift
+    pattern: |
+      ignoreDifferences:
+        - group: admissionregistration.k8s.io
+          kind: ValidatingWebhookConfiguration
+          jqPathExpressions:
+            - .webhooks[]?.clientConfig.caBundle
+        - group: admissionregistration.k8s.io
+          kind: MutatingWebhookConfiguration
+          jqPathExpressions:
+            - .webhooks[]?.clientConfig.caBundle
+    applies_to:
+      - Istio (istiod-istio-system webhook)
+      - KServe (inferenceservice.serving.kserve.io webhook)
+      - GPU Operator (nvidia.com webhooks)
+      - Any operator using cert-manager for webhook certificates
+
+  argocd_sync_waves:
+    rule: Use sync waves for CRD-dependent resources
+    why: Prevents race conditions where resources deploy before CRDs are ready
+    pattern: |
+      metadata:
+        annotations:
+          argocd.argoproj.io/sync-wave: "0"  # CRDs and operators
+          argocd.argoproj.io/sync-wave: "1"  # Custom resources using those CRDs
+    critical_for:
+      - Istio: Base CRDs (wave 0) → Istio control plane (wave 1) → Gateway/VirtualService (wave 2)
+      - KServe: KServe operator (wave 0) → InferenceService CRs (wave 1)
+      - GPU Operator: Operator (wave 0) → GPU configurations (wave 1)
+    symptom_without: "unable to recognize... no matches for kind"
+    note: Lower wave numbers deploy first, default is 0
 ```
 
 ---
@@ -115,6 +149,11 @@ gitops/clusters/development/apps/aimodels-config.yaml  # Points to ai-aas-config
 # 1. Add new ArgoCD app for new source
 # 2. MUST DELETE old app and source files!
 # 3. Verify no SharedResourceWarning in ArgoCD
+
+# WRONG: Not ignoring cert-manager caBundle injection
+# ArgoCD v3 detects cert-manager's caBundle injection as drift
+# This causes constant OutOfSync status for webhooks
+# Must use ignoreDifferences to ignore the injected field
 ```
 
 ### Duplicate ArgoCD App Detection

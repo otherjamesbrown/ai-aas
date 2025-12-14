@@ -24,6 +24,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/api/equality"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -1186,8 +1187,24 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		return fmt.Errorf("failed to get InferenceService: %w", err)
 	}
 
+	// Compare specs to determine if an update is needed
+	existingSpec, existingSpecFound, err := unstructured.NestedMap(existing.Object, "spec")
+	if err != nil {
+		return fmt.Errorf("failed to get existing InferenceService spec: %w", err)
+	}
+	desiredSpec, desiredSpecFound, err := unstructured.NestedMap(isvc.Object, "spec")
+	if err != nil {
+		return fmt.Errorf("failed to get desired InferenceService spec: %w", err)
+	}
+
+	// Skip update if specs are unchanged
+	if existingSpecFound && desiredSpecFound && equality.Semantic.DeepEqual(existingSpec, desiredSpec) {
+		log.Info("InferenceService spec unchanged, skipping update", "name", aiModel.Name)
+		return nil
+	}
+
 	// Update existing InferenceService with retry on conflict
-	log.Info("Updating InferenceService", "name", aiModel.Name)
+	log.Info("InferenceService spec changed, updating", "name", aiModel.Name)
 
 	// Retry loop with exponential backoff to handle race conditions with KServe controller
 	backoff := wait.Backoff{

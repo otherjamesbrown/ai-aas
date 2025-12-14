@@ -1,6 +1,6 @@
 # Go Services Developer Context
 
-> **Inherits**: context/agents.md | **Verified**: 2025-12-13 | **Commit**: 24c3e0ee
+> **Inherits**: context/agents.md | **Verified**: 2025-12-14 | **Commit**: 5b8479c4
 
 ---
 
@@ -128,6 +128,86 @@ api_endpoints:
 
 ---
 
+## Go Module Naming Conventions
+
+```yaml
+module_naming:
+  repository_root: "github.com/otherjamesbrown/ai-aas"
+  
+  service_modules:
+    pattern: "github.com/otherjamesbrown/ai-aas/services/{service-name}"
+    examples:
+      - "github.com/otherjamesbrown/ai-aas/services/admin-api-service"
+      - "github.com/otherjamesbrown/ai-aas/services/api-router-service"
+      - "github.com/otherjamesbrown/ai-aas/services/user-org-service"
+      - "github.com/otherjamesbrown/ai-aas/services/analytics-service"
+    location: "services/{service-name}/go.mod"
+    
+  cli_module:
+    pattern: "github.com/otherjamesbrown/ai-aas/services/ai-aas-cli"
+    location: "services/ai-aas-cli/go.mod"
+    
+  shared_module:
+    pattern: "github.com/ai-aas/shared-go"
+    location: "shared/go/go.mod"
+    note: "Different prefix - uses ai-aas not otherjamesbrown/ai-aas"
+    
+  import_patterns:
+    internal_imports:
+      rule: "Use full module path + internal package"
+      example: |
+        import "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/domain"
+        import "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/repository"
+      never: |
+        import "internal/domain"  // WRONG: Missing module path
+        
+    shared_imports:
+      rule: "Use shared module with replace directive"
+      go_mod_replace: |
+        replace github.com/ai-aas/shared-go => ../../shared/go
+      example: |
+        import "github.com/ai-aas/shared-go/middleware"
+        import "github.com/ai-aas/shared-go/observability"
+      never: |
+        import "shared/go/middleware"  // WRONG: Not a valid import path
+        
+    cross_service_imports:
+      rule: "Generally avoid - services should be independent"
+      exception: "CLI may import service packages for client libraries"
+      pattern: |
+        import "github.com/otherjamesbrown/ai-aas/services/admin-api-service/pkg/client"
+      
+  common_pitfalls:
+    module_path_mismatch:
+      symptom: "go build fails with 'package X is not in std'"
+      cause: "go.mod module name doesn't match import paths"
+      fix: |
+        1. Check go.mod: module github.com/otherjamesbrown/ai-aas/services/{service}
+        2. Verify imports use full path: github.com/otherjamesbrown/.../internal/...
+        3. Run: go mod tidy
+        
+    wrong_shared_path:
+      symptom: "Cannot find package github.com/ai-aas/shared-go"
+      cause: "Missing replace directive in service's go.mod"
+      fix: |
+        Add to service's go.mod:
+        replace github.com/ai-aas/shared-go => ../../shared/go
+        
+    relative_imports:
+      symptom: "import './internal/domain' not supported"
+      cause: "Using relative imports instead of module-based"
+      fix: "Always use full module path, even for same-module imports"
+      
+  verification_commands:
+    check_module: "head -5 go.mod  # Verify module name"
+    check_imports: "go list -f '{{.ImportPath}}' ./...  # List all packages"
+    fix_dependencies: "go mod tidy  # Clean up go.mod and go.sum"
+    verify_build: "go build ./...  # Ensure all packages compile"
+    check_shared: "go list -m github.com/ai-aas/shared-go  # Verify replace works"
+```
+
+---
+
 ## Anti-patterns
 
 ```go
@@ -154,6 +234,35 @@ repo.UpdatePolicy(policy)  // If this fails, model is inconsistent
 
 // WRONG: Forgetting to update DEPLOYMENT.md when adding env var
 // infra-ops-manager won't know to add it to Helm values
+
+// WRONG: Module path doesn't match directory structure
+// In services/admin-api-service/go.mod:
+module github.com/admin-api-service  // Missing repo prefix!
+
+// CORRECT:
+module github.com/otherjamesbrown/ai-aas/services/admin-api-service
+
+// WRONG: Relative import path
+import "./internal/domain"
+import "../shared/go/middleware"
+
+// CORRECT: Use full module path
+import "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/domain"
+import "github.com/ai-aas/shared-go/middleware"
+
+// WRONG: Import from another service's internal package
+import "github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/auth"
+
+// CORRECT: Services expose public APIs, not internal packages
+// Either call via HTTP API or extract to shared if truly shared logic
+
+// WRONG: Missing replace directive for shared module
+// Service compiles locally but fails in CI/Docker
+import "github.com/ai-aas/shared-go/middleware"
+// go.mod has no "replace" line
+
+// CORRECT: Add replace directive to service's go.mod
+replace github.com/ai-aas/shared-go => ../../shared/go
 ```
 
 ---
@@ -173,6 +282,13 @@ golangci-lint run
 goose -dir migrations create add_new_table sql
 goose -dir migrations postgres "$DATABASE_URL" up
 goose -dir migrations postgres "$DATABASE_URL" down
+
+# Module verification
+head -5 go.mod  # Verify module name
+go list -f '{{.ImportPath}}' ./...  # List all packages
+go mod tidy  # Clean up go.mod and go.sum
+go build ./...  # Ensure all packages compile
+go list -m github.com/ai-aas/shared-go  # Verify replace works
 ```
 
 ---
@@ -200,3 +316,5 @@ Before completing work:
 - [ ] Errors wrapped with context
 - [ ] Migrations are idempotent
 - [ ] DEPLOYMENT.md updated if changed env/ports/health
+- [ ] Module path matches import paths
+- [ ] Shared module has replace directive in go.mod
