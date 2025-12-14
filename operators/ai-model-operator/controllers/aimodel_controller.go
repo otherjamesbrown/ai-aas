@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -1185,10 +1186,66 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		return fmt.Errorf("failed to get InferenceService: %w", err)
 	}
 
-	// Update existing InferenceService
+	// Update existing InferenceService with retry on conflict
 	log.Info("Updating InferenceService", "name", aiModel.Name)
-	isvc.SetResourceVersion(existing.GetResourceVersion())
-	if err := r.Update(ctx, isvc); err != nil {
+
+	// Retry loop with exponential backoff to handle race conditions with KServe controller
+	backoff := wait.Backoff{
+		Steps:    5,                    // Maximum 5 attempts
+		Duration: 50 * time.Millisecond, // Initial delay: 50ms
+		Factor:   2.0,                  // Exponential: 50ms, 100ms, 200ms, 400ms, 800ms
+		Jitter:   0.1,                  // Add 10% jitter to avoid thundering herd
+	}
+
+	var lastErr error
+	retryCount := 0
+
+	err = wait.ExponentialBackoff(backoff, func() (bool, error) {
+		// Fetch the latest version of the InferenceService
+		latest := &unstructured.Unstructured{}
+		latest.SetGroupVersionKind(kserve.InferenceServiceGVK)
+		if err := r.Get(ctx, types.NamespacedName{Name: aiModel.Name, Namespace: aiModel.Namespace}, latest); err != nil {
+			// Permanent error - don't retry
+			lastErr = fmt.Errorf("failed to get InferenceService: %w", err)
+			return false, lastErr
+		}
+
+		// Set the resource version from the latest fetch
+		isvc.SetResourceVersion(latest.GetResourceVersion())
+
+		// Attempt the update
+		if err := r.Update(ctx, isvc); err != nil {
+			if errors.IsConflict(err) {
+				// Conflict error - retry after backoff
+				retryCount++
+				log.Info("InferenceService update conflict, retrying",
+					"name", aiModel.Name,
+					"attempt", retryCount,
+					"maxAttempts", backoff.Steps)
+				lastErr = err
+				return false, nil // Retry
+			}
+			// Other error - don't retry
+			lastErr = fmt.Errorf("failed to update InferenceService: %w", err)
+			return false, lastErr
+		}
+
+		// Success
+		if retryCount > 0 {
+			log.Info("InferenceService update succeeded after retries",
+				"name", aiModel.Name,
+				"attempts", retryCount+1)
+		}
+		return true, nil
+	})
+
+	if err != nil {
+		if lastErr != nil {
+			if errors.IsConflict(lastErr) {
+				return fmt.Errorf("failed to update InferenceService after %d attempts due to conflicts: %w", retryCount, lastErr)
+			}
+			return lastErr
+		}
 		return fmt.Errorf("failed to update InferenceService: %w", err)
 	}
 
