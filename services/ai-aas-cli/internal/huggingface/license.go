@@ -1,7 +1,7 @@
 // Package huggingface re-exports the shared license functionality for backward compatibility.
 package huggingface
 
-import sharedHF "github.com/ai-aas/shared-go/modelcache/huggingface"
+import sharedHF "github.com/otherjamesbrown/ai-aas/shared/go/modelcache/huggingface"
 
 // Re-export license types
 type LicenseInfo = sharedHF.LicenseInfo

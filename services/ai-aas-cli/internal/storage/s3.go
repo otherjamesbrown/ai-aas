@@ -1,11 +1,11 @@
 // Package storage re-exports the shared storage client for backward compatibility.
-// New code should import github.com/ai-aas/shared-go/modelcache/storage directly.
+// New code should import github.com/otherjamesbrown/ai-aas/shared/go/modelcache/storage directly.
 package storage
 
 import (
 	"context"
 
-	sharedStorage "github.com/ai-aas/shared-go/modelcache/storage"
+	sharedStorage "github.com/otherjamesbrown/ai-aas/shared/go/modelcache/storage"
 )
 
 // Re-export types

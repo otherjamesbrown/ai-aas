@@ -19,8 +19,8 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/storage"
 	"go.uber.org/zap"
 
-	sharedMiddleware "github.com/ai-aas/shared-go/middleware"
-	"github.com/ai-aas/shared-go/observability"
+	sharedMiddleware "github.com/otherjamesbrown/ai-aas/shared/go/middleware"
+	"github.com/otherjamesbrown/ai-aas/shared/go/observability"
 )
 
 // NewRouter creates and configures the HTTP router

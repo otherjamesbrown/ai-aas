@@ -12,8 +12,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 
-	sharedMiddleware "github.com/ai-aas/shared-go/middleware"
-	"github.com/ai-aas/shared-go/observability"
+	sharedMiddleware "github.com/otherjamesbrown/ai-aas/shared/go/middleware"
+	"github.com/otherjamesbrown/ai-aas/shared/go/observability"
 )
 
 // responseWriter wraps http.ResponseWriter to capture status code

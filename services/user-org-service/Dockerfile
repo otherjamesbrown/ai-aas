@@ -20,7 +20,7 @@ RUN printf '%s\n' \
     '	/shared/go' \
     ')' \
     '' \
-    'replace github.com/ai-aas/shared-go v0.0.0 => /shared/go' \
+    'replace github.com/otherjamesbrown/ai-aas/shared/go => /shared/go' \
     > go.work
 
 RUN go mod download

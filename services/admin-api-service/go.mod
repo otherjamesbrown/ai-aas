@@ -5,7 +5,7 @@ go 1.24.0
 toolchain go1.24.2
 
 require (
-	github.com/ai-aas/shared-go v0.0.0
+	github.com/otherjamesbrown/ai-aas/shared/go v0.0.0-00010101000000-000000000000
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.6
@@ -16,7 +16,7 @@ require (
 	golang.org/x/time v0.7.0
 )
 
-replace github.com/ai-aas/shared-go => ../../shared/go
+replace github.com/otherjamesbrown/ai-aas/shared/go => ../../shared/go
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.39.6 // indirect

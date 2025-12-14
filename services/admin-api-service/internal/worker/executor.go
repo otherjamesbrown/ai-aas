@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ai-aas/shared-go/modelcache/pull"
+	"github.com/otherjamesbrown/ai-aas/shared/go/modelcache/pull"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"

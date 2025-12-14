@@ -16,7 +16,7 @@ COPY services/model-downloader/go.mod services/model-downloader/go.sum /app/serv
 
 # Update go.mod replace directive to use the copied path
 WORKDIR /app/services/model-downloader
-RUN go mod edit -replace github.com/ai-aas/shared-go=/app/shared/go
+RUN go mod edit -replace github.com/otherjamesbrown/ai-aas/shared/go=/app/shared/go
 RUN go mod download
 
 # Copy service source code
