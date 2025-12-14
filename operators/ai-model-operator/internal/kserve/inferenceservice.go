@@ -20,21 +20,22 @@ var InferenceServiceGVK = schema.GroupVersionKind{
 
 // InferenceServiceBuilder provides a fluent API for building InferenceService resources
 type InferenceServiceBuilder struct {
-	name         string
-	namespace    string
-	storageUri   string
-	modelFormat  string
-	servedName   string
-	runtime      string
-	minReplicas  int32
-	maxReplicas  int32
-	resources    corev1.ResourceRequirements
-	tolerations  []corev1.Toleration
-	nodeSelector map[string]string
-	runtimeArgs  []string
-	runtimeEnv   []corev1.EnvVar
-	ownerRef     *metav1.OwnerReference
-	environment  string
+	name           string
+	namespace      string
+	storageUri     string
+	modelFormat    string
+	servedName     string
+	runtime        string
+	minReplicas    int32
+	maxReplicas    int32
+	resources      corev1.ResourceRequirements
+	tolerations    []corev1.Toleration
+	nodeSelector   map[string]string
+	runtimeArgs    []string
+	runtimeEnv     []corev1.EnvVar
+	ownerRef       *metav1.OwnerReference
+	environment    string
+	updateStrategy string // "RollingUpdate" or "Recreate"
 	// Container-based deployment fields (for trust_remote_code models)
 	containerImage string
 	modelID        string // HuggingFace model ID for direct loading
@@ -172,6 +173,12 @@ func (b *InferenceServiceBuilder) WithModelID(modelID string) *InferenceServiceB
 	return b
 }
 
+// WithUpdateStrategy sets the update strategy (RollingUpdate or Recreate)
+func (b *InferenceServiceBuilder) WithUpdateStrategy(strategy string) *InferenceServiceBuilder {
+	b.updateStrategy = strategy
+	return b
+}
+
 // Build constructs the unstructured InferenceService resource using KServe native model serving
 func (b *InferenceServiceBuilder) Build() (*unstructured.Unstructured, error) {
 	// Validate required fields
@@ -204,6 +211,13 @@ func (b *InferenceServiceBuilder) Build() (*unstructured.Unstructured, error) {
 	// infra/k8s/knative-serving/config-gc.yaml
 	annotations := map[string]interface{}{
 		"serving.kserve.io/deploymentMode": "Serverless",
+	}
+
+	// Apply update strategy annotation for Knative
+	// Recreate strategy: Set rollout duration to 0 to terminate old revision immediately
+	// This frees GPU resources before new pods are scheduled
+	if b.updateStrategy == "Recreate" {
+		annotations["serving.knative.dev/rollout-duration"] = "0"
 	}
 
 	// Build environment variables for the model
@@ -373,6 +387,13 @@ func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructu
 	annotations := map[string]interface{}{
 		"serving.kserve.io/deploymentMode":      "Serverless",
 		"serving.knative.dev/progress-deadline": "900s", // 15 min for large model download
+	}
+
+	// Apply update strategy annotation for Knative
+	// Recreate strategy: Set rollout duration to 0 to terminate old revision immediately
+	// This frees GPU resources before new pods are scheduled
+	if b.updateStrategy == "Recreate" {
+		annotations["serving.knative.dev/rollout-duration"] = "0"
 	}
 
 	// Build environment variables

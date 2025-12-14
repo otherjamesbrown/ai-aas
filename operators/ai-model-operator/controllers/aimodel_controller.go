@@ -1117,6 +1117,12 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 	// For models with trust_remote_code, use container-based deployment
 	// that loads directly from HuggingFace instead of S3. This is required
 	// because vLLM needs to download and execute custom Python model code
+	// Determine update strategy (default to RollingUpdate if not specified)
+	updateStrategy := string(aiModel.Spec.UpdateStrategy)
+	if updateStrategy == "" {
+		updateStrategy = string(aimodelv1alpha1.UpdateStrategyRollingUpdate)
+	}
+
 	// from the HuggingFace repo, which isn't preserved in S3 storage.
 	if aiModel.Spec.TrustRemoteCode && aiModel.Spec.ModelID != "" {
 		log.Info("Using container-based deployment for trust_remote_code model",
@@ -1138,6 +1144,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 			WithNodeSelector(aiModel.Spec.NodeSelector).
 			WithRuntimeArgs(runtimeArgs).
 			WithRuntimeEnv(runtimeEnv).
+			WithUpdateStrategy(updateStrategy).
 			WithOwnerReference(ownerRef).
 			BuildContainerBased()
 		if err != nil {
@@ -1163,6 +1170,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 			WithNodeSelector(aiModel.Spec.NodeSelector).
 			WithRuntimeArgs(runtimeArgs).
 			WithRuntimeEnv(runtimeEnv).
+			WithUpdateStrategy(updateStrategy).
 			WithOwnerReference(ownerRef).
 			Build()
 		if err != nil {
