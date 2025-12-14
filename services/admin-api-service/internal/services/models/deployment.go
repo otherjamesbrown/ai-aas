@@ -175,10 +175,27 @@ type CreateDeploymentRequest struct {
 
 // CreateDeployment creates a new deployment record
 func (s *Service) CreateDeployment(ctx context.Context, req CreateDeploymentRequest) (*Deployment, error) {
-	// Get the model ID
+	// Get the model ID, or auto-register if it doesn't exist
 	model, err := s.GetModel(ctx, req.ModelName)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, ErrModelNotFound) {
+			// Auto-register the model with minimal metadata
+			// This allows AIModel CRs to be deployed via GitOps without manual registry steps
+			autoRegReq := AddModelRequest{
+				Name:         req.ModelName,
+				HFModelID:    req.ModelName, // Use model name as HF ID (can be updated later)
+				RequiresAuth: false,
+				IsGated:      false,
+				GPUMemoryGB:  0, // Will be determined from deployment resources
+				CPUMemoryGB:  0,
+			}
+			model, err = s.AddModel(ctx, autoRegReq)
+			if err != nil {
+				return nil, fmt.Errorf("auto-register model: %w", err)
+			}
+		} else {
+			return nil, err
+		}
 	}
 
 	replicas := req.Replicas
