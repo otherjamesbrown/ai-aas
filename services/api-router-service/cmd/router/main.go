@@ -69,8 +69,8 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/telemetry"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/usage"
 
-	sharedMiddleware "github.com/ai-aas/shared-go/middleware"
-	"github.com/ai-aas/shared-go/observability"
+	sharedMiddleware "github.com/otherjamesbrown/ai-aas/shared/go/middleware"
+	"github.com/otherjamesbrown/ai-aas/shared/go/observability"
 )
 
 func main() {
