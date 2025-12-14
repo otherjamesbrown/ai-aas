@@ -195,3 +195,98 @@ jobs:
             echo "Validating $manifest..."
             kubeval --strict --ignore-missing-schemas "$manifest" || true
           done
+
+  argocd-duplicate-check:
+    name: ArgoCD Duplicate Resource Detection
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Check for duplicate resource management
+        run: |
+          set -e
+          echo "Checking for ArgoCD Applications managing the same resources..."
+          echo ""
+          echo "NOTE: Only checking for duplicates WITHIN each environment."
+          echo "Apps in different environments (development vs staging) are expected to manage same resources."
+          echo ""
+
+          DUPLICATES_FOUND=0
+
+          # Check each environment separately
+          for env_dir in gitops/clusters/*/apps; do
+            if [ ! -d "$env_dir" ]; then
+              continue
+            fi
+
+            # Extract environment name from path (e.g., gitops/clusters/development/apps -> development)
+            ENV_NAME=$(echo "$env_dir" | cut -d'/' -f3)
+            echo "Checking environment: $ENV_NAME"
+
+            # Track resources within this environment
+            declare -A ENV_RESOURCES
+
+            for app in $(find "$env_dir" -name "*.yaml" 2>/dev/null); do
+              KIND=$(yq e '.kind' "$app" 2>/dev/null || echo "")
+              if [ "$KIND" != "Application" ]; then
+                continue
+              fi
+
+              APP_NAME=$(yq e '.metadata.name' "$app" 2>/dev/null || echo "unknown")
+              SOURCE_PATH=$(yq e '.spec.source.path' "$app" 2>/dev/null || echo "")
+              DEST_NS=$(yq e '.spec.destination.namespace' "$app" 2>/dev/null || echo "default")
+
+              # If path exists locally, check resource names
+              if [ -d "$SOURCE_PATH" ]; then
+                for resource in $(find "$SOURCE_PATH" -name "*.yaml" 2>/dev/null); do
+                  RES_KIND=$(yq e '.kind' "$resource" 2>/dev/null || echo "")
+                  RES_NAME=$(yq e '.metadata.name' "$resource" 2>/dev/null || echo "")
+
+                  if [ -n "$RES_KIND" ] && [ "$RES_KIND" != "null" ] && [ -n "$RES_NAME" ] && [ "$RES_NAME" != "null" ]; then
+                    RES_KEY="${DEST_NS}/${RES_KIND}/${RES_NAME}"
+
+                    if [ -n "${ENV_RESOURCES[$RES_KEY]:-}" ]; then
+                      EXISTING_APP="${ENV_RESOURCES[$RES_KEY]}"
+                      if [ "$EXISTING_APP" != "$APP_NAME" ]; then
+                        echo "❌ ERROR: Resource '$RES_KIND/$RES_NAME' in namespace '$DEST_NS' managed by multiple apps in $ENV_NAME:"
+                        echo "   - $EXISTING_APP"
+                        echo "   - $APP_NAME"
+                        echo "   Files: $app"
+                        DUPLICATES_FOUND=$((DUPLICATES_FOUND + 1))
+                      fi
+                    else
+                      ENV_RESOURCES[$RES_KEY]="$APP_NAME"
+                    fi
+                  fi
+                done
+              fi
+            done
+
+            # Clear the associative array for next environment
+            unset ENV_RESOURCES
+            declare -A ENV_RESOURCES
+
+            echo "  ✓ $ENV_NAME environment checked"
+          done
+
+          echo ""
+          if [ $DUPLICATES_FOUND -gt 0 ]; then
+            echo "❌ Found $DUPLICATES_FOUND duplicate resource management issues"
+            echo ""
+            echo "This causes ArgoCD SharedResourceWarning and leads to:"
+            echo "  - Race conditions between apps"
+            echo "  - Config drift and unpredictable behavior"
+            echo "  - Failed rollouts (like the ai-aas-53sw incident)"
+            echo ""
+            echo "Fix: Ensure each resource is managed by exactly ONE ArgoCD Application per environment"
+            exit 1
+          fi
+
+          echo "✅ No duplicate resource management detected"
