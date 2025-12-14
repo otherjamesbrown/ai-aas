@@ -1,0 +1,36 @@
+name: Go Module Path Lint
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - develop
+      - staging
+    paths:
+      - 'services/**/go.mod'
+      - 'operators/**/go.mod'
+      - 'shared/**/go.mod'
+      - '.github/workflows/go-module-lint.yml'
+      - 'scripts/ci/check-go-modules.sh'
+  pull_request:
+    paths:
+      - 'services/**/go.mod'
+      - 'operators/**/go.mod'
+      - 'shared/**/go.mod'
+
+jobs:
+  check-module-paths:
+    name: Check Go Module Path Consistency
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.x"
+
+      - name: Check Go Module Paths
+        run: ./scripts/ci/check-go-modules.sh

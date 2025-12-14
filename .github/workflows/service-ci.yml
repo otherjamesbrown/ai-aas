@@ -96,6 +96,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.24.x"
+      - name: Check Go Module Path Consistency
+        run: ./scripts/ci/check-go-modules.sh
       - name: Run go vet on all services
         run: |
           for dir in services/*/; do
