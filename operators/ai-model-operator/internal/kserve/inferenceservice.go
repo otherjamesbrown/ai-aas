@@ -466,9 +466,10 @@ func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructu
 				"path": "/health",
 				"port": int64(8000),
 			},
-			"periodSeconds":    int64(30),
-			"failureThreshold": int64(3),
-			"timeoutSeconds":   int64(5),
+			"initialDelaySeconds": int64(300), // 5 min delay for model loading
+			"periodSeconds":       int64(30),
+			"failureThreshold":    int64(3),
+			"timeoutSeconds":      int64(5),
 		},
 	}
 
