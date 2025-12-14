@@ -3,6 +3,8 @@ replicaCount: 3
 
 image:
   tag: staging
+  pullSecrets:
+    - ghcr-pull-secret
 
 service:
   type: ClusterIP
