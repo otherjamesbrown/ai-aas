@@ -102,7 +102,43 @@ resources: {}  # Pod can consume all node resources
 # WRONG: Same values file for all environments
 valueFiles:
   - values.yaml  # Should be values-development.yaml for dev
+
+# CRITICAL: Multiple ArgoCD apps managing same resources
+# This causes race conditions, config drift, and failed rollouts!
+# Incident: ai-aas-53sw - KServe revision cleanup deadlock
+gitops/clusters/development/apps/aimodels.yaml      # Points to ai-aas repo
+gitops/clusters/development/apps/aimodels-config.yaml  # Points to ai-aas-config
+# Both deploy AIModels to same namespace = CONFLICT
+
+# WRONG: Incomplete migration between config sources
+# When moving resources to new repo/app:
+# 1. Add new ArgoCD app for new source
+# 2. MUST DELETE old app and source files!
+# 3. Verify no SharedResourceWarning in ArgoCD
 ```
+
+### Duplicate ArgoCD App Detection
+
+**Symptoms**:
+- ArgoCD shows `SharedResourceWarning` in app conditions
+- Resources flip-flopping between configurations
+- Rollouts stuck in partial state
+- Config changes don't take effect consistently
+
+**How to detect**:
+```bash
+# Check for SharedResourceWarning
+kubectl get applications -n argocd -o json | \
+  jq -r '.items[] | .metadata.name as $name | .status.conditions[]? | select(.message | test("part of applications"; "i")) | "\($name): \(.message)"'
+
+# CI check runs automatically on gitops/ changes
+# See: .github/workflows/infra-validation.yml (argocd-duplicate-check job)
+```
+
+**Prevention**:
+1. **Single source of truth**: Each CRD type in a namespace = ONE ArgoCD app
+2. **Migration checklist**: When moving configs, DELETE old source completely
+3. **CI enforcement**: `argocd-duplicate-check` job fails on duplicates
 
 ---
 
@@ -137,7 +173,7 @@ helm template services/<name>/deployments/helm/<name>/ -f values-development.yam
 | Helm Charts | `services/*/deployments/helm/*/` |
 | CI/CD | `.github/workflows/` |
 | Terraform | `infra/terraform/` |
-| AIModel CRs | `infra/k8s/aimodels/<env>/` |
+| AIModel CRs | `ai-aas-config` repo: `environments/<env>/models/` |
 | Env Access | `docs/platform/environment-access.md` |
 | Deploy Runbook | `docs/runbooks/deploy-to-environments.md` |
 
@@ -151,5 +187,7 @@ Before completing work:
 - [ ] No hardcoded IPs/passwords
 - [ ] Correct branch targeting (develop/staging/main)
 - [ ] Uses valueFiles (not inline values)
+- [ ] No duplicate ArgoCD apps for same resources (check SharedResourceWarning)
+- [ ] If migrating configs: deleted old source AND app
 - [ ] Tested in development cluster
 - [ ] CI/CD pipeline passes

@@ -184,3 +184,27 @@ spec:
           annotations:
             summary: "vLLM GPU memory usage high"
             description: "GPU memory usage is {{ $value | humanizePercentage }}"
+
+    # Guidellm Runner Alerts
+    - name: guidellm-runner
+      rules:
+        - alert: GuidellmRunnerStuckNoBenchmarks
+          expr: |
+            (
+              guidellm_runner_up == 1
+              and
+              (
+                (increase(guidellm_requests_total[1h]) == 0)
+                or
+                (absent(guidellm_requests_total) == 1)
+              )
+            )
+          for: 1h
+          labels:
+            severity: warning
+            service: guidellm-runner
+            category: monitoring
+          annotations:
+            summary: "Guidellm runner is active but not sending requests"
+            description: "Guidellm runner has been up for over 1 hour but guidellm_requests_total has not increased. This may indicate a validation failure, configuration issue, or stuck benchmark. Check runner logs for validation errors or benchmark failures."
+            runbook_url: "https://docs.ai-aas.local/runbooks/guidellm-troubleshooting"

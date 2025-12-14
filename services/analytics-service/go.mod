@@ -5,6 +5,7 @@ go 1.24.0
 toolchain go1.24.2
 
 require (
+	github.com/ai-aas/shared-go v0.0.0-00010101000000-000000000000
 	github.com/aws/aws-sdk-go-v2 v1.39.6
 	github.com/aws/aws-sdk-go-v2/config v1.31.20
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.24
@@ -13,7 +14,6 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/kelseyhightower/envconfig v1.4.0
-	github.com/otherjamesbrown/ai-aas/shared/go v0.0.0-00010101000000-000000000000
 	github.com/prometheus/client_golang v1.23.2
 	github.com/rabbitmq/rabbitmq-stream-go-client v1.6.1
 	github.com/redis/go-redis/v9 v9.16.0
@@ -76,4 +76,4 @@ require (
 	google.golang.org/protobuf v1.36.10 // indirect
 )
 
-replace github.com/otherjamesbrown/ai-aas/shared/go => ../../shared/go
+replace github.com/ai-aas/shared-go => ../../shared/go

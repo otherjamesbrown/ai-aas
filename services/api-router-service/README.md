@@ -43,6 +43,7 @@ make test SERVICE=api-router-service
 |--------|----------|-------------|
 | GET | `/v1/status/healthz` | Liveness probe |
 | GET | `/v1/status/readyz` | Readiness probe |
+| GET | `/v1/chat/completions/health` | Unauthenticated health check for validation tools (e.g., guidellm) |
 | GET | `/v1/models` | List available models |
 | GET | `/metrics` | Prometheus metrics |
 

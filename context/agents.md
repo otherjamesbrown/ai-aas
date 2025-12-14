@@ -134,6 +134,7 @@ After fixing a context gap bug:
 | `operator-developer` | operators/, model-downloader/ | go-services-developer (API sync) |
 | `infra-ops-manager` | infra/, gitops/, .github/, Helm charts | Developer agents (app code) |
 | `web-portal-developer` | web/ | go-services-developer (API issues) |
+| `debugger` | Bug investigation (read-only) | Domain agents (fixes), context-maintainer (gaps) |
 
 **If file is outside your domain:** Create handoff bead, don't modify.
 
@@ -150,6 +151,9 @@ Create handoff bead and spawn agent when:
 | Frontend needs API integration fix | `web-portal-developer` |
 | CI/CD pipeline failing | `infra-ops-manager` |
 | Database migration needed | `go-services-developer` |
+| User asks "why did this happen?" | `debugger` |
+| Bug is complex, recurring, or >30 min unresolved | `debugger` |
+| Need root cause analysis before fix | `debugger` |
 
 ---
 

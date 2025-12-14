@@ -101,7 +101,7 @@ maintenance:
 | Level | Files | Total Lines | Status |
 |-------|-------|-------------|--------|
 | 1 | 1 | 161 | ✅ OPTIMIZED |
-| 2 | 8 | 996 | ✅ OPTIMIZED |
+| 2 | 9 | 1116 | ✅ OPTIMIZED |
 | 3 | 5+ | 1750+ | PENDING |
 
 ### Level 1: Core Rules
@@ -119,6 +119,7 @@ maintenance:
 | `context/operator-developer/agents.md` | 126 | ✅ OPTIMIZED | Links to CRD source |
 | `context/infra-ops-manager/agents.md` | 143 | ✅ OPTIMIZED | Links to runbooks |
 | `context/web-portal-developer/agents.md` | 149 | ✅ OPTIMIZED | YAML patterns |
+| `context/debugger/agents.md` | 120 | ✅ NEW | Read-only investigation agent |
 
 ### Level 2: Templates
 
@@ -224,6 +225,15 @@ hierarchy:
         inherits: context/agents.md
         links_to:
           - web/portal/ (source)
+
+      context/debugger/agents.md:
+        type: rules
+        purpose: Bug investigation (read-only)
+        read_when: User asks "why did this happen?" or bug is complex
+        inherits: context/agents.md
+        links_to:
+          - docs/runbooks/ai-debugging-workflow.md (operational)
+          - context/CONTEXT_EFFECTIVENESS_LOG.md (tracking)
 
     templates:
       context/templates/beads.md:

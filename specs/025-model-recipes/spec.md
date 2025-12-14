@@ -2,7 +2,18 @@
 
 ## Overview
 
-A centralized configuration system for AI model deployment "recipes" that captures the specific requirements, runtime configurations, and resource needs for each model type. This enables consistent, repeatable deployments across environments while supporting diverse model types (LLMs, vision models, multimodal) and runtimes (vLLM, Triton, TGI).
+A centralized configuration system for AI model deployment "recipes" that captures **known-good baseline configurations** for each model type. Recipes serve as the tested, production-ready default while AIModel instances can override any setting for experimentation and testing.
+
+**Key Concepts:**
+- **ModelRecipe** = Known-good baseline for a specific model on standard hardware
+- **AIModel** = Deployment instance that references a recipe and can override settings for experimentation
+
+This enables:
+- Consistent, repeatable deployments using proven configurations
+- Hardware experimentation (test same model on different GPU types)
+- Inference server comparison (vLLM vs Triton vs TGI for the same model)
+- A/B testing of runtime configurations
+- Support for diverse model types (LLMs, vision models, multimodal)
 
 ## Problem Statement
 
@@ -17,6 +28,7 @@ This leads to:
 2. **Inconsistency**: Easy to have config drift between dev/staging/prod
 3. **No knowledge capture**: Learned settings (e.g., "mistral needs tokenizer-mode=mistral") are lost
 4. **Hard to manage**: Adding new models requires knowing all the right settings
+5. **No experimentation baseline**: When testing new hardware or runtimes, there's no reference point for comparison
 
 ## Proposed Solution
 
@@ -46,10 +58,11 @@ spec:
   # Container image (optional - defaults based on runtime)
   image: vllm/vllm-openai:latest
 
-  # Resource requirements (can be overridden per-environment)
+  # Resource requirements (can be overridden for experimentation)
   resources:
     gpu:
-      type: nvidia  # nvidia | amd | intel
+      vendor: nvidia  # nvidia | amd | intel
+      model: rtx4000-ada  # Specific GPU model for baseline (e.g., rtx4000-ada, a100-40gb, h100-80gb)
       count: 1
       minMemoryGB: 16  # Minimum VRAM required
     cpu:
@@ -57,7 +70,7 @@ spec:
       limits: "8"
     memory:
       requests: "16Gi"
-      limits: "32Gi"
+      limits: "24Gi"  # Note: 24Gi not 32Gi - leave headroom on 32GB nodes
 
   # Runtime-specific arguments
   runtimeArgs:
@@ -356,11 +369,182 @@ POST /api/v1/recipes/{name}/validate    # Validate recipe
 ## Benefits
 
 1. **Knowledge Capture**: Learned settings (tokenizer-mode, memory tuning) are preserved
-2. **Consistency**: Same recipe across all environments
-3. **Flexibility**: Easy overrides for environment-specific needs
+2. **Consistency**: Same recipe provides baseline across all environments
+3. **Experimentation**: Override any setting to test new hardware, runtimes, or configurations
 4. **Multi-Runtime**: Single abstraction for vLLM, Triton, TGI
 5. **Discoverability**: Browse available recipes, see what's supported
 6. **Validation**: Catch misconfigurations before deployment
+
+## Use Cases
+
+### Use Case 1: Standard Deployment (No Overrides)
+
+Deploy a model using the known-good baseline configuration:
+
+```yaml
+apiVersion: ai.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: gpt-oss-20b
+  namespace: production
+spec:
+  recipeRef:
+    name: gpt-oss-20b
+  enabled: true
+  # No overrides - use the proven recipe as-is
+```
+
+### Use Case 2: Hardware Comparison (GPU Experimentation)
+
+Test the same model on different GPU hardware to compare performance:
+
+```yaml
+# Recipe baseline: RTX 4000 Ada (known-good)
+apiVersion: ai.ai-aas.io/v1alpha1
+kind: ModelRecipe
+metadata:
+  name: gpt-oss-20b
+spec:
+  modelID: unsloth/gpt-oss-20b
+  runtime: vllm
+  resources:
+    gpu:
+      vendor: nvidia
+      model: rtx4000-ada
+      count: 1
+    memory:
+      limits: "24Gi"
+---
+# AIModel: Test on RTX 6000 Blackwell
+apiVersion: ai.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: gpt-oss-20b-blackwell-test
+  namespace: development
+spec:
+  recipeRef:
+    name: gpt-oss-20b
+  overrides:
+    resources:
+      gpu:
+        model: rtx6000-blackwell  # New GPU to test
+        count: 1
+      memory:
+        limits: "48Gi"  # More VRAM available
+    runtimeArgs:
+      vllm:
+        gpuMemoryUtilization: 0.95  # Can push harder with more VRAM
+```
+
+### Use Case 3: Inference Server Comparison (vLLM vs Triton vs TGI)
+
+Test the same model on different inference runtimes to compare latency, throughput, and resource usage:
+
+```yaml
+# Recipe baseline: vLLM (known-good)
+apiVersion: ai.ai-aas.io/v1alpha1
+kind: ModelRecipe
+metadata:
+  name: mistral-7b-instruct
+spec:
+  modelID: mistralai/Mistral-7B-Instruct-v0.3
+  runtime: vllm
+  resources:
+    gpu:
+      model: rtx4000-ada
+      count: 1
+    memory:
+      limits: "24Gi"
+  runtimeArgs:
+    vllm:
+      maxModelLen: 8192
+      gpuMemoryUtilization: 0.9
+---
+# AIModel: Test with Triton runtime
+apiVersion: ai.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: mistral-7b-triton-test
+  namespace: development
+spec:
+  recipeRef:
+    name: mistral-7b-instruct
+  overrides:
+    runtime: triton  # Override the entire runtime
+    runtimeArgs:
+      triton:
+        backend: python
+        dynamicBatching:
+          maxBatchSize: 8
+---
+# AIModel: Test with TGI runtime
+apiVersion: ai.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: mistral-7b-tgi-test
+  namespace: development
+spec:
+  recipeRef:
+    name: mistral-7b-instruct
+  overrides:
+    runtime: tgi  # Override the entire runtime
+    runtimeArgs:
+      tgi:
+        quantize: null
+        maxInputLength: 4096
+        maxTotalTokens: 8192
+```
+
+### Use Case 4: A/B Testing Runtime Configurations
+
+Test different vLLM configurations for the same model:
+
+```yaml
+# AIModel A: Conservative memory settings
+apiVersion: ai.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: gpt-oss-20b-conservative
+  namespace: development
+spec:
+  recipeRef:
+    name: gpt-oss-20b
+  overrides:
+    runtimeArgs:
+      vllm:
+        gpuMemoryUtilization: 0.8
+        maxModelLen: 2048
+---
+# AIModel B: Aggressive memory settings
+apiVersion: ai.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: gpt-oss-20b-aggressive
+  namespace: development
+spec:
+  recipeRef:
+    name: gpt-oss-20b
+  overrides:
+    runtimeArgs:
+      vllm:
+        gpuMemoryUtilization: 0.95
+        maxModelLen: 8192
+        enableChunkedPrefill: true
+```
+
+### Override Flexibility
+
+AIModel overrides can replace **any** field from the recipe:
+
+| Override | Use Case |
+|----------|----------|
+| `runtime` | Compare vLLM vs Triton vs TGI |
+| `resources.gpu.model` | Test on different GPU hardware |
+| `resources.memory.limits` | Tune for available node memory |
+| `runtimeArgs.*` | Experiment with runtime configurations |
+| `image` | Test newer runtime versions |
+| `scheduling.nodeSelector` | Target specific node pools |
+| `replicas` | Scale testing |
 
 ## Migration Path
 

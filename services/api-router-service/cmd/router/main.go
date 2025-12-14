@@ -417,6 +417,10 @@ func main() {
 	publicHandler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, routingEngine, routingMetrics, usageHook)
 	publicHandler.SetUserOrgServiceURL(cfg.UserOrgServiceURL)
 
+	// Register unauthenticated chat completions health endpoint on main router
+	// This allows benchmarking tools like guidellm to verify the endpoint is reachable without requiring an API key
+	router.Get("/v1/chat/completions/health", publicHandler.HandleChatCompletionsHealth)
+
 	// Create tracer for middleware
 	tracer := otel.Tracer("api-router-service")
 
