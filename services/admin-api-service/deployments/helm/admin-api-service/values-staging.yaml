@@ -12,6 +12,8 @@ image:
   repository: ghcr.io/otherjamesbrown/ai-aas/admin-api-service
   tag: staging
   pullPolicy: Always
+  pullSecrets:
+    - ghcr-pull-secret
 
 env:
   - name: PORT

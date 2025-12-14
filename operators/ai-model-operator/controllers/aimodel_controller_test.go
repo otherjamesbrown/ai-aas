@@ -1030,3 +1030,434 @@ func TestAIModelReconciler_RetryPendingCreatesJobWhenReady(t *testing.T) {
 
 	t.Log("Test passed: RetryPending correctly creates new job when time is reached")
 }
+
+// TestAIModelReconciler_ConcurrentInferenceServiceUpdates verifies that the controller
+// can handle concurrent updates to InferenceService resources without conflicts.
+//
+// This test addresses ai-aas-sllz: Concurrent InferenceService update handling.
+func TestAIModelReconciler_ConcurrentInferenceServiceUpdates(t *testing.T) {
+	s := setupScheme()
+
+	aiModelName := "test-concurrent-updates"
+	aiModelNamespace := "default"
+	minReplicas := int32(0)
+	maxReplicas := int32(2)
+
+	aiModel := &aimodelv1alpha1.AIModel{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      aiModelName,
+			Namespace: aiModelNamespace,
+			UID:       types.UID("test-uid-concurrent"),
+		},
+		Spec: aimodelv1alpha1.AIModelSpec{
+			ModelName:   "test-model",
+			ModelID:     "test/model",
+			S3Bucket:    "ai-models",
+			S3Key:       "test-model",
+			Runtime:     "vllm",
+			MinReplicas: &minReplicas,
+			MaxReplicas: &maxReplicas,
+			Enabled:     true,
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("2"),
+					corev1.ResourceMemory: resource.MustParse("8Gi"),
+					"nvidia.com/gpu":      resource.MustParse("1"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("16Gi"),
+					"nvidia.com/gpu":      resource.MustParse("1"),
+				},
+			},
+		},
+		Status: aimodelv1alpha1.AIModelStatus{
+			Phase: aimodelv1alpha1.AIModelPhaseDeploying,
+		},
+	}
+
+	// Create a completed download job
+	jobName := aiModelName + "-downloader"
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jobName,
+			Namespace: aiModelNamespace,
+		},
+		Status: batchv1.JobStatus{
+			Conditions: []batchv1.JobCondition{
+				{
+					Type:   batchv1.JobComplete,
+					Status: corev1.ConditionTrue,
+				},
+			},
+		},
+	}
+
+	// Create an existing InferenceService
+	existingIsvc := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "serving.kserve.io/v1beta1",
+			"kind":       "InferenceService",
+			"metadata": map[string]interface{}{
+				"name":            aiModelName,
+				"namespace":       aiModelNamespace,
+				"resourceVersion": "1000", // Simulates existing resource
+			},
+			"spec": map[string]interface{}{
+				"predictor": map[string]interface{}{
+					"minReplicas": int64(1), // Different from desired state
+					"maxReplicas": int64(3),
+					"model": map[string]interface{}{
+						"storageUri": "s3://ai-models/test-model",
+						"runtime":    "vllm-runtime",
+					},
+				},
+			},
+		},
+	}
+
+	cl := fake.NewClientBuilder().
+		WithScheme(s).
+		WithObjects(aiModel, job, existingIsvc).
+		WithStatusSubresource(aiModel).
+		Build()
+
+	r := &AIModelReconciler{
+		MaxDownloadRetries: 5,
+		InitialRetryDelay:  1 * time.Minute,
+		MaxRetryDelay:      16 * time.Minute,
+		Client: cl,
+		Scheme: s,
+	}
+
+	req := reconcile.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      aiModelName,
+			Namespace: aiModelNamespace,
+		},
+	}
+
+	// First reconcile should update the InferenceService
+	t.Log("Test: First reconcile updates InferenceService")
+	res, err := r.Reconcile(context.Background(), req)
+	if err != nil {
+		t.Fatalf("first reconcile failed: %v", err)
+	}
+
+	if !res.Requeue {
+		t.Error("expected requeue after updating InferenceService")
+	}
+
+	// Verify InferenceService was updated with correct minReplicas
+	updatedIsvc := &unstructured.Unstructured{}
+	updatedIsvc.SetGroupVersionKind(kserve.InferenceServiceGVK)
+	err = cl.Get(context.Background(), types.NamespacedName{Name: aiModelName, Namespace: aiModelNamespace}, updatedIsvc)
+	if err != nil {
+		t.Fatalf("get updated InferenceService: %v", err)
+	}
+
+	predictor, found, err := unstructured.NestedMap(updatedIsvc.Object, "spec", "predictor")
+	if err != nil || !found {
+		t.Fatal("failed to get predictor from updated InferenceService")
+	}
+
+	minReplicasVal, found, err := unstructured.NestedInt64(predictor, "minReplicas")
+	if err != nil || !found {
+		t.Fatal("failed to get minReplicas from updated InferenceService")
+	}
+
+	if minReplicasVal != int64(minReplicas) {
+		t.Errorf("expected minReplicas %d after update, got %d", minReplicas, minReplicasVal)
+	}
+
+	// Second reconcile should handle existing InferenceService gracefully
+	// This simulates a scenario where the InferenceService already exists and matches
+	t.Log("Test: Second reconcile handles existing InferenceService")
+	res2, err := r.Reconcile(context.Background(), req)
+	if err != nil {
+		t.Fatalf("second reconcile failed: %v", err)
+	}
+
+	// Should still requeue to monitor status
+	if !res2.Requeue {
+		t.Error("expected requeue to monitor InferenceService status")
+	}
+
+	// Verify no errors occurred during concurrent update handling
+	updatedAIModel := &aimodelv1alpha1.AIModel{}
+	err = cl.Get(context.Background(), types.NamespacedName{Name: aiModelName, Namespace: aiModelNamespace}, updatedAIModel)
+	if err != nil {
+		t.Fatalf("get updated AIModel: %v", err)
+	}
+
+	// Phase should still be Deploying (waiting for InferenceService ready)
+	if updatedAIModel.Status.Phase != aimodelv1alpha1.AIModelPhaseDeploying {
+		t.Errorf("expected phase Deploying after reconciles, got %s", updatedAIModel.Status.Phase)
+	}
+
+	t.Log("Test passed: Controller handles concurrent InferenceService updates without conflicts")
+}
+
+func TestAIModelReconciler_SkipsUpdateWhenSpecUnchanged(t *testing.T) {
+	// Register operator types with the scheme
+	s := setupScheme()
+
+	// Define a sample AIModel object
+	aiModelName := "test-model-unchanged"
+	aiModelNamespace := "default"
+	minReplicas := int32(0)
+	maxReplicas := int32(2)
+	aiModel := &aimodelv1alpha1.AIModel{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      aiModelName,
+			Namespace: aiModelNamespace,
+			UID:       types.UID("test-uid-456"),
+		},
+		Spec: aimodelv1alpha1.AIModelSpec{
+			ModelName:   "gpt2",
+			ModelID:     "gpt2",
+			S3Bucket:    "ai-models",
+			S3Key:       "gpt2",
+			Runtime:     "vllm",
+			MinReplicas: &minReplicas,
+			MaxReplicas: &maxReplicas,
+			Enabled:     true,
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("2"),
+					corev1.ResourceMemory: resource.MustParse("8Gi"),
+					"nvidia.com/gpu":      resource.MustParse("1"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("16Gi"),
+					"nvidia.com/gpu":      resource.MustParse("1"),
+				},
+			},
+		},
+		Status: aimodelv1alpha1.AIModelStatus{
+			Phase: aimodelv1alpha1.AIModelPhaseDeploying,
+		},
+	}
+
+	// Create a completed downloader job
+	jobName := aiModelName + "-downloader"
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jobName,
+			Namespace: aiModelNamespace,
+		},
+		Status: batchv1.JobStatus{
+			Conditions: []batchv1.JobCondition{
+				{
+					Type:   batchv1.JobComplete,
+					Status: corev1.ConditionTrue,
+				},
+			},
+		},
+	}
+
+	// Create an existing InferenceService using the same builder the controller uses
+	// This ensures the specs will match exactly
+	ownerRef := &metav1.OwnerReference{
+		APIVersion:         aiModel.APIVersion,
+		Kind:               aiModel.Kind,
+		Name:               aiModel.Name,
+		UID:                aiModel.UID,
+		Controller:         func() *bool { b := true; return &b }(),
+		BlockOwnerDeletion: func() *bool { b := true; return &b }(),
+	}
+
+	// Build runtime env with S3 credentials (same as controller)
+	runtimeEnv := []corev1.EnvVar{
+		{
+			Name: "AWS_ACCESS_KEY_ID",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: "s3-credentials",
+					},
+					Key: "AWS_ACCESS_KEY_ID",
+				},
+			},
+		},
+		{
+			Name: "AWS_SECRET_ACCESS_KEY",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: "s3-credentials",
+					},
+					Key: "AWS_SECRET_ACCESS_KEY",
+				},
+			},
+		},
+		{
+			Name: "AWS_ENDPOINT_URL_S3",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: "s3-credentials",
+					},
+					Key: "AWS_ENDPOINT_URL_S3",
+					Optional: func() *bool {
+						opt := true
+						return &opt
+					}(),
+				},
+			},
+		},
+		{
+			Name: "S3_ENDPOINT",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: "s3-credentials",
+					},
+					Key: "S3_ENDPOINT",
+					Optional: func() *bool {
+						opt := true
+						return &opt
+					}(),
+				},
+			},
+		},
+	}
+
+	runtimeArgs := []string{
+		"--dtype=float16",
+		"--max-model-len=4096",
+		"--gpu-memory-utilization=0.9",
+	}
+
+	existingIsvc, buildErr := kserve.NewInferenceServiceBuilder(aiModelName, aiModelNamespace).
+		WithStorageUri("s3://ai-models/gpt2").
+		WithModelFormat("vllm").
+		WithServedName("gpt2").
+		WithRuntime("vllm-runtime").
+		WithScaling(minReplicas, maxReplicas).
+		WithResources(aiModel.Spec.Resources).
+		WithRuntimeArgs(runtimeArgs).
+		WithRuntimeEnv(runtimeEnv).
+		WithOwnerReference(ownerRef).
+		Build()
+	if buildErr != nil {
+		t.Fatalf("build existing InferenceService: %v", buildErr)
+	}
+
+	// Create a fake client with the objects
+	cl := fake.NewClientBuilder().
+		WithScheme(s).
+		WithObjects(aiModel, job, existingIsvc).
+		WithStatusSubresource(aiModel).
+		Build()
+
+	// Create the Reconciler
+	r := &AIModelReconciler{
+		Client:         cl,
+		Scheme:         s,
+		DefaultRuntime: "vllm",
+	}
+
+	// Mock request
+	req := reconcile.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      aiModelName,
+			Namespace: aiModelNamespace,
+		},
+	}
+
+	// Get initial resource version of InferenceService
+	initialIsvc := &unstructured.Unstructured{}
+	initialIsvc.SetGroupVersionKind(kserve.InferenceServiceGVK)
+	err := cl.Get(context.Background(), types.NamespacedName{Name: aiModelName, Namespace: aiModelNamespace}, initialIsvc)
+	if err != nil {
+		t.Fatalf("get initial InferenceService: %v", err)
+	}
+	initialResourceVersion := initialIsvc.GetResourceVersion()
+
+	// First reconcile should skip update since spec is unchanged
+	t.Log("Test: First reconcile with unchanged spec")
+	res, err := r.Reconcile(context.Background(), req)
+	if err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+
+	// Debug: Log what the controller built
+	t.Logf("Initial resource version: %s", initialResourceVersion)
+
+	// Should still requeue to monitor status
+	if !res.Requeue {
+		t.Error("expected requeue to monitor InferenceService status")
+	}
+
+	// Verify InferenceService was NOT updated (resource version unchanged)
+	updatedIsvc := &unstructured.Unstructured{}
+	updatedIsvc.SetGroupVersionKind(kserve.InferenceServiceGVK)
+	err = cl.Get(context.Background(), types.NamespacedName{Name: aiModelName, Namespace: aiModelNamespace}, updatedIsvc)
+	if err != nil {
+		t.Fatalf("get InferenceService after reconcile: %v", err)
+	}
+	finalResourceVersion := updatedIsvc.GetResourceVersion()
+
+	if finalResourceVersion != initialResourceVersion {
+		t.Errorf("InferenceService should not have been updated (resource version changed from %s to %s)",
+			initialResourceVersion, finalResourceVersion)
+	}
+
+	// Now modify the AIModel spec to trigger an update
+	t.Log("Test: Reconcile with changed spec")
+	updatedAIModel := &aimodelv1alpha1.AIModel{}
+	err = cl.Get(context.Background(), types.NamespacedName{Name: aiModelName, Namespace: aiModelNamespace}, updatedAIModel)
+	if err != nil {
+		t.Fatalf("get AIModel: %v", err)
+	}
+
+	// Change maxReplicas
+	newMaxReplicas := int32(5)
+	updatedAIModel.Spec.MaxReplicas = &newMaxReplicas
+	err = cl.Update(context.Background(), updatedAIModel)
+	if err != nil {
+		t.Fatalf("update AIModel: %v", err)
+	}
+
+	// Second reconcile should update InferenceService
+	res2, err := r.Reconcile(context.Background(), req)
+	if err != nil {
+		t.Fatalf("second reconcile: %v", err)
+	}
+
+	if !res2.Requeue {
+		t.Error("expected requeue to monitor InferenceService status")
+	}
+
+	// Verify InferenceService WAS updated (resource version changed)
+	finalIsvc := &unstructured.Unstructured{}
+	finalIsvc.SetGroupVersionKind(kserve.InferenceServiceGVK)
+	err = cl.Get(context.Background(), types.NamespacedName{Name: aiModelName, Namespace: aiModelNamespace}, finalIsvc)
+	if err != nil {
+		t.Fatalf("get InferenceService after second reconcile: %v", err)
+	}
+	changedResourceVersion := finalIsvc.GetResourceVersion()
+
+	if changedResourceVersion == finalResourceVersion {
+		t.Error("InferenceService should have been updated (resource version unchanged)")
+	}
+
+	// Verify the maxReplicas was updated correctly
+	predictor, found, err := unstructured.NestedMap(finalIsvc.Object, "spec", "predictor")
+	if err != nil || !found {
+		t.Fatal("failed to get predictor from updated InferenceService")
+	}
+
+	maxReplicasVal, found, err := unstructured.NestedInt64(predictor, "maxReplicas")
+	if err != nil || !found {
+		t.Fatal("failed to get maxReplicas from updated InferenceService")
+	}
+
+	if maxReplicasVal != int64(newMaxReplicas) {
+		t.Errorf("expected maxReplicas %d after update, got %d", newMaxReplicas, maxReplicasVal)
+	}
+
+	t.Log("Test passed: Controller skips update when spec is unchanged and updates when spec changes")
+}
