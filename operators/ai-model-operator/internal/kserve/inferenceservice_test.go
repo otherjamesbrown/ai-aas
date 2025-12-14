@@ -693,19 +693,12 @@ func TestInferenceServiceBuilder_BuildContainerBased_HasLivenessProbe(t *testing
 		t.Errorf("Expected port 8000, got %d", port)
 	}
 
-	// Verify startupProbe also exists (for initial model loading)
-	startupProbe, found, err := unstructured.NestedMap(container, "startupProbe")
-	if err != nil || !found {
-		t.Fatal("Expected startupProbe in container")
+	// Verify startupProbe is NOT set (Knative rejects it in serverless mode)
+	// See: https://github.com/knative/serving/issues/10037
+	_, found, err = unstructured.NestedMap(container, "startupProbe")
+	if found {
+		t.Error("Expected NO startupProbe (Knative serverless mode rejects it)")
 	}
 
-	startupFailureThreshold, found, err := unstructured.NestedInt64(startupProbe, "failureThreshold")
-	if err != nil || !found {
-		t.Fatal("Expected failureThreshold in startupProbe")
-	}
-	if startupFailureThreshold != 90 {
-		t.Errorf("Expected startupProbe failureThreshold 90, got %d", startupFailureThreshold)
-	}
-
-	t.Log("Test passed: Container-based InferenceService has proper liveness probe configuration")
+	t.Log("Test passed: Container-based InferenceService has proper liveness probe configuration (no startupProbe)")
 }

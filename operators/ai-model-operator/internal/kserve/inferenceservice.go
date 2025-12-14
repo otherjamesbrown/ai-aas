@@ -462,17 +462,10 @@ func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructu
 				"protocol":      "TCP",
 			},
 		},
-		// Startup probe with extended timeout for model download
-		"startupProbe": map[string]interface{}{
-			"httpGet": map[string]interface{}{
-				"path": "/health",
-				"port": int64(8000),
-			},
-			"initialDelaySeconds": int64(30),
-			"periodSeconds":       int64(10),
-			"failureThreshold":    int64(90), // 30s + 90*10s = 15 min max
-			"timeoutSeconds":      int64(5),
-		},
+		// NOTE: We do NOT use startupProbe here because Knative Serving's admission
+		// webhook actively rejects startupProbe in serverless mode. Instead, we rely
+		// on livenessProbe.initialDelaySeconds to allow time for model loading.
+		// See: https://github.com/knative/serving/issues/10037
 		"readinessProbe": map[string]interface{}{
 			"httpGet": map[string]interface{}{
 				"path": "/health",
