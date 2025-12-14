@@ -27,8 +27,8 @@ import (
 	rbacmiddleware "github.com/otherjamesbrown/ai-aas/services/analytics-service/internal/middleware"
 	"github.com/otherjamesbrown/ai-aas/services/analytics-service/internal/storage/postgres"
 
-	sharedMiddleware "github.com/otherjamesbrown/ai-aas/shared/go/middleware"
-	"github.com/otherjamesbrown/ai-aas/shared/go/observability"
+	sharedMiddleware "github.com/ai-aas/shared-go/middleware"
+	"github.com/ai-aas/shared-go/observability"
 )
 
 // Server wraps the HTTP server and router.

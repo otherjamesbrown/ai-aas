@@ -11,7 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 
-	"github.com/otherjamesbrown/ai-aas/shared/go/auth"
+	"github.com/ai-aas/shared-go/auth"
 	"github.com/otherjamesbrown/ai-aas/services/analytics-service/internal/exports"
 )
 

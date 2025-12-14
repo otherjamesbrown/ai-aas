@@ -5,7 +5,7 @@ go 1.24.0
 toolchain go1.24.2
 
 require (
-	github.com/otherjamesbrown/ai-aas/shared/go v0.0.0-00010101000000-000000000000
+	github.com/ai-aas/shared-go v0.0.0-00010101000000-000000000000
 	github.com/fatih/color v1.18.0
 	github.com/lib/pq v1.10.9
 	github.com/olekukonko/tablewriter v0.0.5
@@ -21,7 +21,7 @@ require (
 	k8s.io/client-go v0.32.0
 )
 
-replace github.com/otherjamesbrown/ai-aas/shared/go => ../../shared/go
+replace github.com/ai-aas/shared-go => ../../shared/go
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.39.6 // indirect

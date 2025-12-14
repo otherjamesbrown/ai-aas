@@ -1,7 +1,7 @@
 // Package huggingface re-exports the shared huggingface errors for backward compatibility.
 package huggingface
 
-import sharedHF "github.com/otherjamesbrown/ai-aas/shared/go/modelcache/huggingface"
+import sharedHF "github.com/ai-aas/shared-go/modelcache/huggingface"
 
 // Re-export errors
 var (

@@ -135,6 +135,18 @@ check_replace_directives() {
         return
     fi
 
+    # Calculate depth from module to repo root
+    # Count the number of directory levels to get the correct relative path
+    # Number of directory components = number of slashes + 1
+    local depth
+    depth=$(echo "$rel_dir" | tr -cd '/' | wc -c)
+    depth=$((depth + 1))  # Add 1 because path has one more component than slashes
+    local relative_path=""
+    for ((i=0; i<depth; i++)); do
+        relative_path="../$relative_path"
+    done
+    relative_path="${relative_path}shared/go"
+
     # Check if go.mod imports shared module
     if grep -q "github.com/ai-aas/shared-go" "$gomod_path" 2>/dev/null; then
         # Check if replace directive exists and is correct
@@ -143,13 +155,13 @@ check_replace_directives() {
 
         if [ -z "$replace_directive" ]; then
             echo -e "${RED}ERROR${NC}: Missing replace directive in $rel_dir/go.mod"
-            echo -e "  Expected: ${GREEN}replace github.com/ai-aas/shared-go => ../../shared/go${NC}"
+            echo -e "  Expected: ${GREEN}replace github.com/ai-aas/shared-go => $relative_path${NC}"
             ((ERRORS++))
         else
             # Verify the replace directive points to correct path
-            if ! echo "$replace_directive" | grep -q "=> ../../shared/go"; then
+            if ! echo "$replace_directive" | grep -q "=> $relative_path"; then
                 echo -e "${RED}ERROR${NC}: Incorrect replace directive in $rel_dir/go.mod"
-                echo -e "  Expected: ${GREEN}replace github.com/ai-aas/shared-go => ../../shared/go${NC}"
+                echo -e "  Expected: ${GREEN}replace github.com/ai-aas/shared-go => $relative_path${NC}"
                 echo -e "  Found:    ${RED}$replace_directive${NC}"
                 ((ERRORS++))
             fi

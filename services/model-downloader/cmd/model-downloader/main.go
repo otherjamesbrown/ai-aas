@@ -7,7 +7,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/otherjamesbrown/ai-aas/shared/go/modelcache/pull"
+	"github.com/ai-aas/shared-go/modelcache/pull"
 )
 
 const (

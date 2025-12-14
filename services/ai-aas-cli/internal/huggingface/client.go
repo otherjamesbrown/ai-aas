@@ -1,12 +1,12 @@
 // Package huggingface re-exports the shared huggingface client for backward compatibility.
-// New code should import github.com/otherjamesbrown/ai-aas/shared/go/modelcache/huggingface directly.
+// New code should import github.com/ai-aas/shared-go/modelcache/huggingface directly.
 package huggingface
 
 import (
 	"context"
 	"time"
 
-	sharedHF "github.com/otherjamesbrown/ai-aas/shared/go/modelcache/huggingface"
+	sharedHF "github.com/ai-aas/shared-go/modelcache/huggingface"
 )
 
 // Re-export constants

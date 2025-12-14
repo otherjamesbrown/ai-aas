@@ -4,7 +4,7 @@ go 1.24.0
 
 toolchain go1.24.2
 
-require github.com/otherjamesbrown/ai-aas/shared/go v0.0.0-00010101000000-000000000000
+require github.com/ai-aas/shared-go v0.0.0-00010101000000-000000000000
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.39.6 // indirect
@@ -27,4 +27,4 @@ require (
 	github.com/aws/smithy-go v1.23.2 // indirect
 )
 
-replace github.com/otherjamesbrown/ai-aas/shared/go => ../../shared/go
+replace github.com/ai-aas/shared-go => ../../shared/go
