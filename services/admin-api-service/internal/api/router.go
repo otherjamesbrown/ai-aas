@@ -11,9 +11,11 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/api/middleware"
 	enginesHandler "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/handlers/engines"
 	modelsHandler "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/handlers/models"
+	podsHandler "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/handlers/pods"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/config"
 	enginesSvc "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/services/engines"
 	modelsSvc "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/services/models"
+	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/kubernetes"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/repository"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/service"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/storage"
@@ -115,6 +117,19 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 		engSvc := enginesSvc.NewService(db.Pool())
 		engHdlr := enginesHandler.NewHandler(engSvc)
 		engHdlr.RegisterRoutes(r)
+
+		// Pod health routes (spec 027)
+		k8sClient, err := kubernetes.NewClient()
+		if err != nil {
+			logger.Error("failed to create kubernetes client", zap.Error(err))
+			// Don't fail the entire router - just log the error
+			// Pod health endpoint will return errors if k8s client is nil
+		}
+		if k8sClient != nil {
+			podsSvc := service.NewPodsService(k8sClient, logger)
+			podsHdlr := podsHandler.NewHandler(podsSvc)
+			r.Get("/pods/health", podsHdlr.GetPodHealth)
+		}
 	})
 
 	return r
