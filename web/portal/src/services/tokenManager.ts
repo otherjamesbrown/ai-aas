@@ -1,4 +1,5 @@
 import { publicClient } from '@/lib/http/client';
+import { logger } from '@/lib/logger';
 
 interface TokenResponse {
   access_token: string;
@@ -134,7 +135,7 @@ class TokenManager {
 
       return true;
     } catch (error) {
-      console.error('Token refresh failed:', error);
+      logger.error('Token refresh failed', { component: 'TokenManager' }, error instanceof Error ? error : undefined);
       this.emit('error', error);
       this.clearTokens();
       this.emit('logout');

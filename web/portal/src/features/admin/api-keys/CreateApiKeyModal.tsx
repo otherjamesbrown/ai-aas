@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { CreateApiKeyRequest } from '../types';
+import { logger } from '@/lib/logger';
 
 interface CreateApiKeyModalProps {
   isOpen: boolean;
@@ -22,14 +23,15 @@ export function CreateApiKeyModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('CreateApiKeyModal: handleSubmit called');
-    console.log('CreateApiKeyModal: displayName:', displayName);
-    console.log('CreateApiKeyModal: scopes:', scopes);
+    logger.debug('API key creation form submitted', {
+      component: 'CreateApiKeyModal',
+      displayName,
+      scopeCount: scopes.length
+    });
     const request = {
       display_name: displayName,
       scopes: scopes.length > 0 ? scopes : ['read'],
     };
-    console.log('CreateApiKeyModal: calling onCreate with:', request);
     onCreate(request);
     setDisplayName('');
     setScopes([]);

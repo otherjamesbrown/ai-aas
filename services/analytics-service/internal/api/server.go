@@ -26,6 +26,9 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/analytics-service/internal/audit"
 	rbacmiddleware "github.com/otherjamesbrown/ai-aas/services/analytics-service/internal/middleware"
 	"github.com/otherjamesbrown/ai-aas/services/analytics-service/internal/storage/postgres"
+
+	sharedMiddleware "github.com/ai-aas/shared-go/middleware"
+	"github.com/ai-aas/shared-go/observability"
 )
 
 // Server wraps the HTTP server and router.
@@ -66,9 +69,15 @@ func NewServer(cfg Config) *Server {
 	// Middleware stack
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
+
+	// Request context middleware (for request IDs and correlation)
+	r.Use(observability.RequestContextMiddleware)
+
+	// Request logger middleware (structured logging for all requests)
+	requestLoggerConfig := sharedMiddleware.DefaultRequestLoggerConfig()
+	r.Use(sharedMiddleware.RequestLogger(cfg.Logger, requestLoggerConfig))
 
 	// RBAC configuration - will be applied to analytics API routes
 	rbacCfg := rbacmiddleware.RBACConfig{

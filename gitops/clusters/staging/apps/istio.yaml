@@ -6,6 +6,8 @@ metadata:
   labels:
     environment: staging
     app: istio
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
@@ -49,6 +51,8 @@ metadata:
   labels:
     environment: staging
     app: istio
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
@@ -119,6 +123,8 @@ metadata:
   labels:
     environment: staging
     app: istio
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:

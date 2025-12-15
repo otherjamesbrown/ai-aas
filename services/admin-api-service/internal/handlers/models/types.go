@@ -159,6 +159,16 @@ type CreateDeploymentRequest struct {
 	Replicas    int    `json:"replicas,omitempty"`
 }
 
+// UpdateDeploymentStatusRequest represents a request to update deployment status
+type UpdateDeploymentStatusRequest struct {
+	Status               string     `json:"status"`
+	InferenceServiceName string     `json:"inferenceservice_name,omitempty"`
+	Endpoint             string     `json:"endpoint,omitempty"`
+	ReplicasReady        int        `json:"replicas_ready,omitempty"`
+	LastHealthCheckAt    *time.Time `json:"last_health_check_at,omitempty"`
+	LastHealthStatus     string     `json:"last_health_status,omitempty"`
+}
+
 // ScaleDeploymentRequest represents a request to scale a deployment
 type ScaleDeploymentRequest struct {
 	Replicas int  `json:"replicas"`

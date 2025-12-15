@@ -89,7 +89,9 @@ See Also:
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
-			cfg, err := config.Load()
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
 			}
@@ -268,7 +270,9 @@ See Also:
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 			defer cancel()
 
-			cfg, err := config.Load()
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
 			}
@@ -417,7 +421,9 @@ See Also:
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			cfg, err := config.Load()
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
 			}
@@ -481,7 +487,9 @@ See Also:
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			cfg, err := config.Load()
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
 			}

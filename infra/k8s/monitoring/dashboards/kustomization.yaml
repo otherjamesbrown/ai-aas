@@ -38,3 +38,24 @@ configMapGenerator:
     options:
       labels:
         grafana_dashboard: "1"
+
+  - name: grafana-dashboard-service-logs
+    files:
+      - service-logs.json
+    options:
+      labels:
+        grafana_dashboard: "1"
+
+  - name: grafana-dashboard-request-tracing
+    files:
+      - request-tracing.json
+    options:
+      labels:
+        grafana_dashboard: "1"
+
+  - name: grafana-dashboard-inference-backends
+    files:
+      - inference-backends.json
+    options:
+      labels:
+        grafana_dashboard: "1"

@@ -6,18 +6,18 @@ import (
 	"fmt"
 
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/handlers/pods"
-	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/kubernetes"
+	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/podk8s"
 	"go.uber.org/zap"
 )
 
 // PodsService provides pod health operations
 type PodsService struct {
-	k8sClient *kubernetes.PodClient
+	k8sClient *podk8s.PodClient
 	logger    *zap.Logger
 }
 
 // NewPodsService creates a new pods service
-func NewPodsService(k8sClient *kubernetes.PodClient, logger *zap.Logger) *PodsService {
+func NewPodsService(k8sClient *podk8s.PodClient, logger *zap.Logger) *PodsService {
 	return &PodsService{
 		k8sClient: k8sClient,
 		logger:    logger,
@@ -33,7 +33,7 @@ func (s *PodsService) GetPodHealth(ctx context.Context, opts pods.ListOptions) (
 	}
 
 	// Convert handler options to kubernetes client options
-	k8sOpts := kubernetes.ListModelPodHealthOptions{
+	k8sOpts := podk8s.ListModelPodHealthOptions{
 		Namespace:      opts.Namespace,
 		ModelName:      opts.ModelName,
 		Environment:    opts.Environment,
@@ -79,8 +79,8 @@ func (s *PodsService) GetPodHealth(ctx context.Context, opts pods.ListOptions) (
 	return response, nil
 }
 
-// convertToPodHealth converts kubernetes.PodHealthInfo to pods.PodHealth
-func convertToPodHealth(info kubernetes.PodHealthInfo) pods.PodHealth {
+// convertToPodHealth converts podk8s.PodHealthInfo to pods.PodHealth
+func convertToPodHealth(info podk8s.PodHealthInfo) pods.PodHealth {
 	ph := pods.PodHealth{
 		Name:             info.Name,
 		Namespace:        info.Namespace,

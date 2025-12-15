@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/domain"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/repository"
@@ -57,13 +58,38 @@ func (s *ModelRegistryService) Register(ctx context.Context, reg *domain.ModelRe
 
 	// Auto-create global routing policy for new models (default behavior)
 	// This ensures newly deployed models are immediately accessible to all orgs
-	if created && s.policyRepo != nil {
+	// Always try to create policy, even on updates, in case it was missing
+	if s.policyRepo == nil {
+		s.logger.Error("policyRepo is nil - cannot auto-create routing policy",
+			zap.String("model_name", model.ModelName),
+		)
+	} else {
+		s.logger.Debug("attempting to auto-create routing policy",
+			zap.String("model_name", model.ModelName),
+			zap.String("model_id", model.ModelID.String()),
+			zap.Bool("is_new_model", created),
+		)
 		if err := s.createDefaultRoutingPolicy(ctx, model); err != nil {
-			// Log the error but don't fail the registration
-			// The model is registered, policy can be created manually if needed
-			s.logger.Warn("failed to auto-create routing policy",
+			// Check if the error is due to policy already existing
+			// This is expected and acceptable - not an error condition
+			if isPolicyAlreadyExistsError(err) {
+				s.logger.Debug("routing policy already exists (expected)",
+					zap.String("model_name", model.ModelName),
+					zap.String("model_id", model.ModelID.String()),
+				)
+			} else {
+				// Unexpected error - log as error but don't fail registration
+				// The model is registered, policy can be created manually if needed
+				s.logger.Error("failed to auto-create routing policy",
+					zap.String("model_name", model.ModelName),
+					zap.String("model_id", model.ModelID.String()),
+					zap.Error(err),
+				)
+			}
+		} else {
+			s.logger.Info("successfully auto-created routing policy",
 				zap.String("model_name", model.ModelName),
-				zap.Error(err),
+				zap.String("model_id", model.ModelID.String()),
 			)
 		}
 	}
@@ -75,6 +101,12 @@ func (s *ModelRegistryService) Register(ctx context.Context, reg *domain.ModelRe
 func (s *ModelRegistryService) createDefaultRoutingPolicy(ctx context.Context, model *domain.Model) error {
 	// Build the backend ID from model name (matches deployment naming convention)
 	backendID := model.ModelName
+
+	s.logger.Debug("building policy create request",
+		zap.String("model_name", model.ModelName),
+		zap.String("backend_id", backendID),
+		zap.String("endpoint", model.DeploymentEndpoint),
+	)
 
 	policyCreate := &domain.PolicyCreate{
 		OrganizationID: "*", // Global policy - applies to all organizations
@@ -96,8 +128,18 @@ func (s *ModelRegistryService) createDefaultRoutingPolicy(ctx context.Context, m
 		},
 	}
 
+	s.logger.Debug("calling policyRepo.Create",
+		zap.String("model", model.ModelName),
+		zap.String("org_id", "*"),
+	)
+
 	policy, err := s.policyRepo.Create(ctx, policyCreate, "system")
 	if err != nil {
+		s.logger.Error("policyRepo.Create returned error",
+			zap.String("model_name", model.ModelName),
+			zap.String("backend_id", backendID),
+			zap.Error(err),
+		)
 		return fmt.Errorf("failed to create routing policy: %w", err)
 	}
 
@@ -211,5 +253,18 @@ func (s *ModelRegistryService) validateRegistration(reg *domain.ModelRegistratio
 		return fmt.Errorf("invalid deployment_status: %s", reg.DeploymentStatus)
 	}
 	return nil
+}
+
+// isPolicyAlreadyExistsError checks if the error is due to unique constraint violation
+// This indicates the policy already exists, which is expected behavior
+func isPolicyAlreadyExistsError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := strings.ToLower(err.Error())
+	// Check for PostgreSQL unique constraint violation
+	return strings.Contains(errStr, "unique") ||
+		strings.Contains(errStr, "duplicate") ||
+		strings.Contains(errStr, "idx_routing_policies_unique_org_model")
 }
 

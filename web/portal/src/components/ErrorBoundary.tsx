@@ -1,5 +1,6 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
 import { logger } from '@/lib/logger';
+import { captureError } from '@/lib/sentry';
 
 interface Props {
   children: ReactNode;
@@ -13,6 +14,8 @@ interface State {
   hasError: boolean;
   error: Error | null;
   errorInfo: ErrorInfo | null;
+  /** Sentry event ID for error tracking */
+  sentryEventId: string | null;
 }
 
 /**
@@ -24,7 +27,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null, errorInfo: null };
+    this.state = { hasError: false, error: null, errorInfo: null, sentryEventId: null };
   }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
@@ -32,8 +35,17 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Update state with error info
-    this.setState({ errorInfo });
+    // Capture error in Sentry with component stack context
+    const sentryEventId = captureError(error, {
+      errorBoundary: this.props.component || 'unknown',
+      componentStack: errorInfo.componentStack,
+      react: {
+        componentStack: errorInfo.componentStack,
+      },
+    });
+
+    // Update state with error info and Sentry event ID
+    this.setState({ errorInfo, sentryEventId });
 
     // Log error with structured context
     this.componentLogger.error(
@@ -41,15 +53,13 @@ export class ErrorBoundary extends Component<Props, State> {
       {
         errorBoundary: this.props.component || 'unknown',
         componentStack: errorInfo.componentStack,
+        sentryEventId,
       },
       error
     );
 
     // Call optional error handler
     this.props.onError?.(error, errorInfo);
-
-    // In production, send to error tracking service
-    // Example: Sentry.captureException(error, { contexts: { react: errorInfo } });
   }
 
   render() {
@@ -80,6 +90,19 @@ export class ErrorBoundary extends Component<Props, State> {
             <p className="text-gray-600 mb-4">
               We're sorry, but something unexpected happened. Please try refreshing the page.
             </p>
+            {this.state.sentryEventId && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm text-gray-700 mb-1">
+                  <span className="font-medium">Error ID:</span>{' '}
+                  <code className="text-xs bg-white px-2 py-1 rounded border border-gray-300">
+                    {this.state.sentryEventId}
+                  </code>
+                </p>
+                <p className="text-xs text-gray-600 mt-2">
+                  Our team has been notified. Please include this ID when reporting the issue.
+                </p>
+              </div>
+            )}
             {process.env.NODE_ENV === 'development' && this.state.error && (
               <details className="mb-4">
                 <summary className="cursor-pointer text-sm text-gray-500 mb-2">
@@ -89,6 +112,14 @@ export class ErrorBoundary extends Component<Props, State> {
                   {this.state.error.toString()}
                   {this.state.error.stack}
                 </pre>
+                {this.state.errorInfo?.componentStack && (
+                  <>
+                    <p className="text-xs text-gray-500 mt-2 mb-1">Component Stack:</p>
+                    <pre className="text-xs bg-gray-100 p-3 rounded overflow-auto">
+                      {this.state.errorInfo.componentStack}
+                    </pre>
+                  </>
+                )}
               </details>
             )}
             <div className="flex space-x-3">
@@ -99,7 +130,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 Refresh Page
               </button>
               <button
-                onClick={() => this.setState({ hasError: false, error: null })}
+                onClick={() => this.setState({ hasError: false, error: null, errorInfo: null, sentryEventId: null })}
                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
               >
                 Try Again

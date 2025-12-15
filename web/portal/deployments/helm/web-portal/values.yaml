@@ -103,6 +103,12 @@ staticEnv:
     value: "web-portal"
   - name: VITE_OTEL_SERVICE_VERSION
     value: "0.1.0"
+  # Sentry DSN - set per environment (empty disables Sentry)
+  - name: VITE_SENTRY_DSN
+    value: ""
+  # Log level: debug, info, warn, error
+  - name: VITE_LOG_LEVEL
+    value: "info"
 
 # Secrets for sensitive configuration
 envSecrets: []

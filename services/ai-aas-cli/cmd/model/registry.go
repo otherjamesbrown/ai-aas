@@ -96,7 +96,9 @@ See Also:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			hfModelID := args[0]
 
-			cfg, err := config.Load()
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
@@ -225,7 +227,9 @@ See Also:
   ai-aas model registry info      View model details
   ai-aas model registry status    View model status overview`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load()
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
@@ -345,7 +349,9 @@ See Also:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
 
-			cfg, err := config.Load()
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
@@ -492,7 +498,9 @@ See Also:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
 
-			cfg, err := config.Load()
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
@@ -572,7 +580,9 @@ See Also:
   ai-aas model registry info      Detailed model information
   ai-aas model deploy status      Deployment-specific status`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load()
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
@@ -648,7 +658,9 @@ See Also:
 			oldName := args[0]
 			newName := args[1]
 
-			cfg, err := config.Load()
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}

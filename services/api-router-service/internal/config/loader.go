@@ -279,8 +279,13 @@ func (l *Loader) handleWatchEvent(ctx context.Context, event *clientv3.Event) er
 // GetPolicy retrieves a routing policy for the given organization and model.
 // Returns nil if no policy is found.
 // First checks cache, then etcd if cache miss and etcd is available.
+//
+// Model name resolution:
+//   - First tries exact match (e.g., "unsloth/gpt-oss-20b")
+//   - If no "/" in model name, tries alias lookup by matching models ending with "/<model>"
+//     (e.g., "gpt-oss-20b" matches "unsloth/gpt-oss-20b")
 func (l *Loader) GetPolicy(organizationID, model string) (*RoutingPolicy, error) {
-	// First check cache
+	// First check cache with exact match
 	if l.cache != nil {
 		policy, err := l.cache.GetPolicy(organizationID, model)
 		if err == nil && policy != nil {
@@ -291,6 +296,20 @@ func (l *Loader) GetPolicy(organizationID, model string) (*RoutingPolicy, error)
 			policy, err := l.cache.GetPolicy(etcdGlobalOrgID, model)
 			if err == nil && policy != nil {
 				return policy, nil
+			}
+		}
+
+		// Alias lookup: if model has no "/", try finding a policy with matching suffix
+		if !strings.Contains(model, "/") {
+			policy, err := l.cache.GetPolicyByAlias(organizationID, model)
+			if err == nil && policy != nil {
+				return policy, nil
+			}
+			if organizationID != etcdGlobalOrgID {
+				policy, err := l.cache.GetPolicyByAlias(etcdGlobalOrgID, model)
+				if err == nil && policy != nil {
+					return policy, nil
+				}
 			}
 		}
 	}
@@ -319,6 +338,26 @@ func (l *Loader) GetPolicy(organizationID, model string) (*RoutingPolicy, error)
 					_ = l.cache.StorePolicy(ctx, policy)
 				}
 				return policy, nil
+			}
+		}
+
+		// Alias lookup from etcd if model has no "/"
+		if !strings.Contains(model, "/") {
+			policy, err := l.getPolicyByAliasFromEtcd(ctx, organizationID, model)
+			if err == nil && policy != nil {
+				if l.cache != nil {
+					_ = l.cache.StorePolicy(ctx, policy)
+				}
+				return policy, nil
+			}
+			if organizationID != etcdGlobalOrgID {
+				policy, err := l.getPolicyByAliasFromEtcd(ctx, etcdGlobalOrgID, model)
+				if err == nil && policy != nil {
+					if l.cache != nil {
+						_ = l.cache.StorePolicy(ctx, policy)
+					}
+					return policy, nil
+				}
 			}
 		}
 	}
@@ -350,6 +389,32 @@ func (l *Loader) getPolicyFromEtcd(ctx context.Context, organizationID, model st
 // etcdPolicyKey generates an etcd key for a routing policy.
 func etcdPolicyKey(organizationID, model string) string {
 	return fmt.Sprintf("%s/%s/%s", etcdKeyPrefix, organizationID, model)
+}
+
+// getPolicyByAliasFromEtcd searches for a policy by alias (model name suffix).
+// For example, alias "gpt-oss-20b" matches policy with model "unsloth/gpt-oss-20b".
+func (l *Loader) getPolicyByAliasFromEtcd(ctx context.Context, organizationID, alias string) (*RoutingPolicy, error) {
+	// List all policies for this org and find one matching the alias
+	prefix := fmt.Sprintf("%s/%s/", etcdKeyPrefix, organizationID)
+	suffix := "/" + alias
+
+	resp, err := l.client.Get(ctx, prefix, clientv3.WithPrefix())
+	if err != nil {
+		return nil, fmt.Errorf("etcd prefix get: %w", err)
+	}
+
+	for _, kv := range resp.Kvs {
+		var policy RoutingPolicy
+		if err := json.Unmarshal(kv.Value, &policy); err != nil {
+			continue
+		}
+		// Check if the model name ends with the alias (e.g., "unsloth/gpt-oss-20b" ends with "/gpt-oss-20b")
+		if strings.HasSuffix(policy.Model, suffix) {
+			return &policy, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no policy found with alias %s", alias)
 }
 
 // Stop stops watching for configuration updates and closes the etcd connection.

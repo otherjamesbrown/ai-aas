@@ -1,0 +1,138 @@
+# Loki Infrastructure Health Alerts (PromQL)
+# ==========================================
+# PrometheusRule for Loki component health monitoring
+# Uses PromQL metrics exposed by Loki, Promtail, and Kubernetes
+#
+# NOTE: Log-based alerts using LogQL queries have been moved to Grafana alerting.
+# See: infra/k8s/monitoring/alerts/grafana-log-alerts/ for LogQL-based alerts.
+#
+# For LogQL alerting options:
+# 1. Grafana Alerting: Create alerts in Grafana using Loki datasource
+# 2. Loki Ruler: Enable ruler component in Loki config (requires additional setup)
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: loki-log-alerts
+  namespace: monitoring
+  labels:
+    app: prometheus
+    release: prometheus
+    prometheus: kube-prometheus
+spec:
+  groups:
+    # Log Ingestion Health
+    - name: loki-ingestion
+      interval: 1m
+      rules:
+        - alert: LokiIngestionDown
+          expr: |
+            absent(loki_distributor_bytes_received_total{job="loki"}) == 1
+          for: 5m
+          labels:
+            severity: critical
+            category: infrastructure
+            alert_type: component-health
+          annotations:
+            summary: "Loki log ingestion is down"
+            description: "No log ingestion activity detected for 5 minutes. Logs may be lost."
+            runbook_url: "https://docs.ai-aas.local/runbooks/loki-ingestion-down"
+
+        - alert: LokiIngestionSlowdown
+          expr: |
+            rate(loki_distributor_bytes_received_total{job="loki"}[5m]) < 1000
+          for: 10m
+          labels:
+            severity: warning
+            category: infrastructure
+            alert_type: performance
+          annotations:
+            summary: "Loki ingestion rate is unusually low"
+            description: "Log ingestion rate is {{ $value | humanize }} bytes/sec (expected >1000)"
+
+        - alert: PromtailTargetDown
+          expr: |
+            up{job="promtail"} == 0
+          for: 5m
+          labels:
+            severity: warning
+            category: infrastructure
+            alert_type: component-health
+          annotations:
+            summary: "Promtail instance is down"
+            description: "Promtail on {{ $labels.instance }} is not responding"
+
+    # Loki Storage Health
+    - name: loki-storage
+      interval: 1m
+      rules:
+        - alert: LokiDiskSpaceWarning
+          expr: |
+            (
+              kubelet_volume_stats_used_bytes{persistentvolumeclaim=~"loki.*"}
+              /
+              kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=~"loki.*"}
+            ) > 0.80
+          for: 5m
+          labels:
+            severity: warning
+            category: infrastructure
+            alert_type: resource
+          annotations:
+            summary: "Loki PersistentVolume disk space warning"
+            description: "Loki PV {{ $labels.persistentvolumeclaim }} is {{ $value | humanizePercentage }} full (threshold: 80%)"
+            runbook_url: "https://docs.ai-aas.local/runbooks/loki-disk-space"
+
+        - alert: LokiDiskSpaceCritical
+          expr: |
+            (
+              kubelet_volume_stats_used_bytes{persistentvolumeclaim=~"loki.*"}
+              /
+              kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=~"loki.*"}
+            ) > 0.90
+          for: 5m
+          labels:
+            severity: critical
+            category: infrastructure
+            alert_type: resource
+          annotations:
+            summary: "Loki PersistentVolume disk space critical"
+            description: "Loki PV {{ $labels.persistentvolumeclaim }} is {{ $value | humanizePercentage }} full (threshold: 90%). Immediate action required."
+
+    # Kubernetes Pod Health
+    - name: kubernetes-pod-health
+      interval: 1m
+      rules:
+        - alert: HighPodRestartRate
+          expr: |
+            increase(kube_pod_container_status_restarts_total[1h]) > 10
+          for: 5m
+          labels:
+            severity: critical
+            category: infrastructure
+            alert_type: pod-health
+          annotations:
+            summary: "High pod restart rate detected"
+            description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has restarted {{ $value }} times in the last hour (threshold: 10)"
+            runbook_url: "https://docs.ai-aas.local/runbooks/pod-restart-investigation"
+
+    # Kubernetes Node Health
+    - name: kubernetes-node-health
+      interval: 1m
+      rules:
+        - alert: NodeMemoryOvercommitment
+          expr: |
+            (
+              sum by (node) (kube_pod_container_resource_limits{resource="memory"})
+              /
+              sum by (node) (kube_node_status_allocatable{resource="memory"})
+            ) > 1
+          for: 10m
+          labels:
+            severity: warning
+            category: infrastructure
+            alert_type: resource
+          annotations:
+            summary: "Node memory overcommitment detected"
+            description: "Node {{ $labels.node }} has memory limits {{ $value | humanizePercentage }} of allocatable capacity (threshold: 100%). This may cause pod evictions under load."
+            runbook_url: "https://docs.ai-aas.local/runbooks/node-resource-management"

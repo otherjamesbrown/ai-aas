@@ -86,16 +86,28 @@ Node pool configuration is in Terraform: `infra/terraform/environments/<env>/`
 
 ## Observability Stack
 
-| Component | Purpose | Namespace |
-|-----------|---------|-----------|
-| Prometheus | Metrics collection | `observability` |
-| Grafana | Dashboards | `observability` |
-| Loki | Log aggregation | `observability` |
-| Alertmanager | Alert routing | `observability` |
+The platform uses a unified observability stack for logs, traces, metrics, and error tracking:
 
-Configuration: `gitops/clusters/<env>/apps/` (kube-prometheus-stack, loki applications)
+| Component | Purpose | Namespace | Configuration |
+|-----------|---------|-----------|---------------|
+| Loki | Log aggregation & storage | `system` | `infra/k8s/monitoring/loki/` |
+| Promtail | Log collection (DaemonSet) | `system` | `infra/k8s/monitoring/promtail/` |
+| Tempo | Distributed tracing | `system` | `infra/k8s/monitoring/tempo/` |
+| OTEL Collector | Telemetry routing | `system` | `infra/k8s/monitoring/otel-collector.yaml` |
+| Grafana | Dashboards & visualization | `system` | `infra/k8s/monitoring/grafana/` |
+| Prometheus | Metrics collection | `system` | Existing kube-prometheus-stack |
+| Sentry | Frontend error tracking | External SaaS | `web/portal/src/lib/sentry.ts` |
 
-See [Observability Guide](observability-guide.md) for details.
+**Key Features**:
+- **Logs**: Loki + Promtail with 14-day retention, LogQL queries
+- **Traces**: Tempo + OTEL Collector with trace-to-logs correlation
+- **Metrics**: Prometheus with service graph from traces
+- **Frontend**: Sentry for React errors, session replay, performance monitoring
+- **Inference Backends**: vLLM log collection with GPU error detection
+
+**GitOps Deployment**: `gitops/clusters/<env>/apps/` (loki, promtail, tempo, otel-collector, grafana applications)
+
+See [Observability Architecture](../architecture/observability-architecture.md) for detailed architecture and [Observability Guide](observability-guide.md) for operational details.
 
 ## TLS/SSL Certificates
 

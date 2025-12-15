@@ -134,6 +134,31 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/support/impersonations/current", h.HandleImpersonationStatus)
 }
 
+// HandleChatCompletionsHealth handles GET /v1/chat/completions/health requests.
+// This endpoint is unauthenticated and designed for validation tools like guidellm
+// that need to verify the endpoint is reachable without requiring an API key.
+func (h *Handler) HandleChatCompletionsHealth(w http.ResponseWriter, r *http.Request) {
+	_, span := h.tracer.Start(r.Context(), "health.chat_completions")
+	defer span.End()
+
+	h.logger.Debug("chat completions health check requested",
+		zap.String("remote_addr", r.RemoteAddr),
+		zap.String("user_agent", r.UserAgent()),
+	)
+
+	// Return a simple success response
+	response := map[string]interface{}{
+		"status":  "ok",
+		"service": "api-router-service",
+		"endpoint": "/v1/chat/completions",
+		"timestamp": time.Now().Unix(),
+	}
+
+	if err := h.writeJSON(w, http.StatusOK, response); err != nil {
+		h.logger.Error("failed to write health response", zap.Error(err))
+	}
+}
+
 // HandleInference handles POST /v1/inference requests.
 func (h *Handler) HandleInference(w http.ResponseWriter, r *http.Request) {
 	ctx, span := h.tracer.Start(r.Context(), "inference.request")

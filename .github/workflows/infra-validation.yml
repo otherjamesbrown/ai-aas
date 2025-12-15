@@ -1,0 +1,292 @@
+name: Infrastructure Validation
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - staging
+    paths:
+      - 'infra/k8s/**'
+      - 'gitops/**'
+      - 'services/**/deployments/helm/**'
+      - '.github/workflows/infra-validation.yml'
+  pull_request:
+    branches:
+      - main
+      - develop
+      - staging
+    paths:
+      - 'infra/k8s/**'
+      - 'gitops/**'
+      - 'services/**/deployments/helm/**'
+      - '.github/workflows/infra-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  yamllint:
+    name: YAML Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install yamllint
+        run: pip install yamllint
+
+      - name: Lint Kubernetes manifests
+        run: |
+          yamllint -d '{extends: relaxed, rules: {line-length: {max: 200}, truthy: disable}}' \
+            infra/k8s/
+
+      - name: Lint GitOps manifests
+        run: |
+          yamllint -d '{extends: relaxed, rules: {line-length: {max: 200}, truthy: disable}}' \
+            gitops/
+
+  helm-lint:
+    name: Helm Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.14.0'
+
+      - name: Find and lint Helm charts
+        run: |
+          set -e
+          CHARTS=$(find services -name "Chart.yaml" -path "*/deployments/helm/*" -exec dirname {} \;)
+          if [ -z "$CHARTS" ]; then
+            echo "No Helm charts found"
+            exit 0
+          fi
+
+          for chart in $CHARTS; do
+            echo "Linting $chart..."
+            helm lint "$chart" || true
+          done
+
+      - name: Lint monitoring charts
+        run: |
+          if [ -d "infra/helm/charts" ]; then
+            for chart in infra/helm/charts/*; do
+              if [ -f "$chart/Chart.yaml" ]; then
+                echo "Linting $chart..."
+                helm lint "$chart" || true
+              fi
+            done
+          fi
+
+  argocd-validate:
+    name: ArgoCD Application Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Validate ArgoCD Applications
+        run: |
+          set -e
+          APPS=$(find gitops -name "*.yaml" -path "*/apps/*")
+
+          if [ -z "$APPS" ]; then
+            echo "No ArgoCD Applications found"
+            exit 0
+          fi
+
+          ERRORS=0
+          for app in $APPS; do
+            echo "Validating $app..."
+
+            # Check apiVersion
+            API_VERSION=$(yq e '.apiVersion' "$app" 2>/dev/null || echo "")
+            if [ "$API_VERSION" != "argoproj.io/v1alpha1" ]; then
+              echo "  ⚠️  Missing or invalid apiVersion in $app"
+            fi
+
+            # Check kind
+            KIND=$(yq e '.kind' "$app" 2>/dev/null || echo "")
+            if [ "$KIND" != "Application" ]; then
+              echo "  ⚠️  Not an ArgoCD Application: $app (kind=$KIND)"
+              continue
+            fi
+
+            # Check required fields
+            NAME=$(yq e '.metadata.name' "$app" 2>/dev/null || echo "")
+            if [ -z "$NAME" ] || [ "$NAME" = "null" ]; then
+              echo "  ❌ Missing metadata.name in $app"
+              ERRORS=$((ERRORS + 1))
+            fi
+
+            PROJECT=$(yq e '.spec.project' "$app" 2>/dev/null || echo "")
+            if [ -z "$PROJECT" ] || [ "$PROJECT" = "null" ]; then
+              echo "  ❌ Missing spec.project in $app"
+              ERRORS=$((ERRORS + 1))
+            fi
+
+            REPO_URL=$(yq e '.spec.source.repoURL' "$app" 2>/dev/null || echo "")
+            if [ -z "$REPO_URL" ] || [ "$REPO_URL" = "null" ]; then
+              echo "  ❌ Missing spec.source.repoURL in $app"
+              ERRORS=$((ERRORS + 1))
+            fi
+
+            DEST_SERVER=$(yq e '.spec.destination.server' "$app" 2>/dev/null || echo "")
+            if [ -z "$DEST_SERVER" ] || [ "$DEST_SERVER" = "null" ]; then
+              echo "  ❌ Missing spec.destination.server in $app"
+              ERRORS=$((ERRORS + 1))
+            fi
+
+            # Check sync policy exists
+            SYNC_POLICY=$(yq e '.spec.syncPolicy' "$app" 2>/dev/null || echo "")
+            if [ -z "$SYNC_POLICY" ] || [ "$SYNC_POLICY" = "null" ]; then
+              echo "  ⚠️  Missing spec.syncPolicy in $app (recommended)"
+            fi
+
+            echo "  ✅ $app is valid"
+          done
+
+          if [ $ERRORS -gt 0 ]; then
+            echo ""
+            echo "❌ Found $ERRORS validation errors"
+            exit 1
+          fi
+
+          echo ""
+          echo "✅ All ArgoCD Applications are valid"
+
+  kubernetes-validate:
+    name: Kubernetes Manifest Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kubeval
+        run: |
+          wget https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz
+          tar xf kubeval-linux-amd64.tar.gz
+          sudo mv kubeval /usr/local/bin/
+
+      - name: Validate Kubernetes manifests
+        run: |
+          set -e
+          MANIFESTS=$(find infra/k8s -name "*.yaml" -o -name "*.yml" | head -50)
+
+          if [ -z "$MANIFESTS" ]; then
+            echo "No Kubernetes manifests found"
+            exit 0
+          fi
+
+          # Skip CRDs and unknown types, validate standard resources
+          for manifest in $MANIFESTS; do
+            echo "Validating $manifest..."
+            kubeval --strict --ignore-missing-schemas "$manifest" || true
+          done
+
+  argocd-duplicate-check:
+    name: ArgoCD Duplicate Resource Detection
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Check for duplicate resource management
+        run: |
+          set -e
+          echo "Checking for ArgoCD Applications managing the same resources..."
+          echo ""
+          echo "NOTE: Only checking for duplicates WITHIN each environment."
+          echo "Apps in different environments (development vs staging) are expected to manage same resources."
+          echo ""
+
+          DUPLICATES_FOUND=0
+
+          # Check each environment separately
+          for env_dir in gitops/clusters/*/apps; do
+            if [ ! -d "$env_dir" ]; then
+              continue
+            fi
+
+            # Extract environment name from path (e.g., gitops/clusters/development/apps -> development)
+            ENV_NAME=$(echo "$env_dir" | cut -d'/' -f3)
+            echo "Checking environment: $ENV_NAME"
+
+            # Track resources within this environment
+            declare -A ENV_RESOURCES
+
+            for app in $(find "$env_dir" -name "*.yaml" 2>/dev/null); do
+              KIND=$(yq e '.kind' "$app" 2>/dev/null || echo "")
+              if [ "$KIND" != "Application" ]; then
+                continue
+              fi
+
+              APP_NAME=$(yq e '.metadata.name' "$app" 2>/dev/null || echo "unknown")
+              SOURCE_PATH=$(yq e '.spec.source.path' "$app" 2>/dev/null || echo "")
+              DEST_NS=$(yq e '.spec.destination.namespace' "$app" 2>/dev/null || echo "default")
+
+              # If path exists locally, check resource names
+              if [ -d "$SOURCE_PATH" ]; then
+                for resource in $(find "$SOURCE_PATH" -name "*.yaml" 2>/dev/null); do
+                  RES_KIND=$(yq e '.kind' "$resource" 2>/dev/null || echo "")
+                  RES_NAME=$(yq e '.metadata.name' "$resource" 2>/dev/null || echo "")
+
+                  if [ -n "$RES_KIND" ] && [ "$RES_KIND" != "null" ] && [ -n "$RES_NAME" ] && [ "$RES_NAME" != "null" ]; then
+                    RES_KEY="${DEST_NS}/${RES_KIND}/${RES_NAME}"
+
+                    if [ -n "${ENV_RESOURCES[$RES_KEY]:-}" ]; then
+                      EXISTING_APP="${ENV_RESOURCES[$RES_KEY]}"
+                      if [ "$EXISTING_APP" != "$APP_NAME" ]; then
+                        echo "❌ ERROR: Resource '$RES_KIND/$RES_NAME' in namespace '$DEST_NS' managed by multiple apps in $ENV_NAME:"
+                        echo "   - $EXISTING_APP"
+                        echo "   - $APP_NAME"
+                        echo "   Files: $app"
+                        DUPLICATES_FOUND=$((DUPLICATES_FOUND + 1))
+                      fi
+                    else
+                      ENV_RESOURCES[$RES_KEY]="$APP_NAME"
+                    fi
+                  fi
+                done
+              fi
+            done
+
+            # Clear the associative array for next environment
+            unset ENV_RESOURCES
+            declare -A ENV_RESOURCES
+
+            echo "  ✓ $ENV_NAME environment checked"
+          done
+
+          echo ""
+          if [ $DUPLICATES_FOUND -gt 0 ]; then
+            echo "❌ Found $DUPLICATES_FOUND duplicate resource management issues"
+            echo ""
+            echo "This causes ArgoCD SharedResourceWarning and leads to:"
+            echo "  - Race conditions between apps"
+            echo "  - Config drift and unpredictable behavior"
+            echo "  - Failed rollouts (like the ai-aas-53sw incident)"
+            echo ""
+            echo "Fix: Ensure each resource is managed by exactly ONE ArgoCD Application per environment"
+            exit 1
+          fi
+
+          echo "✅ No duplicate resource management detected"

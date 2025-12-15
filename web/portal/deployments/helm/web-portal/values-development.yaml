@@ -22,6 +22,23 @@ ingress:
 #   - VITE_OAUTH_ISSUER_URL: https://api.dev.otherjamesbrown.com
 #   - VITE_OAUTH_REDIRECT_URI: https://portal.dev.otherjamesbrown.com/auth/callback
 
+# Development-specific static environment variables
+staticEnv:
+  - name: VITE_OAUTH_CLIENT_ID
+    value: ""
+  - name: VITE_OTEL_EXPORTER_OTLP_ENDPOINT
+    value: ""
+  - name: VITE_OTEL_SERVICE_NAME
+    value: "web-portal"
+  - name: VITE_OTEL_SERVICE_VERSION
+    value: "0.1.0"
+  # Sentry DSN - empty in development (Sentry disabled for local dev)
+  - name: VITE_SENTRY_DSN
+    value: ""
+  # Log level: debug for development
+  - name: VITE_LOG_LEVEL
+    value: "debug"
+
 resources:
   limits:
     cpu: 200m
@@ -34,4 +51,18 @@ autoscaling:
   enabled: true
   minReplicas: 2
   maxReplicas: 5
+
+# Node scheduling - prefer CPU nodes (avoid GPU nodes)
+# GPU nodes have taint nvidia.com/gpu=true:NoSchedule
+# CPU nodes are in pool 770211, GPU nodes are in pool 776664
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - key: lke.linode.com/pool-id
+              operator: In
+              values:
+                - "770211"  # CPU node pool
 

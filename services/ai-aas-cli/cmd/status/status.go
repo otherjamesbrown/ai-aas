@@ -56,13 +56,17 @@ This command performs health checks on:
   - API Router (request routing)
 
 The checks use the configured base domain to construct service URLs.
+When using --profile, the status command checks the endpoints configured in that profile.
 
 Examples:
-  ai-aas-cli status              # Check all services
-  ai-aas-cli status --verbose    # Show detailed information
-  ai-aas-cli status --json       # Output as JSON`,
+  ai-aas-cli status                    # Check all services
+  ai-aas-cli status --verbose          # Show detailed information
+  ai-aas-cli status --json             # Output as JSON
+  ai-aas-cli status --profile staging  # Check staging profile endpoints`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runStatus(cmd.Context(), verbose, jsonOutput)
+			// Get profile name from parent persistent flag
+			profileName, _ := cmd.Flags().GetString("profile")
+			return runStatus(cmd.Context(), profileName, verbose, jsonOutput)
 		},
 	}
 
@@ -72,10 +76,21 @@ Examples:
 	return cmd
 }
 
-func runStatus(ctx context.Context, verbose, jsonOutput bool) error {
-	cfg, err := config.Load()
-	if err != nil {
-		return fmt.Errorf("load config: %w", err)
+func runStatus(ctx context.Context, profileName string, verbose, jsonOutput bool) error {
+	// Load config with profile support - if profile is specified, use profile-specific endpoints
+	var cfg *config.Config
+	var err error
+
+	if profileName != "" {
+		cfg, _, err = config.GetEffectiveConfig(profileName)
+		if err != nil {
+			return fmt.Errorf("load profile config: %w", err)
+		}
+	} else {
+		cfg, err = config.Load()
+		if err != nil {
+			return fmt.Errorf("load config: %w", err)
+		}
 	}
 
 	// Extract base domain from API endpoint
@@ -89,6 +104,9 @@ func runStatus(ctx context.Context, verbose, jsonOutput bool) error {
 		fmt.Println("║                    Platform Health Check                       ║")
 		fmt.Println("╚════════════════════════════════════════════════════════════════╝")
 		fmt.Println()
+		if profileName != "" {
+			fmt.Printf("Profile:      %s\n", profileName)
+		}
 		fmt.Printf("Environment:  %s\n", cfg.Environment)
 		fmt.Printf("Base Domain:  %s\n", baseDomain)
 		fmt.Println()
