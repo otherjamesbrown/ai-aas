@@ -40,11 +40,11 @@ type PodHealth struct {
 
 // TerminationInfo contains details about the last container termination
 type TerminationInfo struct {
-	Reason     string    `json:"reason"`
-	ExitCode   int       `json:"exit_code"`
-	Message    string    `json:"message"`
-	StartedAt  time.Time `json:"started_at"`
-	FinishedAt time.Time `json:"finished_at"`
+	Reason     string     `json:"reason"`
+	ExitCode   int        `json:"exit_code"`
+	Message    string     `json:"message"`
+	StartedAt  *time.Time `json:"started_at"`
+	FinishedAt *time.Time `json:"finished_at"`
 }
 
 // ContainerHealth represents health information for a container

@@ -26,6 +26,12 @@ func NewPodsService(k8sClient *kubernetes.Client, logger *zap.Logger) *PodsServi
 
 // GetPodHealth retrieves pod health information
 func (s *PodsService) GetPodHealth(ctx context.Context, opts pods.ListOptions) (*pods.PodHealthResponse, error) {
+	// Check if k8s client is available
+	if s.k8sClient == nil {
+		s.logger.Error("kubernetes client not initialized")
+		return nil, pods.ErrK8sUnavailable
+	}
+
 	// Convert handler options to kubernetes client options
 	k8sOpts := kubernetes.ListModelPodHealthOptions{
 		Namespace:      opts.Namespace,

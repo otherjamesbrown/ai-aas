@@ -122,14 +122,12 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 		k8sClient, err := kubernetes.NewClient()
 		if err != nil {
 			logger.Error("failed to create kubernetes client", zap.Error(err))
-			// Don't fail the entire router - just log the error
-			// Pod health endpoint will return errors if k8s client is nil
+			// Don't fail the entire router - k8s client may be nil
+			// Service layer will return 503 if client is unavailable
 		}
-		if k8sClient != nil {
-			podsSvc := service.NewPodsService(k8sClient, logger)
-			podsHdlr := podsHandler.NewHandler(podsSvc)
-			r.Get("/pods/health", podsHdlr.GetPodHealth)
-		}
+		podsSvc := service.NewPodsService(k8sClient, logger)
+		podsHdlr := podsHandler.NewHandler(podsSvc)
+		r.Get("/pods/health", podsHdlr.GetPodHealth)
 	})
 
 	return r

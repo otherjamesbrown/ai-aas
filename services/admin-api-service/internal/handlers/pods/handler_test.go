@@ -294,8 +294,37 @@ func TestGetPodHealth_ServiceError(t *testing.T) {
 		t.Error("expected error field in response")
 	}
 
-	if _, ok := errResponse["details"]; !ok {
-		t.Error("expected details field in response")
+	// Note: details field intentionally omitted from error responses for security
+	// (avoids leaking internal implementation details)
+}
+
+func TestGetPodHealth_K8sUnavailable(t *testing.T) {
+	svc := &mockService{
+		err: ErrK8sUnavailable,
+	}
+	handler := setupHandler(svc)
+
+	req := httptest.NewRequest("GET", "/v1/pods/health", nil)
+	w := httptest.NewRecorder()
+
+	handler.GetPodHealth(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected status 503, got %d", w.Code)
+	}
+
+	var errResponse map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&errResponse); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+
+	errorMsg, ok := errResponse["error"].(string)
+	if !ok {
+		t.Error("expected error field in response")
+	}
+
+	if errorMsg != "kubernetes service unavailable" {
+		t.Errorf("expected 'kubernetes service unavailable' error, got '%s'", errorMsg)
 	}
 }
 

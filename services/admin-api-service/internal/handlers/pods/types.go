@@ -1,7 +1,13 @@
 // Package pods provides types for pod health API.
 package pods
 
-import "time"
+import (
+	"errors"
+	"time"
+)
+
+// ErrK8sUnavailable indicates the Kubernetes client is not available
+var ErrK8sUnavailable = errors.New("kubernetes client unavailable")
 
 // PodHealthResponse represents the response from GET /v1/pods/health
 type PodHealthResponse struct {

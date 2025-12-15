@@ -4,6 +4,7 @@ package pods
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -42,6 +43,11 @@ func (h *Handler) GetPodHealth(w http.ResponseWriter, r *http.Request) {
 	// Get pod health from service
 	response, err := h.service.GetPodHealth(r.Context(), opts)
 	if err != nil {
+		// Return 503 if Kubernetes client is unavailable
+		if errors.Is(err, ErrK8sUnavailable) {
+			writeError(w, http.StatusServiceUnavailable, "kubernetes service unavailable", err)
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "failed to retrieve pod health", err)
 		return
 	}
@@ -71,16 +77,14 @@ func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	json.NewEncoder(w).Encode(data)
 }
 
-func writeError(w http.ResponseWriter, status int, message string, err error) {
+func writeError(w http.ResponseWriter, status int, message string, _ error) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 
+	// Don't expose internal error details in response for security
+	// Detailed errors are logged in the service layer
 	errResponse := map[string]interface{}{
 		"error": message,
-	}
-
-	if err != nil {
-		errResponse["details"] = err.Error()
 	}
 
 	json.NewEncoder(w).Encode(errResponse)
