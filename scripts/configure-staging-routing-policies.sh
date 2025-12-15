@@ -9,7 +9,7 @@
 set -e
 
 # Configuration
-ADMIN_API_ENDPOINT="http://admin-api.172.236.135.55.nip.io"
+ADMIN_API_ENDPOINT="https://admin-api.staging.otherjamesbrown.com"
 API_KEY="ai-aas__HYQk1SQgY4P_f2aMjYM39zL9NAxG63tcHn_Gx4If3M"  # STAGING_MASTER_ADMIN_API_KEY
 
 # Colors for output

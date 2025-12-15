@@ -75,14 +75,14 @@ admin-cli bootstrap --email=admin@example.com --org-name="Example Org"
 ```bash
 # Example: List organizations via API
 curl -H "X-API-Key: $MASTER_ADMIN_API_KEY" \
-     https://user-org.172.232.58.222.nip.io/v1/orgs
+     https://user-org.dev.otherjamesbrown.com/v1/orgs
 
 # Example: Create a new user
 curl -X POST \
      -H "X-API-Key: $MASTER_ADMIN_API_KEY" \
      -H "Content-Type: application/json" \
      -d '{"email":"user@example.com","display_name":"John Doe"}' \
-     https://user-org.172.232.58.222.nip.io/v1/users
+     https://user-org.dev.otherjamesbrown.com/v1/users
 ```
 
 ### Using in Tests
@@ -147,7 +147,7 @@ curl -X PUT \
      -H "X-API-Key: $MASTER_ADMIN_API_KEY" \
      -H "Content-Type: application/json" \
      -d '{"current_password":"master-admin-password","new_password":"YOUR_STRONG_PASSWORD"}' \
-     https://user-org.172.232.58.222.nip.io/v1/users/me/password
+     https://user-org.dev.otherjamesbrown.com/v1/users/me/password
 ```
 
 #### Option 2: Direct Database Update
@@ -250,11 +250,11 @@ If the master admin key is lost or compromised:
 
 The master admin account works with these development cluster endpoints:
 
-- **API Router**: `https://api.172.232.58.222.nip.io`
-- **User-Org Service**: `https://user-org.172.232.58.222.nip.io`
-- **Analytics Service**: `https://analytics.172.232.58.222.nip.io`
-- **ArgoCD**: `https://argocd.172.232.58.222.nip.io`
-- **Grafana**: `https://grafana.172.232.58.222.nip.io`
+- **API Router**: `https://api.dev.otherjamesbrown.com`
+- **User-Org Service**: `https://user-org.dev.otherjamesbrown.com`
+- **Analytics Service**: `https://analytics.dev.otherjamesbrown.com`
+- **ArgoCD**: `https://argocd.dev.otherjamesbrown.com`
+- **Grafana**: `https://grafana.dev.otherjamesbrown.com`
 
 ## Support
 

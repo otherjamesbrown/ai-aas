@@ -13,7 +13,7 @@ service:
 global:
   domain:
     base: "staging.otherjamesbrown.com"
-    local: "staging.ai-aas.local"
+    local: "staging.otherjamesbrown.com"
   tls:
     enabled: true
     clusterIssuer: "letsencrypt-staging"
@@ -27,7 +27,7 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
-    - host: api.staging.ai-aas.local
+    - host: api.staging.otherjamesbrown.com
       paths:
         - path: /
           pathType: Prefix

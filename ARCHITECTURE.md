@@ -183,14 +183,14 @@ prometheus:
   targets: [vLLM pods, Go services, operators]
 
 grafana:
-  url: "http://grafana.{cluster-ip}.nip.io"
+  url: "https://grafana.dev.otherjamesbrown.com"
   dashboards:
     - service-logs.json (aggregated logs)
     - request-tracing.json (trace correlation)
     - inference-backends.json (vLLM metrics)
 
 loki:
-  url: "http://loki.{cluster-ip}.nip.io"
+  url: "https://loki.dev.otherjamesbrown.com"
   purpose: Log aggregation
   format: Structured JSON
   query_api: "/loki/api/v1/query_range"
@@ -225,9 +225,9 @@ istio_gateway:
   config: Service Helm charts (VirtualServices)
 
 endpoints:
-  api_router: "https://api.{cluster-ip}.nip.io"
-  grafana: "http://grafana.{cluster-ip}.nip.io"
-  loki: "http://loki.{cluster-ip}.nip.io"
+  api_router: "https://api.dev.otherjamesbrown.com"
+  grafana: "https://grafana.dev.otherjamesbrown.com"
+  loki: "https://loki.dev.otherjamesbrown.com"
   argocd: "https://argocd.{domain}"
 
 detailed_reference: "docs/technical/platform/ingress-best-practices.md"

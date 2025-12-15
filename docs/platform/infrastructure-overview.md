@@ -66,7 +66,7 @@ Node pool configuration is in Terraform: `infra/terraform/environments/<env>/`
 - **Network Policies**: Calico with default-deny stance
 - **DNS**:
   - Production: Linode DNS
-  - Development: Local hosts file (`.ai-aas.local` domains)
+  - Development: Local hosts file (`.otherjamesbrown.com` domains)
 
 ## Change Management Flow
 

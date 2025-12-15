@@ -148,7 +148,7 @@ admin-cli routing policy create \
   --backends gpt-oss-20b-vllm-deployment:100
 
 # 4. Test via API
-curl -X POST http://api.dev.ai-aas.local/v1/chat/completions \
+curl -X POST https://api.dev.otherjamesbrown.com/v1/chat/completions \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{

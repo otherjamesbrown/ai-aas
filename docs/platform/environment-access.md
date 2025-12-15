@@ -57,16 +57,16 @@ git-crypt unlock
 - Loki API: `https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range`
 - Tempo (Tracing): `http://tempo.system.svc.cluster.local:3100` (cluster internal only)
 
-**Quick Access (nip.io - no TLS/DNS setup required)**:
+**Quick Access**:
 ```bash
 # Open Grafana in browser
-open http://grafana.172.232.58.222.nip.io
+open https://grafana.dev.otherjamesbrown.com
 
 # Test Loki readiness
-curl http://loki.172.232.58.222.nip.io/ready
+curl https://loki.dev.otherjamesbrown.com/ready
 
 # Query Loki logs (last 1 hour errors)
-curl -G http://loki.172.232.58.222.nip.io/loki/api/v1/query_range \
+curl -G https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range \
   --data-urlencode 'query={level="error"}' \
   --data-urlencode 'start='$(date -d '1 hour ago' +%s)000000000 \
   --data-urlencode 'end='$(date +%s)000000000 \

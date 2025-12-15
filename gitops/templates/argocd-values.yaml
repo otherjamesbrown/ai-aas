@@ -16,13 +16,13 @@ server:
     annotations:
       nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
       nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+      cert-manager.io/cluster-issuer: letsencrypt-prod
     hosts:
-      - argocd.dev.ai-aas.local
+      - argocd.dev.otherjamesbrown.com
     tls:
-      - secretName: ai-aas-tls
+      - secretName: argocd-tls
         hosts:
-          - argocd.dev.ai-aas.local
-          - argocd.prod.ai-aas.local
+          - argocd.dev.otherjamesbrown.com
 
 redis:
   auth:

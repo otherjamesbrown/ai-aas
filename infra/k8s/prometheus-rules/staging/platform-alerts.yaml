@@ -123,7 +123,6 @@ spec:
           annotations:
             summary: "InferenceService pod {{ $labels.pod }} is restarting frequently (staging)"
             description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has restarted {{ $value }} times in the last hour. This may indicate liveness probe failures, OOM kills, or application crashes. Check pod logs and describe the pod for details."
-            runbook_url: "https://docs.ai-aas.local/runbooks/inference-troubleshooting"
 
         - alert: GPUNodeNotReady
           expr: |
@@ -205,4 +204,3 @@ spec:
           annotations:
             summary: "Guidellm runner is active but not sending requests (staging)"
             description: "Guidellm runner has been up for over 1 hour but guidellm_requests_total has not increased. This may indicate a validation failure, configuration issue, or stuck benchmark. Check runner logs for validation errors or benchmark failures."
-            runbook_url: "https://docs.ai-aas.local/runbooks/guidellm-troubleshooting"

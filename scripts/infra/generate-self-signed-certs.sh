@@ -9,23 +9,22 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 OUTPUT_DIR="${PROJECT_ROOT}/infra/secrets/certs"
 CA_NAME="ai-aas-ca"
+# NOTE: With Let's Encrypt via cert-manager, self-signed certs are no longer needed.
+# This script is kept for local development without cert-manager.
 DOMAINS=(
-  "api.dev.ai-aas.local"
-  "portal.dev.ai-aas.local"
-  "grafana.dev.ai-aas.local"
-  "argocd.dev.ai-aas.local"
-  "user-org.dev.ai-aas.local"
-  "etcd.dev.ai-aas.local"
-  "api.prod.ai-aas.local"
-  "portal.prod.ai-aas.local"
-  "grafana.prod.ai-aas.local"
-  "argocd.prod.ai-aas.local"
-  "user-org.172.232.58.222.nip.io"
-  "api.172.232.58.222.nip.io"
-  "portal.172.232.58.222.nip.io"
-  "etcd.172.232.58.222.nip.io"
-  "argocd.172.232.58.222.nip.io"
-  "grafana.172.232.58.222.nip.io"
+  "api.dev.otherjamesbrown.com"
+  "portal.dev.otherjamesbrown.com"
+  "grafana.dev.otherjamesbrown.com"
+  "argocd.dev.otherjamesbrown.com"
+  "user-org.dev.otherjamesbrown.com"
+  "etcd.dev.otherjamesbrown.com"
+  "loki.dev.otherjamesbrown.com"
+  "api.staging.otherjamesbrown.com"
+  "portal.staging.otherjamesbrown.com"
+  "grafana.staging.otherjamesbrown.com"
+  "api.prod.otherjamesbrown.com"
+  "portal.prod.otherjamesbrown.com"
+  "grafana.prod.otherjamesbrown.com"
 )
 
 while [[ $# -gt 0 ]]; do
@@ -58,7 +57,7 @@ Examples:
   $0
 
   # Generate for specific domains
-  $0 --domains "api.dev.ai-aas.local,portal.dev.ai-aas.local"
+  $0 --domains "api.dev.otherjamesbrown.com,portal.dev.otherjamesbrown.com"
 
   # Custom output directory
   $0 --output-dir /tmp/certs
@@ -104,7 +103,7 @@ req_extensions = v3_req
 prompt = no
 
 [req_distinguished_name]
-CN = *.ai-aas.local
+CN = *.otherjamesbrown.com
 O = AI-AAS
 C = US
 

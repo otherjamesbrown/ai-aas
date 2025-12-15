@@ -203,7 +203,7 @@ kubectl get pods -n system -l app=<service>
 kubectl describe pod -n system <pod-name>
 
 # Test service endpoint
-curl -k https://api.dev.ai-aas.local/health
+curl -k https://api.dev.otherjamesbrown.com/health
 ```
 
 **Verify metrics in Grafana:**

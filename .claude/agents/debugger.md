@@ -153,12 +153,12 @@ If prior investigation exists in bead comments, review it first. Don't repeat wo
 kubectl logs -n <namespace> -l app=<service> --tail=100 | grep -i error
 
 # Query Loki for errors
-curl -G http://loki.172.232.58.222.nip.io/loki/api/v1/query_range \
+curl -G https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range \
   --data-urlencode 'query={service="<service>",level="error"}' \
   --data-urlencode 'limit=50'
 
 # Find by trace ID if available
-curl -G http://loki.172.232.58.222.nip.io/loki/api/v1/query_range \
+curl -G https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range \
   --data-urlencode 'query={trace_id="<TRACE_ID>"}'
 ```
 
@@ -316,7 +316,7 @@ kubectl logs -n <namespace> -l app=<service> --tail=100
 kubectl describe pod <pod> -n <namespace>
 
 # Loki queries
-curl -G http://loki.172.232.58.222.nip.io/loki/api/v1/query_range \
+curl -G https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range \
   --data-urlencode 'query={service="<service>"}' \
   --data-urlencode 'limit=100'
 

@@ -39,7 +39,7 @@ sudo mv ai-aas-cli-linux-amd64 /usr/local/bin/ai-aas-cli
 
 ```bash
 # Configure CLI
-ai-aas-cli config set api-endpoint https://api.dev.ai-aas.local
+ai-aas-cli config set api-endpoint https://api.dev.otherjamesbrown.com
 ai-aas-cli config set api-key <your-api-key>
 
 # Test connection
@@ -179,7 +179,7 @@ ai-aas-cli status
 
 # CLI configuration
 ai-aas-cli config show
-ai-aas-cli config set api-endpoint https://api.prod.ai-aas.local
+ai-aas-cli config set api-endpoint https://api.prod.otherjamesbrown.com
 ai-aas-cli config set api-key <your-api-key>
 ai-aas-cli config test
 ```
@@ -190,7 +190,7 @@ The CLI uses configuration files stored in `~/.config/ai-aas-cli/`:
 
 ```yaml
 # config.yaml
-api_endpoint: https://api.dev.ai-aas.local
+api_endpoint: https://api.dev.otherjamesbrown.com
 api_key: sk-xxxxx
 default_environment: development
 timeout: 30s
@@ -207,7 +207,7 @@ timeout: 30s
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `AI_AAS_API_ENDPOINT` | Admin API endpoint | `https://api.dev.ai-aas.local` |
+| `AI_AAS_API_ENDPOINT` | Admin API endpoint | `https://api.dev.otherjamesbrown.com` |
 | `AI_AAS_API_KEY` | API authentication key | `sk-xxxxx` |
 | `AI_AAS_DEFAULT_ENV` | Default environment | `development` |
 | `AI_AAS_CONFIG_PATH` | Config file path | `~/.config/ai-aas-cli/config.yaml` |
@@ -331,7 +331,7 @@ make test-e2e-cleanup
 
 ```bash
 # Verify API endpoint is reachable
-curl -k https://api.dev.ai-aas.local/health
+curl -k https://api.dev.otherjamesbrown.com/health
 
 # Test CLI configuration
 ai-aas-cli config test

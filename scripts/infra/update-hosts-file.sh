@@ -14,14 +14,14 @@ INGRESS_SVC="ingress-nginx-controller"
 
 # Domains to add
 DOMAINS=(
-  "api.dev.ai-aas.local"
-  "portal.dev.ai-aas.local"
-  "grafana.dev.ai-aas.local"
-  "argocd.dev.ai-aas.local"
-  "api.prod.ai-aas.local"
-  "portal.prod.ai-aas.local"
-  "grafana.prod.ai-aas.local"
-  "argocd.prod.ai-aas.local"
+  "api.dev.otherjamesbrown.com"
+  "portal.dev.otherjamesbrown.com"
+  "grafana.dev.otherjamesbrown.com"
+  "argocd.dev.otherjamesbrown.com"
+  "api.prod.otherjamesbrown.com"
+  "portal.prod.otherjamesbrown.com"
+  "grafana.prod.otherjamesbrown.com"
+  "argocd.prod.otherjamesbrown.com"
 )
 
 while [[ $# -gt 0 ]]; do
@@ -126,10 +126,10 @@ fi
 echo "🧹 Removing old AI-AAS entries..."
 if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
   # Windows: Use PowerShell to remove lines
-  powershell -Command "(Get-Content '$HOSTS_FILE') | Where-Object { \$_ -notmatch 'ai-aas.local' } | Set-Content '$HOSTS_FILE'"
+  powershell -Command "(Get-Content '$HOSTS_FILE') | Where-Object { \$_ -notmatch 'otherjamesbrown.com' } | Set-Content '$HOSTS_FILE'"
 else
   # Linux/macOS: Use sed
-  sed -i.bak '/ai-aas.local/d' "$HOSTS_FILE" 2>/dev/null || true
+  sed -i.bak '/otherjamesbrown.com/d' "$HOSTS_FILE" 2>/dev/null || true
 fi
 
 # Add new entries

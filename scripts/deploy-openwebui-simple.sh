@@ -14,7 +14,7 @@ LINODE_DEFAULT_FIREWALL="${LINODE_DEFAULT_FIREWALL:-akamai-home}"
 INSTANCE_LABEL="${INSTANCE_LABEL:-openwebui-dev}"
 INSTANCE_TYPE="${INSTANCE_TYPE:-g6-nanode-1}"
 REGION="${REGION:-fr-par}"  # Paris region for proximity to AI-AAS cluster
-AI_AAS_API_URL="${AI_AAS_API_URL:-https://api.dev.ai-aas.local}"
+AI_AAS_API_URL="${AI_AAS_API_URL:-https://api.dev.otherjamesbrown.com}"
 SSH_KEY_PATH="${SSH_KEY_PATH:-$HOME/.ssh/id_ed25519.pub}"
 
 # Validate required variables
@@ -109,7 +109,7 @@ ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
 set -e
 
 echo "==> Adding hosts entry for AI-AAS API"
-echo "${AI_AAS_API_IP} api.dev.ai-aas.local" >> /etc/hosts
+echo "${AI_AAS_API_IP} api.dev.otherjamesbrown.com" >> /etc/hosts
 
 echo "==> Installing Docker"
 curl -fsSL https://get.docker.com | sh
@@ -119,7 +119,7 @@ systemctl start docker
 echo "==> Starting Open WebUI with HTTPS and API key"
 docker run -d \
   --name open-webui \
-  --add-host api.dev.ai-aas.local:${AI_AAS_API_IP} \
+  --add-host api.dev.otherjamesbrown.com:${AI_AAS_API_IP} \
   -p 3000:8080 \
   -v open-webui:/app/backend/data \
   -e OPENAI_API_BASE_URL=${AI_AAS_API_URL}/v1 \

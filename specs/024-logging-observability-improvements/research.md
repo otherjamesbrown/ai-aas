@@ -30,7 +30,7 @@ This document captures technology decisions and research findings for the observ
 
 ### References
 - [Grafana Loki vs ELK comparison](https://grafana.com/docs/loki/latest/)
-- Existing Grafana deployment at `grafana.dev.ai-aas.local`
+- Existing Grafana deployment at `grafana.dev.otherjamesbrown.com`
 
 ---
 

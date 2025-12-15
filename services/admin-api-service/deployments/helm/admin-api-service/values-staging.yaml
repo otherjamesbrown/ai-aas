@@ -4,7 +4,7 @@
 global:
   domain:
     base: "staging.otherjamesbrown.com"
-    local: "staging.ai-aas.local"
+    local: "staging.otherjamesbrown.com"
 
 replicaCount: 2
 

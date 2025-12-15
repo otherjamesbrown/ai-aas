@@ -138,7 +138,7 @@ git push origin your-branch
 # 2. Create PR and merge to development
 
 # 3. ArgoCD syncs automatically (development) or manually sync
-argocd app sync aimodels-development --server argocd.dev.ai-aas.local
+argocd app sync aimodels-development --server argocd.dev.otherjamesbrown.com
 ```
 
 ---
@@ -184,7 +184,7 @@ kubectl get pod -n development -l serving.kserve.io/inferenceservice=gpt-oss-20b
 
 ```bash
 # Send test request immediately after pod shows 2/2 Running
-curl -X POST "https://api.172.232.58.222.nip.io/v1/chat/completions" \
+curl -X POST "https://api.dev.otherjamesbrown.com/v1/chat/completions" \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -200,7 +200,7 @@ curl -X POST "https://api.172.232.58.222.nip.io/v1/chat/completions" \
 
 ```bash
 # Time the first request after pod Ready
-time curl -X POST "https://api.172.232.58.222.nip.io/v1/chat/completions" \
+time curl -X POST "https://api.dev.otherjamesbrown.com/v1/chat/completions" \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{

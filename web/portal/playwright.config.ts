@@ -20,7 +20,7 @@ import { defineConfig, devices } from '@playwright/test';
  *   pnpm playwright test --project=smoke
  *
  *   # Remote smoke tests
- *   PLAYWRIGHT_BASE_URL=https://portal.172.232.58.222.nip.io SKIP_WEBSERVER=true pnpm playwright test --project=smoke
+ *   PLAYWRIGHT_BASE_URL=https://portal.dev.otherjamesbrown.com SKIP_WEBSERVER=true pnpm playwright test --project=smoke
  *
  *   # Full test suite
  *   pnpm playwright test

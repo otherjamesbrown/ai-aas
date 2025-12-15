@@ -43,7 +43,7 @@ func TestAuthorizationDenial(t *testing.T) {
 	
 	// If using IP address, set Host header
 	if isIPAddress(ctx.Config.APIURLs.UserOrgService) {
-		limitedClient.SetHeader("Host", "api.dev.ai-aas.local")
+		limitedClient.SetHeader("Host", "api.dev.otherjamesbrown.com")
 	}
 
 	// Attempt a restricted action (e.g., creating another organization)

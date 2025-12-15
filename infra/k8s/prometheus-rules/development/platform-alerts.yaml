@@ -29,7 +29,6 @@ spec:
           annotations:
             summary: "High error rate on API Router"
             description: "API Router error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
-            runbook_url: "https://docs.ai-aas.local/runbooks/api-router-errors"
 
         - alert: APIRouterHighLatency
           expr: |
@@ -198,7 +197,6 @@ spec:
           annotations:
             summary: "InferenceService pod {{ $labels.pod }} is restarting frequently"
             description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has restarted {{ $value }} times in the last hour. This may indicate liveness probe failures, OOM kills, or application crashes. Check pod logs and describe the pod for details."
-            runbook_url: "https://docs.ai-aas.local/runbooks/inference-troubleshooting"
 
     # Guidellm Runner Alerts
     - name: guidellm-runner
@@ -222,4 +220,3 @@ spec:
           annotations:
             summary: "Guidellm runner is active but not sending requests"
             description: "Guidellm runner has been up for over 1 hour but guidellm_requests_total has not increased. This may indicate a validation failure, configuration issue, or stuck benchmark. Check runner logs for validation errors or benchmark failures."
-            runbook_url: "https://docs.ai-aas.local/runbooks/guidellm-troubleshooting"

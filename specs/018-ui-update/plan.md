@@ -30,7 +30,7 @@ Rebuild the web portal with stable architecture, centralized configuration, Lino
 
 Constitution v1.4.2 is ratified. This plan satisfies each gate:
 
-- **API-First**: ✅ UI is a thin client using existing REST APIs. All operations use the **same API services and endpoints as ai-aas-cli**. No business logic in UI; all operations map to CLI commands which use identical APIs. Base URLs computed from portal domain (e.g., `portal.dev.ai-aas.local` → `api.dev.ai-aas.local`, `user-org.dev.ai-aas.local`). OpenAPI schemas exist for backend APIs.
+- **API-First**: ✅ UI is a thin client using existing REST APIs. All operations use the **same API services and endpoints as ai-aas-cli**. No business logic in UI; all operations map to CLI commands which use identical APIs. Base URLs computed from portal domain (e.g., `portal.dev.otherjamesbrown.com` → `api.dev.otherjamesbrown.com`, `user-org.dev.otherjamesbrown.com`). OpenAPI schemas exist for backend APIs.
 
 - **Statelessness**: ✅ Frontend is stateless SPA. Authentication tokens stored in sessionStorage (ephemeral). No in-process state; all persistent state managed by backend services (PostgreSQL, Redis). UI state is React component state only.
 

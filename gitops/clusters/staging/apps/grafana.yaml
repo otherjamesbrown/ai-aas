@@ -40,13 +40,14 @@ spec:
         ingress:
           enabled: true
           ingressClassName: nginx
+          annotations:
+            cert-manager.io/cluster-issuer: letsencrypt-prod
+            nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
           hosts:
-            - grafana.staging.ai-aas.local
             - grafana.staging.otherjamesbrown.com
           tls:
             - secretName: grafana-tls
               hosts:
-                - grafana.staging.ai-aas.local
                 - grafana.staging.otherjamesbrown.com
   destination:
     server: https://kubernetes.default.svc

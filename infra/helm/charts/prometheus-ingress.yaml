@@ -4,38 +4,39 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: prometheus-ingress
-  namespace: default  # Adjust namespace if Prometheus is in a different namespace
+  namespace: monitoring
   annotations:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/auth-type: basic
-    nginx.ingress.kubernetes.io/auth-secret: prometheus-basic-auth  # Create this secret if needed
+    nginx.ingress.kubernetes.io/auth-secret: prometheus-basic-auth
     nginx.ingress.kubernetes.io/auth-realm: "Prometheus - Authentication Required"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: nginx
   tls:
-    - secretName: ai-aas-tls
+    - secretName: prometheus-tls
       hosts:
-        - prometheus.dev.ai-aas.local
-        - prometheus.prod.ai-aas.local
+        - prometheus.dev.otherjamesbrown.com
+        - prometheus.prod.otherjamesbrown.com
   rules:
-    - host: prometheus.dev.ai-aas.local
+    - host: prometheus.dev.otherjamesbrown.com
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: prometheus-kube-prometheus-prometheus  # Adjust service name based on your Prometheus deployment
+                name: prometheus-kube-prometheus-prometheus
                 port:
                   number: 9090
-    - host: prometheus.prod.ai-aas.local
+    - host: prometheus.prod.otherjamesbrown.com
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: prometheus-kube-prometheus-prometheus  # Adjust service name based on your Prometheus deployment
+                name: prometheus-kube-prometheus-prometheus
                 port:
                   number: 9090
 

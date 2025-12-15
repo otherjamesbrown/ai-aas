@@ -127,9 +127,9 @@ This document contains:
 **Quick Access Examples:**
 - Kubernetes: `kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-development.yaml`
 - Database: Connection string in `secrets/env/.env` as `DATABASE_URL`
-- API Router: `https://api.172.232.58.222.nip.io` or `https://api.dev.ai-aas.local`
+- API Router: `https://api.dev.otherjamesbrown.com`
 - Master Admin API Key: Found in `secrets/env/.env` as `MASTER_ADMIN_API_KEY`
-- ArgoCD: `https://argocd.dev.ai-aas.local` (password retrieved from k8s secret)
+- ArgoCD: `https://argocd.dev.otherjamesbrown.com` (password retrieved from k8s secret)
 
 ## Endpoint URL Management Strategy
 
@@ -254,7 +254,7 @@ kubectl get deployment <name> -n <namespace> -o jsonpath='{.spec.template.spec.c
 ### Reference Documentation:
 
 - `docs/runbooks/deploy-to-environments.md`: Complete deployment runbook
-- ArgoCD endpoints: `argocd.dev.ai-aas.local`, `argocd.prod.ai-aas.local`
+- ArgoCD endpoints: `argocd.dev.otherjamesbrown.com`, `argocd.prod.otherjamesbrown.com`
 
 ## ArgoCD Application Requirements
 
@@ -369,8 +369,8 @@ spec:
 
 | What | Command/URL |
 |------|-------------|
-| **Grafana** | http://grafana.172.232.58.222.nip.io |
-| **Loki API** | http://loki.172.232.58.222.nip.io |
+| **Grafana** | https://grafana.dev.otherjamesbrown.com |
+| **Loki API** | https://loki.dev.otherjamesbrown.com |
 | **Service Logs Dashboard** | Grafana → Dashboards → Service Logs |
 | **Request Tracing Dashboard** | Grafana → Dashboards → Request Tracing |
 
@@ -381,19 +381,19 @@ spec:
 kubectl logs -n <namespace> -l app=<service> --tail=100 | grep -i error
 
 # Query Loki directly for errors (last hour)
-curl -G http://loki.172.232.58.222.nip.io/loki/api/v1/query_range \
+curl -G https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range \
   --data-urlencode 'query={service="api-router-service",level="error"}' \
   --data-urlencode 'limit=50'
 
 # Find logs by trace ID
-curl -G http://loki.172.232.58.222.nip.io/loki/api/v1/query_range \
+curl -G https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range \
   --data-urlencode 'query={trace_id="<TRACE_ID>"}'
 
 # View vLLM/inference backend logs
 kubectl logs -n system -l serving.kserve.io/inferenceservice=<model> --tail=100
 
 # Check for GPU/CUDA errors
-curl -G http://loki.172.232.58.222.nip.io/loki/api/v1/query_range \
+curl -G https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range \
   --data-urlencode 'query={namespace="system"} |~ "(?i)cuda|oom|gpu"'
 ```
 

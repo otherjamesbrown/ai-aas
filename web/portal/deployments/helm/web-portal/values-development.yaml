@@ -13,7 +13,7 @@ ingress:
   enabled: true
   # subdomain: portal (default from values.yaml)
   # Hosts are computed automatically:
-  #   - portal.dev.ai-aas.local (local domain)
+  #   - portal.dev.otherjamesbrown.com (local domain)
   #   - portal.dev.otherjamesbrown.com (public domain)
 
 # VITE_ environment variables are computed from global.domain in the deployment template

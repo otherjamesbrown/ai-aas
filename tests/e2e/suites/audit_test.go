@@ -253,7 +253,7 @@ func TestDenialEventVerification(t *testing.T) {
 	limitedClient.SetHeader("X-API-Key", apiKey.Secret)
 	limitedClient.SetHeader("X-Correlation-ID", corrID)
 	if isIPAddress(ctx.Config.APIURLs.UserOrgService) {
-		limitedClient.SetHeader("Host", "api.dev.ai-aas.local")
+		limitedClient.SetHeader("Host", "api.dev.otherjamesbrown.com")
 	}
 
 	// Attempt a restricted action (should generate denial audit event)

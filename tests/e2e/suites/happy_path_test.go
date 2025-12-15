@@ -168,7 +168,7 @@ func TestModelRequestRouting(t *testing.T) {
 	
 	// If using IP address, set Host header for ingress routing
 	if isIPAddress(ctx.Config.APIURLs.APIRouterService) {
-		routerClient.SetHeader("Host", "api.dev.ai-aas.local")
+		routerClient.SetHeader("Host", "api.dev.otherjamesbrown.com")
 	}
 
 	// Make inference request

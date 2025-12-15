@@ -44,8 +44,8 @@ Development environments should support both hostname-based and IP-based access 
 
 **Key Characteristics:**
 - HTTPS with self-signed certificates (using `ai-aas-tls` secret)
-- Hostname-based access: `api.dev.ai-aas.local` (requires `/etc/hosts` entry)
-- IP-based access: `api.<LOAD_BALANCER_IP>.nip.io` (works without DNS/hosts configuration)
+- Hostname-based access: `api.dev.otherjamesbrown.com` (requires `/etc/hosts` entry)
+- DNS-based access: `api.dev.otherjamesbrown.com`
 - Force SSL redirect enabled
 
 **Example Configuration:**
@@ -57,27 +57,19 @@ ingress:
   annotations:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: api.dev.ai-aas.local
+    - host: api.dev.otherjamesbrown.com
       paths:
         - path: /
           pathType: Prefix
-    # IP-based access using nip.io
-    - host: api.172.232.58.222.nip.io
+    - host: api.dev.otherjamesbrown.com
       paths:
         - path: /
           pathType: Prefix
   tls:
-    - secretName: ai-aas-tls
+    - secretName: api-tls
       hosts:
-        - api.dev.ai-aas.local
-        - api.172.232.58.222.nip.io
+        - api.dev.otherjamesbrown.com
 ```
-
-**Why nip.io?**
-- nip.io is a wildcard DNS service that maps `<anything>.<IP>.nip.io` to `<IP>`
-- Eliminates need to configure `/etc/hosts` or DNS for development
-- Works immediately after deployment with LoadBalancer IP
-- Supports HTTPS with wildcard certificates
 
 ### Staging Environment
 
@@ -144,8 +136,8 @@ ingress:
 ### Development
 
 Development uses a self-signed certificate stored in the `ai-aas-tls` secret. This certificate should:
-- Cover all development hostnames (`api.dev.ai-aas.local`, `api.prod.ai-aas.local`)
-- Include wildcard for nip.io if possible, or specific IP-based hostnames
+- Cover all development hostnames (`api.dev.otherjamesbrown.com`, `api.prod.otherjamesbrown.com`)
+- Use cert-manager for automatic certificate management
 - Be committed to git-crypt for team sharing
 
 ### Staging and Production
@@ -204,26 +196,23 @@ annotations:
 With `/etc/hosts` configured:
 
 ```bash
-curl -k https://api.dev.ai-aas.local/v1/status/healthz \
+curl -k https://api.dev.otherjamesbrown.com/v1/status/healthz \
   -H "X-API-Key: YOUR_API_KEY"
 ```
 
-### Test IP-Based Access
 
-Using nip.io (works without `/etc/hosts`):
 
 ```bash
-LOAD_BALANCER_IP=$(kubectl get svc -n ingress-nginx ingress-nginx-controller \
   -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 
-curl -k https://api.$LOAD_BALANCER_IP.nip.io/v1/status/healthz \
+curl -k https://api.dev.otherjamesbrown.com/v1/status/healthz \
   -H "X-API-Key: YOUR_API_KEY"
 ```
 
 ### Verify TLS Certificate
 
 ```bash
-openssl s_client -connect api.172.232.58.222.nip.io:443 -servername api.172.232.58.222.nip.io
+openssl s_client -connect api.dev.otherjamesbrown.com:443 -servername api.dev.otherjamesbrown.com
 ```
 
 ## Troubleshooting
@@ -233,12 +222,12 @@ openssl s_client -connect api.172.232.58.222.nip.io:443 -servername api.172.232.
 **Symptom:** NGINX returns 404 for all requests
 
 **Causes:**
-1. Hostname mismatch - ingress configured for `api.dev.ai-aas.local` but accessing via IP
+1. Hostname mismatch - ingress configured for `api.dev.otherjamesbrown.com` but accessing via IP
 2. Missing ingress rule for the requested host
 3. Path not matching ingress path configuration
 
 **Solutions:**
-- Add nip.io hostname to ingress hosts
+- Use correct hostname in requests
 - Use correct hostname in requests
 - Verify ingress rules: `kubectl get ingress -n <namespace> -o yaml`
 
@@ -275,14 +264,14 @@ openssl s_client -connect api.172.232.58.222.nip.io:443 -servername api.172.232.
 The API Router is the central gateway for all API traffic.
 
 **Access URLs:**
-- Hostname: `https://api.dev.ai-aas.local` (requires `/etc/hosts` entry)
-- IP-based: `https://api.172.232.58.222.nip.io` (works without DNS)
+- Hostname: `https://api.dev.otherjamesbrown.com` (requires `/etc/hosts` entry)
+- IP-based: `https://api.dev.otherjamesbrown.com` (works without DNS)
 
 **Configuration Location:** `services/api-router-service/deployments/helm/api-router-service/values-development.yaml`
 
 **Testing:**
 ```bash
-curl -k -H "X-API-Key: YOUR_KEY" https://api.172.232.58.222.nip.io/v1/status/healthz
+curl -k -H "X-API-Key: YOUR_KEY" https://api.dev.otherjamesbrown.com/v1/status/healthz
 ```
 
 ### User-Org Service
@@ -290,21 +279,21 @@ curl -k -H "X-API-Key: YOUR_KEY" https://api.172.232.58.222.nip.io/v1/status/hea
 The User-Org Service manages user and organization data. This service is accessed by admin-cli and other internal services.
 
 **Access URLs:**
-- Hostname: `https://user-org.dev.ai-aas.local` (requires `/etc/hosts` entry)
-- IP-based: `https://user-org.172.232.58.222.nip.io` (works without DNS)
+- Hostname: `https://user-org.dev.otherjamesbrown.com` (requires `/etc/hosts` entry)
+- IP-based: `https://user-org.dev.otherjamesbrown.com` (works without DNS)
 
 **Configuration Location:** `infra/k8s/development/ingress/user-org-service-ingress.yaml`
 
 **Testing:**
 ```bash
-curl -k https://user-org.172.232.58.222.nip.io/healthz
+curl -k https://user-org.dev.otherjamesbrown.com/healthz
 ```
 
 **Admin CLI Integration:**
-The admin-cli defaults to using the nip.io URL for remote access without requiring kubectl. This is configured in `services/admin-cli/internal/config/defaults.go`:
+The admin-cli defaults to using the public URL. This is configured in `services/admin-cli/internal/config/defaults.go`:
 
 ```go
-v.SetDefault("api-endpoints.user-org-service", "https://user-org.172.232.58.222.nip.io")
+v.SetDefault("api-endpoints.user-org-service", "https://user-org.dev.otherjamesbrown.com")
 ```
 
 ### etcd (Config Service)
@@ -312,14 +301,14 @@ v.SetDefault("api-endpoints.user-org-service", "https://user-org.172.232.58.222.
 etcd stores configuration and routing policies. It's accessed by admin-cli for configuration management.
 
 **Access URLs:**
-- HTTP Gateway: `https://etcd.172.232.58.222.nip.io` (HTTPS, for HTTP API testing)
+- HTTP Gateway: `https://etcd.dev.otherjamesbrown.com` (HTTPS, for HTTP API testing)
 - gRPC API: `localhost:2379` (requires kubectl port-forward)
 
 **Configuration Location:** `infra/k8s/development/ingress/etcd-ingress.yaml`
 
 **Testing HTTP Gateway:**
 ```bash
-curl -k https://etcd.172.232.58.222.nip.io/version
+curl -k https://etcd.dev.otherjamesbrown.com/version
 ```
 
 **Admin CLI Integration:**
@@ -347,7 +336,7 @@ v.SetDefault("api-endpoints.config-service", "localhost:2379")
 When deploying a new service with ingress:
 
 - [ ] Configure hostname-based access for the environment
-- [ ] Add nip.io hostname for development
+
 - [ ] Configure TLS certificate (self-signed for dev, cert-manager for staging/prod)
 - [ ] Enable HTTPS redirect
 - [ ] Set appropriate timeouts for your use case

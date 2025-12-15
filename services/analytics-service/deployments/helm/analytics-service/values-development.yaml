@@ -67,7 +67,7 @@ ingress:
   # subdomain: analytics (default from values.yaml)
   # path: /analytics (default from values.yaml)
   # Hosts are computed automatically:
-  #   - analytics.dev.ai-aas.local (local domain)
+  #   - analytics.dev.otherjamesbrown.com (local domain)
   #   - analytics.dev.otherjamesbrown.com (public domain)
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"

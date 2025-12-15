@@ -50,7 +50,7 @@ The AI-AAS platform uses a comprehensive observability stack deployed in the `sy
   - Pre-built dashboards: Inference Backends, Service Logs, Request Tracing
   - Trace-to-logs correlation with derived fields
   - Configuration: `infra/k8s/monitoring/grafana/`
-  - Access: `https://grafana.dev.ai-aas.local`
+  - Access: `https://grafana.dev.otherjamesbrown.com`
 
 - **Prometheus** (kube-prometheus-stack):
   - Scrapes cluster metrics, Kubernetes components, ingress, services

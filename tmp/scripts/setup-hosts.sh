@@ -18,21 +18,21 @@ echo ""
 sudo tee -a /etc/hosts > /dev/null << HOSTS
 
 # AI-AAS Development Cluster (Added $(date))
-$REMOTE_IP argocd.dev.ai-aas.local
-$REMOTE_IP api.dev.ai-aas.local
-$REMOTE_IP portal.dev.ai-aas.local
-$REMOTE_IP user-org.dev.ai-aas.local
-$REMOTE_IP etcd.dev.ai-aas.local
+$REMOTE_IP argocd.dev.otherjamesbrown.com
+$REMOTE_IP api.dev.otherjamesbrown.com
+$REMOTE_IP portal.dev.otherjamesbrown.com
+$REMOTE_IP user-org.dev.otherjamesbrown.com
+$REMOTE_IP etcd.dev.otherjamesbrown.com
 HOSTS
 
 echo "✅ Hosts file updated successfully!"
 echo ""
 echo "Added endpoints:"
-echo "  - https://argocd.dev.ai-aas.local (ArgoCD)"
-echo "  - https://api.dev.ai-aas.local (API Router)"
-echo "  - https://portal.dev.ai-aas.local (Web Portal)"
-echo "  - https://user-org.dev.ai-aas.local (User-Org Service)"
-echo "  - https://etcd.dev.ai-aas.local (etcd)"
+echo "  - https://argocd.dev.otherjamesbrown.com (ArgoCD)"
+echo "  - https://api.dev.otherjamesbrown.com (API Router)"
+echo "  - https://portal.dev.otherjamesbrown.com (Web Portal)"
+echo "  - https://user-org.dev.otherjamesbrown.com (User-Org Service)"
+echo "  - https://etcd.dev.otherjamesbrown.com (etcd)"
 echo ""
 echo "You can now test with:"
-echo "  curl -k https://portal.dev.ai-aas.local"
+echo "  curl -k https://portal.dev.otherjamesbrown.com"

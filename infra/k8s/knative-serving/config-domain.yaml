@@ -8,4 +8,4 @@ metadata:
     app.kubernetes.io/name: knative-serving
 data:
   # Domain for development environment
-  dev.ai-aas.local: ""
+  dev.otherjamesbrown.com: ""

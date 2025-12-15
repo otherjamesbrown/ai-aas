@@ -140,7 +140,7 @@ This document describes the unified observability architecture for the AI-AAS pl
 - **Storage**: 50Gi PersistentVolume per replica
 - **Retention**: 14 days (development), 30 days (production)
 - **Query Interface**: LogQL (Prometheus-like query language)
-- **Ingress**: `loki.dev.ai-aas.local` (internal access)
+- **Ingress**: `loki.dev.otherjamesbrown.com` (internal access)
 - **API Endpoint**: `/loki/api/v1/query`, `/loki/api/v1/query_range`
 
 **Index Strategy**:
@@ -336,8 +336,8 @@ sum(rate({namespace="system"}[5m])) by (service)
 
 | Service | Ingress URL | Authentication |
 |---------|-------------|----------------|
-| Grafana | `https://grafana.dev.ai-aas.local` | Admin credentials |
-| Loki | `https://loki.dev.ai-aas.local` | None (internal only) |
+| Grafana | `https://grafana.dev.otherjamesbrown.com` | Admin credentials |
+| Loki | `https://loki.dev.otherjamesbrown.com` | None (internal only) |
 
 See [Environment Access](../platform/environment-access.md) for credentials.
 
@@ -449,7 +449,7 @@ See [GitOps Deployment Workflow](../runbooks/deploy-to-environments.md).
 kubectl logs -n system -l app=my-service -f
 
 # Access Grafana
-open https://grafana.dev.ai-aas.local
+open https://grafana.dev.otherjamesbrown.com
 
 # Query logs in Grafana
 {namespace="system", service="my-service"} | json | level="error"

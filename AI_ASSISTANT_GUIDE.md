@@ -136,7 +136,7 @@ The platform has a unified observability stack for logs, traces, metrics, and er
 *   **`docs/runbooks/ai-debugging-workflow.md`**: Debug workflow for AI assistants with LogQL commands and common scenarios.
 
 **Quick Reference**:
-- **Logs**: Access via Grafana (`https://grafana.dev.ai-aas.local`) or kubectl
+- **Logs**: Access via Grafana (`https://grafana.dev.otherjamesbrown.com`) or kubectl
 - **Traces**: Tempo integration with trace-to-logs correlation
 - **Frontend Errors**: Sentry captures React errors with session replay
 - **vLLM Logs**: Special dashboard for inference backend monitoring with GPU error detection
