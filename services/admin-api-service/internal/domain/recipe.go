@@ -40,7 +40,7 @@ type RecipeUpdate struct {
 
 // RecipeListParams represents query parameters for listing recipes
 type RecipeListParams struct {
-	Runtime string // Filter by runtime (vllm, triton, tgi)
+	Runtime string // Filter by runtime (vllm, triton, tensorrt-llm, tgi)
 	Limit   int
 	Offset  int
 }
@@ -52,7 +52,7 @@ type RecipeListResponse struct {
 }
 
 // Valid runtimes
-var ValidRuntimes = []string{"vllm", "triton", "tgi"}
+var ValidRuntimes = []string{"vllm", "triton", "tensorrt-llm", "tgi"}
 
 // IsValidRuntime checks if a runtime is valid
 func IsValidRuntime(runtime string) bool {
