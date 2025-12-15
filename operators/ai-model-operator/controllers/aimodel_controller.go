@@ -1151,6 +1151,9 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		case "triton":
 			modelFormat = "tensorrt"
 			runtimeName = "kserve-tritonserver"
+		case "tensorrt-llm":
+			modelFormat = "tensorrt-llm"
+			runtimeName = "kserve-tensorrt-llm"
 		default:
 			// For custom runtimes, use the runtime value as the runtime name
 			runtimeName = runtime
@@ -1213,6 +1216,29 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		updateStrategy = string(aimodelv1alpha1.UpdateStrategyRollingUpdate)
 	}
 
+	// Get health check configuration from recipe or set runtime-aware defaults
+	livenessPath := "/health"
+	readinessPath := "/health"
+	probePort := int32(8000)
+
+	// Use recipe health check config if available
+	if recipeSpec != nil && recipeSpec.HealthCheck.LivenessPath != "" {
+		livenessPath = recipeSpec.HealthCheck.LivenessPath
+	}
+	if recipeSpec != nil && recipeSpec.HealthCheck.ReadinessPath != "" {
+		readinessPath = recipeSpec.HealthCheck.ReadinessPath
+	}
+
+	// Set runtime-aware defaults if recipe doesn't specify paths
+	if recipeSpec == nil || recipeSpec.HealthCheck.LivenessPath == "" {
+		switch runtime {
+		case "triton", "tensorrt-llm":
+			livenessPath = "/v2/health/live"
+			readinessPath = "/v2/health/ready"
+			probePort = 8080
+		}
+	}
+
 	// from the HuggingFace repo, which isn't preserved in S3 storage.
 	if aiModel.Spec.TrustRemoteCode && aiModel.Spec.ModelID != "" {
 		log.Info("Using container-based deployment for trust_remote_code model",
@@ -1242,6 +1268,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 			WithRuntimeEnv(runtimeEnv).
 			WithUpdateStrategy(updateStrategy).
 			WithLivenessInitialDelay(livenessInitialDelay).
+			WithHealthProbes(livenessPath, readinessPath, probePort).
 			WithOwnerReference(ownerRef).
 			BuildContainerBased()
 		if err != nil {
@@ -1268,6 +1295,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 			WithRuntimeArgs(runtimeArgs).
 			WithRuntimeEnv(runtimeEnv).
 			WithUpdateStrategy(updateStrategy).
+			WithHealthProbes(livenessPath, readinessPath, probePort).
 			WithOwnerReference(ownerRef).
 			Build()
 		if err != nil {
