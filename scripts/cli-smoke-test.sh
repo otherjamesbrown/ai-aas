@@ -72,7 +72,11 @@ for arg in "$@"; do
             echo "  --dev-only      Run only development environment tests"
             echo "  --staging-only  Run only staging environment tests"
             echo "  --json          Output results as JSON"
-            echo "  --verbose, -v   Show detailed model list and inference token usage"
+            echo "  --verbose, -v   Show published models table and Q&A for each inference"
+            echo ""
+            echo "By default, shows inference details (model, tokens, time) for ALL models."
+            echo "With --verbose, additionally shows the published models table and"
+            echo "the question/answer for each inference test."
             exit 0
             ;;
     esac
@@ -132,6 +136,11 @@ extract_json_field() {
     echo "$json" | jq -s '.[-1]' 2>/dev/null | jq -r ".$field // empty" 2>/dev/null
 }
 
+# Sanitize string for use in results (replace spaces with underscores)
+sanitize_result() {
+    echo "$1" | tr ' ' '_' | tr -d '\n' | head -c 30
+}
+
 # Run tests for a single environment
 run_environment_tests() {
     local env_name="$1"
@@ -171,7 +180,7 @@ run_environment_tests() {
         results+=("create_org:PASS:$org_slug")
     else
         local error_msg
-        error_msg=$(echo "$org_output" | grep -o '"error":[^,}]*' | head -1 || echo "unknown error")
+        error_msg=$(sanitize_result "$(echo "$org_output" | grep -o '"error":[^,}]*' | head -1 || echo "unknown_error")")
         results+=("create_org:FAIL:$error_msg")
         # Can't continue without org
         echo "${results[*]}"
@@ -193,7 +202,7 @@ run_environment_tests() {
         results+=("create_user:PASS:$user_id")
     else
         local error_msg
-        error_msg=$(echo "$user_output" | grep -o '"error":[^,}]*' | head -1 || echo "unknown error")
+        error_msg=$(sanitize_result "$(echo "$user_output" | grep -o '"error":[^,}]*' | head -1 || echo "unknown_error")")
         results+=("create_user:FAIL:$error_msg")
         # Try cleanup and return
         run_cli org delete --org-id "$org_slug" --force \
@@ -215,7 +224,7 @@ run_environment_tests() {
         results+=("grant_model_access:PASS:auto_grant")
     else
         local error_msg
-        error_msg=$(echo "$model_access_output" | grep -o '"error":[^,}]*' | head -1 || echo "unknown error")
+        error_msg=$(sanitize_result "$(echo "$model_access_output" | grep -o '"error":[^,}]*' | head -1 || echo "unknown_error")")
         results+=("grant_model_access:FAIL:$error_msg")
     fi
 
@@ -232,7 +241,7 @@ run_environment_tests() {
         results+=("activate_user:PASS:active")
     else
         local error_msg
-        error_msg=$(echo "$activate_output" | grep -o '"error":[^,}]*' | head -1 || echo "unknown error")
+        error_msg=$(sanitize_result "$(echo "$activate_output" | grep -o '"error":[^,}]*' | head -1 || echo "unknown_error")")
         results+=("activate_user:FAIL:$error_msg")
     fi
 
@@ -252,7 +261,7 @@ run_environment_tests() {
         results+=("create_apikey:PASS:$key_id")
     else
         local error_msg
-        error_msg=$(echo "$apikey_output" | grep -o '"error":[^,}]*' | head -1 || echo "unknown error")
+        error_msg=$(sanitize_result "$(echo "$apikey_output" | grep -o '"error":[^,}]*' | head -1 || echo "unknown_error")")
         results+=("create_apikey:FAIL:$error_msg")
     fi
 
@@ -272,7 +281,7 @@ run_environment_tests() {
             has_mock=$(echo "$models_output" | jq '[.data[].id | select(contains("mock-backend"))] | length')
 
             if [[ "$has_mock" -gt 0 ]]; then
-                results+=("list_models:FAIL:mock-backend detected")
+                results+=("list_models:FAIL:mock-backend_detected")
             else
                 local model_ids
                 model_ids=$(echo "$models_output" | jq -r '[.data[].id] | join(", ")' | cut -c1-60)
@@ -283,20 +292,22 @@ run_environment_tests() {
                 first_model_id=$(echo "$models_output" | jq -r '.data[0].id // empty')
             fi
         else
-            results+=("list_models:FAIL:invalid response")
+            results+=("list_models:FAIL:invalid_response")
         fi
     else
-        results+=("list_models:SKIP:no API key")
+        results+=("list_models:SKIP:no_API_key")
     fi
 
     # Test 6: Inference Test (chat completion)
-    # Try each model until one works - some models may be published but not deployed
-    local inference_json=""
+    # Test ALL published models and report results for each
+    local inference_json_array="[]"
+    local inference_prompt="Say hello in exactly 5 words."
     if [[ -n "$new_api_key" ]]; then
         local all_model_ids
         all_model_ids=$(echo "$models_output" | jq -r '.data[].id' 2>/dev/null)
-        local inference_success=false
-        local last_error_msg=""
+        local inference_pass_count=0
+        local inference_fail_count=0
+        local inference_results=()
 
         for model_id in $all_model_ids; do
             [[ -z "$model_id" ]] && continue
@@ -311,7 +322,7 @@ run_environment_tests() {
                 -H "Content-Type: application/json" \
                 -d "{
                     \"model\": \"$model_id\",
-                    \"messages\": [{\"role\": \"user\", \"content\": \"Say hello in exactly 5 words.\"}],
+                    \"messages\": [{\"role\": \"user\", \"content\": \"$inference_prompt\"}],
                     \"max_tokens\": 50
                 }" 2>&1)
 
@@ -323,27 +334,39 @@ run_environment_tests() {
                 prompt_tokens=$(echo "$inference_output" | jq -r '.usage.prompt_tokens // 0')
                 completion_tokens=$(echo "$inference_output" | jq -r '.usage.completion_tokens // 0')
                 total_tokens=$(echo "$inference_output" | jq -r '.usage.total_tokens // 0')
-                response_text=$(echo "$inference_output" | jq -r '.choices[0].message.content // empty' | head -c 50)
+                response_text=$(echo "$inference_output" | jq -r '.choices[0].message.content // empty')
+                # Escape response for JSON (replace newlines and quotes)
+                response_text=$(echo "$response_text" | tr '\n' ' ' | sed 's/"/\\"/g' | head -c 100)
 
-                results+=("inference:PASS:${duration_ms}ms,${total_tokens}tok")
-                # Store inference details for verbose output
-                inference_json="{\"model\":\"$model_id\",\"prompt_tokens\":$prompt_tokens,\"completion_tokens\":$completion_tokens,\"total_tokens\":$total_tokens,\"duration_ms\":$duration_ms,\"response\":\"$response_text\"}"
-                inference_success=true
-                break
+                inference_results+=("{\"model\":\"$model_id\",\"status\":\"PASS\",\"prompt_tokens\":$prompt_tokens,\"completion_tokens\":$completion_tokens,\"total_tokens\":$total_tokens,\"duration_ms\":$duration_ms,\"prompt\":\"$inference_prompt\",\"response\":\"$response_text\"}")
+                ((inference_pass_count++))
             else
-                last_error_msg=$(echo "$inference_output" | jq -r '.error // "unknown error"' 2>/dev/null | head -c 50)
+                local error_msg
+                error_msg=$(echo "$inference_output" | jq -r '.error.message // .error // "unknown error"' 2>/dev/null | head -c 50 | sed 's/"/\\"/g')
+                inference_results+=("{\"model\":\"$model_id\",\"status\":\"FAIL\",\"prompt_tokens\":0,\"completion_tokens\":0,\"total_tokens\":0,\"duration_ms\":$duration_ms,\"prompt\":\"$inference_prompt\",\"response\":\"\",\"error\":\"$error_msg\"}")
+                ((inference_fail_count++))
             fi
         done
 
-        if [[ "$inference_success" != "true" ]]; then
-            if [[ -z "$all_model_ids" ]]; then
-                results+=("inference:SKIP:no models available")
-            else
-                results+=("inference:FAIL:$last_error_msg")
-            fi
+        # Determine overall inference test result
+        local total_models=$((inference_pass_count + inference_fail_count))
+        if [[ $total_models -eq 0 ]]; then
+            results+=("inference:SKIP:no_models")
+        elif [[ $inference_fail_count -eq 0 ]]; then
+            results+=("inference:PASS:${inference_pass_count}/${total_models}_models")
+        elif [[ $inference_pass_count -eq 0 ]]; then
+            results+=("inference:FAIL:0/${total_models}_models")
+        else
+            results+=("inference:PASS:${inference_pass_count}/${total_models}_models")
         fi
+
+        # Build JSON array of all inference results
+        local old_ifs="$IFS"
+        IFS=','
+        inference_json_array="[${inference_results[*]}]"
+        IFS="$old_ifs"
     else
-        results+=("inference:SKIP:no API key")
+        results+=("inference:SKIP:no_API_key")
     fi
 
     # Test 7: Inference Health
@@ -370,17 +393,17 @@ run_environment_tests() {
     if echo "$delete_output" | grep -q '"outcome": "success"'; then
         results+=("cleanup:PASS:deleted")
     else
-        results+=("cleanup:FAIL:could not delete $org_slug")
+        results+=("cleanup:FAIL:delete_failed_$org_slug")
     fi
 
     # Return results as space-separated string
     echo "${results[*]}"
 
-    # Write verbose data to temp files (always write, cleanup happens in print_verbose_details)
+    # Write data to temp files (always write, cleanup happens in print_inference_details)
     local verbose_dir="/tmp/smoke-test-verbose-${SMOKE_TEST_ID:-$$}"
     mkdir -p "$verbose_dir"
     [[ -n "$models_json" ]] && echo "$models_json" > "$verbose_dir/${env_name}_models.json"
-    [[ -n "$inference_json" ]] && echo "$inference_json" > "$verbose_dir/${env_name}_inference.json"
+    [[ "$inference_json_array" != "[]" ]] && echo "$inference_json_array" > "$verbose_dir/${env_name}_inference.json"
 }
 
 # Parse results string into associative array
@@ -605,7 +628,61 @@ print_summary_table() {
     echo "└──────────────────────┴─────────────┴─────────────┘"
 }
 
-# Print verbose details (models and inference)
+# Print inference details for all models (shown by default)
+print_inference_details() {
+    local verbose_dir="/tmp/smoke-test-verbose-${SMOKE_TEST_ID:-$$}"
+
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════════════════════════════╗"
+    echo "║                               INFERENCE DETAILS                                      ║"
+    echo "╠═════════════╦════════════════════════════════════════╦════════╦════════╦════════════╣"
+    echo "║ Environment ║ Model                                  ║ Prompt ║ Compl. ║ Time (ms)  ║"
+    echo "╠═════════════╬════════════════════════════════════════╬════════╬════════╬════════════╣"
+
+    for env in dev staging; do
+        [[ "$env" == "dev" && "$RUN_DEV" != "true" ]] && continue
+        [[ "$env" == "staging" && "$RUN_STAGING" != "true" ]] && continue
+
+        local env_label="Development"
+        [[ "$env" == "staging" ]] && env_label="Staging"
+
+        local inference_file="$verbose_dir/${env}_inference.json"
+        if [[ -f "$inference_file" ]]; then
+            local first=true
+            # Read each inference result from the array
+            local count
+            count=$(cat "$inference_file" | jq 'length' 2>/dev/null)
+            for ((i=0; i<count; i++)); do
+                local model status prompt_tokens completion_tokens duration_ms
+                model=$(cat "$inference_file" | jq -r ".[$i].model // \"unknown\"" 2>/dev/null)
+                status=$(cat "$inference_file" | jq -r ".[$i].status // \"UNKNOWN\"" 2>/dev/null)
+                prompt_tokens=$(cat "$inference_file" | jq -r ".[$i].prompt_tokens // 0" 2>/dev/null)
+                completion_tokens=$(cat "$inference_file" | jq -r ".[$i].completion_tokens // 0" 2>/dev/null)
+                duration_ms=$(cat "$inference_file" | jq -r ".[$i].duration_ms // 0" 2>/dev/null)
+
+                local display_env=""
+                if [[ "$first" == "true" ]]; then
+                    display_env="$env_label"
+                    first=false
+                fi
+
+                # Truncate model name and add status indicator
+                local truncated_model="${model:0:36}"
+                local status_icon="✅"
+                [[ "$status" == "FAIL" ]] && status_icon="❌"
+                printf "║ %-11s ║ %s %-36s ║ %6s ║ %6s ║ %10s ║\n" \
+                    "$display_env" "$status_icon" "$truncated_model" "$prompt_tokens" "$completion_tokens" "$duration_ms"
+            done
+        else
+            printf "║ %-11s ║   %-36s ║ %6s ║ %6s ║ %10s ║\n" \
+                "$env_label" "(no inference test)" "-" "-" "-"
+        fi
+    done
+
+    echo "╚═════════════╩════════════════════════════════════════╩════════╩════════╩════════════╝"
+}
+
+# Print verbose details (models table and Q&A for each inference)
 print_verbose_details() {
     local verbose_dir="/tmp/smoke-test-verbose-${SMOKE_TEST_ID:-$$}"
 
@@ -618,6 +695,9 @@ print_verbose_details() {
     echo "╠═════════════╬══════════════════════════════════════════════════╬════════════╣"
 
     for env in dev staging; do
+        [[ "$env" == "dev" && "$RUN_DEV" != "true" ]] && continue
+        [[ "$env" == "staging" && "$RUN_STAGING" != "true" ]] && continue
+
         local env_label="Development"
         [[ "$env" == "staging" ]] && env_label="Staging"
 
@@ -643,46 +723,55 @@ print_verbose_details() {
 
     echo "╚═════════════╩══════════════════════════════════════════════════╩════════════╝"
 
-    # Inference details table
+    # Q&A details for each inference
     echo ""
-    echo "╔══════════════════════════════════════════════════════════════════════════════╗"
-    echo "║                             INFERENCE DETAILS                               ║"
-    echo "╠═════════════╦════════════════════════════════╦════════╦════════╦════════════╣"
-    echo "║ Environment ║ Model                          ║ Prompt ║ Compl. ║ Time (ms)  ║"
-    echo "╠═════════════╬════════════════════════════════╬════════╬════════╬════════════╣"
+    echo "╔══════════════════════════════════════════════════════════════════════════════════════╗"
+    echo "║                            INFERENCE Q&A DETAILS                                     ║"
+    echo "╚══════════════════════════════════════════════════════════════════════════════════════╝"
 
     for env in dev staging; do
+        [[ "$env" == "dev" && "$RUN_DEV" != "true" ]] && continue
+        [[ "$env" == "staging" && "$RUN_STAGING" != "true" ]] && continue
+
         local env_label="Development"
         [[ "$env" == "staging" ]] && env_label="Staging"
 
         local inference_file="$verbose_dir/${env}_inference.json"
         if [[ -f "$inference_file" ]]; then
-            local model prompt_tokens completion_tokens duration_ms response
-            model=$(cat "$inference_file" | jq -r '.model // "unknown"' 2>/dev/null)
-            prompt_tokens=$(cat "$inference_file" | jq -r '.prompt_tokens // 0' 2>/dev/null)
-            completion_tokens=$(cat "$inference_file" | jq -r '.completion_tokens // 0' 2>/dev/null)
-            duration_ms=$(cat "$inference_file" | jq -r '.duration_ms // 0' 2>/dev/null)
-            response=$(cat "$inference_file" | jq -r '.response // ""' 2>/dev/null)
+            echo ""
+            echo "┌─ $env_label ─────────────────────────────────────────────────────────────────────────┐"
 
-            # Truncate model name
-            local truncated_model="${model:0:30}"
-            printf "║ %-11s ║ %-30s ║ %6s ║ %6s ║ %10s ║\n" \
-                "$env_label" "$truncated_model" "$prompt_tokens" "$completion_tokens" "$duration_ms"
+            local count
+            count=$(cat "$inference_file" | jq 'length' 2>/dev/null)
+            for ((i=0; i<count; i++)); do
+                local model status prompt response error
+                model=$(cat "$inference_file" | jq -r ".[$i].model // \"unknown\"" 2>/dev/null)
+                status=$(cat "$inference_file" | jq -r ".[$i].status // \"UNKNOWN\"" 2>/dev/null)
+                prompt=$(cat "$inference_file" | jq -r ".[$i].prompt // \"\"" 2>/dev/null)
+                response=$(cat "$inference_file" | jq -r ".[$i].response // \"\"" 2>/dev/null)
+                error=$(cat "$inference_file" | jq -r ".[$i].error // \"\"" 2>/dev/null)
 
-            if [[ -n "$response" ]]; then
-                echo "╟─────────────╨────────────────────────────────────────────────────────────────╢"
-                printf "║ Response: %-67s ║\n" "${response:0:67}"
-                echo "╟─────────────╥────────────────────────────────────────────────────────────────╢"
-            fi
-        else
-            printf "║ %-11s ║ %-30s ║ %6s ║ %6s ║ %10s ║\n" \
-                "$env_label" "(no inference test)" "-" "-" "-"
+                local status_icon="✅"
+                [[ "$status" == "FAIL" ]] && status_icon="❌"
+
+                echo "│"
+                echo "│  $status_icon Model: $model"
+                echo "│  Q: $prompt"
+                if [[ "$status" == "PASS" ]]; then
+                    echo "│  A: ${response:0:75}"
+                else
+                    echo "│  Error: ${error:0:70}"
+                fi
+            done
+
+            echo "└────────────────────────────────────────────────────────────────────────────────────┘"
         fi
     done
+}
 
-    echo "╚═════════════╩════════════════════════════════╩════════╩════════╩════════════╝"
-
-    # Cleanup temp files
+# Cleanup temp files
+cleanup_temp_files() {
+    local verbose_dir="/tmp/smoke-test-verbose-${SMOKE_TEST_ID:-$$}"
     rm -rf "$verbose_dir"
 }
 
@@ -742,10 +831,16 @@ main() {
         # Print the summary table
         print_summary_table
 
-        # Print verbose details if requested
+        # Always print inference details for all models
+        print_inference_details
+
+        # Print additional verbose details if requested (models table + Q&A)
         if [[ "$VERBOSE" == "true" ]]; then
             print_verbose_details
         fi
+
+        # Cleanup temp files
+        cleanup_temp_files
 
         # Final status
         local total_failures=0
