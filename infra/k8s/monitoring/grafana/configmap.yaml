@@ -14,7 +14,8 @@ data:
     reporting_enabled = false
 
     [server]
-    root_url = %(protocol)s://%(domain)s/
+    domain = grafana.dev.otherjamesbrown.com
+    root_url = https://grafana.dev.otherjamesbrown.com/
     serve_from_sub_path = false
 
     [security]
