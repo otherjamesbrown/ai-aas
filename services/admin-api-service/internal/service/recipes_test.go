@@ -9,67 +9,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// RecipeService defines the interface for recipe management (TDD - interface defined by tests)
-// This interface will be implemented in T018
-type RecipeService interface {
-	CreateRecipe(ctx context.Context, input *CreateRecipeInput) (*RecipeResponse, error)
-	GetRecipe(ctx context.Context, name string) (*RecipeResponse, error)
-	ListRecipes(ctx context.Context, filters *ListRecipesFilters) (*ListRecipesResponse, error)
-	UpdateRecipe(ctx context.Context, name string, input *UpdateRecipeInput) (*RecipeResponse, error)
-	DeleteRecipe(ctx context.Context, name string) error
-	ValidateRecipe(ctx context.Context, spec map[string]interface{}) (*ValidationResult, error)
-}
-
-// Service DTOs (used in tests, will be moved to domain package in T018)
-
-type CreateRecipeInput struct {
-	Name        string
-	DisplayName string
-	Description string
-	ModelID     string
-	Runtime     string
-	Spec        map[string]interface{}
-}
-
-type UpdateRecipeInput struct {
-	DisplayName *string
-	Description *string
-	Spec        map[string]interface{}
-}
-
-type RecipeResponse struct {
-	RecipeID    uuid.UUID
-	Name        string
-	DisplayName string
-	Description string
-	ModelID     string
-	Runtime     string
-	Spec        map[string]interface{}
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-}
-
-type ListRecipesResponse struct {
-	Recipes []RecipeResponse
-	Total   int
-}
-
-type ListRecipesFilters struct {
-	Runtime string
-	ModelID string
-}
-
-type ValidationResult struct {
-	Valid   bool
-	Errors  []ValidationError
-	Runtime string
-}
-
-type ValidationError struct {
-	Field   string
-	Message string
-}
-
 // Mock implementation for testing
 
 type mockRecipeRepository struct {
@@ -155,15 +94,6 @@ func (m *mockRecipeRepository) Delete(ctx context.Context, name string) error {
 	delete(m.recipes, name)
 	return nil
 }
-
-// Sentinel errors
-var (
-	ErrRecipeNotFound       = errors.New("recipe not found")
-	ErrRecipeAlreadyExists  = errors.New("recipe already exists")
-	ErrInvalidRecipeSpec    = errors.New("invalid recipe spec")
-	ErrInvalidRuntime       = errors.New("invalid runtime")
-	ErrMissingRequiredField = errors.New("missing required field")
-)
 
 // Mock service implementation for testing
 type mockRecipeService struct {
