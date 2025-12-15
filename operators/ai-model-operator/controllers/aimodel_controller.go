@@ -48,6 +48,7 @@ import (
 	aimodelv1alpha1 "github.com/ai-aas/ai-model-operator/api/v1alpha1"
 	"github.com/ai-aas/ai-model-operator/internal/kserve"
 	"github.com/ai-aas/ai-model-operator/internal/adminapi"
+	"github.com/ai-aas/ai-model-operator/internal/recipe"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -110,6 +111,10 @@ type AIModelReconciler struct {
 
 	// Admin API client for deployment sync (optional - sync is disabled if nil)
 	AdminAPIClient AdminAPIClient
+
+	// Recipe resolution and validation
+	RecipeResolver *recipe.Resolver
+	RecipeValidator *recipe.Validator
 }
 
 // AdminAPIClient defines the interface for syncing deployment state with the Admin API
@@ -436,7 +441,47 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 
 
-	// 2. Reconcile KServe InferenceService (replaces vLLM Deployment + Service)
+	// 2. Resolve and merge recipe if specified
+	var mergedSpec *aimodelv1alpha1.ModelRecipeSpec
+	if aiModel.Spec.RecipeRef != nil {
+		log.Info("Resolving recipe reference", "name", aiModel.Spec.RecipeRef.Name, "namespace", aiModel.Spec.RecipeRef.Namespace)
+
+		// Resolve the recipe
+		modelRecipe, err := r.RecipeResolver.ResolveRecipe(ctx, aiModel.Spec.RecipeRef)
+		if err != nil {
+			log.Error(err, "Failed to resolve recipe", "recipeRef", aiModel.Spec.RecipeRef.Name)
+			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
+			aiModel.Status.Message = fmt.Sprintf("Recipe resolution failed: %v", err)
+			if statusErr := r.Status().Update(ctx, aiModel); statusErr != nil {
+				log.Error(statusErr, "unable to update AIModel status to Failed")
+			}
+			reconcileTotal.WithLabelValues("error").Inc()
+			// Requeue after delay to retry recipe resolution
+			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+		}
+
+		// Merge recipe spec with overrides
+		merged := recipe.MergeRecipe(modelRecipe.Spec, aiModel.Spec.Overrides)
+		mergedSpec = &merged
+
+		// Validate the merged spec
+		validationResult := r.RecipeValidator.Validate(mergedSpec)
+		if !validationResult.Valid {
+			log.Error(nil, "Recipe validation failed", "errors", validationResult.Errors)
+			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
+			aiModel.Status.Message = fmt.Sprintf("Recipe validation failed: %s", validationResult.ErrorString())
+			if statusErr := r.Status().Update(ctx, aiModel); statusErr != nil {
+				log.Error(statusErr, "unable to update AIModel status to Failed")
+			}
+			reconcileTotal.WithLabelValues("error").Inc()
+			// Don't requeue - validation errors require user intervention
+			return ctrl.Result{}, nil
+		}
+
+		log.Info("Recipe resolved and validated successfully", "recipe", aiModel.Spec.RecipeRef.Name)
+	}
+
+	// 3. Reconcile KServe InferenceService (replaces vLLM Deployment + Service)
 	log.Info("Reconciling InferenceService", "name", aiModel.Name)
 
 	// Update phase to Deploying if not already set
@@ -450,7 +495,7 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// Create or update the InferenceService
-	if err := r.createOrUpdateInferenceService(ctx, aiModel); err != nil {
+	if err := r.createOrUpdateInferenceService(ctx, aiModel, mergedSpec); err != nil {
 		log.Error(err, "Failed to reconcile InferenceService", "name", aiModel.Name)
 		aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
 		aiModel.Status.Message = fmt.Sprintf("Failed to create InferenceService: %v", err)
@@ -926,12 +971,17 @@ func (r *AIModelReconciler) checkS3ArtifactExists(ctx context.Context, aiModel *
 }
 
 // createOrUpdateInferenceService creates or updates a KServe InferenceService for the AIModel
-func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) error {
+// If recipeSpec is provided, it uses the recipe configuration; otherwise uses inline AIModel spec
+func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, aiModel *aimodelv1alpha1.AIModel, recipeSpec *aimodelv1alpha1.ModelRecipeSpec) error {
 	log := log.FromContext(ctx)
 
-	// Determine runtime to use (from spec or default)
-	runtime := aiModel.Spec.Runtime
-	if runtime == "" {
+	// Determine runtime to use (from recipe, spec, or default)
+	runtime := ""
+	if recipeSpec != nil {
+		runtime = recipeSpec.Runtime
+	} else if aiModel.Spec.Runtime != "" {
+		runtime = aiModel.Spec.Runtime
+	} else {
 		// Use configured default runtime or fallback to "vllm"
 		runtime = r.DefaultRuntime
 		if runtime == "" {
@@ -939,37 +989,61 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		}
 	}
 
-	// Get min/max replicas with defaults
+	// Get min/max replicas (from overrides in recipe, or inline spec, or defaults)
 	minReplicas := int32(0)
-	if aiModel.Spec.MinReplicas != nil {
-		minReplicas = *aiModel.Spec.MinReplicas
-	}
-
 	maxReplicas := int32(1)
-	if aiModel.Spec.MaxReplicas != nil {
-		maxReplicas = *aiModel.Spec.MaxReplicas
-	}
 
-	// Build resources with defaults if not specified
-	resources := aiModel.Spec.Resources
-	if len(resources.Requests) == 0 && len(resources.Limits) == 0 {
-		resources = corev1.ResourceRequirements{
-			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("4"),
-				corev1.ResourceMemory: resource.MustParse("16Gi"),
-				"nvidia.com/gpu":      resource.MustParse("1"),
-			},
-			Limits: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("8"),
-				corev1.ResourceMemory: resource.MustParse("32Gi"),
-				"nvidia.com/gpu":      resource.MustParse("1"),
-			},
+	if recipeSpec != nil && aiModel.Spec.Overrides != nil && aiModel.Spec.Overrides.Replicas != nil {
+		// Use override values if specified
+		if aiModel.Spec.Overrides.Replicas.Min != nil {
+			minReplicas = *aiModel.Spec.Overrides.Replicas.Min
+		}
+		if aiModel.Spec.Overrides.Replicas.Max != nil {
+			maxReplicas = *aiModel.Spec.Overrides.Replicas.Max
+		}
+	} else {
+		// Use inline spec values
+		if aiModel.Spec.MinReplicas != nil {
+			minReplicas = *aiModel.Spec.MinReplicas
+		}
+		if aiModel.Spec.MaxReplicas != nil {
+			maxReplicas = *aiModel.Spec.MaxReplicas
 		}
 	}
 
-	// Build tolerations with defaults if not specified
-	tolerations := aiModel.Spec.Tolerations
-	if len(tolerations) == 0 {
+	// Build resources (from recipe or inline spec)
+	var resources corev1.ResourceRequirements
+	if recipeSpec != nil {
+		// Convert recipe resources to Kubernetes ResourceRequirements
+		resources = r.convertRecipeResources(&recipeSpec.Resources)
+	} else {
+		// Use inline spec resources
+		resources = aiModel.Spec.Resources
+		if len(resources.Requests) == 0 && len(resources.Limits) == 0 {
+			// Apply defaults if nothing specified
+			resources = corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("16Gi"),
+					"nvidia.com/gpu":      resource.MustParse("1"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("8"),
+					corev1.ResourceMemory: resource.MustParse("32Gi"),
+					"nvidia.com/gpu":      resource.MustParse("1"),
+				},
+			}
+		}
+	}
+
+	// Build tolerations (from recipe scheduling or inline spec)
+	var tolerations []corev1.Toleration
+	if recipeSpec != nil && len(recipeSpec.Scheduling.Tolerations) > 0 {
+		tolerations = recipeSpec.Scheduling.Tolerations
+	} else if len(aiModel.Spec.Tolerations) > 0 {
+		tolerations = aiModel.Spec.Tolerations
+	} else {
+		// Default tolerations
 		tolerations = []corev1.Toleration{
 			{
 				Key:      "gpu-workload",
@@ -983,6 +1057,14 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 				Effect:   corev1.TaintEffectNoSchedule,
 			},
 		}
+	}
+
+	// Build node selector (from recipe scheduling or inline spec)
+	var nodeSelector map[string]string
+	if recipeSpec != nil && len(recipeSpec.Scheduling.NodeSelector) > 0 {
+		nodeSelector = recipeSpec.Scheduling.NodeSelector
+	} else {
+		nodeSelector = aiModel.Spec.NodeSelector
 	}
 
 	// Build runtime env with S3 credentials
@@ -1073,18 +1155,26 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		}
 	}
 
-	// Use runtime args from spec, or fall back to defaults
-	runtimeArgs := aiModel.Spec.RuntimeArgs
-	if len(runtimeArgs) == 0 {
-		// Use default vLLM args if none specified
-		runtimeArgs = []string{
-			"--dtype=float16",
-			"--max-model-len=4096",
-			"--gpu-memory-utilization=0.9",
+	// Build runtime args (from recipe or inline spec)
+	var runtimeArgs []string
+	if recipeSpec != nil {
+		// Convert recipe runtime args to command-line args
+		runtimeArgs = r.convertRecipeRuntimeArgs(runtime, &recipeSpec.RuntimeArgs)
+	} else {
+		// Use inline spec runtime args
+		runtimeArgs = aiModel.Spec.RuntimeArgs
+		if len(runtimeArgs) == 0 {
+			// Use default vLLM args if none specified
+			runtimeArgs = []string{
+				"--dtype=float16",
+				"--max-model-len=4096",
+				"--gpu-memory-utilization=0.9",
+			}
 		}
 	}
 
-	// Add --trust-remote-code flag if TrustRemoteCode is enabled
+	// Add --trust-remote-code flag if TrustRemoteCode is enabled in AIModel spec
+	// This allows per-deployment override of trust_remote_code even when using recipes
 	if aiModel.Spec.TrustRemoteCode {
 		// Check if the flag is not already present to avoid duplicates
 		hasFlag := false
@@ -1133,7 +1223,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 			WithScaling(minReplicas, maxReplicas).
 			WithResources(resources).
 			WithTolerations(tolerations).
-			WithNodeSelector(aiModel.Spec.NodeSelector).
+			WithNodeSelector(nodeSelector).
 			WithRuntimeArgs(runtimeArgs).
 			WithRuntimeEnv(runtimeEnv).
 			WithOwnerReference(ownerRef).
@@ -1158,7 +1248,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 			WithScaling(minReplicas, maxReplicas).
 			WithResources(resources).
 			WithTolerations(tolerations).
-			WithNodeSelector(aiModel.Spec.NodeSelector).
+			WithNodeSelector(nodeSelector).
 			WithRuntimeArgs(runtimeArgs).
 			WithRuntimeEnv(runtimeEnv).
 			WithOwnerReference(ownerRef).
@@ -1410,6 +1500,98 @@ func (r *AIModelReconciler) deleteDeploymentFromAdminAPI(ctx context.Context, ai
 // contains is a helper function to check if a string contains a substring
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
+}
+
+// convertRecipeResources converts recipe resources to Kubernetes ResourceRequirements
+func (r *AIModelReconciler) convertRecipeResources(recipeRes *aimodelv1alpha1.RecipeResources) corev1.ResourceRequirements {
+	resources := corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{},
+		Limits:   corev1.ResourceList{},
+	}
+
+	// GPU resources
+	gpuCount := fmt.Sprintf("%d", recipeRes.GPU.Count)
+	gpuResourceName := corev1.ResourceName(fmt.Sprintf("%s.com/gpu", recipeRes.GPU.Vendor))
+	if recipeRes.GPU.Vendor == "" || recipeRes.GPU.Vendor == "nvidia" {
+		gpuResourceName = "nvidia.com/gpu"
+	}
+	resources.Requests[gpuResourceName] = resource.MustParse(gpuCount)
+	resources.Limits[gpuResourceName] = resource.MustParse(gpuCount)
+
+	// CPU resources
+	if recipeRes.CPU.Requests != "" {
+		resources.Requests[corev1.ResourceCPU] = resource.MustParse(recipeRes.CPU.Requests)
+	}
+	if recipeRes.CPU.Limits != "" {
+		resources.Limits[corev1.ResourceCPU] = resource.MustParse(recipeRes.CPU.Limits)
+	}
+
+	// Memory resources
+	if recipeRes.Memory.Requests != "" {
+		resources.Requests[corev1.ResourceMemory] = resource.MustParse(recipeRes.Memory.Requests)
+	}
+	if recipeRes.Memory.Limits != "" {
+		resources.Limits[corev1.ResourceMemory] = resource.MustParse(recipeRes.Memory.Limits)
+	}
+
+	return resources
+}
+
+// convertRecipeRuntimeArgs converts recipe runtime args to command-line arguments
+func (r *AIModelReconciler) convertRecipeRuntimeArgs(runtime string, runtimeArgs *aimodelv1alpha1.RuntimeArgsSpec) []string {
+	var args []string
+
+	switch runtime {
+	case "vllm":
+		if runtimeArgs.VLLM != nil {
+			vllmArgs := runtimeArgs.VLLM
+			if vllmArgs.DType != "" {
+				args = append(args, fmt.Sprintf("--dtype=%s", vllmArgs.DType))
+			}
+			if vllmArgs.MaxModelLen > 0 {
+				args = append(args, fmt.Sprintf("--max-model-len=%d", vllmArgs.MaxModelLen))
+			}
+			if vllmArgs.GPUMemoryUtilization != "" {
+				args = append(args, fmt.Sprintf("--gpu-memory-utilization=%s", vllmArgs.GPUMemoryUtilization))
+			}
+			if vllmArgs.TrustRemoteCode {
+				args = append(args, "--trust-remote-code")
+			}
+			if vllmArgs.TokenizerMode != "" {
+				args = append(args, fmt.Sprintf("--tokenizer-mode=%s", vllmArgs.TokenizerMode))
+			}
+			// Append any extra args
+			args = append(args, vllmArgs.ExtraArgs...)
+		}
+	case "tgi":
+		if runtimeArgs.TGI != nil {
+			tgiArgs := runtimeArgs.TGI
+			if tgiArgs.Quantize != "" {
+				args = append(args, fmt.Sprintf("--quantize=%s", tgiArgs.Quantize))
+			}
+			if tgiArgs.MaxInputLength > 0 {
+				args = append(args, fmt.Sprintf("--max-input-length=%d", tgiArgs.MaxInputLength))
+			}
+			if tgiArgs.MaxTotalTokens > 0 {
+				args = append(args, fmt.Sprintf("--max-total-tokens=%d", tgiArgs.MaxTotalTokens))
+			}
+			if tgiArgs.MaxBatchPrefillTokens > 0 {
+				args = append(args, fmt.Sprintf("--max-batch-prefill-tokens=%d", tgiArgs.MaxBatchPrefillTokens))
+			}
+			if tgiArgs.NumShard > 0 {
+				args = append(args, fmt.Sprintf("--num-shard=%d", tgiArgs.NumShard))
+			}
+			if tgiArgs.DisableFlashAttention {
+				args = append(args, "--disable-flash-attention")
+			}
+		}
+	case "triton":
+		// Triton uses config.pbtxt instead of command-line args
+		// The args would be handled differently in the InferenceService spec
+		// For now, we don't convert Triton args to command-line format
+	}
+
+	return args
 }
 
 // SetupWithManager sets up the controller with the Manager.

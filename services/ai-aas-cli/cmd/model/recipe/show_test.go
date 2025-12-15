@@ -339,22 +339,6 @@ func outputRecipeTable(w io.Writer, recipe *Recipe) error {
 	return nil
 }
 
-// Recipe represents a model recipe (matches the API domain model)
-type Recipe struct {
-	ID          string                 `json:"id"`
-	Name        string                 `json:"name"`
-	DisplayName string                 `json:"display_name"`
-	Description string                 `json:"description"`
-	ModelID     string                 `json:"model_id"`
-	Runtime     string                 `json:"runtime"`
-	Spec        map[string]interface{} `json:"spec"`
-}
-
-// RecipeClient interface for interacting with the recipes API
-type RecipeClient interface {
-	GetRecipe(name string) (*Recipe, error)
-}
-
 // contains checks if a string contains a substring (case-insensitive helper)
 func contains(s, substr string) bool {
 	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
