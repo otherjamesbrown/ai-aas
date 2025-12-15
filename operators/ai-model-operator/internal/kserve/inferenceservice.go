@@ -75,8 +75,9 @@ func NewInferenceServiceBuilder(name, namespace string) *InferenceServiceBuilder
 				Effect:   corev1.TaintEffectNoSchedule,
 			},
 		},
-		runtimeArgs: []string{}, // Runtime args are now set per-model in the controller
-		environment: "development",
+		runtimeArgs:                 []string{}, // Runtime args are now set per-model in the controller
+		environment:                 "development",
+		livenessInitialDelaySeconds: 300, // Default 5 minutes for model loading
 	}
 }
 
@@ -177,6 +178,12 @@ func (b *InferenceServiceBuilder) WithModelID(modelID string) *InferenceServiceB
 // WithUpdateStrategy sets the update strategy (RollingUpdate or Recreate)
 func (b *InferenceServiceBuilder) WithUpdateStrategy(strategy string) *InferenceServiceBuilder {
 	b.updateStrategy = strategy
+	return b
+}
+
+// WithLivenessInitialDelay sets the initialDelaySeconds for the liveness probe
+func (b *InferenceServiceBuilder) WithLivenessInitialDelay(seconds int32) *InferenceServiceBuilder {
+	b.livenessInitialDelaySeconds = seconds
 	return b
 }
 
@@ -481,7 +488,7 @@ func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructu
 				"path": "/health",
 				"port": int64(8000),
 			},
-			"initialDelaySeconds": int64(300), // 5 min delay for model loading
+			"initialDelaySeconds": int64(b.livenessInitialDelaySeconds),
 			"periodSeconds":       int64(30),
 			"failureThreshold":    int64(3),
 			"timeoutSeconds":      int64(5),

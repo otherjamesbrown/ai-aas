@@ -28,6 +28,16 @@ Each entry records a context gap that was identified and fixed:
 ### Template Entry
 
 ```yaml
+- date: 2025-12-15
+  bug_bead: ai-aas-9s4z
+  gap_type: missing_antipattern
+  context_file: context/operator-developer/agents.md
+  what_was_missing: "No documentation about KServe admission webhook overriding container probe configuration"
+  fix_applied: "Added 'KServe Admission Webhook Probe Override' section with WRONG examples and verification steps"
+  fix_bead: ai-aas-tb3j
+  prevented_bugs: []
+```
+
 - date: 2025-12-13
   bug_bead: ai-aas-xxx
   gap_type: missing_antipattern
@@ -47,7 +57,7 @@ Each entry records a context gap that was identified and fixed:
 | Type | Count | % |
 |------|-------|---|
 | missing_pattern | 0 | 0% |
-| missing_antipattern | 0 | 0% |
+| missing_antipattern | 1 | 100% |
 | stale_content | 0 | 0% |
 | missing_rule | 0 | 0% |
 
@@ -58,7 +68,7 @@ Each entry records a context gap that was identified and fixed:
 | context/agents.md | 0 | 0 |
 | context/cli-developer/agents.md | 0 | 0 |
 | context/go-services-developer/agents.md | 0 | 0 |
-| context/operator-developer/agents.md | 0 | 0 |
+| context/operator-developer/agents.md | 1 | 1 |
 | context/infra-ops-manager/agents.md | 0 | 0 |
 | context/web-portal-developer/agents.md | 0 | 0 |
 
@@ -66,7 +76,7 @@ Each entry records a context gap that was identified and fixed:
 
 | Quarter | Bugs with context-gap | Bugs prevented by prior fixes | Effectiveness |
 |---------|----------------------|-------------------------------|---------------|
-| 2025-Q4 | 0 | 0 | N/A |
+| 2025-Q4 | 1 | 0 | N/A |
 
 ---
 

@@ -1221,6 +1221,12 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		// Use vLLM image - v0.10.2 has native support for GPT-OSS and other modern architectures
 		containerImage := "vllm/vllm-openai:v0.10.2"
 
+		// Determine liveness probe initial delay (default 300s if not specified)
+		livenessInitialDelay := int32(300)
+		if aiModel.Spec.ProbeConfig != nil && aiModel.Spec.ProbeConfig.InitialDelaySeconds != nil {
+			livenessInitialDelay = *aiModel.Spec.ProbeConfig.InitialDelaySeconds
+		}
+
 		// Use the HuggingFace model ID as the served name so vLLM accepts requests
 		// with the full HF ID (e.g., "unsloth/gpt-oss-20b"). This allows multiple
 		// models with the same base name but different sources to coexist.
@@ -1235,6 +1241,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 			WithRuntimeArgs(runtimeArgs).
 			WithRuntimeEnv(runtimeEnv).
 			WithUpdateStrategy(updateStrategy).
+			WithLivenessInitialDelay(livenessInitialDelay).
 			WithOwnerReference(ownerRef).
 			BuildContainerBased()
 		if err != nil {
