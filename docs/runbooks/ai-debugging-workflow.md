@@ -1,7 +1,7 @@
 # AI Coding Assistant Debugging Workflow
 
 ---
-last_updated: 2025-12-12
+last_updated: 2025-12-15
 document_type: runbook
 audience: ai-assistants
 spec: 024-logging-observability-improvements
@@ -13,9 +13,9 @@ This guide provides step-by-step instructions for AI coding assistants (Claude) 
 
 | Component | URL | Purpose |
 |-----------|-----|---------|
-| Grafana | `https://grafana.dev.ai-aas.local` | Log visualization, dashboards, trace exploration |
-| Loki API | `https://loki.dev.ai-aas.local/loki/api/v1/query_range` | Direct log querying |
-| ArgoCD | `https://argocd.dev.ai-aas.local` | Deployment status and sync operations |
+| Grafana | `https://grafana.dev.otherjamesbrown.com` | Log visualization, dashboards, trace exploration |
+| Loki API | `https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range` | Direct log querying |
+| ArgoCD | `https://argocd.dev.otherjamesbrown.com` | Deployment status and sync operations |
 | Sentry | External SaaS | Frontend error tracking with session replay |
 
 ### Quick Command Reference
@@ -86,7 +86,7 @@ kubectl logs -n system <pod-name> --previous
 ```
 
 **Historical search in Grafana:**
-1. Navigate to `https://grafana.dev.ai-aas.local`
+1. Navigate to `https://grafana.dev.otherjamesbrown.com`
 2. Click **Explore** (compass icon in left sidebar)
 3. Select **Loki** as the data source
 4. Enter LogQL query:
@@ -98,7 +98,7 @@ kubectl logs -n system <pod-name> --previous
 **Direct Loki API query:**
 ```bash
 # Query errors in last 15 minutes
-curl -s 'https://loki.dev.ai-aas.local/loki/api/v1/query_range' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
   --data-urlencode 'query={namespace="system", level="error"}' \
   --data-urlencode 'limit=100' \
   --data-urlencode 'start='$(date -u -d '15 minutes ago' +%s)000000000 \
@@ -685,7 +685,7 @@ The AI-AAS platform includes pre-built dashboards for debugging.
 
 ### Accessing Dashboards
 
-1. Navigate to `https://grafana.dev.ai-aas.local`
+1. Navigate to `https://grafana.dev.otherjamesbrown.com`
 2. Login with admin credentials (retrieve password from Kubernetes secret)
 3. Click **Dashboards** icon in left sidebar (four squares)
 4. Browse dashboards or use search
@@ -1352,7 +1352,7 @@ kubectl get pods -n system -l app=loki
 kubectl logs -n system -l app=loki --tail=50
 
 # Test Loki API
-curl -k https://loki.dev.ai-aas.local/ready
+curl -k https://loki.dev.otherjamesbrown.com/ready
 ```
 
 **Check Pod Annotations:**
@@ -1473,7 +1473,7 @@ jobs:
           sleep 30
 
           # Query for errors in test time window
-          ERROR_COUNT=$(curl -s -k "https://loki.dev.ai-aas.local/loki/api/v1/query" \
+          ERROR_COUNT=$(curl -s -k "https://loki.dev.otherjamesbrown.com/loki/api/v1/query" \
             --data-urlencode 'query=count_over_time({namespace="system"} |= "error" [5m])' \
             | jq '.data.result[0].value[1] // "0"')
 
@@ -1481,7 +1481,7 @@ jobs:
 
           if [ "$ERROR_COUNT" -gt "0" ]; then
             echo "Fetching error logs..."
-            curl -s -k "https://loki.dev.ai-aas.local/loki/api/v1/query_range" \
+            curl -s -k "https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range" \
               --data-urlencode 'query={namespace="system"} |= "error"' \
               --data-urlencode 'limit=20' | jq
           fi
@@ -1525,7 +1525,7 @@ For additional help:
 
 ---
 
-**Last Updated**: 2025-12-12
-**Version**: 2.0
+**Last Updated**: 2025-12-15
+**Version**: 2.1
 **Maintained By**: AI-AAS Platform Team
 **Spec**: 024-logging-observability-improvements
