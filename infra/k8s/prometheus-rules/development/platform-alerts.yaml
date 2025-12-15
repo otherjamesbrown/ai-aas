@@ -188,7 +188,6 @@ spec:
         - alert: InferenceServicePodRestarts
           expr: |
             increase(kube_pod_container_status_restarts_total{
-              namespace="system",
               pod=~".*predictor.*"
             }[1h]) > 1
           for: 5m

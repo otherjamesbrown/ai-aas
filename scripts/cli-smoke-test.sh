@@ -330,13 +330,18 @@ run_environment_tests() {
             duration_ms=$((end_time - start_time))
 
             if echo "$inference_output" | jq -e '.choices[0].message.content' >/dev/null 2>&1; then
+                # Parse all fields in one jq call for efficiency
+                local parsed_fields
+                parsed_fields=$(echo "$inference_output" | jq -r '[
+                    .usage.prompt_tokens // 0,
+                    .usage.completion_tokens // 0,
+                    .usage.total_tokens // 0,
+                    (.choices[0].message.content // "" | gsub("\n"; " ") | .[0:100])
+                ] | @tsv')
                 local prompt_tokens completion_tokens total_tokens response_text
-                prompt_tokens=$(echo "$inference_output" | jq -r '.usage.prompt_tokens // 0')
-                completion_tokens=$(echo "$inference_output" | jq -r '.usage.completion_tokens // 0')
-                total_tokens=$(echo "$inference_output" | jq -r '.usage.total_tokens // 0')
-                response_text=$(echo "$inference_output" | jq -r '.choices[0].message.content // empty')
-                # Escape response for JSON (replace newlines and quotes)
-                response_text=$(echo "$response_text" | tr '\n' ' ' | sed 's/"/\\"/g' | head -c 100)
+                IFS=$'\t' read -r prompt_tokens completion_tokens total_tokens response_text <<< "$parsed_fields"
+                # Escape quotes for JSON
+                response_text=$(echo "$response_text" | sed 's/"/\\"/g')
 
                 inference_results+=("{\"model\":\"$model_id\",\"status\":\"PASS\",\"prompt_tokens\":$prompt_tokens,\"completion_tokens\":$completion_tokens,\"total_tokens\":$total_tokens,\"duration_ms\":$duration_ms,\"prompt\":\"$inference_prompt\",\"response\":\"$response_text\"}")
                 ((inference_pass_count++))

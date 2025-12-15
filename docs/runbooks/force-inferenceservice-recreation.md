@@ -358,7 +358,7 @@ kubectl get aimodel -n development -o name > /tmp/aimodels.txt
 
 # 2. Backup all manifests
 while read -r aimodel; do
-  kubectl get "$aimodel" -n development -o yaml > "/tmp/$(basename $aimodel).yaml"
+  kubectl get "$aimodel" -n development -o yaml > "/tmp/$(echo "$aimodel" | tr '/' '_').yaml"
 done < /tmp/aimodels.txt
 
 # 3. Delete all AIModels
