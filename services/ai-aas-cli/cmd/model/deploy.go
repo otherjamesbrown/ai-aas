@@ -33,6 +33,7 @@ func NewDeployCommand() *cobra.Command {
 		wait            bool
 		timeout         time.Duration
 		trustRemoteCode bool
+		recipe          string
 	)
 
 	cmd := &cobra.Command{
@@ -51,6 +52,12 @@ Examples:
 
   # Deploy with specific resource requirements
   ai-aas-cli model deploy llama-3-8b -e development --gpu-count 2 --memory 48
+
+  # Deploy using a model recipe
+  ai-aas-cli model deploy mistral-7b -e development --recipe mistral-7b-instruct-v03
+
+  # Deploy with recipe and override GPU count
+  ai-aas-cli model deploy mistral-7b -e development --recipe mistral-7b-instruct-v03 --gpu-count 2
 
   # Deploy with auto-scaling
   ai-aas-cli model deploy llama-3-8b -e production --min-replicas 2 --max-replicas 5
@@ -115,6 +122,12 @@ Examples:
 			aimodelName := fmt.Sprintf("%s-%s", modelName, environment)
 			namespace := fmt.Sprintf("%s", environment) // Using environment as namespace
 
+			// Determine which flags were explicitly set for override tracking
+			gpuCountChanged := cmd.Flags().Changed("gpu-count")
+			memoryChanged := cmd.Flags().Changed("memory")
+			minReplicasChanged := cmd.Flags().Changed("min-replicas")
+			maxReplicasChanged := cmd.Flags().Changed("max-replicas")
+
 			aimodelCfg := kubernetes.AIModelConfig{
 				Name:            aimodelName,
 				Namespace:       namespace,
@@ -138,6 +151,13 @@ Examples:
 				Annotations: map[string]string{
 					"ai-aas.io/hf-model-id": model.HFModelID,
 				},
+				// Recipe support
+				RecipeName:          recipe,
+				RecipeNamespace:     "ai-model-system",
+				OverrideGPUCount:    gpuCountChanged,
+				OverrideMemory:      memoryChanged,
+				OverrideMinReplicas: minReplicasChanged,
+				OverrideMaxReplicas: maxReplicasChanged,
 			}
 
 			// Show configuration
@@ -145,9 +165,25 @@ Examples:
 			fmt.Printf("  Model: %s (%s)\n", modelName, model.HFModelID)
 			fmt.Printf("  Environment: %s\n", environment)
 			fmt.Printf("  AIModel CR: %s/%s\n", namespace, aimodelName)
-			fmt.Printf("  S3 Location: s3://%s/%s\n", s3Bucket, s3Key)
-			fmt.Printf("  Resources: %d GPU(s), %dGB memory\n", gpuCount, memoryGB)
-			fmt.Printf("  Replicas: %d-%d\n", minReplicas, maxReplicas)
+			if recipe != "" {
+				fmt.Printf("  Recipe: %s (namespace: %s)\n", recipe, aimodelCfg.RecipeNamespace)
+				if gpuCountChanged || memoryChanged || minReplicasChanged || maxReplicasChanged {
+					fmt.Printf("  Overrides:\n")
+					if gpuCountChanged {
+						fmt.Printf("    - GPU Count: %d\n", gpuCount)
+					}
+					if memoryChanged {
+						fmt.Printf("    - Memory: %dGB\n", memoryGB)
+					}
+					if minReplicasChanged || maxReplicasChanged {
+						fmt.Printf("    - Replicas: %d-%d\n", minReplicas, maxReplicas)
+					}
+				}
+			} else {
+				fmt.Printf("  S3 Location: s3://%s/%s\n", s3Bucket, s3Key)
+				fmt.Printf("  Resources: %d GPU(s), %dGB memory\n", gpuCount, memoryGB)
+				fmt.Printf("  Replicas: %d-%d\n", minReplicas, maxReplicas)
+			}
 			if trustRemoteCode {
 				fmt.Printf("  Trust Remote Code: enabled\n")
 			}
@@ -275,6 +311,7 @@ Examples:
 	cmd.Flags().BoolVar(&wait, "wait", false, "wait for deployment to be ready")
 	cmd.Flags().DurationVar(&timeout, "timeout", 10*time.Minute, "timeout when waiting")
 	cmd.Flags().BoolVar(&trustRemoteCode, "trust-remote-code", false, "allow execution of custom model code (required for some models)")
+	cmd.Flags().StringVar(&recipe, "recipe", "", "use a model recipe for deployment configuration")
 	_ = cmd.MarkFlagRequired("environment")
 
 	return cmd
@@ -689,28 +726,86 @@ func generateAIModelYAML(cfg kubernetes.AIModelConfig) ([]byte, error) {
 		annotations[k] = v
 	}
 
-	// Build spec
-	spec := map[string]interface{}{
-		"modelName":  cfg.ModelName,
-		"modelID":    cfg.ModelID,
-		"s3Bucket":   cfg.S3Bucket,
-		"s3Key":      cfg.S3Key,
-		"enabled":    cfg.Enabled,
-		"runtime":    cfg.Runtime,
-		"resources":  resources,
-	}
+	// Build spec based on recipe or inline configuration
+	spec := map[string]interface{}{}
 
-	if cfg.RuntimeName != "" {
-		spec["runtimeName"] = cfg.RuntimeName
-	}
-	if cfg.MinReplicas > 0 {
-		spec["minReplicas"] = cfg.MinReplicas
-	}
-	if cfg.MaxReplicas > 0 {
-		spec["maxReplicas"] = cfg.MaxReplicas
-	}
-	if cfg.TrustRemoteCode {
-		spec["trustRemoteCode"] = true
+	// If using a recipe, build recipeRef and overrides
+	if cfg.RecipeName != "" {
+		// Add recipeRef
+		recipeRef := map[string]interface{}{
+			"name": cfg.RecipeName,
+		}
+		if cfg.RecipeNamespace != "" {
+			recipeRef["namespace"] = cfg.RecipeNamespace
+		} else {
+			recipeRef["namespace"] = "ai-model-system" // default namespace
+		}
+		spec["recipeRef"] = recipeRef
+
+		// Build overrides for explicitly set values
+		overrides := map[string]interface{}{}
+
+		// Resource overrides
+		if cfg.OverrideGPUCount || cfg.OverrideMemory {
+			resourceOverrides := map[string]interface{}{}
+
+			if cfg.OverrideGPUCount || cfg.OverrideMemory {
+				gpuOverrides := map[string]interface{}{}
+				if cfg.OverrideGPUCount {
+					gpuOverrides["count"] = int32(cfg.GPUCount)
+				}
+				resourceOverrides["gpu"] = gpuOverrides
+			}
+
+			if cfg.OverrideMemory {
+				memoryOverrides := map[string]interface{}{
+					"requests": fmt.Sprintf("%dGi", cfg.MemoryGB),
+				}
+				resourceOverrides["memory"] = memoryOverrides
+			}
+
+			overrides["resources"] = resourceOverrides
+		}
+
+		// Replica overrides
+		if cfg.OverrideMinReplicas || cfg.OverrideMaxReplicas {
+			replicaOverrides := map[string]interface{}{}
+			if cfg.OverrideMinReplicas {
+				replicaOverrides["min"] = int32(cfg.MinReplicas)
+			}
+			if cfg.OverrideMaxReplicas {
+				replicaOverrides["max"] = int32(cfg.MaxReplicas)
+			}
+			overrides["replicas"] = replicaOverrides
+		}
+
+		if len(overrides) > 0 {
+			spec["overrides"] = overrides
+		}
+	} else {
+		// Inline configuration (backward compatible)
+		spec = map[string]interface{}{
+			"modelName": cfg.ModelName,
+			"modelID":   cfg.ModelID,
+			"s3Bucket":  cfg.S3Bucket,
+			"s3Key":     cfg.S3Key,
+			"enabled":   cfg.Enabled,
+			"runtime":   cfg.Runtime,
+			"resources": resources,
+		}
+
+		if cfg.RuntimeName != "" {
+			spec["runtimeName"] = cfg.RuntimeName
+		}
+		if cfg.MinReplicas > 0 {
+			spec["minReplicas"] = cfg.MinReplicas
+		}
+		if cfg.MaxReplicas > 0 {
+			spec["maxReplicas"] = cfg.MaxReplicas
+		}
+		if cfg.TrustRemoteCode {
+			spec["trustRemoteCode"] = true
+		}
 	}
 
 	aimodel := map[string]interface{}{
