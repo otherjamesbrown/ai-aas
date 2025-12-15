@@ -258,7 +258,7 @@ func extractPodHealthInfo(pod *corev1.Pod, modelName, inferenceServiceName strin
 	var totalRestarts int32
 	var lastRestartTime *time.Time
 
-	for i, container := range pod.Spec.Containers {
+	for _, container := range pod.Spec.Containers {
 		var containerStatus *corev1.ContainerStatus
 		for j := range pod.Status.ContainerStatuses {
 			if pod.Status.ContainerStatuses[j].Name == container.Name {
@@ -311,9 +311,13 @@ func extractPodHealthInfo(pod *corev1.Pod, modelName, inferenceServiceName strin
 						lastRestartTime = &term.FinishedAt.Time
 					}
 				}
-				// Only set on first container with termination info
-				if i == 0 || info.LastTermination == nil {
+				// Track most recent termination across all containers
+				if info.LastTermination == nil {
 					info.LastTermination = termInfo
+				} else if termInfo.FinishedAt != nil {
+					if info.LastTermination.FinishedAt == nil || termInfo.FinishedAt.After(*info.LastTermination.FinishedAt) {
+						info.LastTermination = termInfo
+					}
 				}
 			}
 		}

@@ -148,7 +148,7 @@ func printHealthTable(resp *pod.HealthResponse, showDetails bool) error {
 		}
 
 		// Format restart count with last restart time
-		restartStr := formatRestartCount(p.RestartCount, p.LastRestartTime)
+		restartStr := formatRestartCount(int(p.RestartCount), p.LastRestartTime)
 
 		// Format age
 		age := formatAge(p.AgeSeconds)

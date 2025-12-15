@@ -29,7 +29,7 @@ type PodHealth struct {
 	Phase             string             `json:"phase"`
 	Ready             bool               `json:"ready"`
 	Node              string             `json:"node"`
-	RestartCount      int                `json:"restart_count"`
+	RestartCount      int32              `json:"restart_count"`
 	LastRestartTime   *time.Time         `json:"last_restart_time,omitempty"`
 	LastTermination   *TerminationInfo   `json:"last_termination,omitempty"`
 	Containers        []ContainerHealth  `json:"containers"`
@@ -41,7 +41,7 @@ type PodHealth struct {
 // TerminationInfo contains details about the last container termination
 type TerminationInfo struct {
 	Reason     string     `json:"reason"`
-	ExitCode   int        `json:"exit_code"`
+	ExitCode   int32      `json:"exit_code"`
 	Message    string     `json:"message"`
 	StartedAt  *time.Time `json:"started_at"`
 	FinishedAt *time.Time `json:"finished_at"`
