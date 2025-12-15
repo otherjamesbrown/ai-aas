@@ -185,6 +185,22 @@ spec:
             summary: "vLLM GPU memory usage high"
             description: "GPU memory usage is {{ $value | humanizePercentage }}"
 
+        - alert: InferenceServicePodRestarts
+          expr: |
+            increase(kube_pod_container_status_restarts_total{
+              namespace="system",
+              pod=~".*predictor.*"
+            }[1h]) > 1
+          for: 5m
+          labels:
+            severity: warning
+            service: kserve
+            category: inference
+          annotations:
+            summary: "InferenceService pod {{ $labels.pod }} is restarting frequently"
+            description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has restarted {{ $value }} times in the last hour. This may indicate liveness probe failures, OOM kills, or application crashes. Check pod logs and describe the pod for details."
+            runbook_url: "https://docs.ai-aas.local/runbooks/inference-troubleshooting"
+
     # Guidellm Runner Alerts
     - name: guidellm-runner
       rules:

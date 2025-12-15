@@ -37,8 +37,9 @@ type InferenceServiceBuilder struct {
 	environment    string
 	updateStrategy string // "RollingUpdate" or "Recreate"
 	// Container-based deployment fields (for trust_remote_code models)
-	containerImage string
-	modelID        string // HuggingFace model ID for direct loading
+	containerImage              string
+	modelID                     string // HuggingFace model ID for direct loading
+	livenessInitialDelaySeconds int32  // InitialDelaySeconds for liveness probe
 }
 
 // NewInferenceServiceBuilder creates a new InferenceServiceBuilder
@@ -57,7 +58,7 @@ func NewInferenceServiceBuilder(name, namespace string) *InferenceServiceBuilder
 			},
 			Limits: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("8"),
-				corev1.ResourceMemory: resource.MustParse("32Gi"),
+				corev1.ResourceMemory: resource.MustParse("24Gi"),
 				"nvidia.com/gpu":      resource.MustParse("1"),
 			},
 		},

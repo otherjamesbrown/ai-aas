@@ -1031,7 +1031,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 				},
 				Limits: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("8"),
-					corev1.ResourceMemory: resource.MustParse("32Gi"),
+					corev1.ResourceMemory: resource.MustParse("24Gi"),
 					"nvidia.com/gpu":      resource.MustParse("1"),
 				},
 			}
