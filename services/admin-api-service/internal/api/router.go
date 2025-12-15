@@ -15,6 +15,7 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/config"
 	enginesSvc "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/services/engines"
 	modelsSvc "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/services/models"
+	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/kubernetes"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/repository"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/service"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/storage"
@@ -128,7 +129,20 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 
 		// Model recipe routes (T020)
 		recipeRepo := repository.NewRecipeRepository(db)
-		recipeSvc := service.NewRecipeService(recipeRepo, logger)
+
+		// Create Kubernetes client for recipe deployments listing
+		// If KUBECONFIG is not set, will use in-cluster config (or nil if that fails)
+		var k8sClient service.K8sClient
+		k8sClientImpl, err := kubernetes.NewClient(cfg.Kubeconfig)
+		if err != nil {
+			logger.Warn("failed to create kubernetes client, recipe deployments will return empty list",
+				zap.Error(err),
+			)
+		} else {
+			k8sClient = k8sClientImpl
+		}
+
+		recipeSvc := service.NewRecipeService(recipeRepo, k8sClient, logger)
 		recipeAdapter := recipesHandler.NewServiceAdapter(recipeSvc)
 		recipeHdlr := recipesHandler.NewHandler(recipeAdapter)
 		recipeHdlr.RegisterRoutes(r)

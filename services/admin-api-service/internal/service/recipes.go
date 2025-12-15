@@ -20,6 +20,7 @@ type RecipeService interface {
 	UpdateRecipe(ctx context.Context, name string, input *UpdateRecipeInput) (*RecipeResponse, error)
 	DeleteRecipe(ctx context.Context, name string) error
 	ValidateRecipe(ctx context.Context, spec map[string]interface{}) (*ValidationResult, error)
+	ListRecipeDeployments(ctx context.Context, name string) ([]DeploymentReference, error)
 }
 
 // CreateRecipeInput represents the input for creating a recipe
@@ -77,6 +78,13 @@ type ValidationError struct {
 	Message string
 }
 
+// DeploymentReference represents a deployment using a recipe
+type DeploymentReference struct {
+	ModelName   string
+	Environment string
+	Namespace   string
+}
+
 // Sentinel errors for recipe operations
 var (
 	ErrRecipeNotFound       = fmt.Errorf("recipe not found")
@@ -88,15 +96,29 @@ var (
 
 // RecipeServiceImpl implements the RecipeService interface
 type RecipeServiceImpl struct {
-	repo   *repository.RecipeRepository
-	logger *zap.Logger
+	repo      *repository.RecipeRepository
+	k8sClient K8sClient
+	logger    *zap.Logger
+}
+
+// K8sClient defines the interface for Kubernetes operations
+type K8sClient interface {
+	ListAIModelsByRecipe(ctx context.Context, recipeName string) ([]K8sDeployment, error)
+}
+
+// K8sDeployment represents a Kubernetes deployment reference
+type K8sDeployment struct {
+	Name        string
+	Namespace   string
+	Environment string
 }
 
 // NewRecipeService creates a new recipe service
-func NewRecipeService(repo *repository.RecipeRepository, logger *zap.Logger) RecipeService {
+func NewRecipeService(repo *repository.RecipeRepository, k8sClient K8sClient, logger *zap.Logger) RecipeService {
 	return &RecipeServiceImpl{
-		repo:   repo,
-		logger: logger,
+		repo:      repo,
+		k8sClient: k8sClient,
+		logger:    logger,
 	}
 }
 
@@ -331,4 +353,55 @@ func (s *RecipeServiceImpl) toResponse(recipe *domain.Recipe) (*RecipeResponse, 
 		CreatedAt:   recipe.CreatedAt,
 		UpdatedAt:   recipe.UpdatedAt,
 	}, nil
+}
+
+// ListRecipeDeployments lists all deployments using a specific recipe
+func (s *RecipeServiceImpl) ListRecipeDeployments(ctx context.Context, name string) ([]DeploymentReference, error) {
+	if name == "" {
+		return nil, ErrMissingRequiredField
+	}
+
+	// Check if recipe exists
+	recipe, err := s.repo.Get(ctx, name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check recipe: %w", err)
+	}
+	if recipe == nil {
+		return nil, ErrRecipeNotFound
+	}
+
+	// If no Kubernetes client configured, return empty list
+	if s.k8sClient == nil {
+		s.logger.Warn("no kubernetes client configured, returning empty deployment list",
+			zap.String("recipe_name", name),
+		)
+		return []DeploymentReference{}, nil
+	}
+
+	// Query Kubernetes for AIModels using this recipe
+	k8sDeployments, err := s.k8sClient.ListAIModelsByRecipe(ctx, name)
+	if err != nil {
+		s.logger.Error("failed to list deployments from kubernetes",
+			zap.String("recipe_name", name),
+			zap.Error(err),
+		)
+		return nil, fmt.Errorf("failed to list deployments: %w", err)
+	}
+
+	// Convert to DeploymentReference
+	deployments := make([]DeploymentReference, len(k8sDeployments))
+	for i, d := range k8sDeployments {
+		deployments[i] = DeploymentReference{
+			ModelName:   d.Name,
+			Environment: d.Environment,
+			Namespace:   d.Namespace,
+		}
+	}
+
+	s.logger.Info("listed recipe deployments",
+		zap.String("recipe_name", name),
+		zap.Int("count", len(deployments)),
+	)
+
+	return deployments, nil
 }

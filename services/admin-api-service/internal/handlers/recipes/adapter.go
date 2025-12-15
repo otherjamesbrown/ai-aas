@@ -166,7 +166,20 @@ func (a *ServiceAdapter) ValidateRecipe(req ValidateRecipeRequest) (*ValidationR
 
 // ListRecipeDeployments lists all deployments using a specific recipe
 func (a *ServiceAdapter) ListRecipeDeployments(name string) ([]DeploymentReference, error) {
-	// TODO: This needs to be implemented in the service layer
-	// For now, return an empty list
-	return []DeploymentReference{}, nil
+	deployments, err := a.svc.ListRecipeDeployments(a.ctx, name)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to handler DeploymentReference
+	result := make([]DeploymentReference, len(deployments))
+	for i, d := range deployments {
+		result[i] = DeploymentReference{
+			ModelName:   d.ModelName,
+			Environment: d.Environment,
+			Namespace:   d.Namespace,
+		}
+	}
+
+	return result, nil
 }

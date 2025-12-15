@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/service"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
@@ -50,23 +51,15 @@ func NewClient(kubeconfig string) (*Client, error) {
 	}, nil
 }
 
-// AIModelDeployment represents an AIModel deployment reference
-type AIModelDeployment struct {
-	Name        string
-	Namespace   string
-	Environment string
-	RecipeName  string
-}
-
 // ListAIModelsByRecipe lists all AIModel resources that reference a specific recipe
-func (c *Client) ListAIModelsByRecipe(ctx context.Context, recipeName string) ([]AIModelDeployment, error) {
+func (c *Client) ListAIModelsByRecipe(ctx context.Context, recipeName string) ([]service.K8sDeployment, error) {
 	// List all AIModels across all namespaces
 	list, err := c.dynamicClient.Resource(AIModelGVR).Namespace("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list AIModels: %w", err)
 	}
 
-	var deployments []AIModelDeployment
+	var deployments []service.K8sDeployment
 
 	for _, item := range list.Items {
 		// Check if this AIModel has a recipeRef
@@ -103,11 +96,10 @@ func (c *Client) ListAIModelsByRecipe(ctx context.Context, recipeName string) ([
 			}
 		}
 
-		deployments = append(deployments, AIModelDeployment{
+		deployments = append(deployments, service.K8sDeployment{
 			Name:        item.GetName(),
 			Namespace:   item.GetNamespace(),
 			Environment: environment,
-			RecipeName:  recipeName,
 		})
 	}
 
