@@ -18,6 +18,11 @@ var InferenceServiceGVK = schema.GroupVersionKind{
 	Kind:    "InferenceService",
 }
 
+// probeConfigVersion tracks the version of health probe configuration.
+// Increment this when probe settings change (initialDelaySeconds, periodSeconds, etc.)
+// to trigger automatic updates of existing InferenceServices.
+const probeConfigVersion = "v1"
+
 // InferenceServiceBuilder provides a fluent API for building InferenceService resources
 type InferenceServiceBuilder struct {
 	name           string
@@ -219,6 +224,7 @@ func (b *InferenceServiceBuilder) Build() (*unstructured.Unstructured, error) {
 	// infra/k8s/knative-serving/config-gc.yaml
 	annotations := map[string]interface{}{
 		"serving.kserve.io/deploymentMode": "Serverless",
+		"ai-aas.io/probe-config-version":   probeConfigVersion, // Track probe config version for reconciliation
 	}
 
 	// Apply update strategy annotation for Knative
@@ -393,8 +399,9 @@ func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructu
 
 	// Build annotations with extended timeout for model loading
 	annotations := map[string]interface{}{
-		"serving.kserve.io/deploymentMode":      "Serverless",
-		"serving.knative.dev/progress-deadline": "900s", // 15 min for large model download
+		"serving.kserve.io/deploymentMode":       "Serverless",
+		"serving.knative.dev/progress-deadline":  "900s", // 15 min for large model download
+		"ai-aas.io/probe-config-version":         probeConfigVersion, // Track probe config version for reconciliation
 	}
 
 	// Apply update strategy annotation for Knative

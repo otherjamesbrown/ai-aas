@@ -1292,6 +1292,22 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		return fmt.Errorf("failed to get InferenceService: %w", err)
 	}
 
+	// Check probe config version annotation to detect when probe configuration
+	// in the operator code has changed. This forces updates even if the AIModel
+	// spec hasn't changed, ensuring existing InferenceServices get updated probe config.
+	existingAnnotations := existing.GetAnnotations()
+	desiredAnnotations := isvc.GetAnnotations()
+	existingProbeVersion := existingAnnotations["ai-aas.io/probe-config-version"]
+	desiredProbeVersion := desiredAnnotations["ai-aas.io/probe-config-version"]
+
+	probeConfigChanged := existingProbeVersion != desiredProbeVersion
+	if probeConfigChanged {
+		log.Info("Probe config version changed, forcing update",
+			"name", aiModel.Name,
+			"existingVersion", existingProbeVersion,
+			"desiredVersion", desiredProbeVersion)
+	}
+
 	// Compare specs to determine if an update is needed
 	existingSpec, existingSpecFound, err := unstructured.NestedMap(existing.Object, "spec")
 	if err != nil {
@@ -1302,14 +1318,18 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		return fmt.Errorf("failed to get desired InferenceService spec: %w", err)
 	}
 
-	// Skip update if specs are unchanged
-	if existingSpecFound && desiredSpecFound && equality.Semantic.DeepEqual(existingSpec, desiredSpec) {
-		log.Info("InferenceService spec unchanged, skipping update", "name", aiModel.Name)
+	// Skip update if specs are unchanged AND probe config version is the same
+	if !probeConfigChanged && existingSpecFound && desiredSpecFound && equality.Semantic.DeepEqual(existingSpec, desiredSpec) {
+		log.Info("InferenceService spec and probe config unchanged, skipping update", "name", aiModel.Name)
 		return nil
 	}
 
 	// Update existing InferenceService with retry on conflict
-	log.Info("InferenceService spec changed, updating", "name", aiModel.Name)
+	updateReason := "spec changed"
+	if probeConfigChanged {
+		updateReason = "probe config version changed"
+	}
+	log.Info("Updating InferenceService", "name", aiModel.Name, "reason", updateReason)
 
 	// Retry loop with exponential backoff to handle race conditions with KServe controller
 	backoff := wait.Backoff{

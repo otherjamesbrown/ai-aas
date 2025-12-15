@@ -266,6 +266,12 @@ func TestInferenceServiceBuilder_Build(t *testing.T) {
 			annotations["serving.kserve.io/deploymentMode"])
 	}
 
+	// Verify probe config version annotation
+	probeVersion := annotations["ai-aas.io/probe-config-version"]
+	if probeVersion != probeConfigVersion {
+		t.Errorf("Expected probe-config-version '%s', got '%s'", probeConfigVersion, probeVersion)
+	}
+
 	// Verify spec.predictor
 	predictor, found, err := unstructured.NestedMap(obj.Object, "spec", "predictor")
 	if err != nil {
@@ -616,6 +622,16 @@ func TestInferenceServiceBuilder_BuildContainerBased_HasLivenessProbe(t *testing
 	obj, err := builder.BuildContainerBased()
 	if err != nil {
 		t.Fatalf("BuildContainerBased failed: %v", err)
+	}
+
+	// Verify probe config version annotation is set
+	annotations := obj.GetAnnotations()
+	probeVersion, found := annotations["ai-aas.io/probe-config-version"]
+	if !found {
+		t.Error("Expected ai-aas.io/probe-config-version annotation to be set")
+	}
+	if probeVersion != probeConfigVersion {
+		t.Errorf("Expected probe-config-version '%s', got '%s'", probeConfigVersion, probeVersion)
 	}
 
 	// Get predictor.containers[0]
