@@ -12,12 +12,12 @@ import (
 
 // PodsService provides pod health operations
 type PodsService struct {
-	k8sClient *kubernetes.Client
+	k8sClient *kubernetes.PodClient
 	logger    *zap.Logger
 }
 
 // NewPodsService creates a new pods service
-func NewPodsService(k8sClient *kubernetes.Client, logger *zap.Logger) *PodsService {
+func NewPodsService(k8sClient *kubernetes.PodClient, logger *zap.Logger) *PodsService {
 	return &PodsService{
 		k8sClient: k8sClient,
 		logger:    logger,

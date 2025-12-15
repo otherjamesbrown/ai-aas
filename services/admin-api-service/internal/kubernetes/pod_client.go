@@ -16,14 +16,14 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-// Client wraps the Kubernetes client for pod operations
-type Client struct {
+// PodClient wraps the Kubernetes client for pod operations
+type PodClient struct {
 	clientset *kubernetes.Clientset
 }
 
-// NewClient creates a new Kubernetes client
+// NewPodClient creates a new Kubernetes client for pod health queries
 // Tries in-cluster config first, then falls back to kubeconfig
-func NewClient() (*Client, error) {
+func NewPodClient() (*PodClient, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		// Fall back to kubeconfig
@@ -47,7 +47,7 @@ func NewClient() (*Client, error) {
 		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
 
-	return &Client{clientset: clientset}, nil
+	return &PodClient{clientset: clientset}, nil
 }
 
 // PodHealthInfo contains health information about a pod
@@ -113,7 +113,7 @@ type ListModelPodHealthOptions struct {
 }
 
 // ListModelPodHealth retrieves health information for model pods
-func (c *Client) ListModelPodHealth(ctx context.Context, opts ListModelPodHealthOptions) ([]PodHealthInfo, error) {
+func (c *PodClient) ListModelPodHealth(ctx context.Context, opts ListModelPodHealthOptions) ([]PodHealthInfo, error) {
 	namespace := opts.Namespace
 	if namespace == "" {
 		namespace = "system"
