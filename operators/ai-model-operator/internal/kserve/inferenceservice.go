@@ -20,21 +20,22 @@ var InferenceServiceGVK = schema.GroupVersionKind{
 
 // InferenceServiceBuilder provides a fluent API for building InferenceService resources
 type InferenceServiceBuilder struct {
-	name         string
-	namespace    string
-	storageUri   string
-	modelFormat  string
-	servedName   string
-	runtime      string
-	minReplicas  int32
-	maxReplicas  int32
-	resources    corev1.ResourceRequirements
-	tolerations  []corev1.Toleration
-	nodeSelector map[string]string
-	runtimeArgs  []string
-	runtimeEnv   []corev1.EnvVar
-	ownerRef     *metav1.OwnerReference
-	environment  string
+	name           string
+	namespace      string
+	storageUri     string
+	modelFormat    string
+	servedName     string
+	runtime        string
+	minReplicas    int32
+	maxReplicas    int32
+	resources      corev1.ResourceRequirements
+	tolerations    []corev1.Toleration
+	nodeSelector   map[string]string
+	runtimeArgs    []string
+	runtimeEnv     []corev1.EnvVar
+	ownerRef       *metav1.OwnerReference
+	environment    string
+	updateStrategy string // "RollingUpdate" or "Recreate"
 	// Container-based deployment fields (for trust_remote_code models)
 	containerImage string
 	modelID        string // HuggingFace model ID for direct loading
@@ -172,6 +173,12 @@ func (b *InferenceServiceBuilder) WithModelID(modelID string) *InferenceServiceB
 	return b
 }
 
+// WithUpdateStrategy sets the update strategy (RollingUpdate or Recreate)
+func (b *InferenceServiceBuilder) WithUpdateStrategy(strategy string) *InferenceServiceBuilder {
+	b.updateStrategy = strategy
+	return b
+}
+
 // Build constructs the unstructured InferenceService resource using KServe native model serving
 func (b *InferenceServiceBuilder) Build() (*unstructured.Unstructured, error) {
 	// Validate required fields
@@ -204,6 +211,13 @@ func (b *InferenceServiceBuilder) Build() (*unstructured.Unstructured, error) {
 	// infra/k8s/knative-serving/config-gc.yaml
 	annotations := map[string]interface{}{
 		"serving.kserve.io/deploymentMode": "Serverless",
+	}
+
+	// Apply update strategy annotation for Knative
+	// Recreate strategy: Set rollout duration to 0 to terminate old revision immediately
+	// This frees GPU resources before new pods are scheduled
+	if b.updateStrategy == "Recreate" {
+		annotations["serving.knative.dev/rollout-duration"] = "0"
 	}
 
 	// Build environment variables for the model
@@ -375,6 +389,13 @@ func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructu
 		"serving.knative.dev/progress-deadline": "900s", // 15 min for large model download
 	}
 
+	// Apply update strategy annotation for Knative
+	// Recreate strategy: Set rollout duration to 0 to terminate old revision immediately
+	// This frees GPU resources before new pods are scheduled
+	if b.updateStrategy == "Recreate" {
+		annotations["serving.knative.dev/rollout-duration"] = "0"
+	}
+
 	// Build environment variables
 	env := []interface{}{
 		map[string]interface{}{
@@ -441,17 +462,10 @@ func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructu
 				"protocol":      "TCP",
 			},
 		},
-		// Startup probe with extended timeout for model download
-		"startupProbe": map[string]interface{}{
-			"httpGet": map[string]interface{}{
-				"path": "/health",
-				"port": int64(8000),
-			},
-			"initialDelaySeconds": int64(30),
-			"periodSeconds":       int64(10),
-			"failureThreshold":    int64(90), // 30s + 90*10s = 15 min max
-			"timeoutSeconds":      int64(5),
-		},
+		// NOTE: We do NOT use startupProbe here because Knative Serving's admission
+		// webhook actively rejects startupProbe in serverless mode. Instead, we rely
+		// on livenessProbe.initialDelaySeconds to allow time for model loading.
+		// See: https://github.com/knative/serving/issues/10037
 		"readinessProbe": map[string]interface{}{
 			"httpGet": map[string]interface{}{
 				"path": "/health",
@@ -466,9 +480,10 @@ func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructu
 				"path": "/health",
 				"port": int64(8000),
 			},
-			"periodSeconds":    int64(30),
-			"failureThreshold": int64(3),
-			"timeoutSeconds":   int64(5),
+			"initialDelaySeconds": int64(300), // 5 min delay for model loading
+			"periodSeconds":       int64(30),
+			"failureThreshold":    int64(3),
+			"timeoutSeconds":      int64(5),
 		},
 	}
 

@@ -82,6 +82,11 @@ spec:
   runtimeEnv:
     - name: CUSTOM_VAR
       value: "value"
+
+  # Optional: Update strategy for deployments
+  # RollingUpdate (default): New pods created before old ones terminated
+  # Recreate: Old pods terminated before new ones created (frees GPUs)
+  updateStrategy: RollingUpdate
 ```
 
 ### AIModel Status
@@ -287,7 +292,68 @@ When a download job fails:
 Status fields for retry tracking:
 - `retryCount`: Number of retry attempts made
 - `lastRetryTime`: Timestamp of the last retry attempt
-- `nextRetryTime`: Scheduled time for the next retry
+
+## Update Strategies
+
+The operator supports two update strategies for managing InferenceService deployments:
+
+### RollingUpdate (Default)
+
+**Use when**: You have sufficient GPU capacity to run both old and new versions simultaneously.
+
+**Behavior**:
+- New pods are created and become ready before old pods are terminated
+- Zero-downtime deployments
+- Requires 2x GPU capacity during the rollout
+
+**Example**:
+```yaml
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: llama-7b
+spec:
+  modelID: meta-llama/Llama-2-7b-hf
+  updateStrategy: RollingUpdate  # Default
+  resources:
+    requests:
+      nvidia.com/gpu: "1"
+```
+
+### Recreate
+
+**Use when**: GPU capacity is constrained and you can tolerate brief downtime during updates.
+
+**Behavior**:
+- Old pods are terminated immediately (rollout-duration: 0)
+- Frees GPU resources before new pods are scheduled
+- Brief service interruption during pod replacement
+- Prevents scheduling failures due to insufficient GPU capacity
+
+**Example**:
+```yaml
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: llama-70b
+spec:
+  modelID: meta-llama/Llama-2-70b-hf
+  updateStrategy: Recreate  # Terminate old pods first
+  resources:
+    requests:
+      nvidia.com/gpu: "4"  # Large model requiring multiple GPUs
+```
+
+**Implementation Details**:
+- Sets `serving.knative.dev/rollout-duration: "0"` annotation on InferenceService
+- Knative immediately terminates old revision when new revision is ready
+- Old pods release GPU resources before new pods are scheduled
+
+**When to use Recreate**:
+- Cluster has limited GPU capacity
+- Model requires multiple GPUs (e.g., 4x or 8x A100)
+- Total available GPUs < 2x model requirement
+- Downtime of 30-90 seconds is acceptable during updates
 
 ## Known Issues / Planned Improvements
 

@@ -114,6 +114,14 @@ type AIModelSpec struct {
 	// +kubebuilder:validation:Minimum=0
 	// +optional
 	Replicas *int32 `json:"replicas,omitempty"`
+
+	// UpdateStrategy determines how updates to the InferenceService are rolled out.
+	// RollingUpdate (default): New pods are created before old ones are terminated.
+	// Recreate: Old pods are terminated before new ones are created, freeing GPU resources.
+	// +kubebuilder:validation:Enum=RollingUpdate;Recreate
+	// +kubebuilder:default=RollingUpdate
+	// +optional
+	UpdateStrategy UpdateStrategyType `json:"updateStrategy,omitempty"`
 }
 
 // RecipeReference identifies a ModelRecipe
@@ -159,6 +167,16 @@ type ReplicaOverrides struct {
 	Min *int32 `json:"min,omitempty"`
 	Max *int32 `json:"max,omitempty"`
 }
+
+// UpdateStrategyType defines how model updates are deployed
+type UpdateStrategyType string
+
+const (
+	// UpdateStrategyRollingUpdate creates new pods before terminating old ones (default)
+	UpdateStrategyRollingUpdate UpdateStrategyType = "RollingUpdate"
+	// UpdateStrategyRecreate terminates old pods before creating new ones, freeing GPU resources
+	UpdateStrategyRecreate UpdateStrategyType = "Recreate"
+)
 
 // AIModelPhase represents the current phase of the AIModel deployment.
 type AIModelPhase string

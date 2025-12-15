@@ -124,6 +124,54 @@ r.Create(ctx, inferenceService)  // Will error if exists!
 // Should: Get() first, then Create() or Update()
 ```
 
+### Knative Serving Probe Configuration
+
+**CRITICAL**: Knative Serving in Serverless mode does not support `startupProbe`. Even if you define it in the InferenceService spec, Knative will remove it from the actual pod deployment.
+
+```go
+// WRONG: Relying on startupProbe in Serverless mode
+container.StartupProbe = &corev1.Probe{
+    InitialDelaySeconds: 30,
+    FailureThreshold: 90,
+    // This probe will be REMOVED by Knative!
+}
+
+// WRONG: Liveness probe with no initialDelaySeconds for slow-starting containers
+container.LivenessProbe = &corev1.Probe{
+    HTTPGet: &corev1.HTTPGetAction{
+        Path: "/health",
+        Port: intstr.FromInt(8000),
+    },
+    PeriodSeconds:    30,
+    FailureThreshold: 3,
+    // Missing: InitialDelaySeconds
+    // Container will be killed after 90s if startup takes longer!
+}
+
+// CORRECT: Set initialDelaySeconds on livenessProbe for long-loading containers
+container.LivenessProbe = &corev1.Probe{
+    HTTPGet: &corev1.HTTPGetAction{
+        Path: "/health",
+        Port: intstr.FromInt(8000),
+    },
+    InitialDelaySeconds: 300,  // 5 minutes for vLLM model loading
+    PeriodSeconds:       30,
+    FailureThreshold:    3,
+    TimeoutSeconds:      5,
+}
+```
+
+**Why this matters**:
+- vLLM model loading can take 90-150 seconds (download + load + compile)
+- Without `initialDelaySeconds`, liveness probe starts immediately
+- After 3 failures (3 × 30s = 90s), kubelet kills container with SIGKILL
+- Container restarts in a loop, never completing model initialization
+- Readiness probe still prevents traffic until model is ready
+
+**Recommended values**:
+- Small/medium models (≤20B): 300 seconds (5 minutes)
+- Large models (>20B): Consider making configurable via CRD
+
 ---
 
 ## Commands

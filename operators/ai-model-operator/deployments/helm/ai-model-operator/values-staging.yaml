@@ -5,6 +5,8 @@ image:
   repository: ghcr.io/otherjamesbrown/ai-aas/ai-model-operator
   pullPolicy: Always
   tag: "staging"  # Use staging branch builds
+  pullSecrets:
+    - ghcr-pull-secret
 
 # Model downloader image (Go-based, supports Linode Object Storage)
 downloaderImage: "ghcr.io/otherjamesbrown/ai-aas/model-downloader:staging"
