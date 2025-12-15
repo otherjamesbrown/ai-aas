@@ -29,7 +29,7 @@ spec:
       dtype: auto
       maxModelLen: 8192
       gpuMemoryUtilization: "0.9"
-      tokenizerMode: mistral
+      tokenizerMode: auto
   scheduling:
     tolerations:
       - key: nvidia.com/gpu

@@ -91,7 +91,9 @@ func mergeGPUResources(original v1alpha1.GPUResources, override v1alpha1.GPUReso
 	}
 
 	// Override Count if non-zero
-	// Zero values are only applied when testing zero value overrides explicitly
+	// Note: GPU count of 0 is semantically invalid (no GPUs = cannot run GPU model),
+	// so we treat it as "not set" rather than an explicit override to zero.
+	// This differs from boolean fields like TrustRemoteCode where false is meaningful.
 	if override.Count != 0 {
 		result.Count = override.Count
 	}

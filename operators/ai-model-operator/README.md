@@ -133,8 +133,9 @@ spec:
       count: 1
       minMemoryGB: 16
   runtimeArgs:
-    - "--max-model-len=4096"
-    - "--gpu-memory-utilization=0.9"
+    vllm:
+      maxModelLen: 4096
+      gpuMemoryUtilization: "0.9"
 ```
 
 ### Using Recipes with AIModel

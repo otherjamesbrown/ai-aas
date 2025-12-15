@@ -102,7 +102,6 @@ Manage model deployment recipes:
 # List available recipes
 ai-aas-cli model recipe list
 ai-aas-cli model recipe list --runtime vllm
-ai-aas-cli model recipe list --model-id mistralai/Mistral-7B-Instruct-v0.3
 
 # Show recipe details
 ai-aas-cli model recipe show mistral-7b-instruct-v03
@@ -117,7 +116,8 @@ ai-aas-cli model deploy create my-model -e development --recipe mistral-7b-instr
 ai-aas-cli model deploy create my-model -e development \
   --recipe mistral-7b-instruct-v03 \
   --gpu-count 2 \
-  --replicas 3
+  --min-replicas 2 \
+  --max-replicas 3
 ```
 
 ### Recipes provide:
