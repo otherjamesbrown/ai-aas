@@ -266,6 +266,12 @@ func TestInferenceServiceBuilder_Build(t *testing.T) {
 			annotations["serving.kserve.io/deploymentMode"])
 	}
 
+	// Verify probe config version annotation
+	probeVersion := annotations["ai-aas.io/probe-config-version"]
+	if probeVersion != probeConfigVersion {
+		t.Errorf("Expected probe-config-version '%s', got '%s'", probeConfigVersion, probeVersion)
+	}
+
 	// Verify spec.predictor
 	predictor, found, err := unstructured.NestedMap(obj.Object, "spec", "predictor")
 	if err != nil {
@@ -618,6 +624,16 @@ func TestInferenceServiceBuilder_BuildContainerBased_HasLivenessProbe(t *testing
 		t.Fatalf("BuildContainerBased failed: %v", err)
 	}
 
+	// Verify probe config version annotation is set
+	annotations := obj.GetAnnotations()
+	probeVersion, found := annotations["ai-aas.io/probe-config-version"]
+	if !found {
+		t.Error("Expected ai-aas.io/probe-config-version annotation to be set")
+	}
+	if probeVersion != probeConfigVersion {
+		t.Errorf("Expected probe-config-version '%s', got '%s'", probeConfigVersion, probeVersion)
+	}
+
 	// Get predictor.containers[0]
 	predictor, found, err := unstructured.NestedMap(obj.Object, "spec", "predictor")
 	if err != nil || !found {
@@ -671,6 +687,15 @@ func TestInferenceServiceBuilder_BuildContainerBased_HasLivenessProbe(t *testing
 		t.Errorf("Expected failureThreshold 3, got %d", failureThreshold)
 	}
 
+	// Verify timeoutSeconds
+	timeoutSeconds, found, err := unstructured.NestedInt64(livenessProbe, "timeoutSeconds")
+	if err != nil || !found {
+		t.Fatal("Expected timeoutSeconds in livenessProbe")
+	}
+	if timeoutSeconds != 5 {
+		t.Errorf("Expected timeoutSeconds 5, got %d", timeoutSeconds)
+	}
+
 	// Verify httpGet path and port
 	httpGet, found, err := unstructured.NestedMap(livenessProbe, "httpGet")
 	if err != nil || !found {
@@ -693,6 +718,61 @@ func TestInferenceServiceBuilder_BuildContainerBased_HasLivenessProbe(t *testing
 		t.Errorf("Expected port 8000, got %d", port)
 	}
 
+	// Verify readinessProbe exists and has correct configuration
+	readinessProbe, found, err := unstructured.NestedMap(container, "readinessProbe")
+	if err != nil || !found {
+		t.Fatal("Expected readinessProbe in container")
+	}
+
+	// Verify readinessProbe periodSeconds
+	readinessPeriodSeconds, found, err := unstructured.NestedInt64(readinessProbe, "periodSeconds")
+	if err != nil || !found {
+		t.Fatal("Expected periodSeconds in readinessProbe")
+	}
+	if readinessPeriodSeconds != 10 {
+		t.Errorf("Expected readinessProbe periodSeconds 10, got %d", readinessPeriodSeconds)
+	}
+
+	// Verify readinessProbe failureThreshold
+	readinessFailureThreshold, found, err := unstructured.NestedInt64(readinessProbe, "failureThreshold")
+	if err != nil || !found {
+		t.Fatal("Expected failureThreshold in readinessProbe")
+	}
+	if readinessFailureThreshold != 3 {
+		t.Errorf("Expected readinessProbe failureThreshold 3, got %d", readinessFailureThreshold)
+	}
+
+	// Verify readinessProbe timeoutSeconds
+	readinessTimeoutSeconds, found, err := unstructured.NestedInt64(readinessProbe, "timeoutSeconds")
+	if err != nil || !found {
+		t.Fatal("Expected timeoutSeconds in readinessProbe")
+	}
+	if readinessTimeoutSeconds != 5 {
+		t.Errorf("Expected readinessProbe timeoutSeconds 5, got %d", readinessTimeoutSeconds)
+	}
+
+	// Verify readinessProbe httpGet
+	readinessHttpGet, found, err := unstructured.NestedMap(readinessProbe, "httpGet")
+	if err != nil || !found {
+		t.Fatal("Expected httpGet in readinessProbe")
+	}
+
+	readinessPath, found, err := unstructured.NestedString(readinessHttpGet, "path")
+	if err != nil || !found {
+		t.Fatal("Expected path in readinessProbe httpGet")
+	}
+	if readinessPath != "/health" {
+		t.Errorf("Expected readinessProbe path '/health', got '%s'", readinessPath)
+	}
+
+	readinessPort, found, err := unstructured.NestedInt64(readinessHttpGet, "port")
+	if err != nil || !found {
+		t.Fatal("Expected port in readinessProbe httpGet")
+	}
+	if readinessPort != 8000 {
+		t.Errorf("Expected readinessProbe port 8000, got %d", readinessPort)
+	}
+
 	// Verify startupProbe is NOT set (Knative rejects it in serverless mode)
 	// See: https://github.com/knative/serving/issues/10037
 	_, found, err = unstructured.NestedMap(container, "startupProbe")
@@ -700,5 +780,5 @@ func TestInferenceServiceBuilder_BuildContainerBased_HasLivenessProbe(t *testing
 		t.Error("Expected NO startupProbe (Knative serverless mode rejects it)")
 	}
 
-	t.Log("Test passed: Container-based InferenceService has proper liveness probe configuration (no startupProbe)")
+	t.Log("Test passed: Container-based InferenceService has proper liveness and readiness probe configuration (no startupProbe)")
 }

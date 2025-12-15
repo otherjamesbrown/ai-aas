@@ -1031,7 +1031,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 				},
 				Limits: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("8"),
-					corev1.ResourceMemory: resource.MustParse("32Gi"),
+					corev1.ResourceMemory: resource.MustParse("24Gi"),
 					"nvidia.com/gpu":      resource.MustParse("1"),
 				},
 			}
@@ -1221,6 +1221,12 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		// Use vLLM image - v0.10.2 has native support for GPT-OSS and other modern architectures
 		containerImage := "vllm/vllm-openai:v0.10.2"
 
+		// Determine liveness probe initial delay (default 300s if not specified)
+		livenessInitialDelay := int32(300)
+		if aiModel.Spec.ProbeConfig != nil && aiModel.Spec.ProbeConfig.InitialDelaySeconds != nil {
+			livenessInitialDelay = *aiModel.Spec.ProbeConfig.InitialDelaySeconds
+		}
+
 		// Use the HuggingFace model ID as the served name so vLLM accepts requests
 		// with the full HF ID (e.g., "unsloth/gpt-oss-20b"). This allows multiple
 		// models with the same base name but different sources to coexist.
@@ -1235,6 +1241,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 			WithRuntimeArgs(runtimeArgs).
 			WithRuntimeEnv(runtimeEnv).
 			WithUpdateStrategy(updateStrategy).
+			WithLivenessInitialDelay(livenessInitialDelay).
 			WithOwnerReference(ownerRef).
 			BuildContainerBased()
 		if err != nil {
@@ -1285,6 +1292,22 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		return fmt.Errorf("failed to get InferenceService: %w", err)
 	}
 
+	// Check probe config version annotation to detect when probe configuration
+	// in the operator code has changed. This forces updates even if the AIModel
+	// spec hasn't changed, ensuring existing InferenceServices get updated probe config.
+	existingAnnotations := existing.GetAnnotations()
+	desiredAnnotations := isvc.GetAnnotations()
+	existingProbeVersion := existingAnnotations["ai-aas.io/probe-config-version"]
+	desiredProbeVersion := desiredAnnotations["ai-aas.io/probe-config-version"]
+
+	probeConfigChanged := existingProbeVersion != desiredProbeVersion
+	if probeConfigChanged {
+		log.Info("Probe config version changed, forcing update",
+			"name", aiModel.Name,
+			"existingVersion", existingProbeVersion,
+			"desiredVersion", desiredProbeVersion)
+	}
+
 	// Compare specs to determine if an update is needed
 	existingSpec, existingSpecFound, err := unstructured.NestedMap(existing.Object, "spec")
 	if err != nil {
@@ -1295,14 +1318,18 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		return fmt.Errorf("failed to get desired InferenceService spec: %w", err)
 	}
 
-	// Skip update if specs are unchanged
-	if existingSpecFound && desiredSpecFound && equality.Semantic.DeepEqual(existingSpec, desiredSpec) {
-		log.Info("InferenceService spec unchanged, skipping update", "name", aiModel.Name)
+	// Skip update if specs are unchanged AND probe config version is the same
+	if !probeConfigChanged && existingSpecFound && desiredSpecFound && equality.Semantic.DeepEqual(existingSpec, desiredSpec) {
+		log.Info("InferenceService spec and probe config unchanged, skipping update", "name", aiModel.Name)
 		return nil
 	}
 
 	// Update existing InferenceService with retry on conflict
-	log.Info("InferenceService spec changed, updating", "name", aiModel.Name)
+	updateReason := "spec changed"
+	if probeConfigChanged {
+		updateReason = "probe config version changed"
+	}
+	log.Info("Updating InferenceService", "name", aiModel.Name, "reason", updateReason)
 
 	// Retry loop with exponential backoff to handle race conditions with KServe controller
 	backoff := wait.Backoff{

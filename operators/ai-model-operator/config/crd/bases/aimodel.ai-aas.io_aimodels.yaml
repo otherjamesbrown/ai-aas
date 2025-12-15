@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  name: aimodels.
+  name: aimodels.aimodel.ai-aas.io
 spec:
-  group: ""
+  group: aimodel.ai-aas.io
   names:
     kind: AIModel
     listKind: AIModelList
@@ -38,7 +38,7 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
-    name: ""
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: AIModel is the Schema for the aimodels API
@@ -1299,6 +1299,19 @@ spec:
                           type: object
                         type: array
                     type: object
+                type: object
+              probeConfig:
+                description: ProbeConfig allows customizing health probe settings
+                  for the inference container.
+                properties:
+                  initialDelaySeconds:
+                    description: |-
+                      InitialDelaySeconds is the number of seconds after the container starts before liveness probes are initiated.
+                      This should be set to allow sufficient time for model loading, especially for large models (100B+).
+                      Default: 300 (5 minutes)
+                    format: int32
+                    minimum: 0
+                    type: integer
                 type: object
               recipeRef:
                 description: RecipeRef references a ModelRecipe to use as the base

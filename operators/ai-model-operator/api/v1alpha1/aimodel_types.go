@@ -109,6 +109,10 @@ type AIModelSpec struct {
 	// +optional
 	Overrides *RecipeOverrides `json:"overrides,omitempty"`
 
+	// ProbeConfig allows customizing health probe settings for the inference container.
+	// +optional
+	ProbeConfig *ProbeConfig `json:"probeConfig,omitempty"`
+
 	// DEPRECATED: Use MinReplicas/MaxReplicas instead.
 	// Replicas is the number of inference instances to deploy.
 	// +kubebuilder:validation:Minimum=0
@@ -166,6 +170,16 @@ type RecipeOverrides struct {
 type ReplicaOverrides struct {
 	Min *int32 `json:"min,omitempty"`
 	Max *int32 `json:"max,omitempty"`
+}
+
+// ProbeConfig allows customizing health probe settings for the inference container
+type ProbeConfig struct {
+	// InitialDelaySeconds is the number of seconds after the container starts before liveness probes are initiated.
+	// This should be set to allow sufficient time for model loading, especially for large models (100B+).
+	// Default: 300 (5 minutes)
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	InitialDelaySeconds *int32 `json:"initialDelaySeconds,omitempty"`
 }
 
 // UpdateStrategyType defines how model updates are deployed

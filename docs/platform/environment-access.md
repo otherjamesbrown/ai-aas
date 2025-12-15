@@ -169,6 +169,24 @@ Check encryption status:
 git-crypt status
 ```
 
+**Git Worktrees**: Worktrees need to be unlocked separately using the symmetric key:
+```bash
+# Symmetric key location (shared across all worktrees)
+~/.config/git-crypt/ai-aas-key
+
+# Unlock a worktree
+cd /path/to/worktree
+git crypt unlock ~/.config/git-crypt/ai-aas-key
+```
+
+If the symmetric key doesn't exist, export it from an already-unlocked repo:
+```bash
+# From the main repo (if already unlocked)
+mkdir -p ~/.config/git-crypt
+git crypt export-key ~/.config/git-crypt/ai-aas-key
+chmod 600 ~/.config/git-crypt/ai-aas-key
+```
+
 ### Environment Files
 - Development: `secrets/env/.env`
 - Contains all credentials, tokens, and connection strings

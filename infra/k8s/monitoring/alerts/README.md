@@ -55,10 +55,14 @@ The alerting infrastructure monitors:
 
 ### Crash Detection
 - **ServicePanicDetected**: Go panic detected in logs (CRITICAL)
-- **PodCrashLooping**: > 5 restarts in 10 minutes (CRITICAL)
+- **PodCrashLooping**: > 5 restarts in 10 minutes (CRITICAL) [Not yet implemented - see HighPodRestartRate]
+- **HighPodRestartRate**: > 10 restarts in 1 hour (CRITICAL)
 
 ### Observability Health
 - **LowCorrelationIDCoverage**: < 95% of logs have correlation IDs for 15 min (WARNING)
+
+### Kubernetes Resource Health
+- **NodeMemoryOvercommitment**: Node memory limits > 100% of allocatable (WARNING)
 
 ## Alert Routing
 

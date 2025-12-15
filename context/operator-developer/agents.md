@@ -1,6 +1,6 @@
 # Operator Developer Context
 
-> **Inherits**: context/agents.md | **Verified**: 2025-12-13 | **Commit**: 24c3e0ee
+> **Inherits**: context/agents.md | **Verified**: 2025-12-15 | **Commit**: be4e1768
 
 ---
 
@@ -171,6 +171,68 @@ container.LivenessProbe = &corev1.Probe{
 **Recommended values**:
 - Small/medium models (≤20B): 300 seconds (5 minutes)
 - Large models (>20B): Consider making configurable via CRD
+
+
+### KServe Admission Webhook Probe Override
+
+**CRITICAL**: KServe's admission webhook modifies InferenceService specs and may override or remove probe configuration set in container specs. This is distinct from Knative Serving's behavior.
+
+```go
+// WRONG: Setting probes directly in container spec
+container := map[string]interface{}{
+    "livenessProbe": map[string]interface{}{
+        "httpGet": map[string]interface{}{
+            "path": "/health",
+            "port": 8000,
+        },
+        "initialDelaySeconds": 300,
+        "periodSeconds":       30,
+        "failureThreshold":    3,
+    },
+}
+// KServe admission webhook may override or remove this configuration!
+
+// WRONG: Assuming operator-set probes will be preserved
+func BuildContainerBased() {
+    container.StartupProbe = &corev1.Probe{...}
+    container.LivenessProbe = &corev1.Probe{...}
+    // These probes may be REMOVED by KServe webhook
+}
+
+// CORRECT: Use KServe/Knative annotations to influence probe behavior
+annotations := map[string]string{
+    "serving.knative.dev/initialDelaySeconds": "300",
+    "serving.knative.dev/timeoutSeconds": "5",
+    // Or configure at ClusterServingRuntime level
+}
+```
+
+**Why this happens**:
+- KServe admission webhook processes InferenceService resources
+- Webhook may apply defaults, override container specs, or remove incompatible probes
+- Knative Serving (used by KServe in serverless mode) removes `startupProbe` entirely
+- Probes set in operator code may not match deployed pod configuration
+
+**Evidence from bug ai-aas-9s4z**:
+- Operator set: `livenessProbe.initialDelaySeconds = 300`
+- Deployed pod had: `livenessProbe` with NO `initialDelaySeconds`
+- Result: vLLM containers killed after 90s during model loading
+
+**Solutions**:
+1. **Use ClusterServingRuntime probe configuration** (preferred for KServe)
+2. **Use Knative annotations** for probe timing (if supported)
+3. **Configure at InferenceService.spec level**, not container level
+4. **Test deployed pods** - always verify actual probe config with `kubectl get pod -o yaml`
+5. **Monitor for restarts** - liveness probe failures appear in events
+
+**Verification after deployment**:
+```bash
+# Check actual probe configuration
+kubectl get pod <predictor-pod> -n <namespace> -o yaml | grep -A 10 livenessProbe
+
+# Check events for probe failures
+kubectl get events -n <namespace> | grep "failed liveness probe"
+```
 
 ---
 

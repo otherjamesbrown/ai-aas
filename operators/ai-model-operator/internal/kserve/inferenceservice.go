@@ -18,6 +18,11 @@ var InferenceServiceGVK = schema.GroupVersionKind{
 	Kind:    "InferenceService",
 }
 
+// probeConfigVersion tracks the version of health probe configuration.
+// Increment this when probe settings change (initialDelaySeconds, periodSeconds, etc.)
+// to trigger automatic updates of existing InferenceServices.
+const probeConfigVersion = "v1"
+
 // InferenceServiceBuilder provides a fluent API for building InferenceService resources
 type InferenceServiceBuilder struct {
 	name           string
@@ -37,8 +42,9 @@ type InferenceServiceBuilder struct {
 	environment    string
 	updateStrategy string // "RollingUpdate" or "Recreate"
 	// Container-based deployment fields (for trust_remote_code models)
-	containerImage string
-	modelID        string // HuggingFace model ID for direct loading
+	containerImage              string
+	modelID                     string // HuggingFace model ID for direct loading
+	livenessInitialDelaySeconds int32  // InitialDelaySeconds for liveness probe
 }
 
 // NewInferenceServiceBuilder creates a new InferenceServiceBuilder
@@ -57,7 +63,7 @@ func NewInferenceServiceBuilder(name, namespace string) *InferenceServiceBuilder
 			},
 			Limits: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("8"),
-				corev1.ResourceMemory: resource.MustParse("32Gi"),
+				corev1.ResourceMemory: resource.MustParse("24Gi"),
 				"nvidia.com/gpu":      resource.MustParse("1"),
 			},
 		},
@@ -74,8 +80,9 @@ func NewInferenceServiceBuilder(name, namespace string) *InferenceServiceBuilder
 				Effect:   corev1.TaintEffectNoSchedule,
 			},
 		},
-		runtimeArgs: []string{}, // Runtime args are now set per-model in the controller
-		environment: "development",
+		runtimeArgs:                 []string{}, // Runtime args are now set per-model in the controller
+		environment:                 "development",
+		livenessInitialDelaySeconds: 300, // Default 5 minutes for model loading
 	}
 }
 
@@ -179,6 +186,12 @@ func (b *InferenceServiceBuilder) WithUpdateStrategy(strategy string) *Inference
 	return b
 }
 
+// WithLivenessInitialDelay sets the initialDelaySeconds for the liveness probe
+func (b *InferenceServiceBuilder) WithLivenessInitialDelay(seconds int32) *InferenceServiceBuilder {
+	b.livenessInitialDelaySeconds = seconds
+	return b
+}
+
 // Build constructs the unstructured InferenceService resource using KServe native model serving
 func (b *InferenceServiceBuilder) Build() (*unstructured.Unstructured, error) {
 	// Validate required fields
@@ -211,6 +224,7 @@ func (b *InferenceServiceBuilder) Build() (*unstructured.Unstructured, error) {
 	// infra/k8s/knative-serving/config-gc.yaml
 	annotations := map[string]interface{}{
 		"serving.kserve.io/deploymentMode": "Serverless",
+		"ai-aas.io/probe-config-version":   probeConfigVersion, // Track probe config version for reconciliation
 	}
 
 	// Apply update strategy annotation for Knative
@@ -385,8 +399,9 @@ func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructu
 
 	// Build annotations with extended timeout for model loading
 	annotations := map[string]interface{}{
-		"serving.kserve.io/deploymentMode":      "Serverless",
-		"serving.knative.dev/progress-deadline": "900s", // 15 min for large model download
+		"serving.kserve.io/deploymentMode":       "Serverless",
+		"serving.knative.dev/progress-deadline":  "900s", // 15 min for large model download
+		"ai-aas.io/probe-config-version":         probeConfigVersion, // Track probe config version for reconciliation
 	}
 
 	// Apply update strategy annotation for Knative
@@ -480,7 +495,7 @@ func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructu
 				"path": "/health",
 				"port": int64(8000),
 			},
-			"initialDelaySeconds": int64(300), // 5 min delay for model loading
+			"initialDelaySeconds": int64(b.livenessInitialDelaySeconds),
 			"periodSeconds":       int64(30),
 			"failureThreshold":    int64(3),
 			"timeoutSeconds":      int64(5),
