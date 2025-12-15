@@ -29,7 +29,7 @@ data:
     auto_assign_org_role = Viewer
 
     [auth.anonymous]
-    enabled = false
+    enabled = true
     org_name = Main Org.
     org_role = Viewer
 
