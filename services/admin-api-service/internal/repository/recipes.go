@@ -11,6 +11,15 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/domain"
 )
 
+// RecipeRepositoryInterface defines the interface for recipe database operations
+type RecipeRepositoryInterface interface {
+	Create(ctx context.Context, create *domain.RecipeCreate) (*domain.Recipe, error)
+	Get(ctx context.Context, name string) (*domain.Recipe, error)
+	List(ctx context.Context, params domain.RecipeListParams) (*domain.RecipeListResponse, error)
+	Update(ctx context.Context, name string, update *domain.RecipeUpdate) (*domain.Recipe, error)
+	Delete(ctx context.Context, name string) error
+}
+
 // RecipeRepository handles recipe database operations
 type RecipeRepository struct {
 	db *DB

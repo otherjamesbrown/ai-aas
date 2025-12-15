@@ -3,170 +3,26 @@ package repository
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/domain"
+	"github.com/pashagolub/pgxmock/v4"
 )
-
-// mockRecipeRepository is a mock implementation for testing
-// This will be replaced by the real implementation in T017
-type mockRecipeRepository struct {
-	recipes map[string]*domain.Recipe
-	err     error
-}
-
-func newMockRecipeRepository() *mockRecipeRepository {
-	return &mockRecipeRepository{
-		recipes: make(map[string]*domain.Recipe),
-	}
-}
-
-func (m *mockRecipeRepository) Create(ctx context.Context, create *domain.RecipeCreate) (*domain.Recipe, error) {
-	if m.err != nil {
-		return nil, m.err
-	}
-
-	// Check for duplicate name
-	if _, exists := m.recipes[create.Name]; exists {
-		return nil, errors.New("duplicate key value violates unique constraint")
-	}
-
-	now := time.Now().UTC()
-	recipe := &domain.Recipe{
-		ID:          uuid.New(),
-		Name:        create.Name,
-		DisplayName: create.DisplayName,
-		Description: create.Description,
-		ModelID:     create.ModelID,
-		Runtime:     create.Runtime,
-		Spec:        create.Spec,
-		CreatedAt:   now,
-		UpdatedAt:   now,
-	}
-
-	m.recipes[recipe.Name] = recipe
-	return recipe, nil
-}
-
-func (m *mockRecipeRepository) Get(ctx context.Context, name string) (*domain.Recipe, error) {
-	if m.err != nil {
-		return nil, m.err
-	}
-
-	recipe, exists := m.recipes[name]
-	if !exists {
-		return nil, nil
-	}
-
-	return recipe, nil
-}
-
-func (m *mockRecipeRepository) List(ctx context.Context, params domain.RecipeListParams) (*domain.RecipeListResponse, error) {
-	if m.err != nil {
-		return nil, m.err
-	}
-
-	// Collect all recipes
-	all := make([]*domain.Recipe, 0, len(m.recipes))
-	for _, recipe := range m.recipes {
-		// Apply runtime filter if specified
-		if params.Runtime != "" && recipe.Runtime != params.Runtime {
-			continue
-		}
-		all = append(all, recipe)
-	}
-
-	total := len(all)
-
-	// Apply pagination
-	limit := params.Limit
-	if limit <= 0 || limit > 500 {
-		limit = 100
-	}
-
-	start := params.Offset
-	if start > total {
-		start = total
-	}
-
-	end := start + limit
-	if end > total {
-		end = total
-	}
-
-	recipes := all[start:end]
-
-	// Convert to non-pointer slice
-	result := make([]domain.Recipe, len(recipes))
-	for i, r := range recipes {
-		result[i] = *r
-	}
-
-	response := &domain.RecipeListResponse{
-		Recipes: result,
-		Pagination: domain.Pagination{
-			Total:  total,
-			Limit:  limit,
-			Offset: params.Offset,
-		},
-	}
-
-	if end < total {
-		nextOffset := params.Offset + limit
-		response.Pagination.NextOffset = &nextOffset
-	}
-
-	return response, nil
-}
-
-func (m *mockRecipeRepository) Update(ctx context.Context, name string, update *domain.RecipeUpdate) (*domain.Recipe, error) {
-	if m.err != nil {
-		return nil, m.err
-	}
-
-	recipe, exists := m.recipes[name]
-	if !exists {
-		return nil, nil
-	}
-
-	// Apply updates
-	if update.DisplayName != nil {
-		recipe.DisplayName = *update.DisplayName
-	}
-	if update.Description != nil {
-		recipe.Description = *update.Description
-	}
-	if update.Runtime != nil {
-		recipe.Runtime = *update.Runtime
-	}
-	if update.Spec != nil {
-		recipe.Spec = *update.Spec
-	}
-
-	recipe.UpdatedAt = time.Now().UTC()
-	return recipe, nil
-}
-
-func (m *mockRecipeRepository) Delete(ctx context.Context, name string) error {
-	if m.err != nil {
-		return m.err
-	}
-
-	if _, exists := m.recipes[name]; !exists {
-		return pgx.ErrNoRows
-	}
-
-	delete(m.recipes, name)
-	return nil
-}
 
 // TestRecipeRepository_Create_Success tests successful recipe creation
 func TestRecipeRepository_Create_Success(t *testing.T) {
-	repo := newMockRecipeRepository()
+	mock, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer mock.Close()
+
+	db := &DB{pool: mock}
+	repo := NewRecipeRepository(db)
 	ctx := context.Background()
 
 	spec := json.RawMessage(`{
@@ -189,6 +45,12 @@ func TestRecipeRepository_Create_Success(t *testing.T) {
 		Runtime:     "vllm",
 		Spec:        spec,
 	}
+
+	// Expect the INSERT query
+	mock.ExpectExec(`INSERT INTO recipes`).
+		WithArgs(pgxmock.AnyArg(), create.Name, create.DisplayName, create.Description,
+			create.ModelID, create.Runtime, create.Spec, pgxmock.AnyArg(), pgxmock.AnyArg()).
+		WillReturnResult(pgxmock.NewResult("INSERT", 1))
 
 	recipe, err := repo.Create(ctx, create)
 
@@ -219,11 +81,22 @@ func TestRecipeRepository_Create_Success(t *testing.T) {
 	if recipe.UpdatedAt.IsZero() {
 		t.Error("expected non-zero updated_at")
 	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
 }
 
 // TestRecipeRepository_Create_DuplicateName_Error tests that creating a recipe with a duplicate name fails
 func TestRecipeRepository_Create_DuplicateName_Error(t *testing.T) {
-	repo := newMockRecipeRepository()
+	mock, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer mock.Close()
+
+	db := &DB{pool: mock}
+	repo := NewRecipeRepository(db)
 	ctx := context.Background()
 
 	spec := json.RawMessage(`{"runtime": "vllm"}`)
@@ -235,41 +108,47 @@ func TestRecipeRepository_Create_DuplicateName_Error(t *testing.T) {
 		Spec:    spec,
 	}
 
-	// Create first recipe
-	_, err := repo.Create(ctx, create)
-	if err != nil {
-		t.Fatalf("first create should succeed, got error: %v", err)
-	}
+	// Simulate duplicate key violation error
+	pgErr := &pgconn.PgError{Code: "23505", Message: "duplicate key value violates unique constraint"}
+	mock.ExpectExec(`INSERT INTO recipes`).
+		WithArgs(pgxmock.AnyArg(), create.Name, create.DisplayName, create.Description,
+			create.ModelID, create.Runtime, create.Spec, pgxmock.AnyArg(), pgxmock.AnyArg()).
+		WillReturnError(pgErr)
 
-	// Attempt to create duplicate
 	_, err = repo.Create(ctx, create)
 	if err == nil {
 		t.Fatal("expected error for duplicate name, got nil")
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }
 
 // TestRecipeRepository_Get_Success tests successful retrieval of a recipe by name
 func TestRecipeRepository_Get_Success(t *testing.T) {
-	repo := newMockRecipeRepository()
+	mock, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer mock.Close()
+
+	db := &DB{pool: mock}
+	repo := NewRecipeRepository(db)
 	ctx := context.Background()
 
 	spec := json.RawMessage(`{"runtime": "vllm"}`)
+	expectedID := uuid.New()
+	now := time.Now().UTC()
 
-	create := &domain.RecipeCreate{
-		Name:        "llama-7b-vllm",
-		DisplayName: "Llama 7B with vLLM",
-		Description: "Test recipe",
-		ModelID:     "meta-llama/Llama-2-7b-hf",
-		Runtime:     "vllm",
-		Spec:        spec,
-	}
+	// Expect the SELECT query
+	rows := pgxmock.NewRows([]string{"id", "name", "display_name", "description", "model_id", "runtime", "spec", "created_at", "updated_at"}).
+		AddRow(expectedID, "llama-7b-vllm", "Llama 7B with vLLM", "Test recipe", "meta-llama/Llama-2-7b-hf", "vllm", spec, now, now)
 
-	created, err := repo.Create(ctx, create)
-	if err != nil {
-		t.Fatalf("create failed: %v", err)
-	}
+	mock.ExpectQuery(`SELECT (.+) FROM recipes WHERE name`).
+		WithArgs("llama-7b-vllm").
+		WillReturnRows(rows)
 
-	// Get the recipe
 	recipe, err := repo.Get(ctx, "llama-7b-vllm")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -277,18 +156,34 @@ func TestRecipeRepository_Get_Success(t *testing.T) {
 	if recipe == nil {
 		t.Fatal("expected recipe to be non-nil")
 	}
-	if recipe.ID != created.ID {
-		t.Errorf("expected ID %s, got %s", created.ID, recipe.ID)
+	if recipe.ID != expectedID {
+		t.Errorf("expected ID %s, got %s", expectedID, recipe.ID)
 	}
-	if recipe.Name != created.Name {
-		t.Errorf("expected name %s, got %s", created.Name, recipe.Name)
+	if recipe.Name != "llama-7b-vllm" {
+		t.Errorf("expected name llama-7b-vllm, got %s", recipe.Name)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }
 
 // TestRecipeRepository_Get_NotFound_Error tests that getting a non-existent recipe returns nil
 func TestRecipeRepository_Get_NotFound_Error(t *testing.T) {
-	repo := newMockRecipeRepository()
+	mock, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer mock.Close()
+
+	db := &DB{pool: mock}
+	repo := NewRecipeRepository(db)
 	ctx := context.Background()
+
+	// Expect query to return no rows
+	mock.ExpectQuery(`SELECT (.+) FROM recipes WHERE name`).
+		WithArgs("non-existent-recipe").
+		WillReturnError(pgx.ErrNoRows)
 
 	recipe, err := repo.Get(ctx, "non-existent-recipe")
 	if err != nil {
@@ -297,37 +192,42 @@ func TestRecipeRepository_Get_NotFound_Error(t *testing.T) {
 	if recipe != nil {
 		t.Error("expected recipe to be nil for not found")
 	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
 }
 
 // TestRecipeRepository_List_All tests listing all recipes
 func TestRecipeRepository_List_All(t *testing.T) {
-	repo := newMockRecipeRepository()
+	mock, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer mock.Close()
+
+	db := &DB{pool: mock}
+	repo := NewRecipeRepository(db)
 	ctx := context.Background()
 
-	// Create multiple recipes
-	recipes := []struct {
-		name    string
-		runtime string
-	}{
-		{"llama-7b-vllm", "vllm"},
-		{"llama-7b-triton", "triton"},
-		{"mistral-7b-vllm", "vllm"},
-	}
+	spec := json.RawMessage(`{"runtime": "vllm"}`)
+	now := time.Now().UTC()
 
-	for _, r := range recipes {
-		spec := json.RawMessage(`{"runtime": "` + r.runtime + `"}`)
-		create := &domain.RecipeCreate{
-			Name:    r.name,
-			ModelID: "test-model",
-			Runtime: r.runtime,
-			Spec:    spec,
-		}
-		if _, err := repo.Create(ctx, create); err != nil {
-			t.Fatalf("create failed: %v", err)
-		}
-	}
+	// Expect count query
+	countRows := pgxmock.NewRows([]string{"count"}).AddRow(3)
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM recipes`).
+		WillReturnRows(countRows)
 
-	// List all recipes
+	// Expect data query
+	dataRows := pgxmock.NewRows([]string{"id", "name", "display_name", "description", "model_id", "runtime", "spec", "created_at", "updated_at"}).
+		AddRow(uuid.New(), "llama-7b-vllm", "Llama 7B", "", "model1", "vllm", spec, now, now).
+		AddRow(uuid.New(), "llama-7b-triton", "Llama 7B Triton", "", "model1", "triton", spec, now, now).
+		AddRow(uuid.New(), "mistral-7b-vllm", "Mistral 7B", "", "model2", "vllm", spec, now, now)
+
+	mock.ExpectQuery(`SELECT (.+) FROM recipes ORDER BY created_at DESC LIMIT`).
+		WithArgs(100, 0).
+		WillReturnRows(dataRows)
+
 	params := domain.RecipeListParams{
 		Limit:  100,
 		Offset: 0,
@@ -349,37 +249,42 @@ func TestRecipeRepository_List_All(t *testing.T) {
 	if response.Pagination.NextOffset != nil {
 		t.Error("expected no next offset for single page")
 	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
 }
 
 // TestRecipeRepository_List_FilterByRuntime tests filtering recipes by runtime
 func TestRecipeRepository_List_FilterByRuntime(t *testing.T) {
-	repo := newMockRecipeRepository()
+	mock, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer mock.Close()
+
+	db := &DB{pool: mock}
+	repo := NewRecipeRepository(db)
 	ctx := context.Background()
 
-	// Create recipes with different runtimes
-	recipes := []struct {
-		name    string
-		runtime string
-	}{
-		{"llama-7b-vllm", "vllm"},
-		{"llama-7b-triton", "triton"},
-		{"mistral-7b-vllm", "vllm"},
-	}
+	spec := json.RawMessage(`{"runtime": "vllm"}`)
+	now := time.Now().UTC()
 
-	for _, r := range recipes {
-		spec := json.RawMessage(`{"runtime": "` + r.runtime + `"}`)
-		create := &domain.RecipeCreate{
-			Name:    r.name,
-			ModelID: "test-model",
-			Runtime: r.runtime,
-			Spec:    spec,
-		}
-		if _, err := repo.Create(ctx, create); err != nil {
-			t.Fatalf("create failed: %v", err)
-		}
-	}
+	// Expect count query with runtime filter
+	countRows := pgxmock.NewRows([]string{"count"}).AddRow(2)
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM recipes WHERE runtime`).
+		WithArgs("vllm").
+		WillReturnRows(countRows)
 
-	// Filter by vllm runtime
+	// Expect data query with runtime filter
+	dataRows := pgxmock.NewRows([]string{"id", "name", "display_name", "description", "model_id", "runtime", "spec", "created_at", "updated_at"}).
+		AddRow(uuid.New(), "llama-7b-vllm", "Llama 7B", "", "model1", "vllm", spec, now, now).
+		AddRow(uuid.New(), "mistral-7b-vllm", "Mistral 7B", "", "model2", "vllm", spec, now, now)
+
+	mock.ExpectQuery(`SELECT (.+) FROM recipes WHERE runtime = \$1 ORDER BY created_at DESC LIMIT`).
+		WithArgs("vllm", 100, 0).
+		WillReturnRows(dataRows)
+
 	params := domain.RecipeListParams{
 		Runtime: "vllm",
 		Limit:   100,
@@ -398,28 +303,41 @@ func TestRecipeRepository_List_FilterByRuntime(t *testing.T) {
 			t.Errorf("expected runtime vllm, got %s", recipe.Runtime)
 		}
 	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
 }
 
 // TestRecipeRepository_List_Pagination tests pagination functionality
 func TestRecipeRepository_List_Pagination(t *testing.T) {
-	repo := newMockRecipeRepository()
+	mock, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer mock.Close()
+
+	db := &DB{pool: mock}
+	repo := NewRecipeRepository(db)
 	ctx := context.Background()
 
-	// Create 5 recipes
-	for i := 0; i < 5; i++ {
-		spec := json.RawMessage(`{"runtime": "vllm"}`)
-		create := &domain.RecipeCreate{
-			Name:    "recipe-" + string(rune('a'+i)),
-			ModelID: "test-model",
-			Runtime: "vllm",
-			Spec:    spec,
-		}
-		if _, err := repo.Create(ctx, create); err != nil {
-			t.Fatalf("create failed: %v", err)
-		}
-	}
+	spec := json.RawMessage(`{"runtime": "vllm"}`)
+	now := time.Now().UTC()
 
-	// Get first page (limit 2)
+	// First page - expect count query
+	countRows := pgxmock.NewRows([]string{"count"}).AddRow(5)
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM recipes`).
+		WillReturnRows(countRows)
+
+	// First page - expect data query
+	dataRows := pgxmock.NewRows([]string{"id", "name", "display_name", "description", "model_id", "runtime", "spec", "created_at", "updated_at"}).
+		AddRow(uuid.New(), "recipe-a", "", "", "model1", "vllm", spec, now, now).
+		AddRow(uuid.New(), "recipe-b", "", "", "model1", "vllm", spec, now, now)
+
+	mock.ExpectQuery(`SELECT (.+) FROM recipes ORDER BY created_at DESC LIMIT`).
+		WithArgs(2, 0).
+		WillReturnRows(dataRows)
+
 	params := domain.RecipeListParams{
 		Limit:  2,
 		Offset: 0,
@@ -441,46 +359,48 @@ func TestRecipeRepository_List_Pagination(t *testing.T) {
 		t.Errorf("expected next offset 2, got %d", *response.Pagination.NextOffset)
 	}
 
-	// Get second page
-	params.Offset = 2
-	response, err = repo.List(ctx, params)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-	if len(response.Recipes) != 2 {
-		t.Errorf("expected 2 recipes in second page, got %d", len(response.Recipes))
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }
 
 // TestRecipeRepository_Update_Success tests successful recipe update
 func TestRecipeRepository_Update_Success(t *testing.T) {
-	repo := newMockRecipeRepository()
+	mock, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer mock.Close()
+
+	db := &DB{pool: mock}
+	repo := NewRecipeRepository(db)
 	ctx := context.Background()
 
 	spec := json.RawMessage(`{"runtime": "vllm"}`)
+	existingID := uuid.New()
+	createdAt := time.Now().UTC().Add(-1 * time.Hour)
+	updatedAt := time.Now().UTC()
 
-	create := &domain.RecipeCreate{
-		Name:        "llama-7b-vllm",
-		DisplayName: "Llama 7B",
-		Description: "Original description",
-		ModelID:     "meta-llama/Llama-2-7b-hf",
-		Runtime:     "vllm",
-		Spec:        spec,
-	}
+	// Expect Get query first
+	getRows := pgxmock.NewRows([]string{"id", "name", "display_name", "description", "model_id", "runtime", "spec", "created_at", "updated_at"}).
+		AddRow(existingID, "llama-7b-vllm", "Llama 7B", "Original description", "meta-llama/Llama-2-7b-hf", "vllm", spec, createdAt, createdAt)
 
-	created, err := repo.Create(ctx, create)
-	if err != nil {
-		t.Fatalf("create failed: %v", err)
-	}
+	mock.ExpectQuery(`SELECT (.+) FROM recipes WHERE name`).
+		WithArgs("llama-7b-vllm").
+		WillReturnRows(getRows)
 
-	// Sleep briefly to ensure updated_at is different
-	time.Sleep(1 * time.Millisecond)
-
-	// Update the recipe
+	// Expect UPDATE query
 	newDisplayName := "Llama 7B Updated"
 	newDescription := "Updated description"
 	newRuntime := "triton"
 	newSpec := json.RawMessage(`{"runtime": "triton"}`)
+
+	updateRows := pgxmock.NewRows([]string{"id", "name", "display_name", "description", "model_id", "runtime", "spec", "created_at", "updated_at"}).
+		AddRow(existingID, "llama-7b-vllm", newDisplayName, newDescription, "meta-llama/Llama-2-7b-hf", newRuntime, newSpec, createdAt, updatedAt)
+
+	mock.ExpectQuery(`UPDATE recipes SET (.+) WHERE name`).
+		WithArgs(newDisplayName, newDescription, newRuntime, newSpec, "llama-7b-vllm").
+		WillReturnRows(updateRows)
 
 	update := &domain.RecipeUpdate{
 		DisplayName: &newDisplayName,
@@ -505,35 +425,49 @@ func TestRecipeRepository_Update_Success(t *testing.T) {
 	if updated.Runtime != newRuntime {
 		t.Errorf("expected runtime %s, got %s", newRuntime, updated.Runtime)
 	}
-	// UpdatedAt should be >= CreatedAt (may be equal due to millisecond precision)
-	if updated.UpdatedAt.Before(created.UpdatedAt) {
-		t.Error("expected updated_at to be >= created_at")
+	if !updated.UpdatedAt.After(createdAt) {
+		t.Error("expected updated_at to be after created_at")
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }
 
 // TestRecipeRepository_Update_PartialUpdate tests partial update of a recipe
 func TestRecipeRepository_Update_PartialUpdate(t *testing.T) {
-	repo := newMockRecipeRepository()
+	mock, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer mock.Close()
+
+	db := &DB{pool: mock}
+	repo := NewRecipeRepository(db)
 	ctx := context.Background()
 
 	spec := json.RawMessage(`{"runtime": "vllm"}`)
+	existingID := uuid.New()
+	createdAt := time.Now().UTC().Add(-1 * time.Hour)
+	updatedAt := time.Now().UTC()
 
-	create := &domain.RecipeCreate{
-		Name:        "llama-7b-vllm",
-		DisplayName: "Llama 7B",
-		Description: "Original description",
-		ModelID:     "meta-llama/Llama-2-7b-hf",
-		Runtime:     "vllm",
-		Spec:        spec,
-	}
+	// Expect Get query first
+	getRows := pgxmock.NewRows([]string{"id", "name", "display_name", "description", "model_id", "runtime", "spec", "created_at", "updated_at"}).
+		AddRow(existingID, "llama-7b-vllm", "Llama 7B", "Original description", "meta-llama/Llama-2-7b-hf", "vllm", spec, createdAt, createdAt)
 
-	_, err := repo.Create(ctx, create)
-	if err != nil {
-		t.Fatalf("create failed: %v", err)
-	}
+	mock.ExpectQuery(`SELECT (.+) FROM recipes WHERE name`).
+		WithArgs("llama-7b-vllm").
+		WillReturnRows(getRows)
 
-	// Update only display name
+	// Expect UPDATE query with only display_name
 	newDisplayName := "Llama 7B Updated"
+	updateRows := pgxmock.NewRows([]string{"id", "name", "display_name", "description", "model_id", "runtime", "spec", "created_at", "updated_at"}).
+		AddRow(existingID, "llama-7b-vllm", newDisplayName, "Original description", "meta-llama/Llama-2-7b-hf", "vllm", spec, createdAt, updatedAt)
+
+	mock.ExpectQuery(`UPDATE recipes SET display_name = \$1 WHERE name`).
+		WithArgs(newDisplayName, "llama-7b-vllm").
+		WillReturnRows(updateRows)
+
 	update := &domain.RecipeUpdate{
 		DisplayName: &newDisplayName,
 	}
@@ -546,18 +480,34 @@ func TestRecipeRepository_Update_PartialUpdate(t *testing.T) {
 		t.Errorf("expected display_name %s, got %s", newDisplayName, updated.DisplayName)
 	}
 	// Verify other fields are unchanged
-	if updated.Description != create.Description {
-		t.Errorf("expected description unchanged: %s, got %s", create.Description, updated.Description)
+	if updated.Description != "Original description" {
+		t.Errorf("expected description unchanged: Original description, got %s", updated.Description)
 	}
-	if updated.Runtime != create.Runtime {
-		t.Errorf("expected runtime unchanged: %s, got %s", create.Runtime, updated.Runtime)
+	if updated.Runtime != "vllm" {
+		t.Errorf("expected runtime unchanged: vllm, got %s", updated.Runtime)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }
 
 // TestRecipeRepository_Update_NotFound_Error tests updating a non-existent recipe
 func TestRecipeRepository_Update_NotFound_Error(t *testing.T) {
-	repo := newMockRecipeRepository()
+	mock, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer mock.Close()
+
+	db := &DB{pool: mock}
+	repo := NewRecipeRepository(db)
 	ctx := context.Background()
+
+	// Expect Get query to return no rows
+	mock.ExpectQuery(`SELECT (.+) FROM recipes WHERE name`).
+		WithArgs("non-existent-recipe").
+		WillReturnError(pgx.ErrNoRows)
 
 	newDisplayName := "Updated Name"
 	update := &domain.RecipeUpdate{
@@ -571,70 +521,93 @@ func TestRecipeRepository_Update_NotFound_Error(t *testing.T) {
 	if recipe != nil {
 		t.Error("expected recipe to be nil for not found")
 	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
 }
 
 // TestRecipeRepository_Delete_Success tests successful recipe deletion
 func TestRecipeRepository_Delete_Success(t *testing.T) {
-	repo := newMockRecipeRepository()
+	mock, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer mock.Close()
+
+	db := &DB{pool: mock}
+	repo := NewRecipeRepository(db)
 	ctx := context.Background()
 
-	spec := json.RawMessage(`{"runtime": "vllm"}`)
+	// Expect DELETE query
+	mock.ExpectExec(`DELETE FROM recipes WHERE name`).
+		WithArgs("llama-7b-vllm").
+		WillReturnResult(pgxmock.NewResult("DELETE", 1))
 
-	create := &domain.RecipeCreate{
-		Name:    "llama-7b-vllm",
-		ModelID: "meta-llama/Llama-2-7b-hf",
-		Runtime: "vllm",
-		Spec:    spec,
-	}
-
-	_, err := repo.Create(ctx, create)
-	if err != nil {
-		t.Fatalf("create failed: %v", err)
-	}
-
-	// Delete the recipe
 	err = repo.Delete(ctx, "llama-7b-vllm")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	// Verify it's deleted
-	recipe, err := repo.Get(ctx, "llama-7b-vllm")
-	if err != nil {
-		t.Fatalf("get failed: %v", err)
-	}
-	if recipe != nil {
-		t.Error("expected recipe to be nil after deletion")
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }
 
 // TestRecipeRepository_Delete_NotFound_Error tests deleting a non-existent recipe
 func TestRecipeRepository_Delete_NotFound_Error(t *testing.T) {
-	repo := newMockRecipeRepository()
+	mock, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer mock.Close()
+
+	db := &DB{pool: mock}
+	repo := NewRecipeRepository(db)
 	ctx := context.Background()
 
-	err := repo.Delete(ctx, "non-existent-recipe")
+	// Expect DELETE query that affects 0 rows
+	mock.ExpectExec(`DELETE FROM recipes WHERE name`).
+		WithArgs("non-existent-recipe").
+		WillReturnResult(pgxmock.NewResult("DELETE", 0))
+
+	err = repo.Delete(ctx, "non-existent-recipe")
 	if err != pgx.ErrNoRows {
 		t.Errorf("expected pgx.ErrNoRows, got %v", err)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }
 
 // TestRecipeRepository_List_DefaultPagination tests default pagination values
 func TestRecipeRepository_List_DefaultPagination(t *testing.T) {
-	repo := newMockRecipeRepository()
+	mock, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer mock.Close()
+
+	db := &DB{pool: mock}
+	repo := NewRecipeRepository(db)
 	ctx := context.Background()
 
-	// Create one recipe
 	spec := json.RawMessage(`{"runtime": "vllm"}`)
-	create := &domain.RecipeCreate{
-		Name:    "test-recipe",
-		ModelID: "test-model",
-		Runtime: "vllm",
-		Spec:    spec,
-	}
-	if _, err := repo.Create(ctx, create); err != nil {
-		t.Fatalf("create failed: %v", err)
-	}
+	now := time.Now().UTC()
+
+	// Expect count query
+	countRows := pgxmock.NewRows([]string{"count"}).AddRow(1)
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM recipes`).
+		WillReturnRows(countRows)
+
+	// Expect data query with default limit of 100
+	dataRows := pgxmock.NewRows([]string{"id", "name", "display_name", "description", "model_id", "runtime", "spec", "created_at", "updated_at"}).
+		AddRow(uuid.New(), "test-recipe", "", "", "model1", "vllm", spec, now, now)
+
+	mock.ExpectQuery(`SELECT (.+) FROM recipes ORDER BY created_at DESC LIMIT`).
+		WithArgs(100, 0).
+		WillReturnRows(dataRows)
 
 	// List with zero limit (should default to 100)
 	params := domain.RecipeListParams{
@@ -650,20 +623,21 @@ func TestRecipeRepository_List_DefaultPagination(t *testing.T) {
 		t.Errorf("expected default limit 100, got %d", response.Pagination.Limit)
 	}
 
-	// List with limit > 500 (should be capped at 100)
-	params.Limit = 1000
-	response, err = repo.List(ctx, params)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-	if response.Pagination.Limit != 100 {
-		t.Errorf("expected capped limit 100, got %d", response.Pagination.Limit)
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }
 
 // TestRecipeRepository_SpecJSONMarshaling tests that spec is properly stored and retrieved as JSON
 func TestRecipeRepository_SpecJSONMarshaling(t *testing.T) {
-	repo := newMockRecipeRepository()
+	mock, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer mock.Close()
+
+	db := &DB{pool: mock}
+	repo := NewRecipeRepository(db)
 	ctx := context.Background()
 
 	complexSpec := json.RawMessage(`{
@@ -700,6 +674,12 @@ func TestRecipeRepository_SpecJSONMarshaling(t *testing.T) {
 		Spec:    complexSpec,
 	}
 
+	// Expect CREATE query
+	mock.ExpectExec(`INSERT INTO recipes`).
+		WithArgs(pgxmock.AnyArg(), create.Name, create.DisplayName, create.Description,
+			create.ModelID, create.Runtime, complexSpec, pgxmock.AnyArg(), pgxmock.AnyArg()).
+		WillReturnResult(pgxmock.NewResult("INSERT", 1))
+
 	created, err := repo.Create(ctx, create)
 	if err != nil {
 		t.Fatalf("create failed: %v", err)
@@ -710,7 +690,15 @@ func TestRecipeRepository_SpecJSONMarshaling(t *testing.T) {
 		t.Errorf("spec mismatch:\nexpected: %s\ngot: %s", string(complexSpec), string(created.Spec))
 	}
 
-	// Get and verify spec is retrieved correctly
+	// Expect GET query
+	now := time.Now().UTC()
+	getRows := pgxmock.NewRows([]string{"id", "name", "display_name", "description", "model_id", "runtime", "spec", "created_at", "updated_at"}).
+		AddRow(created.ID, "llama-7b-complex", "", "", "meta-llama/Llama-2-7b-hf", "vllm", complexSpec, now, now)
+
+	mock.ExpectQuery(`SELECT (.+) FROM recipes WHERE name`).
+		WithArgs("llama-7b-complex").
+		WillReturnRows(getRows)
+
 	recipe, err := repo.Get(ctx, "llama-7b-complex")
 	if err != nil {
 		t.Fatalf("get failed: %v", err)
@@ -737,5 +725,9 @@ func TestRecipeRepository_SpecJSONMarshaling(t *testing.T) {
 		}
 	} else {
 		t.Error("expected resources in spec")
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }

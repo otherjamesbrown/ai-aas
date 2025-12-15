@@ -113,7 +113,7 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 		})
 
 		// Model management routes for ai-aas-cli (spec 020)
-		modelsSvc := modelsHandler.CreateModelsService(db.Pool())
+		modelsSvc := modelsHandler.CreateModelsService(db.ConcretePool())
 
 		// Set up S3 client factory for model rename operations
 		modelsSvc.SetS3ClientFactory(createS3ClientFactory())
@@ -123,7 +123,7 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 		modelsHdlr.RegisterRoutes(r)
 
 		// Inference engine management routes (AIAAS-042)
-		engSvc := enginesSvc.NewService(db.Pool())
+		engSvc := enginesSvc.NewService(db.ConcretePool())
 		engHdlr := enginesHandler.NewHandler(engSvc)
 		engHdlr.RegisterRoutes(r)
 

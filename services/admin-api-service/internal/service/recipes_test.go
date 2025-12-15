@@ -2,211 +2,76 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/domain"
+	"go.uber.org/zap"
 )
 
-// Mock implementation for testing
-
+// mockRecipeRepository implements RecipeRepositoryInterface for testing
 type mockRecipeRepository struct {
-	recipes map[string]*RecipeResponse
-	err     error
+	createFunc func(ctx context.Context, create *domain.RecipeCreate) (*domain.Recipe, error)
+	getFunc    func(ctx context.Context, name string) (*domain.Recipe, error)
+	listFunc   func(ctx context.Context, params domain.RecipeListParams) (*domain.RecipeListResponse, error)
+	updateFunc func(ctx context.Context, name string, update *domain.RecipeUpdate) (*domain.Recipe, error)
+	deleteFunc func(ctx context.Context, name string) error
 }
 
-func (m *mockRecipeRepository) GetByName(ctx context.Context, name string) (*RecipeResponse, error) {
-	if m.err != nil {
-		return nil, m.err
+func (m *mockRecipeRepository) Create(ctx context.Context, create *domain.RecipeCreate) (*domain.Recipe, error) {
+	if m.createFunc != nil {
+		return m.createFunc(ctx, create)
 	}
-	recipe, exists := m.recipes[name]
-	if !exists {
-		return nil, ErrRecipeNotFound
-	}
-	return recipe, nil
+	return nil, errors.New("createFunc not implemented")
 }
 
-func (m *mockRecipeRepository) Create(ctx context.Context, input *CreateRecipeInput) (*RecipeResponse, error) {
-	if m.err != nil {
-		return nil, m.err
+func (m *mockRecipeRepository) Get(ctx context.Context, name string) (*domain.Recipe, error) {
+	if m.getFunc != nil {
+		return m.getFunc(ctx, name)
 	}
-	recipe := &RecipeResponse{
-		RecipeID:    uuid.New(),
-		Name:        input.Name,
-		DisplayName: input.DisplayName,
-		Description: input.Description,
-		ModelID:     input.ModelID,
-		Runtime:     input.Runtime,
-		Spec:        input.Spec,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}
-	m.recipes[input.Name] = recipe
-	return recipe, nil
+	return nil, errors.New("getFunc not implemented")
 }
 
-func (m *mockRecipeRepository) List(ctx context.Context, filters *ListRecipesFilters) ([]RecipeResponse, error) {
-	if m.err != nil {
-		return nil, m.err
+func (m *mockRecipeRepository) List(ctx context.Context, params domain.RecipeListParams) (*domain.RecipeListResponse, error) {
+	if m.listFunc != nil {
+		return m.listFunc(ctx, params)
 	}
-	var results []RecipeResponse
-	for _, recipe := range m.recipes {
-		if filters.Runtime != "" && recipe.Runtime != filters.Runtime {
-			continue
-		}
-		if filters.ModelID != "" && recipe.ModelID != filters.ModelID {
-			continue
-		}
-		results = append(results, *recipe)
-	}
-	return results, nil
+	return nil, errors.New("listFunc not implemented")
 }
 
-func (m *mockRecipeRepository) Update(ctx context.Context, name string, input *UpdateRecipeInput) (*RecipeResponse, error) {
-	if m.err != nil {
-		return nil, m.err
+func (m *mockRecipeRepository) Update(ctx context.Context, name string, update *domain.RecipeUpdate) (*domain.Recipe, error) {
+	if m.updateFunc != nil {
+		return m.updateFunc(ctx, name, update)
 	}
-	recipe, exists := m.recipes[name]
-	if !exists {
-		return nil, ErrRecipeNotFound
-	}
-	if input.DisplayName != nil {
-		recipe.DisplayName = *input.DisplayName
-	}
-	if input.Description != nil {
-		recipe.Description = *input.Description
-	}
-	if input.Spec != nil {
-		recipe.Spec = input.Spec
-	}
-	recipe.UpdatedAt = time.Now()
-	return recipe, nil
+	return nil, errors.New("updateFunc not implemented")
 }
 
 func (m *mockRecipeRepository) Delete(ctx context.Context, name string) error {
-	if m.err != nil {
-		return m.err
+	if m.deleteFunc != nil {
+		return m.deleteFunc(ctx, name)
 	}
-	if _, exists := m.recipes[name]; !exists {
-		return ErrRecipeNotFound
-	}
-	delete(m.recipes, name)
-	return nil
+	return errors.New("deleteFunc not implemented")
 }
 
-// Mock service implementation for testing
-type mockRecipeService struct {
-	repo *mockRecipeRepository
-}
+// TestRecipeService_CreateRecipe_Success tests successful recipe creation
+func TestRecipeService_CreateRecipe_Success(t *testing.T) {
+	ctx := context.Background()
+	logger := zap.NewNop()
 
-func newMockRecipeService() *mockRecipeService {
-	return &mockRecipeService{
-		repo: &mockRecipeRepository{
-			recipes: make(map[string]*RecipeResponse),
+	spec := map[string]interface{}{
+		"runtime": "vllm",
+		"resources": map[string]interface{}{
+			"gpu": map[string]interface{}{
+				"vendor":      "nvidia",
+				"count":       1,
+				"minMemoryGB": 16,
+			},
 		},
 	}
-}
-
-func (s *mockRecipeService) CreateRecipe(ctx context.Context, input *CreateRecipeInput) (*RecipeResponse, error) {
-	// Validate input
-	if input.Name == "" {
-		return nil, ErrMissingRequiredField
-	}
-	if input.Runtime == "" {
-		return nil, ErrMissingRequiredField
-	}
-	if input.Runtime != "vllm" && input.Runtime != "triton" && input.Runtime != "tgi" {
-		return nil, ErrInvalidRuntime
-	}
-
-	// Check if already exists
-	existing, _ := s.repo.GetByName(ctx, input.Name)
-	if existing != nil {
-		return nil, ErrRecipeAlreadyExists
-	}
-
-	return s.repo.Create(ctx, input)
-}
-
-func (s *mockRecipeService) GetRecipe(ctx context.Context, name string) (*RecipeResponse, error) {
-	if name == "" {
-		return nil, ErrMissingRequiredField
-	}
-	return s.repo.GetByName(ctx, name)
-}
-
-func (s *mockRecipeService) ListRecipes(ctx context.Context, filters *ListRecipesFilters) (*ListRecipesResponse, error) {
-	if filters == nil {
-		filters = &ListRecipesFilters{}
-	}
-	recipes, err := s.repo.List(ctx, filters)
-	if err != nil {
-		return nil, err
-	}
-	return &ListRecipesResponse{
-		Recipes: recipes,
-		Total:   len(recipes),
-	}, nil
-}
-
-func (s *mockRecipeService) UpdateRecipe(ctx context.Context, name string, input *UpdateRecipeInput) (*RecipeResponse, error) {
-	if name == "" {
-		return nil, ErrMissingRequiredField
-	}
-	return s.repo.Update(ctx, name, input)
-}
-
-func (s *mockRecipeService) DeleteRecipe(ctx context.Context, name string) error {
-	if name == "" {
-		return ErrMissingRequiredField
-	}
-	return s.repo.Delete(ctx, name)
-}
-
-func (s *mockRecipeService) ValidateRecipe(ctx context.Context, spec map[string]interface{}) (*ValidationResult, error) {
-	result := &ValidationResult{
-		Valid:  true,
-		Errors: []ValidationError{},
-	}
-
-	// Check runtime
-	runtime, ok := spec["runtime"].(string)
-	if !ok {
-		result.Valid = false
-		result.Errors = append(result.Errors, ValidationError{
-			Field:   "runtime",
-			Message: "runtime is required and must be a string",
-		})
-		return result, nil
-	}
-	result.Runtime = runtime
-
-	if runtime != "vllm" && runtime != "triton" && runtime != "tgi" {
-		result.Valid = false
-		result.Errors = append(result.Errors, ValidationError{
-			Field:   "runtime",
-			Message: "runtime must be one of: vllm, triton, tgi",
-		})
-	}
-
-	// Check resources
-	if _, hasResources := spec["resources"]; !hasResources {
-		result.Valid = false
-		result.Errors = append(result.Errors, ValidationError{
-			Field:   "resources",
-			Message: "resources field is required",
-		})
-	}
-
-	return result, nil
-}
-
-// Test Cases
-
-func TestRecipeService_CreateRecipe_Success(t *testing.T) {
-	svc := newMockRecipeService()
-	ctx := context.Background()
 
 	input := &CreateRecipeInput{
 		Name:        "mistral-7b-instruct-v03",
@@ -214,19 +79,33 @@ func TestRecipeService_CreateRecipe_Success(t *testing.T) {
 		Description: "Mistral 7B instruction-tuned model",
 		ModelID:     "mistralai/Mistral-7B-Instruct-v0.3",
 		Runtime:     "vllm",
-		Spec: map[string]interface{}{
-			"runtime": "vllm",
-			"resources": map[string]interface{}{
-				"gpu": map[string]interface{}{
-					"vendor":      "nvidia",
-					"count":       1,
-					"minMemoryGB": 16,
-				},
-			},
+		Spec:        spec,
+	}
+
+	mockRepo := &mockRecipeRepository{
+		getFunc: func(ctx context.Context, name string) (*domain.Recipe, error) {
+			// Recipe doesn't exist yet
+			return nil, nil
+		},
+		createFunc: func(ctx context.Context, create *domain.RecipeCreate) (*domain.Recipe, error) {
+			now := time.Now().UTC()
+			return &domain.Recipe{
+				ID:          uuid.New(),
+				Name:        create.Name,
+				DisplayName: create.DisplayName,
+				Description: create.Description,
+				ModelID:     create.ModelID,
+				Runtime:     create.Runtime,
+				Spec:        create.Spec,
+				CreatedAt:   now,
+				UpdatedAt:   now,
+			}, nil
 		},
 	}
 
+	svc := NewRecipeService(mockRepo, nil, logger)
 	recipe, err := svc.CreateRecipe(ctx, input)
+
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -242,6 +121,7 @@ func TestRecipeService_CreateRecipe_Success(t *testing.T) {
 	}
 }
 
+// TestRecipeService_CreateRecipe_ValidationError tests validation errors
 func TestRecipeService_CreateRecipe_ValidationError(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -274,10 +154,13 @@ func TestRecipeService_CreateRecipe_ValidationError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := newMockRecipeService()
 			ctx := context.Background()
+			logger := zap.NewNop()
+			mockRepo := &mockRecipeRepository{}
 
+			svc := NewRecipeService(mockRepo, nil, logger)
 			_, err := svc.CreateRecipe(ctx, tt.input)
+
 			if !errors.Is(err, tt.expectedErr) {
 				t.Errorf("expected error %v, got %v", tt.expectedErr, err)
 			}
@@ -285,87 +168,120 @@ func TestRecipeService_CreateRecipe_ValidationError(t *testing.T) {
 	}
 }
 
+// TestRecipeService_CreateRecipe_AlreadyExists tests duplicate recipe creation
 func TestRecipeService_CreateRecipe_AlreadyExists(t *testing.T) {
-	svc := newMockRecipeService()
 	ctx := context.Background()
+	logger := zap.NewNop()
 
 	input := &CreateRecipeInput{
 		Name:    "test-recipe",
 		Runtime: "vllm",
 	}
 
-	// Create first time
-	_, err := svc.CreateRecipe(ctx, input)
-	if err != nil {
-		t.Fatalf("first create failed: %v", err)
+	mockRepo := &mockRecipeRepository{
+		getFunc: func(ctx context.Context, name string) (*domain.Recipe, error) {
+			// Recipe already exists
+			return &domain.Recipe{
+				ID:      uuid.New(),
+				Name:    name,
+				Runtime: "vllm",
+			}, nil
+		},
 	}
 
-	// Try to create again
-	_, err = svc.CreateRecipe(ctx, input)
+	svc := NewRecipeService(mockRepo, nil, logger)
+	_, err := svc.CreateRecipe(ctx, input)
+
 	if !errors.Is(err, ErrRecipeAlreadyExists) {
 		t.Errorf("expected ErrRecipeAlreadyExists, got %v", err)
 	}
 }
 
+// TestRecipeService_GetRecipe_Success tests successful recipe retrieval
 func TestRecipeService_GetRecipe_Success(t *testing.T) {
-	svc := newMockRecipeService()
 	ctx := context.Background()
+	logger := zap.NewNop()
 
-	// Create a recipe first
-	input := &CreateRecipeInput{
-		Name:        "test-recipe",
-		DisplayName: "Test Recipe",
-		Runtime:     "vllm",
-	}
-	created, err := svc.CreateRecipe(ctx, input)
-	if err != nil {
-		t.Fatalf("create failed: %v", err)
+	expectedID := uuid.New()
+	now := time.Now().UTC()
+	spec := json.RawMessage(`{"runtime": "vllm"}`)
+
+	mockRepo := &mockRecipeRepository{
+		getFunc: func(ctx context.Context, name string) (*domain.Recipe, error) {
+			return &domain.Recipe{
+				ID:          expectedID,
+				Name:        "test-recipe",
+				DisplayName: "Test Recipe",
+				Runtime:     "vllm",
+				Spec:        spec,
+				CreatedAt:   now,
+				UpdatedAt:   now,
+			}, nil
+		},
 	}
 
-	// Get the recipe
+	svc := NewRecipeService(mockRepo, nil, logger)
 	recipe, err := svc.GetRecipe(ctx, "test-recipe")
+
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if recipe.Name != created.Name {
-		t.Errorf("expected name %s, got %s", created.Name, recipe.Name)
+	if recipe.RecipeID != expectedID {
+		t.Errorf("expected ID %s, got %s", expectedID, recipe.RecipeID)
 	}
-	if recipe.RecipeID != created.RecipeID {
-		t.Errorf("expected ID %s, got %s", created.RecipeID, recipe.RecipeID)
+	if recipe.Name != "test-recipe" {
+		t.Errorf("expected name test-recipe, got %s", recipe.Name)
 	}
 }
 
+// TestRecipeService_GetRecipe_NotFound tests recipe not found
 func TestRecipeService_GetRecipe_NotFound(t *testing.T) {
-	svc := newMockRecipeService()
 	ctx := context.Background()
+	logger := zap.NewNop()
 
+	mockRepo := &mockRecipeRepository{
+		getFunc: func(ctx context.Context, name string) (*domain.Recipe, error) {
+			return nil, nil
+		},
+	}
+
+	svc := NewRecipeService(mockRepo, nil, logger)
 	_, err := svc.GetRecipe(ctx, "nonexistent")
+
 	if !errors.Is(err, ErrRecipeNotFound) {
 		t.Errorf("expected ErrRecipeNotFound, got %v", err)
 	}
 }
 
+// TestRecipeService_ListRecipes_All tests listing all recipes
 func TestRecipeService_ListRecipes_All(t *testing.T) {
-	svc := newMockRecipeService()
 	ctx := context.Background()
+	logger := zap.NewNop()
 
-	// Create multiple recipes
-	recipes := []*CreateRecipeInput{
-		{Name: "recipe1", Runtime: "vllm", ModelID: "model1"},
-		{Name: "recipe2", Runtime: "triton", ModelID: "model2"},
-		{Name: "recipe3", Runtime: "vllm", ModelID: "model1"},
+	spec := json.RawMessage(`{"runtime": "vllm"}`)
+	now := time.Now().UTC()
+
+	mockRepo := &mockRecipeRepository{
+		listFunc: func(ctx context.Context, params domain.RecipeListParams) (*domain.RecipeListResponse, error) {
+			return &domain.RecipeListResponse{
+				Recipes: []domain.Recipe{
+					{ID: uuid.New(), Name: "recipe1", Runtime: "vllm", ModelID: "model1", Spec: spec, CreatedAt: now, UpdatedAt: now},
+					{ID: uuid.New(), Name: "recipe2", Runtime: "triton", ModelID: "model2", Spec: spec, CreatedAt: now, UpdatedAt: now},
+					{ID: uuid.New(), Name: "recipe3", Runtime: "vllm", ModelID: "model1", Spec: spec, CreatedAt: now, UpdatedAt: now},
+				},
+				Pagination: domain.Pagination{
+					Total:  3,
+					Limit:  1000,
+					Offset: 0,
+				},
+			}, nil
+		},
 	}
 
-	for _, input := range recipes {
-		_, err := svc.CreateRecipe(ctx, input)
-		if err != nil {
-			t.Fatalf("create failed: %v", err)
-		}
-	}
-
-	// List all
+	svc := NewRecipeService(mockRepo, nil, logger)
 	result, err := svc.ListRecipes(ctx, &ListRecipesFilters{})
+
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -378,26 +294,38 @@ func TestRecipeService_ListRecipes_All(t *testing.T) {
 	}
 }
 
+// TestRecipeService_ListRecipes_FilterByRuntime tests filtering by runtime
 func TestRecipeService_ListRecipes_FilterByRuntime(t *testing.T) {
-	svc := newMockRecipeService()
 	ctx := context.Background()
+	logger := zap.NewNop()
 
-	// Create recipes with different runtimes
-	recipes := []*CreateRecipeInput{
-		{Name: "vllm1", Runtime: "vllm"},
-		{Name: "vllm2", Runtime: "vllm"},
-		{Name: "triton1", Runtime: "triton"},
+	spec := json.RawMessage(`{"runtime": "vllm"}`)
+	now := time.Now().UTC()
+
+	mockRepo := &mockRecipeRepository{
+		listFunc: func(ctx context.Context, params domain.RecipeListParams) (*domain.RecipeListResponse, error) {
+			// Verify runtime filter is passed correctly
+			if params.Runtime != "vllm" {
+				t.Errorf("expected runtime filter 'vllm', got '%s'", params.Runtime)
+			}
+
+			return &domain.RecipeListResponse{
+				Recipes: []domain.Recipe{
+					{ID: uuid.New(), Name: "vllm1", Runtime: "vllm", Spec: spec, CreatedAt: now, UpdatedAt: now},
+					{ID: uuid.New(), Name: "vllm2", Runtime: "vllm", Spec: spec, CreatedAt: now, UpdatedAt: now},
+				},
+				Pagination: domain.Pagination{
+					Total:  2,
+					Limit:  1000,
+					Offset: 0,
+				},
+			}, nil
+		},
 	}
 
-	for _, input := range recipes {
-		_, err := svc.CreateRecipe(ctx, input)
-		if err != nil {
-			t.Fatalf("create failed: %v", err)
-		}
-	}
-
-	// Filter by vllm
+	svc := NewRecipeService(mockRepo, nil, logger)
 	result, err := svc.ListRecipes(ctx, &ListRecipesFilters{Runtime: "vllm"})
+
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -414,60 +342,41 @@ func TestRecipeService_ListRecipes_FilterByRuntime(t *testing.T) {
 	}
 }
 
-func TestRecipeService_ListRecipes_FilterByModelID(t *testing.T) {
-	svc := newMockRecipeService()
-	ctx := context.Background()
-
-	// Create recipes with different model IDs
-	recipes := []*CreateRecipeInput{
-		{Name: "recipe1", Runtime: "vllm", ModelID: "modelA"},
-		{Name: "recipe2", Runtime: "vllm", ModelID: "modelB"},
-		{Name: "recipe3", Runtime: "vllm", ModelID: "modelA"},
-	}
-
-	for _, input := range recipes {
-		_, err := svc.CreateRecipe(ctx, input)
-		if err != nil {
-			t.Fatalf("create failed: %v", err)
-		}
-	}
-
-	// Filter by modelA
-	result, err := svc.ListRecipes(ctx, &ListRecipesFilters{ModelID: "modelA"})
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	if result.Total != 2 {
-		t.Errorf("expected 2 recipes for modelA, got %d", result.Total)
-	}
-}
-
+// TestRecipeService_UpdateRecipe_Success tests successful recipe update
 func TestRecipeService_UpdateRecipe_Success(t *testing.T) {
-	svc := newMockRecipeService()
 	ctx := context.Background()
+	logger := zap.NewNop()
 
-	// Create a recipe
-	input := &CreateRecipeInput{
-		Name:        "test-recipe",
-		DisplayName: "Original Name",
-		Description: "Original Description",
-		Runtime:     "vllm",
-	}
-	_, err := svc.CreateRecipe(ctx, input)
-	if err != nil {
-		t.Fatalf("create failed: %v", err)
-	}
+	now := time.Now().UTC()
+	spec := json.RawMessage(`{"runtime": "vllm"}`)
 
-	// Update it
 	newDisplayName := "Updated Name"
 	newDescription := "Updated Description"
-	update := &UpdateRecipeInput{
+
+	mockRepo := &mockRecipeRepository{
+		updateFunc: func(ctx context.Context, name string, update *domain.RecipeUpdate) (*domain.Recipe, error) {
+			return &domain.Recipe{
+				ID:          uuid.New(),
+				Name:        name,
+				DisplayName: *update.DisplayName,
+				Description: *update.Description,
+				Runtime:     "vllm",
+				Spec:        spec,
+				CreatedAt:   now.Add(-1 * time.Hour),
+				UpdatedAt:   now,
+			}, nil
+		},
+	}
+
+	svc := NewRecipeService(mockRepo, nil, logger)
+
+	input := &UpdateRecipeInput{
 		DisplayName: &newDisplayName,
 		Description: &newDescription,
 	}
 
-	updated, err := svc.UpdateRecipe(ctx, "test-recipe", update)
+	updated, err := svc.UpdateRecipe(ctx, "test-recipe", input)
+
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -480,61 +389,83 @@ func TestRecipeService_UpdateRecipe_Success(t *testing.T) {
 	}
 }
 
+// TestRecipeService_UpdateRecipe_NotFound tests updating non-existent recipe
 func TestRecipeService_UpdateRecipe_NotFound(t *testing.T) {
-	svc := newMockRecipeService()
 	ctx := context.Background()
+	logger := zap.NewNop()
+
+	mockRepo := &mockRecipeRepository{
+		updateFunc: func(ctx context.Context, name string, update *domain.RecipeUpdate) (*domain.Recipe, error) {
+			return nil, nil
+		},
+	}
+
+	svc := NewRecipeService(mockRepo, nil, logger)
 
 	newName := "Updated"
-	update := &UpdateRecipeInput{
+	input := &UpdateRecipeInput{
 		DisplayName: &newName,
 	}
 
-	_, err := svc.UpdateRecipe(ctx, "nonexistent", update)
+	_, err := svc.UpdateRecipe(ctx, "nonexistent", input)
+
 	if !errors.Is(err, ErrRecipeNotFound) {
 		t.Errorf("expected ErrRecipeNotFound, got %v", err)
 	}
 }
 
+// TestRecipeService_DeleteRecipe_Success tests successful recipe deletion
 func TestRecipeService_DeleteRecipe_Success(t *testing.T) {
-	svc := newMockRecipeService()
 	ctx := context.Background()
+	logger := zap.NewNop()
 
-	// Create a recipe
-	input := &CreateRecipeInput{
-		Name:    "test-recipe",
-		Runtime: "vllm",
-	}
-	_, err := svc.CreateRecipe(ctx, input)
-	if err != nil {
-		t.Fatalf("create failed: %v", err)
+	mockRepo := &mockRecipeRepository{
+		getFunc: func(ctx context.Context, name string) (*domain.Recipe, error) {
+			return &domain.Recipe{
+				ID:      uuid.New(),
+				Name:    name,
+				Runtime: "vllm",
+			}, nil
+		},
+		deleteFunc: func(ctx context.Context, name string) error {
+			return nil
+		},
 	}
 
-	// Delete it
-	err = svc.DeleteRecipe(ctx, "test-recipe")
+	svc := NewRecipeService(mockRepo, nil, logger)
+	err := svc.DeleteRecipe(ctx, "test-recipe")
+
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-
-	// Verify it's gone
-	_, err = svc.GetRecipe(ctx, "test-recipe")
-	if !errors.Is(err, ErrRecipeNotFound) {
-		t.Errorf("expected recipe to be deleted, got error: %v", err)
-	}
 }
 
+// TestRecipeService_DeleteRecipe_NotFound tests deleting non-existent recipe
 func TestRecipeService_DeleteRecipe_NotFound(t *testing.T) {
-	svc := newMockRecipeService()
 	ctx := context.Background()
+	logger := zap.NewNop()
 
+	mockRepo := &mockRecipeRepository{
+		getFunc: func(ctx context.Context, name string) (*domain.Recipe, error) {
+			return nil, nil
+		},
+	}
+
+	svc := NewRecipeService(mockRepo, nil, logger)
 	err := svc.DeleteRecipe(ctx, "nonexistent")
+
 	if !errors.Is(err, ErrRecipeNotFound) {
 		t.Errorf("expected ErrRecipeNotFound, got %v", err)
 	}
 }
 
+// TestRecipeService_ValidateRecipe_Valid tests valid recipe validation
 func TestRecipeService_ValidateRecipe_Valid(t *testing.T) {
-	svc := newMockRecipeService()
 	ctx := context.Background()
+	logger := zap.NewNop()
+	mockRepo := &mockRecipeRepository{}
+
+	svc := NewRecipeService(mockRepo, nil, logger)
 
 	spec := map[string]interface{}{
 		"runtime": "vllm",
@@ -546,6 +477,7 @@ func TestRecipeService_ValidateRecipe_Valid(t *testing.T) {
 	}
 
 	result, err := svc.ValidateRecipe(ctx, spec)
+
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -558,6 +490,7 @@ func TestRecipeService_ValidateRecipe_Valid(t *testing.T) {
 	}
 }
 
+// TestRecipeService_ValidateRecipe_Invalid tests invalid recipe validation
 func TestRecipeService_ValidateRecipe_Invalid(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -587,10 +520,13 @@ func TestRecipeService_ValidateRecipe_Invalid(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := newMockRecipeService()
 			ctx := context.Background()
+			logger := zap.NewNop()
+			mockRepo := &mockRecipeRepository{}
 
+			svc := NewRecipeService(mockRepo, nil, logger)
 			result, err := svc.ValidateRecipe(ctx, tt.spec)
+
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -604,4 +540,124 @@ func TestRecipeService_ValidateRecipe_Invalid(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestRecipeService_ListRecipeDeployments_Success tests listing deployments
+func TestRecipeService_ListRecipeDeployments_Success(t *testing.T) {
+	ctx := context.Background()
+	logger := zap.NewNop()
+
+	mockRepo := &mockRecipeRepository{
+		getFunc: func(ctx context.Context, name string) (*domain.Recipe, error) {
+			return &domain.Recipe{
+				ID:      uuid.New(),
+				Name:    name,
+				Runtime: "vllm",
+			}, nil
+		},
+	}
+
+	// Mock K8s client
+	mockK8s := &mockK8sClient{
+		deployments: []K8sDeployment{
+			{Name: "model1", Namespace: "default", Environment: "dev"},
+			{Name: "model2", Namespace: "default", Environment: "dev"},
+		},
+	}
+
+	svc := NewRecipeService(mockRepo, mockK8s, logger)
+	deployments, err := svc.ListRecipeDeployments(ctx, "test-recipe")
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if len(deployments) != 2 {
+		t.Errorf("expected 2 deployments, got %d", len(deployments))
+	}
+}
+
+// TestRecipeService_ListRecipeDeployments_NoK8sClient tests with no k8s client
+func TestRecipeService_ListRecipeDeployments_NoK8sClient(t *testing.T) {
+	ctx := context.Background()
+	logger := zap.NewNop()
+
+	mockRepo := &mockRecipeRepository{
+		getFunc: func(ctx context.Context, name string) (*domain.Recipe, error) {
+			return &domain.Recipe{
+				ID:      uuid.New(),
+				Name:    name,
+				Runtime: "vllm",
+			}, nil
+		},
+	}
+
+	svc := NewRecipeService(mockRepo, nil, logger)
+	deployments, err := svc.ListRecipeDeployments(ctx, "test-recipe")
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if len(deployments) != 0 {
+		t.Errorf("expected empty deployments, got %d", len(deployments))
+	}
+}
+
+// TestRecipeService_ListRecipeDeployments_RecipeNotFound tests with non-existent recipe
+func TestRecipeService_ListRecipeDeployments_RecipeNotFound(t *testing.T) {
+	ctx := context.Background()
+	logger := zap.NewNop()
+
+	mockRepo := &mockRecipeRepository{
+		getFunc: func(ctx context.Context, name string) (*domain.Recipe, error) {
+			return nil, nil
+		},
+	}
+
+	svc := NewRecipeService(mockRepo, nil, logger)
+	_, err := svc.ListRecipeDeployments(ctx, "nonexistent")
+
+	if !errors.Is(err, ErrRecipeNotFound) {
+		t.Errorf("expected ErrRecipeNotFound, got %v", err)
+	}
+}
+
+// TestRecipeService_DeleteRecipe_RepositoryError tests repository error handling
+func TestRecipeService_DeleteRecipe_RepositoryError(t *testing.T) {
+	ctx := context.Background()
+	logger := zap.NewNop()
+
+	mockRepo := &mockRecipeRepository{
+		getFunc: func(ctx context.Context, name string) (*domain.Recipe, error) {
+			return &domain.Recipe{
+				ID:      uuid.New(),
+				Name:    name,
+				Runtime: "vllm",
+			}, nil
+		},
+		deleteFunc: func(ctx context.Context, name string) error {
+			return pgx.ErrNoRows
+		},
+	}
+
+	svc := NewRecipeService(mockRepo, nil, logger)
+	err := svc.DeleteRecipe(ctx, "test-recipe")
+
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+// mockK8sClient implements K8sClient for testing
+type mockK8sClient struct {
+	deployments []K8sDeployment
+	err         error
+}
+
+func (m *mockK8sClient) ListAIModelsByRecipe(ctx context.Context, recipeName string) ([]K8sDeployment, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.deployments, nil
 }

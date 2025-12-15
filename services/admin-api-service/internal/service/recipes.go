@@ -96,7 +96,7 @@ var (
 
 // RecipeServiceImpl implements the RecipeService interface
 type RecipeServiceImpl struct {
-	repo      *repository.RecipeRepository
+	repo      repository.RecipeRepositoryInterface
 	k8sClient K8sClient
 	logger    *zap.Logger
 }
@@ -114,7 +114,7 @@ type K8sDeployment struct {
 }
 
 // NewRecipeService creates a new recipe service
-func NewRecipeService(repo *repository.RecipeRepository, k8sClient K8sClient, logger *zap.Logger) RecipeService {
+func NewRecipeService(repo repository.RecipeRepositoryInterface, k8sClient K8sClient, logger *zap.Logger) RecipeService {
 	return &RecipeServiceImpl{
 		repo:      repo,
 		k8sClient: k8sClient,
