@@ -301,7 +301,7 @@ run_environment_tests() {
     # Test 6: Inference Test (chat completion)
     # Test ALL published models and report results for each
     local inference_json_array="[]"
-    local inference_prompt="Say hello in exactly 5 words."
+    local inference_prompt="What is the capital of France?"
     if [[ -n "$new_api_key" ]]; then
         local all_model_ids
         all_model_ids=$(echo "$models_output" | jq -r '.data[].id' 2>/dev/null)
