@@ -50,6 +50,11 @@ serviceAccount:
   create: true
   name: ""
 
+# RBAC configuration for pod and InferenceService access
+rbac:
+  # Create ClusterRole and ClusterRoleBinding for pod health queries
+  create: true
+
 podAnnotations:
   prometheus.io/scrape: "true"
   prometheus.io/port: "8080"
