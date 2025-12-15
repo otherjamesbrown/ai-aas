@@ -41,6 +41,14 @@ type AIModelConfig struct {
 	Environment     string
 	Labels          map[string]string
 	Annotations     map[string]string
+	// Recipe support
+	RecipeName      string // Name of the ModelRecipe to use
+	RecipeNamespace string // Namespace of the ModelRecipe (defaults to ai-model-system)
+	// Override tracking - set to true when the user explicitly sets the value
+	OverrideGPUCount    bool
+	OverrideMemory      bool
+	OverrideMinReplicas bool
+	OverrideMaxReplicas bool
 }
 
 // AIModelPhase represents the current phase of the AIModel deployment
@@ -227,31 +235,89 @@ func buildAIModelManifest(cfg AIModelConfig) *unstructured.Unstructured {
 		resourcesMap["requests"].(map[string]interface{})["nvidia.com/gpu"] = cfg.GPUCount
 	}
 
-	// Build spec
-	spec := map[string]interface{}{
-		"modelName": cfg.ModelName,
-		"modelID":   cfg.ModelID,
-		"s3Bucket":  cfg.S3Bucket,
-		"s3Key":     cfg.S3Key,
-		"enabled":   cfg.Enabled,
-		"resources": resourcesMap,
-	}
+	// Build spec based on recipe or inline configuration
+	spec := map[string]interface{}{}
 
-	// Add optional fields
-	if cfg.Runtime != "" {
-		spec["runtime"] = cfg.Runtime
-	}
-	if cfg.RuntimeName != "" {
-		spec["runtimeName"] = cfg.RuntimeName
-	}
-	if cfg.MinReplicas > 0 {
-		spec["minReplicas"] = int32(cfg.MinReplicas)
-	}
-	if cfg.MaxReplicas > 0 {
-		spec["maxReplicas"] = int32(cfg.MaxReplicas)
-	}
-	if cfg.TrustRemoteCode {
-		spec["trustRemoteCode"] = true
+	// If using a recipe, build recipeRef and overrides
+	if cfg.RecipeName != "" {
+		// Add recipeRef
+		recipeRef := map[string]interface{}{
+			"name": cfg.RecipeName,
+		}
+		if cfg.RecipeNamespace != "" {
+			recipeRef["namespace"] = cfg.RecipeNamespace
+		} else {
+			recipeRef["namespace"] = "ai-model-system" // default namespace
+		}
+		spec["recipeRef"] = recipeRef
+
+		// Build overrides for explicitly set values
+		overrides := map[string]interface{}{}
+
+		// Resource overrides
+		if cfg.OverrideGPUCount || cfg.OverrideMemory {
+			resourceOverrides := map[string]interface{}{}
+
+			if cfg.OverrideGPUCount || cfg.OverrideMemory {
+				gpuOverrides := map[string]interface{}{}
+				if cfg.OverrideGPUCount {
+					gpuOverrides["count"] = int32(cfg.GPUCount)
+				}
+				resourceOverrides["gpu"] = gpuOverrides
+			}
+
+			if cfg.OverrideMemory {
+				memoryOverrides := map[string]interface{}{
+					"requests": fmt.Sprintf("%dGi", cfg.MemoryGB),
+				}
+				resourceOverrides["memory"] = memoryOverrides
+			}
+
+			overrides["resources"] = resourceOverrides
+		}
+
+		// Replica overrides
+		if cfg.OverrideMinReplicas || cfg.OverrideMaxReplicas {
+			replicaOverrides := map[string]interface{}{}
+			if cfg.OverrideMinReplicas {
+				replicaOverrides["min"] = int32(cfg.MinReplicas)
+			}
+			if cfg.OverrideMaxReplicas {
+				replicaOverrides["max"] = int32(cfg.MaxReplicas)
+			}
+			overrides["replicas"] = replicaOverrides
+		}
+
+		if len(overrides) > 0 {
+			spec["overrides"] = overrides
+		}
+	} else {
+		// Inline configuration (backward compatible)
+		spec = map[string]interface{}{
+			"modelName": cfg.ModelName,
+			"modelID":   cfg.ModelID,
+			"s3Bucket":  cfg.S3Bucket,
+			"s3Key":     cfg.S3Key,
+			"enabled":   cfg.Enabled,
+			"resources": resourcesMap,
+		}
+
+		// Add optional fields
+		if cfg.Runtime != "" {
+			spec["runtime"] = cfg.Runtime
+		}
+		if cfg.RuntimeName != "" {
+			spec["runtimeName"] = cfg.RuntimeName
+		}
+		if cfg.MinReplicas > 0 {
+			spec["minReplicas"] = int32(cfg.MinReplicas)
+		}
+		if cfg.MaxReplicas > 0 {
+			spec["maxReplicas"] = int32(cfg.MaxReplicas)
+		}
+		if cfg.TrustRemoteCode {
+			spec["trustRemoteCode"] = true
+		}
 	}
 
 	aimodel := &unstructured.Unstructured{

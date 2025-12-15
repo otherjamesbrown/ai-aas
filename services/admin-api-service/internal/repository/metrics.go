@@ -24,8 +24,10 @@ func (db *DB) UpdateConnectionMetrics() {
 		return
 	}
 
-	stats := db.pool.Stat()
-	metrics.DBConnectionsActive.Set(float64(stats.AcquiredConns()))
+	stats := db.Stats()
+	if stats != nil {
+		metrics.DBConnectionsActive.Set(float64(stats.AcquiredConns()))
+	}
 }
 
 // StartMetricsUpdater starts a goroutine that periodically updates connection metrics

@@ -100,6 +100,15 @@ type AIModelSpec struct {
 	// +optional
 	TrustRemoteCode bool `json:"trustRemoteCode"`
 
+	// RecipeRef references a ModelRecipe to use as the base configuration
+	// +optional
+	RecipeRef *RecipeReference `json:"recipeRef,omitempty"`
+
+	// Overrides allows overriding specific recipe fields
+	// These are deep-merged with the recipe configuration
+	// +optional
+	Overrides *RecipeOverrides `json:"overrides,omitempty"`
+
 	// DEPRECATED: Use MinReplicas/MaxReplicas instead.
 	// Replicas is the number of inference instances to deploy.
 	// +kubebuilder:validation:Minimum=0
@@ -113,6 +122,50 @@ type AIModelSpec struct {
 	// +kubebuilder:default=RollingUpdate
 	// +optional
 	UpdateStrategy UpdateStrategyType `json:"updateStrategy,omitempty"`
+}
+
+// RecipeReference identifies a ModelRecipe
+type RecipeReference struct {
+	// Name is the name of the ModelRecipe
+	Name string `json:"name"`
+
+	// Namespace is the namespace of the ModelRecipe
+	// Defaults to ai-model-system if not specified
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
+}
+
+// RecipeOverrides allows overriding recipe fields
+type RecipeOverrides struct {
+	// Runtime overrides the recipe runtime
+	// +optional
+	Runtime string `json:"runtime,omitempty"`
+
+	// Image overrides the recipe image
+	// +optional
+	Image string `json:"image,omitempty"`
+
+	// Replicas overrides the replica configuration
+	// +optional
+	Replicas *ReplicaOverrides `json:"replicas,omitempty"`
+
+	// Resources overrides resource requirements
+	// +optional
+	Resources *RecipeResources `json:"resources,omitempty"`
+
+	// RuntimeArgs overrides runtime-specific args
+	// +optional
+	RuntimeArgs *RuntimeArgsSpec `json:"runtimeArgs,omitempty"`
+
+	// Scheduling overrides scheduling configuration
+	// +optional
+	Scheduling *SchedulingSpec `json:"scheduling,omitempty"`
+}
+
+// ReplicaOverrides for AIModel
+type ReplicaOverrides struct {
+	Min *int32 `json:"min,omitempty"`
+	Max *int32 `json:"max,omitempty"`
 }
 
 // UpdateStrategyType defines how model updates are deployed

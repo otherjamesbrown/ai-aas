@@ -11,9 +11,11 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/api/middleware"
 	enginesHandler "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/handlers/engines"
 	modelsHandler "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/handlers/models"
+	recipesHandler "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/handlers/recipes"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/config"
 	enginesSvc "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/services/engines"
 	modelsSvc "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/services/models"
+	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/kubernetes"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/repository"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/service"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/storage"
@@ -111,7 +113,7 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 		})
 
 		// Model management routes for ai-aas-cli (spec 020)
-		modelsSvc := modelsHandler.CreateModelsService(db.Pool())
+		modelsSvc := modelsHandler.CreateModelsService(db.ConcretePool())
 
 		// Set up S3 client factory for model rename operations
 		modelsSvc.SetS3ClientFactory(createS3ClientFactory())
@@ -121,9 +123,29 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 		modelsHdlr.RegisterRoutes(r)
 
 		// Inference engine management routes (AIAAS-042)
-		engSvc := enginesSvc.NewService(db.Pool())
+		engSvc := enginesSvc.NewService(db.ConcretePool())
 		engHdlr := enginesHandler.NewHandler(engSvc)
 		engHdlr.RegisterRoutes(r)
+
+		// Model recipe routes (T020)
+		recipeRepo := repository.NewRecipeRepository(db)
+
+		// Create Kubernetes client for recipe deployments listing
+		// If KUBECONFIG is not set, will use in-cluster config (or nil if that fails)
+		var k8sClient service.K8sClient
+		k8sClientImpl, err := kubernetes.NewClient(cfg.Kubeconfig)
+		if err != nil {
+			logger.Warn("failed to create kubernetes client, recipe deployments will return empty list",
+				zap.Error(err),
+			)
+		} else {
+			k8sClient = k8sClientImpl
+		}
+
+		recipeSvc := service.NewRecipeService(recipeRepo, k8sClient, logger)
+		recipeAdapter := recipesHandler.NewServiceAdapter(recipeSvc)
+		recipeHdlr := recipesHandler.NewHandler(recipeAdapter)
+		recipeHdlr.RegisterRoutes(r)
 	})
 
 	return r

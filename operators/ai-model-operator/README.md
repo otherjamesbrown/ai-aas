@@ -113,6 +113,65 @@ operators/ai-model-operator/
 └── README.md                  # This file
 ```
 
+## ModelRecipe CRD
+
+ModelRecipe defines known-good baseline configurations for AI model deployments. Recipes provide validated resource requirements, runtime configurations, and deployment parameters for specific models, reducing trial-and-error in production deployments.
+
+### Example ModelRecipe
+
+```yaml
+apiVersion: ai.ai-aas.io/v1alpha1
+kind: ModelRecipe
+metadata:
+  name: mistral-7b-instruct-v03
+  namespace: ai-model-system
+spec:
+  modelID: mistralai/Mistral-7B-Instruct-v0.3
+  runtime: vllm
+  resources:
+    gpu:
+      count: 1
+      minMemoryGB: 16
+  runtimeArgs:
+    vllm:
+      maxModelLen: 4096
+      gpuMemoryUtilization: "0.9"
+```
+
+### Using Recipes with AIModel
+
+AIModels can reference recipes to inherit baseline configurations and selectively override specific values:
+
+```yaml
+apiVersion: ai.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: my-model
+spec:
+  recipeRef:
+    name: mistral-7b-instruct-v03
+  overrides:
+    resources:
+      gpu:
+        count: 2  # Override GPU count from recipe
+    minReplicas: 1  # Override autoscaling minimum
+```
+
+### Benefits of Recipes
+
+- **Validated configurations**: Pre-tested resource requirements and runtime settings
+- **Consistency**: Standardized deployments across environments
+- **Quick iteration**: Override only what you need to change
+- **Documentation**: Recipes serve as deployment documentation for specific models
+
+### Recipe Inheritance
+
+When an AIModel references a recipe:
+1. Base configuration is loaded from the recipe
+2. AIModel overrides are applied on top
+3. Required fields (modelName, s3Bucket, s3Key) must be specified in AIModel
+4. The operator validates the merged configuration before deployment
+
 ## AIModel CRD
 
 ### Spec Fields
