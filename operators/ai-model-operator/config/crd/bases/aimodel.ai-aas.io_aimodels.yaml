@@ -351,13 +351,6 @@ spec:
                   S3Key is the S3 key (path) to the model artifacts.
                   Optional when TrustRemoteCode is true (model loads directly from HuggingFace).
                 type: string
-              trustRemoteCode:
-                description: |-
-                  TrustRemoteCode allows the runtime to execute custom model code from the model repository.
-                  Required for models with custom architectures not built into transformers.
-                  For vLLM, this adds the --trust-remote-code flag.
-                  When true, S3Bucket and S3Key become optional as the model loads directly from HuggingFace.
-                type: boolean
               tolerations:
                 description: Tolerations specifies tolerations for pod scheduling.
                 items:
@@ -397,6 +390,13 @@ spec:
                       type: string
                   type: object
                 type: array
+              trustRemoteCode:
+                description: |-
+                  TrustRemoteCode allows the runtime to execute custom model code from the model repository.
+                  Required for models with custom architectures not built into transformers.
+                  For vLLM, this adds the --trust-remote-code flag.
+                  When true, S3Bucket and S3Key become optional as the model loads directly from HuggingFace.
+                type: boolean
             required:
             - modelID
             - modelName
