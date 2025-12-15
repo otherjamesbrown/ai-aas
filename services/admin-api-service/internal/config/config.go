@@ -35,6 +35,9 @@ type Config struct {
 	TracingEnabled bool
 	OTLPEndpoint   string
 
+	// Kubernetes settings
+	Kubeconfig string // Path to kubeconfig file (empty = use in-cluster config)
+
 	// Worker settings
 	WorkerEnabled              bool
 	WorkerPollInterval         time.Duration
@@ -58,6 +61,8 @@ func Load() (*Config, error) {
 		MetricsEnabled:  getEnvBool("METRICS_ENABLED", true),
 		TracingEnabled:  getEnvBool("TRACING_ENABLED", false),
 		OTLPEndpoint:    getEnv("OTLP_ENDPOINT", ""),
+		// Kubernetes settings
+		Kubeconfig:      getEnv("KUBECONFIG", ""),
 		// Worker settings
 		WorkerEnabled:                getEnvBool("WORKER_ENABLED", true),
 		WorkerPollInterval:           getEnvDuration("WORKER_POLL_INTERVAL", 5*time.Second),
