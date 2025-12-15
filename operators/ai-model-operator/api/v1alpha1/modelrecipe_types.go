@@ -36,7 +36,7 @@ type ModelRecipeSpec struct {
 	Description string `json:"description,omitempty"`
 
 	// Runtime specifies the inference runtime
-	// +kubebuilder:validation:Enum=vllm;triton;tgi
+	// +kubebuilder:validation:Enum=vllm;triton;tensorrt-llm;tgi
 	// +kubebuilder:default=vllm
 	Runtime string `json:"runtime"`
 

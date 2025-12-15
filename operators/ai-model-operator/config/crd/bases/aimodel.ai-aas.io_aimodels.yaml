@@ -1401,6 +1401,7 @@ spec:
                 enum:
                 - vllm
                 - triton
+                - tensorrt-llm
                 - tgi
                 type: string
               runtimeArgs:
