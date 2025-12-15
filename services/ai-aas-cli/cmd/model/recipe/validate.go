@@ -11,13 +11,20 @@ import (
 
 // RecipeFile represents a recipe YAML file for validation
 // This is different from the Recipe type which represents API responses
+// Supports both simple format and Kubernetes CRD format
 type RecipeFile struct {
-	Name        string                 `yaml:"name" json:"name"`
-	DisplayName string                 `yaml:"display_name" json:"display_name,omitempty"`
-	Description string                 `yaml:"description" json:"description,omitempty"`
-	ModelID     string                 `yaml:"model_id" json:"model_id"`
-	Runtime     string                 `yaml:"runtime" json:"runtime"`
-	Spec        map[string]interface{} `yaml:"spec" json:"spec"`
+	// Simple format fields (top-level)
+	Name        string                 `yaml:"name,omitempty" json:"name,omitempty"`
+	DisplayName string                 `yaml:"display_name,omitempty" json:"display_name,omitempty"`
+	Description string                 `yaml:"description,omitempty" json:"description,omitempty"`
+	ModelID     string                 `yaml:"model_id,omitempty" json:"model_id,omitempty"`
+	Runtime     string                 `yaml:"runtime,omitempty" json:"runtime,omitempty"`
+	Spec        map[string]interface{} `yaml:"spec,omitempty" json:"spec,omitempty"`
+
+	// Kubernetes CRD format fields
+	APIVersion string                 `yaml:"apiVersion,omitempty" json:"apiVersion,omitempty"`
+	Kind       string                 `yaml:"kind,omitempty" json:"kind,omitempty"`
+	Metadata   map[string]interface{} `yaml:"metadata,omitempty" json:"metadata,omitempty"`
 }
 
 // ValidationResult represents the result of a validation
@@ -101,30 +108,63 @@ func validateRecipe(recipe *RecipeFile, filePath string) ValidationResult {
 		Errors: []string{},
 	}
 
+	// Determine if this is a Kubernetes CRD format or simple format
+	isKubernetesCRD := recipe.APIVersion != "" && recipe.Kind != ""
+
+	var name, modelID, runtime string
+	var spec map[string]interface{}
+
+	if isKubernetesCRD {
+		// Extract fields from Kubernetes CRD format
+		if recipe.Metadata != nil {
+			if n, ok := recipe.Metadata["name"].(string); ok {
+				name = n
+			}
+		}
+
+		if recipe.Spec != nil {
+			// Extract modelID from spec
+			if mid, ok := recipe.Spec["modelID"].(string); ok {
+				modelID = mid
+			}
+			// Extract runtime from spec
+			if rt, ok := recipe.Spec["runtime"].(string); ok {
+				runtime = rt
+			}
+			spec = recipe.Spec
+		}
+	} else {
+		// Use top-level fields from simple format
+		name = recipe.Name
+		modelID = recipe.ModelID
+		runtime = recipe.Runtime
+		spec = recipe.Spec
+	}
+
 	// Check required fields
-	if recipe.Name == "" {
+	if name == "" {
 		result.Valid = false
 		result.Errors = append(result.Errors, "name: required field is missing")
 	}
 
-	if recipe.ModelID == "" {
+	if modelID == "" {
 		result.Valid = false
 		result.Errors = append(result.Errors, "model_id: required field is missing")
 	}
 
-	if recipe.Runtime == "" {
+	if runtime == "" {
 		result.Valid = false
 		result.Errors = append(result.Errors, "runtime: required field is missing")
 	} else {
 		// Validate runtime value
 		validRuntimes := []string{"vllm", "triton", "tgi"}
-		if !containsString(validRuntimes, recipe.Runtime) {
+		if !containsString(validRuntimes, runtime) {
 			result.Valid = false
 			result.Errors = append(result.Errors, "runtime: must be one of: vllm, triton, tgi")
 		}
 	}
 
-	if recipe.Spec == nil || len(recipe.Spec) == 0 {
+	if spec == nil || len(spec) == 0 {
 		result.Valid = false
 		result.Errors = append(result.Errors, "spec: required field is missing")
 	}
@@ -163,14 +203,22 @@ func outputResult(cmd *cobra.Command, result ValidationResult, format string) er
 		if result.Valid {
 			// Extract recipe name for output
 			recipeName := result.File
-			// Try to extract name from errors if available
+			// Try to extract name from the file
 			if len(result.Errors) == 0 {
 				// Read the file to get the recipe name
 				data, err := os.ReadFile(result.File)
 				if err == nil {
 					var recipe RecipeFile
-					if err := yaml.Unmarshal(data, &recipe); err == nil && recipe.Name != "" {
-						recipeName = recipe.Name
+					if err := yaml.Unmarshal(data, &recipe); err == nil {
+						// Try simple format first
+						if recipe.Name != "" {
+							recipeName = recipe.Name
+						} else if recipe.Metadata != nil {
+							// Try Kubernetes CRD format
+							if n, ok := recipe.Metadata["name"].(string); ok && n != "" {
+								recipeName = n
+							}
+						}
 					}
 				}
 			}
