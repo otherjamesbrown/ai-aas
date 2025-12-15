@@ -122,7 +122,7 @@ func TestValidator_Validate(t *testing.T) {
 				},
 			},
 			wantErr: true,
-			errMsg:  "runtime must be one of: vllm, triton, tgi",
+			errMsg:  "runtime must be one of: vllm, triton, tensorrt-llm, tgi",
 		},
 		{
 			name: "invalid GPU count",
@@ -264,6 +264,49 @@ func TestValidator_Validate(t *testing.T) {
 			},
 			wantErr: true,
 			errMsg:  "tgi.quantize must be one of",
+		},
+		{
+			name: "valid tensorrt-llm recipe",
+			spec: &aimodelv1alpha1.ModelRecipeSpec{
+				ModelID: "meta-llama/Llama-3.1-8B-Instruct",
+				Runtime: "tensorrt-llm",
+				Resources: aimodelv1alpha1.RecipeResources{
+					GPU: aimodelv1alpha1.GPUResources{
+						Count:  1,
+						Vendor: "nvidia",
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "tensorrt-llm without GPU",
+			spec: &aimodelv1alpha1.ModelRecipeSpec{
+				ModelID: "meta-llama/Llama-3.1-8B-Instruct",
+				Runtime: "tensorrt-llm",
+				Resources: aimodelv1alpha1.RecipeResources{
+					GPU: aimodelv1alpha1.GPUResources{
+						Count: 0,
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "tensorrt-llm runtime requires GPU",
+		},
+		{
+			name: "tensorrt-llm with non-nvidia GPU",
+			spec: &aimodelv1alpha1.ModelRecipeSpec{
+				ModelID: "meta-llama/Llama-3.1-8B-Instruct",
+				Runtime: "tensorrt-llm",
+				Resources: aimodelv1alpha1.RecipeResources{
+					GPU: aimodelv1alpha1.GPUResources{
+						Count:  1,
+						Vendor: "amd",
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "tensorrt-llm runtime requires nvidia GPU vendor",
 		},
 		{
 			name: "wrong runtime args for runtime",
