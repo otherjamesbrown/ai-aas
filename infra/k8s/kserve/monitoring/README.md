@@ -14,6 +14,7 @@ These resources require **Prometheus Operator** to be installed in the cluster, 
 | File | Purpose | Metrics Collected |
 |------|---------|-------------------|
 | `podmonitor-vllm.yaml` | vLLM inference metrics | TTFT, throughput, cache usage, token counts |
+| `podmonitor-tensorrt-llm.yaml` | TensorRT-LLM/Triton inference metrics | Request counts, latencies, queue times, GPU memory |
 | `podmonitor-queue-proxy.yaml` | Knative queue-proxy metrics | Request latency, queue depth, concurrency |
 | `podmonitor-dcgm.yaml` | NVIDIA DCGM GPU metrics | GPU utilization, memory, temperature, power |
 

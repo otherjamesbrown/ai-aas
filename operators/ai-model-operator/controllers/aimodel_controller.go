@@ -1722,10 +1722,35 @@ func (r *AIModelReconciler) convertRecipeRuntimeArgs(runtime string, runtimeArgs
 				args = append(args, "--disable-flash-attention")
 			}
 		}
-	case "triton":
-		// Triton uses config.pbtxt instead of command-line args
-		// The args would be handled differently in the InferenceService spec
-		// For now, we don't convert Triton args to command-line format
+	case "triton", "tensorrt-llm":
+		if runtimeArgs.Triton != nil {
+			tritonArgs := runtimeArgs.Triton
+
+			// Model repository path - can be set via command-line or env var
+			// The ClusterServingRuntime sets --model-store=/mnt/models as default
+			// For now, we don't override it here as it's typically handled by KServe
+			// However, if needed in the future, we could add:
+			// if tritonArgs.ModelRepository != "" {
+			//     args = append(args, fmt.Sprintf("--model-repository=%s", tritonArgs.ModelRepository))
+			// }
+
+			// Backend configuration
+			// Triton backends are configured via config.pbtxt in the model repository
+			// Dynamic batching, instance groups, and tensor configs are also in config.pbtxt
+			// These are not command-line arguments to tritonserver
+
+			// For TensorRT-LLM backend, additional configuration may be needed
+			if tritonArgs.Backend == "tensorrt" {
+				// TensorRT-LLM specific args would go here if needed
+				// Currently, these are handled by the model repository config
+			}
+
+			// Note: Most Triton configuration is done through:
+			// 1. ClusterServingRuntime (server-level args like --http-port, --grpc-port)
+			// 2. Model repository config.pbtxt (model-level config)
+			// 3. Environment variables (set via runtimeEnv in the spec)
+			// This function returns empty args for Triton, which is correct behavior
+		}
 	}
 
 	return args
