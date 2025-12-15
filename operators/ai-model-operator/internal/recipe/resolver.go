@@ -18,26 +18,58 @@ package recipe
 
 import (
 	"context"
-	"errors"
+	"fmt"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	aimodelv1alpha1 "github.com/ai-aas/ai-model-operator/api/v1alpha1"
 )
 
-// Resolver resolves ModelRecipe references
+const (
+	// DefaultRecipeNamespace is the default namespace for ModelRecipes
+	DefaultRecipeNamespace = "ai-model-system"
+)
+
+// Resolver resolves ModelRecipe references to actual ModelRecipe resources
 type Resolver struct {
 	client client.Client
 }
 
 // NewResolver creates a new recipe resolver
-func NewResolver(c client.Client) *Resolver {
-	return &Resolver{client: c}
+func NewResolver(client client.Client) *Resolver {
+	return &Resolver{
+		client: client,
+	}
 }
 
 // ResolveRecipe resolves a RecipeReference to a ModelRecipe
-// This is a stub implementation for testing - will be implemented in T009
 func (r *Resolver) ResolveRecipe(ctx context.Context, ref *aimodelv1alpha1.RecipeReference) (*aimodelv1alpha1.ModelRecipe, error) {
-	// Stub implementation that will fail all tests
-	return nil, errors.New("not implemented")
+	// Handle nil reference
+	if ref == nil {
+		return nil, fmt.Errorf("recipe reference is nil")
+	}
+
+	// Handle empty name
+	if ref.Name == "" {
+		return nil, fmt.Errorf("recipe name is empty")
+	}
+
+	// Default namespace to ai-model-system if empty
+	namespace := ref.Namespace
+	if namespace == "" {
+		namespace = DefaultRecipeNamespace
+	}
+
+	// Fetch the ModelRecipe from Kubernetes
+	recipe := &aimodelv1alpha1.ModelRecipe{}
+	err := r.client.Get(ctx, client.ObjectKey{
+		Name:      ref.Name,
+		Namespace: namespace,
+	}, recipe)
+
+	if err != nil {
+		return nil, fmt.Errorf("recipe %s not found: %w", ref.Name, err)
+	}
+
+	return recipe, nil
 }

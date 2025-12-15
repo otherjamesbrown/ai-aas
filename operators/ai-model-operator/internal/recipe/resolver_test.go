@@ -29,11 +29,6 @@ import (
 	aimodelv1alpha1 "github.com/ai-aas/ai-model-operator/api/v1alpha1"
 )
 
-const (
-	// DefaultRecipeNamespace is the default namespace for ModelRecipes
-	DefaultRecipeNamespace = "ai-model-system"
-)
-
 // TestResolveRecipe_Success tests successful recipe resolution
 func TestResolveRecipe_Success(t *testing.T) {
 	// Setup
