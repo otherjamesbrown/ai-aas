@@ -1,0 +1,47 @@
+apiVersion: ai.ai-aas.io/v1alpha1
+kind: ModelRecipe
+metadata:
+  name: mistral-7b-instruct-v03
+  namespace: ai-model-system
+  labels:
+    ai.ai-aas.io/model-family: mistral
+    ai.ai-aas.io/model-size: 7b
+    ai.ai-aas.io/task: text-generation
+    ai.ai-aas.io/runtime: vllm
+spec:
+  modelID: mistralai/Mistral-7B-Instruct-v0.3
+  displayName: "Mistral 7B Instruct v0.3"
+  description: "Mistral 7B instruction-tuned model optimized for conversational tasks"
+  runtime: vllm
+  resources:
+    gpu:
+      vendor: nvidia
+      count: 1
+      minMemoryGB: 16
+    cpu:
+      requests: "4"
+      limits: "8"
+    memory:
+      requests: "16Gi"
+      limits: "24Gi"
+  runtimeArgs:
+    vllm:
+      dtype: auto
+      maxModelLen: 8192
+      gpuMemoryUtilization: "0.9"
+      tokenizerMode: mistral
+  scheduling:
+    tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+  healthCheck:
+    startupProbeSeconds: 300
+    livenessPath: /health
+    readinessPath: /health
+  metadata:
+    parameters: "7B"
+    contextLength: 8192
+    architecture: Mistral
+    license: Apache-2.0
+    sourceURL: https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3
