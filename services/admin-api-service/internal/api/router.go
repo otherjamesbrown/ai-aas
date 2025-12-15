@@ -11,6 +11,7 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/api/middleware"
 	enginesHandler "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/handlers/engines"
 	modelsHandler "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/handlers/models"
+	recipesHandler "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/handlers/recipes"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/config"
 	enginesSvc "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/services/engines"
 	modelsSvc "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/services/models"
@@ -124,6 +125,13 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 		engSvc := enginesSvc.NewService(db.Pool())
 		engHdlr := enginesHandler.NewHandler(engSvc)
 		engHdlr.RegisterRoutes(r)
+
+		// Model recipe routes (T020)
+		recipeRepo := repository.NewRecipeRepository(db)
+		recipeSvc := service.NewRecipeService(recipeRepo, logger)
+		recipeAdapter := recipesHandler.NewServiceAdapter(recipeSvc)
+		recipeHdlr := recipesHandler.NewHandler(recipeAdapter)
+		recipeHdlr.RegisterRoutes(r)
 	})
 
 	return r
