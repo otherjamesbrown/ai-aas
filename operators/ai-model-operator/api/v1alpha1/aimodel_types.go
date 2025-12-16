@@ -52,7 +52,7 @@ type AIModelSpec struct {
 	Enabled bool `json:"enabled,omitempty"`
 
 	// Runtime specifies the inference runtime to use.
-	// +kubebuilder:validation:Enum=vllm;triton;tgi
+	// +kubebuilder:validation:Enum=vllm;triton;tensorrt-llm;tgi
 	// +kubebuilder:default=vllm
 	Runtime string `json:"runtime,omitempty"`
 

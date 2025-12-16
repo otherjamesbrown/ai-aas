@@ -45,6 +45,10 @@ type InferenceServiceBuilder struct {
 	containerImage              string
 	modelID                     string // HuggingFace model ID for direct loading
 	livenessInitialDelaySeconds int32  // InitialDelaySeconds for liveness probe
+	// Health probe configuration
+	livenessPath  string // Path for liveness probe (default: /health)
+	readinessPath string // Path for readiness probe (default: /health)
+	probePort     int32  // Port for health probes (default: 8000)
 }
 
 // NewInferenceServiceBuilder creates a new InferenceServiceBuilder
@@ -189,6 +193,14 @@ func (b *InferenceServiceBuilder) WithUpdateStrategy(strategy string) *Inference
 // WithLivenessInitialDelay sets the initialDelaySeconds for the liveness probe
 func (b *InferenceServiceBuilder) WithLivenessInitialDelay(seconds int32) *InferenceServiceBuilder {
 	b.livenessInitialDelaySeconds = seconds
+	return b
+}
+
+// WithHealthProbes sets the health probe paths and port
+func (b *InferenceServiceBuilder) WithHealthProbes(livenessPath, readinessPath string, port int32) *InferenceServiceBuilder {
+	b.livenessPath = livenessPath
+	b.readinessPath = readinessPath
+	b.probePort = port
 	return b
 }
 
@@ -463,6 +475,20 @@ func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructu
 		args = append(args, arg)
 	}
 
+	// Set default probe paths and port if not specified
+	livenessPath := b.livenessPath
+	if livenessPath == "" {
+		livenessPath = "/health"
+	}
+	readinessPath := b.readinessPath
+	if readinessPath == "" {
+		readinessPath = "/health"
+	}
+	probePort := b.probePort
+	if probePort == 0 {
+		probePort = 8000
+	}
+
 	// Build container spec
 	container := map[string]interface{}{
 		"name":      "kserve-container",
@@ -483,8 +509,8 @@ func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructu
 		// See: https://github.com/knative/serving/issues/10037
 		"readinessProbe": map[string]interface{}{
 			"httpGet": map[string]interface{}{
-				"path": "/health",
-				"port": int64(8000),
+				"path": readinessPath,
+				"port": int64(probePort),
 			},
 			"periodSeconds":    int64(10),
 			"failureThreshold": int64(3),
@@ -492,8 +518,8 @@ func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructu
 		},
 		"livenessProbe": map[string]interface{}{
 			"httpGet": map[string]interface{}{
-				"path": "/health",
-				"port": int64(8000),
+				"path": livenessPath,
+				"port": int64(probePort),
 			},
 			"initialDelaySeconds": int64(b.livenessInitialDelaySeconds),
 			"periodSeconds":       int64(30),

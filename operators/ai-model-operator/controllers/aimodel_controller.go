@@ -1151,6 +1151,9 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		case "triton":
 			modelFormat = "tensorrt"
 			runtimeName = "kserve-tritonserver"
+		case "tensorrt-llm":
+			modelFormat = "tensorrt-llm"
+			runtimeName = "kserve-tensorrt-llm"
 		default:
 			// For custom runtimes, use the runtime value as the runtime name
 			runtimeName = runtime
@@ -1213,6 +1216,29 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		updateStrategy = string(aimodelv1alpha1.UpdateStrategyRollingUpdate)
 	}
 
+	// Get health check configuration from recipe or set runtime-aware defaults
+	livenessPath := "/health"
+	readinessPath := "/health"
+	probePort := int32(8000)
+
+	// Use recipe health check config if available
+	if recipeSpec != nil && recipeSpec.HealthCheck.LivenessPath != "" {
+		livenessPath = recipeSpec.HealthCheck.LivenessPath
+	}
+	if recipeSpec != nil && recipeSpec.HealthCheck.ReadinessPath != "" {
+		readinessPath = recipeSpec.HealthCheck.ReadinessPath
+	}
+
+	// Set runtime-aware defaults if recipe doesn't specify paths
+	if recipeSpec == nil || recipeSpec.HealthCheck.LivenessPath == "" {
+		switch runtime {
+		case "triton", "tensorrt-llm":
+			livenessPath = "/v2/health/live"
+			readinessPath = "/v2/health/ready"
+			probePort = 8080
+		}
+	}
+
 	// from the HuggingFace repo, which isn't preserved in S3 storage.
 	if aiModel.Spec.TrustRemoteCode && aiModel.Spec.ModelID != "" {
 		log.Info("Using container-based deployment for trust_remote_code model",
@@ -1242,6 +1268,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 			WithRuntimeEnv(runtimeEnv).
 			WithUpdateStrategy(updateStrategy).
 			WithLivenessInitialDelay(livenessInitialDelay).
+			WithHealthProbes(livenessPath, readinessPath, probePort).
 			WithOwnerReference(ownerRef).
 			BuildContainerBased()
 		if err != nil {
@@ -1268,6 +1295,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 			WithRuntimeArgs(runtimeArgs).
 			WithRuntimeEnv(runtimeEnv).
 			WithUpdateStrategy(updateStrategy).
+			WithHealthProbes(livenessPath, readinessPath, probePort).
 			WithOwnerReference(ownerRef).
 			Build()
 		if err != nil {
@@ -1694,10 +1722,35 @@ func (r *AIModelReconciler) convertRecipeRuntimeArgs(runtime string, runtimeArgs
 				args = append(args, "--disable-flash-attention")
 			}
 		}
-	case "triton":
-		// Triton uses config.pbtxt instead of command-line args
-		// The args would be handled differently in the InferenceService spec
-		// For now, we don't convert Triton args to command-line format
+	case "triton", "tensorrt-llm":
+		if runtimeArgs.Triton != nil {
+			tritonArgs := runtimeArgs.Triton
+
+			// Model repository path - can be set via command-line or env var
+			// The ClusterServingRuntime sets --model-store=/mnt/models as default
+			// For now, we don't override it here as it's typically handled by KServe
+			// However, if needed in the future, we could add:
+			// if tritonArgs.ModelRepository != "" {
+			//     args = append(args, fmt.Sprintf("--model-repository=%s", tritonArgs.ModelRepository))
+			// }
+
+			// Backend configuration
+			// Triton backends are configured via config.pbtxt in the model repository
+			// Dynamic batching, instance groups, and tensor configs are also in config.pbtxt
+			// These are not command-line arguments to tritonserver
+
+			// For TensorRT-LLM backend, additional configuration may be needed
+			if tritonArgs.Backend == "tensorrt" {
+				// TensorRT-LLM specific args would go here if needed
+				// Currently, these are handled by the model repository config
+			}
+
+			// Note: Most Triton configuration is done through:
+			// 1. ClusterServingRuntime (server-level args like --http-port, --grpc-port)
+			// 2. Model repository config.pbtxt (model-level config)
+			// 3. Environment variables (set via runtimeEnv in the spec)
+			// This function returns empty args for Triton, which is correct behavior
+		}
 	}
 
 	return args

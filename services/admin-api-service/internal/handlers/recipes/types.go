@@ -27,7 +27,7 @@ type Service interface {
 
 // ListRecipesOptions contains options for listing recipes
 type ListRecipesOptions struct {
-	Runtime string // Filter by runtime (vllm, triton, tgi)
+	Runtime string // Filter by runtime (vllm, triton, tensorrt-llm, tgi)
 }
 
 // Recipe represents a model recipe in the database

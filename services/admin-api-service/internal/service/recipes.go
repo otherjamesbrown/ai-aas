@@ -133,7 +133,7 @@ func (s *RecipeServiceImpl) CreateRecipe(ctx context.Context, input *CreateRecip
 	}
 
 	// Validate runtime
-	if input.Runtime != "vllm" && input.Runtime != "triton" && input.Runtime != "tgi" {
+	if !domain.IsValidRuntime(input.Runtime) {
 		return nil, ErrInvalidRuntime
 	}
 
@@ -315,11 +315,11 @@ func (s *RecipeServiceImpl) ValidateRecipe(ctx context.Context, spec map[string]
 	result.Runtime = runtime
 
 	// Validate runtime value
-	if runtime != "vllm" && runtime != "triton" && runtime != "tgi" {
+	if !domain.IsValidRuntime(runtime) {
 		result.Valid = false
 		result.Errors = append(result.Errors, ValidationError{
 			Field:   "runtime",
-			Message: "runtime must be one of: vllm, triton, tgi",
+			Message: fmt.Sprintf("runtime must be one of: %v", domain.ValidRuntimes),
 		})
 	}
 
