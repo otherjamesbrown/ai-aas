@@ -27,16 +27,12 @@ type ModelsResponse struct {
 }
 
 // AdminAPIModelResponse represents a single model from Admin API /v1/models.
+// This matches the Model struct returned by admin-api-service.
 type AdminAPIModelResponse struct {
-	Name        string `json:"name"`
-	DisplayName string `json:"display_name"`
-	HFModelID   string `json:"hf_model_id"`
-	Enabled     bool   `json:"enabled"`
-}
-
-// AdminAPIModelsResponse represents the response from Admin API GET /v1/models.
-type AdminAPIModelsResponse struct {
-	Models []AdminAPIModelResponse `json:"models"`
+	Name             string  `json:"name"`
+	HFModelID        string  `json:"hf_model_id"`
+	CacheStatus      *string `json:"cache_status"`
+	DeploymentStatus *string `json:"deployment_status"`
 }
 
 // fetchModelsFromAdminAPI fetches models from the Admin API service.
@@ -68,12 +64,13 @@ func (h *Handler) fetchModelsFromAdminAPI(ctx context.Context) ([]AdminAPIModelR
 		return nil, fmt.Errorf("admin api returned %d: %s", resp.StatusCode, string(body))
 	}
 
-	var adminResp AdminAPIModelsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&adminResp); err != nil {
+	// Admin API returns an array directly, not wrapped in an object
+	var models []AdminAPIModelResponse
+	if err := json.NewDecoder(resp.Body).Decode(&models); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
-	return adminResp.Models, nil
+	return models, nil
 }
 
 // HandleModels handles GET /v1/models requests (OpenAI-compatible).
@@ -95,10 +92,11 @@ func (h *Handler) HandleModels(w http.ResponseWriter, r *http.Request) {
 		// Fall back to empty list rather than failing the request
 		models = make([]ModelObject, 0)
 	} else {
-		// Filter to only enabled models and convert to OpenAI format
+		// Filter to only deployed/ready models and convert to OpenAI format
 		models = make([]ModelObject, 0, len(adminModels))
 		for _, adminModel := range adminModels {
-			if adminModel.Enabled {
+			// Only include models that are deployed and ready
+			if adminModel.DeploymentStatus != nil && *adminModel.DeploymentStatus == "ready" {
 				models = append(models, ModelObject{
 					ID:      adminModel.Name,
 					Object:  "model",
