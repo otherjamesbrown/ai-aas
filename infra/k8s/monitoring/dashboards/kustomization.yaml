@@ -39,9 +39,23 @@ configMapGenerator:
       labels:
         grafana_dashboard: "1"
 
+  - name: grafana-dashboard-gpu-fleet
+    files:
+      - gpu-fleet.json
+    options:
+      labels:
+        grafana_dashboard: "1"
+
   - name: grafana-dashboard-kubernetes-resources
     files:
       - kubernetes-resources.json
+    options:
+      labels:
+        grafana_dashboard: "1"
+
+  - name: grafana-dashboard-api-performance-v2
+    files:
+      - api-performance-v2.json
     options:
       labels:
         grafana_dashboard: "1"
