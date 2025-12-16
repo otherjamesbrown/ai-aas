@@ -28,6 +28,7 @@ func TestChatCompletionsHealthEndpoint(t *testing.T) {
 		nil, // config loader not needed for health endpoint
 		nil, // backend client not needed for health endpoint
 		backendRegistry,
+		nil, // model registry not needed for health endpoint
 		nil, // routing engine not needed for health endpoint
 		nil, // routing metrics not needed for health endpoint
 		nil, // usage hook not needed for health endpoint
@@ -93,6 +94,7 @@ func TestChatCompletionsHealthNoAuthRequired(t *testing.T) {
 		nil,
 		nil,
 		backendRegistry,
+		nil,
 		nil,
 		nil,
 		nil,

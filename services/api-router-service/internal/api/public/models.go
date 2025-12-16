@@ -24,35 +24,40 @@ type ModelsResponse struct {
 }
 
 // HandleModels handles GET /v1/models requests (OpenAI-compatible).
-// Returns a list of available models based on registered backends.
+// Returns a list of available models based on the model registry.
+// Only returns models with deployment_status = 'ready' and a valid deployment_endpoint.
 func (h *Handler) HandleModels(w http.ResponseWriter, r *http.Request) {
 	h.logger.Debug("handling models list request",
 		zap.String("method", r.Method),
 		zap.String("path", r.URL.Path))
 
-	// Get all registered backend IDs
-	backendIDs := h.backendRegistry.ListBackends()
-
-	// Build model list from backends
-	models := make([]ModelObject, 0, len(backendIDs))
+	// Get ready models from model registry
+	var models []ModelObject
 	createdTimestamp := time.Now().Unix()
 
-	for _, backendID := range backendIDs {
-		backend, err := h.backendRegistry.GetBackend(backendID)
+	// If ModelRegistry is available, query it
+	if h.modelRegistry != nil {
+		entries, err := h.modelRegistry.ListReadyModels(r.Context())
 		if err != nil {
-			h.logger.Warn("failed to get backend",
-				zap.String("backend_id", backendID),
+			h.logger.Error("failed to list ready models from registry",
 				zap.Error(err))
-			continue
+			// Fall back to empty list rather than failing the request
+			models = make([]ModelObject, 0)
+		} else {
+			models = make([]ModelObject, 0, len(entries))
+			for _, entry := range entries {
+				models = append(models, ModelObject{
+					ID:      entry.ModelName,
+					Object:  "model",
+					Created: createdTimestamp,
+					OwnedBy: "ai-aas",
+				})
+			}
 		}
-
-		// Use backend ID as model ID (e.g., "vllm-gpt-oss-20b")
-		models = append(models, ModelObject{
-			ID:      backend.ID,
-			Object:  "model",
-			Created: createdTimestamp,
-			OwnedBy: "ai-aas",
-		})
+	} else {
+		// Fallback: If ModelRegistry is not configured, return empty list
+		h.logger.Warn("model registry not configured, returning empty model list")
+		models = make([]ModelObject, 0)
 	}
 
 	response := ModelsResponse{

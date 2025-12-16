@@ -32,6 +32,7 @@ type Handler struct {
 	configLoader      *config.Loader
 	backendClient     *routing.BackendClient
 	backendRegistry   *config.BackendRegistry
+	modelRegistry     *routing.Registry
 	routingEngine     *routing.Engine
 	routingMetrics    *telemetry.RoutingMetrics
 	usageHook         *UsageHook
@@ -49,6 +50,7 @@ func NewHandler(
 	configLoader *config.Loader,
 	backendClient *routing.BackendClient,
 	backendRegistry *config.BackendRegistry,
+	modelRegistry *routing.Registry,
 	routingEngine *routing.Engine,
 	routingMetrics *telemetry.RoutingMetrics,
 	usageHook *UsageHook,
@@ -60,6 +62,7 @@ func NewHandler(
 		configLoader:    configLoader,
 		backendClient:   backendClient,
 		backendRegistry: backendRegistry,
+		modelRegistry:   modelRegistry,
 		routingEngine:   routingEngine,
 		routingMetrics:  routingMetrics,
 		usageHook:       usageHook,
