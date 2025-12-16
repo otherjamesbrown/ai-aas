@@ -1,4 +1,4 @@
-apiVersion: ai.ai-aas.io/v1alpha1
+apiVersion: aimodel.ai-aas.io/v1alpha1
 kind: ModelRecipe
 metadata:
   name: gpt-oss-20b
