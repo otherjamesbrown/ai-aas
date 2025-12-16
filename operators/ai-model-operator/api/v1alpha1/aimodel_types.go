@@ -30,7 +30,11 @@ type AIModelSpec struct {
 	// Important: Run "make generate" to regenerate code after modifying this file
 
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^[a-z]([a-z0-9-]*[a-z0-9])?$`
 	// ModelName is the human-readable name of the AI model.
+	// Must be DNS-compatible: lowercase alphanumeric and hyphens only, must start
+	// with a letter and end with alphanumeric. No periods allowed (use hyphens instead,
+	// e.g., "llama-3-1-8b" not "llama-3.1-8b").
 	ModelName string `json:"modelName"`
 
 	// ModelID is the unique identifier for the model (e.g., HuggingFace model ID).

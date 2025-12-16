@@ -71,6 +71,22 @@ const (
 	maxDeploymentRetryDelay     = 10 * time.Minute // Max wait between retries
 )
 
+// sanitizeInferenceServiceName converts an AIModel name to a KServe-compatible name.
+// KServe InferenceService names must be DNS-compatible: lowercase alphanumeric and hyphens only,
+// must start with a letter and end with alphanumeric. Periods are not allowed.
+// Example: "llama-3.1-8b-instruct" -> "llama-3-1-8b-instruct"
+func sanitizeInferenceServiceName(name string) string {
+	// Replace periods with hyphens (most common issue)
+	sanitized := strings.ReplaceAll(name, ".", "-")
+	// Replace any consecutive hyphens with single hyphen
+	for strings.Contains(sanitized, "--") {
+		sanitized = strings.ReplaceAll(sanitized, "--", "-")
+	}
+	// Trim leading/trailing hyphens
+	sanitized = strings.Trim(sanitized, "-")
+	return sanitized
+}
+
 var (
 	reconcileTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -237,7 +253,7 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		// Delete InferenceService to stop all pods and release GPU resources
 		isvc := &unstructured.Unstructured{}
 		isvc.SetGroupVersionKind(kserve.InferenceServiceGVK)
-		err := r.Get(ctx, types.NamespacedName{Name: aiModel.Name, Namespace: aiModel.Namespace}, isvc)
+		err := r.Get(ctx, types.NamespacedName{Name: sanitizeInferenceServiceName(aiModel.Name), Namespace: aiModel.Namespace}, isvc)
 		if err == nil {
 			// InferenceService exists, delete it
 			log.Info("Deleting InferenceService for disabled model", "name", aiModel.Name)
@@ -569,7 +585,7 @@ func (r *AIModelReconciler) finalizeAIModel(ctx context.Context, aiModel *aimode
 	// Delete InferenceService
 	isvc := &unstructured.Unstructured{}
 	isvc.SetGroupVersionKind(kserve.InferenceServiceGVK)
-	if err := r.Get(ctx, client.ObjectKey{Name: aiModel.Name, Namespace: aiModel.Namespace}, isvc); err == nil {
+	if err := r.Get(ctx, client.ObjectKey{Name: sanitizeInferenceServiceName(aiModel.Name), Namespace: aiModel.Namespace}, isvc); err == nil {
 		log.Info("Deleting InferenceService", "name", aiModel.Name)
 		if err := r.Delete(ctx, isvc); err != nil && !errors.IsNotFound(err) {
 			log.Error(err, "Failed to delete InferenceService", "name", aiModel.Name)
@@ -1256,7 +1272,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		// Use the HuggingFace model ID as the served name so vLLM accepts requests
 		// with the full HF ID (e.g., "unsloth/gpt-oss-20b"). This allows multiple
 		// models with the same base name but different sources to coexist.
-		isvc, err = kserve.NewInferenceServiceBuilder(aiModel.Name, aiModel.Namespace).
+		isvc, err = kserve.NewInferenceServiceBuilder(sanitizeInferenceServiceName(aiModel.Name), aiModel.Namespace).
 			WithContainerImage(containerImage).
 			WithModelID(aiModel.Spec.ModelID).
 			WithServedName(aiModel.Spec.ModelID).
@@ -1283,7 +1299,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		if servedName == "" {
 			servedName = aiModel.Spec.ModelName // Fallback for legacy models
 		}
-		isvc, err = kserve.NewInferenceServiceBuilder(aiModel.Name, aiModel.Namespace).
+		isvc, err = kserve.NewInferenceServiceBuilder(sanitizeInferenceServiceName(aiModel.Name), aiModel.Namespace).
 			WithStorageUri(storageUri).
 			WithModelFormat(modelFormat).
 			WithServedName(servedName).
@@ -1306,7 +1322,8 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 	// Check if InferenceService already exists
 	existing := &unstructured.Unstructured{}
 	existing.SetGroupVersionKind(kserve.InferenceServiceGVK)
-	err = r.Get(ctx, types.NamespacedName{Name: aiModel.Name, Namespace: aiModel.Namespace}, existing)
+	isvcName := sanitizeInferenceServiceName(aiModel.Name)
+	err = r.Get(ctx, types.NamespacedName{Name: isvcName, Namespace: aiModel.Namespace}, existing)
 
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -1374,7 +1391,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		// Fetch the latest version of the InferenceService
 		latest := &unstructured.Unstructured{}
 		latest.SetGroupVersionKind(kserve.InferenceServiceGVK)
-		if err := r.Get(ctx, types.NamespacedName{Name: aiModel.Name, Namespace: aiModel.Namespace}, latest); err != nil {
+		if err := r.Get(ctx, types.NamespacedName{Name: isvcName, Namespace: aiModel.Namespace}, latest); err != nil {
 			// Permanent error - don't retry
 			lastErr = fmt.Errorf("failed to get InferenceService: %w", err)
 			return false, lastErr
@@ -1429,8 +1446,9 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 	// Get the InferenceService
 	isvc := &unstructured.Unstructured{}
 	isvc.SetGroupVersionKind(kserve.InferenceServiceGVK)
+	isvcName := sanitizeInferenceServiceName(aiModel.Name)
 
-	err := r.Get(ctx, types.NamespacedName{Name: aiModel.Name, Namespace: aiModel.Namespace}, isvc)
+	err := r.Get(ctx, types.NamespacedName{Name: isvcName, Namespace: aiModel.Namespace}, isvc)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			log.Info("InferenceService not found, skipping status update", "name", aiModel.Name)
@@ -1445,8 +1463,8 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 		return fmt.Errorf("failed to extract InferenceService status: %w", err)
 	}
 
-	// Update AIModel status
-	aiModel.Status.InferenceServiceName = aiModel.Name
+	// Update AIModel status (use sanitized name for InferenceService)
+	aiModel.Status.InferenceServiceName = isvcName
 	aiModel.Status.InferenceEndpoint = status.URL
 	aiModel.Status.ReadyReplicas = status.ReadyReplicas
 
