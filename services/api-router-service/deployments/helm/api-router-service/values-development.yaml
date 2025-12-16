@@ -64,7 +64,7 @@ autoscaling:
 
 startupProbe:
   path: /v1/status/healthz
-  failureThreshold: 30
+  failureThreshold: 60  # Increased to allow for database connection during startup
   periodSeconds: 2
   timeoutSeconds: 5
 
