@@ -40,7 +40,7 @@ jobs:
           # Check AIModel CRD
           echo "Checking AIModel CRD..."
           SOURCE_CRD="$SOURCE_DIR/aimodel.ai-aas.io_aimodels.yaml"
-          HELM_CRD="$HELM_CRD_DIR/aimodel.yaml"
+          HELM_CRD="$HELM_CRD_DIR/aimodel.ai-aas.io_aimodels.yaml"
 
           if [ ! -f "$SOURCE_CRD" ]; then
             echo "❌ Source CRD not found: $SOURCE_CRD"
@@ -66,7 +66,7 @@ jobs:
           # Check ModelRecipe CRD
           echo "Checking ModelRecipe CRD..."
           SOURCE_CRD="$SOURCE_DIR/aimodel.ai-aas.io_modelrecipes.yaml"
-          HELM_CRD="$HELM_CRD_DIR/modelrecipe.yaml"
+          HELM_CRD="$HELM_CRD_DIR/aimodel.ai-aas.io_modelrecipes.yaml"
 
           if [ ! -f "$SOURCE_CRD" ]; then
             echo "❌ Source CRD not found: $SOURCE_CRD"
