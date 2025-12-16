@@ -29,8 +29,9 @@ services/admin-api-service/admin-api-service
 migrate.env
 migrate.env.tmp
 
-# Beads issue tracking (local only)
-.beads/
+# Beads issue tracking
+# Note: .beads/.gitignore handles ignoring databases/temp files
+# while keeping issues.jsonl tracked for sync
 
 # Claude Code extension
 .cxp/
