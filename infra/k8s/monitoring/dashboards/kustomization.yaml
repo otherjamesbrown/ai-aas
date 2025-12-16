@@ -38,3 +38,10 @@ configMapGenerator:
     options:
       labels:
         grafana_dashboard: "1"
+
+  - name: grafana-dashboard-kubernetes-resources
+    files:
+      - kubernetes-resources.json
+    options:
+      labels:
+        grafana_dashboard: "1"
