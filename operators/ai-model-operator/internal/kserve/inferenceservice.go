@@ -234,8 +234,21 @@ func (b *InferenceServiceBuilder) Build() (*unstructured.Unstructured, error) {
 	// we use aggressive GC settings (min=1, max=2 non-active revisions) to
 	// prevent old revisions from holding GPU resources. See:
 	// infra/k8s/knative-serving/config-gc.yaml
+	//
+	// Deployment mode selection:
+	// - Serverless (Knative): Default mode with autoscaling, but has restrictions
+	//   (single port, no nodeSelector allowed by Knative validation)
+	// - RawDeployment: Uses standard Kubernetes Deployments, allows nodeSelector
+	//   and multiple ports for runtimes like TensorRT-LLM/Triton
+	deploymentMode := "Serverless"
+	if len(b.nodeSelector) > 0 {
+		// Knative Serving validation doesn't allow nodeSelector in pod spec.
+		// Use RawDeployment mode to bypass Knative and use standard Kubernetes Deployments.
+		// This also allows ClusterServingRuntimes with multiple ports (http, grpc, metrics).
+		deploymentMode = "RawDeployment"
+	}
 	annotations := map[string]interface{}{
-		"serving.kserve.io/deploymentMode": "Serverless",
+		"serving.kserve.io/deploymentMode": deploymentMode,
 		"ai-aas.io/probe-config-version":   probeConfigVersion, // Track probe config version for reconciliation
 	}
 
@@ -410,8 +423,18 @@ func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructu
 	}
 
 	// Build annotations with extended timeout for model loading
+	// Deployment mode selection:
+	// - Serverless (Knative): Default mode with autoscaling, but has restrictions
+	//   (single port, no nodeSelector allowed by Knative validation)
+	// - RawDeployment: Uses standard Kubernetes Deployments, allows nodeSelector
+	deploymentMode := "Serverless"
+	if len(b.nodeSelector) > 0 {
+		// Knative Serving validation doesn't allow nodeSelector in pod spec.
+		// Use RawDeployment mode to bypass Knative and use standard Kubernetes Deployments.
+		deploymentMode = "RawDeployment"
+	}
 	annotations := map[string]interface{}{
-		"serving.kserve.io/deploymentMode":       "Serverless",
+		"serving.kserve.io/deploymentMode":       deploymentMode,
 		"serving.knative.dev/progress-deadline":  "900s", // 15 min for large model download
 		"ai-aas.io/probe-config-version":         probeConfigVersion, // Track probe config version for reconciliation
 	}
