@@ -387,6 +387,13 @@ func main() {
 		routingMetrics = nil
 	}
 
+	// Initialize token metrics
+	tokenMetrics, err := telemetry.NewTokenMetrics(logger)
+	if err != nil {
+		logger.Warn("failed to initialize token metrics", zap.Error(err))
+		tokenMetrics = nil
+	}
+
 	// Register backends with health monitor
 	for _, backendID := range backendRegistry.ListBackends() {
 		backendCfg, err := backendRegistry.GetBackend(backendID)
@@ -405,7 +412,7 @@ func main() {
 	defer healthMonitor.Stop()
 
 	// Initialize public API handler with routing engine and usage hook
-	publicHandler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, routingEngine, routingMetrics, usageHook)
+	publicHandler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, routingEngine, routingMetrics, tokenMetrics, usageHook)
 	publicHandler.SetUserOrgServiceURL(cfg.UserOrgServiceURL)
 
 	// Create tracer for middleware

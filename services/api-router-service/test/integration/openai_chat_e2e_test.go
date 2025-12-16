@@ -116,7 +116,7 @@ func TestOpenAIChatCompletions_E2E(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil)
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil)
 
 	// Configure handler to use REAL vLLM backend
 	realBackendURI := fmt.Sprintf("%s/v1/chat/completions", vllmURL)

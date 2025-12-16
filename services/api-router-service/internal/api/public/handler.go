@@ -34,6 +34,7 @@ type Handler struct {
 	backendRegistry   *config.BackendRegistry
 	routingEngine     *routing.Engine
 	routingMetrics    *telemetry.RoutingMetrics
+	tokenMetrics      *telemetry.TokenMetrics
 	usageHook         *UsageHook
 	tracer            trace.Tracer
 	errorBuilder      *api.ErrorBuilder
@@ -51,6 +52,7 @@ func NewHandler(
 	backendRegistry *config.BackendRegistry,
 	routingEngine *routing.Engine,
 	routingMetrics *telemetry.RoutingMetrics,
+	tokenMetrics *telemetry.TokenMetrics,
 	usageHook *UsageHook,
 ) *Handler {
 	tracer := otel.Tracer("api-router-service")
@@ -62,6 +64,7 @@ func NewHandler(
 		backendRegistry: backendRegistry,
 		routingEngine:   routingEngine,
 		routingMetrics:  routingMetrics,
+		tokenMetrics:    tokenMetrics,
 		usageHook:       usageHook,
 		tracer:          tracer,
 		errorBuilder:    api.NewErrorBuilder(tracer),
