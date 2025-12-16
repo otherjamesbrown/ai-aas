@@ -92,18 +92,17 @@ func (h *Handler) HandleModels(w http.ResponseWriter, r *http.Request) {
 		// Fall back to empty list rather than failing the request
 		models = make([]ModelObject, 0)
 	} else {
-		// Filter to only deployed/ready models and convert to OpenAI format
+		// Convert all models to OpenAI format
+		// Models in the registry are available for routing - actual availability
+		// depends on backend configuration in routing policies
 		models = make([]ModelObject, 0, len(adminModels))
 		for _, adminModel := range adminModels {
-			// Only include models that are deployed and ready
-			if adminModel.DeploymentStatus != nil && *adminModel.DeploymentStatus == "ready" {
-				models = append(models, ModelObject{
-					ID:      adminModel.Name,
-					Object:  "model",
-					Created: createdTimestamp,
-					OwnedBy: "ai-aas",
-				})
-			}
+			models = append(models, ModelObject{
+				ID:      adminModel.Name,
+				Object:  "model",
+				Created: createdTimestamp,
+				OwnedBy: "ai-aas",
+			})
 		}
 	}
 
