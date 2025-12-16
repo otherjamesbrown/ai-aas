@@ -112,12 +112,6 @@ env:
     value: "3600"
   - name: CORS_ALLOW_CREDENTIALS
     value: "true"
-  # Database connection for ModelRegistry (/v1/models endpoint)
-  - name: DATABASE_URL
-    valueFrom:
-      secretKeyRef:
-        name: api-router-db-secrets
-        key: database-url
 
 # Backend endpoints - configure vLLM service
 # Format: backend-id:http://service-name.namespace.svc.cluster.local:port

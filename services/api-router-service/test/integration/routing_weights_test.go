@@ -132,7 +132,7 @@ func TestRoutingWeightDistribution(t *testing.T) {
 		BackendEndpoints: "",
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil)
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, "", "")
 
 	// Configure handler to use mock backend URIs
 	handler.SetBackendURI("backend-1", backend1.URL+"/v1/completions")
@@ -233,7 +233,7 @@ func TestRoutingFailover(t *testing.T) {
 		BackendEndpoints: "",
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil)
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, "", "")
 
 	handler.SetBackendURI("backend-1", failingBackend.URL+"/v1/completions")
 	handler.SetBackendURI("backend-2", workingBackend.URL+"/v1/completions")
@@ -330,7 +330,7 @@ func TestDegradedBackendExclusion(t *testing.T) {
 		BackendEndpoints: "",
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil)
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, "", "")
 
 	handler.SetBackendURI("backend-degraded", degradedBackend.URL+"/v1/completions")
 	handler.SetBackendURI("backend-healthy", healthyBackend.URL+"/v1/completions")

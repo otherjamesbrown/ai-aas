@@ -380,26 +380,6 @@ func main() {
 	})
 	router.Get("/v1/platform/health", platformHealthHandler.PlatformHealth)
 
-	// Initialize model registry for dynamic routing
-	modelRegistry, err := routing.NewRegistry(&routing.RegistryConfig{
-		DatabaseURL:   cfg.DatabaseURL,
-		RedisAddr:     cfg.RedisAddr,
-		RedisPassword: cfg.RedisPassword,
-		RedisDB:       cfg.RedisDB,
-		CacheTTL:      2 * time.Minute,
-		Environment:   cfg.Environment,
-	}, logger)
-	if err != nil {
-		logger.Warn("failed to initialize model registry, /v1/models will return empty list", zap.Error(err))
-		modelRegistry = nil
-	} else {
-		defer func() {
-			if err := modelRegistry.Close(); err != nil {
-				logger.Error("failed to close model registry", zap.Error(err))
-			}
-		}()
-	}
-
 	// Initialize backend client
 	backendClient := routing.NewBackendClient(logger, 30*time.Second)
 
@@ -434,7 +414,7 @@ func main() {
 	defer healthMonitor.Stop()
 
 	// Initialize public API handler with routing engine and usage hook
-	publicHandler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, modelRegistry, routingEngine, routingMetrics, usageHook)
+	publicHandler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, routingEngine, routingMetrics, usageHook, cfg.AdminAPIEndpoint, cfg.AdminAPIKey)
 	publicHandler.SetUserOrgServiceURL(cfg.UserOrgServiceURL)
 
 	// Register unauthenticated chat completions health endpoint on main router

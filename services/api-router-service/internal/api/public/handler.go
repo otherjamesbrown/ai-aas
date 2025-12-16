@@ -32,7 +32,6 @@ type Handler struct {
 	configLoader      *config.Loader
 	backendClient     *routing.BackendClient
 	backendRegistry   *config.BackendRegistry
-	modelRegistry     *routing.Registry
 	routingEngine     *routing.Engine
 	routingMetrics    *telemetry.RoutingMetrics
 	usageHook         *UsageHook
@@ -41,6 +40,8 @@ type Handler struct {
 	backendURIs       map[string]string // Map of backend ID to URI (for testing/configuration - overrides registry)
 	httpClient        *http.Client      // Shared HTTP client for OpenAI requests (PR#16 Issue#4)
 	userOrgServiceURL string            // URL for user-org-service (for auth proxy)
+	adminAPIEndpoint  string            // URL for admin-api-service (for models endpoint)
+	adminAPIKey       string            // API key for admin-api-service
 }
 
 // NewHandler creates a new public API handler.
@@ -50,25 +51,27 @@ func NewHandler(
 	configLoader *config.Loader,
 	backendClient *routing.BackendClient,
 	backendRegistry *config.BackendRegistry,
-	modelRegistry *routing.Registry,
 	routingEngine *routing.Engine,
 	routingMetrics *telemetry.RoutingMetrics,
 	usageHook *UsageHook,
+	adminAPIEndpoint string,
+	adminAPIKey string,
 ) *Handler {
 	tracer := otel.Tracer("api-router-service")
 	return &Handler{
-		logger:          logger,
-		authenticator:   authenticator,
-		configLoader:    configLoader,
-		backendClient:   backendClient,
-		backendRegistry: backendRegistry,
-		modelRegistry:   modelRegistry,
-		routingEngine:   routingEngine,
-		routingMetrics:  routingMetrics,
-		usageHook:       usageHook,
-		tracer:          tracer,
-		errorBuilder:    api.NewErrorBuilder(tracer),
-		backendURIs:     make(map[string]string),
+		logger:           logger,
+		authenticator:    authenticator,
+		configLoader:     configLoader,
+		backendClient:    backendClient,
+		backendRegistry:  backendRegistry,
+		routingEngine:    routingEngine,
+		routingMetrics:   routingMetrics,
+		usageHook:        usageHook,
+		tracer:           tracer,
+		errorBuilder:     api.NewErrorBuilder(tracer),
+		backendURIs:      make(map[string]string),
+		adminAPIEndpoint: adminAPIEndpoint,
+		adminAPIKey:      adminAPIKey,
 		httpClient: &http.Client{
 			// Shared client without timeout - we'll use context for per-request timeouts (PR#16 Issue#4)
 			Timeout: 0,

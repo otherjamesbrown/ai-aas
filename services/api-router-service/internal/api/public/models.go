@@ -2,7 +2,10 @@
 package public
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -23,41 +26,87 @@ type ModelsResponse struct {
 	Data   []ModelObject `json:"data"`
 }
 
+// AdminAPIModelResponse represents a single model from Admin API /v1/models.
+type AdminAPIModelResponse struct {
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
+	HFModelID   string `json:"hf_model_id"`
+	Enabled     bool   `json:"enabled"`
+}
+
+// AdminAPIModelsResponse represents the response from Admin API GET /v1/models.
+type AdminAPIModelsResponse struct {
+	Models []AdminAPIModelResponse `json:"models"`
+}
+
+// fetchModelsFromAdminAPI fetches models from the Admin API service.
+func (h *Handler) fetchModelsFromAdminAPI(ctx context.Context) ([]AdminAPIModelResponse, error) {
+	if h.adminAPIEndpoint == "" {
+		return nil, fmt.Errorf("admin API endpoint not configured")
+	}
+
+	url := fmt.Sprintf("%s/v1/models", h.adminAPIEndpoint)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	// Add admin API key for authentication
+	if h.adminAPIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+h.adminAPIKey)
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := h.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("admin api returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	var adminResp AdminAPIModelsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&adminResp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	return adminResp.Models, nil
+}
+
 // HandleModels handles GET /v1/models requests (OpenAI-compatible).
-// Returns a list of available models based on the model registry.
-// Only returns models with deployment_status = 'ready' and a valid deployment_endpoint.
+// Returns a list of available models by calling the Admin API service.
+// Only returns enabled models for the current environment.
 func (h *Handler) HandleModels(w http.ResponseWriter, r *http.Request) {
 	h.logger.Debug("handling models list request",
 		zap.String("method", r.Method),
 		zap.String("path", r.URL.Path))
 
-	// Get ready models from model registry
 	var models []ModelObject
 	createdTimestamp := time.Now().Unix()
 
-	// If ModelRegistry is available, query it
-	if h.modelRegistry != nil {
-		entries, err := h.modelRegistry.ListReadyModels(r.Context())
-		if err != nil {
-			h.logger.Error("failed to list ready models from registry",
-				zap.Error(err))
-			// Fall back to empty list rather than failing the request
-			models = make([]ModelObject, 0)
-		} else {
-			models = make([]ModelObject, 0, len(entries))
-			for _, entry := range entries {
+	// Fetch models from Admin API
+	adminModels, err := h.fetchModelsFromAdminAPI(r.Context())
+	if err != nil {
+		h.logger.Error("failed to fetch models from admin api",
+			zap.Error(err))
+		// Fall back to empty list rather than failing the request
+		models = make([]ModelObject, 0)
+	} else {
+		// Filter to only enabled models and convert to OpenAI format
+		models = make([]ModelObject, 0, len(adminModels))
+		for _, adminModel := range adminModels {
+			if adminModel.Enabled {
 				models = append(models, ModelObject{
-					ID:      entry.ModelName,
+					ID:      adminModel.Name,
 					Object:  "model",
 					Created: createdTimestamp,
 					OwnedBy: "ai-aas",
 				})
 			}
 		}
-	} else {
-		// Fallback: If ModelRegistry is not configured, return empty list
-		h.logger.Warn("model registry not configured, returning empty model list")
-		models = make([]ModelObject, 0)
 	}
 
 	response := ModelsResponse{
