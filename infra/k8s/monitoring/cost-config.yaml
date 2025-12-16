@@ -1,0 +1,176 @@
+# Cost Configuration for Usage Tracking and Cost Dashboards
+# This ConfigMap provides cost parameters for calculating infrastructure costs
+# and organization cost allocation in Grafana dashboards.
+#
+# Usage:
+# - Org Usage Dashboard: Uses token costs for org-level cost tracking
+# - Cost Efficiency Dashboard: Uses GPU costs for efficiency metrics
+# - Per-Model Performance: Uses combined token + GPU costs
+#
+# To update costs, modify this file and apply:
+#   kubectl apply -f infra/k8s/monitoring/cost-config.yaml
+#
+# Dashboards reference this ConfigMap via environment variables or direct queries.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cost-config
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: cost-config
+    app.kubernetes.io/component: observability
+    app.kubernetes.io/part-of: monitoring
+data:
+  # Token Cost Configuration (per 1M tokens)
+  # Based on typical LLM provider pricing (OpenAI GPT-3.5/4 range)
+  # These are approximate values - adjust based on actual infrastructure costs
+
+  # Input token cost (per 1M tokens in USD)
+  # Typical range: $0.50 - $3.00 for small models, $3.00 - $30.00 for large models
+  cost_per_million_input_tokens: "1.50"
+
+  # Output/generation token cost (per 1M tokens in USD)
+  # Usually 2-3x input cost due to generation overhead
+  cost_per_million_output_tokens: "3.00"
+
+  # GPU Hourly Cost Configuration (USD per GPU per hour)
+  # Based on cloud provider pricing for various GPU types
+  # Format: gpu_type=hourly_cost
+  #
+  # Linode GPU Instance Pricing Reference:
+  # - RTX 4000 Ada (20GB): $1.50/hour (g2-gpu-rtx4000a1-m)
+  # - A100 (40GB): $2.50/hour (estimated)
+  # - V100 (16GB): $1.20/hour (estimated)
+  # - L40S (48GB): $2.00/hour (estimated)
+  gpu_hourly_costs: |
+    rtx-4000-ada=1.50
+    rtx4000ada=1.50
+    a100-40gb=2.50
+    a100-80gb=3.50
+    v100-16gb=1.20
+    l40s-48gb=2.00
+    default=1.50
+
+  # Linode Instance Type to GPU Type Mapping
+  # Maps Linode instance types to standardized GPU type names
+  instance_type_to_gpu: |
+    g2-gpu-rtx4000a1-m=rtx-4000-ada
+    g2-gpu-rtx4000a2-m=rtx-4000-ada
+    g2-gpu-rtx4000a4-m=rtx-4000-ada
+
+  # Organization Cost Allocation Rules
+  # How to distribute shared infrastructure costs across organizations
+  # Method options: proportional, fixed, tiered
+  org_allocation_method: "proportional"
+
+  # Proportional allocation: Costs distributed based on usage metrics
+  # Metrics can be: token_count, gpu_hours, request_count
+  org_allocation_metric: "token_count"
+
+  # Fixed monthly infrastructure overhead (USD)
+  # Costs not directly attributable to usage (control plane, monitoring, etc.)
+  monthly_infrastructure_overhead: "500.00"
+
+  # Markup percentage for cost calculations (0-100)
+  # Applied on top of raw infrastructure costs
+  markup_percentage: "20"
+
+  # Cost Efficiency Thresholds
+  # Used for alerting and dashboard coloring
+  # Tokens per GPU-hour benchmarks (higher is better)
+  efficiency_excellent_threshold: "1000000"  # 1M tokens/GPU-hour
+  efficiency_good_threshold: "500000"        # 500K tokens/GPU-hour
+  efficiency_acceptable_threshold: "250000"  # 250K tokens/GPU-hour
+  # Below acceptable = needs optimization
+
+  # Cost per Request Thresholds (USD)
+  # Used for dashboard alerting (lower is better)
+  cost_per_request_excellent: "0.001"   # $0.001/request
+  cost_per_request_good: "0.005"        # $0.005/request
+  cost_per_request_warning: "0.010"     # $0.010/request
+  # Above warning = investigate
+
+  # Environment-specific multipliers
+  # Adjust costs for different environments (dev/staging/prod)
+  environment_cost_multiplier: |
+    development=1.0
+    staging=1.0
+    production=1.0
+
+  # Currency and formatting
+  currency: "USD"
+  currency_symbol: "$"
+  decimal_places: "4"
+
+  # Data retention for cost calculations (days)
+  # How far back to look for cost aggregations
+  cost_calculation_lookback_days: "30"
+
+  # PromQL query templates for cost calculations
+  # These can be referenced in Grafana dashboards
+  promql_templates: |
+    # Total cost per model (input + output tokens)
+    total_cost_by_model: |
+      (
+        sum(increase(vllm:prompt_tokens_total{model_name="$model"}[1h])) * ${cost_per_million_input_tokens} / 1000000
+        +
+        sum(increase(vllm:generation_tokens_total{model_name="$model"}[1h])) * ${cost_per_million_output_tokens} / 1000000
+      )
+
+    # GPU cost per model (GPU hours * hourly rate)
+    gpu_cost_by_model: |
+      sum(
+        count_over_time(up{job="vllm",model_name="$model"}[1h]) / 60 * ${gpu_hourly_cost}
+      )
+
+    # Total cost per organization
+    total_cost_by_org: |
+      sum by (org_id) (
+        increase(vllm:prompt_tokens_total[1h]) * ${cost_per_million_input_tokens} / 1000000
+        +
+        increase(vllm:generation_tokens_total[1h]) * ${cost_per_million_output_tokens} / 1000000
+      )
+
+    # Efficiency: tokens per GPU-hour
+    tokens_per_gpu_hour: |
+      (
+        sum(increase(vllm:prompt_tokens_total{model_name="$model"}[1h]))
+        +
+        sum(increase(vllm:generation_tokens_total{model_name="$model"}[1h]))
+      ) / (count_over_time(up{job="vllm",model_name="$model"}[1h]) / 60)
+
+  # Notes and documentation
+  notes: |
+    ## Cost Configuration Notes
+
+    **Token Costs**:
+    - Input tokens: $1.50 per 1M tokens (reading/processing)
+    - Output tokens: $3.00 per 1M tokens (generation)
+    - Adjust these based on your infrastructure costs and desired markup
+
+    **GPU Costs**:
+    - Based on Linode GPU instance pricing
+    - RTX 4000 Ada: $1.50/hour (primary GPU type in development)
+    - Default fallback: $1.50/hour for unknown GPU types
+
+    **Efficiency Benchmarks**:
+    - Excellent: 1M+ tokens/GPU-hour
+    - Good: 500K-1M tokens/GPU-hour
+    - Acceptable: 250K-500K tokens/GPU-hour
+    - Below 250K: Requires optimization
+
+    **Cost Allocation**:
+    - Proportional method: Organizations pay based on token usage
+    - Fixed overhead: $500/month for shared infrastructure
+    - Markup: 20% on top of raw costs
+
+    **Updating Costs**:
+    1. Edit this ConfigMap
+    2. Apply: kubectl apply -f infra/k8s/monitoring/cost-config.yaml
+    3. Grafana dashboards will pick up changes automatically (no restart needed)
+
+    **Related Resources**:
+    - Org Usage Dashboard: Uses token costs for org-level tracking
+    - Cost Efficiency Dashboard: Uses GPU costs and efficiency thresholds
+    - Per-Model Performance: Combines token + GPU costs
