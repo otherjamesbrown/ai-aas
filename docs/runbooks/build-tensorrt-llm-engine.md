@@ -380,14 +380,18 @@ Create `preprocessing/1/model.py`:
 
 ```python
 import json
+import os
 import numpy as np
 import triton_python_backend_utils as pb_utils
 from transformers import AutoTokenizer
 
 class TritonPythonModel:
     def initialize(self, args):
+        # The 'model_repository_path' is the path to the directory containing this model (e.g. /mnt/models/preprocessing).
+        # We construct a relative path to the tokenizer directory.
+        tokenizer_path = os.path.join(args['model_repository'], '..', 'tensorrt_llm', '1', 'tokenizer')
         self.tokenizer = AutoTokenizer.from_pretrained(
-            "/opt/tritonserver/backends/tensorrtllm/tensorrt_llm/1/tokenizer",
+            tokenizer_path,
             trust_remote_code=True
         )
         self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -455,14 +459,18 @@ dynamic_batching {
 Create `postprocessing/1/model.py`:
 
 ```python
+import os
 import numpy as np
 import triton_python_backend_utils as pb_utils
 from transformers import AutoTokenizer
 
 class TritonPythonModel:
     def initialize(self, args):
+        # The 'model_repository' is the path to the directory containing this model (e.g. /mnt/models/postprocessing).
+        # We construct a relative path to the tokenizer directory.
+        tokenizer_path = os.path.join(args['model_repository'], '..', 'tensorrt_llm', '1', 'tokenizer')
         self.tokenizer = AutoTokenizer.from_pretrained(
-            "/opt/tritonserver/backends/tensorrtllm/tensorrt_llm/1/tokenizer",
+            tokenizer_path,
             trust_remote_code=True
         )
 
