@@ -87,6 +87,22 @@ func sanitizeInferenceServiceName(name string) string {
 	return sanitized
 }
 
+// deriveExternalName derives the external name for an AIModel.
+// If spec.ExternalName is set, use it. Otherwise, derive from ModelID
+// by taking the part after the last "/".
+// Example: modelID "unsloth/gpt-oss-20b" -> externalName "gpt-oss-20b"
+func deriveExternalName(aiModel *aimodelv1alpha1.AIModel) string {
+	if aiModel.Spec.ExternalName != "" {
+		return aiModel.Spec.ExternalName
+	}
+	// Derive from ModelID
+	modelID := aiModel.Spec.ModelID
+	if idx := strings.LastIndex(modelID, "/"); idx >= 0 {
+		return modelID[idx+1:]
+	}
+	return modelID
+}
+
 var (
 	reconcileTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -1622,10 +1638,11 @@ func (r *AIModelReconciler) syncDeploymentToAdminAPI(ctx context.Context, aiMode
 		}
 
 		createErr := r.AdminAPIClient.CreateDeployment(ctx, adminapi.CreateDeploymentRequest{
-			ModelName:   aiModel.Name,
-			Environment: environment,
-			Namespace:   aiModel.Namespace,
-			Replicas:    replicas,
+			ModelName:    aiModel.Name,
+			ExternalName: deriveExternalName(aiModel),
+			Environment:  environment,
+			Namespace:    aiModel.Namespace,
+			Replicas:     replicas,
 		})
 		if createErr != nil {
 			return fmt.Errorf("failed to create deployment: %w", createErr)

@@ -52,14 +52,15 @@ const (
 
 // RoutingPolicy represents a routing policy configuration.
 type RoutingPolicy struct {
-	PolicyID         string
-	OrganizationID   string // "*" for global
-	Model            string
-	Backends         []BackendWeight
+	PolicyID          string
+	OrganizationID    string // "*" for global
+	Model             string // Full internal model path (e.g., "unsloth/gpt-oss-20b")
+	ExternalName      string // Name exposed in OpenAI API (e.g., "gpt-oss-20b")
+	Backends          []BackendWeight
 	FailoverThreshold int
 	DegradedBackends  []string
-	UpdatedAt        time.Time
-	Version          int64
+	UpdatedAt         time.Time
+	Version           int64
 }
 
 // BackendWeight defines a backend with its routing weight.
@@ -282,7 +283,8 @@ func (l *Loader) handleWatchEvent(ctx context.Context, event *clientv3.Event) er
 //
 // Model name resolution:
 //   - First tries exact match (e.g., "unsloth/gpt-oss-20b")
-//   - If no "/" in model name, tries alias lookup by matching models ending with "/<model>"
+//   - If no "/" in model name, tries external_name lookup (explicit mapping from OpenAI API name)
+//   - Falls back to alias lookup by matching models ending with "/<model>"
 //     (e.g., "gpt-oss-20b" matches "unsloth/gpt-oss-20b")
 func (l *Loader) GetPolicy(organizationID, model string) (*RoutingPolicy, error) {
 	// First check cache with exact match
@@ -299,9 +301,22 @@ func (l *Loader) GetPolicy(organizationID, model string) (*RoutingPolicy, error)
 			}
 		}
 
-		// Alias lookup: if model has no "/", try finding a policy with matching suffix
+		// External name lookup: if model has no "/", try finding a policy by external_name
 		if !strings.Contains(model, "/") {
-			policy, err := l.cache.GetPolicyByAlias(organizationID, model)
+			// Try external name match first (explicit configuration)
+			policy, err := l.cache.GetPolicyByExternalName(organizationID, model)
+			if err == nil && policy != nil {
+				return policy, nil
+			}
+			if organizationID != etcdGlobalOrgID {
+				policy, err := l.cache.GetPolicyByExternalName(etcdGlobalOrgID, model)
+				if err == nil && policy != nil {
+					return policy, nil
+				}
+			}
+
+			// Fall back to alias lookup (suffix matching for backwards compatibility)
+			policy, err = l.cache.GetPolicyByAlias(organizationID, model)
 			if err == nil && policy != nil {
 				return policy, nil
 			}

@@ -41,18 +41,20 @@ type deploymentStatusDTO struct {
 
 // createDeploymentRequestDTO contains data for creating a deployment
 type createDeploymentRequestDTO struct {
-	ModelName   string `json:"model_name"`
-	Environment string `json:"environment"`
-	Namespace   string `json:"namespace"`
-	Replicas    int    `json:"replicas,omitempty"`
+	ModelName    string `json:"model_name"`
+	ExternalName string `json:"external_name,omitempty"`
+	Environment  string `json:"environment"`
+	Namespace    string `json:"namespace"`
+	Replicas     int    `json:"replicas,omitempty"`
 }
 
 // CreateDeploymentRequest contains data for creating a deployment
 type CreateDeploymentRequest struct {
-	ModelName   string
-	Environment string
-	Namespace   string
-	Replicas    int
+	ModelName    string
+	ExternalName string // Name exposed in OpenAI-compatible APIs
+	Environment  string
+	Namespace    string
+	Replicas     int
 }
 
 // DeploymentStatus represents the status of a deployment
@@ -66,10 +68,11 @@ type DeploymentStatus struct {
 // CreateDeployment creates a new deployment record
 func (c *Client) CreateDeployment(ctx context.Context, req CreateDeploymentRequest) error {
 	dto := createDeploymentRequestDTO{
-		ModelName:   req.ModelName,
-		Environment: req.Environment,
-		Namespace:   req.Namespace,
-		Replicas:    req.Replicas,
+		ModelName:    req.ModelName,
+		ExternalName: req.ExternalName,
+		Environment:  req.Environment,
+		Namespace:    req.Namespace,
+		Replicas:     req.Replicas,
 	}
 	return c.request(ctx, http.MethodPost, "/v1/deployments", dto, nil)
 }

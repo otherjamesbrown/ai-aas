@@ -30,6 +30,7 @@ type ModelsResponse struct {
 // This matches the Model struct returned by admin-api-service.
 type AdminAPIModelResponse struct {
 	Name             string  `json:"name"`
+	ExternalName     string  `json:"external_name,omitempty"`
 	HFModelID        string  `json:"hf_model_id"`
 	CacheStatus      *string `json:"cache_status"`
 	DeploymentStatus *string `json:"deployment_status"`
@@ -97,8 +98,13 @@ func (h *Handler) HandleModels(w http.ResponseWriter, r *http.Request) {
 		// depends on backend configuration in routing policies
 		models = make([]ModelObject, 0, len(adminModels))
 		for _, adminModel := range adminModels {
+			// Use external_name if set, otherwise use the internal name
+			modelID := adminModel.ExternalName
+			if modelID == "" {
+				modelID = adminModel.Name
+			}
 			models = append(models, ModelObject{
-				ID:      adminModel.Name,
+				ID:      modelID,
 				Object:  "model",
 				Created: createdTimestamp,
 				OwnedBy: "ai-aas",

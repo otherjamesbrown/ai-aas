@@ -38,7 +38,17 @@ type AIModelSpec struct {
 	ModelName string `json:"modelName"`
 
 	// ModelID is the unique identifier for the model (e.g., HuggingFace model ID).
+	// This is the full internal path used by all internal systems (e.g., "unsloth/gpt-oss-20b").
 	ModelID string `json:"modelID"`
+
+	// ExternalName is the name exposed in OpenAI-compatible APIs (/v1/models, /v1/chat/completions).
+	// If not specified, derived from ModelID by taking the part after the last "/".
+	// Example: modelID "unsloth/gpt-oss-20b" -> externalName "gpt-oss-20b"
+	// This allows multiple models with the same base name from different providers to coexist
+	// with different external names (e.g., "gpt-oss-20b-unsloth" vs "gpt-oss-20b-openai").
+	// Must be unique per environment.
+	// +optional
+	ExternalName string `json:"externalName,omitempty"`
 
 	// S3Bucket is the S3 bucket where model artifacts are stored.
 	// Optional when TrustRemoteCode is true (model loads directly from HuggingFace).
