@@ -46,9 +46,10 @@ type InferenceServiceBuilder struct {
 	modelID                     string // HuggingFace model ID for direct loading
 	livenessInitialDelaySeconds int32  // InitialDelaySeconds for liveness probe
 	// Health probe configuration
-	livenessPath  string // Path for liveness probe (default: /health)
-	readinessPath string // Path for readiness probe (default: /health)
-	probePort     int32  // Port for health probes (default: 8000)
+	livenessPath   string // Path for liveness probe (default: /health)
+	readinessPath  string // Path for readiness probe (default: /health)
+	probePort      int32  // Port for health probes (default: 8000)
+	deploymentMode string // Explicit deployment mode ("Serverless" or "RawDeployment")
 }
 
 // NewInferenceServiceBuilder creates a new InferenceServiceBuilder
@@ -204,6 +205,14 @@ func (b *InferenceServiceBuilder) WithHealthProbes(livenessPath, readinessPath s
 	return b
 }
 
+// WithDeploymentMode sets the explicit deployment mode.
+// Valid values: "Serverless" (Knative), "RawDeployment" (standard K8s Deployment)
+// If not set, defaults to "Serverless" for backward compatibility.
+func (b *InferenceServiceBuilder) WithDeploymentMode(mode string) *InferenceServiceBuilder {
+	b.deploymentMode = mode
+	return b
+}
+
 // Build constructs the unstructured InferenceService resource using KServe native model serving
 func (b *InferenceServiceBuilder) Build() (*unstructured.Unstructured, error) {
 	// Validate required fields
@@ -240,15 +249,14 @@ func (b *InferenceServiceBuilder) Build() (*unstructured.Unstructured, error) {
 	//   (single port, no nodeSelector allowed by Knative validation)
 	// - RawDeployment: Uses standard Kubernetes Deployments, allows nodeSelector
 	//   and multiple ports for runtimes like TensorRT-LLM/Triton
-	deploymentMode := "Serverless"
-	if len(b.nodeSelector) > 0 {
-		// Knative Serving validation doesn't allow nodeSelector in pod spec.
-		// Use RawDeployment mode to bypass Knative and use standard Kubernetes Deployments.
-		// This also allows ClusterServingRuntimes with multiple ports (http, grpc, metrics).
-		deploymentMode = "RawDeployment"
+	//
+	// Use explicit mode if set, otherwise default to Serverless for backward compatibility
+	mode := b.deploymentMode
+	if mode == "" {
+		mode = "Serverless"
 	}
 	annotations := map[string]interface{}{
-		"serving.kserve.io/deploymentMode": deploymentMode,
+		"serving.kserve.io/deploymentMode": mode,
 		"ai-aas.io/probe-config-version":   probeConfigVersion, // Track probe config version for reconciliation
 	}
 
@@ -423,20 +431,15 @@ func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructu
 	}
 
 	// Build annotations with extended timeout for model loading
-	// Deployment mode selection:
-	// - Serverless (Knative): Default mode with autoscaling, but has restrictions
-	//   (single port, no nodeSelector allowed by Knative validation)
-	// - RawDeployment: Uses standard Kubernetes Deployments, allows nodeSelector
-	deploymentMode := "Serverless"
-	if len(b.nodeSelector) > 0 {
-		// Knative Serving validation doesn't allow nodeSelector in pod spec.
-		// Use RawDeployment mode to bypass Knative and use standard Kubernetes Deployments.
-		deploymentMode = "RawDeployment"
+	// Use explicit mode if set, otherwise default to Serverless for backward compatibility
+	mode := b.deploymentMode
+	if mode == "" {
+		mode = "Serverless"
 	}
 	annotations := map[string]interface{}{
-		"serving.kserve.io/deploymentMode":       deploymentMode,
-		"serving.knative.dev/progress-deadline":  "900s", // 15 min for large model download
-		"ai-aas.io/probe-config-version":         probeConfigVersion, // Track probe config version for reconciliation
+		"serving.kserve.io/deploymentMode":      mode,
+		"serving.knative.dev/progress-deadline": "900s",             // 15 min for large model download
+		"ai-aas.io/probe-config-version":        probeConfigVersion, // Track probe config version for reconciliation
 	}
 
 	// Apply update strategy annotation for Knative

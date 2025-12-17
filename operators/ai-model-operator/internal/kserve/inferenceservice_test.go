@@ -782,3 +782,149 @@ func TestInferenceServiceBuilder_BuildContainerBased_HasLivenessProbe(t *testing
 
 	t.Log("Test passed: Container-based InferenceService has proper liveness and readiness probe configuration (no startupProbe)")
 }
+
+func TestInferenceServiceBuilder_WithDeploymentMode(t *testing.T) {
+	tests := []struct {
+		name           string
+		deploymentMode string
+		wantMode       string
+	}{
+		{
+			name:           "explicit Serverless mode",
+			deploymentMode: "Serverless",
+			wantMode:       "Serverless",
+		},
+		{
+			name:           "explicit RawDeployment mode",
+			deploymentMode: "RawDeployment",
+			wantMode:       "RawDeployment",
+		},
+		{
+			name:           "empty mode defaults to Serverless",
+			deploymentMode: "",
+			wantMode:       "Serverless",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			builder := NewInferenceServiceBuilder("test-model", "test-ns").
+				WithStorageUri("s3://bucket/model").
+				WithRuntime("vllm/vllm-openai:v0.6.3")
+
+			if tt.deploymentMode != "" {
+				builder = builder.WithDeploymentMode(tt.deploymentMode)
+			}
+
+			isvc, err := builder.Build()
+			if err != nil {
+				t.Fatalf("Build() failed: %v", err)
+			}
+
+			if isvc == nil {
+				t.Fatal("Build() returned nil")
+			}
+
+			gotMode := isvc.GetAnnotations()["serving.kserve.io/deploymentMode"]
+			if gotMode != tt.wantMode {
+				t.Errorf("deploymentMode = %q, want %q", gotMode, tt.wantMode)
+			}
+		})
+	}
+}
+
+// TestInferenceServiceBuilder_Build_RawDeployment verifies that Build() correctly
+// generates InferenceService with RawDeployment mode annotations and configuration.
+// This test addresses T014 from GPU Deployment Mode Migration (spec 030).
+func TestInferenceServiceBuilder_Build_RawDeployment(t *testing.T) {
+	builder := NewInferenceServiceBuilder("gpu-model", "system").
+		WithDeploymentMode("RawDeployment").
+		WithModelFormat("pytorch").
+		WithStorageUri("s3://models/gpu-model").
+		WithRuntime("vllm/vllm-openai:v0.6.3").
+		WithNodeSelector(map[string]string{"gpu": "nvidia"}).
+		WithScaling(1, 1)
+
+	obj, err := builder.Build()
+	if err != nil {
+		t.Fatalf("Build() failed: %v", err)
+	}
+
+	// Verify basic metadata
+	if obj.GetName() != "gpu-model" {
+		t.Errorf("Name = %q, want %q", obj.GetName(), "gpu-model")
+	}
+	if obj.GetNamespace() != "system" {
+		t.Errorf("Namespace = %q, want %q", obj.GetNamespace(), "system")
+	}
+
+	// Verify deployment mode annotation
+	annotations := obj.GetAnnotations()
+	gotMode := annotations["serving.kserve.io/deploymentMode"]
+	if gotMode != "RawDeployment" {
+		t.Errorf("deploymentMode annotation = %q, want %q", gotMode, "RawDeployment")
+	}
+
+	// Verify nodeSelector is applied (important for GPU scheduling)
+	predictor, found, err := unstructured.NestedMap(obj.Object, "spec", "predictor")
+	if err != nil {
+		t.Fatalf("Error getting predictor: %v", err)
+	}
+	if !found {
+		t.Fatal("Expected predictor in spec")
+	}
+
+	nodeSelector, found, err := unstructured.NestedStringMap(predictor, "nodeSelector")
+	if err != nil {
+		t.Fatalf("Error getting nodeSelector: %v", err)
+	}
+	if !found {
+		t.Error("NodeSelector is nil, expected gpu: nvidia")
+	} else if nodeSelector["gpu"] != "nvidia" {
+		t.Errorf("NodeSelector[gpu] = %q, want %q", nodeSelector["gpu"], "nvidia")
+	}
+
+	// Verify minReplicas and maxReplicas (GPU workloads often use min=max=1)
+	minReplicas, found, err := unstructured.NestedInt64(predictor, "minReplicas")
+	if err != nil || !found {
+		t.Fatal("Expected minReplicas in predictor")
+	}
+	if minReplicas != 1 {
+		t.Errorf("minReplicas = %d, want 1", minReplicas)
+	}
+
+	maxReplicas, found, err := unstructured.NestedInt64(predictor, "maxReplicas")
+	if err != nil || !found {
+		t.Fatal("Expected maxReplicas in predictor")
+	}
+	if maxReplicas != 1 {
+		t.Errorf("maxReplicas = %d, want 1", maxReplicas)
+	}
+
+	// Verify model spec contains correct fields
+	model, found, err := unstructured.NestedMap(predictor, "model")
+	if err != nil || !found {
+		t.Fatal("Expected model in predictor")
+	}
+
+	storageUri, found, err := unstructured.NestedString(model, "storageUri")
+	if err != nil || !found {
+		t.Fatal("Expected storageUri in model")
+	}
+	if storageUri != "s3://models/gpu-model" {
+		t.Errorf("storageUri = %q, want %q", storageUri, "s3://models/gpu-model")
+	}
+
+	// Verify modelFormat
+	modelFormat, found, err := unstructured.NestedMap(model, "modelFormat")
+	if err != nil || !found {
+		t.Fatal("Expected modelFormat in model")
+	}
+	formatName, found, err := unstructured.NestedString(modelFormat, "name")
+	if err != nil || !found {
+		t.Fatal("Expected name in modelFormat")
+	}
+	if formatName != "pytorch" {
+		t.Errorf("modelFormat.name = %q, want %q", formatName, "pytorch")
+	}
+}

@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.17.0
+    controller-gen.kubebuilder.io/version: v0.19.0
   name: aimodels.aimodel.ai-aas.io
 spec:
   group: aimodel.ai-aas.io
@@ -63,6 +63,14 @@ spec:
           spec:
             description: AIModelSpec defines the desired state of AIModel
             properties:
+              deploymentMode:
+                description: |-
+                  DeploymentMode specifies how the model should be deployed.
+                  If set, overrides recipe and runtime-based defaults.
+                enum:
+                - Serverless
+                - RawDeployment
+                type: string
               enabled:
                 default: true
                 description: |-

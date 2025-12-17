@@ -184,6 +184,7 @@ When an AIModel references a recipe:
 | `s3Key` | string | Yes | - | S3 path prefix |
 | `enabled` | bool | No | true | Enable/disable deployment |
 | `runtime` | string | No | vllm | Runtime: vllm, triton, tgi |
+| `deploymentMode` | string | No | - | Deployment mode: Serverless or RawDeployment |
 | `minReplicas` | int32 | No | 0 | Minimum replicas (0 = scale-to-zero) |
 | `maxReplicas` | int32 | No | 1 | Maximum replicas |
 | `resources` | ResourceRequirements | No | - | CPU/memory/GPU resources |
@@ -191,6 +192,42 @@ When an AIModel references a recipe:
 | `tolerations` | []Toleration | No | - | Pod tolerations |
 | `runtimeArgs` | []string | No | - | Additional CLI arguments |
 | `runtimeEnv` | []EnvVar | No | - | Additional environment variables |
+
+### Deployment Mode Fields
+
+#### AIModel.spec.deploymentMode
+- **Type**: string (enum: Serverless, RawDeployment)
+- **Required**: No
+- **Description**: Overrides the deployment mode for this model. If not set, determined by recipe or runtime defaults.
+
+#### ModelRecipe.spec.deploymentMode
+- **Type**: string (enum: Serverless, RawDeployment)
+- **Required**: No
+- **Description**: Sets the default deployment mode for models using this recipe.
+
+### Autoscaling Configuration (RawDeployment only)
+
+#### ModelRecipe.spec.autoscaling
+Configuration for Horizontal Pod Autoscaler when using RawDeployment mode.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| enabled | bool | false | Enable HPA for this recipe |
+| minReplicas | int32 | 1 | Minimum replica count |
+| maxReplicas | int32 | 1 | Maximum replica count |
+| targetCPUUtilization | int32 | 70 | Target CPU % for scaling |
+| scaleDownStabilization | int32 | 300 | Stabilization window (seconds) |
+
+**Example**:
+```yaml
+spec:
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilization: 70
+    scaleDownStabilization: 300
+```
 
 ### Status Fields
 

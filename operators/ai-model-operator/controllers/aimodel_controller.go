@@ -22,20 +22,20 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/apimachinery/pkg/api/equality"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	batchv1 "k8s.io/api/batch/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -48,8 +48,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	aimodelv1alpha1 "github.com/ai-aas/ai-model-operator/api/v1alpha1"
-	"github.com/ai-aas/ai-model-operator/internal/kserve"
 	"github.com/ai-aas/ai-model-operator/internal/adminapi"
+	"github.com/ai-aas/ai-model-operator/internal/kserve"
 	"github.com/ai-aas/ai-model-operator/internal/recipe"
 	// +kubebuilder:scaffold:imports
 )
@@ -66,7 +66,7 @@ const (
 
 // Retry configuration for InferenceService deployment failures
 const (
-	maxDeploymentRetries        = 10             // More retries for transient resource issues
+	maxDeploymentRetries        = 10               // More retries for transient resource issues
 	initialDeploymentRetryDelay = 30 * time.Second // Shorter initial delay for scheduling
 	maxDeploymentRetryDelay     = 10 * time.Minute // Max wait between retries
 )
@@ -131,7 +131,7 @@ type AIModelReconciler struct {
 	AdminAPIClient AdminAPIClient
 
 	// Recipe resolution and validation
-	RecipeResolver *recipe.Resolver
+	RecipeResolver  *recipe.Resolver
 	RecipeValidator *recipe.Validator
 }
 
@@ -307,157 +307,155 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		jobName := fmt.Sprintf("%s-downloader", aiModel.Name)
 		foundJob := &batchv1.Job{}
 		err := r.Get(ctx, client.ObjectKey{Name: jobName, Namespace: aiModel.Namespace}, foundJob)
-	if err != nil && client.IgnoreNotFound(err) != nil {
-		log.Error(err, "Failed to get Job", "Job.Name", jobName)
-		reconcileTotal.WithLabelValues("error").Inc()
-		return ctrl.Result{}, err
-	} else if err != nil { // Job not found
-		// Handle RetryPending phase - check if it's time to retry
-		if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhaseRetryPending {
-			if aiModel.Status.NextRetryTime != nil {
-				now := metav1.Now()
-				if now.Time.Before(aiModel.Status.NextRetryTime.Time) {
-					// Not yet time to retry, requeue with remaining wait time
-					waitDuration := aiModel.Status.NextRetryTime.Time.Sub(now.Time)
-					log.Info("Retry not yet due, waiting", "waitDuration", waitDuration)
-					reconcileTotal.WithLabelValues("success").Inc()
-					return ctrl.Result{RequeueAfter: waitDuration}, nil
-				}
-				// Time to retry - fall through to job creation logic
-				log.Info("Retry time reached, creating new download job", "retryCount", aiModel.Status.RetryCount)
-			}
-		}
-
-		// Check if S3 artifacts already exist (e.g., from a previous download or manual upload)
-		// If they exist, we can skip the downloader job and proceed to InferenceService creation
-		exists, err := r.checkS3ArtifactExists(ctx, aiModel)
-		if err != nil {
-			// Actual error (credentials, network, etc.) - not just missing artifacts
-			log.Error(err, "Failed to check S3 artifacts", "Bucket", aiModel.Spec.S3Bucket, "Key", aiModel.Spec.S3Key)
-			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
-			aiModel.Status.Message = fmt.Sprintf("S3 check failed: %v", err)
-			if statusErr := r.Status().Update(ctx, aiModel); statusErr != nil {
-				log.Error(statusErr, "unable to update AIModel status to Failed")
-			}
+		if err != nil && client.IgnoreNotFound(err) != nil {
+			log.Error(err, "Failed to get Job", "Job.Name", jobName)
 			reconcileTotal.WithLabelValues("error").Inc()
-			return ctrl.Result{Requeue: true}, nil
-		}
+			return ctrl.Result{}, err
+		} else if err != nil { // Job not found
+			// Handle RetryPending phase - check if it's time to retry
+			if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhaseRetryPending {
+				if aiModel.Status.NextRetryTime != nil {
+					now := metav1.Now()
+					if now.Time.Before(aiModel.Status.NextRetryTime.Time) {
+						// Not yet time to retry, requeue with remaining wait time
+						waitDuration := aiModel.Status.NextRetryTime.Time.Sub(now.Time)
+						log.Info("Retry not yet due, waiting", "waitDuration", waitDuration)
+						reconcileTotal.WithLabelValues("success").Inc()
+						return ctrl.Result{RequeueAfter: waitDuration}, nil
+					}
+					// Time to retry - fall through to job creation logic
+					log.Info("Retry time reached, creating new download job", "retryCount", aiModel.Status.RetryCount)
+				}
+			}
 
-		if exists {
-			// Artifacts already exist in S3, skip download phase
-			log.Info("S3 artifacts already exist, skipping download", "Bucket", aiModel.Spec.S3Bucket, "Key", aiModel.Spec.S3Key)
-			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
-			// Reset retry count on success
-			aiModel.Status.RetryCount = 0
-			aiModel.Status.LastRetryTime = nil
-			aiModel.Status.NextRetryTime = nil
-			if statusErr := r.Status().Update(ctx, aiModel); statusErr != nil {
-				log.Error(statusErr, "unable to update AIModel status to Deploying")
-				return ctrl.Result{}, statusErr
-			}
-			// Continue to InferenceService creation (fall through)
-		} else {
-			// Artifacts not found in S3, create downloader job to fetch from HuggingFace
-			log.Info("S3 artifacts not found, creating downloader job", "Bucket", aiModel.Spec.S3Bucket, "Key", aiModel.Spec.S3Key)
-			log.Info("Creating a new Model Downloader Job", "Job.Namespace", aiModel.Namespace, "Job.Name", jobName)
-			job := r.modelDownloaderJob(aiModel, jobName)
-			if err := ctrl.SetControllerReference(aiModel, job, r.Scheme); err != nil {
-				log.Error(err, "Failed to set controller reference for Job", "Job.Name", job.Name)
+			// Check if S3 artifacts already exist (e.g., from a previous download or manual upload)
+			// If they exist, we can skip the downloader job and proceed to InferenceService creation
+			exists, err := r.checkS3ArtifactExists(ctx, aiModel)
+			if err != nil {
+				// Actual error (credentials, network, etc.) - not just missing artifacts
+				log.Error(err, "Failed to check S3 artifacts", "Bucket", aiModel.Spec.S3Bucket, "Key", aiModel.Spec.S3Key)
+				aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
+				aiModel.Status.Message = fmt.Sprintf("S3 check failed: %v", err)
+				if statusErr := r.Status().Update(ctx, aiModel); statusErr != nil {
+					log.Error(statusErr, "unable to update AIModel status to Failed")
+				}
 				reconcileTotal.WithLabelValues("error").Inc()
-				return ctrl.Result{}, err
+				return ctrl.Result{Requeue: true}, nil
 			}
-			if err := r.Create(ctx, job); err != nil {
-				log.Error(err, "Failed to create Job", "Job.Name", job.Name)
-				reconcileTotal.WithLabelValues("error").Inc()
-				return ctrl.Result{}, err
-			}
-			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDownloading
-			if err := r.Status().Update(ctx, aiModel); err != nil {
-				log.Error(err, "unable to update AIModel status to Downloading")
-				reconcileTotal.WithLabelValues("error").Inc()
-				return ctrl.Result{}, err
-			}
-			reconcileTotal.WithLabelValues("success").Inc()
-			return ctrl.Result{Requeue: true}, nil // Requeue to wait for Job completion
-		}
-	} else {
-		// Job found, check its status
-		if jobIsComplete(foundJob) {
-			log.Info("Model Downloader Job completed successfully", "Job.Name", jobName)
-			if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhaseDownloading || aiModel.Status.Phase == aimodelv1alpha1.AIModelPhasePending {
+
+			if exists {
+				// Artifacts already exist in S3, skip download phase
+				log.Info("S3 artifacts already exist, skipping download", "Bucket", aiModel.Spec.S3Bucket, "Key", aiModel.Spec.S3Key)
 				aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
-				// Reset retry tracking on success
+				// Reset retry count on success
 				aiModel.Status.RetryCount = 0
 				aiModel.Status.LastRetryTime = nil
 				aiModel.Status.NextRetryTime = nil
-				if err := r.Status().Update(ctx, aiModel); err != nil {
-					log.Error(err, "unable to update AIModel status to Deploying")
-					reconcileTotal.WithLabelValues("error").Inc()
-					return ctrl.Result{}, err
+				if statusErr := r.Status().Update(ctx, aiModel); statusErr != nil {
+					log.Error(statusErr, "unable to update AIModel status to Deploying")
+					return ctrl.Result{}, statusErr
 				}
-			}
-		} else if jobIsFailed(foundJob) {
-			log.Error(fmt.Errorf("job failed"), "Model Downloader Job failed", "Job.Name", jobName)
-
-			// Check if we should retry
-			maxRetries := r.MaxDownloadRetries
-			if maxRetries == 0 {
-				maxRetries = maxDownloadRetries // Use default if not configured
-			}
-			if aiModel.Status.RetryCount < maxRetries {
-				// Delete the failed job so a new one can be created
-				log.Info("Deleting failed job to prepare for retry", "Job.Name", jobName, "retryCount", aiModel.Status.RetryCount)
-				if err := r.Delete(ctx, foundJob, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
-					log.Error(err, "Failed to delete failed Job", "Job.Name", jobName)
-					reconcileTotal.WithLabelValues("error").Inc()
-					return ctrl.Result{}, err
-				}
-
-				// Increment retry count and calculate backoff
-				aiModel.Status.RetryCount++
-				backoffDuration := r.calculateRetryBackoff(aiModel.Status.RetryCount - 1) // Use previous count for backoff
-				now := metav1.Now()
-				nextRetry := metav1.NewTime(now.Add(backoffDuration))
-
-				aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseRetryPending
-				aiModel.Status.LastRetryTime = &now
-				aiModel.Status.NextRetryTime = &nextRetry
-				aiModel.Status.Message = fmt.Sprintf("Download failed, retry %d/%d scheduled in %v",
-					aiModel.Status.RetryCount, maxRetries, backoffDuration)
-
-				if err := r.Status().Update(ctx, aiModel); err != nil {
-					log.Error(err, "unable to update AIModel status to RetryPending")
-					reconcileTotal.WithLabelValues("error").Inc()
-					return ctrl.Result{}, err
-				}
-
-				log.Info("Retry scheduled", "retryCount", aiModel.Status.RetryCount,
-					"backoffDuration", backoffDuration, "nextRetryTime", nextRetry.Time)
-				reconcileTotal.WithLabelValues("retry").Inc()
-				return ctrl.Result{RequeueAfter: backoffDuration}, nil
+				// Continue to InferenceService creation (fall through)
 			} else {
-				// Max retries exceeded, mark as permanently failed
-				log.Error(fmt.Errorf("max retries exceeded"), "Download failed after maximum retries",
-					"Job.Name", jobName, "maxRetries", maxRetries)
-				aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
-				aiModel.Status.Message = fmt.Sprintf("Download failed after %d retry attempts. Manual intervention required.", maxRetries)
-				if err := r.Status().Update(ctx, aiModel); err != nil {
-					log.Error(err, "unable to update AIModel status to Failed")
+				// Artifacts not found in S3, create downloader job to fetch from HuggingFace
+				log.Info("S3 artifacts not found, creating downloader job", "Bucket", aiModel.Spec.S3Bucket, "Key", aiModel.Spec.S3Key)
+				log.Info("Creating a new Model Downloader Job", "Job.Namespace", aiModel.Namespace, "Job.Name", jobName)
+				job := r.modelDownloaderJob(aiModel, jobName)
+				if err := ctrl.SetControllerReference(aiModel, job, r.Scheme); err != nil {
+					log.Error(err, "Failed to set controller reference for Job", "Job.Name", job.Name)
 					reconcileTotal.WithLabelValues("error").Inc()
 					return ctrl.Result{}, err
 				}
-				reconcileTotal.WithLabelValues("error").Inc()
-				return ctrl.Result{}, nil // Do not requeue - permanent failure
+				if err := r.Create(ctx, job); err != nil {
+					log.Error(err, "Failed to create Job", "Job.Name", job.Name)
+					reconcileTotal.WithLabelValues("error").Inc()
+					return ctrl.Result{}, err
+				}
+				aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDownloading
+				if err := r.Status().Update(ctx, aiModel); err != nil {
+					log.Error(err, "unable to update AIModel status to Downloading")
+					reconcileTotal.WithLabelValues("error").Inc()
+					return ctrl.Result{}, err
+				}
+				reconcileTotal.WithLabelValues("success").Inc()
+				return ctrl.Result{Requeue: true}, nil // Requeue to wait for Job completion
 			}
 		} else {
-			log.Info("Model Downloader Job still running", "Job.Name", jobName)
-			reconcileTotal.WithLabelValues("success").Inc()
-			return ctrl.Result{Requeue: true}, nil // Requeue to wait for Job completion
+			// Job found, check its status
+			if jobIsComplete(foundJob) {
+				log.Info("Model Downloader Job completed successfully", "Job.Name", jobName)
+				if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhaseDownloading || aiModel.Status.Phase == aimodelv1alpha1.AIModelPhasePending {
+					aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
+					// Reset retry tracking on success
+					aiModel.Status.RetryCount = 0
+					aiModel.Status.LastRetryTime = nil
+					aiModel.Status.NextRetryTime = nil
+					if err := r.Status().Update(ctx, aiModel); err != nil {
+						log.Error(err, "unable to update AIModel status to Deploying")
+						reconcileTotal.WithLabelValues("error").Inc()
+						return ctrl.Result{}, err
+					}
+				}
+			} else if jobIsFailed(foundJob) {
+				log.Error(fmt.Errorf("job failed"), "Model Downloader Job failed", "Job.Name", jobName)
+
+				// Check if we should retry
+				maxRetries := r.MaxDownloadRetries
+				if maxRetries == 0 {
+					maxRetries = maxDownloadRetries // Use default if not configured
+				}
+				if aiModel.Status.RetryCount < maxRetries {
+					// Delete the failed job so a new one can be created
+					log.Info("Deleting failed job to prepare for retry", "Job.Name", jobName, "retryCount", aiModel.Status.RetryCount)
+					if err := r.Delete(ctx, foundJob, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
+						log.Error(err, "Failed to delete failed Job", "Job.Name", jobName)
+						reconcileTotal.WithLabelValues("error").Inc()
+						return ctrl.Result{}, err
+					}
+
+					// Increment retry count and calculate backoff
+					aiModel.Status.RetryCount++
+					backoffDuration := r.calculateRetryBackoff(aiModel.Status.RetryCount - 1) // Use previous count for backoff
+					now := metav1.Now()
+					nextRetry := metav1.NewTime(now.Add(backoffDuration))
+
+					aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseRetryPending
+					aiModel.Status.LastRetryTime = &now
+					aiModel.Status.NextRetryTime = &nextRetry
+					aiModel.Status.Message = fmt.Sprintf("Download failed, retry %d/%d scheduled in %v",
+						aiModel.Status.RetryCount, maxRetries, backoffDuration)
+
+					if err := r.Status().Update(ctx, aiModel); err != nil {
+						log.Error(err, "unable to update AIModel status to RetryPending")
+						reconcileTotal.WithLabelValues("error").Inc()
+						return ctrl.Result{}, err
+					}
+
+					log.Info("Retry scheduled", "retryCount", aiModel.Status.RetryCount,
+						"backoffDuration", backoffDuration, "nextRetryTime", nextRetry.Time)
+					reconcileTotal.WithLabelValues("retry").Inc()
+					return ctrl.Result{RequeueAfter: backoffDuration}, nil
+				} else {
+					// Max retries exceeded, mark as permanently failed
+					log.Error(fmt.Errorf("max retries exceeded"), "Download failed after maximum retries",
+						"Job.Name", jobName, "maxRetries", maxRetries)
+					aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
+					aiModel.Status.Message = fmt.Sprintf("Download failed after %d retry attempts. Manual intervention required.", maxRetries)
+					if err := r.Status().Update(ctx, aiModel); err != nil {
+						log.Error(err, "unable to update AIModel status to Failed")
+						reconcileTotal.WithLabelValues("error").Inc()
+						return ctrl.Result{}, err
+					}
+					reconcileTotal.WithLabelValues("error").Inc()
+					return ctrl.Result{}, nil // Do not requeue - permanent failure
+				}
+			} else {
+				log.Info("Model Downloader Job still running", "Job.Name", jobName)
+				reconcileTotal.WithLabelValues("success").Inc()
+				return ctrl.Result{Requeue: true}, nil // Requeue to wait for Job completion
+			}
 		}
-	}
 	} // End of S3-based deployment else block
-
-
 
 	// 2. Resolve and merge recipe if specified
 	var mergedSpec *aimodelv1alpha1.ModelRecipeSpec
@@ -570,7 +568,6 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	reconcileTotal.WithLabelValues("success").Inc()
 	return ctrl.Result{}, nil
 }
-
 
 func (r *AIModelReconciler) finalizeAIModel(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) error {
 	log := log.FromContext(ctx)
@@ -736,10 +733,10 @@ print('Upload complete!')
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
-						Name:  "downloader",
-						Image: downloaderImage,
+						Name:    "downloader",
+						Image:   downloaderImage,
 						Command: command,
-						Args: args,
+						Args:    args,
 						Env: []corev1.EnvVar{
 							{
 								Name:  "MODEL_ID",
@@ -1255,6 +1252,15 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		}
 	}
 
+	// Determine deployment mode
+	deploymentMode := r.determineDeploymentMode(aiModel, recipeSpec)
+
+	// Log the decision for observability
+	log.Info("Deployment mode determined",
+		"mode", deploymentMode,
+		"aimodel", aiModel.Name,
+		"runtime", runtime)
+
 	// from the HuggingFace repo, which isn't preserved in S3 storage.
 	if aiModel.Spec.TrustRemoteCode && aiModel.Spec.ModelID != "" {
 		log.Info("Using container-based deployment for trust_remote_code model",
@@ -1276,6 +1282,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 			WithContainerImage(containerImage).
 			WithModelID(aiModel.Spec.ModelID).
 			WithServedName(aiModel.Spec.ModelID).
+			WithDeploymentMode(deploymentMode).
 			WithScaling(minReplicas, maxReplicas).
 			WithResources(resources).
 			WithTolerations(tolerations).
@@ -1304,6 +1311,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 			WithModelFormat(modelFormat).
 			WithServedName(servedName).
 			WithRuntime(runtimeName).
+			WithDeploymentMode(deploymentMode).
 			WithScaling(minReplicas, maxReplicas).
 			WithResources(resources).
 			WithTolerations(tolerations).
@@ -1378,10 +1386,10 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 
 	// Retry loop with exponential backoff to handle race conditions with KServe controller
 	backoff := wait.Backoff{
-		Steps:    5,                    // Maximum 5 attempts
+		Steps:    5,                     // Maximum 5 attempts
 		Duration: 50 * time.Millisecond, // Initial delay: 50ms
-		Factor:   2.0,                  // Exponential: 50ms, 100ms, 200ms, 400ms, 800ms
-		Jitter:   0.1,                  // Add 10% jitter to avoid thundering herd
+		Factor:   2.0,                   // Exponential: 50ms, 100ms, 200ms, 400ms, 800ms
+		Jitter:   0.1,                   // Add 10% jitter to avoid thundering herd
 	}
 
 	var lastErr error
@@ -1772,6 +1780,87 @@ func (r *AIModelReconciler) convertRecipeRuntimeArgs(runtime string, runtimeArgs
 	}
 
 	return args
+}
+
+// determineDeploymentMode determines the deployment mode for an AIModel.
+// Priority:
+// 1. AIModel.Spec.DeploymentMode (explicit override)
+// 2. Recipe.Spec.DeploymentMode (if recipe is used)
+// 3. Runtime-based default:
+//   - tensorrt-llm, triton → RawDeployment
+//   - vllm, tgi with GPU → RawDeployment
+//   - vllm, tgi without GPU → Serverless
+//   - default → Serverless
+func (r *AIModelReconciler) determineDeploymentMode(
+	aimodel *aimodelv1alpha1.AIModel,
+	recipe *aimodelv1alpha1.ModelRecipeSpec,
+) string {
+	// 1. AIModel explicit override
+	if aimodel.Spec.DeploymentMode != "" {
+		return aimodel.Spec.DeploymentMode
+	}
+
+	// 2. Recipe explicit setting
+	if recipe != nil && recipe.DeploymentMode != "" {
+		return recipe.DeploymentMode
+	}
+
+	// 3. Runtime-based defaults
+	runtime := aimodel.Spec.Runtime
+	if recipe != nil && recipe.Runtime != "" {
+		runtime = recipe.Runtime
+	}
+
+	switch runtime {
+	case "tensorrt-llm", "triton":
+		return "RawDeployment"
+	case "vllm", "tgi":
+		// Check if GPU is requested
+		if r.hasGPU(aimodel, recipe) {
+			return "RawDeployment"
+		}
+		return "Serverless"
+	default:
+		return "Serverless"
+	}
+}
+
+// hasGPU checks if GPU resources are requested in the AIModel or recipe.
+func (r *AIModelReconciler) hasGPU(
+	aimodel *aimodelv1alpha1.AIModel,
+	recipe *aimodelv1alpha1.ModelRecipeSpec,
+) bool {
+	// Check AIModel resources for any GPU request
+	// Check both nvidia.com/gpu and other GPU vendors (amd.com/gpu, intel.com/gpu)
+	if aimodel.Spec.Resources.Requests != nil {
+		for resourceName, quantity := range aimodel.Spec.Resources.Requests {
+			if strings.Contains(string(resourceName), "gpu") {
+				// Check if quantity is non-zero
+				if !quantity.IsZero() {
+					return true
+				}
+			}
+		}
+	}
+
+	// Also check limits
+	if aimodel.Spec.Resources.Limits != nil {
+		for resourceName, quantity := range aimodel.Spec.Resources.Limits {
+			if strings.Contains(string(resourceName), "gpu") {
+				// Check if quantity is non-zero
+				if !quantity.IsZero() {
+					return true
+				}
+			}
+		}
+	}
+
+	// Check recipe GPU resources
+	if recipe != nil && recipe.Resources.GPU.Count > 0 {
+		return true
+	}
+
+	return false
 }
 
 // SetupWithManager sets up the controller with the Manager.

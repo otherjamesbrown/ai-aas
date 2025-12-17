@@ -65,6 +65,12 @@ type AIModelSpec struct {
 	// +optional
 	RuntimeName string `json:"runtimeName,omitempty"`
 
+	// DeploymentMode specifies how the model should be deployed.
+	// If set, overrides recipe and runtime-based defaults.
+	// +kubebuilder:validation:Enum=Serverless;RawDeployment
+	// +optional
+	DeploymentMode string `json:"deploymentMode,omitempty"`
+
 	// MinReplicas is the minimum number of replicas for autoscaling.
 	// Set to 0 to enable scale-to-zero.
 	// +kubebuilder:validation:Minimum=0

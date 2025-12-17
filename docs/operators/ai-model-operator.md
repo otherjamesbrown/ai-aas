@@ -87,6 +87,11 @@ spec:
   # RollingUpdate (default): New pods created before old ones terminated
   # Recreate: Old pods terminated before new ones created (frees GPUs)
   updateStrategy: RollingUpdate
+
+  # Optional: Deployment mode
+  # Serverless (default for CPU): Knative-based with scale-to-zero
+  # RawDeployment: Standard Kubernetes Deployment (recommended for GPU)
+  deploymentMode: RawDeployment
 ```
 
 ### AIModel Status
@@ -354,6 +359,45 @@ spec:
 - Model requires multiple GPUs (e.g., 4x or 8x A100)
 - Total available GPUs < 2x model requirement
 - Downtime of 30-90 seconds is acceptable during updates
+
+## Deployment Mode
+
+The `deploymentMode` field controls how models are deployed:
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| `Serverless` | Knative-based deployment with scale-to-zero | CPU workloads, cost-sensitive environments |
+| `RawDeployment` | Standard Kubernetes Deployment | GPU workloads, multi-port containers |
+
+### Selection Priority
+
+1. **AIModel explicit override**: `spec.deploymentMode` on the AIModel takes highest priority
+2. **Recipe setting**: `spec.deploymentMode` on the ModelRecipe
+3. **Runtime-based default**:
+   - `tensorrt-llm`, `triton` → RawDeployment
+   - `vllm`, `tgi` with GPU → RawDeployment
+   - `vllm`, `tgi` without GPU → Serverless
+   - Other runtimes → Serverless
+
+### Example
+
+```yaml
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: llama-3-8b
+spec:
+  modelID: meta-llama/Llama-3-8B
+  modelName: llama-3-8b
+  runtime: vllm
+  deploymentMode: RawDeployment  # Explicit override
+  enabled: true
+  s3Bucket: ai-aas
+  s3Key: models/llama-3-8b
+  resources:
+    requests:
+      nvidia.com/gpu: "1"
+```
 
 ## Known Issues / Planned Improvements
 

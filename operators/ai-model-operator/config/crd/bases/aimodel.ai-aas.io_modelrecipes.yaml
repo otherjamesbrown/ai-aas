@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.17.0
+    controller-gen.kubebuilder.io/version: v0.19.0
   name: modelrecipes.aimodel.ai-aas.io
 spec:
   group: aimodel.ai-aas.io
@@ -59,6 +59,53 @@ spec:
           spec:
             description: ModelRecipeSpec defines the desired state of ModelRecipe
             properties:
+              autoscaling:
+                description: |-
+                  Autoscaling configuration for RawDeployment mode.
+                  Only applies when deploymentMode is RawDeployment.
+                properties:
+                  enabled:
+                    default: false
+                    description: Enabled controls whether HPA is created for this
+                      deployment.
+                    type: boolean
+                  maxReplicas:
+                    default: 1
+                    description: MaxReplicas is the maximum number of replicas.
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  minReplicas:
+                    default: 1
+                    description: MinReplicas is the minimum number of replicas.
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  scaleDownStabilization:
+                    default: 300
+                    description: ScaleDownStabilization is the stabilization window
+                      for scale down in seconds.
+                    format: int32
+                    minimum: 0
+                    type: integer
+                  targetCPUUtilization:
+                    default: 70
+                    description: TargetCPUUtilization is the target CPU utilization
+                      percentage for HPA.
+                    format: int32
+                    maximum: 100
+                    minimum: 1
+                    type: integer
+                type: object
+              deploymentMode:
+                description: |-
+                  DeploymentMode specifies how models using this recipe should be deployed.
+                  Options: "Serverless" (Knative), "RawDeployment" (standard K8s)
+                  If not specified, determined automatically based on runtime and GPU requirements.
+                enum:
+                - Serverless
+                - RawDeployment
+                type: string
               description:
                 description: Description provides additional context about the model
                 type: string
