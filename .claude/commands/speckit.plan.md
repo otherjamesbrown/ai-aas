@@ -15,8 +15,21 @@ ls -d specs/*/spec.md
 ### Step 2: Load Context
 Read the required files:
 - `specs/[feature]/spec.md` - The feature specification
+- `specs/[feature]/impact.md` - Impact analysis (**if exists** - for migrations/refactors)
 - `memory/constitution.md` - Project principles (if exists)
 - `CLAUDE.md` or `ARCHITECTURE.md` - Project architecture
+
+**If `impact.md` exists**, this is a migration/refactoring spec:
+- Phases must align with migration order from impact.md
+- Include REMOVE/DEPRECATE tasks in plan
+- Reference affected files from impact analysis
+
+**If `impact.md` does NOT exist** and spec involves:
+- Removing existing functionality
+- Migrating between approaches
+- Refactoring existing patterns
+
+Then **STOP** and recommend running `/speckit.impact` first.
 
 ### Step 3: Phase 0 - Research
 For each unclear technical requirement:
@@ -56,6 +69,8 @@ Create `specs/[feature]/plan.md` with:
 **Feature Branch**: `[NNN]-[feature-name]`
 **Date**: [ISO date]
 **Spec**: [link to spec.md]
+**Impact Analysis**: [link to impact.md or "N/A - greenfield feature"]
+**Type**: Feature | Migration | Refactor
 
 ## Summary
 [Primary requirement + technical approach]
@@ -70,10 +85,53 @@ Create `specs/[feature]/plan.md` with:
 [How this plan aligns with project principles]
 
 ## Project Structure
-[Files to be created/modified]
+
+### Files to Add
+[New files to create]
+
+### Files to Modify
+[Existing files to change - reference impact.md if available]
+
+### Files to Remove
+[Files to delete - only for migrations/refactors, from impact.md]
 
 ## Phases
 [Breakdown of implementation phases]
+
+<!-- For migrations/refactors, align with impact.md migration_order -->
+```
+
+**For Migration/Refactor specs** (when `impact.md` exists), add:
+
+```markdown
+## Migration Strategy
+
+### Phase 1: Prepare (Backward Compatible)
+[Changes that don't break existing behavior]
+- Add new fields/types
+- Feature flags if needed
+
+### Phase 2: Implement
+[New functionality]
+- New code paths
+- Updated tests
+
+### Phase 3: Migrate
+[Switch to new behavior]
+- Update existing resources
+- Data migrations
+
+### Phase 4: Cleanup
+[Remove old code]
+- Delete deprecated code
+- Remove feature flags
+- Update documentation
+
+## Rollback Plan
+[From impact.md - how to revert each phase]
+
+## Risk Mitigation
+[HIGH risk items from impact.md and how to address them]
 ```
 
 ### Step 6: Validate
@@ -82,10 +140,17 @@ Ensure:
 - Plan aligns with project architecture
 - No implementation details that contradict constitution
 
+**For Migration/Refactor specs**, also validate:
+- All REMOVE items from `impact.md` are addressed in plan
+- Migration phases are safe to execute sequentially
+- Rollback plan exists for each phase
+- HIGH risk items have mitigation strategies
+
 ### Step 7: Report
 Output:
 - Generated artifacts list
 - Branch information
+- **For migrations**: Summary of REMOVE/MODIFY/ADD counts
 - Next step: `/speckit.tasks`
 
 ## User Input
