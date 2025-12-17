@@ -54,6 +54,7 @@ type AdminPolicy struct {
 	PolicyID          string         `json:"policy_id"`
 	OrganizationID    string         `json:"organization_id"`
 	Model             string         `json:"model"`
+	ExternalName      string         `json:"external_name,omitempty"`
 	Backends          []AdminBackend `json:"backends"`
 	FallbackBackends  []AdminBackend `json:"fallback_backends,omitempty"`
 	FailoverThreshold int            `json:"failover_threshold"`
@@ -230,6 +231,7 @@ func (c *AdminSyncClient) convertPolicy(admin *AdminPolicy) *RoutingPolicy {
 		PolicyID:          admin.PolicyID,
 		OrganizationID:    admin.OrganizationID,
 		Model:             admin.Model,
+		ExternalName:      admin.ExternalName,
 		Backends:          backends,
 		FailoverThreshold: admin.FailoverThreshold,
 		UpdatedAt:         admin.UpdatedAt,
