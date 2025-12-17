@@ -92,7 +92,7 @@ while IFS= read -r revision; do
         echo "    Action: Would delete (dry-run)"
     else
         echo -n "    Action: Deleting... "
-        if kubectl delete revision "$name" -n "$namespace" --wait=false 2>/dev/null; then
+        if kubectl delete revision "$name" -n "$namespace" --wait=false; then
             echo "OK"
             ((DELETED_COUNT++))
         else

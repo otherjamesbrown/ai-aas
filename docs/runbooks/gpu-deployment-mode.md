@@ -77,11 +77,11 @@ kubectl logs <pod-name> -n <namespace> --previous
 
 1. Create AIModel CR:
 ```yaml
-apiVersion: ai.ai-aas.io/v1alpha1
+apiVersion: aimodel.ai-aas.io/v1alpha1
 kind: AIModel
 metadata:
   name: llama-3-8b
-  namespace: system
+  namespace: <namespace>
 spec:
   modelName: llama-3-8b
   modelID: meta-llama/Meta-Llama-3-8B-Instruct
@@ -95,8 +95,8 @@ spec:
 2. Apply and verify:
 ```bash
 kubectl apply -f aimodel.yaml
-kubectl get isvc -n system
-kubectl get pods -n system -l serving.kserve.io/inferenceservice=llama-3-8b
+kubectl get isvc -n <namespace>
+kubectl get pods -n <namespace> -l serving.kserve.io/inferenceservice=llama-3-8b
 ```
 
 ## Monitoring

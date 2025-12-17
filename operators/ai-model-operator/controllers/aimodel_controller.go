@@ -1830,29 +1830,11 @@ func (r *AIModelReconciler) hasGPU(
 	aimodel *aimodelv1alpha1.AIModel,
 	recipe *aimodelv1alpha1.ModelRecipeSpec,
 ) bool {
-	// Check AIModel resources for any GPU request
-	// Check both nvidia.com/gpu and other GPU vendors (amd.com/gpu, intel.com/gpu)
-	if aimodel.Spec.Resources.Requests != nil {
-		for resourceName, quantity := range aimodel.Spec.Resources.Requests {
-			if strings.Contains(string(resourceName), "gpu") {
-				// Check if quantity is non-zero
-				if !quantity.IsZero() {
-					return true
-				}
-			}
-		}
-	}
-
-	// Also check limits
-	if aimodel.Spec.Resources.Limits != nil {
-		for resourceName, quantity := range aimodel.Spec.Resources.Limits {
-			if strings.Contains(string(resourceName), "gpu") {
-				// Check if quantity is non-zero
-				if !quantity.IsZero() {
-					return true
-				}
-			}
-		}
+	// Check AIModel resources (both requests and limits) for any GPU request
+	// Supports nvidia.com/gpu, amd.com/gpu, intel.com/gpu, and other vendors
+	if hasGPUResource(aimodel.Spec.Resources.Requests) ||
+		hasGPUResource(aimodel.Spec.Resources.Limits) {
+		return true
 	}
 
 	// Check recipe GPU resources
@@ -1860,6 +1842,16 @@ func (r *AIModelReconciler) hasGPU(
 		return true
 	}
 
+	return false
+}
+
+// hasGPUResource checks if a resource list contains a non-zero GPU request.
+func hasGPUResource(resources corev1.ResourceList) bool {
+	for resourceName, quantity := range resources {
+		if strings.Contains(string(resourceName), "gpu") && !quantity.IsZero() {
+			return true
+		}
+	}
 	return false
 }
 
