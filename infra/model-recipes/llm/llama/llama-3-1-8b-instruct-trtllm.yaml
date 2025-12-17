@@ -3,6 +3,13 @@ kind: ModelRecipe
 metadata:
   name: llama-3-1-8b-instruct-trtllm
   namespace: ai-model-system
+  annotations:
+    # Engine version dependencies - CRITICAL: engine must match runtime
+    ai.ai-aas.io/trtllm-version: "0.12.0"
+    ai.ai-aas.io/min-triton-version: "24.08"
+    ai.ai-aas.io/gpu-architecture: "sm_89"
+    ai.ai-aas.io/engine-build-date: "2024-08"
+    ai.ai-aas.io/cuda-version: "12.4"
   labels:
     ai.ai-aas.io/model-family: llama
     ai.ai-aas.io/model-size: 8b
@@ -13,7 +20,7 @@ spec:
   displayName: "Llama 3.1 8B Instruct (TensorRT-LLM)"
   description: "Meta's Llama 3.1 8B Instruct optimized with TensorRT-LLM on Triton"
   runtime: tensorrt-llm
-  image: nvcr.io/nvidia/tritonserver:24.04-trtllm-python-py3
+  image: nvcr.io/nvidia/tritonserver:24.08-trtllm-python-py3
   resources:
     gpu:
       vendor: nvidia
