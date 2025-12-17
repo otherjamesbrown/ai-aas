@@ -81,19 +81,15 @@ git-crypt unlock
 - Access: `kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-staging.yaml`
 
 **ArgoCD**
-- URL: https://argocd.staging.otherjamesbrown.com
+- URL: https://argocd.staging.ai-aas.local
 - Username: `admin`
-- Password: Retrieve with `kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-staging.yaml -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode`
-
-**Database (PostgreSQL)**
-- Host: Akamai managed database
-- Connection String: Found in Kubernetes secret `user-org-service/user-org-service-db-secret` key `database-url`
-- Retrieve: `kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-staging.yaml get secret -n user-org-service user-org-service-db-secret -o jsonpath='{.data.database-url}' | base64 -d`
+- Password: Retrieve with `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode`
 
 **API Endpoints**
 - API Router: https://api.staging.otherjamesbrown.com
 - Admin API: https://admin-api.staging.otherjamesbrown.com
 - User Org Service: https://user-org.staging.otherjamesbrown.com
+- Analytics: https://analytics.staging.otherjamesbrown.com
 
 **Ingress Architecture** (Dual-Ingress)
 - NGINX Ingress IP: `172.236.135.55` - PRIMARY for all external HTTP/HTTPS traffic
@@ -101,24 +97,19 @@ git-crypt unlock
 - All service ingresses use `ingressClassName: nginx`
 - See `docs/technical/platform/ingress-best-practices.md` for architecture details
 
-**Monitoring & Observability**
-- Grafana: https://grafana.staging.otherjamesbrown.com
-- Loki: https://loki.staging.otherjamesbrown.com
-
-**API Keys**
-- Master Admin API Key: Found in `secrets/env/.env` as `STAGING_MASTER_ADMIN_API_KEY`
-- API Key ID: Found in `secrets/env/.env` as `STAGING_MASTER_ADMIN_API_KEY_ID`
-- Master Admin User ID: `39255f13-e223-4c80-8242-3fc37e12e717`
-- Master Admin Org ID: `b6fc81af-a245-4599-b3e1-7d2b8745c148`
-- Master Admin Org Slug: `master-admin-org`
+**TLS Certificates**
+- Uses Let's Encrypt staging certificates (not trusted by browsers)
+- All services use `letsencrypt-staging` ClusterIssuer
+- Test with `curl -k` to skip certificate verification
 
 **AI-AAS CLI**
-- Use the `staging-master` profile for full admin access:
+- Configure for staging:
   ```bash
-  ai-aas-cli --profile staging-master org list
-  ai-aas-cli --profile staging-master user list
+  ai-aas-cli profile create staging-sg \
+    --admin-api-endpoint=https://admin-api.staging.otherjamesbrown.com \
+    --api-key=$(grep STAGING_ADMIN_API_KEY secrets/env/.env | cut -d'=' -f2)
+  ai-aas-cli profile use staging-sg
   ```
-- Configuration in `~/.ai-aas-cli.yaml` under `profiles.staging-master`
 
 ### Production Environment
 

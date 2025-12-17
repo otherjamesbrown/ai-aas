@@ -305,8 +305,8 @@ func runAPIKeyCreate(cmd *cobra.Command, args []string, flagOrgID, flagUserID, f
 	flagFormat string, flagVerbose, flagQuiet bool, flagUserOrgEndpoint, flagAPIKey string, flagProfile string) error {
 	startTime := time.Now()
 
-	// Load configuration
-	cfg, err := config.Load()
+	// Load configuration with profile support
+	cfg, _, err := config.GetEffectiveConfig(flagProfile)
 	if err != nil {
 		return errors.NewOperationError(
 			fmt.Sprintf("failed to load configuration: %v", err),

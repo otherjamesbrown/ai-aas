@@ -1,19 +1,24 @@
 # Endpoints and URLs
 
 ---
-last_updated: 2025-12-08
-last_verified: 2025-12-08
+last_updated: 2025-12-09
+last_verified: 2025-12-09
 document_type: reference
 verification_command: "kubectl get ingress -A"
 ---
 
 ## Overview
 
-This document lists all exposed endpoints in the platform. URLs use two domain patterns:
-- `.ai-aas.local` - For local development (requires hosts file entry)
-- `.otherjamesbrown.com` - Public DNS (nip.io fallback available)
+This document lists all exposed endpoints in the platform across all environments.
 
-**Ingress IP**: `172.232.58.222` (development cluster)
+**Domain Patterns**:
+- Development: `.dev.otherjamesbrown.com` and `.dev.ai-aas.local`
+- Staging: `.staging.otherjamesbrown.com` and `.staging.ai-aas.local`
+- Production: `.otherjamesbrown.com` and `.ai-aas.local`
+
+**Ingress IPs**:
+- Development: `172.232.58.222`
+- Staging: `172.236.135.55`
 
 ## Quick Reference - Development Environment
 
@@ -29,14 +34,28 @@ This document lists all exposed endpoints in the platform. URLs use two domain p
 | ArgoCD | `https://argocd.dev.ai-aas.local` | ✅ Active |
 | etcd | `https://etcd.dev.ai-aas.local` | ✅ Active |
 
+## Quick Reference - Staging Environment
+
+| Service | URL | Status |
+|---------|-----|--------|
+| API Router | `https://api.staging.otherjamesbrown.com` | ✅ Active |
+| User-Org Service | `https://user-org.staging.otherjamesbrown.com` | ✅ Active |
+| Analytics Service | `https://analytics.staging.otherjamesbrown.com` | ✅ Active |
+| Admin API | `https://admin-api.staging.otherjamesbrown.com` | ✅ Active |
+| Grafana | `https://grafana.staging.ai-aas.local` | ⚠️ Local only |
+
+**Note**: Staging uses Let's Encrypt staging certificates (not trusted by browsers). Use `-k` flag with curl for testing.
+
 ## Verification
 
 ```bash
-# List all ingresses
-kubectl get ingress -A
-
-# Check specific service
+# Development
+kubectl --kubeconfig=~/kubeconfigs/kubeconfig-development.yaml get ingress -A
 curl -k https://api.dev.ai-aas.local/v1/status/healthz
+
+# Staging
+kubectl --kubeconfig=~/kubeconfigs/kubeconfig-staging.yaml get ingress -A
+curl -k https://api.staging.otherjamesbrown.com/v1/status/healthz
 ```
 
 ## Application Services
