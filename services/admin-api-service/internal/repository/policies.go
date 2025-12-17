@@ -95,7 +95,7 @@ func (r *PolicyRepository) GetByID(ctx context.Context, id string) (*domain.Rout
 			rp.created_at, rp.updated_at,
 			rp.created_by, rp.updated_by
 		FROM routing_policies rp
-		LEFT JOIN model_registry m ON rp.model = m.name
+		LEFT JOIN model_registry m ON rp.model = m.hf_model_id
 		WHERE rp.policy_id = $1 AND rp.deleted_at IS NULL
 	`
 
@@ -126,7 +126,7 @@ func (r *PolicyRepository) GetByID(ctx context.Context, id string) (*domain.Rout
 
 // List retrieves policies with filtering and pagination
 func (r *PolicyRepository) List(ctx context.Context, params domain.PolicyListParams) (*domain.PolicyListResponse, error) {
-	baseQuery := `FROM routing_policies rp LEFT JOIN model_registry m ON rp.model = m.name WHERE rp.deleted_at IS NULL`
+	baseQuery := `FROM routing_policies rp LEFT JOIN model_registry m ON rp.model = m.hf_model_id WHERE rp.deleted_at IS NULL`
 	args := []interface{}{}
 	argNum := 1
 
@@ -343,7 +343,7 @@ func (r *PolicyRepository) GetForSync(ctx context.Context, sinceVersion int, env
 			rp.created_at, rp.updated_at,
 			rp.created_by, rp.updated_by, rp.deleted_at
 		FROM routing_policies rp
-		LEFT JOIN model_registry m ON rp.model = m.name
+		LEFT JOIN model_registry m ON rp.model = m.hf_model_id
 		WHERE rp.version > $1
 		ORDER BY rp.version ASC
 	`
