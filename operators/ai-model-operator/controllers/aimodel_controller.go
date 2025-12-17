@@ -1639,6 +1639,7 @@ func (r *AIModelReconciler) syncDeploymentToAdminAPI(ctx context.Context, aiMode
 
 		createErr := r.AdminAPIClient.CreateDeployment(ctx, adminapi.CreateDeploymentRequest{
 			ModelName:    aiModel.Name,
+			ModelID:      aiModel.Spec.ModelID,
 			ExternalName: deriveExternalName(aiModel),
 			Environment:  environment,
 			Namespace:    aiModel.Namespace,

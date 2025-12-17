@@ -395,3 +395,17 @@ func (s *Service) DeleteCredential(ctx context.Context, credType string) error {
 	return nil
 }
 
+// updateModelHFModelID updates a model's hf_model_id
+func (s *Service) updateModelHFModelID(ctx context.Context, modelID uuid.UUID, hfModelID string) error {
+	query := `UPDATE model_registry SET hf_model_id = $2, updated_at = NOW() WHERE id = $1`
+	_, err := s.pool.Exec(ctx, query, modelID, hfModelID)
+	return err
+}
+
+// updateModelExternalName updates a model's external_name
+func (s *Service) updateModelExternalName(ctx context.Context, modelID uuid.UUID, externalName string) error {
+	query := `UPDATE model_registry SET external_name = $2, updated_at = NOW() WHERE id = $1`
+	_, err := s.pool.Exec(ctx, query, modelID, externalName)
+	return err
+}
+

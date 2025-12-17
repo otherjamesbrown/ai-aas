@@ -69,6 +69,7 @@ func (a *ServiceAdapter) GetModel(name string) (*Model, error) {
 func (a *ServiceAdapter) AddModel(req AddModelRequest) (*Model, error) {
 	svcReq := svcModels.AddModelRequest{
 		Name:          req.Name,
+		ExternalName:  req.ExternalName,
 		HFModelID:     req.HFModelID,
 		RequiresAuth:  req.RequiresAuth,
 		IsGated:       req.LicenseType != "",
@@ -295,12 +296,14 @@ func (a *ServiceAdapter) GetDeployment(modelName, environment string) (*Deployme
 // CreateDeployment creates a new deployment
 func (a *ServiceAdapter) CreateDeployment(req CreateDeploymentRequest) (*Deployment, error) {
 	svcReq := svcModels.CreateDeploymentRequest{
-		ModelName:   req.ModelName,
-		Environment: req.Environment,
-		Namespace:   req.Namespace,
-		GPUCount:    req.GPUCount,
-		MemoryGB:    req.MemoryGB,
-		Replicas:    req.Replicas,
+		ModelName:    req.ModelName,
+		ModelID:      req.ModelID,
+		ExternalName: req.ExternalName,
+		Environment:  req.Environment,
+		Namespace:    req.Namespace,
+		GPUCount:     req.GPUCount,
+		MemoryGB:     req.MemoryGB,
+		Replicas:     req.Replicas,
 	}
 
 	d, err := a.svc.CreateDeployment(a.ctx, svcReq)
@@ -541,6 +544,9 @@ func convertModel(m svcModels.Model) Model {
 		UpdatedAt:    m.UpdatedAt,
 	}
 
+	if m.ExternalName != nil {
+		model.ExternalName = *m.ExternalName
+	}
 	if m.LicenseType != nil {
 		model.LicenseType = *m.LicenseType
 	}

@@ -164,13 +164,15 @@ func (s *Service) GetDeployment(ctx context.Context, modelName, environment stri
 
 // CreateDeploymentRequest contains data for creating a deployment
 type CreateDeploymentRequest struct {
-	ModelName   string
-	CacheID     *uuid.UUID
-	Environment string
-	Namespace   string
-	GPUCount    int
-	MemoryGB    int
-	Replicas    int
+	ModelName    string
+	ModelID      string     // Full model path (e.g., "unsloth/gpt-oss-20b")
+	ExternalName string     // Name exposed in OpenAI-compatible APIs
+	CacheID      *uuid.UUID
+	Environment  string
+	Namespace    string
+	GPUCount     int
+	MemoryGB     int
+	Replicas     int
 }
 
 // CreateDeployment creates a new deployment record
@@ -181,9 +183,14 @@ func (s *Service) CreateDeployment(ctx context.Context, req CreateDeploymentRequ
 		if errors.Is(err, ErrModelNotFound) {
 			// Auto-register the model with minimal metadata
 			// This allows AIModel CRs to be deployed via GitOps without manual registry steps
+			hfModelID := req.ModelID
+			if hfModelID == "" {
+				hfModelID = req.ModelName // Fallback for backwards compatibility
+			}
 			autoRegReq := AddModelRequest{
 				Name:         req.ModelName,
-				HFModelID:    req.ModelName, // Use model name as HF ID (can be updated later)
+				HFModelID:    hfModelID,
+				ExternalName: req.ExternalName,
 				RequiresAuth: false,
 				IsGated:      false,
 				GPUMemoryGB:  0, // Will be determined from deployment resources
@@ -195,6 +202,20 @@ func (s *Service) CreateDeployment(ctx context.Context, req CreateDeploymentRequ
 			}
 		} else {
 			return nil, err
+		}
+	} else if req.ModelID != "" || req.ExternalName != "" {
+		// Model exists - update hf_model_id and external_name if provided
+		if req.ModelID != "" && model.HFModelID != req.ModelID {
+			err := s.updateModelHFModelID(ctx, model.ID, req.ModelID)
+			if err != nil {
+				return nil, fmt.Errorf("update model hf_model_id: %w", err)
+			}
+		}
+		if req.ExternalName != "" && (model.ExternalName == nil || *model.ExternalName != req.ExternalName) {
+			err := s.updateModelExternalName(ctx, model.ID, req.ExternalName)
+			if err != nil {
+				return nil, fmt.Errorf("update model external_name: %w", err)
+			}
 		}
 	}
 

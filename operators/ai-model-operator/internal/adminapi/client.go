@@ -42,6 +42,7 @@ type deploymentStatusDTO struct {
 // createDeploymentRequestDTO contains data for creating a deployment
 type createDeploymentRequestDTO struct {
 	ModelName    string `json:"model_name"`
+	ModelID      string `json:"model_id,omitempty"`
 	ExternalName string `json:"external_name,omitempty"`
 	Environment  string `json:"environment"`
 	Namespace    string `json:"namespace"`
@@ -51,6 +52,7 @@ type createDeploymentRequestDTO struct {
 // CreateDeploymentRequest contains data for creating a deployment
 type CreateDeploymentRequest struct {
 	ModelName    string
+	ModelID      string // Full model path (e.g., "unsloth/gpt-oss-20b")
 	ExternalName string // Name exposed in OpenAI-compatible APIs
 	Environment  string
 	Namespace    string
@@ -69,6 +71,7 @@ type DeploymentStatus struct {
 func (c *Client) CreateDeployment(ctx context.Context, req CreateDeploymentRequest) error {
 	dto := createDeploymentRequestDTO{
 		ModelName:    req.ModelName,
+		ModelID:      req.ModelID,
 		ExternalName: req.ExternalName,
 		Environment:  req.Environment,
 		Namespace:    req.Namespace,

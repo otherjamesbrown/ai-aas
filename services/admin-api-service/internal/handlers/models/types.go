@@ -153,13 +153,15 @@ type ListDeploymentsOptions struct {
 
 // CreateDeploymentRequest represents a request to create a deployment
 type CreateDeploymentRequest struct {
-	ModelName   string `json:"model_name"`
-	CacheID     string `json:"cache_id,omitempty"`
-	Environment string `json:"environment"`
-	Namespace   string `json:"namespace,omitempty"`
-	GPUCount    int    `json:"gpu_count,omitempty"`
-	MemoryGB    int    `json:"memory_gb,omitempty"`
-	Replicas    int    `json:"replicas,omitempty"`
+	ModelName    string `json:"model_name"`
+	ModelID      string `json:"model_id,omitempty"`
+	ExternalName string `json:"external_name,omitempty"`
+	CacheID      string `json:"cache_id,omitempty"`
+	Environment  string `json:"environment"`
+	Namespace    string `json:"namespace,omitempty"`
+	GPUCount     int    `json:"gpu_count,omitempty"`
+	MemoryGB     int    `json:"memory_gb,omitempty"`
+	Replicas     int    `json:"replicas,omitempty"`
 }
 
 // UpdateDeploymentStatusRequest represents a request to update deployment status
