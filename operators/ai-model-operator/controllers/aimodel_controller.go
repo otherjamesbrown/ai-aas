@@ -1622,6 +1622,8 @@ func (r *AIModelReconciler) syncDeploymentToAdminAPI(ctx context.Context, aiMode
 	// Try to update existing deployment first
 	err := r.AdminAPIClient.UpdateDeploymentStatus(ctx, aiModel.Name, environment, adminapi.DeploymentStatus{
 		Status:               deploymentStatus,
+		ModelID:              aiModel.Spec.ModelID,
+		ExternalName:         deriveExternalName(aiModel),
 		InferenceServiceName: aiModel.Status.InferenceServiceName,
 		Endpoint:             status.URL,
 		ReplicasReady:        int(status.ReadyReplicas),
@@ -1652,6 +1654,8 @@ func (r *AIModelReconciler) syncDeploymentToAdminAPI(ctx context.Context, aiMode
 		// After creating, update with current status
 		return r.AdminAPIClient.UpdateDeploymentStatus(ctx, aiModel.Name, environment, adminapi.DeploymentStatus{
 			Status:               deploymentStatus,
+			ModelID:              aiModel.Spec.ModelID,
+			ExternalName:         deriveExternalName(aiModel),
 			InferenceServiceName: aiModel.Status.InferenceServiceName,
 			Endpoint:             status.URL,
 			ReplicasReady:        int(status.ReadyReplicas),

@@ -337,15 +337,11 @@ func (a *ServiceAdapter) ScaleDeployment(modelName, environment string, req Scal
 
 // UpdateDeploymentStatus updates a deployment's status
 func (a *ServiceAdapter) UpdateDeploymentStatus(modelName, environment string, req UpdateDeploymentStatusRequest) error {
-	// First get the deployment to obtain its ID
-	deployment, err := a.svc.GetDeployment(a.ctx, modelName, environment)
-	if err != nil {
-		return err
-	}
-
 	// Convert handler request to service request
 	svcReq := svcModels.UpdateDeploymentStatusRequest{
 		Status:        req.Status,
+		ModelID:       req.ModelID,
+		ExternalName:  req.ExternalName,
 		ReplicasReady: req.ReplicasReady,
 	}
 
@@ -362,7 +358,8 @@ func (a *ServiceAdapter) UpdateDeploymentStatus(modelName, environment string, r
 		svcReq.LastHealthStatus = &req.LastHealthStatus
 	}
 
-	return a.svc.UpdateDeploymentStatus(a.ctx, deployment.ID, svcReq)
+	// Use UpdateDeploymentStatusWithModel to also update model_registry if needed
+	return a.svc.UpdateDeploymentStatusWithModel(a.ctx, modelName, environment, svcReq)
 }
 
 // DeleteDeployment terminates a deployment

@@ -167,6 +167,8 @@ type CreateDeploymentRequest struct {
 // UpdateDeploymentStatusRequest represents a request to update deployment status
 type UpdateDeploymentStatusRequest struct {
 	Status               string     `json:"status"`
+	ModelID              string     `json:"model_id,omitempty"`
+	ExternalName         string     `json:"external_name,omitempty"`
 	InferenceServiceName string     `json:"inferenceservice_name,omitempty"`
 	Endpoint             string     `json:"endpoint,omitempty"`
 	ReplicasReady        int        `json:"replicas_ready,omitempty"`

@@ -267,12 +267,14 @@ func (s *Service) CreateDeployment(ctx context.Context, req CreateDeploymentRequ
 
 // UpdateDeploymentStatusRequest contains data for updating deployment status
 type UpdateDeploymentStatusRequest struct {
-	Status                 string
-	InferenceServiceName   *string
-	Endpoint               *string
-	ReplicasReady          int
-	LastHealthCheckAt      *time.Time
-	LastHealthStatus       *string
+	Status               string
+	ModelID              string // Full model path for updating model_registry.hf_model_id
+	ExternalName         string // For updating model_registry.external_name
+	InferenceServiceName *string
+	Endpoint             *string
+	ReplicasReady        int
+	LastHealthCheckAt    *time.Time
+	LastHealthStatus     *string
 }
 
 // UpdateDeploymentStatus updates a deployment's status and health info
@@ -298,6 +300,42 @@ func (s *Service) UpdateDeploymentStatus(ctx context.Context, id uuid.UUID, req 
 
 	if result.RowsAffected() == 0 {
 		return ErrDeploymentNotFound
+	}
+
+	return nil
+}
+
+// UpdateDeploymentStatusWithModel updates a deployment's status and also updates the model_registry if needed
+func (s *Service) UpdateDeploymentStatusWithModel(ctx context.Context, modelName, environment string, req UpdateDeploymentStatusRequest) error {
+	// Get the deployment to find the model_id
+	deployment, err := s.GetDeployment(ctx, modelName, environment)
+	if err != nil {
+		return err
+	}
+
+	// Update deployment status
+	err = s.UpdateDeploymentStatus(ctx, deployment.ID, req)
+	if err != nil {
+		return err
+	}
+
+	// If ModelID or ExternalName provided, update the model_registry
+	if req.ModelID != "" || req.ExternalName != "" {
+		model, err := s.GetModel(ctx, modelName)
+		if err != nil {
+			return fmt.Errorf("get model for update: %w", err)
+		}
+
+		if req.ModelID != "" && model.HFModelID != req.ModelID {
+			if err := s.updateModelHFModelID(ctx, model.ID, req.ModelID); err != nil {
+				return fmt.Errorf("update model hf_model_id: %w", err)
+			}
+		}
+		if req.ExternalName != "" && (model.ExternalName == nil || *model.ExternalName != req.ExternalName) {
+			if err := s.updateModelExternalName(ctx, model.ID, req.ExternalName); err != nil {
+				return fmt.Errorf("update model external_name: %w", err)
+			}
+		}
 	}
 
 	return nil
