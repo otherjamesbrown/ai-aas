@@ -1461,3 +1461,170 @@ func TestAIModelReconciler_SkipsUpdateWhenSpecUnchanged(t *testing.T) {
 
 	t.Log("Test passed: Controller skips update when spec is unchanged and updates when spec changes")
 }
+
+func TestDetermineDeploymentMode(t *testing.T) {
+	s := setupScheme()
+	r := &AIModelReconciler{
+		Client: fake.NewClientBuilder().WithScheme(s).Build(),
+		Scheme: s,
+	}
+
+	tests := []struct {
+		name     string
+		aimodel  *aimodelv1alpha1.AIModel
+		recipe   *aimodelv1alpha1.ModelRecipeSpec
+		wantMode string
+	}{
+		{
+			name: "explicit AIModel override to RawDeployment",
+			aimodel: &aimodelv1alpha1.AIModel{
+				Spec: aimodelv1alpha1.AIModelSpec{
+					DeploymentMode: "RawDeployment",
+					Runtime:        "vllm",
+				},
+			},
+			recipe:   nil,
+			wantMode: "RawDeployment",
+		},
+		{
+			name: "explicit AIModel override to Serverless",
+			aimodel: &aimodelv1alpha1.AIModel{
+				Spec: aimodelv1alpha1.AIModelSpec{
+					DeploymentMode: "Serverless",
+					Runtime:        "tensorrt-llm", // Would default to RawDeployment
+				},
+			},
+			recipe:   nil,
+			wantMode: "Serverless",
+		},
+		{
+			name: "recipe explicit mode",
+			aimodel: &aimodelv1alpha1.AIModel{
+				Spec: aimodelv1alpha1.AIModelSpec{
+					Runtime: "vllm",
+				},
+			},
+			recipe: &aimodelv1alpha1.ModelRecipeSpec{
+				DeploymentMode: "RawDeployment",
+			},
+			wantMode: "RawDeployment",
+		},
+		{
+			name: "tensorrt-llm defaults to RawDeployment",
+			aimodel: &aimodelv1alpha1.AIModel{
+				Spec: aimodelv1alpha1.AIModelSpec{
+					Runtime: "tensorrt-llm",
+				},
+			},
+			recipe:   nil,
+			wantMode: "RawDeployment",
+		},
+		{
+			name: "triton defaults to RawDeployment",
+			aimodel: &aimodelv1alpha1.AIModel{
+				Spec: aimodelv1alpha1.AIModelSpec{
+					Runtime: "triton",
+				},
+			},
+			recipe:   nil,
+			wantMode: "RawDeployment",
+		},
+		{
+			name: "vllm without GPU defaults to Serverless",
+			aimodel: &aimodelv1alpha1.AIModel{
+				Spec: aimodelv1alpha1.AIModelSpec{
+					Runtime: "vllm",
+				},
+			},
+			recipe:   nil,
+			wantMode: "Serverless",
+		},
+		{
+			name: "vllm with GPU defaults to RawDeployment",
+			aimodel: &aimodelv1alpha1.AIModel{
+				Spec: aimodelv1alpha1.AIModelSpec{
+					Runtime: "vllm",
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							"nvidia.com/gpu": resource.MustParse("1"),
+						},
+					},
+				},
+			},
+			recipe:   nil,
+			wantMode: "RawDeployment",
+		},
+		{
+			name: "unknown runtime defaults to Serverless",
+			aimodel: &aimodelv1alpha1.AIModel{
+				Spec: aimodelv1alpha1.AIModelSpec{
+					Runtime: "unknown-runtime",
+				},
+			},
+			recipe:   nil,
+			wantMode: "Serverless",
+		},
+		{
+			name: "tgi with GPU defaults to RawDeployment",
+			aimodel: &aimodelv1alpha1.AIModel{
+				Spec: aimodelv1alpha1.AIModelSpec{
+					Runtime: "tgi",
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							"nvidia.com/gpu": resource.MustParse("1"),
+						},
+					},
+				},
+			},
+			recipe:   nil,
+			wantMode: "RawDeployment",
+		},
+		{
+			name: "tgi without GPU defaults to Serverless",
+			aimodel: &aimodelv1alpha1.AIModel{
+				Spec: aimodelv1alpha1.AIModelSpec{
+					Runtime: "tgi",
+				},
+			},
+			recipe:   nil,
+			wantMode: "Serverless",
+		},
+		{
+			name: "recipe runtime with GPU overrides AIModel runtime",
+			aimodel: &aimodelv1alpha1.AIModel{
+				Spec: aimodelv1alpha1.AIModelSpec{
+					Runtime: "vllm", // Would be Serverless without GPU
+				},
+			},
+			recipe: &aimodelv1alpha1.ModelRecipeSpec{
+				Runtime: "tensorrt-llm", // Forces RawDeployment
+			},
+			wantMode: "RawDeployment",
+		},
+		{
+			name: "GPU from recipe resources triggers RawDeployment",
+			aimodel: &aimodelv1alpha1.AIModel{
+				Spec: aimodelv1alpha1.AIModelSpec{
+					Runtime: "vllm",
+				},
+			},
+			recipe: &aimodelv1alpha1.ModelRecipeSpec{
+				Resources: aimodelv1alpha1.RecipeResources{
+					GPU: aimodelv1alpha1.GPUResources{
+						Count: 1,
+					},
+				},
+			},
+			wantMode: "RawDeployment",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotMode := r.determineDeploymentMode(tt.aimodel, tt.recipe)
+			if gotMode != tt.wantMode {
+				t.Errorf("determineDeploymentMode() = %q, want %q", gotMode, tt.wantMode)
+			}
+		})
+	}
+}

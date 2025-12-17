@@ -19,7 +19,7 @@
 #
 # For production deployments, prefer S3-cached models without trust-remote-code
 # when possible, as S3 caching provides a stable, reviewed model snapshot.
-apiVersion: ai.ai-aas.io/v1alpha1
+apiVersion: aimodel.ai-aas.io/v1alpha1
 kind: AIModel
 metadata:
   name: mistral-7b-instruct
