@@ -87,11 +87,16 @@ func (r *PolicyRepository) Create(ctx context.Context, create *domain.PolicyCrea
 // GetByID retrieves a policy by ID
 func (r *PolicyRepository) GetByID(ctx context.Context, id string) (*domain.RoutingPolicy, error) {
 	query := `
-		SELECT policy_id, organization_id, model, backends, fallback_backends,
-			failover_threshold, enabled, version, metadata, created_at, updated_at,
-			created_by, updated_by
-		FROM routing_policies
-		WHERE policy_id = $1 AND deleted_at IS NULL
+		SELECT
+			rp.policy_id, rp.organization_id, rp.model,
+			COALESCE(m.external_name, '') as external_name,
+			rp.backends, rp.fallback_backends,
+			rp.failover_threshold, rp.enabled, rp.version, rp.metadata,
+			rp.created_at, rp.updated_at,
+			rp.created_by, rp.updated_by
+		FROM routing_policies rp
+		LEFT JOIN model_registry m ON rp.model = m.name
+		WHERE rp.policy_id = $1 AND rp.deleted_at IS NULL
 	`
 
 	var policy domain.RoutingPolicy
@@ -99,6 +104,7 @@ func (r *PolicyRepository) GetByID(ctx context.Context, id string) (*domain.Rout
 
 	err := r.db.Pool().QueryRow(ctx, query, id).Scan(
 		&policy.PolicyID, &policy.OrganizationID, &policy.Model,
+		&policy.ExternalName,
 		&backends, &fallback, &policy.FailoverThreshold, &policy.Enabled,
 		&policy.Version, &metadata, &policy.CreatedAt, &policy.UpdatedAt,
 		&policy.CreatedBy, &policy.UpdatedBy,
@@ -120,24 +126,24 @@ func (r *PolicyRepository) GetByID(ctx context.Context, id string) (*domain.Rout
 
 // List retrieves policies with filtering and pagination
 func (r *PolicyRepository) List(ctx context.Context, params domain.PolicyListParams) (*domain.PolicyListResponse, error) {
-	baseQuery := `FROM routing_policies WHERE deleted_at IS NULL`
+	baseQuery := `FROM routing_policies rp LEFT JOIN model_registry m ON rp.model = m.name WHERE rp.deleted_at IS NULL`
 	args := []interface{}{}
 	argNum := 1
 
 	if params.Model != "" {
-		baseQuery += fmt.Sprintf(" AND model = $%d", argNum)
+		baseQuery += fmt.Sprintf(" AND rp.model = $%d", argNum)
 		args = append(args, params.Model)
 		argNum++
 	}
 
 	if params.OrganizationID != "" {
-		baseQuery += fmt.Sprintf(" AND organization_id = $%d", argNum)
+		baseQuery += fmt.Sprintf(" AND rp.organization_id = $%d", argNum)
 		args = append(args, params.OrganizationID)
 		argNum++
 	}
 
 	if params.Enabled != nil {
-		baseQuery += fmt.Sprintf(" AND enabled = $%d", argNum)
+		baseQuery += fmt.Sprintf(" AND rp.enabled = $%d", argNum)
 		args = append(args, *params.Enabled)
 		argNum++
 	}
@@ -156,10 +162,14 @@ func (r *PolicyRepository) List(ctx context.Context, params domain.PolicyListPar
 	}
 
 	selectQuery := `
-		SELECT policy_id, organization_id, model, backends, fallback_backends,
-			failover_threshold, enabled, version, metadata, created_at, updated_at,
-			created_by, updated_by
-	` + baseQuery + fmt.Sprintf(" ORDER BY updated_at DESC LIMIT $%d OFFSET $%d", argNum, argNum+1)
+		SELECT
+			rp.policy_id, rp.organization_id, rp.model,
+			COALESCE(m.external_name, '') as external_name,
+			rp.backends, rp.fallback_backends,
+			rp.failover_threshold, rp.enabled, rp.version, rp.metadata,
+			rp.created_at, rp.updated_at,
+			rp.created_by, rp.updated_by
+	` + baseQuery + fmt.Sprintf(" ORDER BY rp.updated_at DESC LIMIT $%d OFFSET $%d", argNum, argNum+1)
 
 	args = append(args, limit, params.Offset)
 
@@ -176,6 +186,7 @@ func (r *PolicyRepository) List(ctx context.Context, params domain.PolicyListPar
 
 		if err := rows.Scan(
 			&policy.PolicyID, &policy.OrganizationID, &policy.Model,
+			&policy.ExternalName,
 			&backends, &fallback, &policy.FailoverThreshold, &policy.Enabled,
 			&policy.Version, &metadata, &policy.CreatedAt, &policy.UpdatedAt,
 			&policy.CreatedBy, &policy.UpdatedBy,
@@ -324,12 +335,17 @@ func (r *PolicyRepository) SetEnabled(ctx context.Context, id string, enabled bo
 // GetForSync retrieves policies changed since a version for syncing
 func (r *PolicyRepository) GetForSync(ctx context.Context, sinceVersion int, environment string) (*domain.PolicySyncResponse, error) {
 	query := `
-		SELECT policy_id, organization_id, model, backends, fallback_backends,
-			failover_threshold, enabled, version, metadata, created_at, updated_at,
-			created_by, updated_by, deleted_at
-		FROM routing_policies
-		WHERE version > $1
-		ORDER BY version ASC
+		SELECT
+			rp.policy_id, rp.organization_id, rp.model,
+			COALESCE(m.external_name, '') as external_name,
+			rp.backends, rp.fallback_backends,
+			rp.failover_threshold, rp.enabled, rp.version, rp.metadata,
+			rp.created_at, rp.updated_at,
+			rp.created_by, rp.updated_by, rp.deleted_at
+		FROM routing_policies rp
+		LEFT JOIN model_registry m ON rp.model = m.name
+		WHERE rp.version > $1
+		ORDER BY rp.version ASC
 	`
 
 	rows, err := r.db.Pool().Query(ctx, query, sinceVersion)
@@ -348,6 +364,7 @@ func (r *PolicyRepository) GetForSync(ctx context.Context, sinceVersion int, env
 
 		if err := rows.Scan(
 			&policy.PolicyID, &policy.OrganizationID, &policy.Model,
+			&policy.ExternalName,
 			&backends, &fallback, &policy.FailoverThreshold, &policy.Enabled,
 			&policy.Version, &metadata, &policy.CreatedAt, &policy.UpdatedAt,
 			&policy.CreatedBy, &policy.UpdatedBy, &deletedAt,

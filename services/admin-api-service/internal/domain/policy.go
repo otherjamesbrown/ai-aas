@@ -15,6 +15,7 @@ type RoutingPolicy struct {
 	PolicyID          string                 `json:"policy_id"`
 	OrganizationID    string                 `json:"organization_id"`
 	Model             string                 `json:"model"`
+	ExternalName      string                 `json:"external_name,omitempty"` // Name exposed in OpenAI API
 	Backends          []Backend              `json:"backends"`
 	FallbackBackends  []Backend              `json:"fallback_backends,omitempty"`
 	FailoverThreshold int                    `json:"failover_threshold"`
