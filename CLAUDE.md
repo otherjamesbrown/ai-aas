@@ -22,6 +22,11 @@ bd update <issue-id> --status in_progress  # Update status
 bd close <issue-id>                # Close an issue
 ```
 
+**Bead ID shorthand:**
+- Prefix `ai-aas-` can be omitted when referencing beads
+- "spec030" → ai-aas-spec030
+- "pr93" → ai-aas-pr93
+
 **When ending a session or completing work:**
 - Ask the user: "Would you like to create any beads issues before we finish?"
 - If the user mentions something to do "later" or "eventually", offer to create a beads issue
@@ -101,6 +106,33 @@ In addition to the principles outlined in the main guide, always adhere to:
     - Check for existing clients in `internal/api`, `internal/registry`, `internal/kubernetes`
     - Check if the Admin API already has the endpoint you need
     - If an API endpoint is missing, add it to Admin API first, then use it from CLI
+
+## Workspace & Git Worktree Setup
+
+The development machine uses a **workspace** bash function (defined in `~/.bashrc`) to manage git worktrees for parallel development:
+
+```bash
+workspace <name> [branch]    # Create/switch to a worktree
+workspace                    # List current worktrees
+workspace-remove <name>      # Clean up a worktree
+```
+
+**Key details:**
+- Main repository: `~/ai-aas`
+- Worktrees created in: `~/worktrees/<name>`
+- Permanent worktrees: `develop`, `staging`
+- Temporary worktrees: feature branches, PR reviews
+
+### Git-Crypt
+
+The repository uses **git-crypt** to encrypt sensitive files (`.env`, secrets).
+
+- **Key location**: `~/.config/git-crypt/ai-aas-key`
+- The workspace function auto-unlocks git-crypt when creating new worktrees
+- If you encounter git-crypt errors, manually unlock:
+  ```bash
+  cd ~/ai-aas && git-crypt unlock ~/.config/git-crypt/ai-aas-key
+  ```
 
 ## Environment Access & Credentials
 
