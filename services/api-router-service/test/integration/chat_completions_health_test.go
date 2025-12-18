@@ -98,6 +98,7 @@ func TestChatCompletionsHealthNoAuthRequired(t *testing.T) {
 		backendRegistry,
 		nil,
 		nil,
+		nil, // token metrics not needed for health endpoint
 		nil,
 		"", // admin API endpoint not needed for health endpoint
 		"", // admin API key not needed for health endpoint
