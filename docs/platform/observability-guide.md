@@ -44,12 +44,13 @@ The AI-AAS platform uses a comprehensive observability stack deployed in the `sy
 
 ### Visualization & Metrics
 
-- **Grafana** (Deployment):
+- **Grafana** (kube-prometheus-stack):
   - Unified dashboard for logs, traces, and metrics
   - Datasources: Loki, Tempo, Prometheus
-  - Pre-built dashboards: Inference Backends, Service Logs, Request Tracing
+  - Pre-built dashboards: GPU Fleet, API Performance, Inference Engine, Cost Efficiency, etc.
   - Trace-to-logs correlation with derived fields
-  - Configuration: `infra/k8s/monitoring/grafana/`
+  - Dashboard definitions: `infra/k8s/monitoring/dashboards/`
+  - Deployed via ConfigMap sidecar (label: `grafana_dashboard: "1"`)
   - Access: `https://grafana.dev.otherjamesbrown.com`
 
 - **Prometheus** (kube-prometheus-stack):

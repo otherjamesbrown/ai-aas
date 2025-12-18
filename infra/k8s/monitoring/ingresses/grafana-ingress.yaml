@@ -1,6 +1,8 @@
 # Grafana Ingress
 # Exposes Grafana dashboard via HTTPS
 #
+# Points to kube-prometheus-stack Grafana (not standalone deployment)
+#
 # Domain Configuration:
 # ---------------------
 # This file uses environment-specific domain values. When creating for a new environment:
