@@ -3,38 +3,71 @@ kind: Kustomization
 
 namespace: monitoring
 
+# Dashboard Suite v2.0 (spec028)
+# Replaces legacy dashboards with purpose-driven observability suite
+#
+# New Dashboards:
+#   - gpu-fleet.json: GPU inventory, utilization heatmaps, health
+#   - kubernetes-resources.json: Node/pod status, CPU/memory usage
+#   - api-performance-v2.json: Request rate, latency, errors by org
+#   - inference-performance.json: Model latency, throughput, KV cache
+#   - inference-engine.json: vLLM engine metrics, memory management
+#   - org-usage.json: Organization token consumption and patterns
+#   - cost-efficiency.json: Cost tracking, efficiency metrics
+#
+# Removed (superseded):
+#   - per-model-performance.json -> inference-performance.json
+#   - api-performance.json -> api-performance-v2.json
+#   - fleet-overview.json -> gpu-fleet.json
+#   - node-cluster-view.json -> kubernetes-resources.json
+#   - per-gpu-type-analysis.json -> gpu-fleet.json
+
 configMapGenerator:
-  - name: grafana-dashboard-per-model-performance
+  - name: grafana-dashboard-gpu-fleet
     files:
-      - per-model-performance.json
+      - gpu-fleet.json
     options:
       labels:
         grafana_dashboard: "1"
 
-  - name: grafana-dashboard-api-performance
+  - name: grafana-dashboard-kubernetes-resources
     files:
-      - api-performance.json
+      - kubernetes-resources.json
     options:
       labels:
         grafana_dashboard: "1"
 
-  - name: grafana-dashboard-fleet-overview
+  - name: grafana-dashboard-api-performance-v2
     files:
-      - fleet-overview.json
+      - api-performance-v2.json
     options:
       labels:
         grafana_dashboard: "1"
 
-  - name: grafana-dashboard-node-cluster-view
+  - name: grafana-dashboard-inference-performance
     files:
-      - node-cluster-view.json
+      - inference-performance.json
     options:
       labels:
         grafana_dashboard: "1"
 
-  - name: grafana-dashboard-per-gpu-type
+  - name: grafana-dashboard-inference-engine
     files:
-      - per-gpu-type-analysis.json
+      - inference-engine.json
+    options:
+      labels:
+        grafana_dashboard: "1"
+
+  - name: grafana-dashboard-org-usage
+    files:
+      - org-usage.json
+    options:
+      labels:
+        grafana_dashboard: "1"
+
+  - name: grafana-dashboard-cost-efficiency
+    files:
+      - cost-efficiency.json
     options:
       labels:
         grafana_dashboard: "1"

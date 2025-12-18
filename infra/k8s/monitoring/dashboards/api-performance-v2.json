@@ -17,14 +17,14 @@
   },
   "editable": true,
   "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
+  "graphTooltip": 1,
   "id": null,
   "links": [],
   "panels": [
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -54,7 +54,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
+        "h": 6,
         "w": 6,
         "x": 0,
         "y": 0
@@ -80,19 +80,19 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
-          "expr": "sum(rate(revision_app_request_count{namespace=\"development\"}[1m]))",
+          "expr": "sum(rate(api_router_backend_requests_total{organization_id=~\"$organization\"}[5m]))",
           "refId": "A"
         }
       ],
-      "title": "Request Rate (RPS)",
+      "title": "Total Request Rate",
       "type": "stat"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -109,11 +109,11 @@
               },
               {
                 "color": "yellow",
-                "value": 1000
+                "value": 200
               },
               {
                 "color": "red",
-                "value": 5000
+                "value": 500
               }
             ]
           },
@@ -122,7 +122,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
+        "h": 6,
         "w": 6,
         "x": 6,
         "y": 0
@@ -148,9 +148,77 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(revision_app_request_latencies_bucket{namespace=\"development\"}[5m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(api_router_backend_request_duration_seconds_bucket{organization_id=~\"$organization\"}[5m])) by (le)) * 1000",
+          "refId": "A"
+        }
+      ],
+      "title": "P50 Latency",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 500
+              },
+              {
+                "color": "red",
+                "value": 1000
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.95, sum(rate(api_router_backend_request_duration_seconds_bucket{organization_id=~\"$organization\"}[5m])) by (le)) * 1000",
           "refId": "A"
         }
       ],
@@ -160,77 +228,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "max": 100,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 95
-              },
-              {
-                "color": "green",
-                "value": 99
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 12,
-        "y": 0
-      },
-      "id": 3,
-      "options": {
-        "minVizHeight": 75,
-        "minVizWidth": 75,
-        "orientation": "auto",
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true,
-        "sizing": "auto"
-      },
-      "pluginVersion": "11.0.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "100 * (sum(rate(revision_app_request_count{response_code_class=\"2xx\",namespace=\"development\"}[5m])) / sum(rate(revision_app_request_count{namespace=\"development\"}[5m])))",
-          "refId": "A"
-        }
-      ],
-      "title": "Success Rate",
-      "type": "gauge"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -247,20 +245,20 @@
               },
               {
                 "color": "yellow",
-                "value": 10
+                "value": 1000
               },
               {
                 "color": "red",
-                "value": 50
+                "value": 2000
               }
             ]
           },
-          "unit": "short"
+          "unit": "ms"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
+        "h": 6,
         "w": 6,
         "x": 18,
         "y": 0
@@ -286,19 +284,19 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
-          "expr": "sum(activator_request_concurrency{namespace=\"development\"})",
+          "expr": "histogram_quantile(0.99, sum(rate(api_router_backend_request_duration_seconds_bucket{organization_id=~\"$organization\"}[5m])) by (le)) * 1000",
           "refId": "A"
         }
       ],
-      "title": "Concurrent Requests",
+      "title": "P99 Latency",
       "type": "stat"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -355,7 +353,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 4
+        "y": 6
       },
       "id": 5,
       "options": {
@@ -371,27 +369,27 @@
         },
         "tooltip": {
           "mode": "multi",
-          "sort": "none"
+          "sort": "desc"
         }
       },
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
-          "expr": "sum(rate(revision_app_request_count{namespace=\"development\"}[1m])) by (configuration_name)",
-          "legendFormat": "{{configuration_name}}",
+          "expr": "sum(rate(api_router_backend_requests_total{organization_id=~\"$organization\"}[5m])) by (backend_id, model)",
+          "legendFormat": "{{backend_id}} - {{model}}",
           "refId": "A"
         }
       ],
-      "title": "Request Rate Over Time",
+      "title": "Request Rate by Backend and Model",
       "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -445,14 +443,14 @@
         "overrides": [
           {
             "matcher": {
-              "id": "byName",
-              "options": "p99"
+              "id": "byRegexp",
+              "options": ".*p50$"
             },
             "properties": [
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "red",
+                  "fixedColor": "green",
                   "mode": "fixed"
                 }
               }
@@ -460,8 +458,8 @@
           },
           {
             "matcher": {
-              "id": "byName",
-              "options": "p95"
+              "id": "byRegexp",
+              "options": ".*p95"
             },
             "properties": [
               {
@@ -475,14 +473,14 @@
           },
           {
             "matcher": {
-              "id": "byName",
-              "options": "p50"
+              "id": "byRegexp",
+              "options": ".*p99"
             },
             "properties": [
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "green",
+                  "fixedColor": "red",
                   "mode": "fixed"
                 }
               }
@@ -494,7 +492,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 4
+        "y": 6
       },
       "id": 6,
       "options": {
@@ -517,38 +515,38 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.50, sum(rate(revision_app_request_latencies_bucket{namespace=\"development\"}[5m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(api_router_backend_request_duration_seconds_bucket{organization_id=~\"$organization\"}[5m])) by (le)) * 1000",
           "legendFormat": "p50",
           "refId": "A"
         },
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(revision_app_request_latencies_bucket{namespace=\"development\"}[5m])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate(api_router_backend_request_duration_seconds_bucket{organization_id=~\"$organization\"}[5m])) by (le)) * 1000",
           "legendFormat": "p95",
           "refId": "B"
         },
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(revision_app_request_latencies_bucket{namespace=\"development\"}[5m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(api_router_backend_request_duration_seconds_bucket{organization_id=~\"$organization\"}[5m])) by (le)) * 1000",
           "legendFormat": "p99",
           "refId": "C"
         }
       ],
-      "title": "Request Latency Percentiles",
+      "title": "Latency Percentiles (P50, P95, P99)",
       "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -603,7 +601,7 @@
           {
             "matcher": {
               "id": "byRegexp",
-              "options": "/2xx/"
+              "options": ".*success.*"
             },
             "properties": [
               {
@@ -618,22 +616,7 @@
           {
             "matcher": {
               "id": "byRegexp",
-              "options": "/4xx/"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "yellow",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/5xx/"
+              "options": ".*error.*"
             },
             "properties": [
               {
@@ -651,7 +634,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 12
+        "y": 14
       },
       "id": 7,
       "options": {
@@ -673,38 +656,183 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
-          "expr": "sum(rate(revision_app_request_count{response_code_class=\"2xx\",namespace=\"development\"}[1m])) by (response_code_class)",
-          "legendFormat": "2xx Success",
+          "expr": "sum(rate(api_router_backend_requests_total{organization_id=~\"$organization\",status=\"success\"}[5m])) by (status)",
+          "legendFormat": "Success",
           "refId": "A"
         },
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
-          "expr": "sum(rate(revision_app_request_count{response_code_class=\"4xx\",namespace=\"development\"}[1m])) by (response_code_class)",
-          "legendFormat": "4xx Client Error",
+          "expr": "sum(rate(api_router_backend_requests_total{organization_id=~\"$organization\",status=\"error\"}[5m])) by (status)",
+          "legendFormat": "Error",
           "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "sum(rate(revision_app_request_count{response_code_class=\"5xx\",namespace=\"development\"}[1m])) by (response_code_class)",
-          "legendFormat": "5xx Server Error",
-          "refId": "C"
         }
       ],
-      "title": "Requests by Status Code",
+      "title": "Request Status (Success vs Error)",
       "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*timeout.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*http_5xx.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*http_4xx.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*connection.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "purple",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(api_router_backend_errors_total{organization_id=~\"$organization\"}[5m])) by (error_type)",
+          "legendFormat": "{{error_type}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Error Breakdown by Type",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -753,7 +881,100 @@
               }
             ]
           },
-          "unit": "short"
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 22
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(api_router_backend_requests_total{organization_id=~\"$organization\"}[5m])) by (organization_id)",
+          "legendFormat": "{{organization_id}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Request Rate by Organization",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
         },
         "overrides": []
       },
@@ -761,9 +982,9 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 12
+        "y": 22
       },
-      "id": 8,
+      "id": 10,
       "options": {
         "legend": {
           "calcs": [
@@ -784,20 +1005,215 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
-          "expr": "sum(activator_request_concurrency{namespace=\"development\"}) by (configuration_name)",
-          "legendFormat": "{{configuration_name}}",
+          "expr": "histogram_quantile(0.95, sum(rate(api_router_backend_request_duration_seconds_bucket{organization_id=~\"$organization\"}[5m])) by (le, organization_id)) * 1000",
+          "legendFormat": "{{organization_id}} - p95",
           "refId": "A"
         }
       ],
-      "title": "Concurrent Requests Over Time",
+      "title": "P95 Latency by Organization",
       "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 30
+      },
+      "id": 11,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(api_router_rate_limit_denials_total{organization_id=~\"$organization\"}[5m])) by (limit_type)",
+          "legendFormat": "{{limit_type}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Rate Limit Denials",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 30
+      },
+      "id": 12,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(api_router_budget_denials_total{organization_id=~\"$organization\"}[5m])) by (quota_type)",
+          "legendFormat": "Budget - {{quota_type}}",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(api_router_quota_denials_total{organization_id=~\"$organization\"}[5m])) by (quota_type)",
+          "legendFormat": "Quota - {{quota_type}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Budget & Quota Denials",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -826,7 +1242,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "RPS"
+              "options": "Request Rate"
             },
             "properties": [
               {
@@ -858,12 +1274,12 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Success Rate"
+              "options": "Error Rate"
             },
             "properties": [
               {
                 "id": "unit",
-                "value": "percent"
+                "value": "percentunit"
               },
               {
                 "id": "decimals",
@@ -882,16 +1298,16 @@
                   "mode": "absolute",
                   "steps": [
                     {
-                      "color": "red",
+                      "color": "green",
                       "value": null
                     },
                     {
                       "color": "yellow",
-                      "value": 95
+                      "value": 0.01
                     },
                     {
-                      "color": "green",
-                      "value": 99
+                      "color": "red",
+                      "value": 0.05
                     }
                   ]
                 }
@@ -901,12 +1317,12 @@
         ]
       },
       "gridPos": {
-        "h": 8,
+        "h": 10,
         "w": 24,
         "x": 0,
-        "y": 20
+        "y": 38
       },
-      "id": 9,
+      "id": 13,
       "options": {
         "cellHeight": "sm",
         "footer": {
@@ -918,16 +1334,21 @@
           "show": false
         },
         "showHeader": true,
-        "sortBy": []
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Request Rate"
+          }
+        ]
       },
       "pluginVersion": "11.0.0",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
-          "expr": "sum(rate(revision_app_request_count{namespace=\"development\"}[5m])) by (configuration_name)",
+          "expr": "sum(rate(api_router_backend_requests_total{organization_id=~\"$organization\"}[5m])) by (organization_id, backend_id, model)",
           "format": "table",
           "instant": true,
           "refId": "A"
@@ -935,9 +1356,9 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(revision_app_request_latencies_bucket{namespace=\"development\"}[5m])) by (le, configuration_name))",
+          "expr": "histogram_quantile(0.95, sum(rate(api_router_backend_request_duration_seconds_bucket{organization_id=~\"$organization\"}[5m])) by (le, organization_id, backend_id, model)) * 1000",
           "format": "table",
           "instant": true,
           "refId": "B"
@@ -945,15 +1366,15 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
-          "expr": "100 * (sum(rate(revision_app_request_count{response_code_class=\"2xx\",namespace=\"development\"}[5m])) by (configuration_name) / sum(rate(revision_app_request_count{namespace=\"development\"}[5m])) by (configuration_name))",
+          "expr": "sum(rate(api_router_backend_requests_total{organization_id=~\"$organization\",status=\"error\"}[5m])) by (organization_id, backend_id, model) / sum(rate(api_router_backend_requests_total{organization_id=~\"$organization\"}[5m])) by (organization_id, backend_id, model)",
           "format": "table",
           "instant": true,
           "refId": "C"
         }
       ],
-      "title": "Service Performance Summary",
+      "title": "Per-Organization Performance Summary",
       "transformations": [
         {
           "id": "merge",
@@ -965,21 +1386,16 @@
             "excludeByName": {
               "Time": true,
               "__name__": true,
-              "container": true,
-              "endpoint": true,
-              "instance": true,
-              "job": true,
-              "le": true,
-              "namespace": true,
-              "pod": true,
-              "service": true
+              "le": true
             },
             "indexByName": {},
             "renameByName": {
-              "Value #A": "RPS",
+              "Value #A": "Request Rate",
               "Value #B": "P95 Latency",
-              "Value #C": "Success Rate",
-              "configuration_name": "Service"
+              "Value #C": "Error Rate",
+              "organization_id": "Organization",
+              "backend_id": "Backend",
+              "model": "Model"
             }
           }
         }
@@ -988,9 +1404,46 @@
     }
   ],
   "schemaVersion": 39,
-  "tags": ["ai-aas", "api", "performance", "requests"],
+  "tags": [
+    "ai-aas",
+    "api",
+    "performance",
+    "api-router"
+  ],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "Prometheus",
+          "value": "Prometheus"
+        },
+        "hide": 0,
+        "label": "Datasource",
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "type": "datasource"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(api_router_backend_requests_total, organization_id)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Organization",
+        "multi": true,
+        "name": "organization",
+        "query": "label_values(api_router_backend_requests_total, organization_id)",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
   },
   "time": {
     "from": "now-1h",
@@ -998,8 +1451,8 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "AI-AAS API Performance",
-  "uid": "ai-aas-api-performance",
-  "version": 0,
+  "title": "API Performance v2",
+  "uid": "api-performance-v2",
+  "version": 1,
   "weekStart": ""
 }

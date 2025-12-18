@@ -195,6 +195,18 @@ func (h *Handler) HandleOpenAIChatCompletions(w http.ResponseWriter, r *http.Req
 		)
 	}
 
+	// Record token metrics
+	if h.tokenMetrics != nil {
+		h.tokenMetrics.RecordTokens(
+			ctx,
+			authCtx.OrganizationID,
+			originalModel, // Use original model name (alias)
+			"chat",
+			openAIResp.Usage.PromptTokens,
+			openAIResp.Usage.CompletionTokens,
+		)
+	}
+
 	// Write response
 	if err := h.writeJSON(w, http.StatusOK, openAIResp); err != nil {
 		h.logger.Error("failed to write OpenAI response", zap.Error(err))
@@ -304,6 +316,18 @@ func (h *Handler) HandleOpenAICompletions(w http.ResponseWriter, r *http.Request
 			"WITHIN_LIMIT",
 			span.SpanContext(),
 			routingDecision.AttemptNumber-1,
+		)
+	}
+
+	// Record token metrics
+	if h.tokenMetrics != nil {
+		h.tokenMetrics.RecordTokens(
+			ctx,
+			authCtx.OrganizationID,
+			originalModel, // Use original model name (alias)
+			"completion",
+			openAIResp.Usage.PromptTokens,
+			openAIResp.Usage.CompletionTokens,
 		)
 	}
 
