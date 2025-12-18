@@ -444,7 +444,7 @@
           {
             "matcher": {
               "id": "byRegexp",
-              "options": ".*p50.*"
+              "options": ".*p50$"
             },
             "properties": [
               {
@@ -459,7 +459,7 @@
           {
             "matcher": {
               "id": "byRegexp",
-              "options": ".*p95.*"
+              "options": ".*p95"
             },
             "properties": [
               {
@@ -474,7 +474,7 @@
           {
             "matcher": {
               "id": "byRegexp",
-              "options": ".*p99.*"
+              "options": ".*p99"
             },
             "properties": [
               {

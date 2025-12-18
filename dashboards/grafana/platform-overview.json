@@ -91,7 +91,7 @@
             "type": "prometheus",
             "uid": "${prometheus_datasource}"
           },
-          "expr": "(\n  (\n    avg(up{job=~\".*-service\"}) * 40\n  ) + \n  (\n    (1 - (sum(rate(http_server_requests_failed_total[5m])) / sum(rate(http_server_duration_seconds_count[5m])))) * 40\n  ) +\n  (\n    (avg(DCGM_FI_DEV_GPU_UTIL) / 100) * 20\n  )\n) * 100 / 100",
+          "expr": "(\n  (\n    avg(up{job=~\".*-service\"}) * 40\n  ) + \n  (\n    (1 - (sum(rate(http_server_requests_failed_total[5m])) / sum(rate(http_server_duration_seconds_count[5m])))) * 40\n  ) +\n  (\n    (avg(DCGM_FI_DEV_GPU_UTIL) / 100) * 20\n  )\n)",
           "refId": "A"
         }
       ],

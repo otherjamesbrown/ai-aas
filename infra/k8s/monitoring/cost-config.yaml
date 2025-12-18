@@ -107,40 +107,8 @@ data:
   # How far back to look for cost aggregations
   cost_calculation_lookback_days: "30"
 
-  # PromQL query templates for cost calculations
-  # These can be referenced in Grafana dashboards
-  promql_templates: |
-    # Total cost per model (input + output tokens)
-    total_cost_by_model: |
-      (
-        sum(increase(vllm:prompt_tokens_total{model_name="$model"}[1h])) * ${cost_per_million_input_tokens} / 1000000
-        +
-        sum(increase(vllm:generation_tokens_total{model_name="$model"}[1h])) * ${cost_per_million_output_tokens} / 1000000
-      )
-
-    # GPU cost per model (GPU hours * hourly rate)
-    gpu_cost_by_model: |
-      sum(
-        count_over_time(up{job="vllm",model_name="$model"}[1h]) / 60 * ${gpu_hourly_cost}
-      )
-
-    # Total cost per organization
-    total_cost_by_org: |
-      sum by (org_id) (
-        increase(vllm:prompt_tokens_total[1h]) * ${cost_per_million_input_tokens} / 1000000
-        +
-        increase(vllm:generation_tokens_total[1h]) * ${cost_per_million_output_tokens} / 1000000
-      )
-
-    # Efficiency: tokens per GPU-hour
-    tokens_per_gpu_hour: |
-      (
-        sum(increase(vllm:prompt_tokens_total{model_name="$model"}[1h]))
-        +
-        sum(increase(vllm:generation_tokens_total{model_name="$model"}[1h]))
-      ) / (count_over_time(up{job="vllm",model_name="$model"}[1h]) / 60)
-
   # Notes and documentation
+  # For PromQL query examples, see COST_CONFIG_README.md
   notes: |
     ## Cost Configuration Notes
 

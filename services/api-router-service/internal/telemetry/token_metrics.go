@@ -40,7 +40,7 @@ func NewTokenMetrics(logger *zap.Logger) (*TokenMetrics, error) {
 
 	tokensProcessedTotal, err := meter.Int64Counter(
 		"tokens_processed_total",
-		metric.WithDescription("Total number of tokens processed (prompt + completion)"),
+		metric.WithDescription("Total number of tokens processed, labeled by token_type (prompt/completion)"),
 	)
 	if err != nil {
 		return nil, err
@@ -80,17 +80,24 @@ func (m *TokenMetrics) RecordTokens(
 ) {
 	totalTokens := promptTokens + completionTokens
 
-	attrs := []attribute.KeyValue{
+	baseAttrs := []attribute.KeyValue{
 		attribute.String("org_id", orgID),
 		attribute.String("model", model),
 		attribute.String("request_type", requestType),
 	}
 
-	// Record total tokens processed (counter)
-	m.tokensProcessedTotal.Add(ctx, int64(totalTokens), metric.WithAttributes(attrs...))
+	// Record prompt tokens (counter with token_type=prompt)
+	promptAttrs := append([]attribute.KeyValue{}, baseAttrs...)
+	promptAttrs = append(promptAttrs, attribute.String("token_type", "prompt"))
+	m.tokensProcessedTotal.Add(ctx, int64(promptTokens), metric.WithAttributes(promptAttrs...))
 
-	// Record tokens per request distribution (histogram)
-	m.tokensPerRequest.Record(ctx, float64(totalTokens), metric.WithAttributes(attrs...))
+	// Record completion tokens (counter with token_type=completion)
+	completionAttrs := append([]attribute.KeyValue{}, baseAttrs...)
+	completionAttrs = append(completionAttrs, attribute.String("token_type", "completion"))
+	m.tokensProcessedTotal.Add(ctx, int64(completionTokens), metric.WithAttributes(completionAttrs...))
+
+	// Record tokens per request distribution (histogram for total tokens)
+	m.tokensPerRequest.Record(ctx, float64(totalTokens), metric.WithAttributes(baseAttrs...))
 
 	// Log debug information for high token usage
 	if totalTokens > 10000 {

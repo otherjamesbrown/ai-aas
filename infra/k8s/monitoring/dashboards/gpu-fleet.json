@@ -1241,7 +1241,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "DCGM_FI_DEV_GPU_UTIL * on(exported_pod) group_left(model_name) (0 * vllm:avg_generation_throughput_toks_per_s + 1)",
+          "expr": "DCGM_FI_DEV_GPU_UTIL * on(exported_pod) group_left(model_name) label_replace(0 * vllm:avg_generation_throughput_toks_per_s + 1, \"exported_pod\", \"$1\", \"pod\", \"(.*)\")",
           "format": "table",
           "instant": true,
           "refId": "A"

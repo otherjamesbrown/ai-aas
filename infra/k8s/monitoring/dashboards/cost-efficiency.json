@@ -105,7 +105,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(increase(tokens_processed_total[$__range])) * 2.25 / 1000000",
+          "expr": "(sum(increase(tokens_processed_total{token_type=\"prompt\"}[$__range])) * 1.50 + sum(increase(tokens_processed_total{token_type=\"completion\"}[$__range])) * 3.00) / 1000000",
           "refId": "A"
         }
       ],
@@ -311,7 +311,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "(sum(increase(tokens_processed_total[$__range])) * 2.25 / 1000000) / sum(increase(api_router_backend_requests_total[$__range]))",
+          "expr": "((sum(increase(tokens_processed_total{token_type=\"prompt\"}[$__range])) * 1.50 + sum(increase(tokens_processed_total{token_type=\"completion\"}[$__range])) * 3.00) / 1000000) / sum(increase(api_router_backend_requests_total[$__range]))",
           "refId": "A"
         }
       ],
@@ -443,7 +443,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(increase(tokens_processed_total[1h])) * 2.25 / 1000000",
+          "expr": "(sum(increase(tokens_processed_total{token_type=\"prompt\"}[1h])) * 1.50 + sum(increase(tokens_processed_total{token_type=\"completion\"}[1h])) * 3.00) / 1000000",
           "legendFormat": "Token Cost",
           "refId": "A"
         },
@@ -541,7 +541,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(increase(tokens_processed_total{org_id=~\".+\"}[1h])) by (org_id) * 2.25 / 1000000",
+          "expr": "(sum(increase(tokens_processed_total{org_id=~\".+\", token_type=\"prompt\"}[1h])) by (org_id) * 1.50 + sum(increase(tokens_processed_total{org_id=~\".+\", token_type=\"completion\"}[1h])) by (org_id) * 3.00) / 1000000",
           "legendFormat": "{{org_id}}",
           "refId": "A"
         }
@@ -630,7 +630,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(increase(tokens_processed_total{model=~\".+\"}[1h])) by (model) * 2.25 / 1000000",
+          "expr": "(sum(increase(tokens_processed_total{model=~\".+\", token_type=\"prompt\"}[1h])) by (model) * 1.50 + sum(increase(tokens_processed_total{model=~\".+\", token_type=\"completion\"}[1h])) by (model) * 3.00) / 1000000",
           "legendFormat": "{{model}}",
           "refId": "A"
         }
@@ -1233,7 +1233,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(increase(tokens_processed_total[$__range])) by (org_id) * 2.25 / 1000000",
+          "expr": "(sum(increase(tokens_processed_total{token_type=\"prompt\"}[$__range])) by (org_id) * 1.50 + sum(increase(tokens_processed_total{token_type=\"completion\"}[$__range])) by (org_id) * 3.00) / 1000000",
           "format": "table",
           "instant": true,
           "refId": "B"
@@ -1253,7 +1253,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "(sum(increase(tokens_processed_total[$__range])) by (org_id) * 2.25 / 1000000) / sum(increase(api_router_backend_requests_total[$__range])) by (organization_id)",
+          "expr": "((sum(increase(tokens_processed_total{token_type=\"prompt\"}[$__range])) by (org_id) * 1.50 + sum(increase(tokens_processed_total{token_type=\"completion\"}[$__range])) by (org_id) * 3.00) / 1000000) / sum(increase(api_router_backend_requests_total[$__range])) by (organization_id)",
           "format": "table",
           "instant": true,
           "refId": "D"
