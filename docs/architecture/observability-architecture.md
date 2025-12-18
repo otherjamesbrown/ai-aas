@@ -181,17 +181,25 @@ This document describes the unified observability architecture for the AI-AAS pl
 
 ### 4. Visualization Layer
 
-#### Grafana (Deployment)
+#### Grafana (kube-prometheus-stack)
 - **Purpose**: Unified visualization and exploration
-- **Configuration**: `/home/dev/ai-aas-024-observability/infra/k8s/monitoring/grafana/configmap.yaml`
+- **Deployment**: Managed by kube-prometheus-stack Helm chart in `monitoring` namespace
+- **Dashboards**: Deployed via ConfigMaps with `grafana_dashboard: "1"` label (sidecar auto-discovery)
+  - Dashboard definitions: `infra/k8s/monitoring/dashboards/`
+  - ArgoCD app: `monitoring-dashboards-development`
 - **Datasources**:
   - **Loki**: Log queries via LogQL
   - **Tempo**: Trace exploration
   - **Prometheus**: Metrics (existing)
-- **Dashboards** (ConfigMap-mounted):
-  - `inference-backends.json`: vLLM model health, GPU errors, loading status
-  - `service-logs.json`: Service log volume, error rates, log viewer
-  - `request-tracing.json`: Request flow, trace correlation, latency breakdown
+- **Pre-built Dashboards**:
+  - `gpu-fleet.json`: GPU inventory, utilization, health
+  - `kubernetes-resources.json`: Node/pod status, CPU/memory
+  - `api-performance-v2.json`: Request rate, latency, errors by org
+  - `inference-performance.json`: Model latency, throughput, KV cache
+  - `inference-engine.json`: vLLM engine metrics
+  - `org-usage.json`: Organization token consumption
+  - `cost-efficiency.json`: Cost tracking, efficiency metrics
+  - `platform-overview.json`: Health score, API success
 - **Features**:
   - Trace-to-logs correlation: Click trace → view related logs
   - Derived fields: Extract `trace_id` from logs → link to Tempo
@@ -330,7 +338,7 @@ sum(rate({namespace="system"}[5m])) by (service)
 | Tempo | `tempo.system.svc.cluster.local` | 3100 | HTTP |
 | OTEL Collector | `otel-collector.system.svc.cluster.local` | 4317 | gRPC |
 | OTEL Collector | `otel-collector.system.svc.cluster.local` | 4318 | HTTP |
-| Grafana | `grafana.system.svc.cluster.local` | 3000 | HTTP |
+| Grafana | `kube-prometheus-stack-grafana.monitoring.svc.cluster.local` | 80 | HTTP |
 
 ### External Access (Development)
 
@@ -420,7 +428,10 @@ See [Environment Access](../platform/environment-access.md) for credentials.
 | promtail | `infra/k8s/monitoring/promtail` | system | develop |
 | tempo | `infra/k8s/monitoring/tempo` | system | develop |
 | otel-collector | `infra/k8s/monitoring/otel-collector.yaml` | system | develop |
-| grafana | `infra/k8s/monitoring/grafana` | system | develop |
+| monitoring-dashboards | `infra/k8s/monitoring/dashboards` | monitoring | develop |
+| monitoring-ingresses | `infra/k8s/monitoring/ingresses` | monitoring | develop |
+
+**Note**: Grafana is deployed as part of `kube-prometheus-stack` Helm chart, not as a standalone application. Dashboards are automatically loaded via ConfigMap sidecar.
 
 ### Deployment Workflow
 

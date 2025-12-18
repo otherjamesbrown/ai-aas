@@ -1,6 +1,8 @@
 # Grafana Ingress
 # Exposes Grafana dashboard via HTTPS
 #
+# Points to kube-prometheus-stack Grafana (not standalone deployment)
+#
 # Domain Configuration:
 # ---------------------
 # This file uses environment-specific domain values. When creating for a new environment:
@@ -8,8 +10,6 @@
 # 2. Replace "dev.otherjamesbrown.com" with the environment's baseDomain
 #
 # Access URL (Development): https://grafana.dev.otherjamesbrown.com
-#
-# Default credentials: admin / admin
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -31,9 +31,9 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: grafana
+                name: kube-prometheus-stack-grafana
                 port:
-                  number: 3000
+                  number: 80
   tls:
     - secretName: grafana-tls
       hosts:
