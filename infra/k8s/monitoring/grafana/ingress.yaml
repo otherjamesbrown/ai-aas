@@ -6,11 +6,8 @@
 # This file uses environment-specific domain values. When creating for a new environment:
 # 1. Reference configs/environments/{env}.yaml for the correct baseDomain
 # 2. Replace "dev.otherjamesbrown.com" with the environment's baseDomain
-# 3. Replace "dev.ai-aas.local" with the environment's localDomain
 #
-# Access URLs (Development):
-# - Hostname: https://grafana.dev.ai-aas.local (requires /etc/hosts entry)
-# - Public DNS: https://grafana.dev.otherjamesbrown.com
+# Access URL (Development): https://grafana.dev.otherjamesbrown.com
 #
 # Default credentials: admin / admin
 apiVersion: networking.k8s.io/v1
@@ -27,16 +24,6 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: grafana.dev.ai-aas.local
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: grafana
-                port:
-                  number: 3000
     - host: grafana.dev.otherjamesbrown.com
       http:
         paths:

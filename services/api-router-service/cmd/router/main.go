@@ -68,6 +68,9 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/routing"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/telemetry"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/usage"
+
+	sharedMiddleware "github.com/ai-aas/shared-go/middleware"
+	"github.com/ai-aas/shared-go/observability"
 )
 
 func main() {
@@ -235,9 +238,15 @@ func main() {
 	// Base middleware stack (applies to all routes including health endpoints)
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
-	router.Use(middleware.Logger)
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.Timeout(60 * time.Second))
+
+	// Request context middleware (for request IDs and correlation)
+	router.Use(observability.RequestContextMiddleware)
+
+	// Request logger middleware (structured logging for all requests)
+	requestLoggerConfig := sharedMiddleware.DefaultRequestLoggerConfig()
+	router.Use(sharedMiddleware.RequestLogger(logger, requestLoggerConfig))
 
 	// Initialize authentication
 	authenticator := auth.NewAuthenticator(logger, cfg.UserOrgServiceURL, cfg.UserOrgServiceTimeout)
@@ -412,8 +421,12 @@ func main() {
 	defer healthMonitor.Stop()
 
 	// Initialize public API handler with routing engine and usage hook
-	publicHandler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, routingEngine, routingMetrics, tokenMetrics, usageHook)
+	publicHandler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, routingEngine, routingMetrics, usageHook, cfg.AdminAPIEndpoint, cfg.AdminAPIKey)
 	publicHandler.SetUserOrgServiceURL(cfg.UserOrgServiceURL)
+
+	// Register unauthenticated chat completions health endpoint on main router
+	// This allows benchmarking tools like guidellm to verify the endpoint is reachable without requiring an API key
+	router.Get("/v1/chat/completions/health", publicHandler.HandleChatCompletionsHealth)
 
 	// Create tracer for middleware
 	tracer := otel.Tracer("api-router-service")

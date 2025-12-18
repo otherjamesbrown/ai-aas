@@ -1,0 +1,84 @@
+# AIModel CR for Mistral-7B-Instruct-v0.2 (Staging)
+#
+# When applied, the AI Model Operator will create a KServe InferenceService
+# with this configuration.
+#
+# ⚠️  SECURITY WARNING: This configuration uses --trust-remote-code
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# The --trust-remote-code flag allows the model to execute arbitrary Python
+# code from the HuggingFace repository. This is required for some models
+# (e.g., those with custom architectures) but poses security risks:
+#
+# - Malicious code could be executed during model loading
+# - The model repository owner could push harmful updates
+#
+# Only use --trust-remote-code when:
+# 1. You trust the model source (e.g., official HuggingFace organizations)
+# 2. You have reviewed the model's code for safety
+# 3. The model requires custom code to function correctly
+#
+# For production deployments, prefer S3-cached models without trust-remote-code
+# when possible, as S3 caching provides a stable, reviewed model snapshot.
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: mistral-7b-instruct
+  namespace: staging
+  labels:
+    app: vllm-inference
+    model: mistral-7b-instruct
+    version: v0.2
+    environment: staging
+spec:
+  # Model identification
+  modelName: mistral-7b-instruct
+  modelID: mistralai/Mistral-7B-Instruct-v0.2
+
+  # S3 cache for model artifacts (required - see spec FR-3)
+  # Models are downloaded from HuggingFace and cached in S3
+  s3Bucket: "ai-aas-models-staging"
+  s3Key: "models/mistral-7b-instruct-v0.2"
+
+  # Deployment configuration
+  enabled: true
+  runtime: vllm
+
+  # Replica configuration for staging
+  # Keep 1 replica warm for faster testing/demos
+  minReplicas: 1
+  maxReplicas: 3
+
+  # Resource requirements - matches original InferenceService
+  resources:
+    requests:
+      cpu: "4"
+      memory: "16Gi"
+      nvidia.com/gpu: "1"
+    limits:
+      cpu: "8"
+      memory: "32Gi"
+      nvidia.com/gpu: "1"
+
+  # GPU node scheduling - matches original InferenceService tolerations
+  tolerations:
+    - key: gpu-workload
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+
+  # vLLM runtime arguments - matches original InferenceService container args
+  runtimeArgs:
+    - --model=mistralai/Mistral-7B-Instruct-v0.2
+    - --dtype=float16
+    - --max-model-len=4096
+    - --gpu-memory-utilization=0.9
+    - --trust-remote-code
+    - --served-model-name=mistral-7b-instruct
+
+  # Runtime environment variables - matches original InferenceService
+  runtimeEnv:
+    - name: HF_HOME
+      value: /tmp/hf_home

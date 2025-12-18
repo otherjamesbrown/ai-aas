@@ -70,7 +70,7 @@
 
 ### Local Development
 - **Self-Signed Certificates**: CA and TLS certificates in `infra/secrets/certs/`
-- **Local DNS**: Hosts file entries for `.ai-aas.local` domains
+- **Local DNS**: Hosts file entries for `.otherjamesbrown.com` domains
 - **Firewall-Restricted**: Access limited to authorized machines (no VPN required)
 - **Setup**: See `infra/secrets/certs/README.md` for certificate generation and trust instructions
 

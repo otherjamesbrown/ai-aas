@@ -22,8 +22,8 @@ This document provides a factual overview of the web portal architecture, curren
 ### 2. API URL Resolution
 
 **Symptoms:**
-- When accessing via `portal.172.232.58.222.nip.io`, API calls must target `api.172.232.58.222.nip.io`
-- Build-time environment variable `VITE_API_BASE_URL` is set to `https://api.dev.ai-aas.local/api`
+- When accessing via `portal.dev.otherjamesbrown.com`, API calls must target `api.dev.otherjamesbrown.com`
+- Build-time environment variable `VITE_API_BASE_URL` is set to `https://api.dev.otherjamesbrown.com/api`
 - The `.local` domain does not resolve from external browsers
 
 **Current Workaround:** Dynamic URL detection added to multiple files to detect nip.io hostnames.
@@ -121,8 +121,8 @@ const baseUrl = useMemo(() => {
 
 | Access Method | Portal URL | Expected API URL |
 |--------------|------------|------------------|
-| nip.io | `https://portal.172.232.58.222.nip.io` | `https://api.172.232.58.222.nip.io` |
-| Local domain | `https://portal.dev.ai-aas.local` | `https://api.dev.ai-aas.local` |
+| nip.io | `https://portal.dev.otherjamesbrown.com` | `https://api.dev.otherjamesbrown.com` |
+| Local domain | `https://portal.dev.otherjamesbrown.com` | `https://api.dev.otherjamesbrown.com` |
 | Localhost | `http://localhost:5173` | `http://localhost:8080` |
 
 ---

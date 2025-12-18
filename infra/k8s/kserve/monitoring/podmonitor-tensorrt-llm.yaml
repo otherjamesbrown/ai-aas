@@ -1,0 +1,95 @@
+# PodMonitor for scraping TensorRT-LLM/Triton metrics from KServe InferenceServices
+#
+# This PodMonitor automatically discovers and scrapes metrics from all
+# TensorRT-LLM-based InferenceServices in the cluster. It targets the Triton
+# container on port 8002 where Prometheus metrics are exposed.
+#
+# The metrics include:
+# - nv_inference_request_success - Successful inference requests
+# - nv_inference_request_failure - Failed inference requests
+# - nv_inference_count - Total number of inferences performed
+# - nv_inference_exec_count - Number of inference batch executions
+# - nv_inference_request_duration_us - Inference request duration
+# - nv_inference_queue_duration_us - Time requests spend in queue
+# - nv_inference_compute_input_duration_us - Input processing time
+# - nv_inference_compute_infer_duration_us - Actual inference time
+# - nv_inference_compute_output_duration_us - Output processing time
+# - nv_gpu_utilization - GPU utilization percentage
+# - nv_gpu_memory_total_bytes - Total GPU memory
+# - nv_gpu_memory_used_bytes - Used GPU memory
+# - And many more (see Triton Inference Server documentation)
+#
+# Labels preserved for correlation:
+# - model: The model being served (from pod metadata)
+# - version: Model version from pod metadata
+# - serving_kserve_io_inferenceservice: The InferenceService name
+# - namespace: Kubernetes namespace
+# - pod: Pod name (links to DCGM metrics)
+# - node: Node name (for GPU correlation)
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: kserve-tensorrt-llm-metrics
+  namespace: development
+  labels:
+    app: tensorrt-llm-inference
+    monitoring: prometheus
+spec:
+  # Select all pods with TensorRT-LLM inference label
+  # Note: This label is set by the ai-model-operator when deploying TensorRT-LLM models
+  selector:
+    matchLabels:
+      app: tensorrt-llm-inference
+
+  # Scrape pods from any namespace (allows multi-namespace deployments)
+  namespaceSelector:
+    any: true
+
+  # Pod metrics endpoints configuration
+  podMetricsEndpoints:
+    - port: metrics  # Port 8002 named "metrics" in Triton container
+      path: /metrics
+      scheme: http
+      interval: 30s  # Scrape every 30 seconds
+      scrapeTimeout: 10s
+
+      # Relabel configurations to enrich metrics
+      relabelings:
+        # Preserve the pod name as a label (critical for DCGM correlation)
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+          action: replace
+
+        # Preserve the namespace
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+          action: replace
+
+        # Preserve the node name for GPU correlation
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+          action: replace
+
+        # Add InferenceService name from pod label
+        - sourceLabels: [__meta_kubernetes_pod_label_serving_kserve_io_inferenceservice]
+          targetLabel: inferenceservice
+          action: replace
+
+        # Add model name from pod label (our custom label)
+        - sourceLabels: [__meta_kubernetes_pod_label_model]
+          targetLabel: model_label
+          action: replace
+
+        # Add model version from pod label
+        - sourceLabels: [__meta_kubernetes_pod_label_version]
+          targetLabel: model_version
+          action: replace
+
+        # Add environment label
+        - sourceLabels: [__meta_kubernetes_pod_label_environment]
+          targetLabel: environment
+          action: replace
+
+      # No metric relabeling - accept all metrics from Triton pods
+      # Triton exports standard Prometheus metrics following NVIDIA's naming conventions

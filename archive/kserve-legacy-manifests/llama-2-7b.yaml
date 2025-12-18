@@ -1,0 +1,104 @@
+# KServe InferenceService for Llama-2-7b
+# Pilot model for Phase 2 migration
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: llama-2-7b
+  namespace: development
+  labels:
+    app: vllm-inference
+    model: llama-2-7b
+    version: v1
+    environment: development
+  annotations:
+    serving.kserve.io/deploymentMode: "Serverless"
+    serving.kserve.io/autoscalerClass: "kpa"
+spec:
+  predictor:
+    # Model configuration
+    model:
+      modelFormat:
+        name: vllm
+      storageUri: hf://meta-llama/Llama-2-7b-hf
+      protocolVersion: v2
+
+    # Scaling configuration - keep 1 replica warm for pilot phase
+    minReplicas: 1
+    maxReplicas: 5
+    scaleTarget: 5  # 5 concurrent requests per pod
+    scaleMetric: concurrency
+
+    # Resource requirements for 7B model
+    resources:
+      requests:
+        cpu: "4"
+        memory: "16Gi"
+        nvidia.com/gpu: 1
+      limits:
+        cpu: "8"
+        memory: "32Gi"
+        nvidia.com/gpu: 1
+
+    # Container configuration (vLLM)
+    containers:
+      - name: kserve-container
+        image: vllm/vllm-openai:v0.3.0
+        args:
+          - --model=/mnt/models
+          - --dtype=float16
+          - --max-model-len=4096
+          - --gpu-memory-utilization=0.9
+          - --trust-remote-code
+          - --served-model-name=llama-2-7b
+        env:
+          - name: HF_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: huggingface-secret
+                key: token
+          - name: HF_HOME
+            value: /tmp/hf_home
+        ports:
+          - containerPort: 8080
+            name: h2c
+            protocol: TCP
+        # Health probes to prevent traffic before model is loaded
+        # NOTE: KServe/Knative does NOT support startupProbe - it will be ignored!
+        # We must use readinessProbe with long enough timeout for initial model loading
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30  # Give model time to start loading
+          periodSeconds: 10
+          failureThreshold: 36  # 30s + 36×10s = 6 min max for 7B model
+          timeoutSeconds: 5
+        # Liveness probe with lenient settings to avoid killing during startup
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 120  # Don't check for first 2 minutes
+          periodSeconds: 30
+          failureThreshold: 6  # Allow 3 minutes of downtime
+          timeoutSeconds: 5
+
+    # GPU node scheduling
+    nodeSelector:
+      kserve.io/gpu: "true"
+
+    tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+
+    # Autoscaling annotations (Knative)
+    metadata:
+      annotations:
+        autoscaling.knative.dev/class: "kpa.autoscaling.knative.dev"
+        autoscaling.knative.dev/metric: "concurrency"
+        autoscaling.knative.dev/target: "5"
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "5"
+        autoscaling.knative.dev/scaleDownDelay: "5m"
+        autoscaling.knative.dev/window: "60s"

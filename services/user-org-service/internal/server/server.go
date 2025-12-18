@@ -11,6 +11,9 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
+
+	sharedMiddleware "github.com/ai-aas/shared-go/middleware"
+	"github.com/ai-aas/shared-go/observability"
 )
 
 // responseWriter wraps http.ResponseWriter to capture status code
@@ -138,8 +141,15 @@ func New(opts Options) *http.Server {
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
 	router.Use(middleware.Recoverer)
-	
-	// Comprehensive request/response logging middleware for debugging
+
+	// Request context middleware (for request IDs and correlation)
+	router.Use(observability.RequestContextMiddleware)
+
+	// Request logger middleware (structured logging for all requests)
+	requestLoggerConfig := sharedMiddleware.DefaultRequestLoggerConfig()
+	router.Use(sharedMiddleware.RequestLogger(opts.Logger, requestLoggerConfig))
+
+	// Comprehensive request/response logging middleware for debugging (keeping for backward compatibility)
 	router.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()

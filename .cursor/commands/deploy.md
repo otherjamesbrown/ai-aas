@@ -101,7 +101,7 @@ The `deploy.sh` script handles most steps automatically:
    - Auto-syncs within 30-60 seconds
 
 6. **Verify:**
-   - Check ArgoCD UI: https://argocd.dev.ai-aas.local
+   - Check ArgoCD UI: https://argocd.dev.otherjamesbrown.com
    - Monitor deployment status
    - Verify CI passed: `gh run list --workflow web-portal.yml`
 
@@ -179,7 +179,7 @@ The deployment script (`scripts/dev/deploy.sh`) follows GitOps best practices:
 
 **Development:**
 - Auto-sync: Enabled (watches `main`)
-- ArgoCD UI: https://argocd.dev.ai-aas.local
+- ArgoCD UI: https://argocd.dev.otherjamesbrown.com
 - Manual sync: `argocd app sync web-portal-development`
 
 **Production:**
@@ -191,7 +191,7 @@ The deployment script (`scripts/dev/deploy.sh`) follows GitOps best practices:
 - **CI Status (Go services)**: `gh run list --workflow ci.yml`
 - **CI Status (Web portal)**: `gh run list --workflow web-portal.yml`
 - **ArgoCD Apps**: `kubectl get application -n argocd`
-- **ArgoCD UI**: https://argocd.dev.ai-aas.local
+- **ArgoCD UI**: https://argocd.dev.otherjamesbrown.com
 - **Kubernetes**: `kubectl get all --all-namespaces`
 
 **Check CI Status Before Merging:**

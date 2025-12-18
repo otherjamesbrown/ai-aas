@@ -1,5 +1,17 @@
 # KServe Migration Deployment Guide
 
+> **📜 HISTORICAL DOCUMENT**
+>
+> This runbook documents the **completed** migration from custom vLLM Helm charts to KServe InferenceServices (November 2025).
+>
+> **Current Approach**: The platform now uses **AIModel Custom Resources** managed by the AI Model Operator.
+>
+> For current deployment instructions, see:
+> - [operators/ai-model-operator/config/samples/README.md](../../operators/ai-model-operator/config/samples/README.md)
+> - [operators/ai-model-operator/config/samples/QUICK-START.md](../../operators/ai-model-operator/config/samples/QUICK-START.md)
+
+---
+
 This runbook provides step-by-step instructions for deploying the KServe infrastructure and migrating models from custom vLLM Helm charts to KServe InferenceServices.
 
 **Status**: ✅ COMPLETED - Migration successful! (Phases 1-5 complete)
@@ -19,8 +31,8 @@ This runbook provides step-by-step instructions for deploying the KServe infrast
 - ✅ Phase 5: Cleanup and Optimization
 
 **Current Production Model**: `mistral-7b-instruct` on KServe
-**External Access**: `https://api.172.232.58.222.nip.io`
-**Web Portal**: `https://portal.172.232.58.222.nip.io`
+**External Access**: `https://api.dev.otherjamesbrown.com`
+**Web Portal**: `https://portal.dev.otherjamesbrown.com`
 
 ---
 
@@ -165,7 +177,7 @@ kubectl get inferenceservice test-distilgpt2 -n development -w
 
 # Expected output:
 # NAME               URL                                                  READY   PREV   LATEST   ...
-# test-distilgpt2    http://test-distilgpt2.development.dev.ai-aas.local True    100           ...
+# test-distilgpt2    http://test-distilgpt2.development.dev.otherjamesbrown.com True    100           ...
 
 # Check predictor pods
 kubectl get pods -n development -l serving.kserve.io/inferenceservice=test-distilgpt2
@@ -195,8 +207,10 @@ curl -X POST http://localhost:8080/v2/models/test-distilgpt2/infer \
 
 ### Step 1: Deploy Llama-2-7b InferenceService
 
+**Historical Note**: This migration used direct InferenceService manifests. The current approach uses AIModel CRs instead.
+
 ```bash
-# Apply Llama-2-7b InferenceService
+# Apply Llama-2-7b InferenceService (historical approach)
 kubectl apply -f infra/k8s/kserve/models/llama-2-7b.yaml
 
 # Watch for Ready status (10-15 minutes for model download and loading)
@@ -324,7 +338,7 @@ kubectl logs -n development -l app.kubernetes.io/name=api-router-service --tail=
 
 ```bash
 # Test via API Router (OpenAI-compatible endpoint)
-curl -X POST https://api.dev.ai-aas.local/v1/chat/completions \
+curl -X POST https://api.dev.otherjamesbrown.com/v1/chat/completions \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{

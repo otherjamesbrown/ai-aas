@@ -14,7 +14,8 @@ data:
     reporting_enabled = false
 
     [server]
-    root_url = %(protocol)s://%(domain)s/
+    domain = grafana.dev.otherjamesbrown.com
+    root_url = https://grafana.dev.otherjamesbrown.com/
     serve_from_sub_path = false
 
     [security]
@@ -28,7 +29,7 @@ data:
     auto_assign_org_role = Viewer
 
     [auth.anonymous]
-    enabled = false
+    enabled = true
     org_name = Main Org.
     org_role = Viewer
 
@@ -58,11 +59,53 @@ data:
         type: loki
         access: proxy
         url: http://loki.monitoring.svc.cluster.local:3100
+        uid: loki
         isDefault: true
         editable: false
         jsonData:
           maxLines: 1000
           timeout: 60
+          derivedFields:
+            - datasourceUid: tempo
+              matcherRegex: "trace_id=(\\w+)"
+              name: TraceID
+              url: "$${__value.raw}"
+
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://otel-collector.monitoring.svc.cluster.local:8889
+        uid: prometheus
+        editable: false
+        jsonData:
+          httpMethod: POST
+          timeInterval: 30s
+
+      - name: Tempo
+        type: tempo
+        access: proxy
+        url: http://tempo.monitoring.svc.cluster.local:3200
+        uid: tempo
+        editable: false
+        jsonData:
+          httpMethod: GET
+          tracesToLogs:
+            datasourceUid: loki
+            tags: ['trace_id']
+            mappedTags: [{ key: 'service.name', value: 'service' }]
+            mapTagNamesEnabled: false
+            spanStartTimeShift: '1h'
+            spanEndTimeShift: '-1h'
+            filterByTraceID: true
+            filterBySpanID: false
+          serviceMap:
+            datasourceUid: prometheus
+          nodeGraph:
+            enabled: true
+          search:
+            hide: false
+          lokiSearch:
+            datasourceUid: loki
 ---
 # Grafana Dashboard Providers
 apiVersion: v1

@@ -1,0 +1,12 @@
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: sample-model
+  namespace: ai-model-operator-system
+spec:
+  modelName: "mistral-7b"
+  modelID: "mistral-7b-v0.1"
+  s3Bucket: "ai-models"
+  s3Key: "mistral-7b"
+  replicas: 1
+  enabled: true

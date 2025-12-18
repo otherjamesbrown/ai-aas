@@ -45,7 +45,9 @@ Examples:
 			hfModelID := args[0]
 
 			// Get configuration
-			cfg, err := config.Load()
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}

@@ -49,6 +49,7 @@ func (s *Service) SetS3ClientFactory(factory S3ClientFactory) {
 type Model struct {
 	ID                     uuid.UUID
 	Name                   string
+	ExternalName           *string
 	HFModelID              string
 	HFRevision             string
 	RequiresAuth           bool
@@ -63,6 +64,10 @@ type Model struct {
 	Metadata               []byte
 	CreatedAt              time.Time
 	UpdatedAt              time.Time
+
+	// Computed fields
+	CacheStatus      *string
+	DeploymentStatus *string
 }
 
 // ListModelsOptions configures model listing
@@ -75,13 +80,30 @@ type ListModelsOptions struct {
 
 // ListModels returns models matching the given options
 func (s *Service) ListModels(ctx context.Context, opts ListModelsOptions) ([]Model, error) {
+	// Query with LEFT JOINs to get cache and deployment status
+	// Get the latest cache entry status and the deployment status for any environment
 	query := `
-		SELECT id, name, hf_model_id, hf_revision, requires_auth, is_gated,
-		       license_type, license_url, license_accepted_at, license_accepted_by,
-		       recommended_gpu_memory_gb, recommended_cpu_memory_gb,
-		       pinned_version, metadata, created_at, updated_at
-		FROM model_registry
-		ORDER BY name
+		SELECT
+			r.id, r.name, r.external_name, r.hf_model_id, r.hf_revision, r.requires_auth, r.is_gated,
+			r.license_type, r.license_url, r.license_accepted_at, r.license_accepted_by,
+			r.recommended_gpu_memory_gb, r.recommended_cpu_memory_gb,
+			r.pinned_version, r.metadata, r.created_at, r.updated_at,
+			-- Cache status: get status of the most recent cache entry
+			(SELECT status FROM model_cache WHERE model_id = r.id ORDER BY cached_at DESC LIMIT 1) as cache_status,
+			-- Deployment status: get status if any deployment exists (priority: ready > deploying > others)
+			(SELECT status FROM model_deployments
+			 WHERE model_id = r.id
+			 ORDER BY
+			   CASE
+			     WHEN status = 'ready' THEN 1
+			     WHEN status = 'deploying' THEN 2
+			     WHEN status = 'pending' THEN 3
+			     ELSE 4
+			   END,
+			   updated_at DESC
+			 LIMIT 1) as deployment_status
+		FROM model_registry r
+		ORDER BY r.name
 	`
 
 	rows, err := s.pool.Query(ctx, query)
@@ -94,10 +116,11 @@ func (s *Service) ListModels(ctx context.Context, opts ListModelsOptions) ([]Mod
 	for rows.Next() {
 		var m Model
 		err := rows.Scan(
-			&m.ID, &m.Name, &m.HFModelID, &m.HFRevision, &m.RequiresAuth, &m.IsGated,
+			&m.ID, &m.Name, &m.ExternalName, &m.HFModelID, &m.HFRevision, &m.RequiresAuth, &m.IsGated,
 			&m.LicenseType, &m.LicenseURL, &m.LicenseAcceptedAt, &m.LicenseAcceptedBy,
 			&m.RecommendedGPUMemoryGB, &m.RecommendedCPUMemoryGB,
 			&m.PinnedVersion, &m.Metadata, &m.CreatedAt, &m.UpdatedAt,
+			&m.CacheStatus, &m.DeploymentStatus,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan model: %w", err)
@@ -111,20 +134,36 @@ func (s *Service) ListModels(ctx context.Context, opts ListModelsOptions) ([]Mod
 // GetModel returns a model by name
 func (s *Service) GetModel(ctx context.Context, name string) (*Model, error) {
 	query := `
-		SELECT id, name, hf_model_id, hf_revision, requires_auth, is_gated,
-		       license_type, license_url, license_accepted_at, license_accepted_by,
-		       recommended_gpu_memory_gb, recommended_cpu_memory_gb,
-		       pinned_version, metadata, created_at, updated_at
-		FROM model_registry
-		WHERE name = $1
+		SELECT
+			r.id, r.name, r.external_name, r.hf_model_id, r.hf_revision, r.requires_auth, r.is_gated,
+			r.license_type, r.license_url, r.license_accepted_at, r.license_accepted_by,
+			r.recommended_gpu_memory_gb, r.recommended_cpu_memory_gb,
+			r.pinned_version, r.metadata, r.created_at, r.updated_at,
+			-- Cache status: get status of the most recent cache entry
+			(SELECT status FROM model_cache WHERE model_id = r.id ORDER BY cached_at DESC LIMIT 1) as cache_status,
+			-- Deployment status: get status if any deployment exists
+			(SELECT status FROM model_deployments
+			 WHERE model_id = r.id
+			 ORDER BY
+			   CASE
+			     WHEN status = 'ready' THEN 1
+			     WHEN status = 'deploying' THEN 2
+			     WHEN status = 'pending' THEN 3
+			     ELSE 4
+			   END,
+			   updated_at DESC
+			 LIMIT 1) as deployment_status
+		FROM model_registry r
+		WHERE r.name = $1
 	`
 
 	var m Model
 	err := s.pool.QueryRow(ctx, query, name).Scan(
-		&m.ID, &m.Name, &m.HFModelID, &m.HFRevision, &m.RequiresAuth, &m.IsGated,
+		&m.ID, &m.Name, &m.ExternalName, &m.HFModelID, &m.HFRevision, &m.RequiresAuth, &m.IsGated,
 		&m.LicenseType, &m.LicenseURL, &m.LicenseAcceptedAt, &m.LicenseAcceptedBy,
 		&m.RecommendedGPUMemoryGB, &m.RecommendedCPUMemoryGB,
 		&m.PinnedVersion, &m.Metadata, &m.CreatedAt, &m.UpdatedAt,
+		&m.CacheStatus, &m.DeploymentStatus,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrModelNotFound
@@ -139,6 +178,7 @@ func (s *Service) GetModel(ctx context.Context, name string) (*Model, error) {
 // AddModelRequest contains the data for adding a model
 type AddModelRequest struct {
 	Name           string
+	ExternalName   string // Optional, derived from HFModelID if not set
 	HFModelID      string
 	RequiresAuth   bool
 	IsGated        bool
@@ -175,17 +215,28 @@ func (s *Service) AddModel(ctx context.Context, req AddModelRequest) (*Model, er
 		cpuMemory = &c
 	}
 
+	// Derive external_name from HFModelID if not explicitly set
+	externalName := req.ExternalName
+	if externalName == "" {
+		externalName = deriveExternalName(req.HFModelID)
+	}
+	var externalNamePtr *string
+	if externalName != "" {
+		externalNamePtr = &externalName
+	}
+
 	query := `
 		INSERT INTO model_registry (
-			name, hf_model_id, hf_revision, requires_auth, is_gated,
+			name, external_name, hf_model_id, hf_revision, requires_auth, is_gated,
 			license_type, license_accepted_at, license_accepted_by,
 			recommended_gpu_memory_gb, recommended_cpu_memory_gb
-		) VALUES ($1, $2, 'main', $3, $4, $5, $6, $7, $8, $9)
+		) VALUES ($1, $2, $3, 'main', $4, $5, $6, $7, $8, $9, $10)
 		RETURNING id, created_at, updated_at
 	`
 
 	m := Model{
 		Name:                   req.Name,
+		ExternalName:           externalNamePtr,
 		HFModelID:              req.HFModelID,
 		HFRevision:             "main",
 		RequiresAuth:           req.RequiresAuth,
@@ -198,7 +249,7 @@ func (s *Service) AddModel(ctx context.Context, req AddModelRequest) (*Model, er
 	}
 
 	err := s.pool.QueryRow(ctx, query,
-		m.Name, m.HFModelID, m.RequiresAuth, m.IsGated,
+		m.Name, m.ExternalName, m.HFModelID, m.RequiresAuth, m.IsGated,
 		m.LicenseType, m.LicenseAcceptedAt, m.LicenseAcceptedBy,
 		m.RecommendedGPUMemoryGB, m.RecommendedCPUMemoryGB,
 	).Scan(&m.ID, &m.CreatedAt, &m.UpdatedAt)
@@ -208,6 +259,18 @@ func (s *Service) AddModel(ctx context.Context, req AddModelRequest) (*Model, er
 	}
 
 	return &m, nil
+}
+
+// deriveExternalName derives an external name from a model ID.
+// If the model ID contains a "/", returns the part after the last "/".
+// Otherwise, returns the model ID as-is.
+func deriveExternalName(modelID string) string {
+	for i := len(modelID) - 1; i >= 0; i-- {
+		if modelID[i] == '/' {
+			return modelID[i+1:]
+		}
+	}
+	return modelID
 }
 
 // RemoveModel deletes a model from the registry
@@ -330,5 +393,19 @@ func (s *Service) DeleteCredential(ctx context.Context, credType string) error {
 	}
 
 	return nil
+}
+
+// updateModelHFModelID updates a model's hf_model_id
+func (s *Service) updateModelHFModelID(ctx context.Context, modelID uuid.UUID, hfModelID string) error {
+	query := `UPDATE model_registry SET hf_model_id = $2, updated_at = NOW() WHERE id = $1`
+	_, err := s.pool.Exec(ctx, query, modelID, hfModelID)
+	return err
+}
+
+// updateModelExternalName updates a model's external_name
+func (s *Service) updateModelExternalName(ctx context.Context, modelID uuid.UUID, externalName string) error {
+	query := `UPDATE model_registry SET external_name = $2, updated_at = NOW() WHERE id = $1`
+	_, err := s.pool.Exec(ctx, query, modelID, externalName)
+	return err
 }
 

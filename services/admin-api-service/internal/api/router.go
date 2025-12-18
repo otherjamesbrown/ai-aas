@@ -11,13 +11,20 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/api/middleware"
 	enginesHandler "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/handlers/engines"
 	modelsHandler "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/handlers/models"
+	podsHandler "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/handlers/pods"
+	recipesHandler "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/handlers/recipes"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/config"
 	enginesSvc "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/services/engines"
 	modelsSvc "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/services/models"
+	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/kubernetes"
+	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/podk8s"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/repository"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/service"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/storage"
 	"go.uber.org/zap"
+
+	sharedMiddleware "github.com/ai-aas/shared-go/middleware"
+	"github.com/ai-aas/shared-go/observability"
 )
 
 // NewRouter creates and configures the HTTP router
@@ -27,7 +34,13 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 	// Global middleware
 	r.Use(chiMiddleware.RealIP)
 	r.Use(chiMiddleware.Recoverer)
-	r.Use(middleware.RequestLogging(logger))
+
+	// Request context middleware (for request IDs and correlation)
+	r.Use(observability.RequestContextMiddleware)
+
+	// Request logger middleware (structured logging for all requests)
+	requestLoggerConfig := sharedMiddleware.DefaultRequestLoggerConfig()
+	r.Use(sharedMiddleware.RequestLogger(logger, requestLoggerConfig))
 
 	// Rate limiter
 	rateLimiter := middleware.NewRateLimiter(cfg.RateLimitPerMin)
@@ -102,7 +115,7 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 		})
 
 		// Model management routes for ai-aas-cli (spec 020)
-		modelsSvc := modelsHandler.CreateModelsService(db.Pool())
+		modelsSvc := modelsHandler.CreateModelsService(db.ConcretePool())
 
 		// Set up S3 client factory for model rename operations
 		modelsSvc.SetS3ClientFactory(createS3ClientFactory())
@@ -112,9 +125,40 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 		modelsHdlr.RegisterRoutes(r)
 
 		// Inference engine management routes (AIAAS-042)
-		engSvc := enginesSvc.NewService(db.Pool())
+		engSvc := enginesSvc.NewService(db.ConcretePool())
 		engHdlr := enginesHandler.NewHandler(engSvc)
 		engHdlr.RegisterRoutes(r)
+
+		// Pod health routes (spec 027)
+		podK8sClient, podK8sErr := podk8s.NewPodClient()
+		if podK8sErr != nil {
+			logger.Error("failed to create pod kubernetes client", zap.Error(podK8sErr))
+			// Don't fail the entire router - k8s client may be nil
+			// Service layer will return 503 if client is unavailable
+		}
+		podsSvc := service.NewPodsService(podK8sClient, logger)
+		podsHdlr := podsHandler.NewHandler(podsSvc)
+		r.Get("/pods/health", podsHdlr.GetPodHealth)
+
+		// Model recipe routes (T020)
+		recipeRepo := repository.NewRecipeRepository(db)
+
+		// Create Kubernetes client for recipe deployments listing
+		// If KUBECONFIG is not set, will use in-cluster config (or nil if that fails)
+		var k8sClient service.K8sClient
+		k8sClientImpl, err := kubernetes.NewClient(cfg.Kubeconfig)
+		if err != nil {
+			logger.Warn("failed to create kubernetes client, recipe deployments will return empty list",
+				zap.Error(err),
+			)
+		} else {
+			k8sClient = k8sClientImpl
+		}
+
+		recipeSvc := service.NewRecipeService(recipeRepo, k8sClient, logger)
+		recipeAdapter := recipesHandler.NewServiceAdapter(recipeSvc)
+		recipeHdlr := recipesHandler.NewHandler(recipeAdapter)
+		recipeHdlr.RegisterRoutes(r)
 	})
 
 	return r

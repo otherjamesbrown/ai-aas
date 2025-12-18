@@ -39,7 +39,7 @@ test.describe('UI Navigation Tests', () => {
       let body = '';
       // Log body for all API responses to debug login flow
       if (response.url().includes('api.dev')) {
-        try { body = (await response.text()).substring(0, 200); } catch {}
+        try { body = (await response.text()).substring(0, 200); } catch { /* Ignore response body read errors */ }
       }
       requests.push(`<< ${response.status()} ${response.url()} ${body}`);
     });

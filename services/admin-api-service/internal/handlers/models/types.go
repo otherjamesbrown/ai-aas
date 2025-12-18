@@ -7,6 +7,7 @@ import "time"
 type Model struct {
 	ID                     string                 `json:"id"`
 	Name                   string                 `json:"name"`
+	ExternalName           string                 `json:"external_name,omitempty"`
 	HFModelID              string                 `json:"hf_model_id"`
 	HFRevision             string                 `json:"hf_revision"`
 	RequiresAuth           bool                   `json:"requires_auth"`
@@ -31,6 +32,7 @@ type Model struct {
 type AddModelRequest struct {
 	HFModelID      string `json:"hf_model_id"`
 	Name           string `json:"name"`
+	ExternalName   string `json:"external_name,omitempty"` // Optional, derived from HFModelID if not set
 	RequiresAuth   bool   `json:"requires_auth"`
 	LicenseType    string `json:"license_type,omitempty"`
 	AcceptLicense  bool   `json:"accept_license"`
@@ -119,6 +121,7 @@ type Deployment struct {
 	ID                   string     `json:"id"`
 	ModelID              string     `json:"model_id"`
 	ModelName            string     `json:"model_name,omitempty"`
+	ExternalName         string     `json:"external_name,omitempty"`
 	CacheID              string     `json:"cache_id,omitempty"`
 	Environment          string     `json:"environment"`
 	Namespace            string     `json:"namespace"`
@@ -150,13 +153,27 @@ type ListDeploymentsOptions struct {
 
 // CreateDeploymentRequest represents a request to create a deployment
 type CreateDeploymentRequest struct {
-	ModelName   string `json:"model_name"`
-	CacheID     string `json:"cache_id,omitempty"`
-	Environment string `json:"environment"`
-	Namespace   string `json:"namespace,omitempty"`
-	GPUCount    int    `json:"gpu_count,omitempty"`
-	MemoryGB    int    `json:"memory_gb,omitempty"`
-	Replicas    int    `json:"replicas,omitempty"`
+	ModelName    string `json:"model_name"`
+	ModelID      string `json:"model_id,omitempty"`
+	ExternalName string `json:"external_name,omitempty"`
+	CacheID      string `json:"cache_id,omitempty"`
+	Environment  string `json:"environment"`
+	Namespace    string `json:"namespace,omitempty"`
+	GPUCount     int    `json:"gpu_count,omitempty"`
+	MemoryGB     int    `json:"memory_gb,omitempty"`
+	Replicas     int    `json:"replicas,omitempty"`
+}
+
+// UpdateDeploymentStatusRequest represents a request to update deployment status
+type UpdateDeploymentStatusRequest struct {
+	Status               string     `json:"status"`
+	ModelID              string     `json:"model_id,omitempty"`
+	ExternalName         string     `json:"external_name,omitempty"`
+	InferenceServiceName string     `json:"inferenceservice_name,omitempty"`
+	Endpoint             string     `json:"endpoint,omitempty"`
+	ReplicasReady        int        `json:"replicas_ready,omitempty"`
+	LastHealthCheckAt    *time.Time `json:"last_health_check_at,omitempty"`
+	LastHealthStatus     string     `json:"last_health_status,omitempty"`
 }
 
 // ScaleDeploymentRequest represents a request to scale a deployment

@@ -14,7 +14,8 @@ image:
   repository: ghcr.io/otherjamesbrown/ai-aas/api-router-service
   tag: dev
   pullPolicy: Always  # Pull from GHCR
-  pullSecrets: []
+  pullSecrets:
+    - ghcr-pull-secret
 
 service:
   type: ClusterIP
@@ -32,7 +33,7 @@ ingress:
     # CORS is now handled at the application layer (see env vars below)
     # This provides better logging, flexibility, and single source of truth
   hosts:
-    - host: api.dev.ai-aas.local
+    - host: api.dev.otherjamesbrown.com
       paths:
         - path: /
           pathType: Prefix
@@ -63,7 +64,7 @@ autoscaling:
 
 startupProbe:
   path: /v1/status/healthz
-  failureThreshold: 30
+  failureThreshold: 60  # Increased to allow for database connection during startup
   periodSeconds: 2
   timeoutSeconds: 5
 
@@ -100,7 +101,7 @@ env:
   - name: CORS_ENABLED
     value: "true"
   - name: CORS_ALLOWED_ORIGINS
-    value: "https://portal.dev.otherjamesbrown.com,https://portal.dev.ai-aas.local,http://localhost:5173,https://localhost:5173"
+    value: "https://portal.dev.otherjamesbrown.com,https://portal.dev.otherjamesbrown.com,http://localhost:5173,https://localhost:5173"
   - name: CORS_ALLOWED_METHODS
     value: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
   - name: CORS_ALLOWED_HEADERS
@@ -113,17 +114,18 @@ env:
     value: "true"
 
 # Backend endpoints - configure vLLM service
+# Format: backend-id:http://service-name.namespace.svc.cluster.local:port
+#
+# Backend ID MUST match the HuggingFace model ID (e.g., "unsloth/gpt-oss-20b")
+# so that vLLM's --served-model-name matches the routing policy backend_id.
+#
+# IMPORTANT: Use the -private service on port 8012 (queue-proxy port)
+# - Port 80 on regular services routes through Istio which causes timeouts
+# - Port 8012 on -private services connects directly to the queue-proxy sidecar
+#
+# Note: Don't include path - it's added by the router based on request type
 backends:
-  # Format: backend-id:http://service-name.namespace.svc.cluster.local:port
-  # KServe InferenceServices are exposed via Knative Services
-  #
-  # IMPORTANT: Use the -private service on port 8012 (queue-proxy port)
-  # - Port 80 on regular services routes through Istio which causes timeouts
-  # - Port 8012 on -private services connects directly to the queue-proxy sidecar
-  # - This bypasses Istio routing and provides direct pod connectivity
-  #
-  # Note: Don't include path - it's added by the router based on request type
-  endpoints: "mistralai/Mistral-7B-Instruct-v0.3:http://mistral-7b-development-predictor-00001-private.development.svc.cluster.local:8012,unsloth/gpt-oss-20b:http://gpt-oss-20b-development-predictor-00002-private.development.svc.cluster.local:8012"
+  endpoints: "unsloth/gpt-oss-20b:http://unsloth-gpt-oss-20b-predictor-00001-private.development.svc.cluster.local:8012,meta-llama/Llama-3.1-8B-Instruct:http://llama-3-1-8b-instruct-trtllm-predictor.development.svc.cluster.local:80"
 
 # Redis configuration
 redis:
@@ -172,3 +174,17 @@ prometheus:
   enabled: false  # Disable Prometheus monitoring (CRDs not installed in dev)
   port: 8080
   path: /metrics
+
+# Node scheduling - prefer CPU nodes (avoid GPU nodes)
+# GPU nodes have taint nvidia.com/gpu=true:NoSchedule
+# CPU nodes are in pool 770211, GPU nodes are in pool 776664
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - key: lke.linode.com/pool-id
+              operator: In
+              values:
+                - "770211"  # CPU node pool

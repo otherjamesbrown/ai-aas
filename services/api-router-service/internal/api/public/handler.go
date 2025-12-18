@@ -41,6 +41,8 @@ type Handler struct {
 	backendURIs       map[string]string // Map of backend ID to URI (for testing/configuration - overrides registry)
 	httpClient        *http.Client      // Shared HTTP client for OpenAI requests (PR#16 Issue#4)
 	userOrgServiceURL string            // URL for user-org-service (for auth proxy)
+	adminAPIEndpoint  string            // URL for admin-api-service (for models endpoint)
+	adminAPIKey       string            // API key for admin-api-service
 }
 
 // NewHandler creates a new public API handler.
@@ -54,21 +56,24 @@ func NewHandler(
 	routingMetrics *telemetry.RoutingMetrics,
 	tokenMetrics *telemetry.TokenMetrics,
 	usageHook *UsageHook,
+	adminAPIEndpoint string,
+	adminAPIKey string,
 ) *Handler {
 	tracer := otel.Tracer("api-router-service")
 	return &Handler{
-		logger:          logger,
-		authenticator:   authenticator,
-		configLoader:    configLoader,
-		backendClient:   backendClient,
-		backendRegistry: backendRegistry,
-		routingEngine:   routingEngine,
-		routingMetrics:  routingMetrics,
-		tokenMetrics:    tokenMetrics,
-		usageHook:       usageHook,
-		tracer:          tracer,
-		errorBuilder:    api.NewErrorBuilder(tracer),
-		backendURIs:     make(map[string]string),
+		logger:           logger,
+		authenticator:    authenticator,
+		configLoader:     configLoader,
+		backendClient:    backendClient,
+		backendRegistry:  backendRegistry,
+		routingEngine:    routingEngine,
+		routingMetrics:   routingMetrics,
+		usageHook:        usageHook,
+		tracer:           tracer,
+		errorBuilder:     api.NewErrorBuilder(tracer),
+		backendURIs:      make(map[string]string),
+		adminAPIEndpoint: adminAPIEndpoint,
+		adminAPIKey:      adminAPIKey,
 		httpClient: &http.Client{
 			// Shared client without timeout - we'll use context for per-request timeouts (PR#16 Issue#4)
 			Timeout: 0,
@@ -135,6 +140,31 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 
 	// Support/impersonation status
 	r.Get("/support/impersonations/current", h.HandleImpersonationStatus)
+}
+
+// HandleChatCompletionsHealth handles GET /v1/chat/completions/health requests.
+// This endpoint is unauthenticated and designed for validation tools like guidellm
+// that need to verify the endpoint is reachable without requiring an API key.
+func (h *Handler) HandleChatCompletionsHealth(w http.ResponseWriter, r *http.Request) {
+	_, span := h.tracer.Start(r.Context(), "health.chat_completions")
+	defer span.End()
+
+	h.logger.Debug("chat completions health check requested",
+		zap.String("remote_addr", r.RemoteAddr),
+		zap.String("user_agent", r.UserAgent()),
+	)
+
+	// Return a simple success response
+	response := map[string]interface{}{
+		"status":  "ok",
+		"service": "api-router-service",
+		"endpoint": "/v1/chat/completions",
+		"timestamp": time.Now().Unix(),
+	}
+
+	if err := h.writeJSON(w, http.StatusOK, response); err != nil {
+		h.logger.Error("failed to write health response", zap.Error(err))
+	}
 }
 
 // HandleInference handles POST /v1/inference requests.

@@ -1,16 +1,12 @@
 # User-Org Service Ingress
-# Exposes the user-org-service via HTTPS with both hostname and public DNS access
+# Exposes the user-org-service via HTTPS
 #
 # Domain Configuration:
 # ---------------------
-# This file uses environment-specific domain values. When creating for a new environment:
-# 1. Reference configs/environments/{env}.yaml for the correct baseDomain
-# 2. Replace "dev.otherjamesbrown.com" with the environment's baseDomain
-# 3. Replace "dev.ai-aas.local" with the environment's localDomain
+# When creating for a new environment, reference configs/environments/{env}.yaml
+# and replace "dev.otherjamesbrown.com" with the environment's baseDomain.
 #
-# Access URLs (Development):
-# - Hostname: https://user-org.dev.ai-aas.local (requires /etc/hosts entry)
-# - Public DNS: https://user-org.dev.otherjamesbrown.com
+# Access URL (Development): https://user-org.dev.otherjamesbrown.com
 #
 # Apply with: kubectl apply -f infra/k8s/development/ingress/user-org-service-ingress.yaml
 apiVersion: networking.k8s.io/v1
@@ -24,16 +20,6 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - host: user-org.dev.ai-aas.local
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: user-org-service-development-user-org-service
-            port:
-              number: 8081
   - host: user-org.dev.otherjamesbrown.com
     http:
       paths:

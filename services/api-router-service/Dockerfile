@@ -8,6 +8,8 @@ COPY services/api-router-service ./services/api-router-service
 COPY shared ./shared
 
 # Create a minimal go.work file for the Docker build
+# The use directive tells Go to use the local modules
+# The api-router-service go.mod has a replace for the shared module import path
 RUN printf '%s\n' \
     'go 1.24.0' \
     '' \
@@ -15,8 +17,6 @@ RUN printf '%s\n' \
     '	./services/api-router-service' \
     '	./shared/go' \
     ')' \
-    '' \
-    'replace github.com/ai-aas/shared-go v0.0.0 => ./shared/go' \
     > go.work
 
 # Download dependencies from the service directory

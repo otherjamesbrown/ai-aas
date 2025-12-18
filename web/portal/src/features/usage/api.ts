@@ -1,5 +1,6 @@
 import { httpClient } from '@/lib/http/client';
 import type { UsageApiResponse, UsageFilters } from './types';
+import { logger } from '@/lib/logger';
 
 /**
  * Usage API client with degraded state handling
@@ -64,7 +65,7 @@ export const usageApi = {
       );
       return response.data;
     } catch (error) {
-      console.error('Failed to fetch available models:', error);
+      logger.error('Failed to fetch available models', { component: 'usageApi' }, error instanceof Error ? error : undefined);
       return [];
     }
   },

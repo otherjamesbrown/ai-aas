@@ -164,21 +164,59 @@ func (s *Service) GetDeployment(ctx context.Context, modelName, environment stri
 
 // CreateDeploymentRequest contains data for creating a deployment
 type CreateDeploymentRequest struct {
-	ModelName   string
-	CacheID     *uuid.UUID
-	Environment string
-	Namespace   string
-	GPUCount    int
-	MemoryGB    int
-	Replicas    int
+	ModelName    string
+	ModelID      string     // Full model path (e.g., "unsloth/gpt-oss-20b")
+	ExternalName string     // Name exposed in OpenAI-compatible APIs
+	CacheID      *uuid.UUID
+	Environment  string
+	Namespace    string
+	GPUCount     int
+	MemoryGB     int
+	Replicas     int
 }
 
 // CreateDeployment creates a new deployment record
 func (s *Service) CreateDeployment(ctx context.Context, req CreateDeploymentRequest) (*Deployment, error) {
-	// Get the model ID
+	// Get the model ID, or auto-register if it doesn't exist
 	model, err := s.GetModel(ctx, req.ModelName)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, ErrModelNotFound) {
+			// Auto-register the model with minimal metadata
+			// This allows AIModel CRs to be deployed via GitOps without manual registry steps
+			hfModelID := req.ModelID
+			if hfModelID == "" {
+				hfModelID = req.ModelName // Fallback for backwards compatibility
+			}
+			autoRegReq := AddModelRequest{
+				Name:         req.ModelName,
+				HFModelID:    hfModelID,
+				ExternalName: req.ExternalName,
+				RequiresAuth: false,
+				IsGated:      false,
+				GPUMemoryGB:  0, // Will be determined from deployment resources
+				CPUMemoryGB:  0,
+			}
+			model, err = s.AddModel(ctx, autoRegReq)
+			if err != nil {
+				return nil, fmt.Errorf("auto-register model: %w", err)
+			}
+		} else {
+			return nil, err
+		}
+	} else if req.ModelID != "" || req.ExternalName != "" {
+		// Model exists - update hf_model_id and external_name if provided
+		if req.ModelID != "" && model.HFModelID != req.ModelID {
+			err := s.updateModelHFModelID(ctx, model.ID, req.ModelID)
+			if err != nil {
+				return nil, fmt.Errorf("update model hf_model_id: %w", err)
+			}
+		}
+		if req.ExternalName != "" && (model.ExternalName == nil || *model.ExternalName != req.ExternalName) {
+			err := s.updateModelExternalName(ctx, model.ID, req.ExternalName)
+			if err != nil {
+				return nil, fmt.Errorf("update model external_name: %w", err)
+			}
+		}
 	}
 
 	replicas := req.Replicas
@@ -229,12 +267,14 @@ func (s *Service) CreateDeployment(ctx context.Context, req CreateDeploymentRequ
 
 // UpdateDeploymentStatusRequest contains data for updating deployment status
 type UpdateDeploymentStatusRequest struct {
-	Status                 string
-	InferenceServiceName   *string
-	Endpoint               *string
-	ReplicasReady          int
-	LastHealthCheckAt      *time.Time
-	LastHealthStatus       *string
+	Status               string
+	ModelID              string // Full model path for updating model_registry.hf_model_id
+	ExternalName         string // For updating model_registry.external_name
+	InferenceServiceName *string
+	Endpoint             *string
+	ReplicasReady        int
+	LastHealthCheckAt    *time.Time
+	LastHealthStatus     *string
 }
 
 // UpdateDeploymentStatus updates a deployment's status and health info
@@ -260,6 +300,42 @@ func (s *Service) UpdateDeploymentStatus(ctx context.Context, id uuid.UUID, req 
 
 	if result.RowsAffected() == 0 {
 		return ErrDeploymentNotFound
+	}
+
+	return nil
+}
+
+// UpdateDeploymentStatusWithModel updates a deployment's status and also updates the model_registry if needed
+func (s *Service) UpdateDeploymentStatusWithModel(ctx context.Context, modelName, environment string, req UpdateDeploymentStatusRequest) error {
+	// Get the deployment to find the model_id
+	deployment, err := s.GetDeployment(ctx, modelName, environment)
+	if err != nil {
+		return err
+	}
+
+	// Update deployment status
+	err = s.UpdateDeploymentStatus(ctx, deployment.ID, req)
+	if err != nil {
+		return err
+	}
+
+	// If ModelID or ExternalName provided, update the model_registry
+	if req.ModelID != "" || req.ExternalName != "" {
+		model, err := s.GetModel(ctx, modelName)
+		if err != nil {
+			return fmt.Errorf("get model for update: %w", err)
+		}
+
+		if req.ModelID != "" && model.HFModelID != req.ModelID {
+			if err := s.updateModelHFModelID(ctx, model.ID, req.ModelID); err != nil {
+				return fmt.Errorf("update model hf_model_id: %w", err)
+			}
+		}
+		if req.ExternalName != "" && (model.ExternalName == nil || *model.ExternalName != req.ExternalName) {
+			if err := s.updateModelExternalName(ctx, model.ID, req.ExternalName); err != nil {
+				return fmt.Errorf("update model external_name: %w", err)
+			}
+		}
 	}
 
 	return nil

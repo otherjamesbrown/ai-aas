@@ -1,42 +1,61 @@
 # Endpoints and URLs
 
 ---
-last_updated: 2025-12-08
-last_verified: 2025-12-08
+last_updated: 2025-12-09
+last_verified: 2025-12-09
 document_type: reference
 verification_command: "kubectl get ingress -A"
 ---
 
 ## Overview
 
-This document lists all exposed endpoints in the platform. URLs use two domain patterns:
-- `.ai-aas.local` - For local development (requires hosts file entry)
-- `.otherjamesbrown.com` - Public DNS (nip.io fallback available)
+This document lists all exposed endpoints in the platform across all environments.
 
-**Ingress IP**: `172.232.58.222` (development cluster)
+**Domain Patterns**:
+- Development: `.dev.otherjamesbrown.com` and `.dev.otherjamesbrown.com`
+- Staging: `.staging.otherjamesbrown.com` and `.staging.otherjamesbrown.com`
+- Production: `.otherjamesbrown.com` and `.otherjamesbrown.com`
+
+**Ingress IPs**:
+- Development: `172.232.58.222`
+- Staging: `172.236.135.55`
 
 ## Quick Reference - Development Environment
 
 | Service | URL | Status |
 |---------|-----|--------|
-| API Router | `https://api.dev.ai-aas.local` | ✅ Active |
-| Web Portal | `https://portal.dev.ai-aas.local` | ✅ Active |
-| User-Org Service | `https://user-org.dev.ai-aas.local` | ✅ Active |
-| Analytics Service | `https://analytics.dev.ai-aas.local` | ✅ Active |
-| Admin API | `https://admin-api.dev.ai-aas.local` | ✅ Active |
-| Grafana | `https://grafana.dev.ai-aas.local` | ✅ Active |
-| Loki | `https://loki.dev.ai-aas.local` | ✅ Active |
-| ArgoCD | `https://argocd.dev.ai-aas.local` | ✅ Active |
-| etcd | `https://etcd.dev.ai-aas.local` | ✅ Active |
+| API Router | `https://api.dev.otherjamesbrown.com` | ✅ Active |
+| Web Portal | `https://portal.dev.otherjamesbrown.com` | ✅ Active |
+| User-Org Service | `https://user-org.dev.otherjamesbrown.com` | ✅ Active |
+| Analytics Service | `https://analytics.dev.otherjamesbrown.com` | ✅ Active |
+| Admin API | `https://admin-api.dev.otherjamesbrown.com` | ✅ Active |
+| Grafana | `https://grafana.dev.otherjamesbrown.com` | ✅ Active |
+| Loki | `https://loki.dev.otherjamesbrown.com` | ✅ Active |
+| ArgoCD | `https://argocd.dev.otherjamesbrown.com` | ✅ Active |
+| etcd | `https://etcd.dev.otherjamesbrown.com` | ✅ Active |
+
+## Quick Reference - Staging Environment
+
+| Service | URL | Status |
+|---------|-----|--------|
+| API Router | `https://api.staging.otherjamesbrown.com` | ✅ Active |
+| User-Org Service | `https://user-org.staging.otherjamesbrown.com` | ✅ Active |
+| Analytics Service | `https://analytics.staging.otherjamesbrown.com` | ✅ Active |
+| Admin API | `https://admin-api.staging.otherjamesbrown.com` | ✅ Active |
+| Grafana | `https://grafana.staging.otherjamesbrown.com` | ⚠️ Local only |
+
+**Note**: Staging uses Let's Encrypt staging certificates (not trusted by browsers). Use `-k` flag with curl for testing.
 
 ## Verification
 
 ```bash
-# List all ingresses
-kubectl get ingress -A
+# Development
+kubectl --kubeconfig=~/kubeconfigs/kubeconfig-development.yaml get ingress -A
+curl -k https://api.dev.otherjamesbrown.com/v1/status/healthz
 
-# Check specific service
-curl -k https://api.dev.ai-aas.local/v1/status/healthz
+# Staging
+kubectl --kubeconfig=~/kubeconfigs/kubeconfig-staging.yaml get ingress -A
+curl -k https://api.staging.otherjamesbrown.com/v1/status/healthz
 ```
 
 ## Application Services
@@ -52,7 +71,7 @@ curl -k https://api.dev.ai-aas.local/v1/status/healthz
 | TLS | ✅ Configured |
 
 **URLs**:
-- `https://api.dev.ai-aas.local`
+- `https://api.dev.otherjamesbrown.com`
 - `https://api.dev.otherjamesbrown.com`
 
 **Endpoints**:
@@ -77,7 +96,7 @@ curl -k https://api.dev.ai-aas.local/v1/status/healthz
 | TLS | ✅ Configured |
 
 **URLs**:
-- `https://user-org.dev.ai-aas.local`
+- `https://user-org.dev.otherjamesbrown.com`
 - `https://user-org.dev.otherjamesbrown.com`
 
 **Endpoints**:
@@ -101,7 +120,7 @@ curl -k https://api.dev.ai-aas.local/v1/status/healthz
 | TLS | ✅ Configured |
 
 **URLs**:
-- `https://analytics.dev.ai-aas.local`
+- `https://analytics.dev.otherjamesbrown.com`
 - `https://analytics.dev.otherjamesbrown.com`
 
 **Endpoints**:
@@ -124,7 +143,7 @@ curl -k https://api.dev.ai-aas.local/v1/status/healthz
 | TLS | ✅ Configured |
 
 **URLs**:
-- `https://admin-api.dev.ai-aas.local`
+- `https://admin-api.dev.otherjamesbrown.com`
 - `https://admin-api.dev.otherjamesbrown.com`
 
 **Configuration**: `services/admin-api-service/deployments/helm/admin-api-service/values-development.yaml`
@@ -140,7 +159,7 @@ curl -k https://api.dev.ai-aas.local/v1/status/healthz
 | TLS | ✅ Configured |
 
 **URLs**:
-- `https://portal.dev.ai-aas.local`
+- `https://portal.dev.otherjamesbrown.com`
 - `https://portal.dev.otherjamesbrown.com`
 
 **Configuration**: `web/portal/deployments/helm/web-portal/values-development.yaml`
@@ -158,9 +177,9 @@ curl -k https://api.dev.ai-aas.local/v1/status/healthz
 | TLS | ✅ Configured |
 
 **URLs**:
-- `https://grafana.dev.ai-aas.local`
 - `https://grafana.dev.otherjamesbrown.com`
-- `http://grafana.172.232.58.222.nip.io` (fallback)
+- `https://grafana.dev.otherjamesbrown.com`
+- `https://grafana.dev.otherjamesbrown.com` (fallback)
 
 **Configuration**: `gitops/clusters/development/apps/` (kube-prometheus-stack)
 
@@ -175,7 +194,7 @@ curl -k https://api.dev.ai-aas.local/v1/status/healthz
 | TLS | ✅ Configured |
 
 **URLs**:
-- `https://loki.dev.ai-aas.local`
+- `https://loki.dev.otherjamesbrown.com`
 - `https://loki.dev.otherjamesbrown.com`
 
 **Configuration**: `gitops/clusters/development/apps/` (loki application)
@@ -205,7 +224,7 @@ kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:909
 | Ingress | ✅ Configured |
 | TLS | ✅ Configured |
 
-**URL**: `https://argocd.dev.ai-aas.local`
+**URL**: `https://argocd.dev.otherjamesbrown.com`
 
 **Configuration**: `gitops/templates/argocd-values.yaml`
 
@@ -219,7 +238,7 @@ kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:909
 | TLS | ✅ Configured |
 
 **URLs**:
-- `https://etcd.dev.ai-aas.local`
+- `https://etcd.dev.otherjamesbrown.com`
 - `https://etcd.dev.otherjamesbrown.com`
 
 ## Local DNS Setup
@@ -230,15 +249,15 @@ Add to `/etc/hosts` (Linux/macOS) or `C:\Windows\System32\drivers\etc\hosts` (Wi
 
 ```
 # AI-AAS Development Environment
-172.232.58.222  api.dev.ai-aas.local
-172.232.58.222  portal.dev.ai-aas.local
-172.232.58.222  user-org.dev.ai-aas.local
-172.232.58.222  analytics.dev.ai-aas.local
-172.232.58.222  admin-api.dev.ai-aas.local
-172.232.58.222  grafana.dev.ai-aas.local
-172.232.58.222  loki.dev.ai-aas.local
-172.232.58.222  argocd.dev.ai-aas.local
-172.232.58.222  etcd.dev.ai-aas.local
+172.232.58.222  api.dev.otherjamesbrown.com
+172.232.58.222  portal.dev.otherjamesbrown.com
+172.232.58.222  user-org.dev.otherjamesbrown.com
+172.232.58.222  analytics.dev.otherjamesbrown.com
+172.232.58.222  admin-api.dev.otherjamesbrown.com
+172.232.58.222  grafana.dev.otherjamesbrown.com
+172.232.58.222  loki.dev.otherjamesbrown.com
+172.232.58.222  argocd.dev.otherjamesbrown.com
+172.232.58.222  etcd.dev.otherjamesbrown.com
 ```
 
 ### Automation Script

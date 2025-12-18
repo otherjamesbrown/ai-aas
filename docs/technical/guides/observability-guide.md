@@ -181,7 +181,7 @@ kubectl get secret -n monitoring kube-prometheus-stack-grafana -o jsonpath="{.da
 Access via ingress URL (configure ingress first):
 
 ```bash
-# Example: https://grafana.prod.ai-aas.local
+# Example: https://grafana.prod.otherjamesbrown.com
 ```
 
 ## Dashboard Reference

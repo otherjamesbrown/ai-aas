@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { auditApi } from '../api/audit';
 import type { AuditEvent } from '../types';
+import { logger } from '@/lib/logger';
 
 interface AuditEventBannerProps {
   onEventReceived?: (event: AuditEvent) => void;
@@ -32,7 +33,7 @@ export function AuditEventBanner({ onEventReceived }: AuditEventBannerProps) {
           }
         }
       } catch (error) {
-        console.error('Failed to fetch audit events:', error);
+        logger.error('Failed to fetch audit events', { component: 'AuditEventBanner' }, error instanceof Error ? error : undefined);
       }
     }, 2000); // Poll every 2 seconds
 

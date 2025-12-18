@@ -160,7 +160,7 @@ if [ "${BRANCH}" = "main" ]; then
       if [ $i -eq 12 ]; then
         echo "⚠️  ArgoCD hasn't synced yet. Check manually:"
         echo "   kubectl get application -n argocd"
-        echo "   Or visit: https://argocd.dev.ai-aas.local"
+        echo "   Or visit: https://argocd.dev.otherjamesbrown.com"
       else
         echo "   Waiting... ($((i * 10))s)"
       fi
@@ -182,7 +182,7 @@ else
     echo "📋 Next steps:"
     echo "   1. Review and merge the PR: ${PR_URL}"
     echo "   2. After merge, ArgoCD will auto-sync from main"
-    echo "   3. Monitor ArgoCD: https://argocd.dev.ai-aas.local"
+    echo "   3. Monitor ArgoCD: https://argocd.dev.otherjamesbrown.com"
   else
     # Create PR (using values from commit step or defaults)
     echo "Creating PR..."
@@ -200,7 +200,7 @@ else
       echo "   1. Review the PR: ${PR_URL}"
       echo "   2. Merge the PR (after review/approval)"
       echo "   3. After merge, ArgoCD will auto-sync from main"
-      echo "   4. Monitor ArgoCD: https://argocd.dev.ai-aas.local"
+      echo "   4. Monitor ArgoCD: https://argocd.dev.otherjamesbrown.com"
     else
       echo "❌ Failed to create PR"
       echo "   Output: ${PR_URL}"
@@ -254,7 +254,7 @@ if [ "${BRANCH}" != "main" ]; then
   echo "   1. Review PR: $(gh pr list --head "${BRANCH}" --json url --jq '.[0].url' 2>/dev/null || echo 'Check GitHub')"
   echo "   2. Merge PR after approval"
   echo "   3. ArgoCD will auto-sync from main (development) or manual sync (production)"
-  echo "   4. Monitor: https://argocd.dev.ai-aas.local"
+  echo "   4. Monitor: https://argocd.dev.otherjamesbrown.com"
 else
   echo "📋 Current Status:"
   echo "   - Changes committed and pushed to main"
@@ -262,7 +262,7 @@ else
   echo ""
   echo "📊 Monitor:"
   echo "   - CI Status: gh run list --workflow ci.yml"
-  echo "   - ArgoCD: https://argocd.dev.ai-aas.local"
+  echo "   - ArgoCD: https://argocd.dev.otherjamesbrown.com"
   echo "   - Services: kubectl get pods --all-namespaces"
 fi
 

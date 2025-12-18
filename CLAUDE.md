@@ -1,12 +1,17 @@
 # Claude Rules for AI-AAS Platform
 
-This document provides a set of specific, critical rules for interacting with the AI-AAS Platform repository.
+This document provides Claude-specific configuration for the AI-AAS Platform repository.
 
-For a general overview of the architecture, development workflow, and key documents, please first read the main guide:
+## Related Documents
 
-➡️ **[AI_ASSISTANT_GUIDE.md](./AI_ASSISTANT_GUIDE.md)**
+| Document | Purpose |
+|----------|---------|
+| **[context/agents.md](./context/agents.md)** | Core agent rules (NEVER/ALWAYS, beads workflow, domains) |
+| **[context/context_map.md](./context/context_map.md)** | Navigation index for all context docs |
+| **[AI_ASSISTANT_GUIDE.md](./AI_ASSISTANT_GUIDE.md)** | Onboarding guide (repo structure, CLI commands) |
+| **[ARCHITECTURE.md](./ARCHITECTURE.md)** | System architecture (YAML format) |
 
-After reading the main guide, adhere to the following critical rules below.
+> **Note**: Rules in `context/agents.md` apply to ALL AI agents. This file contains Claude-specific extensions.
 
 ## Issue Tracking with Beads
 
@@ -21,6 +26,11 @@ bd create "Title" --type feature   # Create new issue
 bd update <issue-id> --status in_progress  # Update status
 bd close <issue-id>                # Close an issue
 ```
+
+**Bead ID shorthand:**
+- Prefix `ai-aas-` can be omitted when referencing beads
+- "spec030" → ai-aas-spec030
+- "pr93" → ai-aas-pr93
 
 **When ending a session or completing work:**
 - Ask the user: "Would you like to create any beads issues before we finish?"
@@ -102,6 +112,33 @@ In addition to the principles outlined in the main guide, always adhere to:
     - Check if the Admin API already has the endpoint you need
     - If an API endpoint is missing, add it to Admin API first, then use it from CLI
 
+## Workspace & Git Worktree Setup
+
+The development machine uses a **workspace** bash function (defined in `~/.bashrc`) to manage git worktrees for parallel development:
+
+```bash
+workspace <name> [branch]    # Create/switch to a worktree
+workspace                    # List current worktrees
+workspace-remove <name>      # Clean up a worktree
+```
+
+**Key details:**
+- Main repository: `~/ai-aas`
+- Worktrees created in: `~/worktrees/<name>`
+- Permanent worktrees: `develop`, `staging`
+- Temporary worktrees: feature branches, PR reviews
+
+### Git-Crypt
+
+The repository uses **git-crypt** to encrypt sensitive files (`.env`, secrets).
+
+- **Key location**: `~/.config/git-crypt/ai-aas-key`
+- The workspace function auto-unlocks git-crypt when creating new worktrees
+- If you encounter git-crypt errors, manually unlock:
+  ```bash
+  cd ~/ai-aas && git-crypt unlock ~/.config/git-crypt/ai-aas-key
+  ```
+
 ## Environment Access & Credentials
 
 **CRITICAL**: Before searching for credentials or environment access information, ALWAYS check this document first:
@@ -122,9 +159,9 @@ This document contains:
 **Quick Access Examples:**
 - Kubernetes: `kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-development.yaml`
 - Database: Connection string in `secrets/env/.env` as `DATABASE_URL`
-- API Router: `https://api.172.232.58.222.nip.io` or `https://api.dev.ai-aas.local`
+- API Router: `https://api.dev.otherjamesbrown.com`
 - Master Admin API Key: Found in `secrets/env/.env` as `MASTER_ADMIN_API_KEY`
-- ArgoCD: `https://argocd.dev.ai-aas.local` (password retrieved from k8s secret)
+- ArgoCD: `https://argocd.dev.otherjamesbrown.com` (password retrieved from k8s secret)
 
 ## Endpoint URL Management Strategy
 
@@ -249,7 +286,7 @@ kubectl get deployment <name> -n <namespace> -o jsonpath='{.spec.template.spec.c
 ### Reference Documentation:
 
 - `docs/runbooks/deploy-to-environments.md`: Complete deployment runbook
-- ArgoCD endpoints: `argocd.dev.ai-aas.local`, `argocd.prod.ai-aas.local`
+- ArgoCD endpoints: `argocd.dev.otherjamesbrown.com`, `argocd.prod.otherjamesbrown.com`
 
 ## ArgoCD Application Requirements
 
@@ -353,3 +390,78 @@ spec:
         factor: 2
         maxDuration: 3m
 ```
+
+## Debugging & Observability
+
+**CRITICAL**: When debugging issues, use the observability stack. Don't guess - look at the logs and traces.
+
+📖 **Full Guide**: [docs/runbooks/ai-debugging-workflow.md](docs/runbooks/ai-debugging-workflow.md)
+
+### Quick Reference
+
+| What | Command/URL |
+|------|-------------|
+| **Grafana** | https://grafana.dev.otherjamesbrown.com |
+| **Loki API** | https://loki.dev.otherjamesbrown.com |
+| **Service Logs Dashboard** | Grafana → Dashboards → Service Logs |
+| **Request Tracing Dashboard** | Grafana → Dashboards → Request Tracing |
+
+### Common Debug Commands
+
+```bash
+# View recent errors for a service
+kubectl logs -n <namespace> -l app=<service> --tail=100 | grep -i error
+
+# Query Loki directly for errors (last hour)
+curl -G https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range \
+  --data-urlencode 'query={service="api-router-service",level="error"}' \
+  --data-urlencode 'limit=50'
+
+# Find logs by trace ID
+curl -G https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range \
+  --data-urlencode 'query={trace_id="<TRACE_ID>"}'
+
+# View vLLM/inference backend logs
+kubectl logs -n system -l serving.kserve.io/inferenceservice=<model> --tail=100
+
+# Check for GPU/CUDA errors
+curl -G https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range \
+  --data-urlencode 'query={namespace="system"} |~ "(?i)cuda|oom|gpu"'
+```
+
+### Log Format
+
+All Go services output structured JSON logs:
+```json
+{
+  "level": "error",
+  "ts": "2025-12-12T10:30:00Z",
+  "msg": "request failed",
+  "service": "api-router-service",
+  "trace_id": "abc123",
+  "request_id": "req-456",
+  "error": "connection refused"
+}
+```
+
+**Key fields for filtering**:
+- `service` - Service name (api-router-service, admin-api-service, etc.)
+- `level` - Log level (debug, info, warn, error)
+- `trace_id` - Distributed trace ID (correlates requests across services)
+- `request_id` - Unique request identifier
+- `error` - Error message (when level=error)
+
+### Debug Workflow
+
+1. **Identify the error** - Get the error message or trace_id from the user/logs
+2. **Check service logs** - Use Grafana or kubectl to view recent logs
+3. **Correlate with trace_id** - Find all logs for a specific request across services
+4. **Check dashboards** - Look at error rates, latency spikes
+5. **Check alerts** - See if any alerts fired around the time of the issue
+
+### Frontend Errors
+
+Frontend errors are captured by Sentry. Check:
+- Sentry dashboard for React errors with stack traces
+- Session replay to see user actions leading to errors
+- Error ID displayed to users correlates to Sentry event

@@ -57,12 +57,12 @@ Model `vllm-gpt-oss-20b` deployed successfully:
 
 The inference API is accessible over the internet via Ingress:
 
-**Endpoint**: `http://172.232.58.222` (Host: `vllm.dev.ai-aas.local`)
+**Endpoint**: `http://172.232.58.222` (Host: `vllm.dev.otherjamesbrown.com`)
 
 ```bash
 # Test from anywhere on the internet (no kubectl needed!)
 curl -X POST http://172.232.58.222/v1/chat/completions \
-  -H 'Host: vllm.dev.ai-aas.local' \
+  -H 'Host: vllm.dev.otherjamesbrown.com' \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "unsloth/gpt-oss-20b",
@@ -82,7 +82,7 @@ curl -X POST http://172.232.58.222/v1/chat/completions \
 ```bash
 # Simple math
 curl -s -X POST http://172.232.58.222/v1/chat/completions \
-  -H 'Host: vllm.dev.ai-aas.local' \
+  -H 'Host: vllm.dev.otherjamesbrown.com' \
   -H 'Content-Type: application/json' \
   -d '{"model":"unsloth/gpt-oss-20b","messages":[{"role":"user","content":"What is 2+2?"}],"max_tokens":20}' \
   | jq -r '.choices[0].message.content'
@@ -90,7 +90,7 @@ curl -s -X POST http://172.232.58.222/v1/chat/completions \
 
 # Complex explanation
 curl -s -X POST http://172.232.58.222/v1/chat/completions \
-  -H 'Host: vllm.dev.ai-aas.local' \
+  -H 'Host: vllm.dev.otherjamesbrown.com' \
   -H 'Content-Type: application/json' \
   -d '{"model":"unsloth/gpt-oss-20b","messages":[{"role":"user","content":"Explain what a large language model is in simple terms."}],"max_tokens":300}' \
   | jq -r '.choices[0].message.content'
@@ -130,7 +130,7 @@ API Router Service successfully integrated:
 - ✅ Test API key created in database
 
 **Current Status**:
-- Public endpoint: `http://172.232.58.222` (Host: `vllm.dev.ai-aas.local`)
+- Public endpoint: `http://172.232.58.222` (Host: `vllm.dev.otherjamesbrown.com`)
 - Requests without API keys are rejected with `{"error":"authentication required","code":"AUTH_INVALID"}`
 - API Router successfully validates presence of X-API-Key header
 

@@ -406,3 +406,148 @@ func TestRedactValue(t *testing.T) {
 	}
 }
 
+func TestLogger_WithSampling(t *testing.T) {
+	cfg := DefaultConfig().
+		WithServiceName("test-service").
+		WithLogLevel("debug").
+		WithSampling(DefaultSamplingConfig())
+
+	logger, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New() with sampling error = %v", err)
+	}
+	defer logger.Sync()
+
+	// Verify logger was created successfully
+	if logger == nil {
+		t.Error("New() with sampling returned nil logger")
+	}
+
+	// Log multiple debug messages - some should be sampled
+	for i := 0; i < 200; i++ {
+		logger.Debug("test debug message", zap.Int("iteration", i))
+	}
+
+	// Log error messages - these should NEVER be sampled
+	for i := 0; i < 10; i++ {
+		logger.Error("test error message", zap.Int("iteration", i))
+	}
+}
+
+func TestLogger_SamplingDisabled(t *testing.T) {
+	cfg := DefaultConfig().
+		WithServiceName("test-service").
+		WithLogLevel("debug")
+	// No sampling configured
+
+	logger, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New() without sampling error = %v", err)
+	}
+	defer logger.Sync()
+
+	// Verify logger was created successfully
+	if logger == nil {
+		t.Error("New() without sampling returned nil logger")
+	}
+
+	// All logs should be emitted
+	for i := 0; i < 10; i++ {
+		logger.Debug("test message", zap.Int("iteration", i))
+	}
+}
+
+func TestDefaultSamplingConfig(t *testing.T) {
+	cfg := DefaultSamplingConfig()
+	if cfg == nil {
+		t.Fatal("DefaultSamplingConfig() returned nil")
+	}
+	if !cfg.Enabled {
+		t.Error("DefaultSamplingConfig() should have Enabled=true")
+	}
+	if cfg.Initial != 100 {
+		t.Errorf("DefaultSamplingConfig() Initial = %d, want 100", cfg.Initial)
+	}
+	if cfg.Thereafter != 100 {
+		t.Errorf("DefaultSamplingConfig() Thereafter = %d, want 100", cfg.Thereafter)
+	}
+}
+
+func TestConfig_WithSampling(t *testing.T) {
+	cfg := DefaultConfig()
+	sampling := &SamplingConfig{
+		Enabled:    true,
+		Initial:    50,
+		Thereafter: 10,
+	}
+
+	cfg = cfg.WithSampling(sampling)
+	if cfg.Sampling == nil {
+		t.Error("WithSampling() did not set Sampling")
+	}
+	if cfg.Sampling.Initial != 50 {
+		t.Errorf("WithSampling() Initial = %d, want 50", cfg.Sampling.Initial)
+	}
+	if cfg.Sampling.Thereafter != 10 {
+		t.Errorf("WithSampling() Thereafter = %d, want 10", cfg.Sampling.Thereafter)
+	}
+}
+
+func TestLevelRangeEnabler(t *testing.T) {
+	// Test debug-info range
+	enabler := levelRangeEnabler{min: zapcore.DebugLevel, max: zapcore.InfoLevel}
+
+	if !enabler.Enabled(zapcore.DebugLevel) {
+		t.Error("levelRangeEnabler should enable DebugLevel")
+	}
+	if !enabler.Enabled(zapcore.InfoLevel) {
+		t.Error("levelRangeEnabler should enable InfoLevel")
+	}
+	if enabler.Enabled(zapcore.WarnLevel) {
+		t.Error("levelRangeEnabler should NOT enable WarnLevel")
+	}
+	if enabler.Enabled(zapcore.ErrorLevel) {
+		t.Error("levelRangeEnabler should NOT enable ErrorLevel")
+	}
+
+	// Test warn-fatal range
+	enabler = levelRangeEnabler{min: zapcore.WarnLevel, max: zapcore.FatalLevel}
+
+	if enabler.Enabled(zapcore.DebugLevel) {
+		t.Error("levelRangeEnabler should NOT enable DebugLevel")
+	}
+	if enabler.Enabled(zapcore.InfoLevel) {
+		t.Error("levelRangeEnabler should NOT enable InfoLevel")
+	}
+	if !enabler.Enabled(zapcore.WarnLevel) {
+		t.Error("levelRangeEnabler should enable WarnLevel")
+	}
+	if !enabler.Enabled(zapcore.ErrorLevel) {
+		t.Error("levelRangeEnabler should enable ErrorLevel")
+	}
+}
+
+func TestSamplingDefaults(t *testing.T) {
+	// Test that zero values use defaults
+	cfg := DefaultConfig().
+		WithServiceName("test-service").
+		WithSampling(&SamplingConfig{
+			Enabled:    true,
+			Initial:    0, // Should default to 100
+			Thereafter: 0, // Should default to 100
+		})
+
+	logger, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer logger.Sync()
+
+	if logger == nil {
+		t.Error("New() returned nil logger")
+	}
+
+	// Verify logger works with default sampling values
+	logger.Debug("test message")
+}
+

@@ -40,7 +40,7 @@ jobs:
     timeout-minutes: 60
     strategy:
       matrix:
-        worker: ${{ fromJson(format('[{0}]', join(range(1, inputs.parallelism || 4), ','))) }}
+        worker: [1, 2, 3, 4]
       fail-fast: false
 
     steps:

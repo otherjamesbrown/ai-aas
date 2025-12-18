@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: REST endpoints that power analytics dashboards for usage, reliability, and freshness.
 servers:
-  - url: https://api.ai-aas.local
+  - url: https://api.dev.otherjamesbrown.com
     description: Development
   - url: https://api.ai-aas.prod
     description: Production

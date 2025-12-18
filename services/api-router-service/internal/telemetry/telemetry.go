@@ -6,7 +6,7 @@
 //   interface for telemetry initialization and shutdown.
 //
 // Dependencies:
-//   - github.com/otherjamesbrown/ai-aas/shared/go/observability: OpenTelemetry setup
+//   - github.com/ai-aas/shared-go/observability: OpenTelemetry setup
 //   - go.uber.org/zap: Structured logging
 //   - github.com/rs/zerolog: Alternative logger (for compatibility)
 //
@@ -30,8 +30,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/otherjamesbrown/ai-aas/shared/go/logging"
-	"github.com/otherjamesbrown/ai-aas/shared/go/observability"
+	"github.com/ai-aas/shared-go/logging"
+	"github.com/ai-aas/shared-go/observability"
 )
 
 // Telemetry bundles initialized telemetry components.

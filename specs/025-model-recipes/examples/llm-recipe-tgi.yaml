@@ -1,0 +1,157 @@
+# Example: LLM Recipe for Falcon 7B (TGI Runtime)
+# Shows how to deploy models with HuggingFace Text Generation Inference
+apiVersion: ai.ai-aas.io/v1alpha1
+kind: ModelRecipe
+metadata:
+  name: falcon-7b-instruct
+  namespace: ai-model-system
+  labels:
+    ai.ai-aas.io/model-family: falcon
+    ai.ai-aas.io/model-size: 7b
+    ai.ai-aas.io/task: text-generation
+    ai.ai-aas.io/runtime: tgi
+spec:
+  modelID: tiiuae/falcon-7b-instruct
+  displayName: "Falcon 7B Instruct"
+  description: |
+    TII's Falcon 7B instruction-tuned model.
+    Good performance with TGI's optimized inference.
+
+  runtime: tgi
+  image: ghcr.io/huggingface/text-generation-inference:2.4
+
+  resources:
+    gpu:
+      type: nvidia
+      count: 1
+      minMemoryGB: 16
+    cpu:
+      requests: "4"
+      limits: "8"
+    memory:
+      requests: "16Gi"
+      limits: "32Gi"
+
+  runtimeArgs:
+    tgi:
+      # Quantization (reduces memory, may affect quality)
+      quantize: null  # null | bitsandbytes | bitsandbytes-nf4 | gptq | awq
+
+      # Context length settings
+      maxInputLength: 2048
+      maxTotalTokens: 4096
+      maxBatchPrefillTokens: 4096
+
+      # Batching
+      maxConcurrentRequests: 128
+
+      # Multi-GPU sharding (for larger models)
+      numShard: 1
+
+      # Performance options
+      disableFlashAttention: false
+      enableCudaGraphs: true
+
+      # Trust remote code from HuggingFace (use with caution)
+      trustRemoteCode: false
+
+  scheduling:
+    tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      - key: gpu-workload
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+
+  healthCheck:
+    startupProbeSeconds: 300
+    livenessPath: /health
+    readinessPath: /health
+
+  metadata:
+    parameters: "7B"
+    contextLength: 2048
+    architecture: "FalconForCausalLM"
+    license: "Apache-2.0"
+    sourceURL: "https://huggingface.co/tiiuae/falcon-7b-instruct"
+    notes: |
+      - TGI provides good performance for Falcon models
+      - Consider bitsandbytes quantization for smaller GPUs
+      - Supports streaming responses
+
+---
+# Example with quantization enabled
+apiVersion: ai.ai-aas.io/v1alpha1
+kind: ModelRecipe
+metadata:
+  name: llama-2-13b-chat-gptq
+  namespace: ai-model-system
+  labels:
+    ai.ai-aas.io/model-family: llama
+    ai.ai-aas.io/model-size: 13b
+    ai.ai-aas.io/task: text-generation
+    ai.ai-aas.io/runtime: tgi
+    ai.ai-aas.io/quantization: gptq
+spec:
+  modelID: TheBloke/Llama-2-13B-chat-GPTQ
+  displayName: "Llama 2 13B Chat (GPTQ)"
+  description: |
+    Meta's Llama 2 13B chat model with GPTQ 4-bit quantization.
+    Fits on a single 16GB GPU with good quality.
+
+  runtime: tgi
+  image: ghcr.io/huggingface/text-generation-inference:2.4
+
+  resources:
+    gpu:
+      type: nvidia
+      count: 1
+      minMemoryGB: 16  # GPTQ reduces memory significantly
+    cpu:
+      requests: "4"
+      limits: "8"
+    memory:
+      requests: "16Gi"
+      limits: "32Gi"
+
+  runtimeArgs:
+    tgi:
+      # GPTQ quantization
+      quantize: gptq
+
+      maxInputLength: 4096
+      maxTotalTokens: 8192
+      maxBatchPrefillTokens: 4096
+      maxConcurrentRequests: 64
+
+      numShard: 1
+      disableFlashAttention: false
+      trustRemoteCode: false
+
+  scheduling:
+    tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      - key: gpu-workload
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+
+  healthCheck:
+    startupProbeSeconds: 300
+    livenessPath: /health
+    readinessPath: /health
+
+  metadata:
+    parameters: "13B (4-bit quantized)"
+    contextLength: 4096
+    architecture: "LlamaForCausalLM"
+    license: "Llama 2 Community License"
+    sourceURL: "https://huggingface.co/TheBloke/Llama-2-13B-chat-GPTQ"
+    notes: |
+      - GPTQ 4-bit quantization reduces model size ~4x
+      - Slight quality reduction compared to full precision
+      - Good choice when GPU memory is limited

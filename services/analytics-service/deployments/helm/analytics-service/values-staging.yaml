@@ -4,7 +4,7 @@
 global:
   domain:
     base: "staging.otherjamesbrown.com"
-    local: "staging.ai-aas.local"
+    local: "staging.otherjamesbrown.com"
 
 replicaCount: 2
 
@@ -12,6 +12,8 @@ image:
   repository: ghcr.io/otherjamesbrown/ai-aas/analytics-service
   tag: staging
   pullPolicy: Always
+  pullSecrets:
+    - ghcr-pull-secret
 
 env:
   - name: SERVICE_NAME

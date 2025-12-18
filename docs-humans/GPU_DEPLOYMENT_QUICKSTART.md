@@ -17,7 +17,7 @@ The inference API is accessible over the internet - **no setup required**:
 ```bash
 # Test from anywhere (replace with your question)
 curl -X POST http://172.232.58.222/v1/chat/completions \
-  -H 'Host: vllm.dev.ai-aas.local' \
+  -H 'Host: vllm.dev.otherjamesbrown.com' \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "unsloth/gpt-oss-20b",
@@ -34,14 +34,14 @@ curl -X POST http://172.232.58.222/v1/chat/completions \
 ```bash
 # Simple math
 curl -s -X POST http://172.232.58.222/v1/chat/completions \
-  -H 'Host: vllm.dev.ai-aas.local' \
+  -H 'Host: vllm.dev.otherjamesbrown.com' \
   -H 'Content-Type: application/json' \
   -d '{"model":"unsloth/gpt-oss-20b","messages":[{"role":"user","content":"What is 2+2?"}],"max_tokens":20}' \
   | jq -r '.choices[0].message.content'
 
 # Explanation
 curl -s -X POST http://172.232.58.222/v1/chat/completions \
-  -H 'Host: vllm.dev.ai-aas.local' \
+  -H 'Host: vllm.dev.otherjamesbrown.com' \
   -H 'Content-Type: application/json' \
   -d '{"model":"unsloth/gpt-oss-20b","messages":[{"role":"user","content":"Explain quantum computing in simple terms."}],"max_tokens":200}' \
   | jq -r '.choices[0].message.content'
@@ -49,7 +49,7 @@ curl -s -X POST http://172.232.58.222/v1/chat/completions \
 
 ### Current Deployment
 
-- **🌐 Public Endpoint**: `http://172.232.58.222` (Host: `vllm.dev.ai-aas.local`)
+- **🌐 Public Endpoint**: `http://172.232.58.222` (Host: `vllm.dev.otherjamesbrown.com`)
 - **Service**: `vllm-gpt-oss-20b` in `system` namespace
 - **Model**: unsloth/gpt-oss-20b (20B parameters)
 - **GPU Node**: lke531921-776664-51386eeb0000 (Linode ID: 87352812)
