@@ -72,6 +72,34 @@ The AI-AAS platform currently only supports backends that serve OpenAI-compatibl
 
 No Istio mesh injection, no KNative, direct service-to-service HTTP.
 
+**GPU Scheduling Architecture**: The platform uses a **pool-per-instance-type** pattern (not pool-per-model):
+
+1. **GPU nodes are auto-tainted** via DaemonSet (`nvidia.com/gpu=true:NoSchedule`)
+   - Prevents non-GPU workloads from landing on expensive GPU nodes
+
+2. **Models declare requirements** in `ModelRecipe` CRD:
+   ```yaml
+   spec:
+     scheduling:
+       tolerations:
+         - key: nvidia.com/gpu
+           operator: Exists
+           effect: NoSchedule
+       nodeSelector:
+         nvidia.com/gpu.present: "true"
+         # Can also target specific GPU types:
+         # gpu-type: nvidia-a100
+   ```
+
+3. **K8s scheduler places pods** on nodes matching those constraints
+
+This pattern provides:
+- **Cost efficiency** - Models share nodes; no idle dedicated capacity
+- **Flexibility** - New models just need proper selectors, no infra changes
+- **Scaling** - Add nodes to a pool, all compatible models benefit
+
+The `AIModel` and `ModelRecipe` CRDs support `nodeSelector`, `tolerations`, and full `affinity` rules for complex scheduling needs.
+
 ## Proposed Approach
 
 Implement **Option A: Translation Layer in API Router**
