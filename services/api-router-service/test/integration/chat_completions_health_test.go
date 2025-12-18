@@ -30,6 +30,7 @@ func TestChatCompletionsHealthEndpoint(t *testing.T) {
 		backendRegistry,
 		nil, // routing engine not needed for health endpoint
 		nil, // routing metrics not needed for health endpoint
+		nil, // token metrics not needed for health endpoint
 		nil, // usage hook not needed for health endpoint
 		"",  // admin API endpoint not needed for health endpoint
 		"",  // admin API key not needed for health endpoint

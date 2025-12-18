@@ -421,7 +421,7 @@ func main() {
 	defer healthMonitor.Stop()
 
 	// Initialize public API handler with routing engine and usage hook
-	publicHandler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, routingEngine, routingMetrics, usageHook, cfg.AdminAPIEndpoint, cfg.AdminAPIKey)
+	publicHandler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, routingEngine, routingMetrics, tokenMetrics, usageHook, cfg.AdminAPIEndpoint, cfg.AdminAPIKey)
 	publicHandler.SetUserOrgServiceURL(cfg.UserOrgServiceURL)
 
 	// Register unauthenticated chat completions health endpoint on main router
