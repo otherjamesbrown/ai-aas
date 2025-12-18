@@ -3,9 +3,8 @@ kind: Kustomization
 
 namespace: monitoring
 
-resources:
-  - otel-collector.yaml
-  - cost-config.yaml
+# Base config resources moved to config/ subdirectory
+# and managed by monitoring-config ArgoCD application
 
 # Include subdirectory kustomizations
 # Note: These are managed by separate ArgoCD applications

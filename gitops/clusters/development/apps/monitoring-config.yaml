@@ -16,7 +16,7 @@ spec:
   source:
     repoURL: https://github.com/otherjamesbrown/ai-aas
     targetRevision: develop
-    path: infra/k8s/monitoring
+    path: infra/k8s/monitoring/config
 
   destination:
     server: https://kubernetes.default.svc
