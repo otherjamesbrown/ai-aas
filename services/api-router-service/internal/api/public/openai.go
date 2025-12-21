@@ -29,8 +29,8 @@ import (
 type OpenAIChatCompletionRequest struct {
 	Model       string                 `json:"model"`
 	Messages    []OpenAIMessage        `json:"messages"`
-	MaxTokens   int                    `json:"max_tokens,omitempty"`
-	Temperature float64                `json:"temperature,omitempty"`
+	MaxTokens   *int                   `json:"max_tokens,omitempty"`
+	Temperature *float64               `json:"temperature,omitempty"`
 	Stream      bool                   `json:"stream,omitempty"`
 	Parameters  map[string]interface{} `json:"parameters,omitempty"`
 }
@@ -656,13 +656,13 @@ func (h *Handler) convertToTritonOpenAIRequest(req *OpenAIChatCompletionRequest)
 		Stream:   req.Stream,
 	}
 
-	// Copy optional fields
-	if req.MaxTokens > 0 {
-		maxTokens := req.MaxTokens
+	// Copy optional fields (pointer types preserve explicit zero values)
+	if req.MaxTokens != nil {
+		maxTokens := *req.MaxTokens
 		tritonReq.MaxTokens = &maxTokens
 	}
-	if req.Temperature > 0 {
-		temp := req.Temperature
+	if req.Temperature != nil {
+		temp := *req.Temperature
 		tritonReq.Temperature = &temp
 	}
 

@@ -156,7 +156,7 @@ func TestTritonBackendChatCompletions(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, "", "")
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, "", "")
 
 	// Configure handler to use mock Triton backend URI
 	// Note: the handler will build /v2/models/{model}/infer path from this base
@@ -326,7 +326,7 @@ func TestTritonBackendStreamingNotSupported(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, "", "")
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, "", "")
 
 	router := chi.NewRouter()
 	tracer := otel.Tracer("test")
@@ -410,7 +410,7 @@ func TestTritonBackendMissingTokenizer(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, "", "")
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, "", "")
 
 	router := chi.NewRouter()
 	tracer := otel.Tracer("test")
@@ -527,7 +527,7 @@ func TestTritonBackendErrorMapping(t *testing.T) {
 			testCfg := &config.Config{BackendEndpoints: ""}
 			backendRegistry := config.NewBackendRegistry(testCfg)
 
-			handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, "", "")
+			handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, "", "")
 			handler.SetBackendURI("mock-triton-error", mockBackend.URL)
 
 			router := chi.NewRouter()

@@ -21,6 +21,14 @@ func NewPolicyRepository(db *DB) *PolicyRepository {
 	return &PolicyRepository{db: db}
 }
 
+// stringFromPtr returns the string value of a string pointer or an empty string if the pointer is nil.
+func stringFromPtr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
 // Create creates a new routing policy
 func (r *PolicyRepository) Create(ctx context.Context, create *domain.PolicyCreate, createdBy string) (*domain.RoutingPolicy, error) {
 	policyID := create.PolicyID
@@ -88,9 +96,7 @@ func (r *PolicyRepository) Create(ctx context.Context, create *domain.PolicyCrea
 	json.Unmarshal(backends, &policy.Backends)
 	json.Unmarshal(fallback, &policy.FallbackBackends)
 	json.Unmarshal(metadata, &policy.Metadata)
-	if tokenizer != nil {
-		policy.Tokenizer = *tokenizer
-	}
+	policy.Tokenizer = stringFromPtr(tokenizer)
 
 	return &policy, nil
 }
@@ -134,9 +140,7 @@ func (r *PolicyRepository) GetByID(ctx context.Context, id string) (*domain.Rout
 	json.Unmarshal(backends, &policy.Backends)
 	json.Unmarshal(fallback, &policy.FallbackBackends)
 	json.Unmarshal(metadata, &policy.Metadata)
-	if tokenizer != nil {
-		policy.Tokenizer = *tokenizer
-	}
+	policy.Tokenizer = stringFromPtr(tokenizer)
 
 	return &policy, nil
 }
@@ -325,9 +329,7 @@ func (r *PolicyRepository) Update(ctx context.Context, id string, update *domain
 	json.Unmarshal(backends, &policy.Backends)
 	json.Unmarshal(fallback, &policy.FallbackBackends)
 	json.Unmarshal(metadata, &policy.Metadata)
-	if tokenizer != nil {
-		policy.Tokenizer = *tokenizer
-	}
+	policy.Tokenizer = stringFromPtr(tokenizer)
 
 	return &policy, nil
 }
@@ -372,9 +374,7 @@ func (r *PolicyRepository) SetEnabled(ctx context.Context, id string, enabled bo
 	json.Unmarshal(backends, &policy.Backends)
 	json.Unmarshal(fallback, &policy.FallbackBackends)
 	json.Unmarshal(metadata, &policy.Metadata)
-	if tokenizer != nil {
-		policy.Tokenizer = *tokenizer
-	}
+	policy.Tokenizer = stringFromPtr(tokenizer)
 
 	return &policy, nil
 }

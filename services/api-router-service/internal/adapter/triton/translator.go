@@ -137,8 +137,8 @@ func (t *Translator) TranslateTritonToOpenAI(
 	}
 
 	// Calculate token counts using tiktoken
-	promptText := t.formatPromptForTokenCount(originalReq.Messages)
-	promptTokens := t.tokenizer.CountTokens(promptText)
+	// Use CountMessagesTokens for accurate prompt token counting with message overhead
+	promptTokens := t.tokenizer.CountMessagesTokens(originalReq.Messages)
 	completionTokens := t.tokenizer.CountTokens(completionText)
 
 	// Determine finish reason
@@ -254,19 +254,6 @@ func (t *Translator) formatPrompt(messages []ChatMessage) (string, error) {
 	sb.WriteString("<|start_header_id|>assistant<|end_header_id|>\n\n")
 
 	return sb.String(), nil
-}
-
-// formatPromptForTokenCount formats messages for token counting.
-// This is a simplified version that just concatenates content.
-func (t *Translator) formatPromptForTokenCount(messages []ChatMessage) string {
-	var sb strings.Builder
-	for _, msg := range messages {
-		sb.WriteString(msg.Role)
-		sb.WriteString(": ")
-		sb.WriteString(msg.Content)
-		sb.WriteString("\n")
-	}
-	return sb.String()
 }
 
 // determineFinishReason determines the finish reason based on response and parameters.
