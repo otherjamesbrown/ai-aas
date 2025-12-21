@@ -1,0 +1,180 @@
+# Spec: Triton API Support
+
+**Spec Number:** 032
+**Created:** 2025-12-18
+**Status:** Ready for Implementation
+**Epic Bead:** ai-aas-spec032
+
+## Summary
+
+Add OpenAI API compatibility for Triton Inference Server backends by implementing a protocol translation layer in the API Router. This enables TensorRT-LLM models to be accessed via the standard `/v1/chat/completions` endpoint.
+
+## Clarifications
+
+The following decisions were made during idea refinement:
+
+| Topic | Decision | Rationale |
+|-------|----------|-----------|
+| **Approach** | Translation layer in API Router | Centralized control, no extra services, enables smart load balancing |
+| **Backend Type Config** | Explicit in routing policy | Validate on sync, return clear errors if misconfigured |
+| **Token Counting** | Tiktoken/tokenizer library | Accurate counts needed for billing/quotas |
+| **Streaming** | Phase 2 (not MVP) | MVP is non-streaming; add SSE streaming later |
+| **Error Mapping** | Triton → OpenAI codes | Preserve Triton details in response for debugging |
+| **Tokenizer Config** | Configurable per model | Different models need different encodings (cl100k_base, llama3, etc.) |
+
+## User Scenarios
+
+### US-1: Developer uses OpenAI SDK with TRT-LLM model
+
+**Actor:** Application Developer
+**Precondition:** TRT-LLM model deployed via Triton, routing policy configured with `backend_type: triton`
+
+**Flow:**
+1. Developer configures OpenAI SDK with platform API endpoint and key
+2. Developer calls `client.chat.completions.create(model="meta-llama/Llama-3.1-8B-Instruct", messages=[...])`
+3. API Router receives request, detects Triton backend type from routing policy
+4. API Router translates OpenAI format to Triton V2 protocol
+5. Triton processes request and returns tensor response
+6. API Router translates response back to OpenAI format with accurate token counts
+7. Developer receives standard OpenAI-format response
+
+**Postcondition:** Developer can use TRT-LLM models with standard tooling (LangChain, LlamaIndex, OpenAI SDK)
+
+### US-2: Platform operator configures Triton backend
+
+**Actor:** Platform Operator
+**Precondition:** Triton deployment running in cluster
+
+**Flow:**
+1. Operator adds routing policy with `backend_type: triton` and `tokenizer: llama3`
+2. API Router validates configuration on sync (checks backend reachability, tokenizer exists)
+3. If validation fails, operator receives clear error message
+4. If validation succeeds, model becomes available via OpenAI-compatible API
+
+**Postcondition:** Triton backend is accessible via standard API
+
+### US-3: Request fails with informative error
+
+**Actor:** Application Developer
+**Precondition:** Triton backend is overloaded or unavailable
+
+**Flow:**
+1. Developer sends chat completion request
+2. Triton returns error (e.g., `RESOURCE_EXHAUSTED`)
+3. API Router maps error to OpenAI format (`rate_limit_exceeded`)
+4. Response includes Triton details for debugging
+5. Developer can diagnose issue from error response
+
+**Postcondition:** Errors are actionable and follow OpenAI conventions
+
+## Functional Requirements
+
+### FR-1: Routing Policy Schema
+
+The routing policy MUST support:
+- `backend_type`: enum `"openai"` (default) | `"triton"`
+- `tokenizer`: string specifying tiktoken encoding (e.g., `cl100k_base`, `llama3`, `o200k_base`)
+
+### FR-2: Protocol Translation
+
+The API Router MUST:
+- Detect backend type from routing policy
+- Translate OpenAI `ChatCompletionRequest` to Triton V2 `InferRequest`
+- Translate Triton V2 `InferResponse` to OpenAI `ChatCompletionResponse`
+- Support the `/v2/models/{model}/infer` Triton endpoint
+
+### FR-3: Token Counting
+
+The API Router MUST:
+- Use tiktoken for accurate prompt and completion token counts
+- Support configurable tokenizer per model via routing policy
+- Include accurate `usage` object in response (`prompt_tokens`, `completion_tokens`, `total_tokens`)
+
+### FR-4: Error Mapping
+
+The API Router MUST map Triton errors to OpenAI format:
+
+| Triton Status | HTTP | OpenAI Error Type |
+|---------------|------|-------------------|
+| `UNAVAILABLE` | 503 | `service_unavailable` |
+| `INVALID_ARG` | 400 | `invalid_request_error` |
+| `NOT_FOUND` | 404 | `model_not_found` |
+| `RESOURCE_EXHAUSTED` | 429 | `rate_limit_exceeded` |
+| `DEADLINE_EXCEEDED` | 504 | `timeout` |
+| `INTERNAL` | 500 | `internal_error` |
+
+Triton-specific details MUST be preserved in `triton_details` field for debugging.
+
+### FR-5: Configuration Validation
+
+On routing policy sync, the API Router MUST:
+- Validate backend is reachable (health check)
+- Validate tokenizer encoding exists
+- Return clear error if misconfigured
+
+## Non-Functional Requirements
+
+### NFR-1: Latency
+
+Translation overhead MUST be < 5ms for request/response transformation.
+
+### NFR-2: Compatibility
+
+MUST support standard OpenAI SDK clients without modification.
+
+### NFR-3: Observability
+
+All translated requests MUST:
+- Include trace_id correlation
+- Log backend_type in structured logs
+- Emit metrics for translation success/failure
+
+## Out of Scope
+
+- Streaming inference (Phase 2)
+- Supporting other non-OpenAI protocols (gRPC, custom REST APIs)
+- Direct Triton endpoint exposure to users
+- Triton model management (loading/unloading models)
+- Istio service mesh integration
+
+## Technical Notes
+
+- Existing TRT-LLM deployment: `llama-3-1-8b-instruct-trtllm-predictor.development.svc.cluster.local:80`
+- Triton serves on port 8080 internally, mapped to port 80 on service
+- Health endpoint: `/v2/health/ready`
+- Related specs: 029-triton-tensorrt-llm
+- No KNative or Istio mesh - direct service-to-service HTTP
+
+## Validation
+
+### Development Cluster
+
+- [ ] API Router starts successfully with Triton backend configured
+- [ ] `curl /v1/chat/completions` with Triton model returns valid OpenAI response
+- [ ] Token counts in response are accurate (verified against tiktoken)
+- [ ] Invalid tokenizer config returns clear validation error
+- [ ] Triton errors are mapped to correct OpenAI error codes
+- [ ] `triton_details` field present in error responses
+- [ ] Logs show backend_type and trace_id correlation
+- [ ] Translation latency < 5ms (check metrics)
+
+### Staging
+
+- [ ] End-to-end test with OpenAI Python SDK succeeds
+- [ ] LangChain integration test passes
+- [ ] Load test shows no regression in P99 latency
+- [ ] Error rate under load matches vLLM backends
+
+### Production
+
+- [ ] Canary deployment successful
+- [ ] No increase in error rates after rollout
+- [ ] Customer-facing documentation updated
+
+## Success Criteria
+
+1. **Compatibility**: OpenAI SDK, LangChain, and LlamaIndex can use TRT-LLM models without code changes
+2. **Accuracy**: Token counts match tiktoken calculations within 1%
+3. **Reliability**: Error mapping provides actionable debugging information
+4. **Performance**: Translation adds < 5ms overhead
+5. **Operations**: Clear validation errors prevent misconfiguration

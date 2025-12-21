@@ -17,8 +17,10 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/adapter/triton"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/api"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/auth"
+	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/routing"
 )
 
@@ -141,6 +143,14 @@ func (h *Handler) HandleOpenAIChatCompletions(w http.ResponseWriter, r *http.Req
 	if len(policy.Backends) == 0 {
 		h.writeError(w, r, fmt.Errorf("no backends configured for model %q", openAIReq.Model), api.ErrCodeRoutingError)
 		return
+	}
+
+	// Route based on backend type (spec032 - Triton API Support)
+	switch policy.BackendType {
+	case "triton":
+		h.handleTritonChatCompletion(ctx, w, r, policy, &openAIReq, authCtx, startTime)
+		return
+	default: // "openai" or empty - use existing vLLM/OpenAI flow
 	}
 
 	// Forward OpenAI request directly to backend's OpenAI endpoint
@@ -390,5 +400,246 @@ func (h *Handler) forwardOpenAIRequest(ctx context.Context, backend *routing.Bac
 	}
 
 	return openAIResp, decision, nil
+}
+
+// handleTritonChatCompletion handles chat completion requests for Triton backends.
+// It translates OpenAI requests to Triton V2 protocol and responses back.
+// Implements spec032 - Triton API Support.
+func (h *Handler) handleTritonChatCompletion(
+	ctx context.Context,
+	w http.ResponseWriter,
+	r *http.Request,
+	policy *config.RoutingPolicy,
+	req *OpenAIChatCompletionRequest,
+	authCtx *auth.AuthenticatedContext,
+	startTime time.Time,
+) {
+	ctx, span := h.tracer.Start(ctx, "triton.chat_completions")
+	defer span.End()
+
+	// Check for streaming - not supported for Triton in MVP
+	if req.Stream {
+		h.writeError(w, r, fmt.Errorf("streaming is not supported for Triton backends"), api.ErrCodeValidationError)
+		return
+	}
+
+	// Validate tokenizer is configured
+	if policy.Tokenizer == "" {
+		h.writeError(w, r, fmt.Errorf("tokenizer encoding is required for Triton backends"), api.ErrCodeValidationError)
+		return
+	}
+
+	// Get or create translator for this tokenizer encoding
+	translator, err := h.getOrCreateTranslator(policy.Tokenizer)
+	if err != nil {
+		h.logger.Error("failed to create triton translator",
+			zap.String("tokenizer", policy.Tokenizer),
+			zap.Error(err),
+		)
+		h.writeError(w, r, fmt.Errorf("internal configuration error"), api.ErrCodeBackendError)
+		return
+	}
+
+	// Convert public types to triton adapter types
+	tritonOpenAIReq := h.convertToTritonOpenAIRequest(req)
+
+	// Translate OpenAI request to Triton format
+	translateReqStart := time.Now()
+	tritonReq, err := translator.TranslateOpenAIToTriton(tritonOpenAIReq)
+	translateReqDuration := time.Since(translateReqStart)
+	if err != nil {
+		h.logger.Error("failed to translate request to triton format",
+			zap.Error(err),
+		)
+		h.writeError(w, r, fmt.Errorf("request translation failed: %w", err), api.ErrCodeValidationError)
+		return
+	}
+
+	// Build Triton backend endpoint
+	backendID := policy.Backends[0].BackendID
+	tritonEndpoint := h.buildTritonEndpoint(backendID, policy.Model)
+
+	h.logger.Debug("forwarding to triton backend",
+		zap.String("backend_id", backendID),
+		zap.String("endpoint", tritonEndpoint),
+		zap.String("model", policy.Model),
+		zap.String("backend_type", "triton"),
+	)
+
+	// Serialize Triton request
+	tritonReqBody, err := translator.SerializeTritonRequest(tritonReq)
+	if err != nil {
+		h.writeError(w, r, fmt.Errorf("request serialization failed: %w", err), api.ErrCodeBackendError)
+		return
+	}
+
+	// Create HTTP request to Triton
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", tritonEndpoint, bytes.NewReader(tritonReqBody))
+	if err != nil {
+		h.writeError(w, r, fmt.Errorf("failed to create request: %w", err), api.ErrCodeBackendError)
+		return
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	// Get timeout from backend config
+	backend := h.buildBackendEndpoint(backendID, policy.Model)
+	reqCtx, cancel := context.WithTimeout(ctx, backend.Timeout)
+	defer cancel()
+
+	// Send request to Triton
+	resp, err := h.httpClient.Do(httpReq.WithContext(reqCtx))
+	if err != nil {
+		h.logger.Error("triton request failed",
+			zap.String("backend_id", backendID),
+			zap.Error(err),
+		)
+		h.writeError(w, r, fmt.Errorf("backend request failed: %w", err), api.ErrCodeBackendError)
+		return
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// Read response body
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		h.writeError(w, r, fmt.Errorf("failed to read response: %w", err), api.ErrCodeBackendError)
+		return
+	}
+
+	// Handle Triton errors
+	if resp.StatusCode != http.StatusOK {
+		openAIErr, httpStatus := triton.MapHTTPStatusToTritonError(resp.StatusCode, string(respBody))
+		h.logger.Error("triton backend returned error",
+			zap.Int("status", resp.StatusCode),
+			zap.String("body", string(respBody)),
+			zap.String("backend_id", backendID),
+		)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(httpStatus)
+		_ = json.NewEncoder(w).Encode(triton.OpenAIErrorResponse{Error: *openAIErr})
+		return
+	}
+
+	// Parse Triton response
+	tritonResp, err := translator.ParseTritonResponse(respBody)
+	if err != nil {
+		h.logger.Error("failed to parse triton response",
+			zap.Error(err),
+			zap.String("body", string(respBody)),
+		)
+		h.writeError(w, r, fmt.Errorf("failed to parse backend response: %w", err), api.ErrCodeBackendError)
+		return
+	}
+
+	// Translate Triton response back to OpenAI format
+	translateRespStart := time.Now()
+	openAIResp, err := translator.TranslateTritonToOpenAI(tritonResp, tritonOpenAIReq)
+	translateRespDuration := time.Since(translateRespStart)
+	if err != nil {
+		h.logger.Error("failed to translate triton response to openai format",
+			zap.Error(err),
+		)
+		h.writeError(w, r, fmt.Errorf("response translation failed: %w", err), api.ErrCodeBackendError)
+		return
+	}
+
+	// Create routing decision for metrics
+	routingDecision := &routing.RoutingDecision{
+		BackendID:     backendID,
+		DecisionType:  "PRIMARY",
+		Reason:        "Triton backend routing",
+		Timestamp:     time.Now(),
+		AttemptNumber: 1,
+	}
+
+	// Add routing headers
+	w.Header().Set("X-Routing-Backend", routingDecision.BackendID)
+	w.Header().Set("X-Routing-Decision", routingDecision.DecisionType)
+	w.Header().Set("X-Backend-Type", "triton")
+
+	// Emit usage record
+	if h.usageHook != nil {
+		_ = h.usageHook.EmitUsage(
+			ctx,
+			authCtx,
+			openAIResp.ID,
+			req.Model,
+			routingDecision.BackendID,
+			routingDecision.DecisionType,
+			openAIResp.Usage.PromptTokens,
+			openAIResp.Usage.CompletionTokens,
+			int(time.Since(startTime).Milliseconds()),
+			"WITHIN_LIMIT",
+			span.SpanContext(),
+			0,
+		)
+	}
+
+	h.logger.Info("triton request completed",
+		zap.String("backend_id", backendID),
+		zap.String("backend_type", "triton"),
+		zap.Int("prompt_tokens", openAIResp.Usage.PromptTokens),
+		zap.Int("completion_tokens", openAIResp.Usage.CompletionTokens),
+		zap.Duration("latency", time.Since(startTime)),
+		zap.Duration("translation_request_ms", translateReqDuration),
+		zap.Duration("translation_response_ms", translateRespDuration),
+	)
+
+	// Write response
+	if err := h.writeJSON(w, http.StatusOK, openAIResp); err != nil {
+		h.logger.Error("failed to write triton response", zap.Error(err))
+	}
+}
+
+// convertToTritonOpenAIRequest converts the public OpenAI types to triton adapter types.
+func (h *Handler) convertToTritonOpenAIRequest(req *OpenAIChatCompletionRequest) *triton.OpenAIChatCompletionRequest {
+	// Convert messages
+	messages := make([]triton.ChatMessage, len(req.Messages))
+	for i, msg := range req.Messages {
+		messages[i] = triton.ChatMessage{
+			Role:    msg.Role,
+			Content: msg.Content,
+		}
+	}
+
+	tritonReq := &triton.OpenAIChatCompletionRequest{
+		Model:    req.Model,
+		Messages: messages,
+		Stream:   req.Stream,
+	}
+
+	// Copy optional fields
+	if req.MaxTokens > 0 {
+		maxTokens := req.MaxTokens
+		tritonReq.MaxTokens = &maxTokens
+	}
+	if req.Temperature > 0 {
+		temp := req.Temperature
+		tritonReq.Temperature = &temp
+	}
+
+	return tritonReq
+}
+
+// buildTritonEndpoint constructs the Triton V2 inference endpoint URL.
+// Format: http://{backend_host}/v2/models/{model}/infer
+func (h *Handler) buildTritonEndpoint(backendID, model string) string {
+	backend := h.buildBackendEndpoint(backendID, model)
+
+	// Parse the backend URI
+	parsedURI, err := url.Parse(backend.URI)
+	if err != nil {
+		h.logger.Error("failed to parse backend URI for triton",
+			zap.String("uri", backend.URI),
+			zap.Error(err),
+		)
+		return backend.URI // Fallback to original
+	}
+
+	// Build Triton V2 inference path: /v2/models/{model}/infer
+	// Note: Triton expects the model name with slashes in the path (not URL-encoded)
+	// Example: /v2/models/meta-llama/Llama-3.1-8B-Instruct/infer
+	parsedURI.Path = "/v2/models/" + model + "/infer"
+	// Use Opaque to prevent URL parsing from re-encoding the path
+	return parsedURI.Scheme + "://" + parsedURI.Host + parsedURI.Path
 }
 
