@@ -62,27 +62,31 @@ This will:
 
 ### Step 6: Create Epic Bead
 
-In the new workspace, create the top-level epic bead:
+In the new workspace, create the top-level epic bead with a **deterministic ID**:
 
 ```bash
-bd create --title="Spec $SPEC_NUMBER: $SPEC_NAME" --type=epic --priority=1 --description="Epic for spec $SPEC_FOLDER. See specs/$SPEC_FOLDER/ for details."
+bd create --id="ai-aas-spec$SPEC_NUMBER" --title="Spec $SPEC_NUMBER: $SPEC_NAME" --type=epic --priority=1 --description="Epic for spec $SPEC_FOLDER. See specs/$SPEC_FOLDER/ for details."
 ```
 
-Note the created bead ID (e.g., ai-aas-xyz1).
+**IMPORTANT**: Always use `--id="ai-aas-spec$SPEC_NUMBER"` (e.g., `ai-aas-spec032`) for predictable cross-referencing.
+
+The epic bead ID will be `ai-aas-spec$SPEC_NUMBER` (e.g., ai-aas-spec032).
 
 ### Step 7: Create Spec Sub-Bead
 
 Create the implementation tracking sub-bead:
 
 ```bash
-bd create --title="$SPEC_NAME - Implementation" --type=task --priority=1 --parent=$EPIC_BEAD_ID
+bd create --title="$SPEC_NAME - Implementation" --type=task --priority=1 --parent=ai-aas-spec$SPEC_NUMBER --description="Implementation tracking for $SPEC_NAME"
 ```
+
+Note the created sub-bead ID for the summary.
 
 ### Step 8: Update Beads with Labels
 
 ```bash
-bd update $EPIC_BEAD_ID --label="spec$SPEC_NUMBER" --label="epic"
-bd update $SPEC_BEAD_ID --label="spec$SPEC_NUMBER" --label="implementation"
+bd update ai-aas-spec$SPEC_NUMBER --add-label="spec$SPEC_NUMBER" --add-label="epic"
+bd update $SPEC_BEAD_ID --add-label="spec$SPEC_NUMBER" --add-label="implementation"
 ```
 
 ### Step 9: Show Status Summary
@@ -98,7 +102,7 @@ bd update $SPEC_BEAD_ID --label="spec$SPEC_NUMBER" --label="implementation"
  Tmux Session:     $SPEC_FOLDER
 
  Beads Created:
-   - $EPIC_BEAD_ID (epic): Spec $SPEC_NUMBER: $SPEC_NAME
+   - ai-aas-spec$SPEC_NUMBER (epic): Spec $SPEC_NUMBER: $SPEC_NAME
    - $SPEC_BEAD_ID (implementation): $SPEC_NAME - Implementation
 
  Next Steps:

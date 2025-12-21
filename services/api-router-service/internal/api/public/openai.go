@@ -22,6 +22,7 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/auth"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/routing"
+	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/telemetry"
 )
 
 // OpenAIChatCompletionRequest represents an OpenAI chat completions API request.
@@ -205,6 +206,30 @@ func (h *Handler) HandleOpenAIChatCompletions(w http.ResponseWriter, r *http.Req
 		)
 	}
 
+	// Record token metrics
+	if h.tokenMetrics != nil {
+		h.tokenMetrics.RecordTokens(
+			ctx,
+			authCtx.OrganizationID,
+			originalModel, // Use original model name (alias)
+			"chat",
+			openAIResp.Usage.PromptTokens,
+			openAIResp.Usage.CompletionTokens,
+		)
+	}
+
+	// Record per-backend Prometheus metrics for dashboard visibility
+	if routingDecision != nil {
+		requestLatency := time.Since(startTime)
+		telemetry.RecordBackendRequest(
+			routingDecision.BackendID,
+			authCtx.OrganizationID,
+			originalModel,
+			true, // success
+			requestLatency,
+		)
+	}
+
 	// Write response
 	if err := h.writeJSON(w, http.StatusOK, openAIResp); err != nil {
 		h.logger.Error("failed to write OpenAI response", zap.Error(err))
@@ -314,6 +339,30 @@ func (h *Handler) HandleOpenAICompletions(w http.ResponseWriter, r *http.Request
 			"WITHIN_LIMIT",
 			span.SpanContext(),
 			routingDecision.AttemptNumber-1,
+		)
+	}
+
+	// Record token metrics
+	if h.tokenMetrics != nil {
+		h.tokenMetrics.RecordTokens(
+			ctx,
+			authCtx.OrganizationID,
+			originalModel, // Use original model name (alias)
+			"completion",
+			openAIResp.Usage.PromptTokens,
+			openAIResp.Usage.CompletionTokens,
+		)
+	}
+
+	// Record per-backend Prometheus metrics for dashboard visibility
+	if routingDecision != nil {
+		requestLatency := time.Since(startTime)
+		telemetry.RecordBackendRequest(
+			routingDecision.BackendID,
+			authCtx.OrganizationID,
+			originalModel,
+			true, // success
+			requestLatency,
 		)
 	}
 

@@ -1,13 +1,13 @@
-# Grafana ArgoCD Application
-# Dashboard and log visualization
+# Monitoring Ingresses ArgoCD Application
+# Manages ingress resources for monitoring services (Grafana, etc.)
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: grafana
+  name: monitoring-ingresses-development
   namespace: argocd
   labels:
     environment: development
-    app: grafana
+    app: monitoring-ingresses
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
@@ -15,7 +15,7 @@ spec:
   source:
     repoURL: https://github.com/otherjamesbrown/ai-aas
     targetRevision: develop
-    path: infra/k8s/monitoring/grafana
+    path: infra/k8s/monitoring/ingresses
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring

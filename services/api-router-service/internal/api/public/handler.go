@@ -36,6 +36,7 @@ type Handler struct {
 	backendRegistry   *config.BackendRegistry
 	routingEngine     *routing.Engine
 	routingMetrics    *telemetry.RoutingMetrics
+	tokenMetrics      *telemetry.TokenMetrics
 	usageHook         *UsageHook
 	tracer            trace.Tracer
 	errorBuilder      *api.ErrorBuilder
@@ -59,6 +60,7 @@ func NewHandler(
 	backendRegistry *config.BackendRegistry,
 	routingEngine *routing.Engine,
 	routingMetrics *telemetry.RoutingMetrics,
+	tokenMetrics *telemetry.TokenMetrics,
 	usageHook *UsageHook,
 	adminAPIEndpoint string,
 	adminAPIKey string,
