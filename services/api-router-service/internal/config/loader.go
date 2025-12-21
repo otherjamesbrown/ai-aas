@@ -25,11 +25,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.uber.org/zap"
+
+	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/adapter/triton"
 )
 
 // Loader manages configuration loading and watching from Config Service.
@@ -59,6 +62,8 @@ type RoutingPolicy struct {
 	Backends          []BackendWeight
 	FailoverThreshold int
 	DegradedBackends  []string
+	BackendType       string // "openai" (default) | "triton" - protocol for backend communication
+	Tokenizer         string // tiktoken encoding name (e.g., cl100k_base, llama3) for token counting
 	UpdatedAt         time.Time
 	Version           int64
 }
@@ -475,5 +480,96 @@ func (l *Loader) Health(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// ValidateTritonPolicy validates a routing policy configured for Triton backend.
+// This function performs the following validations:
+//   - Tokenizer encoding must be valid (strict - returns error if invalid)
+//   - Backend health is checked (warning only - logs if unreachable)
+//
+// This implements spec032 FR-5 (Configuration Validation).
+func (l *Loader) ValidateTritonPolicy(ctx context.Context, policy *RoutingPolicy, backendEndpoint string) error {
+	if policy.BackendType != "triton" {
+		return nil // No validation needed for non-triton backends
+	}
+
+	// 1. Validate tokenizer encoding exists (strict - fail if invalid)
+	if policy.Tokenizer == "" {
+		l.logger.Error("triton policy missing tokenizer",
+			zap.String("policy_id", policy.PolicyID),
+			zap.String("model", policy.Model),
+		)
+		return fmt.Errorf("tokenizer encoding is required for triton backend type")
+	}
+
+	// Try to create a tokenizer with this encoding
+	_, err := triton.NewTokenizer(policy.Tokenizer)
+	if err != nil {
+		l.logger.Error("triton policy has invalid tokenizer encoding",
+			zap.String("policy_id", policy.PolicyID),
+			zap.String("model", policy.Model),
+			zap.String("tokenizer", policy.Tokenizer),
+			zap.Error(err),
+		)
+		return fmt.Errorf("invalid tokenizer encoding %q: %w", policy.Tokenizer, err)
+	}
+
+	l.logger.Debug("triton policy tokenizer validation passed",
+		zap.String("policy_id", policy.PolicyID),
+		zap.String("tokenizer", policy.Tokenizer),
+	)
+
+	// 2. Validate backend health (warning only - logs if unreachable)
+	// Only check if a backend endpoint is provided
+	if backendEndpoint != "" {
+		l.checkTritonBackendHealth(ctx, policy, backendEndpoint)
+	}
+
+	return nil
+}
+
+// checkTritonBackendHealth checks if a Triton backend is reachable.
+// This is a warning-only check - it logs issues but doesn't fail policy sync.
+func (l *Loader) checkTritonBackendHealth(ctx context.Context, policy *RoutingPolicy, backendEndpoint string) {
+	// Triton V2 health endpoint: /v2/health/ready
+	healthURL := strings.TrimSuffix(backendEndpoint, "/") + "/v2/health/ready"
+
+	client := &http.Client{Timeout: 3 * time.Second}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
+	if err != nil {
+		l.logger.Warn("failed to create triton health check request",
+			zap.String("policy_id", policy.PolicyID),
+			zap.String("endpoint", backendEndpoint),
+			zap.Error(err),
+		)
+		return
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		l.logger.Warn("triton backend unreachable",
+			zap.String("policy_id", policy.PolicyID),
+			zap.String("model", policy.Model),
+			zap.String("endpoint", backendEndpoint),
+			zap.Error(err),
+		)
+		return
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		l.logger.Warn("triton backend unhealthy",
+			zap.String("policy_id", policy.PolicyID),
+			zap.String("model", policy.Model),
+			zap.String("endpoint", backendEndpoint),
+			zap.Int("status", resp.StatusCode),
+		)
+		return
+	}
+
+	l.logger.Debug("triton backend health check passed",
+		zap.String("policy_id", policy.PolicyID),
+		zap.String("endpoint", backendEndpoint),
+	)
 }
 

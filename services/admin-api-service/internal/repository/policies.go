@@ -21,6 +21,14 @@ func NewPolicyRepository(db *DB) *PolicyRepository {
 	return &PolicyRepository{db: db}
 }
 
+// stringFromPtr returns the string value of a string pointer or an empty string if the pointer is nil.
+func stringFromPtr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
 // Create creates a new routing policy
 func (r *PolicyRepository) Create(ctx context.Context, create *domain.PolicyCreate, createdBy string) (*domain.RoutingPolicy, error) {
 	policyID := create.PolicyID
@@ -47,29 +55,37 @@ func (r *PolicyRepository) Create(ctx context.Context, create *domain.PolicyCrea
 	fallbackJSON, _ := json.Marshal(create.FallbackBackends)
 	metadataJSON, _ := json.Marshal(create.Metadata)
 
+	// Default backend_type to "openai" if not specified
+	backendType := create.BackendType
+	if backendType == "" {
+		backendType = "openai"
+	}
+
 	now := time.Now().UTC()
 
 	query := `
 		INSERT INTO routing_policies (
 			policy_id, organization_id, model, backends, fallback_backends,
-			failover_threshold, enabled, version, metadata,
+			failover_threshold, enabled, version, metadata, backend_type, tokenizer,
 			created_at, updated_at, created_by, updated_by
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, 1, $8, $9, $9, $10, $10)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, 1, $8, $9, $10, $11, $11, $12, $12)
 		RETURNING policy_id, organization_id, model, backends, fallback_backends,
-			failover_threshold, enabled, version, metadata, created_at, updated_at,
-			created_by, updated_by
+			failover_threshold, enabled, version, metadata, backend_type, tokenizer,
+			created_at, updated_at, created_by, updated_by
 	`
 
 	var policy domain.RoutingPolicy
 	var backends, fallback, metadata []byte
+	var tokenizer *string
 
 	err := r.db.Pool().QueryRow(ctx, query,
 		policyID, orgID, create.Model, backendsJSON, fallbackJSON,
-		failoverThreshold, enabled, metadataJSON, now, createdBy,
+		failoverThreshold, enabled, metadataJSON, backendType, nilIfEmpty(create.Tokenizer), now, createdBy,
 	).Scan(
 		&policy.PolicyID, &policy.OrganizationID, &policy.Model,
 		&backends, &fallback, &policy.FailoverThreshold, &policy.Enabled,
-		&policy.Version, &metadata, &policy.CreatedAt, &policy.UpdatedAt,
+		&policy.Version, &metadata, &policy.BackendType, &tokenizer,
+		&policy.CreatedAt, &policy.UpdatedAt,
 		&policy.CreatedBy, &policy.UpdatedBy,
 	)
 
@@ -80,6 +96,7 @@ func (r *PolicyRepository) Create(ctx context.Context, create *domain.PolicyCrea
 	json.Unmarshal(backends, &policy.Backends)
 	json.Unmarshal(fallback, &policy.FallbackBackends)
 	json.Unmarshal(metadata, &policy.Metadata)
+	policy.Tokenizer = stringFromPtr(tokenizer)
 
 	return &policy, nil
 }
@@ -92,6 +109,7 @@ func (r *PolicyRepository) GetByID(ctx context.Context, id string) (*domain.Rout
 			COALESCE(m.external_name, '') as external_name,
 			rp.backends, rp.fallback_backends,
 			rp.failover_threshold, rp.enabled, rp.version, rp.metadata,
+			COALESCE(rp.backend_type, 'openai') as backend_type, rp.tokenizer,
 			rp.created_at, rp.updated_at,
 			rp.created_by, rp.updated_by
 		FROM routing_policies rp
@@ -101,12 +119,14 @@ func (r *PolicyRepository) GetByID(ctx context.Context, id string) (*domain.Rout
 
 	var policy domain.RoutingPolicy
 	var backends, fallback, metadata []byte
+	var tokenizer *string
 
 	err := r.db.Pool().QueryRow(ctx, query, id).Scan(
 		&policy.PolicyID, &policy.OrganizationID, &policy.Model,
 		&policy.ExternalName,
 		&backends, &fallback, &policy.FailoverThreshold, &policy.Enabled,
-		&policy.Version, &metadata, &policy.CreatedAt, &policy.UpdatedAt,
+		&policy.Version, &metadata, &policy.BackendType, &tokenizer,
+		&policy.CreatedAt, &policy.UpdatedAt,
 		&policy.CreatedBy, &policy.UpdatedBy,
 	)
 
@@ -120,6 +140,7 @@ func (r *PolicyRepository) GetByID(ctx context.Context, id string) (*domain.Rout
 	json.Unmarshal(backends, &policy.Backends)
 	json.Unmarshal(fallback, &policy.FallbackBackends)
 	json.Unmarshal(metadata, &policy.Metadata)
+	policy.Tokenizer = stringFromPtr(tokenizer)
 
 	return &policy, nil
 }
@@ -167,6 +188,7 @@ func (r *PolicyRepository) List(ctx context.Context, params domain.PolicyListPar
 			COALESCE(m.external_name, '') as external_name,
 			rp.backends, rp.fallback_backends,
 			rp.failover_threshold, rp.enabled, rp.version, rp.metadata,
+			COALESCE(rp.backend_type, 'openai') as backend_type, rp.tokenizer,
 			rp.created_at, rp.updated_at,
 			rp.created_by, rp.updated_by
 	` + baseQuery + fmt.Sprintf(" ORDER BY rp.updated_at DESC LIMIT $%d OFFSET $%d", argNum, argNum+1)
@@ -183,12 +205,14 @@ func (r *PolicyRepository) List(ctx context.Context, params domain.PolicyListPar
 	for rows.Next() {
 		var policy domain.RoutingPolicy
 		var backends, fallback, metadata []byte
+		var tokenizer *string
 
 		if err := rows.Scan(
 			&policy.PolicyID, &policy.OrganizationID, &policy.Model,
 			&policy.ExternalName,
 			&backends, &fallback, &policy.FailoverThreshold, &policy.Enabled,
-			&policy.Version, &metadata, &policy.CreatedAt, &policy.UpdatedAt,
+			&policy.Version, &metadata, &policy.BackendType, &tokenizer,
+			&policy.CreatedAt, &policy.UpdatedAt,
 			&policy.CreatedBy, &policy.UpdatedBy,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan policy: %w", err)
@@ -197,6 +221,9 @@ func (r *PolicyRepository) List(ctx context.Context, params domain.PolicyListPar
 		json.Unmarshal(backends, &policy.Backends)
 		json.Unmarshal(fallback, &policy.FallbackBackends)
 		json.Unmarshal(metadata, &policy.Metadata)
+		if tokenizer != nil {
+			policy.Tokenizer = *tokenizer
+		}
 
 		policies = append(policies, policy)
 	}
@@ -257,23 +284,38 @@ func (r *PolicyRepository) Update(ctx context.Context, id string, update *domain
 		argNum++
 	}
 
+	if update.BackendType != nil {
+		setClauses = append(setClauses, fmt.Sprintf("backend_type = $%d", argNum))
+		args = append(args, *update.BackendType)
+		argNum++
+	}
+
+	if update.Tokenizer != nil {
+		setClauses = append(setClauses, fmt.Sprintf("tokenizer = $%d", argNum))
+		args = append(args, nilIfEmpty(*update.Tokenizer))
+		argNum++
+	}
+
 	args = append(args, id)
 
 	query := fmt.Sprintf(`
 		UPDATE routing_policies SET %s
 		WHERE policy_id = $%d AND deleted_at IS NULL
 		RETURNING policy_id, organization_id, model, backends, fallback_backends,
-			failover_threshold, enabled, version, metadata, created_at, updated_at,
-			created_by, updated_by
+			failover_threshold, enabled, version, metadata,
+			COALESCE(backend_type, 'openai') as backend_type, tokenizer,
+			created_at, updated_at, created_by, updated_by
 	`, joinStrings(setClauses, ", "), argNum)
 
 	var policy domain.RoutingPolicy
 	var backends, fallback, metadata []byte
+	var tokenizer *string
 
 	err := r.db.Pool().QueryRow(ctx, query, args...).Scan(
 		&policy.PolicyID, &policy.OrganizationID, &policy.Model,
 		&backends, &fallback, &policy.FailoverThreshold, &policy.Enabled,
-		&policy.Version, &metadata, &policy.CreatedAt, &policy.UpdatedAt,
+		&policy.Version, &metadata, &policy.BackendType, &tokenizer,
+		&policy.CreatedAt, &policy.UpdatedAt,
 		&policy.CreatedBy, &policy.UpdatedBy,
 	)
 
@@ -287,6 +329,7 @@ func (r *PolicyRepository) Update(ctx context.Context, id string, update *domain
 	json.Unmarshal(backends, &policy.Backends)
 	json.Unmarshal(fallback, &policy.FallbackBackends)
 	json.Unmarshal(metadata, &policy.Metadata)
+	policy.Tokenizer = stringFromPtr(tokenizer)
 
 	return &policy, nil
 }
@@ -304,17 +347,20 @@ func (r *PolicyRepository) SetEnabled(ctx context.Context, id string, enabled bo
 		UPDATE routing_policies SET enabled = $1, updated_at = NOW(), updated_by = $2, version = version + 1
 		WHERE policy_id = $3 AND deleted_at IS NULL
 		RETURNING policy_id, organization_id, model, backends, fallback_backends,
-			failover_threshold, enabled, version, metadata, created_at, updated_at,
-			created_by, updated_by
+			failover_threshold, enabled, version, metadata,
+			COALESCE(backend_type, 'openai') as backend_type, tokenizer,
+			created_at, updated_at, created_by, updated_by
 	`
 
 	var policy domain.RoutingPolicy
 	var backends, fallback, metadata []byte
+	var tokenizer *string
 
 	err := r.db.Pool().QueryRow(ctx, query, enabled, updatedBy, id).Scan(
 		&policy.PolicyID, &policy.OrganizationID, &policy.Model,
 		&backends, &fallback, &policy.FailoverThreshold, &policy.Enabled,
-		&policy.Version, &metadata, &policy.CreatedAt, &policy.UpdatedAt,
+		&policy.Version, &metadata, &policy.BackendType, &tokenizer,
+		&policy.CreatedAt, &policy.UpdatedAt,
 		&policy.CreatedBy, &policy.UpdatedBy,
 	)
 
@@ -328,6 +374,7 @@ func (r *PolicyRepository) SetEnabled(ctx context.Context, id string, enabled bo
 	json.Unmarshal(backends, &policy.Backends)
 	json.Unmarshal(fallback, &policy.FallbackBackends)
 	json.Unmarshal(metadata, &policy.Metadata)
+	policy.Tokenizer = stringFromPtr(tokenizer)
 
 	return &policy, nil
 }
@@ -340,6 +387,7 @@ func (r *PolicyRepository) GetForSync(ctx context.Context, sinceVersion int, env
 			COALESCE(m.external_name, '') as external_name,
 			rp.backends, rp.fallback_backends,
 			rp.failover_threshold, rp.enabled, rp.version, rp.metadata,
+			COALESCE(rp.backend_type, 'openai') as backend_type, rp.tokenizer,
 			rp.created_at, rp.updated_at,
 			rp.created_by, rp.updated_by, rp.deleted_at
 		FROM routing_policies rp
@@ -360,13 +408,15 @@ func (r *PolicyRepository) GetForSync(ctx context.Context, sinceVersion int, env
 	for rows.Next() {
 		var policy domain.RoutingPolicy
 		var backends, fallback, metadata []byte
+		var tokenizer *string
 		var deletedAt *time.Time
 
 		if err := rows.Scan(
 			&policy.PolicyID, &policy.OrganizationID, &policy.Model,
 			&policy.ExternalName,
 			&backends, &fallback, &policy.FailoverThreshold, &policy.Enabled,
-			&policy.Version, &metadata, &policy.CreatedAt, &policy.UpdatedAt,
+			&policy.Version, &metadata, &policy.BackendType, &tokenizer,
+			&policy.CreatedAt, &policy.UpdatedAt,
 			&policy.CreatedBy, &policy.UpdatedBy, &deletedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan policy: %w", err)
@@ -375,6 +425,9 @@ func (r *PolicyRepository) GetForSync(ctx context.Context, sinceVersion int, env
 		json.Unmarshal(backends, &policy.Backends)
 		json.Unmarshal(fallback, &policy.FallbackBackends)
 		json.Unmarshal(metadata, &policy.Metadata)
+		if tokenizer != nil {
+			policy.Tokenizer = *tokenizer
+		}
 
 		item := domain.PolicySyncItem{
 			RoutingPolicy: policy,
@@ -396,5 +449,13 @@ func (r *PolicyRepository) GetForSync(ctx context.Context, sinceVersion int, env
 			NextSyncRecommendedAt: now.Add(30 * time.Second),
 		},
 	}, nil
+}
+
+// nilIfEmpty returns nil if s is empty, otherwise returns a pointer to s
+func nilIfEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 

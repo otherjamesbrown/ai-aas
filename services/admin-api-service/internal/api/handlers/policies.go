@@ -226,6 +226,20 @@ func (h *PolicyHandler) Validate(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJSON(w, http.StatusOK, response)
 }
 
+// validBackendTypes contains the allowed backend type values
+var validBackendTypes = map[string]bool{
+	"":       true, // empty defaults to "openai"
+	"openai": true,
+	"triton": true,
+}
+
+// validTokenizers contains the allowed tokenizer encoding values
+var validTokenizers = map[string]bool{
+	"cl100k_base": true,
+	"llama3":      true,
+	"o200k_base":  true,
+}
+
 func (h *PolicyHandler) validateCreate(create *domain.PolicyCreate) []httputil.ValidationError {
 	var errors []httputil.ValidationError
 
@@ -247,6 +261,30 @@ func (h *PolicyHandler) validateCreate(create *domain.PolicyCreate) []httputil.V
 		errors = append(errors, httputil.ValidationError{Field: "failover_threshold", Message: "failover_threshold must be between 1 and 10"})
 	}
 
+	// Validate backend_type
+	if !validBackendTypes[create.BackendType] {
+		errors = append(errors, httputil.ValidationError{
+			Field:   "backend_type",
+			Message: "backend_type must be 'openai' or 'triton'",
+		})
+	}
+
+	// Validate tokenizer
+	if create.Tokenizer != "" && !validTokenizers[create.Tokenizer] {
+		errors = append(errors, httputil.ValidationError{
+			Field:   "tokenizer",
+			Message: "tokenizer must be one of: cl100k_base, llama3, o200k_base",
+		})
+	}
+
+	// Require tokenizer when backend_type is triton
+	if create.BackendType == "triton" && create.Tokenizer == "" {
+		errors = append(errors, httputil.ValidationError{
+			Field:   "tokenizer",
+			Message: "tokenizer is required when backend_type is 'triton'",
+		})
+	}
+
 	return errors
 }
 
@@ -266,6 +304,26 @@ func (h *PolicyHandler) validateUpdate(update *domain.PolicyUpdate) []httputil.V
 	if update.FailoverThreshold != nil && (*update.FailoverThreshold < 1 || *update.FailoverThreshold > 10) {
 		errors = append(errors, httputil.ValidationError{Field: "failover_threshold", Message: "failover_threshold must be between 1 and 10"})
 	}
+
+	// Validate backend_type if provided
+	if update.BackendType != nil && !validBackendTypes[*update.BackendType] {
+		errors = append(errors, httputil.ValidationError{
+			Field:   "backend_type",
+			Message: "backend_type must be 'openai' or 'triton'",
+		})
+	}
+
+	// Validate tokenizer if provided
+	if update.Tokenizer != nil && *update.Tokenizer != "" && !validTokenizers[*update.Tokenizer] {
+		errors = append(errors, httputil.ValidationError{
+			Field:   "tokenizer",
+			Message: "tokenizer must be one of: cl100k_base, llama3, o200k_base",
+		})
+	}
+
+	// Note: We can't validate tokenizer requirement for triton on update alone
+	// because we don't have the current backend_type. The service layer
+	// should validate consistency after merge.
 
 	return errors
 }

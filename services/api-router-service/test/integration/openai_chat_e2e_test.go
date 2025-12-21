@@ -34,6 +34,12 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/routing"
 )
 
+// intPtr returns a pointer to the given int value.
+func intPtr(v int) *int { return &v }
+
+// floatPtr returns a pointer to the given float64 value.
+func floatPtr(v float64) *float64 { return &v }
+
 // TestOpenAIChatCompletions_E2E tests OpenAI chat completions against a REAL vLLM backend.
 //
 // This test validates:
@@ -139,8 +145,8 @@ func TestOpenAIChatCompletions_E2E(t *testing.T) {
 				Content: "In one word, can you provide me the capital of France?",
 			},
 		},
-		MaxTokens:   10,         // Limit tokens to encourage concise answer
-		Temperature: 0.1,        // Low temperature for deterministic answer
+		MaxTokens:   intPtr(10),   // Limit tokens to encourage concise answer
+		Temperature: floatPtr(0.1), // Low temperature for deterministic answer
 	}
 
 	jsonBody, err := json.Marshal(requestBody)
