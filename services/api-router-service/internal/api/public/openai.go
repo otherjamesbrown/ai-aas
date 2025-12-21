@@ -25,45 +25,26 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/telemetry"
 )
 
-// OpenAIChatCompletionRequest represents an OpenAI chat completions API request.
-type OpenAIChatCompletionRequest struct {
-	Model       string                 `json:"model"`
-	Messages    []OpenAIMessage        `json:"messages"`
-	MaxTokens   *int                   `json:"max_tokens,omitempty"`
-	Temperature *float64               `json:"temperature,omitempty"`
-	Stream      bool                   `json:"stream,omitempty"`
-	Parameters  map[string]interface{} `json:"parameters,omitempty"`
-}
+// Type aliases for OpenAI chat completion types.
+// These reuse the types defined in the triton adapter to eliminate duplication.
+// The triton package defines comprehensive OpenAI-compatible types used for
+// protocol translation, which are now shared with the public API layer.
+type (
+	// OpenAIChatCompletionRequest represents an OpenAI chat completions API request.
+	OpenAIChatCompletionRequest = triton.OpenAIChatCompletionRequest
 
-// OpenAIMessage represents a message in an OpenAI chat conversation.
-type OpenAIMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
+	// OpenAIMessage represents a message in an OpenAI chat conversation.
+	OpenAIMessage = triton.ChatMessage
 
-// OpenAIChatCompletionResponse represents an OpenAI chat completions API response.
-type OpenAIChatCompletionResponse struct {
-	ID      string                 `json:"id"`
-	Object  string                 `json:"object"`
-	Created int64                  `json:"created"`
-	Model   string                 `json:"model"`
-	Choices []OpenAIChoice         `json:"choices"`
-	Usage   OpenAIUsage            `json:"usage"`
-}
+	// OpenAIChatCompletionResponse represents an OpenAI chat completions API response.
+	OpenAIChatCompletionResponse = triton.OpenAIChatCompletionResponse
 
-// OpenAIChoice represents a completion choice in an OpenAI response.
-type OpenAIChoice struct {
-	Index        int             `json:"index"`
-	Message      OpenAIMessage   `json:"message"`
-	FinishReason string          `json:"finish_reason"`
-}
+	// OpenAIChoice represents a completion choice in an OpenAI response.
+	OpenAIChoice = triton.ChatCompletionChoice
 
-// OpenAIUsage represents token usage information in an OpenAI response.
-type OpenAIUsage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
-}
+	// OpenAIUsage represents token usage information in an OpenAI response.
+	OpenAIUsage = triton.UsageInfo
+)
 
 // OpenAICompletionRequest represents an OpenAI text completions API request.
 type OpenAICompletionRequest struct {
@@ -489,12 +470,11 @@ func (h *Handler) handleTritonChatCompletion(
 		return
 	}
 
-	// Convert public types to triton adapter types
-	tritonOpenAIReq := h.convertToTritonOpenAIRequest(req)
-
 	// Translate OpenAI request to Triton format
+	// Note: OpenAIChatCompletionRequest is now a type alias for triton.OpenAIChatCompletionRequest,
+	// so we can pass the request directly without conversion.
 	translateReqStart := time.Now()
-	tritonReq, err := translator.TranslateOpenAIToTriton(tritonOpenAIReq)
+	tritonReq, err := translator.TranslateOpenAIToTriton(req)
 	translateReqDuration := time.Since(translateReqStart)
 	if err != nil {
 		h.logger.Error("failed to translate request to triton format",
@@ -581,7 +561,7 @@ func (h *Handler) handleTritonChatCompletion(
 
 	// Translate Triton response back to OpenAI format
 	translateRespStart := time.Now()
-	openAIResp, err := translator.TranslateTritonToOpenAI(tritonResp, tritonOpenAIReq)
+	openAIResp, err := translator.TranslateTritonToOpenAI(tritonResp, req)
 	translateRespDuration := time.Since(translateRespStart)
 	if err != nil {
 		h.logger.Error("failed to translate triton response to openai format",
@@ -637,36 +617,6 @@ func (h *Handler) handleTritonChatCompletion(
 	if err := h.writeJSON(w, http.StatusOK, openAIResp); err != nil {
 		h.logger.Error("failed to write triton response", zap.Error(err))
 	}
-}
-
-// convertToTritonOpenAIRequest converts the public OpenAI types to triton adapter types.
-func (h *Handler) convertToTritonOpenAIRequest(req *OpenAIChatCompletionRequest) *triton.OpenAIChatCompletionRequest {
-	// Convert messages
-	messages := make([]triton.ChatMessage, len(req.Messages))
-	for i, msg := range req.Messages {
-		messages[i] = triton.ChatMessage{
-			Role:    msg.Role,
-			Content: msg.Content,
-		}
-	}
-
-	tritonReq := &triton.OpenAIChatCompletionRequest{
-		Model:    req.Model,
-		Messages: messages,
-		Stream:   req.Stream,
-	}
-
-	// Copy optional fields (pointer types preserve explicit zero values)
-	if req.MaxTokens != nil {
-		maxTokens := *req.MaxTokens
-		tritonReq.MaxTokens = &maxTokens
-	}
-	if req.Temperature != nil {
-		temp := *req.Temperature
-		tritonReq.Temperature = &temp
-	}
-
-	return tritonReq
 }
 
 // buildTritonEndpoint constructs the Triton V2 inference endpoint URL.
