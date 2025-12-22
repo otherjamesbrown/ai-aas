@@ -119,13 +119,13 @@ env:
 # Backend ID MUST match the HuggingFace model ID (e.g., "unsloth/gpt-oss-20b")
 # so that vLLM's --served-model-name matches the routing policy backend_id.
 #
-# IMPORTANT: Use the InferenceService name (revision-agnostic) on port 80
-# - KServe automatically routes to the active revision
-# - Avoid hardcoded revision numbers (e.g., -predictor-00001) which break on updates
+# IMPORTANT: GPU workloads use RawDeployment mode (not Knative/Serverless)
+# - Service name pattern: <model>-predictor.<namespace>.svc.cluster.local:80
+# - These are simple ClusterIP services with direct HTTP (no Istio routing)
 #
 # Note: Don't include path - it's added by the router based on request type
 backends:
-  endpoints: "unsloth/gpt-oss-20b:http://unsloth-gpt-oss-20b.development.svc.cluster.local:80,meta-llama/Llama-3.1-8B-Instruct:http://llama-3-1-8b-instruct-trtllm-predictor.development.svc.cluster.local:80"
+  endpoints: "unsloth/gpt-oss-20b:http://unsloth-gpt-oss-20b-predictor.development.svc.cluster.local:80,meta-llama/Llama-3.1-8B-Instruct:http://llama-3-1-8b-instruct-trtllm-predictor.development.svc.cluster.local:80"
 
 # Redis configuration
 redis:
