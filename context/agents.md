@@ -13,6 +13,7 @@
 - Use `kubectl apply/edit/patch` for permanent changes - use GitOps
 - Access database directly from CLI/UI - use APIs
 - Commit to main directly - use develop → staging → main
+- Use libraries that download data at runtime (K8s pods have no internet)
 
 **ALWAYS:**
 - Create or find a bead BEFORE writing code

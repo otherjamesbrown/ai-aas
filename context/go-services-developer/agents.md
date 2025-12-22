@@ -263,6 +263,26 @@ import "github.com/ai-aas/shared-go/middleware"
 
 // CORRECT: Add replace directive to service's go.mod
 replace github.com/ai-aas/shared-go => ../../shared/go
+
+// WRONG: Libraries that download data at runtime
+// Kubernetes pods have no internet access - this WILL fail in production!
+import "github.com/pkoukk/tiktoken-go"
+tiktoken.GetEncoding("cl100k_base")  // Downloads BPE vocab from internet
+
+// CORRECT: Embed data in binary or pre-download in Dockerfile
+// Option 1: Use offline loader with embedded data
+import "github.com/pkoukk/tiktoken-go-loader"
+tiktoken.SetBpeLoader(loader.NewOfflineLoader())
+
+// Option 2: Pre-download in Dockerfile and set cache dir
+// ENV TIKTOKEN_CACHE_DIR=/app/tiktoken-cache
+// RUN python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
+
+// WRONG: Any library that fetches remote resources at runtime
+// - ML model weights downloaded on first use
+// - Config fetched from remote URL without fallback
+// - License validation that phones home
+// All will fail in network-isolated pods!
 ```
 
 ---
