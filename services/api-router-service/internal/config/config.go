@@ -66,6 +66,9 @@ type Config struct {
 	// Health Monitoring
 	HealthCheckInterval time.Duration `envconfig:"HEALTH_CHECK_INTERVAL" default:"10s"`
 
+	// Backend Timeout
+	DefaultBackendTimeout time.Duration `envconfig:"DEFAULT_BACKEND_TIMEOUT" default:"90s"`
+
 	// Usage Accounting
 	UsageBufferDir string `envconfig:"USAGE_BUFFER_DIR" default:"/tmp/api-router-usage-buffer"`
 
@@ -119,7 +122,7 @@ func NewBackendRegistry(cfg *Config) *BackendRegistry {
 				ID:          backendID,
 				URI:         backendURI,
 				ModelVariant: "", // Will be set from routing policy
-				Timeout:     30 * time.Second,
+				Timeout:     cfg.DefaultBackendTimeout,
 			}
 		}
 	}

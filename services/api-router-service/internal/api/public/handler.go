@@ -45,6 +45,7 @@ type Handler struct {
 	userOrgServiceURL string            // URL for user-org-service (for auth proxy)
 	adminAPIEndpoint  string            // URL for admin-api-service (for models endpoint)
 	adminAPIKey       string            // API key for admin-api-service
+	defaultTimeout    time.Duration     // Default backend timeout
 
 	// Triton protocol translation support (spec032)
 	tritonTranslators map[string]*triton.Translator // keyed by tokenizer encoding
@@ -64,6 +65,7 @@ func NewHandler(
 	usageHook *UsageHook,
 	adminAPIEndpoint string,
 	adminAPIKey string,
+	defaultTimeout time.Duration,
 ) *Handler {
 	tracer := otel.Tracer("api-router-service")
 	return &Handler{
@@ -80,6 +82,7 @@ func NewHandler(
 		backendURIs:       make(map[string]string),
 		adminAPIEndpoint:  adminAPIEndpoint,
 		adminAPIKey:       adminAPIKey,
+		defaultTimeout:    defaultTimeout,
 		tritonTranslators: make(map[string]*triton.Translator),
 		httpClient: &http.Client{
 			// Shared client without timeout - we'll use context for per-request timeouts (PR#16 Issue#4)
@@ -409,7 +412,7 @@ func (h *Handler) fallbackRouting(
 // buildBackendEndpoint constructs a BackendEndpoint from a backend ID.
 func (h *Handler) buildBackendEndpoint(backendID, model string) *routing.BackendEndpoint {
 	var uri string
-	var timeout time.Duration = 30 * time.Second
+	timeout := h.defaultTimeout
 
 	// Check test override first (for testing)
 	if h.backendURIs != nil {

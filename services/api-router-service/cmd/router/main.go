@@ -381,13 +381,13 @@ func main() {
 	router.Get("/v1/platform/health", platformHealthHandler.PlatformHealth)
 
 	// Initialize backend client
-	backendClient := routing.NewBackendClient(logger, 30*time.Second)
+	backendClient := routing.NewBackendClient(logger, cfg.DefaultBackendTimeout)
 
 	// Initialize health monitor
 	healthMonitor := routing.NewHealthMonitor(backendClient, logger, cfg.HealthCheckInterval)
-	
+
 	// Initialize routing engine
-	routingEngine := routing.NewEngine(healthMonitor, backendRegistry, logger)
+	routingEngine := routing.NewEngine(healthMonitor, backendRegistry, cfg.DefaultBackendTimeout, logger)
 	
 	// Initialize routing metrics
 	routingMetrics, err := telemetry.NewRoutingMetrics(logger)
@@ -421,7 +421,7 @@ func main() {
 	defer healthMonitor.Stop()
 
 	// Initialize public API handler with routing engine and usage hook
-	publicHandler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, routingEngine, routingMetrics, tokenMetrics, usageHook, cfg.AdminAPIEndpoint, cfg.AdminAPIKey)
+	publicHandler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, routingEngine, routingMetrics, tokenMetrics, usageHook, cfg.AdminAPIEndpoint, cfg.AdminAPIKey, cfg.DefaultBackendTimeout)
 	publicHandler.SetUserOrgServiceURL(cfg.UserOrgServiceURL)
 
 	// Register unauthenticated chat completions health endpoint on main router

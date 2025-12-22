@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
@@ -34,6 +35,7 @@ func TestChatCompletionsHealthEndpoint(t *testing.T) {
 		nil, // usage hook not needed for health endpoint
 		"",  // admin API endpoint not needed for health endpoint
 		"",  // admin API key not needed for health endpoint
+		30*time.Second, // default timeout
 	)
 
 	// Create router and register health endpoint
@@ -102,6 +104,7 @@ func TestChatCompletionsHealthNoAuthRequired(t *testing.T) {
 		nil,
 		"", // admin API endpoint not needed for health endpoint
 		"", // admin API key not needed for health endpoint
+		30*time.Second, // default timeout
 	)
 
 	// Create router similar to main.go architecture
