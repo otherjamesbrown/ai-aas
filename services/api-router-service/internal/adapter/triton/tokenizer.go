@@ -5,7 +5,12 @@ import (
 	"sync"
 
 	"github.com/pkoukk/tiktoken-go"
+	tiktoken_loader "github.com/pkoukk/tiktoken-go-loader"
 )
+
+func init() {
+	tiktoken.SetBpeLoader(tiktoken_loader.NewOfflineLoader())
+}
 
 // Tokenizer wraps tiktoken for token counting.
 type Tokenizer struct {
