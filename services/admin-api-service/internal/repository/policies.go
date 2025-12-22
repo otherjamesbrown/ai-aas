@@ -349,7 +349,9 @@ func (r *PolicyRepository) SetEnabled(ctx context.Context, id string, enabled bo
 	query := `
 		UPDATE routing_policies SET enabled = $1, updated_at = NOW(), updated_by = $2, version = version + 1
 		WHERE policy_id = $3 AND deleted_at IS NULL
-		RETURNING policy_id, organization_id, model, backends, fallback_backends,
+		RETURNING policy_id, organization_id, model,
+			'' as external_name,
+			backends, fallback_backends,
 			failover_threshold, enabled, version, metadata,
 			COALESCE(backend_type, 'openai') as backend_type, tokenizer,
 			created_at, updated_at, created_by, updated_by
@@ -361,6 +363,7 @@ func (r *PolicyRepository) SetEnabled(ctx context.Context, id string, enabled bo
 
 	err := r.db.Pool().QueryRow(ctx, query, enabled, updatedBy, id).Scan(
 		&policy.PolicyID, &policy.OrganizationID, &policy.Model,
+		&policy.ExternalName,
 		&backends, &fallback, &policy.FailoverThreshold, &policy.Enabled,
 		&policy.Version, &metadata, &policy.BackendType, &tokenizer,
 		&policy.CreatedAt, &policy.UpdatedAt,
