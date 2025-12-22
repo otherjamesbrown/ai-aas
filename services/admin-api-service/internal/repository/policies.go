@@ -299,12 +299,14 @@ func (r *PolicyRepository) Update(ctx context.Context, id string, update *domain
 	args = append(args, id)
 
 	query := fmt.Sprintf(`
-		UPDATE routing_policies SET %s
-		WHERE policy_id = $%d AND deleted_at IS NULL
-		RETURNING policy_id, organization_id, model, backends, fallback_backends,
-			failover_threshold, enabled, version, metadata,
-			COALESCE(backend_type, 'openai') as backend_type, tokenizer,
-			created_at, updated_at, created_by, updated_by
+		UPDATE routing_policies rp SET %s
+		WHERE rp.policy_id = $%d AND rp.deleted_at IS NULL
+		RETURNING rp.policy_id, rp.organization_id, rp.model,
+			'' as external_name,
+			rp.backends, rp.fallback_backends,
+			rp.failover_threshold, rp.enabled, rp.version, rp.metadata,
+			COALESCE(rp.backend_type, 'openai') as backend_type, rp.tokenizer,
+			rp.created_at, rp.updated_at, rp.created_by, rp.updated_by
 	`, joinStrings(setClauses, ", "), argNum)
 
 	var policy domain.RoutingPolicy
@@ -313,6 +315,7 @@ func (r *PolicyRepository) Update(ctx context.Context, id string, update *domain
 
 	err := r.db.Pool().QueryRow(ctx, query, args...).Scan(
 		&policy.PolicyID, &policy.OrganizationID, &policy.Model,
+		&policy.ExternalName,
 		&backends, &fallback, &policy.FailoverThreshold, &policy.Enabled,
 		&policy.Version, &metadata, &policy.BackendType, &tokenizer,
 		&policy.CreatedAt, &policy.UpdatedAt,
