@@ -119,13 +119,13 @@ env:
 # Backend ID MUST match the HuggingFace model ID (e.g., "unsloth/gpt-oss-20b")
 # so that vLLM's --served-model-name matches the routing policy backend_id.
 #
-# IMPORTANT: Use the -private service on port 8012 (queue-proxy port)
-# - Port 80 on regular services routes through Istio which causes timeouts
-# - Port 8012 on -private services connects directly to the queue-proxy sidecar
+# IMPORTANT: Use the InferenceService name (revision-agnostic) on port 80
+# - KServe automatically routes to the active revision
+# - Avoid hardcoded revision numbers (e.g., -predictor-00001) which break on updates
 #
 # Note: Don't include path - it's added by the router based on request type
 backends:
-  endpoints: "unsloth/gpt-oss-20b:http://unsloth-gpt-oss-20b-predictor-00001-private.development.svc.cluster.local:8012,meta-llama/Llama-3.1-8B-Instruct:http://llama-3-1-8b-instruct-trtllm-predictor.development.svc.cluster.local:80"
+  endpoints: "unsloth/gpt-oss-20b:http://unsloth-gpt-oss-20b.development.svc.cluster.local:80,meta-llama/Llama-3.1-8B-Instruct:http://llama-3-1-8b-instruct-trtllm-predictor.development.svc.cluster.local:80"
 
 # Redis configuration
 redis:
