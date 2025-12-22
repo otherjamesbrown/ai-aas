@@ -221,9 +221,7 @@ func (r *PolicyRepository) List(ctx context.Context, params domain.PolicyListPar
 		json.Unmarshal(backends, &policy.Backends)
 		json.Unmarshal(fallback, &policy.FallbackBackends)
 		json.Unmarshal(metadata, &policy.Metadata)
-		if tokenizer != nil {
-			policy.Tokenizer = *tokenizer
-		}
+		policy.Tokenizer = stringFromPtr(tokenizer)
 
 		policies = append(policies, policy)
 	}
@@ -431,9 +429,7 @@ func (r *PolicyRepository) GetForSync(ctx context.Context, sinceVersion int, env
 		json.Unmarshal(backends, &policy.Backends)
 		json.Unmarshal(fallback, &policy.FallbackBackends)
 		json.Unmarshal(metadata, &policy.Metadata)
-		if tokenizer != nil {
-			policy.Tokenizer = *tokenizer
-		}
+		policy.Tokenizer = stringFromPtr(tokenizer)
 
 		item := domain.PolicySyncItem{
 			RoutingPolicy: policy,
