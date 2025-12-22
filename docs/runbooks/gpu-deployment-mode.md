@@ -21,6 +21,24 @@ kubectl get isvc <model-name> -n <namespace> -o jsonpath='{.metadata.annotations
 
 Expected output for GPU workloads: `RawDeployment`
 
+## Network Access Pattern
+
+**IMPORTANT**: RawDeployment mode predictors are **internal-only**.
+
+| Access Type | Result | Why |
+|-------------|--------|-----|
+| Internal (`http://<predictor>.namespace.svc.cluster.local`) | ✅ Works | ClusterIP service |
+| External (via Istio gateway) | ❌ 404 Not Found | No VirtualService created |
+| Port-forward | ✅ Works | Bypasses ingress |
+
+**Correct access patterns:**
+- **Production traffic**: External → API Router → Predictor (internal)
+- **Direct testing**: `kubectl port-forward svc/<predictor>-predictor 8080:80`
+
+This differs from **Serverless mode** (Knative), which creates external VirtualServices automatically.
+
+---
+
 ## Common Issues
 
 ### 1. Pod Not Scheduling to GPU Node
