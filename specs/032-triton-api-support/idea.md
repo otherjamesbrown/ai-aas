@@ -50,10 +50,15 @@ The AI-AAS platform currently only supports backends that serve OpenAI-compatibl
 
 ### Architecture Context
 
-**KNative Removed**: The project previously used KNative for serverless inference but removed it due to:
-- Complexity not suited to LLM workloads
-- Long cold starts incompatible with KNative's scale-to-zero model
-- Queue-proxy sidecars adding unnecessary latency
+**GPU Workloads Use RawDeployment Mode**: KServe supports two deployment modes:
+- **RawDeployment**: Standard K8s Deployment + ClusterIP Service (used for GPU workloads)
+- **Serverless**: Knative-based with Istio routing (NOT used for GPU workloads)
+
+GPU workloads (vLLM, Triton, TensorRT-LLM) MUST use RawDeployment because:
+- Knative rejects `nodeSelector` (needed for GPU node scheduling)
+- Knative has single-port restriction (Triton needs multiple ports)
+- Scale-to-zero is counterproductive (5-10 min model load times)
+- Istio/Knative routing adds complexity and failure modes
 
 **Current Architecture** (simplified):
 ```
@@ -62,15 +67,15 @@ The AI-AAS platform currently only supports backends that serve OpenAI-compatibl
 │                                                                  │
 │   API Router (Deployment)                                        │
 │        │                                                         │
-│        ├──── HTTP ────► vLLM (Deployment + Service)             │
+│        ├──── HTTP ────► vLLM (RawDeployment + ClusterIP)        │
 │        │                  └─ OpenAI-compatible                   │
 │        │                                                         │
-│        └──── HTTP ────► Triton (Deployment + Service)           │
+│        └──── HTTP ────► Triton (RawDeployment + ClusterIP)      │
 │                           └─ Needs translation layer             │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-No Istio mesh injection, no KNative, direct service-to-service HTTP.
+Direct service-to-service HTTP via ClusterIP services (no Istio mesh for inference traffic).
 
 **GPU Scheduling Architecture**: The platform uses a **pool-per-instance-type** pattern (not pool-per-model):
 
@@ -219,8 +224,8 @@ All open questions resolved.
 - Triton serves on port 8080 internally, mapped to port 80 on service
 - Health endpoint: `/v2/health/ready`
 - Related specs: 029-triton-tensorrt-llm
-- KNative was removed from project - simplifies architecture
-- No mTLS/Istio mesh requirements
+- GPU workloads use RawDeployment mode (no Knative/Serverless) - simplifies architecture
+- No mTLS/Istio mesh requirements for inference traffic
 
 ## Implementation Phases
 

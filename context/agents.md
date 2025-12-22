@@ -14,6 +14,8 @@
 - Access database directly from CLI/UI - use APIs
 - Commit to main directly - use develop → staging → main
 - Use libraries that download data at runtime (K8s pods have no internet)
+- Use Knative/Serverless mode for GPU workloads - use RawDeployment (see Architecture below)
+- Nest AIModel fields incorrectly - `deploymentMode` is `spec.deploymentMode` NOT `spec.deployment.deploymentMode`
 
 **ALWAYS:**
 - Create or find a bead BEFORE writing code
@@ -155,6 +157,40 @@ Create handoff bead and spawn agent when:
 | User asks "why did this happen?" | `debugger` |
 | Bug is complex, recurring, or >30 min unresolved | `debugger` |
 | Need root cause analysis before fix | `debugger` |
+
+---
+
+## Architecture: Model Deployment
+
+### Deployment Modes
+
+| Mode | Use For | Creates | Networking |
+|------|---------|---------|------------|
+| **RawDeployment** | GPU workloads (vLLM, Triton, TensorRT-LLM) | Deployment + ClusterIP Service | Direct HTTP |
+| **Serverless** | CPU-only workloads (future, if ever) | Knative Service → Istio | Through Istio gateway |
+
+**GPU workloads MUST use RawDeployment** because:
+- Knative rejects `nodeSelector` (needed for GPU node scheduling)
+- Knative has single-port restriction (Triton needs multiple)
+- Scale-to-zero is counterproductive (5-10 min model load times)
+- Istio/Knative routing adds complexity and failure modes
+
+### AIModel CRD Fields
+
+```yaml
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
+spec:
+  deploymentMode: RawDeployment  # CORRECT - direct field
+  # NOT spec.deployment.deploymentMode (wrong - will be ignored)
+```
+
+### What This Means for Routing
+
+| Deployment Mode | Service Type | API Router Endpoint |
+|-----------------|--------------|---------------------|
+| RawDeployment | ClusterIP | `http://<model>-predictor.<ns>.svc.cluster.local:80` |
+| Serverless | ExternalName → Istio | Times out (don't use) |
 
 ---
 
