@@ -1,4 +1,4 @@
-# Specify (Phase 3)
+# Specify (Phase 3.1)
 
 Create a structured spec.md from the idea.md. Wraps /speckit.specify with workflow integration.
 
@@ -60,14 +60,14 @@ Ensure spec.md includes:
 ### Step 6: Update Bead
 
 ```bash
-bd comments add $EPIC_BEAD_ID "spec.md created with /jb-3-specify"
+bd comments add $EPIC_BEAD_ID "spec.md created with /jb-3-1-specify"
 ```
 
 ### Step 7: Show Status Summary
 
 ```
 ═══════════════════════════════════════════════════
- /jb-3-specify - COMPLETE
+ /jb-3-1-specify - COMPLETE
 ═══════════════════════════════════════════════════
 
  Spec Folder:      specs/$SPEC_FOLDER/
@@ -83,6 +83,7 @@ bd comments add $EPIC_BEAD_ID "spec.md created with /jb-3-specify"
 
  Next Steps:
    - Review spec.md and refine if needed
-   - Run /jb-3-plan to create implementation plan
+   - If migration/refactor: Run /jb-3.2-impact for impact analysis
+   - If greenfield: Run /jb-3.3-plan to create implementation plan
 ═══════════════════════════════════════════════════
 ```

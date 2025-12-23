@@ -1,4 +1,4 @@
-# Implement (Phase 3)
+# Implement (Phase 3.6)
 
 Execute implementation of tasks. Wraps /speckit.implement with bead tracking.
 
@@ -16,6 +16,7 @@ basename $(pwd)
 Read all spec files:
 ```bash
 cat specs/$SPEC_FOLDER/spec.md
+cat specs/$SPEC_FOLDER/impact.md 2>/dev/null  # May not exist for greenfield
 cat specs/$SPEC_FOLDER/plan.md
 cat specs/$SPEC_FOLDER/tasks.md
 ```
@@ -52,7 +53,7 @@ bd comments add $SPEC_BEAD_ID "Implementation progress: $COMPLETED/$TOTAL tasks 
 
 ```
 ═══════════════════════════════════════════════════
- /jb-3-implement - SESSION COMPLETE
+ /jb-3.6-implement - SESSION COMPLETE
 ═══════════════════════════════════════════════════
 
  Spec:             $SPEC_FOLDER
@@ -68,7 +69,7 @@ bd comments add $SPEC_BEAD_ID "Implementation progress: $COMPLETED/$TOTAL tasks 
    - $BEAD_3: in_progress
 
  Next Steps:
-   - Continue with /jb-3-implement for remaining tasks
+   - Continue with /jb-3.6-implement for remaining tasks
    - When all tasks done: /jb-4-pr to create PR
 ═══════════════════════════════════════════════════
 ```

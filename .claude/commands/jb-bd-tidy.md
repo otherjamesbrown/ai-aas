@@ -137,7 +137,47 @@ bd label add $BEAD_ID backend
 bd label add $BEAD_ID quick-fix
 ```
 
-#### 6d. Add Context Comment
+#### 6d. Add Timing Labels
+
+Categorize WHEN work should be done:
+
+| Label | When to Use | Examples |
+|-------|-------------|----------|
+| `now` | Actionable today, clear requirements, unblocked | Bug fixes, quick wins, well-specified tasks |
+| `next` | After current priorities complete | Follow-up work, minor prep needed |
+| `exploratory` | Needs investigation/evaluation/ADR first | Architecture changes, major migrations |
+| `later` | Future milestone, blocked, or nice-to-have | Production rollout, blocked by other work |
+
+```bash
+bd label add $BEAD_ID now          # Ready to work on
+bd label add $BEAD_ID next         # Coming up soon
+bd label add $BEAD_ID exploratory  # Needs evaluation
+bd label add $BEAD_ID later        # Future/backlog
+```
+
+**Decision criteria:**
+- **now**: Has spec, has context, no blockers, agent can start immediately
+- **next**: Clear what to do, but other work takes priority first
+- **exploratory**: Significant change requiring trade-off analysis or ADR
+- **later**: Depends on other beads, future milestone, or low priority nice-to-have
+
+#### 6e. Add Environment Labels
+
+Tag which environment the work targets:
+
+| Label | When to Use |
+|-------|-------------|
+| `development` | Development cluster work |
+| `staging` | Staging cluster work |
+| `production` | Production cluster work |
+
+```bash
+bd label add $BEAD_ID development
+bd label add $BEAD_ID staging
+bd label add $BEAD_ID production
+```
+
+#### 6f. Add Context Comment
 
 Add investigation findings as comment so agents have context:
 ```bash
@@ -164,8 +204,24 @@ bd comments add $BEAD_ID "Investigation findings:
 
  Skipped:           $SKIPPED_COUNT
 
- Agent-Ready Beads: $AGENT_READY_COUNT
-   Use /jb-bd-todo to assign agents
+═══════════════════════════════════════════════════
+ TIMING BREAKDOWN
+═══════════════════════════════════════════════════
+
+ Now:          $NOW_COUNT     (actionable today)
+ Next:         $NEXT_COUNT    (after current work)
+ Exploratory:  $EXPLORATORY_COUNT  (needs evaluation)
+ Later:        $LATER_COUNT   (future/backlog)
+
+═══════════════════════════════════════════════════
+ QUICK REFERENCE
+═══════════════════════════════════════════════════
+
+ bd list --label=now          # What to work on today
+ bd list --label=next         # Coming up
+ bd list --label=exploratory  # Needs investigation
+ bd list --label=later        # Future/backlog
+ bd list --label=agent-ready  # Ready for agents
 
 ═══════════════════════════════════════════════════
 ```
@@ -176,3 +232,5 @@ bd comments add $BEAD_ID "Investigation findings:
 - Investigation uses Claude's code analysis - trust but verify
 - Always add context comments for agents
 - After tidy, use `/jb-bd-todo` to work on remaining items
+- **Timing labels are mutually exclusive** - each bead gets exactly one of: `now`, `next`, `exploratory`, `later`
+- Use `bd list --label=now` to find immediate work

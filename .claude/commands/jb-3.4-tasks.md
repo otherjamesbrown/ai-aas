@@ -1,4 +1,4 @@
-# Tasks (Phase 3)
+# Tasks (Phase 3.4)
 
 Create task breakdown and child beads. Wraps /speckit.tasks with bead integration.
 
@@ -17,7 +17,7 @@ basename $(pwd)
 cat specs/$SPEC_FOLDER/plan.md
 ```
 
-If not found, suggest running `/jb-3-plan` first.
+If not found, suggest running `/jb-3.3-plan` first.
 
 ### Step 3: Find Implementation Bead
 
@@ -48,7 +48,7 @@ Add task bead IDs back to tasks.md as references.
 ### Step 6: Update Parent Bead
 
 ```bash
-bd comments add $SPEC_BEAD_ID "Created $COUNT task beads from /jb-3-tasks"
+bd comments add $SPEC_BEAD_ID "Created $COUNT task beads from /jb-3.4-tasks"
 bd update $SPEC_BEAD_ID --status=in_progress
 ```
 
@@ -56,7 +56,7 @@ bd update $SPEC_BEAD_ID --status=in_progress
 
 ```
 ═══════════════════════════════════════════════════
- /jb-3-tasks - COMPLETE
+ /jb-3.4-tasks - COMPLETE
 ═══════════════════════════════════════════════════
 
  Spec Folder:      specs/$SPEC_FOLDER/
@@ -71,7 +71,7 @@ bd update $SPEC_BEAD_ID --status=in_progress
  Parent Bead:      $SPEC_BEAD_ID (in_progress)
 
  Next Steps:
-   - Run /jb-3-implement to start implementation
-   - Mark beads complete as you finish tasks
+   - Run /jb-3.5-analyze to validate spec consistency
+   - Then /jb-3.6-implement to start implementation
 ═══════════════════════════════════════════════════
 ```
