@@ -52,15 +52,21 @@ type Config struct {
 	// Retry Settings
 	MaxRetries int `mapstructure:"max_retries" json:"max_retries,omitempty"`
 	Timeout    int `mapstructure:"timeout" json:"timeout,omitempty"`
+
+	// Inference Timeout (seconds) - for GPU model validation
+	// Default: 90s (allows for cold starts on large GPU models)
+	// Set via config file key 'inference_timeout' or environment variable 'AI_AAS_CLI_INFERENCE_TIMEOUT'
+	InferenceTimeout int `mapstructure:"inference_timeout" json:"inference_timeout,omitempty"`
 }
 
 // DefaultConfig returns the default configuration
 func DefaultConfig() *Config {
 	return &Config{
-		APIEndpoint:  "http://localhost:8080",
-		Environment:  "development",
-		Verbose:      false,
-		OutputFormat: "table",
+		APIEndpoint:      "http://localhost:8080",
+		Environment:      "development",
+		Verbose:          false,
+		OutputFormat:     "table",
+		InferenceTimeout: 90, // 90 seconds for GPU model cold starts
 	}
 }
 
@@ -71,6 +77,7 @@ func Load() (*Config, error) {
 	viper.SetDefault("environment", "development")
 	viper.SetDefault("verbose", false)
 	viper.SetDefault("output_format", "table")
+	viper.SetDefault("inference_timeout", 90)
 
 	// Config file settings
 	viper.SetConfigName(ConfigFileName)
@@ -123,6 +130,19 @@ func Load() (*Config, error) {
 	// AI_AAS_DEFAULT_ORG_ID overrides config file default org
 	if orgOverride := os.Getenv("AI_AAS_DEFAULT_ORG_ID"); orgOverride != "" {
 		cfg.DefaultOrgID = orgOverride
+	}
+
+	// AI_AAS_INFERENCE_TIMEOUT overrides config file inference timeout
+	if timeoutOverride := os.Getenv("AI_AAS_INFERENCE_TIMEOUT"); timeoutOverride != "" {
+		var timeout int
+		if _, err := fmt.Sscanf(timeoutOverride, "%d", &timeout); err == nil && timeout > 0 {
+			cfg.InferenceTimeout = timeout
+		}
+	}
+
+	// Ensure inference timeout has a reasonable value
+	if cfg.InferenceTimeout <= 0 {
+		cfg.InferenceTimeout = 90
 	}
 
 	return &cfg, nil

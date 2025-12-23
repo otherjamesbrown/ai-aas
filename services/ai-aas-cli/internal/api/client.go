@@ -63,7 +63,7 @@ func NewClient(baseURL, apiKey string, opts ...ClientOption) *Client {
 		baseURL: baseURL,
 		apiKey:  apiKey,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: 90 * time.Second, // Increased from 30s for GPU inference validation
 		},
 	}
 
