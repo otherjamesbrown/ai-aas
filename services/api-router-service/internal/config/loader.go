@@ -62,10 +62,60 @@ type RoutingPolicy struct {
 	Backends          []BackendWeight
 	FailoverThreshold int
 	DegradedBackends  []string
-	BackendType       string // "openai" (default) | "triton" - protocol for backend communication
-	Tokenizer         string // tiktoken encoding name (e.g., cl100k_base, llama3) for token counting
+	BackendType       string        // "openai" (default) | "triton" | "triton-grpc" - protocol for backend communication
+	Tokenizer         string        // tiktoken encoding name (e.g., cl100k_base, llama3) for token counting
+	TritonConfig      *TritonConfig // Optional Triton-specific configuration
 	UpdatedAt         time.Time
 	Version           int64
+}
+
+// TritonConfig holds Triton-specific backend configuration.
+// Used for both HTTP and gRPC protocol options.
+type TritonConfig struct {
+	// Protocol specifies the communication protocol: "http" (default) or "grpc"
+	Protocol string
+
+	// HTTPPort is the port for HTTP inference (default: 8000)
+	HTTPPort int
+
+	// GRPCPort is the port for gRPC inference (default: 8001)
+	GRPCPort int
+
+	// GRPCSecure enables TLS for gRPC connections
+	GRPCSecure bool
+}
+
+// DefaultTritonConfig returns a TritonConfig with default values.
+func DefaultTritonConfig() *TritonConfig {
+	return &TritonConfig{
+		Protocol: "http",
+		HTTPPort: 8000,
+		GRPCPort: 8001,
+	}
+}
+
+// IsGRPC returns true if the Triton backend should use gRPC protocol.
+func (t *TritonConfig) IsGRPC() bool {
+	if t == nil {
+		return false
+	}
+	return t.Protocol == "grpc"
+}
+
+// GetGRPCPort returns the gRPC port, using default if not set.
+func (t *TritonConfig) GetGRPCPort() int {
+	if t == nil || t.GRPCPort == 0 {
+		return 8001
+	}
+	return t.GRPCPort
+}
+
+// GetHTTPPort returns the HTTP port, using default if not set.
+func (t *TritonConfig) GetHTTPPort() int {
+	if t == nil || t.HTTPPort == 0 {
+		return 8000
+	}
+	return t.HTTPPort
 }
 
 // BackendWeight defines a backend with its routing weight.

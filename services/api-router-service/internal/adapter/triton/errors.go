@@ -3,6 +3,9 @@ package triton
 import (
 	"net/http"
 	"strings"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Triton error status codes
@@ -139,6 +142,107 @@ func IsRetryableError(httpStatus int) bool {
 		http.StatusTooManyRequests,
 		http.StatusGatewayTimeout,
 		http.StatusRequestTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
+// grpcCodeToTritonStatus maps gRPC status codes to Triton status strings.
+var grpcCodeToTritonStatus = map[codes.Code]string{
+	codes.Unavailable:       TritonStatusUnavailable,
+	codes.InvalidArgument:   TritonStatusInvalidArg,
+	codes.NotFound:          TritonStatusNotFound,
+	codes.ResourceExhausted: TritonStatusResourceExhausted,
+	codes.DeadlineExceeded:  TritonStatusDeadlineExceeded,
+	codes.Internal:          TritonStatusInternal,
+	codes.Unknown:           TritonStatusUnknown,
+	codes.Canceled:          TritonStatusUnavailable,
+	codes.Aborted:           TritonStatusInternal,
+	codes.OutOfRange:        TritonStatusInvalidArg,
+	codes.Unimplemented:     TritonStatusNotFound,
+	codes.FailedPrecondition: TritonStatusInvalidArg,
+	codes.PermissionDenied:  TritonStatusInvalidArg,
+	codes.Unauthenticated:   TritonStatusInvalidArg,
+}
+
+// grpcCodeToHTTPStatus maps gRPC status codes to HTTP status codes.
+var grpcCodeToHTTPStatus = map[codes.Code]int{
+	codes.OK:                 http.StatusOK,
+	codes.Canceled:          http.StatusGatewayTimeout,
+	codes.Unknown:           http.StatusInternalServerError,
+	codes.InvalidArgument:   http.StatusBadRequest,
+	codes.DeadlineExceeded:  http.StatusGatewayTimeout,
+	codes.NotFound:          http.StatusNotFound,
+	codes.AlreadyExists:     http.StatusConflict,
+	codes.PermissionDenied:  http.StatusForbidden,
+	codes.ResourceExhausted: http.StatusTooManyRequests,
+	codes.FailedPrecondition: http.StatusBadRequest,
+	codes.Aborted:           http.StatusConflict,
+	codes.OutOfRange:        http.StatusBadRequest,
+	codes.Unimplemented:     http.StatusNotImplemented,
+	codes.Internal:          http.StatusInternalServerError,
+	codes.Unavailable:       http.StatusServiceUnavailable,
+	codes.DataLoss:          http.StatusInternalServerError,
+	codes.Unauthenticated:   http.StatusUnauthorized,
+}
+
+// MapGRPCError maps a gRPC error to an OpenAI error response and HTTP status code.
+// It extracts the gRPC status code and message from the error.
+func MapGRPCError(err error) (*OpenAIError, int) {
+	if err == nil {
+		return nil, http.StatusOK
+	}
+
+	// Extract gRPC status from error
+	st, ok := status.FromError(err)
+	if !ok {
+		// Not a gRPC error, treat as internal error
+		return &OpenAIError{
+			Message: err.Error(),
+			Type:    OpenAIErrorTypeInternal,
+			Code:    TritonStatusUnknown,
+		}, http.StatusInternalServerError
+	}
+
+	return MapGRPCStatusCode(st.Code(), st.Message())
+}
+
+// MapGRPCStatusCode maps a gRPC status code and message to an OpenAI error response.
+func MapGRPCStatusCode(code codes.Code, message string) (*OpenAIError, int) {
+	// Get Triton status equivalent
+	tritonStatus, ok := grpcCodeToTritonStatus[code]
+	if !ok {
+		tritonStatus = TritonStatusUnknown
+	}
+
+	// Get HTTP status code
+	httpStatus, ok := grpcCodeToHTTPStatus[code]
+	if !ok {
+		httpStatus = http.StatusInternalServerError
+	}
+
+	// Map to OpenAI error
+	openAIErr, _ := MapTritonError(tritonStatus, message)
+	return openAIErr, httpStatus
+}
+
+// IsRetryableGRPCError returns true if the gRPC error is retryable.
+func IsRetryableGRPCError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	st, ok := status.FromError(err)
+	if !ok {
+		return false
+	}
+
+	switch st.Code() {
+	case codes.Unavailable,
+		codes.ResourceExhausted,
+		codes.DeadlineExceeded,
+		codes.Aborted:
 		return true
 	default:
 		return false

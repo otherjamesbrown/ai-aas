@@ -447,9 +447,15 @@ func (h *Handler) handleTritonChatCompletion(
 	ctx, span := h.tracer.Start(ctx, "triton.chat_completions")
 	defer span.End()
 
-	// Check for streaming - not supported for Triton in MVP
+	// Check for streaming - route to gRPC handler if configured
 	if req.Stream {
-		h.writeError(w, r, fmt.Errorf("streaming is not supported for Triton backends"), api.ErrCodeValidationError)
+		// Check if gRPC streaming is enabled for this policy
+		if policy.BackendType == "triton-grpc" || (policy.TritonConfig != nil && policy.TritonConfig.IsGRPC()) {
+			h.handleTritonStreamingChatCompletion(ctx, w, r, policy, req, authCtx, startTime, h.grpcClients, h.grpcTranslators)
+			return
+		}
+		// Standard Triton HTTP does not support streaming
+		h.writeError(w, r, fmt.Errorf("streaming requires gRPC backend (set backend_type: triton-grpc or triton_config.protocol: grpc)"), api.ErrCodeValidationError)
 		return
 	}
 

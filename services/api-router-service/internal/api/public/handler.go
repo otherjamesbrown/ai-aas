@@ -50,6 +50,10 @@ type Handler struct {
 	// Triton protocol translation support (spec032)
 	tritonTranslators map[string]*triton.Translator // keyed by tokenizer encoding
 	translatorMu      sync.RWMutex
+
+	// Triton gRPC streaming support (spec030-grpc)
+	grpcClients     *gRPCClientManager     // gRPC client connections
+	grpcTranslators *gRPCTranslatorManager // gRPC protocol translators
 }
 
 // NewHandler creates a new public API handler.
@@ -84,10 +88,19 @@ func NewHandler(
 		adminAPIKey:       adminAPIKey,
 		defaultTimeout:    defaultTimeout,
 		tritonTranslators: make(map[string]*triton.Translator),
+		grpcClients:       newGRPCClientManager(logger),
+		grpcTranslators:   newGRPCTranslatorManager(),
 		httpClient: &http.Client{
 			// Shared client without timeout - we'll use context for per-request timeouts (PR#16 Issue#4)
 			Timeout: 0,
 		},
+	}
+}
+
+// Close cleans up handler resources, including gRPC client connections.
+func (h *Handler) Close() {
+	if h.grpcClients != nil {
+		h.grpcClients.close()
 	}
 }
 
