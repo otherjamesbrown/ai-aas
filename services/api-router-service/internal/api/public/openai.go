@@ -641,9 +641,9 @@ func (h *Handler) buildTritonEndpoint(backendID, model string) string {
 	}
 
 	// Build Triton V2 inference path: /v2/models/{model}/infer
-	// Note: Triton expects the model name with slashes in the path (not URL-encoded)
-	// Example: /v2/models/meta-llama/Llama-3.1-8B-Instruct/infer
-	parsedURI.Path = "/v2/models/" + model + "/infer"
+	// TRT-LLM always uses "ensemble" as the model name (standard pipeline structure)
+	// Each deployment is a separate service, so routing to the correct service handles model selection
+	parsedURI.Path = "/v2/models/ensemble/infer"
 	// Use Opaque to prevent URL parsing from re-encoding the path
 	return parsedURI.Scheme + "://" + parsedURI.Host + parsedURI.Path
 }

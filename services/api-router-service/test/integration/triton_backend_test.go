@@ -68,6 +68,7 @@ func mockTritonServer(t *testing.T, expectedModel string) *httptest.Server {
 		}
 
 		// Build Triton V2 response
+		// Note: ModelName should match what was requested (expectedModel)
 		response := triton.InferResponse{
 			ID:        tritonReq.ID,
 			ModelName: expectedModel,
@@ -112,7 +113,8 @@ func TestTritonBackendChatCompletions(t *testing.T) {
 	modelName := "meta-llama/Llama-3.1-8B-Instruct"
 
 	// Setup mock Triton server
-	mockBackend := mockTritonServer(t, modelName)
+	// TRT-LLM always uses "ensemble" as the model name in the Triton API
+	mockBackend := mockTritonServer(t, "ensemble")
 	defer mockBackend.Close()
 
 	// Setup
