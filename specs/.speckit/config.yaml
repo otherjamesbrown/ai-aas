@@ -1,0 +1,128 @@
+# Speckit Project Configuration
+# This file provides project-specific settings for speckit commands.
+# Speckit commands load this file at startup if it exists.
+
+project:
+  name: ai-aas
+  description: AI-as-a-Service platform (Go microservices)
+  beads_prefix: ai-aas
+
+# Path conventions
+paths:
+  specs: specs/
+  context: context/
+  docs: docs/
+  architecture: ARCHITECTURE.md
+  constitution: memory/constitution.md
+  templates: templates/
+
+# Agent definitions for task routing
+# Each agent has file patterns and a context file to load
+agents:
+  go-services:
+    description: Go service code (handlers, business logic)
+    patterns:
+      - "services/*-service/**/*.go"
+    context: context/go-services-developer/agents.md
+
+  operator:
+    description: Kubernetes operator code
+    patterns:
+      - "operators/**"
+    context: context/operator-developer/agents.md
+
+  infra-ops:
+    description: Kubernetes, Helm, ArgoCD, GitOps
+    patterns:
+      - "gitops/**"
+      - "**/helm/**"
+      - "**/k8s/**"
+      - "infra/**"
+    context: context/infra-ops-manager/agents.md
+
+  cli:
+    description: CLI commands and API client code
+    patterns:
+      - "cmd/ai-aas-cli/**"
+      - "internal/cli/**"
+    context: context/cli-developer/agents.md
+
+  general:
+    description: Frontend, docs, scripts, other
+    patterns:
+      - "web/**"
+      - "scripts/**"
+      - "*.md"
+    context: null
+
+# Component labels for categorizing work
+components:
+  - api-router      # API Router Service
+  - admin-api       # Admin API Service
+  - user-org        # User/Org Service
+  - analytics       # Analytics Service
+  - web-portal      # Web Portal (React)
+  - cli             # CLI tool
+  - gitops          # GitOps/ArgoCD configs
+  - shared          # Shared libraries
+  - infra           # Infrastructure/Helm charts
+  - operators       # Kubernetes operators
+
+# Validation commands (used by speckit.implement)
+commands:
+  test: "go test ./..."
+  lint: "make lint"
+  build: "make build"
+  smoke_test: "./scripts/cli_smoke_test.sh"
+
+# Environment-specific validation (used in spec.md Validation section)
+environments:
+  development:
+    kubeconfig: "secrets/kubeconfigs/kubeconfig-development.yaml"
+    argocd: "argocd.dev.ai-aas.local"
+  staging:
+    kubeconfig: "secrets/kubeconfigs/kubeconfig-staging.yaml"
+    argocd: "argocd.staging.ai-aas.local"
+  production:
+    kubeconfig: "secrets/kubeconfigs/kubeconfig-production.yaml"
+    argocd: "argocd.prod.ai-aas.local"
+
+# Context document update rules (from context/context_map.md)
+context_update_rules:
+  format:
+    structure:
+      - "Use YAML for: architecture, configs, hierarchies"
+      - "Use tables for: lookups, mappings, comparisons"
+      - "Use bullets for: rules, lists, requirements"
+      - "Use code blocks for: commands, examples"
+    writing_style:
+      - "Keywords: MUST, NEVER, ALWAYS (not 'should', 'consider')"
+      - "Structured data > prose"
+      - "No ASCII diagrams (use YAML)"
+      - "Link to source files, don't duplicate"
+  constraints:
+    rules_max_lines: 200
+    reference_max_lines: 300
+    required_metadata:
+      - last_verified
+      - type
+
+# Spec validation section template
+validation_template: |
+  ## Validation
+
+  ### Development Cluster
+  - [ ] Service deployed and healthy
+  - [ ] Smoke tests pass: `./scripts/cli_smoke_test.sh`
+  - [ ] Feature-specific checks (define in spec)
+
+  ### Staging
+  - [ ] PR merged to staging branch
+  - [ ] ArgoCD sync complete
+  - [ ] Staging smoke tests pass
+
+  ### Production
+  - [ ] PR merged to main branch
+  - [ ] ArgoCD sync complete
+  - [ ] Production smoke tests pass
+  - [ ] Monitoring shows no anomalies

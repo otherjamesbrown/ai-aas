@@ -6,32 +6,53 @@ Create a technical implementation plan from an existing feature specification.
 
 Follow this workflow to create an implementation plan:
 
+### Step 0: Load Project Configuration
+
+Check for project-specific configuration:
+```bash
+cat specs/.speckit/config.yaml 2>/dev/null
+```
+
+If exists, load:
+- Path conventions for context and docs
+- Architecture file location
+- Agent definitions (for later task assignment)
+
 ### Step 1: Setup
+
 Identify the feature specification to plan. If not specified, list available specs:
 ```bash
 ls -d specs/*/spec.md
 ```
 
 ### Step 2: Load Context
+
 Read the required files:
 - `specs/[feature]/spec.md` - The feature specification
-- `specs/[feature]/impact.md` - Impact analysis (**if exists** - for migrations/refactors)
 - `memory/constitution.md` - Project principles (if exists)
 - `CLAUDE.md` or `ARCHITECTURE.md` - Project architecture
 
-**If `impact.md` exists**, this is a migration/refactoring spec:
-- Phases must align with migration order from impact.md
-- Include REMOVE/DEPRECATE tasks in plan
-- Reference affected files from impact analysis
+**Context-aware loading** (from config paths):
+- `context/agents.md` - Agent routing rules
+- `context/context_map.md` - Context structure
+- Relevant agent-specific context based on spec scope
 
-**If `impact.md` does NOT exist** and spec involves:
-- Removing existing functionality
-- Migrating between approaches
-- Refactoring existing patterns
+### Step 3: Check for Impact Analysis
 
-Then **STOP** and recommend running `/speckit.impact` first.
+```bash
+cat specs/[feature]/impact.md 2>/dev/null
+```
 
-### Step 3: Phase 0 - Research
+If `impact.md` exists:
+- Load migration phases from impact analysis
+- Plan phases should align with migration order
+- Include REMOVE/DEPRECATE tasks from impact
+- Reference file paths and risk levels from impact.md
+
+If `impact.md` doesn't exist and spec contains migration signals ("migrate", "replace", "remove", "deprecate"), suggest running `/speckit.impact` first.
+
+### Step 4: Phase 0 - Research
+
 For each unclear technical requirement:
 1. Document the question
 2. Research options and alternatives
@@ -43,7 +64,8 @@ Create `specs/[feature]/research.md` documenting:
 - Alternatives considered
 - Rationale for choices
 
-### Step 4: Phase 1 - Design
+### Step 5: Phase 1 - Design
+
 Generate concrete design outputs:
 
 **Data Model** (`data-model.md`):
@@ -60,17 +82,17 @@ Generate concrete design outputs:
 - How to use/test the feature
 - Example commands or API calls
 
-### Step 5: Write Implementation Plan
+### Step 6: Write Implementation Plan
+
 Create `specs/[feature]/plan.md` with:
 
 ```markdown
 # Implementation Plan: [Feature Name]
 
 **Feature Branch**: `[NNN]-[feature-name]`
-**Date**: [ISO date]
+**Date**: YYYY-MM-DD
 **Spec**: [link to spec.md]
-**Impact Analysis**: [link to impact.md or "N/A - greenfield feature"]
-**Type**: Feature | Migration | Refactor
+**Impact Analysis**: [link to impact.md or "N/A - greenfield"]
 
 ## Summary
 [Primary requirement + technical approach]
@@ -81,77 +103,73 @@ Create `specs/[feature]/plan.md` with:
 - Storage: [database, cache requirements]
 - Testing: [framework, approach]
 
+## Architecture Fit
+[How this fits with existing systems from /context/]
+
 ## Constitution Compliance
 [How this plan aligns with project principles]
 
 ## Project Structure
-
-### Files to Add
-[New files to create]
-
-### Files to Modify
-[Existing files to change - reference impact.md if available]
-
-### Files to Remove
-[Files to delete - only for migrations/refactors, from impact.md]
+[Files to be created/modified]
 
 ## Phases
-[Breakdown of implementation phases]
 
-<!-- For migrations/refactors, align with impact.md migration_order -->
+### Phase 1: [Name]
+- Description: [what this phase accomplishes]
+- Tasks: [high-level task list]
+- Risk: [LOW/MEDIUM/HIGH]
+- Rollback: [how to undo if needed]
+
+### Phase 2: [Name]
+...
 ```
 
-**For Migration/Refactor specs** (when `impact.md` exists), add:
+If `impact.md` exists, align phases with migration order from impact analysis.
 
-```markdown
-## Migration Strategy
+### Step 7: Validate
 
-### Phase 1: Prepare (Backward Compatible)
-[Changes that don't break existing behavior]
-- Add new fields/types
-- Feature flags if needed
-
-### Phase 2: Implement
-[New functionality]
-- New code paths
-- Updated tests
-
-### Phase 3: Migrate
-[Switch to new behavior]
-- Update existing resources
-- Data migrations
-
-### Phase 4: Cleanup
-[Remove old code]
-- Delete deprecated code
-- Remove feature flags
-- Update documentation
-
-## Rollback Plan
-[From impact.md - how to revert each phase]
-
-## Risk Mitigation
-[HIGH risk items from impact.md and how to address them]
-```
-
-### Step 6: Validate
 Ensure:
 - All `[NEEDS CLARIFICATION]` from spec are resolved
 - Plan aligns with project architecture
 - No implementation details that contradict constitution
+- Context updates are planned for `/context/` if needed
+- Documentation updates are planned for `/docs/` if needed
 
-**For Migration/Refactor specs**, also validate:
-- All REMOVE items from `impact.md` are addressed in plan
-- Migration phases are safe to execute sequentially
-- Rollback plan exists for each phase
-- HIGH risk items have mitigation strategies
+### Step 8: Report
 
-### Step 7: Report
-Output:
-- Generated artifacts list
-- Branch information
-- **For migrations**: Summary of REMOVE/MODIFY/ADD counts
-- Next step: `/speckit.tasks`
+Output completion summary:
+
+```
+═══════════════════════════════════════════════════
+ speckit.plan - COMPLETE
+═══════════════════════════════════════════════════
+
+ Spec:             [NNN]-[feature-name]
+
+ Files Created:
+   - plan.md
+   - research.md
+   - data-model.md (if applicable)
+   - contracts/ (if applicable)
+
+ Plan Summary:
+   - Phases: [count]
+   - Components affected: [list]
+   - Risk profile: [HIGH/MEDIUM/LOW]
+
+ Impact Analysis:  [Incorporated / N/A]
+
+ Next Steps:
+   - Review plan.md
+   - Run /speckit.tasks to create task breakdown
+═══════════════════════════════════════════════════
+```
+
+## Key Constraints
+
+- Use ISO date format: YYYY-MM-DD
+- Plan must align with existing architecture in `/context/`
+- If impact.md exists, phases must align with migration order
 
 ## User Input
 $ARGUMENTS

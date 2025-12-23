@@ -97,6 +97,6 @@ Based on which beads and files exist, determine current phase:
 
 Based on current phase, suggest what to do next:
 - If in Phase 1: "Ready for /jb-2-workspace"
-- If in Phase 3: "Continue with /jb-3-implement or /jb-4-pr when done"
+- If in Phase 3: "Continue with /jb-3-4-implement or /jb-4-pr when done"
 - If in Phase 5: "Fix issues or proceed to /jb-6-staging"
 - etc.

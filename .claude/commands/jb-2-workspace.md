@@ -62,31 +62,29 @@ This will:
 
 ### Step 6: Create Epic Bead
 
-In the new workspace, create the top-level epic bead with a **deterministic ID**:
+In the new workspace, create the top-level epic bead with explicit ID:
 
 ```bash
 bd create --id="ai-aas-spec$SPEC_NUMBER" --title="Spec $SPEC_NUMBER: $SPEC_NAME" --type=epic --priority=1 --description="Epic for spec $SPEC_FOLDER. See specs/$SPEC_FOLDER/ for details."
 ```
 
-**IMPORTANT**: Always use `--id="ai-aas-spec$SPEC_NUMBER"` (e.g., `ai-aas-spec032`) for predictable cross-referencing.
+Epic bead ID: `ai-aas-spec$SPEC_NUMBER`
 
-The epic bead ID will be `ai-aas-spec$SPEC_NUMBER` (e.g., ai-aas-spec032).
+### Step 7: Create Implementation Sub-Bead
 
-### Step 7: Create Spec Sub-Bead
-
-Create the implementation tracking sub-bead:
+Create the implementation tracking sub-bead with period-based naming:
 
 ```bash
-bd create --title="$SPEC_NAME - Implementation" --type=task --priority=1 --parent=ai-aas-spec$SPEC_NUMBER --description="Implementation tracking for $SPEC_NAME"
+bd create --id="ai-aas-spec$SPEC_NUMBER.impl" --title="$SPEC_NAME - Implementation" --type=task --priority=1 --parent=ai-aas-spec$SPEC_NUMBER
 ```
 
-Note the created sub-bead ID for the summary.
+Implementation bead ID: `ai-aas-spec$SPEC_NUMBER.impl`
 
 ### Step 8: Update Beads with Labels
 
 ```bash
-bd update ai-aas-spec$SPEC_NUMBER --add-label="spec$SPEC_NUMBER" --add-label="epic"
-bd update $SPEC_BEAD_ID --add-label="spec$SPEC_NUMBER" --add-label="implementation"
+bd update ai-aas-spec$SPEC_NUMBER --label="spec$SPEC_NUMBER" --label="epic"
+bd update ai-aas-spec$SPEC_NUMBER.impl --label="spec$SPEC_NUMBER" --label="implementation"
 ```
 
 ### Step 9: Show Status Summary
@@ -103,12 +101,12 @@ bd update $SPEC_BEAD_ID --add-label="spec$SPEC_NUMBER" --add-label="implementati
 
  Beads Created:
    - ai-aas-spec$SPEC_NUMBER (epic): Spec $SPEC_NUMBER: $SPEC_NAME
-   - $SPEC_BEAD_ID (implementation): $SPEC_NAME - Implementation
+   - ai-aas-spec$SPEC_NUMBER.impl (implementation): $SPEC_NAME - Implementation
 
  Next Steps:
-   - Run /jb-3-specify to create spec.md from idea.md
-   - Then /jb-3-plan to create implementation plan
-   - Then /jb-3-tasks to create task breakdown
+   - Run /jb-3-1-specify to create spec.md from idea.md
+   - Then /jb-3-2-plan to create implementation plan
+   - Then /jb-3-3-tasks to create task breakdown
 ═══════════════════════════════════════════════════
 ```
 

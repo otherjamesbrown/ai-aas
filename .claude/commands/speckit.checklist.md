@@ -33,7 +33,7 @@ Create a checklist file in `specs/[feature]/checklists/`:
 ```markdown
 # [Aspect] Quality Checklist: [Feature Name]
 
-**Generated**: [date]
+**Generated**: YYYY-MM-DD
 **Source**: spec.md, plan.md
 
 ## Completeness
@@ -81,6 +81,10 @@ Output:
 ```
 Are [requirement aspect] defined/specified for [scenario]? [Quality Dimension, Reference]
 ```
+
+## Key Constraints
+
+- Use ISO date format: YYYY-MM-DD
 
 ## User Input
 $ARGUMENTS

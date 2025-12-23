@@ -21,18 +21,22 @@ If branch matches pattern `NNN-*` or `spec-NNN-*`, extract spec number.
 
 ### Step 3: Find Epic Bead
 
+Epic bead ID follows convention: `ai-aas-spec$SPEC_NUMBER`
+
 ```bash
-bd list --label="spec$SPEC_NUMBER" --label="epic"
+bd show ai-aas-spec$SPEC_NUMBER
 ```
 
 ### Step 4: Create PR Sub-Bead
 
-Create a sub-bead under the epic for PR tracking:
+Create a sub-bead under the epic for PR tracking with period-based naming:
 
 ```bash
-bd create --title="PR#$PR_NUMBER: $PR_TITLE" --type=task --priority=1 --parent=$EPIC_BEAD_ID
-bd update $PR_BEAD_ID --label="spec$SPEC_NUMBER" --label="pr" --label="pr-$PR_NUMBER"
+bd create --id="ai-aas-spec$SPEC_NUMBER.pr" --title="PR#$PR_NUMBER: $PR_TITLE" --type=task --priority=1 --parent=ai-aas-spec$SPEC_NUMBER
+bd update ai-aas-spec$SPEC_NUMBER.pr --label="spec$SPEC_NUMBER" --label="pr" --label="pr-$PR_NUMBER"
 ```
+
+PR bead ID: `ai-aas-spec$SPEC_NUMBER.pr`
 
 ### Step 5: Run PR Review
 
@@ -46,8 +50,8 @@ Execute the full PR review workflow (from jb_pr_review):
 
 As work progresses:
 ```bash
-bd comments add $PR_BEAD_ID "Addressed review comments..."
-bd comments add $PR_BEAD_ID "Fixed CI failures..."
+bd comments add ai-aas-spec$SPEC_NUMBER.pr "Addressed review comments..."
+bd comments add ai-aas-spec$SPEC_NUMBER.pr "Fixed CI failures..."
 ```
 
 ### Step 7: Show Status Summary
@@ -62,8 +66,8 @@ bd comments add $PR_BEAD_ID "Fixed CI failures..."
  Related Spec:     $SPEC_NUMBER
 
  Beads:
-   - Epic: $EPIC_BEAD_ID
-   - PR: $PR_BEAD_ID (created)
+   - Epic: ai-aas-spec$SPEC_NUMBER
+   - PR: ai-aas-spec$SPEC_NUMBER.pr
 
  PR Status:
    - Files changed: $COUNT

@@ -14,23 +14,29 @@ Extract spec number from argument.
 
 Check that staging validation passed:
 ```bash
-bd show $STG_BEAD_ID
+bd show ai-aas-spec$SPEC_NUMBER.stg
 ```
 
 If open issues exist, **DO NOT PROCEED**. Warn user.
 
 ### Step 3: Find Epic Bead
 
+Epic bead ID follows convention: `ai-aas-spec$SPEC_NUMBER`
+
 ```bash
-bd list --label="spec$SPEC_NUMBER" --label="epic"
+bd show ai-aas-spec$SPEC_NUMBER
 ```
 
 ### Step 4: Create Production Sub-Bead
 
+Create production bead with period-based naming:
+
 ```bash
-bd create --title="Spec $SPEC_NUMBER - Production Deployment" --type=task --priority=1 --parent=$EPIC_BEAD_ID
-bd update $PROD_BEAD_ID --label="spec$SPEC_NUMBER" --label="production" --label="validation"
+bd create --id="ai-aas-spec$SPEC_NUMBER.prod" --title="Spec $SPEC_NUMBER - Production Deployment" --type=task --priority=1 --parent=ai-aas-spec$SPEC_NUMBER
+bd update ai-aas-spec$SPEC_NUMBER.prod --label="spec$SPEC_NUMBER" --label="production" --label="validation"
 ```
+
+Production bead ID: `ai-aas-spec$SPEC_NUMBER.prod`
 
 ### Step 5: Create PR staging → main
 
@@ -42,10 +48,10 @@ gh pr create \
   --body "Releases changes from spec $SPEC_NUMBER after successful staging validation.
 
 Related beads:
-- Epic: $EPIC_BEAD_ID
-- Dev validation: $DEV_BEAD_ID
-- Staging validation: $STG_BEAD_ID
-- Production: $PROD_BEAD_ID
+- Epic: ai-aas-spec$SPEC_NUMBER
+- Dev validation: ai-aas-spec$SPEC_NUMBER.dev
+- Staging validation: ai-aas-spec$SPEC_NUMBER.stg
+- Production: ai-aas-spec$SPEC_NUMBER.prod
 
 ## Checklist
 - [ ] Staging validation passed
@@ -56,7 +62,7 @@ Related beads:
 ### Step 6: Update Bead with PR
 
 ```bash
-bd comments add $PROD_BEAD_ID "Created PR #$PR_NUMBER for staging → main promotion"
+bd comments add ai-aas-spec$SPEC_NUMBER.prod "Created PR #$PR_NUMBER for staging → main promotion"
 ```
 
 ### Step 7: After PR Merge - Run Validation
@@ -70,7 +76,7 @@ bd comments add $PROD_BEAD_ID "Created PR #$PR_NUMBER for staging → main promo
 ### Step 8: Create Issue Beads for Failures
 
 ```bash
-bd create --title="PROD: $ISSUE_DESCRIPTION" --type=bug --priority=0 --parent=$PROD_BEAD_ID
+bd create --title="PROD: $ISSUE_DESCRIPTION" --type=bug --priority=0 --parent=ai-aas-spec$SPEC_NUMBER.prod
 bd update $ISSUE_BEAD_ID --label="spec$SPEC_NUMBER" --label="prod-issue" --label="urgent"
 ```
 
@@ -83,7 +89,7 @@ bd update $ISSUE_BEAD_ID --label="spec$SPEC_NUMBER" --label="prod-issue" --label
  /jb-7-prod $ARGUMENTS - COMPLETE
 ═══════════════════════════════════════════════════
 
- Production Bead:  $PROD_BEAD_ID (child of $EPIC_BEAD_ID)
+ Production Bead:  ai-aas-spec$SPEC_NUMBER.prod
  PR Created:       #$PR_NUMBER (staging → main)
 
  Validation Status:

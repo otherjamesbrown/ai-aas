@@ -12,16 +12,22 @@ Extract spec number from argument (e.g., `spec030`, `030`).
 
 ### Step 2: Find Epic Bead
 
+Epic bead ID follows convention: `ai-aas-spec$SPEC_NUMBER`
+
 ```bash
-bd list --label="spec$SPEC_NUMBER" --label="epic"
+bd show ai-aas-spec$SPEC_NUMBER
 ```
 
 ### Step 3: Create Retrospective Sub-Bead
 
+Create retrospective bead with period-based naming:
+
 ```bash
-bd create --title="Spec $SPEC_NUMBER - Retrospective" --type=task --priority=2 --parent=$EPIC_BEAD_ID
-bd update $RETRO_BEAD_ID --label="spec$SPEC_NUMBER" --label="retrospective"
+bd create --id="ai-aas-spec$SPEC_NUMBER.retro" --title="Spec $SPEC_NUMBER - Retrospective" --type=task --priority=2 --parent=ai-aas-spec$SPEC_NUMBER
+bd update ai-aas-spec$SPEC_NUMBER.retro --label="spec$SPEC_NUMBER" --label="retrospective"
 ```
+
+Retrospective bead ID: `ai-aas-spec$SPEC_NUMBER.retro`
 
 ### Step 4: Gather Data
 
@@ -87,15 +93,15 @@ Prompt user:
 ### Step 7: Update Bead with Summary
 
 ```bash
-bd comments add $RETRO_BEAD_ID "Retrospective completed. Key learnings: $SUMMARY"
-bd close $RETRO_BEAD_ID "Retrospective documented"
+bd comments add ai-aas-spec$SPEC_NUMBER.retro "Retrospective completed. Key learnings: $SUMMARY"
+bd close ai-aas-spec$SPEC_NUMBER.retro "Retrospective documented"
 ```
 
 ### Step 8: Close Epic Bead
 
 If all work is complete:
 ```bash
-bd close $EPIC_BEAD_ID "Spec $SPEC_NUMBER completed and retrospective done"
+bd close ai-aas-spec$SPEC_NUMBER "Spec $SPEC_NUMBER completed and retrospective done"
 ```
 
 ### Step 9: Show Status Summary
@@ -106,8 +112,8 @@ bd close $EPIC_BEAD_ID "Spec $SPEC_NUMBER completed and retrospective done"
 ═══════════════════════════════════════════════════
 
  Spec:             $SPEC_FOLDER
- Epic Bead:        $EPIC_BEAD_ID (CLOSED)
- Retro Bead:       $RETRO_BEAD_ID (CLOSED)
+ Epic Bead:        ai-aas-spec$SPEC_NUMBER (CLOSED)
+ Retro Bead:       ai-aas-spec$SPEC_NUMBER.retro (CLOSED)
 
  Timeline:
    - Idea → Prod:  $DAYS days
