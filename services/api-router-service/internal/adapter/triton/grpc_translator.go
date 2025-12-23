@@ -211,22 +211,27 @@ func (t *GRPCTranslator) extractTextFromGRPCResponse(resp *pb.ModelStreamInferRe
 	}
 
 	// Look for the text_output tensor in outputs
-	for _, output := range resp.InferResponse.Outputs {
+	for i, output := range resp.InferResponse.Outputs {
 		if output.Name == TensorOutputTextOutput || output.Name == "text" || output.Name == "output" {
-			return t.extractTextFromOutput(output)
+			return t.extractTextFromOutput(output, resp.InferResponse, i)
 		}
 	}
 
 	// Fallback: try first output
 	if len(resp.InferResponse.Outputs) > 0 {
-		return t.extractTextFromOutput(resp.InferResponse.Outputs[0])
+		return t.extractTextFromOutput(resp.InferResponse.Outputs[0], resp.InferResponse, 0)
 	}
 
 	return "", nil
 }
 
 // extractTextFromOutput extracts text from a gRPC output tensor.
-func (t *GRPCTranslator) extractTextFromOutput(output *pb.ModelInferResponse_InferOutputTensor) (string, error) {
+// It handles both structured contents (output.Contents.BytesContents) and raw format (resp.RawOutputContents).
+func (t *GRPCTranslator) extractTextFromOutput(
+	output *pb.ModelInferResponse_InferOutputTensor,
+	resp *pb.ModelInferResponse,
+	outputIndex int,
+) (string, error) {
 	if output == nil {
 		return "", nil
 	}
@@ -239,7 +244,15 @@ func (t *GRPCTranslator) extractTextFromOutput(output *pb.ModelInferResponse_Inf
 		}
 	}
 
-	// Check raw_output_contents in parent response (handled at response level)
+	// Check raw_output_contents in parent response
+	// TRT-LLM uses this format for better performance
+	if resp != nil && len(resp.RawOutputContents) > outputIndex {
+		rawBytes := resp.RawOutputContents[outputIndex]
+		if len(rawBytes) > 0 {
+			return string(rawBytes), nil
+		}
+	}
+
 	return "", nil
 }
 

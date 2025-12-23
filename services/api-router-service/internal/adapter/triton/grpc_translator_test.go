@@ -357,3 +357,141 @@ func TestNewStreamingConfig(t *testing.T) {
 		t.Error("expected positive Created timestamp")
 	}
 }
+
+func TestExtractTextFromGRPCResponse_RawOutputContents(t *testing.T) {
+	translator, err := NewGRPCTranslator("llama3")
+	if err != nil {
+		t.Fatalf("failed to create translator: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		resp     *pb.ModelStreamInferResponse
+		expected string
+		wantErr  bool
+	}{
+		{
+			name: "raw_output_contents format (TRT-LLM style)",
+			resp: &pb.ModelStreamInferResponse{
+				InferResponse: &pb.ModelInferResponse{
+					Outputs: []*pb.ModelInferResponse_InferOutputTensor{
+						{
+							Name:     TensorOutputTextOutput,
+							Datatype: DatatypeBYTES,
+							Shape:    []int64{1},
+							// Contents is nil - TRT-LLM doesn't use this
+							Contents: nil,
+						},
+					},
+					// TRT-LLM puts the text here for performance
+					RawOutputContents: [][]byte{
+						[]byte("Hello, world!"),
+					},
+				},
+			},
+			expected: "Hello, world!",
+			wantErr:  false,
+		},
+		{
+			name: "structured contents format (legacy style)",
+			resp: &pb.ModelStreamInferResponse{
+				InferResponse: &pb.ModelInferResponse{
+					Outputs: []*pb.ModelInferResponse_InferOutputTensor{
+						{
+							Name:     TensorOutputTextOutput,
+							Datatype: DatatypeBYTES,
+							Shape:    []int64{1},
+							Contents: &pb.InferTensorContents{
+								BytesContents: [][]byte{
+									[]byte("Structured response"),
+								},
+							},
+						},
+					},
+					RawOutputContents: nil,
+				},
+			},
+			expected: "Structured response",
+			wantErr:  false,
+		},
+		{
+			name: "both formats present - prefer structured contents",
+			resp: &pb.ModelStreamInferResponse{
+				InferResponse: &pb.ModelInferResponse{
+					Outputs: []*pb.ModelInferResponse_InferOutputTensor{
+						{
+							Name:     TensorOutputTextOutput,
+							Datatype: DatatypeBYTES,
+							Shape:    []int64{1},
+							Contents: &pb.InferTensorContents{
+								BytesContents: [][]byte{
+									[]byte("Structured"),
+								},
+							},
+						},
+					},
+					RawOutputContents: [][]byte{
+						[]byte("Raw"),
+					},
+				},
+			},
+			expected: "Structured",
+			wantErr:  false,
+		},
+		{
+			name: "empty response",
+			resp: &pb.ModelStreamInferResponse{
+				InferResponse: &pb.ModelInferResponse{
+					Outputs:           []*pb.ModelInferResponse_InferOutputTensor{},
+					RawOutputContents: nil,
+				},
+			},
+			expected: "",
+			wantErr:  false,
+		},
+		{
+			name: "nil InferResponse",
+			resp: &pb.ModelStreamInferResponse{
+				InferResponse: nil,
+			},
+			expected: "",
+			wantErr:  false,
+		},
+		{
+			name: "multiple outputs - uses first text_output",
+			resp: &pb.ModelStreamInferResponse{
+				InferResponse: &pb.ModelInferResponse{
+					Outputs: []*pb.ModelInferResponse_InferOutputTensor{
+						{
+							Name:     "other_output",
+							Datatype: DatatypeBYTES,
+						},
+						{
+							Name:     TensorOutputTextOutput,
+							Datatype: DatatypeBYTES,
+						},
+					},
+					RawOutputContents: [][]byte{
+						[]byte("other data"),
+						[]byte("text output data"),
+					},
+				},
+			},
+			expected: "text output data",
+			wantErr:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			text, err := translator.ExtractTextFromGRPCResponse(tt.resp)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ExtractTextFromGRPCResponse() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if text != tt.expected {
+				t.Errorf("ExtractTextFromGRPCResponse() = %q, want %q", text, tt.expected)
+			}
+		})
+	}
+}
