@@ -129,7 +129,9 @@ func (h *Handler) HandleOpenAIChatCompletions(w http.ResponseWriter, r *http.Req
 
 	// Route based on backend type (spec032 - Triton API Support)
 	switch policy.BackendType {
-	case "triton":
+	case "triton", "triton-grpc":
+		// Both "triton" (HTTP) and "triton-grpc" are handled by the same entry point,
+		// which internally routes to HTTP or gRPC based on BackendType
 		h.handleTritonChatCompletion(ctx, w, r, policy, &openAIReq, authCtx, startTime)
 		return
 	default: // "openai" or empty - use existing vLLM/OpenAI flow
@@ -435,6 +437,10 @@ func (h *Handler) forwardOpenAIRequest(ctx context.Context, backend *routing.Bac
 // handleTritonChatCompletion handles chat completion requests for Triton backends.
 // It translates OpenAI requests to Triton V2 protocol and responses back.
 // Implements spec032 - Triton API Support.
+//
+// TRT-LLM Note: TRT-LLM models require gRPC due to "decoupled transaction policy".
+// When backend_type is "triton-grpc", ALL requests (streaming and non-streaming)
+// are routed through gRPC. HTTP is only used for standard Triton backends.
 func (h *Handler) handleTritonChatCompletion(
 	ctx context.Context,
 	w http.ResponseWriter,
@@ -447,15 +453,23 @@ func (h *Handler) handleTritonChatCompletion(
 	ctx, span := h.tracer.Start(ctx, "triton.chat_completions")
 	defer span.End()
 
-	// Check for streaming - route to gRPC handler if configured
+	// Check if gRPC is required (TRT-LLM models require gRPC for all requests)
+	useGRPC := policy.BackendType == "triton-grpc" || (policy.TritonConfig != nil && policy.TritonConfig.IsGRPC())
+
 	if req.Stream {
-		// Check if gRPC streaming is enabled for this policy
-		if policy.BackendType == "triton-grpc" || (policy.TritonConfig != nil && policy.TritonConfig.IsGRPC()) {
+		// Streaming always requires gRPC
+		if useGRPC {
 			h.handleTritonStreamingChatCompletion(ctx, w, r, policy, req, authCtx, startTime, h.grpcClients, h.grpcTranslators)
 			return
 		}
 		// Standard Triton HTTP does not support streaming
 		h.writeError(w, r, fmt.Errorf("streaming requires gRPC backend (set backend_type: triton-grpc or triton_config.protocol: grpc)"), api.ErrCodeValidationError)
+		return
+	}
+
+	// For non-streaming with gRPC backend, use gRPC (required for TRT-LLM)
+	if useGRPC {
+		h.handleTritonNonStreamingGRPC(ctx, w, r, policy, req, authCtx, startTime)
 		return
 	}
 
@@ -646,5 +660,219 @@ func (h *Handler) buildTritonEndpoint(backendID, model string) string {
 	parsedURI.Path = "/v2/models/ensemble/infer"
 	// Use Opaque to prevent URL parsing from re-encoding the path
 	return parsedURI.Scheme + "://" + parsedURI.Host + parsedURI.Path
+}
+
+// handleTritonNonStreamingGRPC handles non-streaming chat completion requests using gRPC.
+// This is required for TRT-LLM models that use "decoupled transaction policy" and cannot
+// use HTTP for inference. The function uses gRPC streaming to collect all response chunks
+// and returns a single OpenAI-compatible JSON response.
+func (h *Handler) handleTritonNonStreamingGRPC(
+	ctx context.Context,
+	w http.ResponseWriter,
+	r *http.Request,
+	policy *config.RoutingPolicy,
+	req *OpenAIChatCompletionRequest,
+	authCtx *auth.AuthenticatedContext,
+	startTime time.Time,
+) {
+	ctx, span := h.tracer.Start(ctx, "triton.grpc_chat_completions")
+	defer span.End()
+
+	// Validate tokenizer is configured
+	if policy.Tokenizer == "" {
+		h.writeError(w, r, fmt.Errorf("tokenizer encoding is required for Triton backends"), api.ErrCodeValidationError)
+		return
+	}
+
+	// Get gRPC endpoint for the backend
+	backendID := policy.Backends[0].BackendID
+	grpcEndpoint := h.buildTritonGRPCEndpoint(backendID, policy.Model)
+
+	h.logger.Debug("starting triton gRPC non-streaming request",
+		zap.String("backend_id", backendID),
+		zap.String("grpc_endpoint", grpcEndpoint),
+		zap.String("model", policy.Model),
+	)
+
+	// Get or create gRPC client
+	client, err := h.grpcClients.getOrCreate(backendID, grpcEndpoint)
+	if err != nil {
+		h.logger.Error("failed to get gRPC client",
+			zap.String("backend_id", backendID),
+			zap.Error(err),
+		)
+		h.writeError(w, r, fmt.Errorf("backend connection failed"), api.ErrCodeBackendError)
+		return
+	}
+
+	// Get or create translator
+	translator, err := h.grpcTranslators.getOrCreate(policy.Tokenizer)
+	if err != nil {
+		h.logger.Error("failed to get gRPC translator",
+			zap.String("tokenizer", policy.Tokenizer),
+			zap.Error(err),
+		)
+		h.writeError(w, r, fmt.Errorf("internal configuration error"), api.ErrCodeBackendError)
+		return
+	}
+
+	// Translate OpenAI request to gRPC format
+	grpcReq, requestID, err := translator.TranslateOpenAIToGRPC(req, policy.Model)
+	if err != nil {
+		h.logger.Error("failed to translate request",
+			zap.Error(err),
+		)
+		h.writeError(w, r, fmt.Errorf("request translation failed: %w", err), api.ErrCodeValidationError)
+		return
+	}
+
+	// Start gRPC stream
+	stream, err := client.StreamInfer(ctx)
+	if err != nil {
+		h.logger.Error("failed to start gRPC stream",
+			zap.String("backend_id", backendID),
+			zap.Error(err),
+		)
+		h.writeError(w, r, fmt.Errorf("backend streaming failed"), api.ErrCodeBackendError)
+		return
+	}
+
+	// Send the request
+	if err := stream.Send(grpcReq); err != nil {
+		h.logger.Error("failed to send request to gRPC stream",
+			zap.Error(err),
+		)
+		h.writeError(w, r, fmt.Errorf("request sending failed"), api.ErrCodeBackendError)
+		return
+	}
+
+	// Close send side to signal we're done sending
+	if err := stream.CloseSend(); err != nil {
+		h.logger.Warn("failed to close send side of stream",
+			zap.Error(err),
+		)
+	}
+
+	// Collect all streaming responses into a single response
+	var accumulatedText string
+	promptTokens := translator.CountPromptTokens(req.Messages)
+
+	for {
+		resp, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			h.logger.Error("error receiving from gRPC stream",
+				zap.Error(err),
+			)
+			h.writeError(w, r, fmt.Errorf("backend error: %v", err), api.ErrCodeBackendError)
+			return
+		}
+
+		// Extract text from response
+		text, err := translator.ExtractTextFromGRPCResponse(resp)
+		if err != nil {
+			h.logger.Warn("failed to extract text from gRPC response",
+				zap.Error(err),
+			)
+			continue
+		}
+		accumulatedText += text
+	}
+
+	// Calculate completion tokens
+	completionTokens := translator.CountCompletionTokens(accumulatedText)
+
+	// Build OpenAI response
+	openAIResp := triton.OpenAIChatCompletionResponse{
+		ID:      requestID,
+		Object:  "chat.completion",
+		Created: time.Now().Unix(),
+		Model:   req.Model,
+		Choices: []triton.ChatCompletionChoice{
+			{
+				Index: 0,
+				Message: triton.ChatMessage{
+					Role:    "assistant",
+					Content: accumulatedText,
+				},
+				FinishReason: "stop",
+			},
+		},
+		Usage: triton.UsageInfo{
+			PromptTokens:     promptTokens,
+			CompletionTokens: completionTokens,
+			TotalTokens:      promptTokens + completionTokens,
+		},
+	}
+
+	// Create routing decision for metrics
+	routingDecision := &routing.RoutingDecision{
+		BackendID:     backendID,
+		DecisionType:  "PRIMARY",
+		Reason:        "Triton gRPC backend routing",
+		Timestamp:     time.Now(),
+		AttemptNumber: 1,
+	}
+
+	// Add routing headers
+	w.Header().Set("X-Routing-Backend", routingDecision.BackendID)
+	w.Header().Set("X-Routing-Decision", routingDecision.DecisionType)
+	w.Header().Set("X-Backend-Type", "triton-grpc")
+
+	// Emit usage record
+	if h.usageHook != nil {
+		_ = h.usageHook.EmitUsage(
+			ctx,
+			authCtx,
+			openAIResp.ID,
+			req.Model,
+			routingDecision.BackendID,
+			routingDecision.DecisionType,
+			openAIResp.Usage.PromptTokens,
+			openAIResp.Usage.CompletionTokens,
+			int(time.Since(startTime).Milliseconds()),
+			"WITHIN_LIMIT",
+			span.SpanContext(),
+			0,
+		)
+	}
+
+	// Record token metrics
+	if h.tokenMetrics != nil {
+		h.tokenMetrics.RecordTokens(
+			ctx,
+			authCtx.OrganizationID,
+			req.Model,
+			"chat",
+			openAIResp.Usage.PromptTokens,
+			openAIResp.Usage.CompletionTokens,
+		)
+	}
+
+	// Record per-backend Prometheus metrics
+	requestLatency := time.Since(startTime)
+	telemetry.RecordBackendRequest(
+		routingDecision.BackendID,
+		authCtx.OrganizationID,
+		req.Model,
+		true, // success
+		requestLatency,
+	)
+
+	h.logger.Info("triton gRPC request completed",
+		zap.String("request_id", requestID),
+		zap.String("backend_id", backendID),
+		zap.String("backend_type", "triton-grpc"),
+		zap.Int("prompt_tokens", openAIResp.Usage.PromptTokens),
+		zap.Int("completion_tokens", openAIResp.Usage.CompletionTokens),
+		zap.Duration("latency", requestLatency),
+	)
+
+	// Write response
+	if err := h.writeJSON(w, http.StatusOK, openAIResp); err != nil {
+		h.logger.Error("failed to write triton gRPC response", zap.Error(err))
+	}
 }
 

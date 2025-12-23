@@ -86,11 +86,12 @@ type TritonConfig struct {
 }
 
 // DefaultTritonConfig returns a TritonConfig with default values.
+// Note: TRT-LLM/Triton uses port 9000 for gRPC by default (not Triton's standard 8001)
 func DefaultTritonConfig() *TritonConfig {
 	return &TritonConfig{
 		Protocol: "http",
 		HTTPPort: 8000,
-		GRPCPort: 8001,
+		GRPCPort: 9000, // TRT-LLM default gRPC port
 	}
 }
 

@@ -228,9 +228,10 @@ func (h *PolicyHandler) Validate(w http.ResponseWriter, r *http.Request) {
 
 // validBackendTypes contains the allowed backend type values
 var validBackendTypes = map[string]bool{
-	"":       true, // empty defaults to "openai"
-	"openai": true,
-	"triton": true,
+	"":            true, // empty defaults to "openai"
+	"openai":      true,
+	"triton":      true, // HTTP-based Triton (standard Triton Inference Server)
+	"triton-grpc": true, // gRPC-based Triton (required for TRT-LLM decoupled models)
 }
 
 // validTokenizers contains the allowed tokenizer encoding values
@@ -265,7 +266,7 @@ func (h *PolicyHandler) validateCreate(create *domain.PolicyCreate) []httputil.V
 	if !validBackendTypes[create.BackendType] {
 		errors = append(errors, httputil.ValidationError{
 			Field:   "backend_type",
-			Message: "backend_type must be 'openai' or 'triton'",
+			Message: "backend_type must be 'openai', 'triton', or 'triton-grpc'",
 		})
 	}
 
@@ -277,8 +278,8 @@ func (h *PolicyHandler) validateCreate(create *domain.PolicyCreate) []httputil.V
 		})
 	}
 
-	// Require tokenizer when backend_type is triton
-	if create.BackendType == "triton" && create.Tokenizer == "" {
+	// Require tokenizer when backend_type is triton or triton-grpc
+	if (create.BackendType == "triton" || create.BackendType == "triton-grpc") && create.Tokenizer == "" {
 		errors = append(errors, httputil.ValidationError{
 			Field:   "tokenizer",
 			Message: "tokenizer is required when backend_type is 'triton'",
@@ -309,7 +310,7 @@ func (h *PolicyHandler) validateUpdate(update *domain.PolicyUpdate) []httputil.V
 	if update.BackendType != nil && !validBackendTypes[*update.BackendType] {
 		errors = append(errors, httputil.ValidationError{
 			Field:   "backend_type",
-			Message: "backend_type must be 'openai' or 'triton'",
+			Message: "backend_type must be 'openai', 'triton', or 'triton-grpc'",
 		})
 	}
 

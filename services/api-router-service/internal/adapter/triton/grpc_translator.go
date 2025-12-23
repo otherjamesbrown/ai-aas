@@ -198,6 +198,12 @@ func (t *GRPCTranslator) TranslateFinalChunk(
 	}
 }
 
+// ExtractTextFromGRPCResponse extracts the generated text from a Triton gRPC response.
+// This is the public API for non-streaming gRPC inference.
+func (t *GRPCTranslator) ExtractTextFromGRPCResponse(resp *pb.ModelStreamInferResponse) (string, error) {
+	return t.extractTextFromGRPCResponse(resp)
+}
+
 // extractTextFromGRPCResponse extracts the generated text from a Triton gRPC response.
 func (t *GRPCTranslator) extractTextFromGRPCResponse(resp *pb.ModelStreamInferResponse) (string, error) {
 	if resp.InferResponse == nil {

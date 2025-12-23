@@ -344,19 +344,19 @@ func (h *Handler) handleTritonStreamingChatCompletion(
 }
 
 // buildTritonGRPCEndpoint constructs the gRPC endpoint URL for a Triton backend.
-// By default, uses port 8001 for gRPC (Triton's default gRPC port).
+// By default, uses port 9000 for gRPC (TRT-LLM's default gRPC port).
 func (h *Handler) buildTritonGRPCEndpoint(backendID, model string) string {
-	// For now, use the same logic as buildTritonEndpoint but with gRPC port
-	// This can be enhanced with proper config support later
+	// Default gRPC port for TRT-LLM/Triton
+	grpcPort := 9000
+
 	backend, err := h.backendRegistry.GetBackend(backendID)
 	if err == nil && backend != nil {
 		// Extract host from HTTP URI and use gRPC port
-		// This is a simple implementation - can be enhanced with proper config
-		return fmt.Sprintf("%s:8001", extractHost(backend.URI))
+		return fmt.Sprintf("%s:%d", extractHost(backend.URI), grpcPort)
 	}
 
 	// Fallback: use model name as service name with Kubernetes DNS
-	return fmt.Sprintf("%s.system.svc.cluster.local:8001", model)
+	return fmt.Sprintf("%s.system.svc.cluster.local:%d", model, grpcPort)
 }
 
 // extractHost extracts the host from a URL (removes scheme and path).
