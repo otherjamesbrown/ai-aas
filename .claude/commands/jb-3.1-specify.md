@@ -1,6 +1,6 @@
 # Specify (Phase 3.1)
 
-Create a structured spec.md from the idea.md. Wraps /speckit.specify with workflow integration.
+Create a structured spec.md from the idea.md. Wraps `/speckit.specify` with workflow integration.
 
 ## Instructions
 
@@ -26,64 +26,49 @@ bd list --label="spec$SPEC_NUMBER" --label="epic"
 
 ### Step 4: Run Speckit Specify
 
-Invoke the speckit.specify workflow, but ensure it:
-1. Reads from `specs/$SPEC_FOLDER/idea.md`
-2. Writes to `specs/$SPEC_FOLDER/spec.md`
-3. Includes a **## Validation** section with environment-specific checks
+Invoke `/speckit.specify` with the idea content.
 
-The spec.md should include:
-- Metadata
-- Clarifications from idea.md
-- User Scenarios
-- Functional Requirements
-- **Validation Steps** (for post-deployment testing)
-- Success Criteria
+The speckit command will:
+- Parse the idea and extract requirements
+- Ask up to 3 clarifying questions
+- Create spec.md with all required sections including Validation
+- Create checklists/requirements.md
 
-### Step 5: Add Validation Section
-
-Ensure spec.md includes:
-
-```markdown
-## Validation
-
-### Development Cluster
-- [ ] $VALIDATION_CHECK_1
-- [ ] $VALIDATION_CHECK_2
-
-### Staging
-- [ ] $STAGING_CHECK_1
-
-### Production
-- [ ] $PROD_CHECK_1
-```
-
-### Step 6: Update Bead
+### Step 5: Update Bead
 
 ```bash
-bd comments add $EPIC_BEAD_ID "spec.md created with /jb-3-1-specify"
+bd comments add $EPIC_BEAD_ID "spec.md created with /jb-3.1-specify"
 ```
 
-### Step 7: Show Status Summary
+### Step 6: Sync Beads
+
+```bash
+bd sync
+```
+
+### Step 7: Status Summary
 
 ```
 ═══════════════════════════════════════════════════
- /jb-3-1-specify - COMPLETE
+ /jb-3.1-specify - COMPLETE
 ═══════════════════════════════════════════════════
 
  Spec Folder:      specs/$SPEC_FOLDER/
- File Created:     spec.md
+
+ Files Created:
+   - spec.md
+   - checklists/requirements.md
 
  Sections:
-   - Metadata
-   - User Scenarios: $COUNT
-   - Requirements: $COUNT
-   - Validation Steps: $COUNT
+   - User Scenarios: [count]
+   - Functional Requirements: [count]
+   - Validation Steps: [count]
 
  Epic Bead:        $EPIC_BEAD_ID (updated)
 
  Next Steps:
    - Review spec.md and refine if needed
-   - If migration/refactor: Run /jb-3.2-impact for impact analysis
-   - If greenfield: Run /jb-3.3-plan to create implementation plan
+   - If migration/refactor: /jb-3.2-impact
+   - If greenfield: /jb-3.3-plan
 ═══════════════════════════════════════════════════
 ```

@@ -141,7 +141,7 @@ Create `specs/[feature]/impact.md`:
 # Impact Analysis: [Feature Name]
 
 **Spec**: [link to spec.md]
-**Analyzed**: [date]
+**Analyzed**: YYYY-MM-DD
 **Type**: Migration | Refactor | Deprecation
 
 ## Summary
@@ -376,6 +376,10 @@ When `/speckit.plan` runs after `/speckit.impact`:
 2. Plan phases should align with migration order
 3. Include REMOVE/DEPRECATE tasks in the plan
 4. Reference impact.md for file paths
+
+## Key Constraints
+
+- Use ISO date format: YYYY-MM-DD
 
 ## User Input
 $ARGUMENTS

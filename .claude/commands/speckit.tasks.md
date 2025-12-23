@@ -4,17 +4,35 @@ Generate an actionable task list from the implementation plan, organized by user
 
 ## Instructions
 
+### Step 0: Load Project Configuration
+
+Check for project-specific configuration:
+```bash
+cat specs/.speckit/config.yaml 2>/dev/null
+```
+
+If exists, load:
+- `agents` - Agent definitions with file patterns and context files
+- `components` - Component labels for categorization
+- `beads_prefix` - Project prefix for bead IDs
+
+Use config values for agent/component labeling. If no config, use defaults.
+
 ### Step 1: Load Context
+
 Read the required design documents:
 - `specs/[feature]/plan.md` - Implementation plan
 - `specs/[feature]/spec.md` - Feature specification
 - `specs/[feature]/data-model.md` - Data model (if exists)
 - `specs/[feature]/contracts/` - API contracts (if exists)
+- `specs/[feature]/impact.md` - Impact analysis (if exists)
 
 ### Step 2: Parse User Stories
+
 Extract user stories from `spec.md`, noting their priorities (P1, P2, P3).
 
 ### Step 3: Generate Tasks
+
 Create `specs/[feature]/tasks.md` with tasks organized by user story.
 
 **Task Format** (mandatory):
@@ -24,7 +42,7 @@ Create `specs/[feature]/tasks.md` with tasks organized by user story.
 
 Where:
 - `TaskID`: Sequential (T001, T002, T003...)
-- `[P]`: Marks parallelizable tasks
+- `[P]`: Marks parallelizable tasks (tasks with no shared file dependencies)
 - `[Story]`: User story reference (US1, US2, etc.)
 - Description: What to do, including exact file paths
 
@@ -34,7 +52,7 @@ Where:
 # Tasks: [Feature Name]
 
 **Feature**: `[NNN]-[feature-name]`
-**Generated**: [date]
+**Generated**: YYYY-MM-DD
 **Source**: plan.md, spec.md
 
 ## Phase 1: Setup & Prerequisites
@@ -62,6 +80,7 @@ Where:
 ```
 
 ### Step 5: Identify Dependencies
+
 Add a dependency section if tasks have prerequisites:
 ```markdown
 ## Dependencies
@@ -70,6 +89,7 @@ Add a dependency section if tasks have prerequisites:
 ```
 
 ### Step 6: Create Epic Bead
+
 Create an epic bead to track the overall feature implementation:
 
 ```bash
@@ -81,9 +101,10 @@ Add metadata to the epic:
 - Link to plan: `specs/[feature]/plan.md`
 - Link to tasks: `specs/[feature]/tasks.md`
 
-Note the epic ID (e.g., `AIAAS-42`).
+Note the epic ID (e.g., `ai-aas-42`).
 
 ### Step 7: Create Task Beads
+
 For each task in `tasks.md`, create a bead with:
 
 ```bash
@@ -92,25 +113,22 @@ bd create "[TaskID] [Description]" --type task --priority [1-3]
 
 **Required Labels** (add with `bd label add <id> <label>`):
 
-1. **Agent Label** - Who should work on this:
-   - `agent:go-services` - Go service code (handlers, business logic)
-   - `agent:infra-ops` - Kubernetes, Helm, ArgoCD, deployment
-   - `agent:cli` - CLI commands and client code
-   - `agent:operator` - Kubernetes operator code
-   - `agent:general` - Everything else (frontend, scripts, docs)
+1. **Agent Label** - From config `agents` section, or use defaults:
 
-2. **Component Label** - What it touches:
-   - `component:api-router` - API Router Service
-   - `component:admin-api` - Admin API Service
-   - `component:user-org` - User/Org Service
-   - `component:analytics` - Analytics Service
-   - `component:web-portal` - Web Portal (React)
-   - `component:cli` - CLI tool
-   - `component:gitops` - GitOps/ArgoCD configs
-   - `component:shared` - Shared libraries
-   - `component:infra` - Infrastructure/Helm charts
+   | Agent | Description |
+   |-------|-------------|
+   | `agent:go-services` | Go service code (handlers, business logic) |
+   | `agent:infra-ops` | Kubernetes, Helm, ArgoCD, deployment |
+   | `agent:cli` | CLI commands and client code |
+   | `agent:operator` | Kubernetes operator code |
+   | `agent:general` | Everything else (frontend, scripts, docs) |
 
-**Agent Selection Rules:**
+2. **Component Label** - From config `components` section
+
+**Agent Selection Rules** (from config or defaults):
+
+Match file paths in task to agent patterns:
+
 | File Path Pattern | Agent Label |
 |-------------------|-------------|
 | `services/*-service/**/*.go` | `agent:go-services` |
@@ -120,6 +138,7 @@ bd create "[TaskID] [Description]" --type task --priority [1-3]
 | `web/**`, `*.md`, `scripts/**` | `agent:general` |
 
 ### Step 8: Add Bead Dependencies
+
 Map task dependencies to bead dependencies:
 
 ```bash
@@ -129,6 +148,7 @@ bd dep add <T006-bead-id> <T004-bead-id>
 ```
 
 ### Step 9: Add Bead Context
+
 For each task bead, add a comment with implementation context:
 
 ```bash
@@ -147,6 +167,7 @@ bd comments <bead-id> --add "## Context
 ```
 
 ### Step 10: Link Tasks to Epic
+
 Add all task beads as blockers of the epic (epic is blocked until all tasks done):
 
 ```bash
@@ -154,33 +175,47 @@ bd dep add <epic-id> <task-bead-id>
 ```
 
 ### Step 11: Report
+
 Output summary:
 
-```markdown
-## Task Generation Complete
+```
+═══════════════════════════════════════════════════
+ speckit.tasks - COMPLETE
+═══════════════════════════════════════════════════
 
-**Feature**: [NNN]-[feature-name]
-**Epic Bead**: AIAAS-XX - [Feature Name] Implementation
+ Feature:          [NNN]-[feature-name]
+ Epic Bead:        [PREFIX]-XX - [Feature Name] Implementation
 
-### Tasks Created
-| Bead ID | Task | Agent | Component | Dependencies |
-|---------|------|-------|-----------|--------------|
-| AIAAS-XX | T001 Setup directories | general | infra | - |
-| AIAAS-XX | T002 Add Go types | go-services | api-router | - |
-| AIAAS-XX | T003 Implement handler | go-services | api-router | T002 |
+ Files Created:
+   - tasks.md
 
-**Total**: X tasks across Y phases
-**Parallel opportunities**: Z tasks can run concurrently
+ Tasks Created:
+   | Bead ID | Task | Agent | Component | Dependencies |
+   |---------|------|-------|-----------|--------------|
+   | XX | T001 Setup directories | general | infra | - |
+   | XX | T002 Add Go types | go-services | api-router | - |
+   | XX | T003 Implement handler | go-services | api-router | T002 |
 
-**Next Step**: `/speckit.implement AIAAS-XX` (epic bead ID)
+ Summary:
+   - Total tasks: [count]
+   - Phases: [count]
+   - Parallel opportunities: [count] tasks can run concurrently
+
+ Next Steps:
+   - Review tasks.md for completeness
+   - Run /speckit.analyze to validate consistency
+   - Run /speckit.implement [epic-id] to start implementation
+═══════════════════════════════════════════════════
 ```
 
 ## Key Constraints
+
 - Every task must have exact file paths
 - Tasks must be immediately actionable without additional context
 - Tests come before implementation within each story phase
 - Every task bead must have both agent and component labels
 - Dependencies in tasks.md must be reflected in bead dependencies
+- Use ISO date format: YYYY-MM-DD
 
 ## User Input
 $ARGUMENTS

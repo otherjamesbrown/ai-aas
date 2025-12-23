@@ -47,7 +47,7 @@ After each answer, update `spec.md`:
 
 1. Add to `## Clarifications` section with dated header:
 ```markdown
-### Session [YYYY-MM-DD]
+### Session YYYY-MM-DD
 
 - **Q:** [Question asked]
   **A:** [User's answer]
@@ -77,6 +77,10 @@ Generate a coverage summary:
 - Questions must materially impact architecture, testing, UX, or compliance
 - No speculative tech-stack questions unless they block functional clarity
 - User can end early with "done" or "stop"
+
+## Key Constraints
+
+- Use ISO date format: YYYY-MM-DD
 
 ## User Input
 $ARGUMENTS

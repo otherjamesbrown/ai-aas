@@ -1,6 +1,6 @@
 # Impact Analysis (Phase 3.2)
 
-Analyze how the specification impacts the existing codebase. Run this **before** planning for migrations, refactors, or deprecations.
+Analyze how the specification impacts the existing codebase. Wraps `/speckit.impact` with workflow integration.
 
 ## When to Use
 
@@ -31,17 +31,14 @@ If not found, suggest running `/jb-3.1-specify` first.
 
 ### Step 3: Check for Impact Signals
 
-Scan spec.md for these signals:
+Scan spec.md for migration signals:
+- "migrate from X to Y"
+- "replace X with Y"
+- "remove X"
+- "change behavior of X"
+- "no longer use X"
 
-| Signal | Indicates |
-|--------|-----------|
-| "migrate from X to Y" | Migration - find all X usage |
-| "replace X with Y" | Replacement - find X, plan removal |
-| "remove X" | Deprecation - find X and dependents |
-| "change behavior of X" | Modification - find X call sites |
-| "no longer use X" | Removal - find X integration points |
-
-If NO signals found, output:
+If NO signals found:
 ```
 ═══════════════════════════════════════════════════
  /jb-3.2-impact - SKIPPED (Greenfield Feature)
@@ -62,68 +59,30 @@ bd list --label="spec$SPEC_NUMBER" --label="epic"
 
 ### Step 5: Run Speckit Impact
 
-Invoke `/speckit.impact` workflow to:
-1. Load architecture context (`context/agents.md`, `ARCHITECTURE.md`)
-2. Search codebase for each impact signal
-3. Map dependencies (what depends on affected code)
-4. Categorize changes (REMOVE, MODIFY, ADD, DEPRECATE, UPDATE)
-5. Assess risk levels (HIGH, MEDIUM, LOW)
-6. Determine migration order with rollback strategies
+Invoke `/speckit.impact` for the current spec folder.
 
-### Step 6: Generate impact.md
+The speckit command will:
+- Load architecture context
+- Search codebase for each impact signal
+- Map dependencies
+- Categorize changes (REMOVE, MODIFY, ADD, DEPRECATE, UPDATE)
+- Assess risk levels
+- Determine migration order with rollback strategies
+- Generate impact.md
 
-Create `specs/$SPEC_FOLDER/impact.md` with:
-
-```markdown
-# Impact Analysis: [Feature Name]
-
-**Spec**: [link to spec.md]
-**Analyzed**: [date]
-**Type**: Migration | Refactor | Deprecation
-
-## Summary
-[1-2 sentence overview]
-
-## Impact Signals
-| Signal from Spec | Search Pattern | Findings |
-|------------------|----------------|----------|
-
-## Affected Components
-```yaml
-components:
-  path/to/component/:
-    files: N
-    risk: HIGH|MEDIUM|LOW
-    changes: [REMOVE, MODIFY, ADD, DEPRECATE, UPDATE]
-```
-
-## Detailed Findings
-### REMOVE / MODIFY / ADD / DEPRECATE / UPDATE
-[Tables of affected files with risk and notes]
-
-## Migration Order
-```yaml
-phase_1_prepare:
-  description: "..."
-  tasks: [...]
-  risk: LOW
-  rollback: "..."
-```
-
-## Rollback Plan
-[Per-phase rollback strategies]
-
-## Open Questions
-[Discovered during analysis]
-```
-
-### Step 7: Update Bead
+### Step 6: Update Bead
 
 ```bash
-bd comments add $EPIC_BEAD_ID "impact.md created with /jb-3.2-impact - $CHANGE_COUNT changes identified ($HIGH_RISK HIGH risk)"
+bd comments add $EPIC_BEAD_ID "impact.md created - $CHANGE_COUNT changes identified ($HIGH_RISK HIGH risk)"
 ```
 
-### Step 8: Show Status Summary
+### Step 7: Sync Beads
+
+```bash
+bd sync
+```
+
+### Step 8: Status Summary
 
 ```
 ═══════════════════════════════════════════════════
@@ -131,43 +90,28 @@ bd comments add $EPIC_BEAD_ID "impact.md created with /jb-3.2-impact - $CHANGE_C
 ═══════════════════════════════════════════════════
 
  Spec Folder:      specs/$SPEC_FOLDER/
- File Created:     impact.md
+
+ File Created:
+   - impact.md
 
  Impact Summary:
-   - REMOVE:     $COUNT items
-   - MODIFY:     $COUNT items
-   - ADD:        $COUNT items
-   - DEPRECATE:  $COUNT items
-   - UPDATE:     $COUNT items
+   - REMOVE:     [count] items
+   - MODIFY:     [count] items
+   - ADD:        [count] items
+   - DEPRECATE:  [count] items
+   - UPDATE:     [count] items
 
  Risk Profile:
-   - HIGH:   $COUNT changes
-   - MEDIUM: $COUNT changes
-   - LOW:    $COUNT changes
+   - HIGH:   [count] changes
+   - MEDIUM: [count] changes
+   - LOW:    [count] changes
 
- Migration Phases: $COUNT
+ Migration Phases: [count]
 
  Epic Bead:        $EPIC_BEAD_ID (updated)
 
  Next Steps:
    - Review impact.md for completeness
-   - Run /jb-3.3-plan to create implementation plan
-     (Plan will incorporate migration phases)
+   - Run /jb-3.3-plan (plan will incorporate migration phases)
 ═══════════════════════════════════════════════════
 ```
-
-## Key Constraints
-
-- **Read-only**: Analysis only, no code modifications
-- **Thorough search**: Better to find too much than miss affected code
-- **Risk-aware**: Flag anything touching production paths as HIGH
-- **Order matters**: Migration phases must be safe to execute sequentially
-- **Rollback-first**: Every phase needs a rollback strategy
-
-## Integration with jb-3-3-plan
-
-When `/jb-3-3-plan` runs after this phase:
-1. Load `impact.md` alongside `spec.md`
-2. Plan phases should align with migration order from impact.md
-3. Include REMOVE/DEPRECATE tasks in the plan
-4. Reference impact.md for file paths and risk levels
