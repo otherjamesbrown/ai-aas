@@ -138,6 +138,7 @@ maintenance:
 | `CLAUDE.md` | 430 | rules | ✅ UPDATED | Links to context/agents.md |
 | `docs/platform/environment-access.md` | 337 | reference | ✅ UPDATED | Recently cleaned up |
 | `docs/operators/ai-model-operator.md` | 338 | reference | ✅ UPDATED | Links to CRD source |
+| `docs/architecture/inference-routing.md` | 280 | reference | ✅ NEW | vLLM vs TRT-LLM, routing policies |
 
 ### Level 4: Sources (No changes needed - these ARE the source of truth)
 
@@ -279,6 +280,15 @@ hierarchy:
         links_to:
           - operators/ai-model-operator/api/v1alpha1/aimodel_types.go (source)
           - infra/k8s/aimodels/ (source)
+
+      docs/architecture/inference-routing.md:
+        type: reference
+        purpose: Inference routing (vLLM vs TRT-LLM, routing policies, gRPC)
+        read_when: Working with api-router-service, inference backends, routing policies
+        links_to:
+          - services/api-router-service/internal/api/public/openai.go (source)
+          - services/api-router-service/internal/adapter/triton/ (source)
+          - docs/routing-policies.md (reference)
 
     operational:
       docs/runbooks/:

@@ -8,7 +8,7 @@
 
 You own:
 - `services/admin-api-service/` - Model registry, deployments
-- `services/api-router-service/` - Inference gateway → vLLM
+- `services/api-router-service/` - Inference gateway (vLLM HTTP, TRT-LLM gRPC)
 - `services/analytics-service/` - Usage tracking
 - `services/user-org-service/` - Auth, users, orgs, RBAC
 - `shared/` - Shared libraries
@@ -318,11 +318,14 @@ go list -m github.com/ai-aas/shared-go  # Verify replace works
 | Service | Key Code |
 |---------|----------|
 | admin-api | `internal/api/handlers/models.go`, `internal/repository/` |
-| api-router | `internal/router/router.go`, `internal/backends/` |
+| api-router | `internal/api/public/openai.go`, `internal/adapter/triton/` |
 | user-org | `internal/api/handlers/auth.go`, `internal/services/auth_service.go` |
 | analytics | `internal/api/handlers/usage.go`, `internal/aggregation/` |
 | shared | `shared/` |
 | Structure | Each service: `cmd/*/main.go`, `internal/{api,models,repository,services}/` |
+
+**Reference Docs:**
+- Inference routing: `docs/architecture/inference-routing.md` (vLLM vs TRT-LLM, routing policies, gRPC)
 
 ---
 
