@@ -115,6 +115,15 @@ spec:
       ports:
         - protocol: TCP
           port: 9000
+    # Allow HTTP inference traffic to TRT-LLM backends (port 8080)
+    - to:
+        - podSelector:
+            matchExpressions:
+              - key: serving.kserve.io/inferenceservice
+                operator: Exists
+      ports:
+        - protocol: TCP
+          port: 8080
     # Allow to OTEL collector
     - to:
         - namespaceSelector:
