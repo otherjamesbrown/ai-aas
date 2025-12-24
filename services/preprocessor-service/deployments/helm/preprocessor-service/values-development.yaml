@@ -39,7 +39,7 @@ env:
   - name: HF_TOKEN
     valueFrom:
       secretKeyRef:
-        name: huggingface-secret
+        name: preprocessor-hf-token
         key: token
 
 # Models to preload at startup
