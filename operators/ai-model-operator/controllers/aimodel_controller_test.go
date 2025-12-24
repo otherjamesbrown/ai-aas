@@ -408,28 +408,35 @@ func TestAIModelReconciler_StatusUpdateFromInferenceService(t *testing.T) {
 		t.Fatalf("updateStatusFromInferenceService: (%v)", err)
 	}
 
-	// The method updates the AIModel in-memory, then calls Status().Update()
-	// In the test, we need to verify the in-memory object was updated correctly
+	// The method re-fetches the AIModel, updates it, and persists via Status().Update()
+	// We need to fetch the updated AIModel from the client to verify changes
+
+	// Fetch the updated AIModel
+	updatedAIModel := &aimodelv1alpha1.AIModel{}
+	err = cl.Get(context.Background(), types.NamespacedName{Name: aiModelName, Namespace: aiModelNamespace}, updatedAIModel)
+	if err != nil {
+		t.Fatalf("failed to fetch updated AIModel: %v", err)
+	}
 
 	// Check phase is Ready
-	if aiModel.Status.Phase != aimodelv1alpha1.AIModelPhaseReady {
-		t.Errorf("expected phase '%s', got '%s'", aimodelv1alpha1.AIModelPhaseReady, aiModel.Status.Phase)
+	if updatedAIModel.Status.Phase != aimodelv1alpha1.AIModelPhaseReady {
+		t.Errorf("expected phase '%s', got '%s'", aimodelv1alpha1.AIModelPhaseReady, updatedAIModel.Status.Phase)
 	}
 
 	// Check endpoint URL
 	expectedURL := "http://test-model.default.example.com"
-	if aiModel.Status.InferenceEndpoint != expectedURL {
-		t.Errorf("expected endpoint '%s', got '%s'", expectedURL, aiModel.Status.InferenceEndpoint)
+	if updatedAIModel.Status.InferenceEndpoint != expectedURL {
+		t.Errorf("expected endpoint '%s', got '%s'", expectedURL, updatedAIModel.Status.InferenceEndpoint)
 	}
 
 	// Check ready replicas
-	if aiModel.Status.ReadyReplicas != 1 {
-		t.Errorf("expected readyReplicas 1, got %d", aiModel.Status.ReadyReplicas)
+	if updatedAIModel.Status.ReadyReplicas != 1 {
+		t.Errorf("expected readyReplicas 1, got %d", updatedAIModel.Status.ReadyReplicas)
 	}
 
 	// Check InferenceService name
-	if aiModel.Status.InferenceServiceName != aiModelName {
-		t.Errorf("expected inferenceServiceName '%s', got '%s'", aiModelName, aiModel.Status.InferenceServiceName)
+	if updatedAIModel.Status.InferenceServiceName != aiModelName {
+		t.Errorf("expected inferenceServiceName '%s', got '%s'", aiModelName, updatedAIModel.Status.InferenceServiceName)
 	}
 
 	t.Log("Test passed: Controller correctly extracts and updates status from InferenceService")

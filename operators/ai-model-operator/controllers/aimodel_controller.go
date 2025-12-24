@@ -516,19 +516,15 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// 3. Reconcile KServe InferenceService (replaces vLLM Deployment + Service)
 	log.Info("Reconciling InferenceService", "name", aiModel.Name)
 
-	// Update phase to Deploying if not already set
-	if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhasePending {
-		aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
-		if err := r.Status().Update(ctx, aiModel); err != nil {
-			log.Error(err, "unable to update AIModel status to Deploying")
-			reconcileTotal.WithLabelValues("error").Inc()
-			return ctrl.Result{}, err
-		}
-	}
-
 	// Create or update the InferenceService
 	if err := r.createOrUpdateInferenceService(ctx, aiModel, mergedSpec); err != nil {
 		log.Error(err, "Failed to reconcile InferenceService", "name", aiModel.Name)
+		// Re-fetch AIModel before status update to avoid conflicts
+		if fetchErr := r.Get(ctx, req.NamespacedName, aiModel); fetchErr != nil {
+			log.Error(fetchErr, "Failed to re-fetch AIModel before status update")
+			reconcileTotal.WithLabelValues("error").Inc()
+			return ctrl.Result{}, fetchErr
+		}
 		aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
 		aiModel.Status.Message = fmt.Sprintf("Failed to create InferenceService: %v", err)
 		if statusErr := r.Status().Update(ctx, aiModel); statusErr != nil {
@@ -538,7 +534,7 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
-	// Update status from InferenceService
+	// Update status from InferenceService (this will check if already Ready and set appropriate phase)
 	if err := r.updateStatusFromInferenceService(ctx, aiModel); err != nil {
 		log.Error(err, "Failed to update status from InferenceService", "name", aiModel.Name)
 		reconcileTotal.WithLabelValues("error").Inc()
@@ -1388,9 +1384,15 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 	}
 
 	// Skip update if specs are unchanged AND probe config version is the same
-	if !probeConfigChanged && existingSpecFound && desiredSpecFound && equality.Semantic.DeepEqual(existingSpec, desiredSpec) {
+	specsEqual := existingSpecFound && desiredSpecFound && equality.Semantic.DeepEqual(existingSpec, desiredSpec)
+	if !probeConfigChanged && specsEqual {
 		log.Info("InferenceService spec and probe config unchanged, skipping update", "name", aiModel.Name)
 		return nil
+	}
+
+	// Log what changed for debugging
+	if !specsEqual {
+		log.Info("InferenceService spec changed, update required", "name", aiModel.Name)
 	}
 
 	// Update existing InferenceService with retry on conflict
@@ -1487,26 +1489,33 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 		return fmt.Errorf("failed to extract InferenceService status: %w", err)
 	}
 
-	// Update AIModel status (use sanitized name for InferenceService)
-	aiModel.Status.InferenceServiceName = isvcName
-	aiModel.Status.InferenceEndpoint = status.URL
-	aiModel.Status.ReadyReplicas = status.ReadyReplicas
+	// Re-fetch AIModel to get latest resourceVersion before status update
+	// This prevents optimistic concurrency conflicts when multiple reconciliations happen
+	latestAIModel := &aimodelv1alpha1.AIModel{}
+	if err := r.Get(ctx, types.NamespacedName{Name: aiModel.Name, Namespace: aiModel.Namespace}, latestAIModel); err != nil {
+		return fmt.Errorf("failed to re-fetch AIModel before status update: %w", err)
+	}
 
-	// Update phase based on status
+	// Update AIModel status fields (use sanitized name for InferenceService)
+	latestAIModel.Status.InferenceServiceName = isvcName
+	latestAIModel.Status.InferenceEndpoint = status.URL
+	latestAIModel.Status.ReadyReplicas = status.ReadyReplicas
+
+	// Update phase based on InferenceService status
 	if status.Ready {
-		wasNotReady := aiModel.Status.Phase != aimodelv1alpha1.AIModelPhaseReady
+		wasNotReady := latestAIModel.Status.Phase != aimodelv1alpha1.AIModelPhaseReady
 		if wasNotReady {
-			log.Info("InferenceService is ready", "name", aiModel.Name, "url", status.URL)
-			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseReady
-			aiModel.Status.Message = fmt.Sprintf("Model is ready at %s", status.URL)
+			log.Info("InferenceService is ready, transitioning to Ready phase", "name", aiModel.Name, "url", status.URL)
+			latestAIModel.Status.Phase = aimodelv1alpha1.AIModelPhaseReady
+			latestAIModel.Status.Message = fmt.Sprintf("Model is ready at %s", status.URL)
 			// Reset retry tracking on success
-			aiModel.Status.RetryCount = 0
-			aiModel.Status.LastRetryTime = nil
-			aiModel.Status.NextRetryTime = nil
+			latestAIModel.Status.RetryCount = 0
+			latestAIModel.Status.LastRetryTime = nil
+			latestAIModel.Status.NextRetryTime = nil
 		}
 
 		// Sync deployment state to Admin API when ready
-		if err := r.syncDeploymentToAdminAPI(ctx, aiModel, status); err != nil {
+		if err := r.syncDeploymentToAdminAPI(ctx, latestAIModel, status); err != nil {
 			// Log error but don't fail reconciliation - Admin API sync is best-effort
 			log.Error(err, "Failed to sync deployment to Admin API", "name", aiModel.Name)
 		}
@@ -1518,7 +1527,7 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 			log.Info("InferenceService has transient failure, will retry",
 				"name", aiModel.Name,
 				"status", status.String(),
-				"retryCount", aiModel.Status.RetryCount)
+				"retryCount", latestAIModel.Status.RetryCount)
 
 			// Get max retries configuration
 			maxRetries := r.MaxDeploymentRetries
@@ -1527,29 +1536,29 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 			}
 
 			// Check if we should retry
-			if aiModel.Status.RetryCount < maxRetries {
+			if latestAIModel.Status.RetryCount < maxRetries {
 				// Only increment retry count and schedule retry if we're in Deploying phase
 				// (not if we're already in RetryPending waiting for the timer)
-				if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhaseDeploying {
-					aiModel.Status.RetryCount++
-					backoffDuration := r.calculateDeploymentRetryBackoff(aiModel.Status.RetryCount - 1)
+				if latestAIModel.Status.Phase == aimodelv1alpha1.AIModelPhaseDeploying {
+					latestAIModel.Status.RetryCount++
+					backoffDuration := r.calculateDeploymentRetryBackoff(latestAIModel.Status.RetryCount - 1)
 					now := metav1.Now()
 					nextRetry := metav1.NewTime(now.Add(backoffDuration))
 
-					aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseRetryPending
-					aiModel.Status.LastRetryTime = &now
-					aiModel.Status.NextRetryTime = &nextRetry
-					aiModel.Status.Message = fmt.Sprintf("Transient deployment failure (retry %d/%d scheduled in %v): %s",
-						aiModel.Status.RetryCount, maxRetries, backoffDuration, status.String())
+					latestAIModel.Status.Phase = aimodelv1alpha1.AIModelPhaseRetryPending
+					latestAIModel.Status.LastRetryTime = &now
+					latestAIModel.Status.NextRetryTime = &nextRetry
+					latestAIModel.Status.Message = fmt.Sprintf("Transient deployment failure (retry %d/%d scheduled in %v): %s",
+						latestAIModel.Status.RetryCount, maxRetries, backoffDuration, status.String())
 
 					log.Info("Deployment retry scheduled",
-						"retryCount", aiModel.Status.RetryCount,
+						"retryCount", latestAIModel.Status.RetryCount,
 						"backoffDuration", backoffDuration,
 						"nextRetryTime", nextRetry.Time)
 				} else {
 					// Already in RetryPending, keep the existing message
-					aiModel.Status.Message = fmt.Sprintf("Waiting for retry %d/%d: %s",
-						aiModel.Status.RetryCount, maxRetries, status.String())
+					latestAIModel.Status.Message = fmt.Sprintf("Waiting for retry %d/%d: %s",
+						latestAIModel.Status.RetryCount, maxRetries, status.String())
 				}
 			} else {
 				// Max retries exceeded for transient failure
@@ -1558,8 +1567,8 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 					"name", aiModel.Name,
 					"maxRetries", maxRetries,
 					"status", status.String())
-				aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
-				aiModel.Status.Message = fmt.Sprintf("Deployment failed after %d retry attempts: %s. Manual intervention required.",
+				latestAIModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
+				latestAIModel.Status.Message = fmt.Sprintf("Deployment failed after %d retry attempts: %s. Manual intervention required.",
 					maxRetries, status.String())
 			}
 		} else if status.IsPermanentFailure() {
@@ -1568,21 +1577,31 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 				"InferenceService has permanent failure",
 				"name", aiModel.Name,
 				"status", status.String())
-			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
-			aiModel.Status.Message = fmt.Sprintf("Permanent deployment failure: %s. Manual intervention required.", status.String())
+			latestAIModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
+			latestAIModel.Status.Message = fmt.Sprintf("Permanent deployment failure: %s. Manual intervention required.", status.String())
 		} else {
 			// Not ready, but not clearly a failure yet (e.g., still creating)
-			// Keep in Deploying phase
-			if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhaseReady {
-				// Transition from Ready to Deploying
-				aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
+			// Only transition to Deploying if not already in a terminal or retry state
+			if latestAIModel.Status.Phase != aimodelv1alpha1.AIModelPhaseDeploying &&
+				latestAIModel.Status.Phase != aimodelv1alpha1.AIModelPhaseFailed &&
+				latestAIModel.Status.Phase != aimodelv1alpha1.AIModelPhaseRetryPending {
+				log.Info("InferenceService not ready yet, setting phase to Deploying",
+					"name", aiModel.Name,
+					"currentPhase", latestAIModel.Status.Phase,
+					"status", status.String())
+				latestAIModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
 			}
-			aiModel.Status.Message = status.String()
+			latestAIModel.Status.Message = status.String()
 		}
 	}
 
-	// Update status
-	if err := r.Status().Update(ctx, aiModel); err != nil {
+	// Update status with retry on conflict
+	if err := r.Status().Update(ctx, latestAIModel); err != nil {
+		if errors.IsConflict(err) {
+			log.Info("Status update conflict, will retry on next reconciliation", "name", aiModel.Name)
+			// Don't return error - let the next reconciliation handle it
+			return nil
+		}
 		return fmt.Errorf("failed to update AIModel status: %w", err)
 	}
 
