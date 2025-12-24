@@ -6,7 +6,7 @@ set -euo pipefail
 
 # Source common helper library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/dev/common.sh
+# shellcheck source=scripts/dev/common.sh disable=SC1091
 source "${SCRIPT_DIR}/common.sh"
 
 # Default values
@@ -124,7 +124,7 @@ local_status() {
   
   popd >/dev/null
   
-  if [[ "${OUTPUT_JSON}" == "true" || "${jsonOutput}" == "true" ]]; then
+  if [[ "${OUTPUT_JSON}" == "true" ]]; then
     echo "${status_json}"
   else
     log_info "Local dev stack status:"
@@ -261,8 +261,6 @@ seed_local_data() {
   fi
   
   log_info "Seeding sample data..."
-  
-  local dsn="postgres://postgres:postgres@localhost:${postgres_port}/ai_aas?sslmode=disable"
   
   # Use docker exec if postgres container is running, otherwise use psql directly
   if docker ps --format "{{.Names}}" | grep -q "^dev-postgres$"; then
