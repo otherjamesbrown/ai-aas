@@ -645,6 +645,9 @@ func convertDeployment(d svcModels.Deployment) Deployment {
 	if d.Endpoint != nil {
 		deployment.Endpoint = *d.Endpoint
 	}
+	if d.StatusChangedAt != nil {
+		deployment.StatusChangedAt = d.StatusChangedAt
+	}
 	if d.MemoryGB != nil {
 		deployment.MemoryGB = *d.MemoryGB
 	}

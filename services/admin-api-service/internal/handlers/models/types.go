@@ -129,6 +129,7 @@ type Deployment struct {
 	Endpoint             string     `json:"endpoint,omitempty"`
 	Enabled              bool       `json:"enabled"`
 	Status               string     `json:"status"`
+	StatusChangedAt      *time.Time `json:"status_changed_at,omitempty"`
 	ReplicasDesired      int        `json:"replicas_desired"`
 	ReplicasReady        int        `json:"replicas_ready"`
 	GPUCount             int        `json:"gpu_count"`

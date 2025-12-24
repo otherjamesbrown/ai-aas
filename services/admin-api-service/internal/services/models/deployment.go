@@ -25,6 +25,7 @@ type Deployment struct {
 	Endpoint             *string
 	Enabled              bool
 	Status               string
+	StatusChangedAt      *time.Time
 	ReplicasDesired      int
 	ReplicasReady        int
 	GPUCount             int
@@ -62,6 +63,7 @@ func (s *Service) ListDeployments(ctx context.Context, opts ListDeploymentsOptio
 	query := `
 		SELECT d.id, d.model_id, d.cache_id, d.environment, d.namespace,
 		       d.inferenceservice_name, d.endpoint, d.enabled, d.status,
+		       d.status_changed_at,
 		       d.replicas_desired, d.replicas_ready, d.gpu_count, d.memory_gb,
 		       d.last_health_check_at, d.last_health_status,
 		       d.last_enabled_at, d.last_enabled_by,
@@ -112,6 +114,7 @@ func (s *Service) ListDeployments(ctx context.Context, opts ListDeploymentsOptio
 		err := rows.Scan(
 			&d.ID, &d.ModelID, &d.CacheID, &d.Environment, &d.Namespace,
 			&d.InferenceServiceName, &d.Endpoint, &d.Enabled, &d.Status,
+			&d.StatusChangedAt,
 			&d.ReplicasDesired, &d.ReplicasReady, &d.GPUCount, &d.MemoryGB,
 			&d.LastHealthCheckAt, &d.LastHealthStatus,
 			&d.LastEnabledAt, &d.LastEnabledBy,
@@ -132,6 +135,7 @@ func (s *Service) GetDeployment(ctx context.Context, modelName, environment stri
 	query := `
 		SELECT d.id, d.model_id, d.cache_id, d.environment, d.namespace,
 		       d.inferenceservice_name, d.endpoint, d.enabled, d.status,
+		       d.status_changed_at,
 		       d.replicas_desired, d.replicas_ready, d.gpu_count, d.memory_gb,
 		       d.last_health_check_at, d.last_health_status,
 		       d.last_enabled_at, d.last_enabled_by,
@@ -146,6 +150,7 @@ func (s *Service) GetDeployment(ctx context.Context, modelName, environment stri
 	err := s.pool.QueryRow(ctx, query, modelName, environment).Scan(
 		&d.ID, &d.ModelID, &d.CacheID, &d.Environment, &d.Namespace,
 		&d.InferenceServiceName, &d.Endpoint, &d.Enabled, &d.Status,
+		&d.StatusChangedAt,
 		&d.ReplicasDesired, &d.ReplicasReady, &d.GPUCount, &d.MemoryGB,
 		&d.LastHealthCheckAt, &d.LastHealthStatus,
 		&d.LastEnabledAt, &d.LastEnabledBy,
