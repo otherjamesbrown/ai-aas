@@ -137,6 +137,65 @@ All translated requests MUST:
 - Triton model management (loading/unloading models)
 - Istio service mesh integration
 
+## Inference Engine Comparison
+
+This section documents the three inference engines supported by the platform and their model capabilities.
+
+### Engine Overview
+
+| Engine | Strengths | API Style | Best For |
+|--------|-----------|-----------|----------|
+| **vLLM** | Fast LLM inference, PagedAttention, OpenAI-compatible | REST (OpenAI) | Chat/completion LLMs, some VLMs |
+| **TensorRT-LLM** | Maximum throughput, NVIDIA-optimized, lowest latency | gRPC (KServe V2) | Production LLMs at scale |
+| **TGI** | HuggingFace native, easy setup, broad model support | REST (OpenAI-like) | Rapid prototyping, diverse models |
+
+### Model Type Support Matrix
+
+| Model Type | vLLM | TensorRT-LLM | TGI | Example Models |
+|------------|------|--------------|-----|----------------|
+| **Chat/Instruct LLM** | Yes | Yes | Yes | Llama-3.1-8B-Instruct, Mistral-7B-Instruct, Qwen2.5-7B-Instruct |
+| **Code LLM** | Yes | Yes | Yes | CodeLlama-34B, DeepSeek-Coder-V2, StarCoder2-15B |
+| **Vision-Language (VLM)** | Yes | Limited | Yes | LLaVA-1.6, Qwen2-VL-7B, Pixtral-12B, InternVL2 |
+| **Speech-to-Text (ASR)** | No | Yes | No | Whisper-large-v3, Distil-Whisper, Canary-1B |
+| **Text-to-Speech (TTS)** | No | Yes | No | XTTS-v2, Bark, Parler-TTS |
+| **Image Generation** | No | Yes | No | SDXL, FLUX.1, Stable Diffusion 3 |
+| **Embeddings** | Yes | Yes | Yes | BGE-large, E5-Mistral-7B, GTE-Qwen2 |
+| **Reranking** | No | Yes | Yes | BGE-Reranker-v2, Cohere-Rerank |
+
+### Model Deployment Roadmap
+
+#### Phase 1: TGI Addition (Text Models)
+
+| Model | Engine | Type | Size | Use Case |
+|-------|--------|------|------|----------|
+| `mistralai/Mistral-7B-Instruct-v0.3` | TGI | Chat LLM | 7B | General chat, compare with vLLM |
+| `Qwen/Qwen2.5-7B-Instruct` | TGI | Chat LLM | 7B | Multilingual, long context |
+| `bigcode/starcoder2-15b` | TGI | Code LLM | 15B | Code generation/completion |
+
+#### Phase 2: Vision-Language Models
+
+| Model | Engine | Type | Size | Use Case |
+|-------|--------|------|------|----------|
+| `llava-hf/llava-v1.6-mistral-7b-hf` | vLLM | VLM | 7B | Image understanding |
+| `Qwen/Qwen2-VL-7B-Instruct` | vLLM/TGI | VLM | 7B | Document OCR, charts |
+| `mistral-community/pixtral-12b` | TGI | VLM | 12B | Multi-image reasoning |
+
+#### Phase 3: Audio Models (Triton/TensorRT-LLM)
+
+| Model | Engine | Type | Size | Use Case |
+|-------|--------|------|------|----------|
+| `openai/whisper-large-v3` | Triton | ASR | 1.5B | Speech transcription |
+| `distil-whisper/distil-large-v3` | Triton | ASR | 756M | Fast transcription |
+| `nvidia/canary-1b` | Triton | ASR | 1B | Multi-language ASR |
+
+#### Phase 4: Embeddings & RAG
+
+| Model | Engine | Type | Size | Use Case |
+|-------|--------|------|------|----------|
+| `BAAI/bge-large-en-v1.5` | vLLM/TGI | Embedding | 335M | Document search |
+| `Alibaba-NLP/gte-Qwen2-7B-instruct` | vLLM | Embedding | 7B | High-quality embeddings |
+| `BAAI/bge-reranker-v2-m3` | TGI | Reranker | 568M | Search result reranking |
+
 ## Technical Notes
 
 - Existing TRT-LLM deployment: `llama-3-1-8b-instruct-trtllm-predictor.development.svc.cluster.local:80`
