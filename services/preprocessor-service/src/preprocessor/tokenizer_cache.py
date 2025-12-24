@@ -46,12 +46,17 @@ class TokenizerCache:
                 raise ValueError(f"Tokenizer load failed previously: {self._load_errors[model_id]}")
 
         # Load outside the lock to avoid blocking other requests
-        logger.info("loading_tokenizer", model_id=model_id)
+        logger.info(
+            "loading_tokenizer",
+            model_id=model_id,
+            local_files_only=settings.transformers_offline,
+        )
         try:
             tokenizer = AutoTokenizer.from_pretrained(
                 model_id,
                 trust_remote_code=True,
                 token=settings.hf_token,
+                local_files_only=settings.transformers_offline,
             )
         except Exception as e:
             error_msg = f"Failed to load tokenizer: {e}"

@@ -1,5 +1,6 @@
 """Main entry point for the preprocessor gRPC service."""
 
+import logging
 import signal
 import sys
 from concurrent import futures
@@ -14,6 +15,13 @@ from . import preprocessor_pb2_grpc
 from .config import settings
 from .service import PreprocessorServicer
 from .tokenizer_cache import tokenizer_cache
+
+# Configure Python's standard logging level (required for structlog filter_by_level)
+logging.basicConfig(
+    format="%(message)s",
+    stream=sys.stdout,
+    level=getattr(logging, settings.log_level.upper(), logging.INFO),
+)
 
 # Configure structured logging
 structlog.configure(

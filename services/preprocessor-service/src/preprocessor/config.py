@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     # HuggingFace configuration
     hf_home: str = Field(default="/app/hf_cache", description="HuggingFace cache directory")
     hf_token: str | None = Field(default=None, description="HuggingFace API token (optional)")
+    transformers_offline: bool = Field(
+        default=False,
+        description="Use local files only, no network access (set via TRANSFORMERS_OFFLINE=1)"
+    )
 
     # Tokenizer cache settings
     max_cached_tokenizers: int = Field(default=50, description="Max tokenizers to keep in memory")

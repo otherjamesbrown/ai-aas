@@ -33,9 +33,14 @@ env:
   - name: HF_HOME
     value: "/app/hf_cache"
   - name: TRANSFORMERS_OFFLINE
-    value: "1"
+    value: "0"
   - name: MAX_CACHED_TOKENIZERS
     value: "50"
+  - name: HF_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: huggingface-secret
+        key: token
 
 # Models to preload at startup
 preloadModels: "meta-llama/Llama-3.1-8B-Instruct"
