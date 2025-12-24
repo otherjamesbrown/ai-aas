@@ -200,15 +200,6 @@ curl -k https://api.dev.otherjamesbrown.com/v1/status/healthz \
   -H "X-API-Key: YOUR_API_KEY"
 ```
 
-
-
-```bash
-  -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-
-curl -k https://api.dev.otherjamesbrown.com/v1/status/healthz \
-  -H "X-API-Key: YOUR_API_KEY"
-```
-
 ### Verify TLS Certificate
 
 ```bash

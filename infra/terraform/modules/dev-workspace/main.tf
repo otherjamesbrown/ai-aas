@@ -52,11 +52,7 @@ resource "linode_instance" "workspace" {
   root_pass       = var.root_pass != null ? var.root_pass : random_password.root_pass.result
   authorized_keys = var.authorized_keys
   swap_size       = var.swap_size
-  backups_enabled = var.backup_enabled
-  backup_schedule {
-    day    = var.backup_schedule.day
-    window = var.backup_schedule.window
-  }
+  backups_enabled  = var.backup_enabled
   watchdog_enabled = var.watchdog_enabled
 
   stackscript_id  = var.stackscript_id != null ? var.stackscript_id : linode_stackscript.bootstrap[0].id
@@ -64,11 +60,11 @@ resource "linode_instance" "workspace" {
 
   # Security: Firewall should be managed separately
   # Use private VLAN for internal networking
-  interfaces {
+  interface {
     purpose = "public"
   }
 
-  dynamic "interfaces" {
+  dynamic "interface" {
     for_each = var.vlan_id != "" ? [1] : []
     content {
       purpose = "vlan"
@@ -95,10 +91,6 @@ resource "random_password" "root_pass" {
   }
 }
 
-# VLAN resource (if creating new VLAN)
-resource "linode_vlan" "workspace_vlan" {
-  count  = var.vlan_id == "" ? 0 : 1
-  label  = var.vlan_id
-  region = var.region
-}
+# Note: VLANs are created implicitly when attached via the interface block
+# The linode_vlan resource type is not supported in the current provider version
 

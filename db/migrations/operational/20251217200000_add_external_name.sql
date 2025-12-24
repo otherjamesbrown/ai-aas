@@ -25,7 +25,7 @@ DO $$
 BEGIN
     UPDATE model_registry
     SET external_name = CASE
-        WHEN hf_model_id LIKE '%/%' THEN SUBSTRING(hf_model_id FROM POSITION('/' IN hf_model_id) + 1)
+        WHEN hf_model_id LIKE '%/%' THEN regexp_replace(hf_model_id, '.*/', '')
         ELSE name
     END
     WHERE external_name IS NULL;
