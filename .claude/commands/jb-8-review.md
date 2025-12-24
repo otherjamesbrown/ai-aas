@@ -12,10 +12,10 @@ Extract spec number from argument (e.g., `spec030`, `030`).
 
 ### Step 2: Find Epic Bead
 
-Epic bead ID follows convention: `ai-aas-spec$SPEC_NUMBER`
+Epic bead ID follows convention: `aas-spec$SPEC_NUMBER`
 
 ```bash
-bd show ai-aas-spec$SPEC_NUMBER
+bd show aas-spec$SPEC_NUMBER
 ```
 
 ### Step 3: Create Retrospective Sub-Bead
@@ -23,11 +23,11 @@ bd show ai-aas-spec$SPEC_NUMBER
 Create retrospective bead with period-based naming:
 
 ```bash
-bd create --id="ai-aas-spec$SPEC_NUMBER.retro" --title="Spec $SPEC_NUMBER - Retrospective" --type=task --priority=2 --parent=ai-aas-spec$SPEC_NUMBER
-bd update ai-aas-spec$SPEC_NUMBER.retro --label="spec$SPEC_NUMBER" --label="retrospective"
+bd create --id="aas-spec$SPEC_NUMBER.retro" --title="Spec $SPEC_NUMBER - Retrospective" --type=task --priority=2 --parent=aas-spec$SPEC_NUMBER
+bd update aas-spec$SPEC_NUMBER.retro --label="spec$SPEC_NUMBER" --label="retrospective"
 ```
 
-Retrospective bead ID: `ai-aas-spec$SPEC_NUMBER.retro`
+Retrospective bead ID: `aas-spec$SPEC_NUMBER.retro`
 
 ### Step 4: Gather Data
 
@@ -93,15 +93,15 @@ Prompt user:
 ### Step 7: Update Bead with Summary
 
 ```bash
-bd comments add ai-aas-spec$SPEC_NUMBER.retro "Retrospective completed. Key learnings: $SUMMARY"
-bd close ai-aas-spec$SPEC_NUMBER.retro "Retrospective documented"
+bd comments add aas-spec$SPEC_NUMBER.retro "Retrospective completed. Key learnings: $SUMMARY"
+bd close aas-spec$SPEC_NUMBER.retro "Retrospective documented"
 ```
 
 ### Step 8: Close Epic Bead
 
 If all work is complete:
 ```bash
-bd close ai-aas-spec$SPEC_NUMBER "Spec $SPEC_NUMBER completed and retrospective done"
+bd close aas-spec$SPEC_NUMBER "Spec $SPEC_NUMBER completed and retrospective done"
 ```
 
 ### Step 9: Show Status Summary
@@ -112,8 +112,8 @@ bd close ai-aas-spec$SPEC_NUMBER "Spec $SPEC_NUMBER completed and retrospective 
 ═══════════════════════════════════════════════════
 
  Spec:             $SPEC_FOLDER
- Epic Bead:        ai-aas-spec$SPEC_NUMBER (CLOSED)
- Retro Bead:       ai-aas-spec$SPEC_NUMBER.retro (CLOSED)
+ Epic Bead:        aas-spec$SPEC_NUMBER (CLOSED)
+ Retro Bead:       aas-spec$SPEC_NUMBER.retro (CLOSED)
 
  Timeline:
    - Idea → Prod:  $DAYS days

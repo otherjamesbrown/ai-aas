@@ -28,9 +28,9 @@ bd close <issue-id>                # Close an issue
 ```
 
 **Bead ID shorthand:**
-- Prefix `ai-aas-` can be omitted when referencing beads
-- "spec030" → ai-aas-spec030
-- "pr93" → ai-aas-pr93
+- Prefix `aas-` can be omitted when referencing beads
+- "spec030" → aas-spec030
+- "pr93" → aas-pr93
 
 **When ending a session or completing work:**
 - Ask the user: "Would you like to create any beads issues before we finish?"

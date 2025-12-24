@@ -110,9 +110,9 @@ When closing beads, use these prefixes:
 | Prefix | When to Use | Example |
 |--------|-------------|---------|
 | `IMPLEMENTED` | Work complete | `IMPLEMENTED: commit abc1234, added retry logic` |
-| `SUPERSEDED` | Replaced by new approach | `SUPERSEDED: replaced by AIModel CR in ai-aas-yyy` |
+| `SUPERSEDED` | Replaced by new approach | `SUPERSEDED: replaced by AIModel CR in aas-yyy` |
 | `OBSOLETE` | No longer needed | `OBSOLETE: feature removed in v2.0` |
-| `DUPLICATE` | Same as another bead | `DUPLICATE: same as ai-aas-yyy` |
+| `DUPLICATE` | Same as another bead | `DUPLICATE: same as aas-yyy` |
 | `WONT_FIX` | Decided not to fix | `WONT_FIX: edge case, cost > benefit` |
 
 ## Labels

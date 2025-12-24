@@ -227,7 +227,7 @@ Create beads for:
 ```markdown
 # Investigation Report
 
-**Bead**: ai-aas-xxx
+**Bead**: aas-xxx
 **Date**: YYYY-MM-DD
 **Investigator**: debugger agent
 
@@ -296,9 +296,9 @@ How to prevent this class of bug in future:
 
 | Bead | Type | Assigned To | Purpose |
 |------|------|-------------|---------|
-| ai-aas-yyy | bug | go-services-developer | Implement fix |
-| ai-aas-zzz | task | infra-ops-manager | Add test to CI |
-| ai-aas-aaa | task | context-maintainer | Update anti-patterns |
+| aas-yyy | bug | go-services-developer | Implement fix |
+| aas-zzz | task | infra-ops-manager | Add test to CI |
+| aas-aaa | task | context-maintainer | Update anti-patterns |
 ```
 
 ---
@@ -337,7 +337,7 @@ After completing investigation:
 
 1. Close investigation bead:
    ```bash
-   bd close <id> --reason "INVESTIGATED: Root cause identified as <category>. See report. Fix bead: ai-aas-yyy"
+   bd close <id> --reason "INVESTIGATED: Root cause identified as <category>. See report. Fix bead: aas-yyy"
    ```
 
 2. Ensure fix bead has:

@@ -28,7 +28,7 @@
 **ALWAYS:**
 - Create or find a bead BEFORE writing code
 - Update bead status: `bd update <id> --status in_progress`
-- Reference bead in commits: `fix(component): description [ai-aas-xxx]`
+- Reference bead in commits: `fix(component): description [aas-xxx]`
 - Close bead with details: `bd close <id> --reason "IMPLEMENTED: commit <hash>, <summary>"`
 - Create handoff beads for work outside your domain (with `agent:` label)
 
@@ -68,7 +68,7 @@ If bead lacks detail, add it using templates: `context/templates/beads.md`
 
 ```bash
 # 1. Commit with bead reference
-git commit -m "fix(component): description [ai-aas-xxx]"
+git commit -m "fix(component): description [aas-xxx]"
 
 # 2. Close bead with commit hash
 bd close <id> --reason "IMPLEMENTED: commit abc1234, added retry logic"
@@ -230,7 +230,7 @@ git checkout -b fix-something
 git commit -m "fix: something"
 
 # WRONG: Closing without details
-bd close ai-aas-xxx --reason "Done"
+bd close aas-xxx --reason "Done"
 
 # WRONG: kubectl for permanent changes
 kubectl apply -f deployment.yaml
@@ -256,11 +256,11 @@ Before reporting complete:
 ## Report Format
 
 ```markdown
-**Bead**: ai-aas-xxx (closed)
+**Bead**: aas-xxx (closed)
 
 **Summary**: What was accomplished
 
-**Commits**: `abc1234`: description [ai-aas-xxx]
+**Commits**: `abc1234`: description [aas-xxx]
 
 **Files Changed**: path/to/file.go
 

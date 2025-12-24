@@ -134,7 +134,7 @@ git commit -m "fix: ..."  # Debugger should NEVER commit fixes
 bd create "Investigate: <symptom>" --type bug
 bd update <id> --add-label "investigation"
 bd update <id> --add-label "context-gap"  # if applicable
-bd close <id> --reason "INVESTIGATED: <category>. Fix bead: ai-aas-yyy"
+bd close <id> --reason "INVESTIGATED: <category>. Fix bead: aas-yyy"
 
 # Logs (read-only)
 kubectl logs -n <namespace> -l app=<service> --tail=100

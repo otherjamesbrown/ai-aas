@@ -10,12 +10,12 @@ Each entry records a context gap that was identified and fixed:
 
 ```yaml
 - date: YYYY-MM-DD
-  bug_bead: ai-aas-xxx
+  bug_bead: aas-xxx
   gap_type: missing_pattern | missing_antipattern | stale_content | missing_rule
   context_file: context/<agent>/agents.md
   what_was_missing: "Brief description"
   fix_applied: "What was added/changed"
-  fix_bead: ai-aas-yyy (if separate task created)
+  fix_bead: aas-yyy (if separate task created)
   prevented_bugs: []  # Updated later when similar bugs DON'T happen
 ```
 
@@ -29,22 +29,22 @@ Each entry records a context gap that was identified and fixed:
 
 ```yaml
 - date: 2025-12-15
-  bug_bead: ai-aas-9s4z
+  bug_bead: aas-9s4z
   gap_type: missing_antipattern
   context_file: context/operator-developer/agents.md
   what_was_missing: "No documentation about KServe admission webhook overriding container probe configuration"
   fix_applied: "Added 'KServe Admission Webhook Probe Override' section with WRONG examples and verification steps"
-  fix_bead: ai-aas-tb3j
+  fix_bead: aas-tb3j
   prevented_bugs: []
 ```
 
 - date: 2025-12-13
-  bug_bead: ai-aas-xxx
+  bug_bead: aas-xxx
   gap_type: missing_antipattern
   context_file: context/go-services-developer/agents.md
   what_was_missing: "No example showing N+1 query anti-pattern"
   fix_applied: "Added WRONG example for N+1 queries in Anti-patterns section"
-  fix_bead: ai-aas-yyy
+  fix_bead: aas-yyy
   prevented_bugs: []
 ```
 
