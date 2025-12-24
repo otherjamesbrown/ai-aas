@@ -1,6 +1,14 @@
 # AI-AAS Agent Rules
 
-> **Last verified**: 2025-12-13 | **Commit**: 24c3e0ee
+> **Last verified**: 2025-12-24 | **Commit**: c3afae5c
+
+---
+
+## Beads Prefix
+
+**Issue prefix is `aas-`** (e.g., `aas-1rk`, `aas-c1e`)
+
+> **Note**: If you see `ai-aas-` prefix in old documentation or commits, the correct prefix is now `aas-`. The prefix was shortened on 2025-12-24 to fix a beads import bug.
 
 ---
 
