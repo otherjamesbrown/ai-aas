@@ -106,7 +106,8 @@ get_project_root() {
 }
 
 # shellcheck disable=SC2034  # Exported for use by scripts that source this file
-export PROJECT_ROOT="$(get_project_root)"
+PROJECT_ROOT="$(get_project_root)"
+export PROJECT_ROOT
 
 # SSH helper functions for remote workspace operations
 ssh_exec() {
