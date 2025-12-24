@@ -1,0 +1,70 @@
+# ClusterServingRuntime for TGI (Text Generation Inference)
+# Defines how to run HuggingFace TGI models in KServe
+# Uses storage-initializer to download models from S3/HF to /mnt/models
+apiVersion: serving.kserve.io/v1alpha1
+kind: ClusterServingRuntime
+metadata:
+  name: tgi-runtime
+spec:
+  annotations:
+    prometheus.kserve.io/port: "8000"
+    prometheus.kserve.io/path: /metrics
+  # Storage helper enabled - uses storage-initializer to download from S3/HF
+  supportedModelFormats:
+    - name: huggingface
+      version: "1"
+      autoSelect: true
+      priority: 1
+  protocolVersions:
+    - v2
+  containers:
+    - name: kserve-container
+      image: ghcr.io/huggingface/text-generation-inference:2.4
+      # TGI expects model at /data (not /mnt/models) by default
+      # We use --model-id to point to the storage-initialized path
+      args:
+        - --model-id
+        - /mnt/models
+        - --port
+        - "8000"
+        - --max-input-tokens
+        - "4096"
+        - --max-total-tokens
+        - "8192"
+        - --max-batch-prefill-tokens
+        - "4096"
+        - --trust-remote-code
+      env:
+        # Model name for API responses, overridden by InferenceService
+        - name: MODEL_ID
+          value: "huggingface-model"
+        - name: HF_HOME
+          value: "/tmp/.cache"
+        - name: HUGGINGFACE_HUB_CACHE
+          value: "/tmp/.cache"
+      ports:
+        - containerPort: 8000
+          protocol: TCP
+      resources:
+        requests:
+          cpu: "2"
+          memory: "8Gi"
+        limits:
+          cpu: "4"
+          memory: "16Gi"
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: 8000
+        initialDelaySeconds: 300
+        periodSeconds: 30
+        timeoutSeconds: 10
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: 8000
+        initialDelaySeconds: 300
+        periodSeconds: 10
+        timeoutSeconds: 10
+        failureThreshold: 3
