@@ -36,6 +36,51 @@ type AdminAPIModelResponse struct {
 	DeploymentStatus *string `json:"deployment_status"`
 }
 
+// getModelsWithCache returns models from cache if valid, otherwise fetches from Admin API.
+// This prevents hitting Admin API rate limits by caching results for the configured TTL.
+func (h *Handler) getModelsWithCache(ctx context.Context) ([]AdminAPIModelResponse, error) {
+	// Fast path: check cache with read lock
+	h.modelsCacheMu.RLock()
+	if h.modelsCache != nil && time.Since(h.modelsCacheTime) < h.modelsCacheTTL {
+		models := h.modelsCache
+		h.modelsCacheMu.RUnlock()
+		h.logger.Debug("returning cached models",
+			zap.Int("count", len(models)),
+			zap.Duration("age", time.Since(h.modelsCacheTime)))
+		return models, nil
+	}
+	h.modelsCacheMu.RUnlock()
+
+	// Slow path: fetch from Admin API and update cache
+	models, err := h.fetchModelsFromAdminAPI(ctx)
+	if err != nil {
+		// On error, return stale cache if available (better than empty)
+		h.modelsCacheMu.RLock()
+		if h.modelsCache != nil {
+			staleModels := h.modelsCache
+			h.modelsCacheMu.RUnlock()
+			h.logger.Warn("returning stale cached models due to fetch error",
+				zap.Error(err),
+				zap.Int("count", len(staleModels)),
+				zap.Duration("age", time.Since(h.modelsCacheTime)))
+			return staleModels, nil
+		}
+		h.modelsCacheMu.RUnlock()
+		return nil, err
+	}
+
+	// Update cache
+	h.modelsCacheMu.Lock()
+	h.modelsCache = models
+	h.modelsCacheTime = time.Now()
+	h.modelsCacheMu.Unlock()
+
+	h.logger.Debug("updated models cache",
+		zap.Int("count", len(models)))
+
+	return models, nil
+}
+
 // fetchModelsFromAdminAPI fetches models from the Admin API service.
 func (h *Handler) fetchModelsFromAdminAPI(ctx context.Context) ([]AdminAPIModelResponse, error) {
 	if h.adminAPIEndpoint == "" {
@@ -85,8 +130,8 @@ func (h *Handler) HandleModels(w http.ResponseWriter, r *http.Request) {
 	var models []ModelObject
 	createdTimestamp := time.Now().Unix()
 
-	// Fetch models from Admin API
-	adminModels, err := h.fetchModelsFromAdminAPI(r.Context())
+	// Fetch models from Admin API (with caching to avoid rate limits)
+	adminModels, err := h.getModelsWithCache(r.Context())
 	if err != nil {
 		h.logger.Error("failed to fetch models from admin api",
 			zap.Error(err))

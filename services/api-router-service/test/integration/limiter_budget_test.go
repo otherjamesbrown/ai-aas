@@ -62,7 +62,7 @@ func TestRateLimitExceeded(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 	
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, "", "", 30*time.Second)
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, "", "", 30*time.Second, 10*time.Second)
 
 	// Set up Redis for rate limiting (skip test if Redis unavailable)
 	redisClient := redis.NewClient(&redis.Options{
@@ -181,7 +181,7 @@ func TestBudgetExceeded(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 	
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, "", "", 30*time.Second)
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, "", "", 30*time.Second, 10*time.Second)
 
 	// Initialize budget client
 	budgetClient := limiter.NewBudgetClient("", 2*time.Second, logger)
@@ -268,7 +268,7 @@ func TestQuotaExceeded(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 	
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, "", "", 30*time.Second)
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, "", "", 30*time.Second, 10*time.Second)
 
 	// Initialize budget client
 	budgetClient := limiter.NewBudgetClient("", 2*time.Second, logger)
@@ -358,7 +358,7 @@ func TestAuditEventEmitted(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 	
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, "", "", 30*time.Second)
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, "", "", 30*time.Second, 10*time.Second)
 
 	// Initialize budget client and rate limiter
 	budgetClient := limiter.NewBudgetClient("", 2*time.Second, logger)
@@ -444,7 +444,7 @@ func TestRateLimitPerOrganization(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 	
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, "", "", 30*time.Second)
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, "", "", 30*time.Second, 10*time.Second)
 
 	// Set up Redis for rate limiting (skip test if Redis unavailable)
 	redisClient := redis.NewClient(&redis.Options{
@@ -537,7 +537,7 @@ func TestRateLimitPerKey(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 	
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, "", "", 30*time.Second)
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, "", "", 30*time.Second, 10*time.Second)
 
 	// Set up Redis for rate limiting (skip test if Redis unavailable)
 	redisClient := redis.NewClient(&redis.Options{

@@ -36,6 +36,7 @@ func TestChatCompletionsHealthEndpoint(t *testing.T) {
 		"",  // admin API endpoint not needed for health endpoint
 		"",  // admin API key not needed for health endpoint
 		30*time.Second, // default timeout
+		10*time.Second, // models cache TTL
 	)
 
 	// Create router and register health endpoint
@@ -105,6 +106,7 @@ func TestChatCompletionsHealthNoAuthRequired(t *testing.T) {
 		"", // admin API endpoint not needed for health endpoint
 		"", // admin API key not needed for health endpoint
 		30*time.Second, // default timeout
+		10*time.Second, // models cache TTL
 	)
 
 	// Create router similar to main.go architecture

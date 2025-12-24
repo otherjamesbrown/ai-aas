@@ -58,6 +58,12 @@ type Handler struct {
 
 	// Preprocessor service support (for model-specific chat templates)
 	preprocessorClients *preprocessor.ClientManager
+
+	// Models cache (to avoid hitting Admin API rate limits)
+	modelsCache     []AdminAPIModelResponse
+	modelsCacheTime time.Time
+	modelsCacheMu   sync.RWMutex
+	modelsCacheTTL  time.Duration
 }
 
 // NewHandler creates a new public API handler.
@@ -74,6 +80,7 @@ func NewHandler(
 	adminAPIEndpoint string,
 	adminAPIKey string,
 	defaultTimeout time.Duration,
+	modelsCacheTTL time.Duration,
 ) *Handler {
 	tracer := otel.Tracer("api-router-service")
 	return &Handler{
@@ -95,6 +102,7 @@ func NewHandler(
 		grpcClients:         newGRPCClientManager(logger),
 		grpcTranslators:     newGRPCTranslatorManager(),
 		preprocessorClients: preprocessor.NewClientManager(logger),
+		modelsCacheTTL:      modelsCacheTTL,
 		httpClient: &http.Client{
 			// Shared client without timeout - we'll use context for per-request timeouts (PR#16 Issue#4)
 			Timeout: 0,

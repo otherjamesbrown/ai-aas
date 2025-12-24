@@ -72,6 +72,9 @@ type Config struct {
 	// Usage Accounting
 	UsageBufferDir string `envconfig:"USAGE_BUFFER_DIR" default:"/tmp/api-router-usage-buffer"`
 
+	// Models Cache
+	ModelsCacheTTL time.Duration `envconfig:"MODELS_CACHE_TTL" default:"10s"`
+
 	// CORS Configuration
 	CORSEnabled        bool   `envconfig:"CORS_ENABLED" default:"true"`
 	CORSAllowedOrigins string `envconfig:"CORS_ALLOWED_ORIGINS" default:"http://localhost:5173,https://localhost:5173"`
