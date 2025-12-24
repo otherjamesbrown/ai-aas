@@ -81,11 +81,15 @@ func (t *GRPCTranslator) TranslateOpenAIToGRPC(req *OpenAIChatCompletionRequest,
 		t.createStringInput(TensorInputTextInput, prompt),
 	}
 
-	// Add optional parameters as input tensors
+	// Add max_tokens (REQUIRED by TRT-LLM - defaults to 512 if not specified)
+	// TRT-LLM ensemble model marks max_tokens as required (optional: false)
+	maxTokens := int32(512) // Default value matching TRT-LLM expectations
 	if req.MaxTokens != nil {
-		inputs = append(inputs, t.createInt32Input(TensorInputMaxTokens, int32(*req.MaxTokens)))
+		maxTokens = int32(*req.MaxTokens)
 	}
+	inputs = append(inputs, t.createInt32Input(TensorInputMaxTokens, maxTokens))
 
+	// Add optional parameters as input tensors
 	if req.Temperature != nil {
 		inputs = append(inputs, t.createFloat32Input(TensorInputTemperature, float32(*req.Temperature)))
 	}

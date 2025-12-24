@@ -85,9 +85,22 @@ func TestGRPCTranslator_TranslateOpenAIToGRPC(t *testing.T) {
 		if grpcReq.ModelName != "test-model" {
 			t.Errorf("expected model name 'test-model', got %q", grpcReq.ModelName)
 		}
-		// Should have at least text_input and stream inputs
-		if len(grpcReq.Inputs) < 2 {
-			t.Errorf("expected at least 2 inputs, got %d", len(grpcReq.Inputs))
+		// Should have text_input, max_tokens (always included), and stream inputs
+		if len(grpcReq.Inputs) < 3 {
+			t.Errorf("expected at least 3 inputs (text_input, max_tokens, stream), got %d", len(grpcReq.Inputs))
+		}
+		// Verify max_tokens is present with default value
+		foundMaxTokens := false
+		for _, input := range grpcReq.Inputs {
+			if input.Name == TensorInputMaxTokens {
+				foundMaxTokens = true
+				if len(input.Contents.IntContents) == 0 || input.Contents.IntContents[0] != 512 {
+					t.Errorf("expected default max_tokens of 512, got %v", input.Contents.IntContents)
+				}
+			}
+		}
+		if !foundMaxTokens {
+			t.Error("expected max_tokens input to always be present")
 		}
 	})
 
