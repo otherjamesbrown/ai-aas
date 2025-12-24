@@ -33,22 +33,24 @@ RUN sed -i 's/import preprocessor_pb2/from . import preprocessor_pb2/' \
     ./src/preprocessor/preprocessor_pb2_grpc.py
 
 # Pre-download tokenizers (configs only, not model weights)
-# This significantly speeds up container startup
+# HF_TOKEN is required for gated models like Llama-3
+ARG HF_TOKEN
 ENV HF_HOME=/app/hf_cache
-ENV TRANSFORMERS_OFFLINE=0
+ENV HF_TOKEN=${HF_TOKEN}
 
 # Download tokenizers for MVP models
 # - meta-llama/Llama-3.1-8B-Instruct: Llama-3 chat format
-# - openai/gpt-oss-20b: Harmony chat format
-RUN python -c "\
+RUN if [ -n "$HF_TOKEN" ]; then \
+      python -c "\
 from transformers import AutoTokenizer; \
 print('Downloading Llama-3.1-8B-Instruct tokenizer...'); \
 AutoTokenizer.from_pretrained('meta-llama/Llama-3.1-8B-Instruct', trust_remote_code=True); \
 print('Llama tokenizer downloaded.'); \
-"
-
-# Note: Add more tokenizers here as needed
-# RUN python -c "from transformers import AutoTokenizer; AutoTokenizer.from_pretrained('openai/gpt-oss-20b')"
+"; \
+    else \
+      echo 'HF_TOKEN not provided, skipping tokenizer pre-download'; \
+      mkdir -p /app/hf_cache; \
+    fi
 
 # Copy source code
 COPY src/ ./src/
@@ -67,7 +69,7 @@ RUN groupadd -r preprocessor && useradd -r -g preprocessor preprocessor
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy HuggingFace cache with pre-downloaded tokenizers
+# Copy HuggingFace cache directory (may be empty, tokenizers download at runtime)
 COPY --from=builder /app/hf_cache /app/hf_cache
 
 # Copy application source
@@ -75,7 +77,7 @@ COPY --from=builder /app/src ./src
 
 # Set environment variables
 ENV HF_HOME=/app/hf_cache
-ENV TRANSFORMERS_OFFLINE=1
+ENV TRANSFORMERS_OFFLINE=0
 ENV PYTHONPATH=/app/src
 ENV PYTHONUNBUFFERED=1
 

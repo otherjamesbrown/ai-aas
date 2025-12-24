@@ -6,6 +6,9 @@ image:
   pullPolicy: Always
   tag: "latest"
 
+imagePullSecrets:
+  - name: ghcr-pull-secret
+
 resources:
   requests:
     cpu: 100m

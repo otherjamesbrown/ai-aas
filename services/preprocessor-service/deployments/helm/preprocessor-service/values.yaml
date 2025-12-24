@@ -82,10 +82,14 @@ env:
     value: "json"
   - name: HF_HOME
     value: "/app/hf_cache"
-  - name: TRANSFORMERS_OFFLINE
-    value: "1"
   - name: MAX_CACHED_TOKENIZERS
     value: "50"
+  # HF_TOKEN should be set via secret for gated models like Llama-3
+  # - name: HF_TOKEN
+  #   valueFrom:
+  #     secretKeyRef:
+  #       name: huggingface-token
+  #       key: token
 
 # Models to preload at startup (comma-separated)
 preloadModels: "meta-llama/Llama-3.1-8B-Instruct"
