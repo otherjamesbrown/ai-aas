@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -1381,26 +1380,25 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 			"desiredVersion", desiredProbeVersion)
 	}
 
-	// Compare specs to determine if an update is needed
-	existingSpec, existingSpecFound, err := unstructured.NestedMap(existing.Object, "spec")
-	if err != nil {
-		return fmt.Errorf("failed to get existing InferenceService spec: %w", err)
-	}
-	desiredSpec, desiredSpecFound, err := unstructured.NestedMap(isvc.Object, "spec")
-	if err != nil {
-		return fmt.Errorf("failed to get desired InferenceService spec: %w", err)
-	}
+	// Compare spec hashes to determine if an update is needed.
+	// This approach ignores server-side mutations (like KServe adding default fields)
+	// and only triggers updates when the operator's desired spec actually changes.
+	specHashMatches := kserve.SpecHashMatches(isvc, existing)
 
-	// Skip update if specs are unchanged AND probe config version is the same
-	specsEqual := existingSpecFound && desiredSpecFound && equality.Semantic.DeepEqual(existingSpec, desiredSpec)
-	if !probeConfigChanged && specsEqual {
-		log.Info("InferenceService spec and probe config unchanged, skipping update", "name", aiModel.Name)
+	// Skip update if spec hash matches AND probe config version is the same
+	if !probeConfigChanged && specHashMatches {
+		log.Info("InferenceService spec hash and probe config unchanged, skipping update",
+			"name", aiModel.Name,
+			"specHash", kserve.GetSpecHash(isvc))
 		return nil
 	}
 
 	// Log what changed for debugging
-	if !specsEqual {
-		log.Info("InferenceService spec changed, update required", "name", aiModel.Name)
+	if !specHashMatches {
+		log.Info("InferenceService spec hash changed, update required",
+			"name", aiModel.Name,
+			"existingHash", kserve.GetSpecHash(existing),
+			"desiredHash", kserve.GetSpecHash(isvc))
 	}
 
 	// Update existing InferenceService with retry on conflict
@@ -1603,14 +1601,72 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 		}
 	}
 
-	// Update status with retry on conflict
-	if err := r.Status().Update(ctx, latestAIModel); err != nil {
-		if errors.IsConflict(err) {
-			log.Info("Status update conflict, will retry on next reconciliation", "name", aiModel.Name)
-			// Don't return error - let the next reconciliation handle it
-			return nil
+	// Update status with retry on conflict using exponential backoff
+	// This is critical - without proper retry, the phase can get stuck
+	statusBackoff := wait.Backoff{
+		Steps:    5,
+		Duration: 50 * time.Millisecond,
+		Factor:   2.0,
+		Jitter:   0.1,
+	}
+
+	var lastStatusErr error
+	statusRetryCount := 0
+
+	err = wait.ExponentialBackoff(statusBackoff, func() (bool, error) {
+		// On retry, re-fetch the latest AIModel to get the current resourceVersion
+		if statusRetryCount > 0 {
+			freshAIModel := &aimodelv1alpha1.AIModel{}
+			if fetchErr := r.Get(ctx, types.NamespacedName{Name: aiModel.Name, Namespace: aiModel.Namespace}, freshAIModel); fetchErr != nil {
+				lastStatusErr = fmt.Errorf("failed to re-fetch AIModel for status retry: %w", fetchErr)
+				return false, lastStatusErr // Permanent error - stop retrying
+			}
+
+			// Reapply the status changes to the fresh object
+			freshAIModel.Status.InferenceServiceName = latestAIModel.Status.InferenceServiceName
+			freshAIModel.Status.InferenceEndpoint = latestAIModel.Status.InferenceEndpoint
+			freshAIModel.Status.ReadyReplicas = latestAIModel.Status.ReadyReplicas
+			freshAIModel.Status.Phase = latestAIModel.Status.Phase
+			freshAIModel.Status.Message = latestAIModel.Status.Message
+			freshAIModel.Status.RetryCount = latestAIModel.Status.RetryCount
+			freshAIModel.Status.LastRetryTime = latestAIModel.Status.LastRetryTime
+			freshAIModel.Status.NextRetryTime = latestAIModel.Status.NextRetryTime
+
+			latestAIModel = freshAIModel
 		}
-		return fmt.Errorf("failed to update AIModel status: %w", err)
+
+		if updateErr := r.Status().Update(ctx, latestAIModel); updateErr != nil {
+			if errors.IsConflict(updateErr) {
+				statusRetryCount++
+				log.Info("Status update conflict, retrying",
+					"name", aiModel.Name,
+					"attempt", statusRetryCount,
+					"maxAttempts", statusBackoff.Steps)
+				lastStatusErr = updateErr
+				return false, nil // Retry
+			}
+			lastStatusErr = fmt.Errorf("failed to update AIModel status: %w", updateErr)
+			return false, lastStatusErr // Permanent error - stop retrying
+		}
+
+		// Success
+		if statusRetryCount > 0 {
+			log.Info("Status update succeeded after retries",
+				"name", aiModel.Name,
+				"attempts", statusRetryCount+1)
+		}
+		return true, nil
+	})
+
+	if err != nil {
+		if lastStatusErr != nil {
+			if errors.IsConflict(lastStatusErr) {
+				// All retries exhausted - return conflict error so reconciler retries
+				return fmt.Errorf("status update failed after %d attempts due to conflicts: %w", statusRetryCount, lastStatusErr)
+			}
+			return lastStatusErr
+		}
+		return fmt.Errorf("status update failed: %w", err)
 	}
 
 	return nil

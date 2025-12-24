@@ -1,6 +1,8 @@
 package kserve
 
 import (
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -10,6 +12,11 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
+
+// SpecHashAnnotation is the annotation key for storing the desired spec hash.
+// This hash is computed from the operator's desired spec and used to detect
+// real changes vs server-side mutations (like KServe adding default fields).
+const SpecHashAnnotation = "ai-aas.io/spec-hash"
 
 // InferenceServiceGVK is the GroupVersionKind for KServe InferenceService
 var InferenceServiceGVK = schema.GroupVersionKind{
@@ -371,6 +378,11 @@ func (b *InferenceServiceBuilder) Build() (*unstructured.Unstructured, error) {
 		obj.SetOwnerReferences([]metav1.OwnerReference{*b.ownerRef})
 	}
 
+	// Compute and store spec hash for change detection
+	if err := addSpecHash(obj); err != nil {
+		return nil, fmt.Errorf("failed to compute spec hash: %w", err)
+	}
+
 	return obj, nil
 }
 
@@ -597,5 +609,67 @@ func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructu
 		obj.SetOwnerReferences([]metav1.OwnerReference{*b.ownerRef})
 	}
 
+	// Compute and store spec hash for change detection
+	if err := addSpecHash(obj); err != nil {
+		return nil, fmt.Errorf("failed to compute spec hash: %w", err)
+	}
+
 	return obj, nil
+}
+
+// computeSpecHash computes a SHA256 hash of the spec for change detection.
+// This allows us to detect real changes to the desired spec without being
+// affected by server-side mutations (KServe adding defaults, etc.).
+func computeSpecHash(spec map[string]interface{}) (string, error) {
+	// JSON marshal with sorted keys for deterministic output
+	data, err := json.Marshal(spec)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal spec: %w", err)
+	}
+	hash := sha256.Sum256(data)
+	return fmt.Sprintf("%x", hash[:8]), nil // Use first 8 bytes (16 hex chars) for readability
+}
+
+// addSpecHash computes the spec hash and adds it to the object's annotations.
+func addSpecHash(obj *unstructured.Unstructured) error {
+	spec, found, err := unstructured.NestedMap(obj.Object, "spec")
+	if err != nil || !found {
+		return fmt.Errorf("spec not found in object")
+	}
+
+	hash, err := computeSpecHash(spec)
+	if err != nil {
+		return err
+	}
+
+	annotations := obj.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+	annotations[SpecHashAnnotation] = hash
+	obj.SetAnnotations(annotations)
+	return nil
+}
+
+// GetSpecHash returns the spec hash from an InferenceService's annotations.
+func GetSpecHash(obj *unstructured.Unstructured) string {
+	annotations := obj.GetAnnotations()
+	if annotations == nil {
+		return ""
+	}
+	return annotations[SpecHashAnnotation]
+}
+
+// SpecHashMatches checks if the spec hash of the desired object matches the existing object.
+// Returns true if hashes match (no update needed), false if they differ (update needed).
+func SpecHashMatches(desired, existing *unstructured.Unstructured) bool {
+	desiredHash := GetSpecHash(desired)
+	existingHash := GetSpecHash(existing)
+
+	// If either hash is missing, fall back to requiring an update
+	if desiredHash == "" || existingHash == "" {
+		return false
+	}
+
+	return desiredHash == existingHash
 }
