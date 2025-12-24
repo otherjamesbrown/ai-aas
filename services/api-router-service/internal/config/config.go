@@ -91,6 +91,22 @@ type BackendEndpointConfig struct {
 	URI         string
 	ModelVariant string
 	Timeout     time.Duration
+	HealthPath  string // Health check path (default: "/health", triton: "/v2/health/ready")
+}
+
+// GetHealthPath returns the appropriate health check path for this backend.
+// Triton/TensorRT-LLM backends use /v2/health/ready (KServe V2 protocol),
+// while vLLM and other OpenAI-compatible backends use /health.
+func (c *BackendEndpointConfig) GetHealthPath() string {
+	if c.HealthPath != "" {
+		return c.HealthPath
+	}
+	// Triton/TensorRT-LLM backends typically have "trtllm" in their service name
+	if strings.Contains(c.URI, "trtllm") {
+		return "/v2/health/ready"
+	}
+	// Default to /health for vLLM and other OpenAI-compatible backends
+	return "/health"
 }
 
 // BackendRegistry manages backend endpoint configurations.

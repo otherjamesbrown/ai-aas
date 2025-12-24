@@ -409,9 +409,10 @@ func main() {
 		backendCfg, err := backendRegistry.GetBackend(backendID)
 		if err == nil {
 			endpoint := &routing.BackendEndpoint{
-				ID:      backendCfg.ID,
-				URI:     backendCfg.URI,
-				Timeout: backendCfg.Timeout,
+				ID:         backendCfg.ID,
+				URI:        backendCfg.URI,
+				Timeout:    backendCfg.Timeout,
+				HealthPath: getHealthPathForBackend(backendCfg.URI),
 			}
 			healthMonitor.RegisterBackend(backendID, endpoint)
 		}
@@ -671,4 +672,16 @@ func extractHostPort(uri string) (host, port string, err error) {
 		return uri, "443", nil
 	}
 	return uri, "80", nil
+}
+
+// getHealthPathForBackend determines the appropriate health check path for a backend.
+// Triton/TensorRT-LLM backends use the KServe V2 protocol (/v2/health/ready),
+// while vLLM and other OpenAI-compatible backends use /health.
+func getHealthPathForBackend(uri string) string {
+	// Triton/TensorRT-LLM backends typically have "trtllm" in their service name
+	if strings.Contains(uri, "trtllm") {
+		return "/v2/health/ready"
+	}
+	// Default to /health for vLLM and other OpenAI-compatible backends
+	return "/health"
 }
