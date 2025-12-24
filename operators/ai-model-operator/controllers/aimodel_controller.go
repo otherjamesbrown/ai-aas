@@ -1518,12 +1518,13 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 			latestAIModel.Status.RetryCount = 0
 			latestAIModel.Status.LastRetryTime = nil
 			latestAIModel.Status.NextRetryTime = nil
-		}
 
-		// Sync deployment state to Admin API when ready
-		if err := r.syncDeploymentToAdminAPI(ctx, latestAIModel, status); err != nil {
-			// Log error but don't fail reconciliation - Admin API sync is best-effort
-			log.Error(err, "Failed to sync deployment to Admin API", "name", aiModel.Name)
+			// Sync deployment state to Admin API only on transition to Ready
+			// This prevents hammering the API with PUT requests on every reconcile
+			if err := r.syncDeploymentToAdminAPI(ctx, latestAIModel, status); err != nil {
+				// Log error but don't fail reconciliation - Admin API sync is best-effort
+				log.Error(err, "Failed to sync deployment to Admin API", "name", aiModel.Name)
+			}
 		}
 	} else {
 		// InferenceService is not ready - determine if it's a transient or permanent failure
