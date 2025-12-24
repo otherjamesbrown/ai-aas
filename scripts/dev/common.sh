@@ -105,7 +105,7 @@ get_project_root() {
   echo "${script_dir}"
 }
 
-PROJECT_ROOT="$(get_project_root)"
+export PROJECT_ROOT="$(get_project_root)"
 
 # SSH helper functions for remote workspace operations
 ssh_exec() {
