@@ -15,6 +15,7 @@ MODE="${MODE:-local}"
 WORKSPACE_HOST="${WORKSPACE_HOST:-}"
 VERBOSE="${VERBOSE:-false}"
 
+# shellcheck disable=SC2317  # Called indirectly by parse_args --help
 show_usage() {
   cat <<EOF
 Usage: $0 [OPTIONS]
