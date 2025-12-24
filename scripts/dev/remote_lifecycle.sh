@@ -227,7 +227,7 @@ check_ttl() {
   
   # Check if workspace has expired
   local created_at
-  created_at=$(ssh_exec "${WORKSPACE_HOST}" "stat -c %Y /etc/ai-aas/workspace-metadata.json 2>/dev/null || echo $(date +%s)" || echo "$(date +%s)")
+  created_at=$(ssh_exec "${WORKSPACE_HOST}" "stat -c %Y /etc/ai-aas/workspace-metadata.json 2>/dev/null || date +%s" || date +%s)
   
   local now
   now=$(date +%s)
