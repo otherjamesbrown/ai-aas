@@ -19,6 +19,7 @@ AUDIT_LOG="${AUDIT_LOG:-${HOME}/.ai-aas/workspace-audit.log}"
 # Parse arguments
 parse_args "$@"
 
+# shellcheck disable=SC2317  # Called indirectly by parse_args --help
 show_usage() {
   cat <<EOF
 Usage: $0 <action> [OPTIONS]

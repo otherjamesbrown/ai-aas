@@ -19,6 +19,7 @@ if [[ $# -gt 1 ]]; then
   parse_args "${@:2}"
 fi
 
+# shellcheck disable=SC2317  # Called indirectly by parse_args --help
 show_usage() {
   cat <<EOF
 Usage: $0 <action> [OPTIONS]
