@@ -726,6 +726,40 @@ func (h *Handler) handleTritonNonStreamingGRPC(
 		return
 	}
 
+	// DEBUG: Log the gRPC request structure
+	h.logger.Debug("translated gRPC request",
+		zap.String("request_id", requestID),
+		zap.String("model_name", grpcReq.ModelName),
+		zap.Int("num_inputs", len(grpcReq.Inputs)),
+		zap.Int("num_outputs", len(grpcReq.Outputs)),
+	)
+
+	// Log each input tensor
+	for i, input := range grpcReq.Inputs {
+		var valuePreview string
+		if input.Contents != nil && len(input.Contents.BytesContents) > 0 {
+			valuePreview = string(input.Contents.BytesContents[0])
+			if len(valuePreview) > 200 {
+				valuePreview = valuePreview[:200] + "..."
+			}
+		} else if input.Contents != nil && len(input.Contents.IntContents) > 0 {
+			valuePreview = fmt.Sprintf("%v", input.Contents.IntContents[0])
+		} else if input.Contents != nil && len(input.Contents.Fp32Contents) > 0 {
+			valuePreview = fmt.Sprintf("%v", input.Contents.Fp32Contents[0])
+		} else if input.Contents != nil && len(input.Contents.BoolContents) > 0 {
+			valuePreview = fmt.Sprintf("%v", input.Contents.BoolContents[0])
+		}
+
+		h.logger.Debug("gRPC input tensor",
+			zap.String("request_id", requestID),
+			zap.Int("index", i),
+			zap.String("name", input.Name),
+			zap.String("datatype", input.Datatype),
+			zap.Any("shape", input.Shape),
+			zap.String("value_preview", valuePreview),
+		)
+	}
+
 	// Start gRPC stream
 	stream, err := client.StreamInfer(ctx)
 	if err != nil {
@@ -756,6 +790,7 @@ func (h *Handler) handleTritonNonStreamingGRPC(
 	// Collect all streaming responses into a single response
 	var accumulatedText string
 	promptTokens := translator.CountPromptTokens(req.Messages)
+	responseCount := 0
 
 	for {
 		resp, err := stream.Recv()
@@ -770,6 +805,61 @@ func (h *Handler) handleTritonNonStreamingGRPC(
 			return
 		}
 
+		responseCount++
+
+		// DEBUG: Log raw gRPC response structure
+		h.logger.Debug("received gRPC response",
+			zap.Int("response_count", responseCount),
+			zap.String("request_id", requestID),
+			zap.Bool("has_infer_response", resp.InferResponse != nil),
+			zap.String("error_message", resp.ErrorMessage),
+		)
+
+		if resp.InferResponse != nil {
+			h.logger.Debug("gRPC response details",
+				zap.String("request_id", requestID),
+				zap.Int("num_outputs", len(resp.InferResponse.Outputs)),
+				zap.Int("num_raw_outputs", len(resp.InferResponse.RawOutputContents)),
+			)
+
+			// Log details of each output tensor
+			for i, output := range resp.InferResponse.Outputs {
+				hasContents := output.Contents != nil
+				var numBytesContents int
+				if hasContents {
+					numBytesContents = len(output.Contents.BytesContents)
+				}
+				var rawSize int
+				if i < len(resp.InferResponse.RawOutputContents) {
+					rawSize = len(resp.InferResponse.RawOutputContents[i])
+				}
+
+				h.logger.Debug("output tensor details",
+					zap.String("request_id", requestID),
+					zap.Int("output_index", i),
+					zap.String("name", output.Name),
+					zap.String("datatype", output.Datatype),
+					zap.Any("shape", output.Shape),
+					zap.Bool("has_contents", hasContents),
+					zap.Int("num_bytes_contents", numBytesContents),
+					zap.Int("raw_output_size", rawSize),
+				)
+
+				// If we have raw output, log a sample
+				if rawSize > 0 {
+					sample := string(resp.InferResponse.RawOutputContents[i])
+					if len(sample) > 100 {
+						sample = sample[:100] + "..."
+					}
+					h.logger.Debug("raw output sample",
+						zap.String("request_id", requestID),
+						zap.Int("output_index", i),
+						zap.String("sample", sample),
+					)
+				}
+			}
+		}
+
 		// Extract text from response
 		text, err := translator.ExtractTextFromGRPCResponse(resp)
 		if err != nil {
@@ -778,6 +868,13 @@ func (h *Handler) handleTritonNonStreamingGRPC(
 			)
 			continue
 		}
+
+		h.logger.Debug("extracted text from response",
+			zap.String("request_id", requestID),
+			zap.Int("response_count", responseCount),
+			zap.Int("text_length", len(text)),
+		)
+
 		accumulatedText += text
 	}
 
