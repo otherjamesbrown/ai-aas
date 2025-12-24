@@ -105,6 +105,7 @@ get_project_root() {
   echo "${script_dir}"
 }
 
+# shellcheck disable=SC2034  # Exported for use by scripts that source this file
 export PROJECT_ROOT="$(get_project_root)"
 
 # SSH helper functions for remote workspace operations
