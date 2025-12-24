@@ -9,8 +9,8 @@ resource "null_resource" "prepare" {
 }
 
 resource "local_file" "documentation" {
-  filename   = local.doc_path
-  content    = templatefile("${path.module}/templates/endpoints.md.tmpl", {
+  filename = local.doc_path
+  content = templatefile("${path.module}/templates/endpoints.md.tmpl", {
     environment = var.environment
     endpoints   = var.endpoints
   })

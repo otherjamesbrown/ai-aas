@@ -157,7 +157,7 @@ if [ "${BRANCH}" = "main" ]; then
         break
       fi
       
-      if [ $i -eq 12 ]; then
+      if [ "$i" -eq 12 ]; then
         echo "⚠️  ArgoCD hasn't synced yet. Check manually:"
         echo "   kubectl get application -n argocd"
         echo "   Or visit: https://argocd.dev.otherjamesbrown.com"

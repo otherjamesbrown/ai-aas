@@ -45,17 +45,17 @@ resource "linode_stackscript" "bootstrap" {
 
 # Linode Instance
 resource "linode_instance" "workspace" {
-  label           = local.instance_label
-  region          = var.region
-  type            = var.instance_type
-  image           = var.image
-  root_pass       = var.root_pass != null ? var.root_pass : random_password.root_pass.result
-  authorized_keys = var.authorized_keys
-  swap_size       = var.swap_size
+  label            = local.instance_label
+  region           = var.region
+  type             = var.instance_type
+  image            = var.image
+  root_pass        = var.root_pass != null ? var.root_pass : random_password.root_pass.result
+  authorized_keys  = var.authorized_keys
+  swap_size        = var.swap_size
   backups_enabled  = var.backup_enabled
   watchdog_enabled = var.watchdog_enabled
 
-  stackscript_id  = var.stackscript_id != null ? var.stackscript_id : linode_stackscript.bootstrap[0].id
+  stackscript_id   = var.stackscript_id != null ? var.stackscript_id : linode_stackscript.bootstrap[0].id
   stackscript_data = local.script_data
 
   # Security: Firewall should be managed separately
