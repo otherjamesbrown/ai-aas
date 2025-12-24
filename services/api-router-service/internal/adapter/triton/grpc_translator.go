@@ -318,10 +318,15 @@ func (t *GRPCTranslator) formatPrompt(messages []ChatMessage) (string, error) {
 	// Use Llama 3 chat template format
 	var sb strings.Builder
 
+	// Always start with BOS token - required for Llama 3 models
+	// Without this, the model doesn't recognize the conversation format
+	// and immediately outputs EOS, resulting in empty completions
+	sb.WriteString("<|begin_of_text|>")
+
 	for _, msg := range messages {
 		switch msg.Role {
 		case "system":
-			sb.WriteString("<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n")
+			sb.WriteString("<|start_header_id|>system<|end_header_id|>\n\n")
 			sb.WriteString(msg.Content)
 			sb.WriteString("<|eot_id|>")
 		case "user":
