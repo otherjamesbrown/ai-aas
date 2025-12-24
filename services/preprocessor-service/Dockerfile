@@ -70,10 +70,10 @@ COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/pytho
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy HuggingFace cache directory (may be empty, tokenizers download at runtime)
-COPY --from=builder /app/hf_cache /app/hf_cache
+COPY --from=builder --chown=preprocessor:preprocessor /app/hf_cache /app/hf_cache
 
 # Copy application source
-COPY --from=builder /app/src ./src
+COPY --from=builder --chown=preprocessor:preprocessor /app/src ./src
 
 # Set environment variables
 ENV HF_HOME=/app/hf_cache
