@@ -19,6 +19,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
+	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/adapter/preprocessor"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/adapter/triton"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/api"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/auth"
@@ -54,6 +55,9 @@ type Handler struct {
 	// Triton gRPC streaming support (spec030-grpc)
 	grpcClients     *gRPCClientManager     // gRPC client connections
 	grpcTranslators *gRPCTranslatorManager // gRPC protocol translators
+
+	// Preprocessor service support (for model-specific chat templates)
+	preprocessorClients *preprocessor.ClientManager
 }
 
 // NewHandler creates a new public API handler.
@@ -87,9 +91,10 @@ func NewHandler(
 		adminAPIEndpoint:  adminAPIEndpoint,
 		adminAPIKey:       adminAPIKey,
 		defaultTimeout:    defaultTimeout,
-		tritonTranslators: make(map[string]*triton.Translator),
-		grpcClients:       newGRPCClientManager(logger),
-		grpcTranslators:   newGRPCTranslatorManager(),
+		tritonTranslators:   make(map[string]*triton.Translator),
+		grpcClients:         newGRPCClientManager(logger),
+		grpcTranslators:     newGRPCTranslatorManager(),
+		preprocessorClients: preprocessor.NewClientManager(logger),
 		httpClient: &http.Client{
 			// Shared client without timeout - we'll use context for per-request timeouts (PR#16 Issue#4)
 			Timeout: 0,
@@ -101,6 +106,9 @@ func NewHandler(
 func (h *Handler) Close() {
 	if h.grpcClients != nil {
 		h.grpcClients.close()
+	}
+	if h.preprocessorClients != nil {
+		_ = h.preprocessorClients.Close()
 	}
 }
 

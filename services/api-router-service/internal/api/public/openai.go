@@ -17,6 +17,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/adapter/preprocessor"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/adapter/triton"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/api"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/auth"
@@ -125,6 +126,26 @@ func (h *Handler) HandleOpenAIChatCompletions(w http.ResponseWriter, r *http.Req
 	if len(policy.Backends) == 0 {
 		h.writeError(w, r, fmt.Errorf("no backends configured for model %q", openAIReq.Model), api.ErrCodeRoutingError)
 		return
+	}
+
+	// Apply preprocessing if configured for this model
+	if policy.PreprocessorConfig != nil && policy.PreprocessorConfig.Enabled {
+		preprocessedReq, err := h.preprocessRequest(ctx, policy, &openAIReq)
+		if err != nil {
+			if policy.PreprocessorConfig.BypassOnFailure {
+				h.logger.Warn("preprocessor failed, bypassing",
+					zap.String("model", openAIReq.Model),
+					zap.String("endpoint", policy.PreprocessorConfig.Endpoint),
+					zap.Error(err),
+				)
+				// Continue with original request
+			} else {
+				h.writeError(w, r, fmt.Errorf("preprocessing failed: %w", err), api.ErrCodeBackendError)
+				return
+			}
+		} else {
+			openAIReq = *preprocessedReq
+		}
 	}
 
 	// Route based on backend type (spec032 - Triton API Support)
@@ -971,5 +992,102 @@ func (h *Handler) handleTritonNonStreamingGRPC(
 	if err := h.writeJSON(w, http.StatusOK, openAIResp); err != nil {
 		h.logger.Error("failed to write triton gRPC response", zap.Error(err))
 	}
+}
+
+// preprocessRequest applies model-specific chat template preprocessing.
+// It calls the preprocessor service to format the prompt according to the model's
+// chat template (e.g., Llama-3 format, Harmony format, etc.).
+func (h *Handler) preprocessRequest(
+	ctx context.Context,
+	policy *config.RoutingPolicy,
+	req *OpenAIChatCompletionRequest,
+) (*OpenAIChatCompletionRequest, error) {
+	if policy.PreprocessorConfig == nil {
+		return req, nil
+	}
+
+	// Get or create preprocessor client
+	client, err := h.preprocessorClients.GetOrCreate(policy.PreprocessorConfig.Endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("get preprocessor client: %w", err)
+	}
+
+	// Apply timeout from config
+	timeout := policy.PreprocessorConfig.GetTimeout()
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	// Convert messages to preprocessor format
+	messages := make([]preprocessor.Message, len(req.Messages))
+	for i, msg := range req.Messages {
+		messages[i] = preprocessor.Message{
+			Role:    msg.Role,
+			Content: msg.Content,
+		}
+	}
+
+	// Determine engine type based on backend type
+	engineType := "vllm" // default
+	switch policy.BackendType {
+	case "triton":
+		engineType = "triton_string"
+	case "triton-grpc":
+		engineType = "triton_tensor"
+	}
+
+	// Build preprocessor request
+	prepReq := &preprocessor.PreprocessRequest{
+		ModelID:    policy.PreprocessorConfig.ModelID,
+		EngineType: engineType,
+		Messages:   messages,
+	}
+	if req.MaxTokens != nil {
+		prepReq.MaxTokens = int32(*req.MaxTokens)
+	}
+	if req.Temperature != nil {
+		prepReq.Temperature = float32(*req.Temperature)
+	}
+	if req.TopP != nil {
+		prepReq.TopP = float32(*req.TopP)
+	}
+	prepReq.Stream = req.Stream
+
+	h.logger.Debug("calling preprocessor",
+		zap.String("model_id", prepReq.ModelID),
+		zap.String("engine_type", engineType),
+		zap.Int("num_messages", len(messages)),
+	)
+
+	// Call preprocessor
+	resp, err := client.Preprocess(ctx, prepReq)
+	if err != nil {
+		return nil, fmt.Errorf("preprocess RPC: %w", err)
+	}
+
+	h.logger.Debug("preprocessor response",
+		zap.Int("prompt_length", len(resp.FormattedPrompt)),
+		zap.Int32("token_count", resp.PromptTokenCount),
+	)
+
+	// Create new request with preprocessed prompt
+	// For string modes (vllm, triton_string), we embed the formatted prompt
+	// in the first message content. The backend will use this directly.
+	newReq := *req
+	if resp.FormattedPrompt != "" {
+		// Replace messages with a single message containing the formatted prompt
+		// This works for backends that accept a pre-formatted prompt
+		newReq.Messages = []OpenAIMessage{
+			{
+				Role:    "user",
+				Content: resp.FormattedPrompt,
+			},
+		}
+	}
+
+	// For tensor mode, the formatted prompt is also available but the
+	// input_ids would be used directly by the gRPC translator.
+	// TODO: Store input_ids in request context for gRPC translator to use
+
+	return &newReq, nil
 }
 

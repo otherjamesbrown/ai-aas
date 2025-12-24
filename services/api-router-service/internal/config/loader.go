@@ -62,9 +62,10 @@ type RoutingPolicy struct {
 	Backends          []BackendWeight
 	FailoverThreshold int
 	DegradedBackends  []string
-	BackendType       string        // "openai" (default) | "triton" | "triton-grpc" - protocol for backend communication
-	Tokenizer         string        // tiktoken encoding name (e.g., cl100k_base, llama3) for token counting
-	TritonConfig      *TritonConfig // Optional Triton-specific configuration
+	BackendType       string              // "openai" (default) | "triton" | "triton-grpc" - protocol for backend communication
+	Tokenizer         string              // tiktoken encoding name (e.g., cl100k_base, llama3) for token counting
+	TritonConfig      *TritonConfig       // Optional Triton-specific configuration
+	PreprocessorConfig *PreprocessorConfig // Optional preprocessor service configuration
 	UpdatedAt         time.Time
 	Version           int64
 }
@@ -117,6 +118,36 @@ func (t *TritonConfig) GetHTTPPort() int {
 		return 8000
 	}
 	return t.HTTPPort
+}
+
+// PreprocessorConfig holds configuration for the preprocessing service.
+// The preprocessor applies model-specific chat templates using HuggingFace.
+type PreprocessorConfig struct {
+	// Enabled determines if preprocessing should be applied
+	Enabled bool `json:"enabled"`
+
+	// Endpoint is the gRPC address of the preprocessor service
+	// Example: "preprocessor-service.development.svc.cluster.local:50051"
+	Endpoint string `json:"endpoint"`
+
+	// ModelID is the HuggingFace model ID for tokenizer lookup
+	// Example: "meta-llama/Llama-3.1-8B-Instruct"
+	ModelID string `json:"model_id"`
+
+	// BypassOnFailure determines behavior when preprocessing fails
+	// true = bypass and use original request, false = fail the request
+	BypassOnFailure bool `json:"bypass_on_failure"`
+
+	// Timeout for preprocessing requests (default: 5s)
+	Timeout time.Duration `json:"timeout,omitempty"`
+}
+
+// GetTimeout returns the timeout, using default if not set.
+func (p *PreprocessorConfig) GetTimeout() time.Duration {
+	if p == nil || p.Timeout == 0 {
+		return 5 * time.Second
+	}
+	return p.Timeout
 }
 
 // BackendWeight defines a backend with its routing weight.

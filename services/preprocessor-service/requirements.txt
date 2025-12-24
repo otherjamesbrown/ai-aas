@@ -1,0 +1,23 @@
+# gRPC dependencies
+grpcio>=1.60.0
+grpcio-tools>=1.60.0
+grpcio-health-checking>=1.60.0
+grpcio-reflection>=1.60.0
+
+# HuggingFace dependencies
+transformers>=4.40.0
+tokenizers>=0.19.0
+sentencepiece>=0.2.0
+protobuf>=4.25.0
+
+# Configuration and logging
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+structlog>=24.0.0
+
+# Metrics
+prometheus-client>=0.20.0
+
+# Development dependencies (optional)
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
