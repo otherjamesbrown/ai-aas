@@ -541,6 +541,14 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
+	// Re-fetch the AIModel to get the latest status after update
+	// This is necessary because updateStatusFromInferenceService uses a fresh copy
+	if err := r.Get(ctx, req.NamespacedName, aiModel); err != nil {
+		log.Error(err, "Failed to re-fetch AIModel after status update", "name", aiModel.Name)
+		reconcileTotal.WithLabelValues("error").Inc()
+		return ctrl.Result{}, err
+	}
+
 	// Handle deployment retry pending state
 	if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhaseRetryPending {
 		if aiModel.Status.NextRetryTime != nil {
