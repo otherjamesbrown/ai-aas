@@ -36,9 +36,16 @@ type ModelRecipeSpec struct {
 	Description string `json:"description,omitempty"`
 
 	// Runtime specifies the inference runtime
-	// +kubebuilder:validation:Enum=vllm;triton;tgi
+	// +kubebuilder:validation:Enum=vllm;triton;tensorrt-llm;tgi
 	// +kubebuilder:default=vllm
 	Runtime string `json:"runtime"`
+
+	// DeploymentMode specifies how models using this recipe should be deployed.
+	// Options: "Serverless" (Knative), "RawDeployment" (standard K8s)
+	// If not specified, determined automatically based on runtime and GPU requirements.
+	// +kubebuilder:validation:Enum=Serverless;RawDeployment
+	// +optional
+	DeploymentMode string `json:"deploymentMode,omitempty"`
 
 	// Image is the container image for the runtime
 	// If not specified, uses default image for the runtime
@@ -59,6 +66,11 @@ type ModelRecipeSpec struct {
 	// HealthCheck contains health check configuration
 	// +optional
 	HealthCheck HealthCheckSpec `json:"healthCheck,omitempty"`
+
+	// Autoscaling configuration for RawDeployment mode.
+	// Only applies when deploymentMode is RawDeployment.
+	// +optional
+	Autoscaling *AutoscalingSpec `json:"autoscaling,omitempty"`
 
 	// Metadata contains model-specific metadata
 	// +optional
@@ -261,6 +273,35 @@ type HealthCheckSpec struct {
 	// ReadinessPath is the path for readiness checks
 	// +kubebuilder:default=/health
 	ReadinessPath string `json:"readinessPath,omitempty"`
+}
+
+// AutoscalingSpec defines autoscaling configuration for RawDeployment mode.
+// Only applies when deploymentMode is RawDeployment.
+type AutoscalingSpec struct {
+	// Enabled controls whether HPA is created for this deployment.
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled,omitempty"`
+
+	// MinReplicas is the minimum number of replicas.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:default=1
+	MinReplicas int32 `json:"minReplicas,omitempty"`
+
+	// MaxReplicas is the maximum number of replicas.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:default=1
+	MaxReplicas int32 `json:"maxReplicas,omitempty"`
+
+	// TargetCPUUtilization is the target CPU utilization percentage for HPA.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=100
+	// +kubebuilder:default=70
+	TargetCPUUtilization int32 `json:"targetCPUUtilization,omitempty"`
+
+	// ScaleDownStabilization is the stabilization window for scale down in seconds.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:default=300
+	ScaleDownStabilization int32 `json:"scaleDownStabilization,omitempty"`
 }
 
 // ModelMetadata contains model-specific metadata

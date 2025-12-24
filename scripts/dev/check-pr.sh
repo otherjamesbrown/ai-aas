@@ -4,9 +4,6 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-
 PR_NUMBER="${1:-}"
 
 # --- Colors ---
@@ -35,7 +32,6 @@ check_command "jq"
 if ! gh auth status >/dev/null 2>&1; then
   echo -e "${RED}❌ GitHub CLI not authenticated.${NC}"
   echo "   Run 'gh auth login' to authenticate."
-  exit 1
   exit 1
 fi
 

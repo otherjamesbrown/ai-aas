@@ -643,9 +643,7 @@ chmod +x scripts/infra/verify-environment.sh
 
 ## Post-Bootstrap Configuration
 
-### Configure DNS (if using custom domains)
-
-If using custom domains (not `*.nip.io`):
+### Configure DNS
 
 1. **Get LoadBalancer IP**:
    ```bash
@@ -908,8 +906,7 @@ This runbook integrates with several automation scripts:
 
 **Special configuration**:
 ```bash
-# Use nip.io for DNS (no real DNS required)
-# Services accessible at: *.172.232.58.222.nip.io
+# Services accessible at: *.dev.otherjamesbrown.com
 
 # Smaller node pools to reduce costs
 baseline_node_pool = {

@@ -31,6 +31,15 @@ rules:
   - get
   - patch
   - update
+# ModelRecipe permissions - needed for recipeRef resolution
+- apiGroups:
+  - aimodel.ai-aas.io
+  resources:
+  - modelrecipes
+  verbs:
+  - get
+  - list
+  - watch
 - apiGroups:
   - apps
   resources:

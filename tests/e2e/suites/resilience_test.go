@@ -34,7 +34,7 @@ func TestBackendFailover(t *testing.T) {
 	routerClient.SetHeader("Authorization", "Bearer "+apiKey.Secret)
 	routerClient.SetHeader("X-API-Key", apiKey.Secret)
 	if isIPAddress(ctx.Config.APIURLs.APIRouterService) {
-		routerClient.SetHeader("Host", "api.dev.ai-aas.local")
+		routerClient.SetHeader("Host", "api.dev.otherjamesbrown.com")
 	}
 
 	// Check backend health status (if admin endpoint available)
@@ -106,7 +106,7 @@ func TestHealthCheck(t *testing.T) {
 	for _, svc := range services {
 		client := harness.NewClient(svc.baseURL, 5*time.Second)
 		if isIPAddress(svc.baseURL) {
-			client.SetHeader("Host", "api.dev.ai-aas.local")
+			client.SetHeader("Host", "api.dev.otherjamesbrown.com")
 		}
 
 		resp, err := client.GET(svc.endpoint)
@@ -175,7 +175,7 @@ func TestPartialOutage(t *testing.T) {
 	orgClient.SetHeader("Authorization", "Bearer "+apiKey.Secret)
 	orgClient.SetHeader("X-API-Key", apiKey.Secret)
 	if isIPAddress(ctx.Config.APIURLs.UserOrgService) {
-		orgClient.SetHeader("Host", "api.dev.ai-aas.local")
+		orgClient.SetHeader("Host", "api.dev.otherjamesbrown.com")
 	}
 
 	// Try to get organization (should work even if inference is down)
@@ -193,7 +193,7 @@ func TestPartialOutage(t *testing.T) {
 	routerClient.SetHeader("Authorization", "Bearer "+apiKey.Secret)
 	routerClient.SetHeader("X-API-Key", apiKey.Secret)
 	if isIPAddress(ctx.Config.APIURLs.APIRouterService) {
-		routerClient.SetHeader("Host", "api.dev.ai-aas.local")
+		routerClient.SetHeader("Host", "api.dev.otherjamesbrown.com")
 	}
 
 	inferenceReq := map[string]interface{}{
@@ -238,7 +238,7 @@ func TestAllBackendsUnavailable(t *testing.T) {
 	routerClient.SetHeader("Authorization", "Bearer "+apiKey.Secret)
 	routerClient.SetHeader("X-API-Key", apiKey.Secret)
 	if isIPAddress(ctx.Config.APIURLs.APIRouterService) {
-		routerClient.SetHeader("Host", "api.dev.ai-aas.local")
+		routerClient.SetHeader("Host", "api.dev.otherjamesbrown.com")
 	}
 
 	// Check backend status

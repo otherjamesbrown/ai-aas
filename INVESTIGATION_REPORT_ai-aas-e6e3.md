@@ -9,7 +9,7 @@
 AI Model Operator in staging environment showing 401 authentication errors when attempting to sync deployment status to Admin API:
 
 ```
-Failed to sync deployment to Admin API: API error (status 401): {"type":"https://docs.ai-aas.local/errors/unauthorized","title":"Unauthorized","status":401,"detail":"invalid or revoked API key"}
+Failed to sync deployment to Admin API: API error (status 401): {"type":"https://docs.otherjamesbrown.com/errors/unauthorized","title":"Unauthorized","status":401,"detail":"invalid or revoked API key"}
 ```
 
 This works correctly in development environment.

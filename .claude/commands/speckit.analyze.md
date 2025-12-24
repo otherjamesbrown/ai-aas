@@ -51,7 +51,7 @@ Output a structured analysis report:
 ```markdown
 # Specification Analysis: [Feature Name]
 
-**Analyzed**: [date]
+**Analyzed**: YYYY-MM-DD
 **Artifacts**: spec.md, plan.md, tasks.md
 
 ## Findings
@@ -90,6 +90,10 @@ If requested, generate a remediation plan, but **do not modify files** without e
 - **Read-only**: No file modifications without explicit approval
 - Constitution violations are always CRITICAL
 - Report must be actionable with specific file locations
+
+## Key Constraints
+
+- Use ISO date format: YYYY-MM-DD
 
 ## User Input
 $ARGUMENTS

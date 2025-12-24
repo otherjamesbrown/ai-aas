@@ -1,4 +1,4 @@
-apiVersion: ai.ai-aas.io/v1alpha1
+apiVersion: aimodel.ai-aas.io/v1alpha1
 kind: ModelRecipe
 metadata:
   name: mistral-7b-instruct-v03

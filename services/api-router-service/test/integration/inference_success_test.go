@@ -118,7 +118,7 @@ func TestInferenceSuccess(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 	
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil)
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, "", "", 30*time.Second, 10*time.Second)
 
 	// Configure handler to use mock backend URI
 	handler.SetBackendURI("mock-backend-1", mockBackend.URL+"/v1/completions")
@@ -214,7 +214,7 @@ func TestInferenceAuthFailure(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 	
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil)
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, "", "", 30*time.Second, 10*time.Second)
 
 	router := chi.NewRouter()
 	tracer := otel.Tracer("test")
@@ -261,7 +261,7 @@ func TestInferenceValidationError(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 	
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil)
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, "", "", 30*time.Second, 10*time.Second)
 
 	router := chi.NewRouter()
 	tracer := otel.Tracer("test")

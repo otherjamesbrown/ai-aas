@@ -2,6 +2,8 @@ go 1.24.6
 
 use (
 	./analytics/tests
+	./cmd/dev-status
+	./cmd/secrets-sync
 	./db/seeds/operational
 	./db/tools/lint
 	./db/tools/migrate

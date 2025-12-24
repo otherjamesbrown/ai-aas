@@ -153,12 +153,12 @@ If prior investigation exists in bead comments, review it first. Don't repeat wo
 kubectl logs -n <namespace> -l app=<service> --tail=100 | grep -i error
 
 # Query Loki for errors
-curl -G http://loki.172.232.58.222.nip.io/loki/api/v1/query_range \
+curl -G https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range \
   --data-urlencode 'query={service="<service>",level="error"}' \
   --data-urlencode 'limit=50'
 
 # Find by trace ID if available
-curl -G http://loki.172.232.58.222.nip.io/loki/api/v1/query_range \
+curl -G https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range \
   --data-urlencode 'query={trace_id="<TRACE_ID>"}'
 ```
 
@@ -227,7 +227,7 @@ Create beads for:
 ```markdown
 # Investigation Report
 
-**Bead**: ai-aas-xxx
+**Bead**: aas-xxx
 **Date**: YYYY-MM-DD
 **Investigator**: debugger agent
 
@@ -296,9 +296,9 @@ How to prevent this class of bug in future:
 
 | Bead | Type | Assigned To | Purpose |
 |------|------|-------------|---------|
-| ai-aas-yyy | bug | go-services-developer | Implement fix |
-| ai-aas-zzz | task | infra-ops-manager | Add test to CI |
-| ai-aas-aaa | task | context-maintainer | Update anti-patterns |
+| aas-yyy | bug | go-services-developer | Implement fix |
+| aas-zzz | task | infra-ops-manager | Add test to CI |
+| aas-aaa | task | context-maintainer | Update anti-patterns |
 ```
 
 ---
@@ -316,7 +316,7 @@ kubectl logs -n <namespace> -l app=<service> --tail=100
 kubectl describe pod <pod> -n <namespace>
 
 # Loki queries
-curl -G http://loki.172.232.58.222.nip.io/loki/api/v1/query_range \
+curl -G https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range \
   --data-urlencode 'query={service="<service>"}' \
   --data-urlencode 'limit=100'
 
@@ -337,7 +337,7 @@ After completing investigation:
 
 1. Close investigation bead:
    ```bash
-   bd close <id> --reason "INVESTIGATED: Root cause identified as <category>. See report. Fix bead: ai-aas-yyy"
+   bd close <id> --reason "INVESTIGATED: Root cause identified as <category>. See report. Fix bead: aas-yyy"
    ```
 
 2. Ensure fix bead has:

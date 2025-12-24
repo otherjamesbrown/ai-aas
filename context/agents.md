@@ -1,6 +1,14 @@
 # AI-AAS Agent Rules
 
-> **Last verified**: 2025-12-13 | **Commit**: 24c3e0ee
+> **Last verified**: 2025-12-24 | **Commit**: c3afae5c
+
+---
+
+## Beads Prefix
+
+**Issue prefix is `aas-`** (e.g., `aas-1rk`, `aas-c1e`)
+
+> **Note**: If you see `ai-aas-` prefix in old documentation or commits, the correct prefix is now `aas-`. The prefix was shortened on 2025-12-24 to fix a beads import bug.
 
 ---
 
@@ -13,11 +21,14 @@
 - Use `kubectl apply/edit/patch` for permanent changes - use GitOps
 - Access database directly from CLI/UI - use APIs
 - Commit to main directly - use develop → staging → main
+- Use libraries that download data at runtime (K8s pods have no internet)
+- Use Knative/Serverless mode for GPU workloads - use RawDeployment (see Architecture below)
+- Nest AIModel fields incorrectly - `deploymentMode` is `spec.deploymentMode` NOT `spec.deployment.deploymentMode`
 
 **ALWAYS:**
 - Create or find a bead BEFORE writing code
 - Update bead status: `bd update <id> --status in_progress`
-- Reference bead in commits: `fix(component): description [ai-aas-xxx]`
+- Reference bead in commits: `fix(component): description [aas-xxx]`
 - Close bead with details: `bd close <id> --reason "IMPLEMENTED: commit <hash>, <summary>"`
 - Create handoff beads for work outside your domain (with `agent:` label)
 
@@ -57,7 +68,7 @@ If bead lacks detail, add it using templates: `context/templates/beads.md`
 
 ```bash
 # 1. Commit with bead reference
-git commit -m "fix(component): description [ai-aas-xxx]"
+git commit -m "fix(component): description [aas-xxx]"
 
 # 2. Close bead with commit hash
 bd close <id> --reason "IMPLEMENTED: commit abc1234, added retry logic"
@@ -157,6 +168,40 @@ Create handoff bead and spawn agent when:
 
 ---
 
+## Architecture: Model Deployment
+
+### Deployment Modes
+
+| Mode | Use For | Creates | Networking |
+|------|---------|---------|------------|
+| **RawDeployment** | GPU workloads (vLLM, Triton, TensorRT-LLM) | Deployment + ClusterIP Service | Direct HTTP |
+| **Serverless** | CPU-only workloads (future, if ever) | Knative Service → Istio | Through Istio gateway |
+
+**GPU workloads MUST use RawDeployment** because:
+- Knative rejects `nodeSelector` (needed for GPU node scheduling)
+- Knative has single-port restriction (Triton needs multiple)
+- Scale-to-zero is counterproductive (5-10 min model load times)
+- Istio/Knative routing adds complexity and failure modes
+
+### AIModel CRD Fields
+
+```yaml
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
+spec:
+  deploymentMode: RawDeployment  # CORRECT - direct field
+  # NOT spec.deployment.deploymentMode (wrong - will be ignored)
+```
+
+### What This Means for Routing
+
+| Deployment Mode | Service Type | API Router Endpoint |
+|-----------------|--------------|---------------------|
+| RawDeployment | ClusterIP | `http://<model>-predictor.<ns>.svc.cluster.local:80` |
+| Serverless | ExternalName → Istio | Times out (don't use) |
+
+---
+
 ## Quick Commands
 
 ```bash
@@ -185,7 +230,7 @@ git checkout -b fix-something
 git commit -m "fix: something"
 
 # WRONG: Closing without details
-bd close ai-aas-xxx --reason "Done"
+bd close aas-xxx --reason "Done"
 
 # WRONG: kubectl for permanent changes
 kubectl apply -f deployment.yaml
@@ -211,11 +256,11 @@ Before reporting complete:
 ## Report Format
 
 ```markdown
-**Bead**: ai-aas-xxx (closed)
+**Bead**: aas-xxx (closed)
 
 **Summary**: What was accomplished
 
-**Commits**: `abc1234`: description [ai-aas-xxx]
+**Commits**: `abc1234`: description [aas-xxx]
 
 **Files Changed**: path/to/file.go
 

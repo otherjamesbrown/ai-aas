@@ -278,8 +278,8 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    # nip.io endpoint (works without local DNS)
-    - host: loki.172.232.58.222.nip.io
+    # Public DNS endpoint
+    - host: loki.dev.otherjamesbrown.com
       http:
         paths:
           - path: /
@@ -290,7 +290,7 @@ spec:
                 port:
                   number: 3100
     # Local DNS endpoint (requires /etc/hosts or DNS setup)
-    - host: loki.dev.ai-aas.local
+    - host: loki.dev.otherjamesbrown.com
       http:
         paths:
           - path: /
@@ -316,8 +316,8 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    # nip.io endpoint (works without local DNS)
-    - host: grafana.172.232.58.222.nip.io
+    # Public DNS endpoint
+    - host: grafana.dev.otherjamesbrown.com
       http:
         paths:
           - path: /
@@ -328,7 +328,7 @@ spec:
                 port:
                   number: 3000
     # Local DNS endpoint (requires /etc/hosts or DNS setup)
-    - host: grafana.dev.ai-aas.local
+    - host: grafana.dev.otherjamesbrown.com
       http:
         paths:
           - path: /

@@ -45,7 +45,7 @@ Exports are requested via the Analytics Export API:
 
 ```bash
 # Create an export job
-curl -X POST https://api.ai-aas.local/analytics/v1/orgs/{orgId}/exports \
+curl -X POST https://api.dev.otherjamesbrown.com/analytics/v1/orgs/{orgId}/exports \
   -H "Authorization: Bearer {token}" \
   -H "Content-Type: application/json" \
   -d '{
@@ -76,7 +76,7 @@ curl -X POST https://api.ai-aas.local/analytics/v1/orgs/{orgId}/exports \
 
 ```bash
 # Get job status
-curl https://api.ai-aas.local/analytics/v1/orgs/{orgId}/exports/{jobId} \
+curl https://api.dev.otherjamesbrown.com/analytics/v1/orgs/{orgId}/exports/{jobId} \
   -H "Authorization: Bearer {token}"
 ```
 
@@ -104,7 +104,7 @@ curl https://api.ai-aas.local/analytics/v1/orgs/{orgId}/exports/{jobId} \
 
 ```bash
 # Get download URL (302 redirect)
-curl -L https://api.ai-aas.local/analytics/v1/orgs/{orgId}/exports/{jobId}/download \
+curl -L https://api.dev.otherjamesbrown.com/analytics/v1/orgs/{orgId}/exports/{jobId}/download \
   -H "Authorization: Bearer {token}"
 ```
 
@@ -114,11 +114,11 @@ The API returns a 302 redirect to a signed Linode Object Storage URL valid for 2
 
 ```bash
 # List all exports for an organization
-curl https://api.ai-aas.local/analytics/v1/orgs/{orgId}/exports \
+curl https://api.dev.otherjamesbrown.com/analytics/v1/orgs/{orgId}/exports \
   -H "Authorization: Bearer {token}"
 
 # Filter by status
-curl "https://api.ai-aas.local/analytics/v1/orgs/{orgId}/exports?status=succeeded" \
+curl "https://api.dev.otherjamesbrown.com/analytics/v1/orgs/{orgId}/exports?status=succeeded" \
   -H "Authorization: Bearer {token}"
 ```
 
@@ -194,7 +194,7 @@ For monthly reconciliation:
 **Example monthly export request**:
 ```bash
 # Export January 2024 data (requested on Feb 1, 2024)
-curl -X POST https://api.ai-aas.local/analytics/v1/orgs/{orgId}/exports \
+curl -X POST https://api.dev.otherjamesbrown.com/analytics/v1/orgs/{orgId}/exports \
   -H "Authorization: Bearer {token}" \
   -H "Content-Type: application/json" \
   -d '{

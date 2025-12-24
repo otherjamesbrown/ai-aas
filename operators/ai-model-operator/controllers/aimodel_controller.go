@@ -24,18 +24,17 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/apimachinery/pkg/api/equality"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	batchv1 "k8s.io/api/batch/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -48,8 +47,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	aimodelv1alpha1 "github.com/ai-aas/ai-model-operator/api/v1alpha1"
-	"github.com/ai-aas/ai-model-operator/internal/kserve"
 	"github.com/ai-aas/ai-model-operator/internal/adminapi"
+	"github.com/ai-aas/ai-model-operator/internal/kserve"
 	"github.com/ai-aas/ai-model-operator/internal/recipe"
 	// +kubebuilder:scaffold:imports
 )
@@ -66,10 +65,42 @@ const (
 
 // Retry configuration for InferenceService deployment failures
 const (
-	maxDeploymentRetries        = 10             // More retries for transient resource issues
+	maxDeploymentRetries        = 10               // More retries for transient resource issues
 	initialDeploymentRetryDelay = 30 * time.Second // Shorter initial delay for scheduling
 	maxDeploymentRetryDelay     = 10 * time.Minute // Max wait between retries
 )
+
+// sanitizeInferenceServiceName converts an AIModel name to a KServe-compatible name.
+// KServe InferenceService names must be DNS-compatible: lowercase alphanumeric and hyphens only,
+// must start with a letter and end with alphanumeric. Periods are not allowed.
+// Example: "llama-3.1-8b-instruct" -> "llama-3-1-8b-instruct"
+func sanitizeInferenceServiceName(name string) string {
+	// Replace periods with hyphens (most common issue)
+	sanitized := strings.ReplaceAll(name, ".", "-")
+	// Replace any consecutive hyphens with single hyphen
+	for strings.Contains(sanitized, "--") {
+		sanitized = strings.ReplaceAll(sanitized, "--", "-")
+	}
+	// Trim leading/trailing hyphens
+	sanitized = strings.Trim(sanitized, "-")
+	return sanitized
+}
+
+// deriveExternalName derives the external name for an AIModel.
+// If spec.ExternalName is set, use it. Otherwise, derive from ModelID
+// by taking the part after the last "/".
+// Example: modelID "unsloth/gpt-oss-20b" -> externalName "gpt-oss-20b"
+func deriveExternalName(aiModel *aimodelv1alpha1.AIModel) string {
+	if aiModel.Spec.ExternalName != "" {
+		return aiModel.Spec.ExternalName
+	}
+	// Derive from ModelID
+	modelID := aiModel.Spec.ModelID
+	if idx := strings.LastIndex(modelID, "/"); idx >= 0 {
+		return modelID[idx+1:]
+	}
+	return modelID
+}
 
 var (
 	reconcileTotal = prometheus.NewCounterVec(
@@ -115,7 +146,7 @@ type AIModelReconciler struct {
 	AdminAPIClient AdminAPIClient
 
 	// Recipe resolution and validation
-	RecipeResolver *recipe.Resolver
+	RecipeResolver  *recipe.Resolver
 	RecipeValidator *recipe.Validator
 }
 
@@ -237,7 +268,7 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		// Delete InferenceService to stop all pods and release GPU resources
 		isvc := &unstructured.Unstructured{}
 		isvc.SetGroupVersionKind(kserve.InferenceServiceGVK)
-		err := r.Get(ctx, types.NamespacedName{Name: aiModel.Name, Namespace: aiModel.Namespace}, isvc)
+		err := r.Get(ctx, types.NamespacedName{Name: sanitizeInferenceServiceName(aiModel.Name), Namespace: aiModel.Namespace}, isvc)
 		if err == nil {
 			// InferenceService exists, delete it
 			log.Info("Deleting InferenceService for disabled model", "name", aiModel.Name)
@@ -291,157 +322,155 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		jobName := fmt.Sprintf("%s-downloader", aiModel.Name)
 		foundJob := &batchv1.Job{}
 		err := r.Get(ctx, client.ObjectKey{Name: jobName, Namespace: aiModel.Namespace}, foundJob)
-	if err != nil && client.IgnoreNotFound(err) != nil {
-		log.Error(err, "Failed to get Job", "Job.Name", jobName)
-		reconcileTotal.WithLabelValues("error").Inc()
-		return ctrl.Result{}, err
-	} else if err != nil { // Job not found
-		// Handle RetryPending phase - check if it's time to retry
-		if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhaseRetryPending {
-			if aiModel.Status.NextRetryTime != nil {
-				now := metav1.Now()
-				if now.Time.Before(aiModel.Status.NextRetryTime.Time) {
-					// Not yet time to retry, requeue with remaining wait time
-					waitDuration := aiModel.Status.NextRetryTime.Time.Sub(now.Time)
-					log.Info("Retry not yet due, waiting", "waitDuration", waitDuration)
-					reconcileTotal.WithLabelValues("success").Inc()
-					return ctrl.Result{RequeueAfter: waitDuration}, nil
-				}
-				// Time to retry - fall through to job creation logic
-				log.Info("Retry time reached, creating new download job", "retryCount", aiModel.Status.RetryCount)
-			}
-		}
-
-		// Check if S3 artifacts already exist (e.g., from a previous download or manual upload)
-		// If they exist, we can skip the downloader job and proceed to InferenceService creation
-		exists, err := r.checkS3ArtifactExists(ctx, aiModel)
-		if err != nil {
-			// Actual error (credentials, network, etc.) - not just missing artifacts
-			log.Error(err, "Failed to check S3 artifacts", "Bucket", aiModel.Spec.S3Bucket, "Key", aiModel.Spec.S3Key)
-			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
-			aiModel.Status.Message = fmt.Sprintf("S3 check failed: %v", err)
-			if statusErr := r.Status().Update(ctx, aiModel); statusErr != nil {
-				log.Error(statusErr, "unable to update AIModel status to Failed")
-			}
+		if err != nil && client.IgnoreNotFound(err) != nil {
+			log.Error(err, "Failed to get Job", "Job.Name", jobName)
 			reconcileTotal.WithLabelValues("error").Inc()
-			return ctrl.Result{Requeue: true}, nil
-		}
+			return ctrl.Result{}, err
+		} else if err != nil { // Job not found
+			// Handle RetryPending phase - check if it's time to retry
+			if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhaseRetryPending {
+				if aiModel.Status.NextRetryTime != nil {
+					now := metav1.Now()
+					if now.Time.Before(aiModel.Status.NextRetryTime.Time) {
+						// Not yet time to retry, requeue with remaining wait time
+						waitDuration := aiModel.Status.NextRetryTime.Time.Sub(now.Time)
+						log.Info("Retry not yet due, waiting", "waitDuration", waitDuration)
+						reconcileTotal.WithLabelValues("success").Inc()
+						return ctrl.Result{RequeueAfter: waitDuration}, nil
+					}
+					// Time to retry - fall through to job creation logic
+					log.Info("Retry time reached, creating new download job", "retryCount", aiModel.Status.RetryCount)
+				}
+			}
 
-		if exists {
-			// Artifacts already exist in S3, skip download phase
-			log.Info("S3 artifacts already exist, skipping download", "Bucket", aiModel.Spec.S3Bucket, "Key", aiModel.Spec.S3Key)
-			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
-			// Reset retry count on success
-			aiModel.Status.RetryCount = 0
-			aiModel.Status.LastRetryTime = nil
-			aiModel.Status.NextRetryTime = nil
-			if statusErr := r.Status().Update(ctx, aiModel); statusErr != nil {
-				log.Error(statusErr, "unable to update AIModel status to Deploying")
-				return ctrl.Result{}, statusErr
-			}
-			// Continue to InferenceService creation (fall through)
-		} else {
-			// Artifacts not found in S3, create downloader job to fetch from HuggingFace
-			log.Info("S3 artifacts not found, creating downloader job", "Bucket", aiModel.Spec.S3Bucket, "Key", aiModel.Spec.S3Key)
-			log.Info("Creating a new Model Downloader Job", "Job.Namespace", aiModel.Namespace, "Job.Name", jobName)
-			job := r.modelDownloaderJob(aiModel, jobName)
-			if err := ctrl.SetControllerReference(aiModel, job, r.Scheme); err != nil {
-				log.Error(err, "Failed to set controller reference for Job", "Job.Name", job.Name)
+			// Check if S3 artifacts already exist (e.g., from a previous download or manual upload)
+			// If they exist, we can skip the downloader job and proceed to InferenceService creation
+			exists, err := r.checkS3ArtifactExists(ctx, aiModel)
+			if err != nil {
+				// Actual error (credentials, network, etc.) - not just missing artifacts
+				log.Error(err, "Failed to check S3 artifacts", "Bucket", aiModel.Spec.S3Bucket, "Key", aiModel.Spec.S3Key)
+				aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
+				aiModel.Status.Message = fmt.Sprintf("S3 check failed: %v", err)
+				if statusErr := r.Status().Update(ctx, aiModel); statusErr != nil {
+					log.Error(statusErr, "unable to update AIModel status to Failed")
+				}
 				reconcileTotal.WithLabelValues("error").Inc()
-				return ctrl.Result{}, err
+				return ctrl.Result{Requeue: true}, nil
 			}
-			if err := r.Create(ctx, job); err != nil {
-				log.Error(err, "Failed to create Job", "Job.Name", job.Name)
-				reconcileTotal.WithLabelValues("error").Inc()
-				return ctrl.Result{}, err
-			}
-			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDownloading
-			if err := r.Status().Update(ctx, aiModel); err != nil {
-				log.Error(err, "unable to update AIModel status to Downloading")
-				reconcileTotal.WithLabelValues("error").Inc()
-				return ctrl.Result{}, err
-			}
-			reconcileTotal.WithLabelValues("success").Inc()
-			return ctrl.Result{Requeue: true}, nil // Requeue to wait for Job completion
-		}
-	} else {
-		// Job found, check its status
-		if jobIsComplete(foundJob) {
-			log.Info("Model Downloader Job completed successfully", "Job.Name", jobName)
-			if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhaseDownloading || aiModel.Status.Phase == aimodelv1alpha1.AIModelPhasePending {
+
+			if exists {
+				// Artifacts already exist in S3, skip download phase
+				log.Info("S3 artifacts already exist, skipping download", "Bucket", aiModel.Spec.S3Bucket, "Key", aiModel.Spec.S3Key)
 				aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
-				// Reset retry tracking on success
+				// Reset retry count on success
 				aiModel.Status.RetryCount = 0
 				aiModel.Status.LastRetryTime = nil
 				aiModel.Status.NextRetryTime = nil
-				if err := r.Status().Update(ctx, aiModel); err != nil {
-					log.Error(err, "unable to update AIModel status to Deploying")
-					reconcileTotal.WithLabelValues("error").Inc()
-					return ctrl.Result{}, err
+				if statusErr := r.Status().Update(ctx, aiModel); statusErr != nil {
+					log.Error(statusErr, "unable to update AIModel status to Deploying")
+					return ctrl.Result{}, statusErr
 				}
-			}
-		} else if jobIsFailed(foundJob) {
-			log.Error(fmt.Errorf("job failed"), "Model Downloader Job failed", "Job.Name", jobName)
-
-			// Check if we should retry
-			maxRetries := r.MaxDownloadRetries
-			if maxRetries == 0 {
-				maxRetries = maxDownloadRetries // Use default if not configured
-			}
-			if aiModel.Status.RetryCount < maxRetries {
-				// Delete the failed job so a new one can be created
-				log.Info("Deleting failed job to prepare for retry", "Job.Name", jobName, "retryCount", aiModel.Status.RetryCount)
-				if err := r.Delete(ctx, foundJob, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
-					log.Error(err, "Failed to delete failed Job", "Job.Name", jobName)
-					reconcileTotal.WithLabelValues("error").Inc()
-					return ctrl.Result{}, err
-				}
-
-				// Increment retry count and calculate backoff
-				aiModel.Status.RetryCount++
-				backoffDuration := r.calculateRetryBackoff(aiModel.Status.RetryCount - 1) // Use previous count for backoff
-				now := metav1.Now()
-				nextRetry := metav1.NewTime(now.Add(backoffDuration))
-
-				aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseRetryPending
-				aiModel.Status.LastRetryTime = &now
-				aiModel.Status.NextRetryTime = &nextRetry
-				aiModel.Status.Message = fmt.Sprintf("Download failed, retry %d/%d scheduled in %v",
-					aiModel.Status.RetryCount, maxRetries, backoffDuration)
-
-				if err := r.Status().Update(ctx, aiModel); err != nil {
-					log.Error(err, "unable to update AIModel status to RetryPending")
-					reconcileTotal.WithLabelValues("error").Inc()
-					return ctrl.Result{}, err
-				}
-
-				log.Info("Retry scheduled", "retryCount", aiModel.Status.RetryCount,
-					"backoffDuration", backoffDuration, "nextRetryTime", nextRetry.Time)
-				reconcileTotal.WithLabelValues("retry").Inc()
-				return ctrl.Result{RequeueAfter: backoffDuration}, nil
+				// Continue to InferenceService creation (fall through)
 			} else {
-				// Max retries exceeded, mark as permanently failed
-				log.Error(fmt.Errorf("max retries exceeded"), "Download failed after maximum retries",
-					"Job.Name", jobName, "maxRetries", maxRetries)
-				aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
-				aiModel.Status.Message = fmt.Sprintf("Download failed after %d retry attempts. Manual intervention required.", maxRetries)
-				if err := r.Status().Update(ctx, aiModel); err != nil {
-					log.Error(err, "unable to update AIModel status to Failed")
+				// Artifacts not found in S3, create downloader job to fetch from HuggingFace
+				log.Info("S3 artifacts not found, creating downloader job", "Bucket", aiModel.Spec.S3Bucket, "Key", aiModel.Spec.S3Key)
+				log.Info("Creating a new Model Downloader Job", "Job.Namespace", aiModel.Namespace, "Job.Name", jobName)
+				job := r.modelDownloaderJob(aiModel, jobName)
+				if err := ctrl.SetControllerReference(aiModel, job, r.Scheme); err != nil {
+					log.Error(err, "Failed to set controller reference for Job", "Job.Name", job.Name)
 					reconcileTotal.WithLabelValues("error").Inc()
 					return ctrl.Result{}, err
 				}
-				reconcileTotal.WithLabelValues("error").Inc()
-				return ctrl.Result{}, nil // Do not requeue - permanent failure
+				if err := r.Create(ctx, job); err != nil {
+					log.Error(err, "Failed to create Job", "Job.Name", job.Name)
+					reconcileTotal.WithLabelValues("error").Inc()
+					return ctrl.Result{}, err
+				}
+				aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDownloading
+				if err := r.Status().Update(ctx, aiModel); err != nil {
+					log.Error(err, "unable to update AIModel status to Downloading")
+					reconcileTotal.WithLabelValues("error").Inc()
+					return ctrl.Result{}, err
+				}
+				reconcileTotal.WithLabelValues("success").Inc()
+				return ctrl.Result{Requeue: true}, nil // Requeue to wait for Job completion
 			}
 		} else {
-			log.Info("Model Downloader Job still running", "Job.Name", jobName)
-			reconcileTotal.WithLabelValues("success").Inc()
-			return ctrl.Result{Requeue: true}, nil // Requeue to wait for Job completion
+			// Job found, check its status
+			if jobIsComplete(foundJob) {
+				log.Info("Model Downloader Job completed successfully", "Job.Name", jobName)
+				if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhaseDownloading || aiModel.Status.Phase == aimodelv1alpha1.AIModelPhasePending {
+					aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
+					// Reset retry tracking on success
+					aiModel.Status.RetryCount = 0
+					aiModel.Status.LastRetryTime = nil
+					aiModel.Status.NextRetryTime = nil
+					if err := r.Status().Update(ctx, aiModel); err != nil {
+						log.Error(err, "unable to update AIModel status to Deploying")
+						reconcileTotal.WithLabelValues("error").Inc()
+						return ctrl.Result{}, err
+					}
+				}
+			} else if jobIsFailed(foundJob) {
+				log.Error(fmt.Errorf("job failed"), "Model Downloader Job failed", "Job.Name", jobName)
+
+				// Check if we should retry
+				maxRetries := r.MaxDownloadRetries
+				if maxRetries == 0 {
+					maxRetries = maxDownloadRetries // Use default if not configured
+				}
+				if aiModel.Status.RetryCount < maxRetries {
+					// Delete the failed job so a new one can be created
+					log.Info("Deleting failed job to prepare for retry", "Job.Name", jobName, "retryCount", aiModel.Status.RetryCount)
+					if err := r.Delete(ctx, foundJob, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
+						log.Error(err, "Failed to delete failed Job", "Job.Name", jobName)
+						reconcileTotal.WithLabelValues("error").Inc()
+						return ctrl.Result{}, err
+					}
+
+					// Increment retry count and calculate backoff
+					aiModel.Status.RetryCount++
+					backoffDuration := r.calculateRetryBackoff(aiModel.Status.RetryCount - 1) // Use previous count for backoff
+					now := metav1.Now()
+					nextRetry := metav1.NewTime(now.Add(backoffDuration))
+
+					aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseRetryPending
+					aiModel.Status.LastRetryTime = &now
+					aiModel.Status.NextRetryTime = &nextRetry
+					aiModel.Status.Message = fmt.Sprintf("Download failed, retry %d/%d scheduled in %v",
+						aiModel.Status.RetryCount, maxRetries, backoffDuration)
+
+					if err := r.Status().Update(ctx, aiModel); err != nil {
+						log.Error(err, "unable to update AIModel status to RetryPending")
+						reconcileTotal.WithLabelValues("error").Inc()
+						return ctrl.Result{}, err
+					}
+
+					log.Info("Retry scheduled", "retryCount", aiModel.Status.RetryCount,
+						"backoffDuration", backoffDuration, "nextRetryTime", nextRetry.Time)
+					reconcileTotal.WithLabelValues("retry").Inc()
+					return ctrl.Result{RequeueAfter: backoffDuration}, nil
+				} else {
+					// Max retries exceeded, mark as permanently failed
+					log.Error(fmt.Errorf("max retries exceeded"), "Download failed after maximum retries",
+						"Job.Name", jobName, "maxRetries", maxRetries)
+					aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
+					aiModel.Status.Message = fmt.Sprintf("Download failed after %d retry attempts. Manual intervention required.", maxRetries)
+					if err := r.Status().Update(ctx, aiModel); err != nil {
+						log.Error(err, "unable to update AIModel status to Failed")
+						reconcileTotal.WithLabelValues("error").Inc()
+						return ctrl.Result{}, err
+					}
+					reconcileTotal.WithLabelValues("error").Inc()
+					return ctrl.Result{}, nil // Do not requeue - permanent failure
+				}
+			} else {
+				log.Info("Model Downloader Job still running", "Job.Name", jobName)
+				reconcileTotal.WithLabelValues("success").Inc()
+				return ctrl.Result{Requeue: true}, nil // Requeue to wait for Job completion
+			}
 		}
-	}
 	} // End of S3-based deployment else block
-
-
 
 	// 2. Resolve and merge recipe if specified
 	var mergedSpec *aimodelv1alpha1.ModelRecipeSpec
@@ -486,19 +515,15 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// 3. Reconcile KServe InferenceService (replaces vLLM Deployment + Service)
 	log.Info("Reconciling InferenceService", "name", aiModel.Name)
 
-	// Update phase to Deploying if not already set
-	if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhasePending {
-		aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
-		if err := r.Status().Update(ctx, aiModel); err != nil {
-			log.Error(err, "unable to update AIModel status to Deploying")
-			reconcileTotal.WithLabelValues("error").Inc()
-			return ctrl.Result{}, err
-		}
-	}
-
 	// Create or update the InferenceService
 	if err := r.createOrUpdateInferenceService(ctx, aiModel, mergedSpec); err != nil {
 		log.Error(err, "Failed to reconcile InferenceService", "name", aiModel.Name)
+		// Re-fetch AIModel before status update to avoid conflicts
+		if fetchErr := r.Get(ctx, req.NamespacedName, aiModel); fetchErr != nil {
+			log.Error(fetchErr, "Failed to re-fetch AIModel before status update")
+			reconcileTotal.WithLabelValues("error").Inc()
+			return ctrl.Result{}, fetchErr
+		}
 		aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
 		aiModel.Status.Message = fmt.Sprintf("Failed to create InferenceService: %v", err)
 		if statusErr := r.Status().Update(ctx, aiModel); statusErr != nil {
@@ -508,9 +533,17 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
-	// Update status from InferenceService
+	// Update status from InferenceService (this will check if already Ready and set appropriate phase)
 	if err := r.updateStatusFromInferenceService(ctx, aiModel); err != nil {
 		log.Error(err, "Failed to update status from InferenceService", "name", aiModel.Name)
+		reconcileTotal.WithLabelValues("error").Inc()
+		return ctrl.Result{}, err
+	}
+
+	// Re-fetch the AIModel to get the latest status after update
+	// This is necessary because updateStatusFromInferenceService uses a fresh copy
+	if err := r.Get(ctx, req.NamespacedName, aiModel); err != nil {
+		log.Error(err, "Failed to re-fetch AIModel after status update", "name", aiModel.Name)
 		reconcileTotal.WithLabelValues("error").Inc()
 		return ctrl.Result{}, err
 	}
@@ -555,7 +588,6 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	return ctrl.Result{}, nil
 }
 
-
 func (r *AIModelReconciler) finalizeAIModel(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) error {
 	log := log.FromContext(ctx)
 	log.Info("Performing finalization for AIModel", "name", aiModel.Name)
@@ -569,7 +601,7 @@ func (r *AIModelReconciler) finalizeAIModel(ctx context.Context, aiModel *aimode
 	// Delete InferenceService
 	isvc := &unstructured.Unstructured{}
 	isvc.SetGroupVersionKind(kserve.InferenceServiceGVK)
-	if err := r.Get(ctx, client.ObjectKey{Name: aiModel.Name, Namespace: aiModel.Namespace}, isvc); err == nil {
+	if err := r.Get(ctx, client.ObjectKey{Name: sanitizeInferenceServiceName(aiModel.Name), Namespace: aiModel.Namespace}, isvc); err == nil {
 		log.Info("Deleting InferenceService", "name", aiModel.Name)
 		if err := r.Delete(ctx, isvc); err != nil && !errors.IsNotFound(err) {
 			log.Error(err, "Failed to delete InferenceService", "name", aiModel.Name)
@@ -720,10 +752,10 @@ print('Upload complete!')
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
-						Name:  "downloader",
-						Image: downloaderImage,
+						Name:    "downloader",
+						Image:   downloaderImage,
 						Command: command,
-						Args: args,
+						Args:    args,
 						Env: []corev1.EnvVar{
 							{
 								Name:  "MODEL_ID",
@@ -1151,6 +1183,9 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		case "triton":
 			modelFormat = "tensorrt"
 			runtimeName = "kserve-tritonserver"
+		case "tensorrt-llm":
+			modelFormat = "tensorrt-llm"
+			runtimeName = "kserve-tensorrt-llm"
 		default:
 			// For custom runtimes, use the runtime value as the runtime name
 			runtimeName = runtime
@@ -1213,6 +1248,38 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		updateStrategy = string(aimodelv1alpha1.UpdateStrategyRollingUpdate)
 	}
 
+	// Get health check configuration from recipe or set runtime-aware defaults
+	livenessPath := "/health"
+	readinessPath := "/health"
+	probePort := int32(8000)
+
+	// Use recipe health check config if available
+	if recipeSpec != nil && recipeSpec.HealthCheck.LivenessPath != "" {
+		livenessPath = recipeSpec.HealthCheck.LivenessPath
+	}
+	if recipeSpec != nil && recipeSpec.HealthCheck.ReadinessPath != "" {
+		readinessPath = recipeSpec.HealthCheck.ReadinessPath
+	}
+
+	// Set runtime-aware defaults if recipe doesn't specify paths
+	if recipeSpec == nil || recipeSpec.HealthCheck.LivenessPath == "" {
+		switch runtime {
+		case "triton", "tensorrt-llm":
+			livenessPath = "/v2/health/live"
+			readinessPath = "/v2/health/ready"
+			probePort = 8080
+		}
+	}
+
+	// Determine deployment mode
+	deploymentMode := r.determineDeploymentMode(aiModel, recipeSpec)
+
+	// Log the decision for observability
+	log.Info("Deployment mode determined",
+		"mode", deploymentMode,
+		"aimodel", aiModel.Name,
+		"runtime", runtime)
+
 	// from the HuggingFace repo, which isn't preserved in S3 storage.
 	if aiModel.Spec.TrustRemoteCode && aiModel.Spec.ModelID != "" {
 		log.Info("Using container-based deployment for trust_remote_code model",
@@ -1230,10 +1297,11 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		// Use the HuggingFace model ID as the served name so vLLM accepts requests
 		// with the full HF ID (e.g., "unsloth/gpt-oss-20b"). This allows multiple
 		// models with the same base name but different sources to coexist.
-		isvc, err = kserve.NewInferenceServiceBuilder(aiModel.Name, aiModel.Namespace).
+		isvc, err = kserve.NewInferenceServiceBuilder(sanitizeInferenceServiceName(aiModel.Name), aiModel.Namespace).
 			WithContainerImage(containerImage).
 			WithModelID(aiModel.Spec.ModelID).
 			WithServedName(aiModel.Spec.ModelID).
+			WithDeploymentMode(deploymentMode).
 			WithScaling(minReplicas, maxReplicas).
 			WithResources(resources).
 			WithTolerations(tolerations).
@@ -1242,6 +1310,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 			WithRuntimeEnv(runtimeEnv).
 			WithUpdateStrategy(updateStrategy).
 			WithLivenessInitialDelay(livenessInitialDelay).
+			WithHealthProbes(livenessPath, readinessPath, probePort).
 			WithOwnerReference(ownerRef).
 			BuildContainerBased()
 		if err != nil {
@@ -1256,11 +1325,12 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		if servedName == "" {
 			servedName = aiModel.Spec.ModelName // Fallback for legacy models
 		}
-		isvc, err = kserve.NewInferenceServiceBuilder(aiModel.Name, aiModel.Namespace).
+		isvc, err = kserve.NewInferenceServiceBuilder(sanitizeInferenceServiceName(aiModel.Name), aiModel.Namespace).
 			WithStorageUri(storageUri).
 			WithModelFormat(modelFormat).
 			WithServedName(servedName).
 			WithRuntime(runtimeName).
+			WithDeploymentMode(deploymentMode).
 			WithScaling(minReplicas, maxReplicas).
 			WithResources(resources).
 			WithTolerations(tolerations).
@@ -1268,6 +1338,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 			WithRuntimeArgs(runtimeArgs).
 			WithRuntimeEnv(runtimeEnv).
 			WithUpdateStrategy(updateStrategy).
+			WithHealthProbes(livenessPath, readinessPath, probePort).
 			WithOwnerReference(ownerRef).
 			Build()
 		if err != nil {
@@ -1278,7 +1349,8 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 	// Check if InferenceService already exists
 	existing := &unstructured.Unstructured{}
 	existing.SetGroupVersionKind(kserve.InferenceServiceGVK)
-	err = r.Get(ctx, types.NamespacedName{Name: aiModel.Name, Namespace: aiModel.Namespace}, existing)
+	isvcName := sanitizeInferenceServiceName(aiModel.Name)
+	err = r.Get(ctx, types.NamespacedName{Name: isvcName, Namespace: aiModel.Namespace}, existing)
 
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -1308,20 +1380,25 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 			"desiredVersion", desiredProbeVersion)
 	}
 
-	// Compare specs to determine if an update is needed
-	existingSpec, existingSpecFound, err := unstructured.NestedMap(existing.Object, "spec")
-	if err != nil {
-		return fmt.Errorf("failed to get existing InferenceService spec: %w", err)
-	}
-	desiredSpec, desiredSpecFound, err := unstructured.NestedMap(isvc.Object, "spec")
-	if err != nil {
-		return fmt.Errorf("failed to get desired InferenceService spec: %w", err)
+	// Compare spec hashes to determine if an update is needed.
+	// This approach ignores server-side mutations (like KServe adding default fields)
+	// and only triggers updates when the operator's desired spec actually changes.
+	specHashMatches := kserve.SpecHashMatches(isvc, existing)
+
+	// Skip update if spec hash matches AND probe config version is the same
+	if !probeConfigChanged && specHashMatches {
+		log.Info("InferenceService spec hash and probe config unchanged, skipping update",
+			"name", aiModel.Name,
+			"specHash", kserve.GetSpecHash(isvc))
+		return nil
 	}
 
-	// Skip update if specs are unchanged AND probe config version is the same
-	if !probeConfigChanged && existingSpecFound && desiredSpecFound && equality.Semantic.DeepEqual(existingSpec, desiredSpec) {
-		log.Info("InferenceService spec and probe config unchanged, skipping update", "name", aiModel.Name)
-		return nil
+	// Log what changed for debugging
+	if !specHashMatches {
+		log.Info("InferenceService spec hash changed, update required",
+			"name", aiModel.Name,
+			"existingHash", kserve.GetSpecHash(existing),
+			"desiredHash", kserve.GetSpecHash(isvc))
 	}
 
 	// Update existing InferenceService with retry on conflict
@@ -1333,10 +1410,10 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 
 	// Retry loop with exponential backoff to handle race conditions with KServe controller
 	backoff := wait.Backoff{
-		Steps:    5,                    // Maximum 5 attempts
+		Steps:    5,                     // Maximum 5 attempts
 		Duration: 50 * time.Millisecond, // Initial delay: 50ms
-		Factor:   2.0,                  // Exponential: 50ms, 100ms, 200ms, 400ms, 800ms
-		Jitter:   0.1,                  // Add 10% jitter to avoid thundering herd
+		Factor:   2.0,                   // Exponential: 50ms, 100ms, 200ms, 400ms, 800ms
+		Jitter:   0.1,                   // Add 10% jitter to avoid thundering herd
 	}
 
 	var lastErr error
@@ -1346,7 +1423,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		// Fetch the latest version of the InferenceService
 		latest := &unstructured.Unstructured{}
 		latest.SetGroupVersionKind(kserve.InferenceServiceGVK)
-		if err := r.Get(ctx, types.NamespacedName{Name: aiModel.Name, Namespace: aiModel.Namespace}, latest); err != nil {
+		if err := r.Get(ctx, types.NamespacedName{Name: isvcName, Namespace: aiModel.Namespace}, latest); err != nil {
 			// Permanent error - don't retry
 			lastErr = fmt.Errorf("failed to get InferenceService: %w", err)
 			return false, lastErr
@@ -1401,8 +1478,9 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 	// Get the InferenceService
 	isvc := &unstructured.Unstructured{}
 	isvc.SetGroupVersionKind(kserve.InferenceServiceGVK)
+	isvcName := sanitizeInferenceServiceName(aiModel.Name)
 
-	err := r.Get(ctx, types.NamespacedName{Name: aiModel.Name, Namespace: aiModel.Namespace}, isvc)
+	err := r.Get(ctx, types.NamespacedName{Name: isvcName, Namespace: aiModel.Namespace}, isvc)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			log.Info("InferenceService not found, skipping status update", "name", aiModel.Name)
@@ -1417,28 +1495,36 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 		return fmt.Errorf("failed to extract InferenceService status: %w", err)
 	}
 
-	// Update AIModel status
-	aiModel.Status.InferenceServiceName = aiModel.Name
-	aiModel.Status.InferenceEndpoint = status.URL
-	aiModel.Status.ReadyReplicas = status.ReadyReplicas
+	// Re-fetch AIModel to get latest resourceVersion before status update
+	// This prevents optimistic concurrency conflicts when multiple reconciliations happen
+	latestAIModel := &aimodelv1alpha1.AIModel{}
+	if err := r.Get(ctx, types.NamespacedName{Name: aiModel.Name, Namespace: aiModel.Namespace}, latestAIModel); err != nil {
+		return fmt.Errorf("failed to re-fetch AIModel before status update: %w", err)
+	}
 
-	// Update phase based on status
+	// Update AIModel status fields (use sanitized name for InferenceService)
+	latestAIModel.Status.InferenceServiceName = isvcName
+	latestAIModel.Status.InferenceEndpoint = status.URL
+	latestAIModel.Status.ReadyReplicas = status.ReadyReplicas
+
+	// Update phase based on InferenceService status
 	if status.Ready {
-		wasNotReady := aiModel.Status.Phase != aimodelv1alpha1.AIModelPhaseReady
+		wasNotReady := latestAIModel.Status.Phase != aimodelv1alpha1.AIModelPhaseReady
 		if wasNotReady {
-			log.Info("InferenceService is ready", "name", aiModel.Name, "url", status.URL)
-			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseReady
-			aiModel.Status.Message = fmt.Sprintf("Model is ready at %s", status.URL)
+			log.Info("InferenceService is ready, transitioning to Ready phase", "name", aiModel.Name, "url", status.URL)
+			latestAIModel.Status.Phase = aimodelv1alpha1.AIModelPhaseReady
+			latestAIModel.Status.Message = fmt.Sprintf("Model is ready at %s", status.URL)
 			// Reset retry tracking on success
-			aiModel.Status.RetryCount = 0
-			aiModel.Status.LastRetryTime = nil
-			aiModel.Status.NextRetryTime = nil
-		}
+			latestAIModel.Status.RetryCount = 0
+			latestAIModel.Status.LastRetryTime = nil
+			latestAIModel.Status.NextRetryTime = nil
 
-		// Sync deployment state to Admin API when ready
-		if err := r.syncDeploymentToAdminAPI(ctx, aiModel, status); err != nil {
-			// Log error but don't fail reconciliation - Admin API sync is best-effort
-			log.Error(err, "Failed to sync deployment to Admin API", "name", aiModel.Name)
+			// Sync deployment state to Admin API only on transition to Ready
+			// This prevents hammering the API with PUT requests on every reconcile
+			if err := r.syncDeploymentToAdminAPI(ctx, latestAIModel, status); err != nil {
+				// Log error but don't fail reconciliation - Admin API sync is best-effort
+				log.Error(err, "Failed to sync deployment to Admin API", "name", aiModel.Name)
+			}
 		}
 	} else {
 		// InferenceService is not ready - determine if it's a transient or permanent failure
@@ -1448,7 +1534,7 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 			log.Info("InferenceService has transient failure, will retry",
 				"name", aiModel.Name,
 				"status", status.String(),
-				"retryCount", aiModel.Status.RetryCount)
+				"retryCount", latestAIModel.Status.RetryCount)
 
 			// Get max retries configuration
 			maxRetries := r.MaxDeploymentRetries
@@ -1457,29 +1543,29 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 			}
 
 			// Check if we should retry
-			if aiModel.Status.RetryCount < maxRetries {
+			if latestAIModel.Status.RetryCount < maxRetries {
 				// Only increment retry count and schedule retry if we're in Deploying phase
 				// (not if we're already in RetryPending waiting for the timer)
-				if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhaseDeploying {
-					aiModel.Status.RetryCount++
-					backoffDuration := r.calculateDeploymentRetryBackoff(aiModel.Status.RetryCount - 1)
+				if latestAIModel.Status.Phase == aimodelv1alpha1.AIModelPhaseDeploying {
+					latestAIModel.Status.RetryCount++
+					backoffDuration := r.calculateDeploymentRetryBackoff(latestAIModel.Status.RetryCount - 1)
 					now := metav1.Now()
 					nextRetry := metav1.NewTime(now.Add(backoffDuration))
 
-					aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseRetryPending
-					aiModel.Status.LastRetryTime = &now
-					aiModel.Status.NextRetryTime = &nextRetry
-					aiModel.Status.Message = fmt.Sprintf("Transient deployment failure (retry %d/%d scheduled in %v): %s",
-						aiModel.Status.RetryCount, maxRetries, backoffDuration, status.String())
+					latestAIModel.Status.Phase = aimodelv1alpha1.AIModelPhaseRetryPending
+					latestAIModel.Status.LastRetryTime = &now
+					latestAIModel.Status.NextRetryTime = &nextRetry
+					latestAIModel.Status.Message = fmt.Sprintf("Transient deployment failure (retry %d/%d scheduled in %v): %s",
+						latestAIModel.Status.RetryCount, maxRetries, backoffDuration, status.String())
 
 					log.Info("Deployment retry scheduled",
-						"retryCount", aiModel.Status.RetryCount,
+						"retryCount", latestAIModel.Status.RetryCount,
 						"backoffDuration", backoffDuration,
 						"nextRetryTime", nextRetry.Time)
 				} else {
 					// Already in RetryPending, keep the existing message
-					aiModel.Status.Message = fmt.Sprintf("Waiting for retry %d/%d: %s",
-						aiModel.Status.RetryCount, maxRetries, status.String())
+					latestAIModel.Status.Message = fmt.Sprintf("Waiting for retry %d/%d: %s",
+						latestAIModel.Status.RetryCount, maxRetries, status.String())
 				}
 			} else {
 				// Max retries exceeded for transient failure
@@ -1488,8 +1574,8 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 					"name", aiModel.Name,
 					"maxRetries", maxRetries,
 					"status", status.String())
-				aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
-				aiModel.Status.Message = fmt.Sprintf("Deployment failed after %d retry attempts: %s. Manual intervention required.",
+				latestAIModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
+				latestAIModel.Status.Message = fmt.Sprintf("Deployment failed after %d retry attempts: %s. Manual intervention required.",
 					maxRetries, status.String())
 			}
 		} else if status.IsPermanentFailure() {
@@ -1498,22 +1584,90 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 				"InferenceService has permanent failure",
 				"name", aiModel.Name,
 				"status", status.String())
-			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
-			aiModel.Status.Message = fmt.Sprintf("Permanent deployment failure: %s. Manual intervention required.", status.String())
+			latestAIModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
+			latestAIModel.Status.Message = fmt.Sprintf("Permanent deployment failure: %s. Manual intervention required.", status.String())
 		} else {
 			// Not ready, but not clearly a failure yet (e.g., still creating)
-			// Keep in Deploying phase
-			if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhaseReady {
-				// Transition from Ready to Deploying
-				aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
+			// Only transition to Deploying if not already in a terminal or retry state
+			if latestAIModel.Status.Phase != aimodelv1alpha1.AIModelPhaseDeploying &&
+				latestAIModel.Status.Phase != aimodelv1alpha1.AIModelPhaseFailed &&
+				latestAIModel.Status.Phase != aimodelv1alpha1.AIModelPhaseRetryPending {
+				log.Info("InferenceService not ready yet, setting phase to Deploying",
+					"name", aiModel.Name,
+					"currentPhase", latestAIModel.Status.Phase,
+					"status", status.String())
+				latestAIModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
 			}
-			aiModel.Status.Message = status.String()
+			latestAIModel.Status.Message = status.String()
 		}
 	}
 
-	// Update status
-	if err := r.Status().Update(ctx, aiModel); err != nil {
-		return fmt.Errorf("failed to update AIModel status: %w", err)
+	// Update status with retry on conflict using exponential backoff
+	// This is critical - without proper retry, the phase can get stuck
+	statusBackoff := wait.Backoff{
+		Steps:    5,
+		Duration: 50 * time.Millisecond,
+		Factor:   2.0,
+		Jitter:   0.1,
+	}
+
+	var lastStatusErr error
+	statusRetryCount := 0
+
+	err = wait.ExponentialBackoff(statusBackoff, func() (bool, error) {
+		// On retry, re-fetch the latest AIModel to get the current resourceVersion
+		if statusRetryCount > 0 {
+			freshAIModel := &aimodelv1alpha1.AIModel{}
+			if fetchErr := r.Get(ctx, types.NamespacedName{Name: aiModel.Name, Namespace: aiModel.Namespace}, freshAIModel); fetchErr != nil {
+				lastStatusErr = fmt.Errorf("failed to re-fetch AIModel for status retry: %w", fetchErr)
+				return false, lastStatusErr // Permanent error - stop retrying
+			}
+
+			// Reapply the status changes to the fresh object
+			freshAIModel.Status.InferenceServiceName = latestAIModel.Status.InferenceServiceName
+			freshAIModel.Status.InferenceEndpoint = latestAIModel.Status.InferenceEndpoint
+			freshAIModel.Status.ReadyReplicas = latestAIModel.Status.ReadyReplicas
+			freshAIModel.Status.Phase = latestAIModel.Status.Phase
+			freshAIModel.Status.Message = latestAIModel.Status.Message
+			freshAIModel.Status.RetryCount = latestAIModel.Status.RetryCount
+			freshAIModel.Status.LastRetryTime = latestAIModel.Status.LastRetryTime
+			freshAIModel.Status.NextRetryTime = latestAIModel.Status.NextRetryTime
+
+			latestAIModel = freshAIModel
+		}
+
+		if updateErr := r.Status().Update(ctx, latestAIModel); updateErr != nil {
+			if errors.IsConflict(updateErr) {
+				statusRetryCount++
+				log.Info("Status update conflict, retrying",
+					"name", aiModel.Name,
+					"attempt", statusRetryCount,
+					"maxAttempts", statusBackoff.Steps)
+				lastStatusErr = updateErr
+				return false, nil // Retry
+			}
+			lastStatusErr = fmt.Errorf("failed to update AIModel status: %w", updateErr)
+			return false, lastStatusErr // Permanent error - stop retrying
+		}
+
+		// Success
+		if statusRetryCount > 0 {
+			log.Info("Status update succeeded after retries",
+				"name", aiModel.Name,
+				"attempts", statusRetryCount+1)
+		}
+		return true, nil
+	})
+
+	if err != nil {
+		if lastStatusErr != nil {
+			if errors.IsConflict(lastStatusErr) {
+				// All retries exhausted - return conflict error so reconciler retries
+				return fmt.Errorf("status update failed after %d attempts due to conflicts: %w", statusRetryCount, lastStatusErr)
+			}
+			return lastStatusErr
+		}
+		return fmt.Errorf("status update failed: %w", err)
 	}
 
 	return nil
@@ -1552,6 +1706,8 @@ func (r *AIModelReconciler) syncDeploymentToAdminAPI(ctx context.Context, aiMode
 	// Try to update existing deployment first
 	err := r.AdminAPIClient.UpdateDeploymentStatus(ctx, aiModel.Name, environment, adminapi.DeploymentStatus{
 		Status:               deploymentStatus,
+		ModelID:              aiModel.Spec.ModelID,
+		ExternalName:         deriveExternalName(aiModel),
 		InferenceServiceName: aiModel.Status.InferenceServiceName,
 		Endpoint:             status.URL,
 		ReplicasReady:        int(status.ReadyReplicas),
@@ -1568,10 +1724,12 @@ func (r *AIModelReconciler) syncDeploymentToAdminAPI(ctx context.Context, aiMode
 		}
 
 		createErr := r.AdminAPIClient.CreateDeployment(ctx, adminapi.CreateDeploymentRequest{
-			ModelName:   aiModel.Name,
-			Environment: environment,
-			Namespace:   aiModel.Namespace,
-			Replicas:    replicas,
+			ModelName:    aiModel.Name,
+			ModelID:      aiModel.Spec.ModelID,
+			ExternalName: deriveExternalName(aiModel),
+			Environment:  environment,
+			Namespace:    aiModel.Namespace,
+			Replicas:     replicas,
 		})
 		if createErr != nil {
 			return fmt.Errorf("failed to create deployment: %w", createErr)
@@ -1580,6 +1738,8 @@ func (r *AIModelReconciler) syncDeploymentToAdminAPI(ctx context.Context, aiMode
 		// After creating, update with current status
 		return r.AdminAPIClient.UpdateDeploymentStatus(ctx, aiModel.Name, environment, adminapi.DeploymentStatus{
 			Status:               deploymentStatus,
+			ModelID:              aiModel.Spec.ModelID,
+			ExternalName:         deriveExternalName(aiModel),
 			InferenceServiceName: aiModel.Status.InferenceServiceName,
 			Endpoint:             status.URL,
 			ReplicasReady:        int(status.ReadyReplicas),
@@ -1694,13 +1854,111 @@ func (r *AIModelReconciler) convertRecipeRuntimeArgs(runtime string, runtimeArgs
 				args = append(args, "--disable-flash-attention")
 			}
 		}
-	case "triton":
-		// Triton uses config.pbtxt instead of command-line args
-		// The args would be handled differently in the InferenceService spec
-		// For now, we don't convert Triton args to command-line format
+	case "triton", "tensorrt-llm":
+		if runtimeArgs.Triton != nil {
+			tritonArgs := runtimeArgs.Triton
+
+			// Model repository path - can be set via command-line or env var
+			// The ClusterServingRuntime sets --model-store=/mnt/models as default
+			// For now, we don't override it here as it's typically handled by KServe
+			// However, if needed in the future, we could add:
+			// if tritonArgs.ModelRepository != "" {
+			//     args = append(args, fmt.Sprintf("--model-repository=%s", tritonArgs.ModelRepository))
+			// }
+
+			// Backend configuration
+			// Triton backends are configured via config.pbtxt in the model repository
+			// Dynamic batching, instance groups, and tensor configs are also in config.pbtxt
+			// These are not command-line arguments to tritonserver
+
+			// For TensorRT-LLM backend, additional configuration may be needed
+			if tritonArgs.Backend == "tensorrt" {
+				// TensorRT-LLM specific args would go here if needed
+				// Currently, these are handled by the model repository config
+			}
+
+			// Note: Most Triton configuration is done through:
+			// 1. ClusterServingRuntime (server-level args like --http-port, --grpc-port)
+			// 2. Model repository config.pbtxt (model-level config)
+			// 3. Environment variables (set via runtimeEnv in the spec)
+			// This function returns empty args for Triton, which is correct behavior
+		}
 	}
 
 	return args
+}
+
+// determineDeploymentMode determines the deployment mode for an AIModel.
+// Priority:
+// 1. AIModel.Spec.DeploymentMode (explicit override)
+// 2. Recipe.Spec.DeploymentMode (if recipe is used)
+// 3. Runtime-based default:
+//   - tensorrt-llm, triton → RawDeployment
+//   - vllm, tgi with GPU → RawDeployment
+//   - vllm, tgi without GPU → Serverless
+//   - default → Serverless
+func (r *AIModelReconciler) determineDeploymentMode(
+	aimodel *aimodelv1alpha1.AIModel,
+	recipe *aimodelv1alpha1.ModelRecipeSpec,
+) string {
+	// 1. AIModel explicit override
+	if aimodel.Spec.DeploymentMode != "" {
+		return aimodel.Spec.DeploymentMode
+	}
+
+	// 2. Recipe explicit setting
+	if recipe != nil && recipe.DeploymentMode != "" {
+		return recipe.DeploymentMode
+	}
+
+	// 3. Runtime-based defaults
+	runtime := aimodel.Spec.Runtime
+	if recipe != nil && recipe.Runtime != "" {
+		runtime = recipe.Runtime
+	}
+
+	switch runtime {
+	case "tensorrt-llm", "triton":
+		return "RawDeployment"
+	case "vllm", "tgi":
+		// Check if GPU is requested
+		if r.hasGPU(aimodel, recipe) {
+			return "RawDeployment"
+		}
+		return "Serverless"
+	default:
+		return "Serverless"
+	}
+}
+
+// hasGPU checks if GPU resources are requested in the AIModel or recipe.
+func (r *AIModelReconciler) hasGPU(
+	aimodel *aimodelv1alpha1.AIModel,
+	recipe *aimodelv1alpha1.ModelRecipeSpec,
+) bool {
+	// Check AIModel resources (both requests and limits) for any GPU request
+	// Supports nvidia.com/gpu, amd.com/gpu, intel.com/gpu, and other vendors
+	if hasGPUResource(aimodel.Spec.Resources.Requests) ||
+		hasGPUResource(aimodel.Spec.Resources.Limits) {
+		return true
+	}
+
+	// Check recipe GPU resources
+	if recipe != nil && recipe.Resources.GPU.Count > 0 {
+		return true
+	}
+
+	return false
+}
+
+// hasGPUResource checks if a resource list contains a non-zero GPU request.
+func hasGPUResource(resources corev1.ResourceList) bool {
+	for resourceName, quantity := range resources {
+		if strings.Contains(string(resourceName), "gpu") && !quantity.IsZero() {
+			return true
+		}
+	}
+	return false
 }
 
 // SetupWithManager sets up the controller with the Manager.

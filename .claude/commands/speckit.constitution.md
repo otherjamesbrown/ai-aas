@@ -20,7 +20,7 @@ If creating new, use this structure:
 
 **Project**: [PROJECT_NAME]
 **Version**: 1.0.0
-**Last Updated**: [DATE]
+**Last Updated**: YYYY-MM-DD
 
 ## Preamble
 [Brief description of what this project is and its core mission]
@@ -73,7 +73,7 @@ After updating constitution, check alignment with:
 Create/update `memory/constitution.md` with:
 - Sync impact report as HTML comment at top
 - All placeholders replaced with concrete values
-- ISO-formatted dates
+- ISO-formatted dates (YYYY-MM-DD)
 - MUST/SHOULD language with explicit rationale
 
 ### Step 8: Report

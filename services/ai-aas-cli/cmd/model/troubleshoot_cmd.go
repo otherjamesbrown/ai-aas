@@ -694,8 +694,11 @@ See Also:
 			results := make(map[string]*ModelValidationResult)
 			allPassed := true
 
+			// Get inference timeout from config (in seconds)
+			inferenceTimeout := time.Duration(cfg.InferenceTimeout) * time.Second
+
 			for _, modelName := range modelNames {
-				result := validateModel(ctx, modelName, environment, regClient, skipSet)
+				result := validateModel(ctx, modelName, environment, regClient, skipSet, inferenceTimeout)
 				results[modelName] = result
 				if !result.Passed {
 					allPassed = false

@@ -60,3 +60,51 @@ contracts-generate: _ensure-module ## Generate Go types from OpenAPI spec only
 		exit 1; \
 	}
 
+# Triton gRPC proto generation
+TRITON_PROTO_DIR := $(SERVICE_ROOT)/internal/adapter/triton/proto
+TRITON_PB_DIR := $(SERVICE_ROOT)/internal/adapter/triton/pb
+TRITON_COMMON_URL := https://raw.githubusercontent.com/triton-inference-server/common/main/protobuf
+
+.PHONY: proto-triton
+proto-triton: proto-triton-download proto-triton-generate ## Download and generate Triton gRPC stubs
+
+.PHONY: proto-triton-download
+proto-triton-download: ## Download Triton proto files from triton-inference-server/common
+	@echo "Downloading Triton proto files..."
+	@mkdir -p $(TRITON_PROTO_DIR)
+	@curl -sL $(TRITON_COMMON_URL)/grpc_service.proto -o $(TRITON_PROTO_DIR)/grpc_service.proto.tmp
+	@curl -sL $(TRITON_COMMON_URL)/model_config.proto -o $(TRITON_PROTO_DIR)/model_config.proto.tmp
+	@# Add go_package option if not present
+	@if ! grep -q 'option go_package' $(TRITON_PROTO_DIR)/grpc_service.proto.tmp; then \
+		sed -i 's/^package inference;$$/package inference;\n\noption go_package = "github.com\/otherjamesbrown\/ai-aas\/services\/api-router-service\/internal\/adapter\/triton\/pb";/' $(TRITON_PROTO_DIR)/grpc_service.proto.tmp; \
+	fi
+	@if ! grep -q 'option go_package' $(TRITON_PROTO_DIR)/model_config.proto.tmp; then \
+		sed -i 's/^package inference;$$/package inference;\n\noption go_package = "github.com\/otherjamesbrown\/ai-aas\/services\/api-router-service\/internal\/adapter\/triton\/pb";/' $(TRITON_PROTO_DIR)/model_config.proto.tmp; \
+	fi
+	@mv $(TRITON_PROTO_DIR)/grpc_service.proto.tmp $(TRITON_PROTO_DIR)/grpc_service.proto
+	@mv $(TRITON_PROTO_DIR)/model_config.proto.tmp $(TRITON_PROTO_DIR)/model_config.proto
+	@echo "✓ Proto files downloaded"
+
+.PHONY: proto-triton-generate
+proto-triton-generate: ## Generate Go stubs from Triton proto files
+	@echo "Generating Go stubs from Triton protos..."
+	@command -v protoc >/dev/null 2>&1 || { \
+		echo "protoc not installed. Install Protocol Buffers compiler."; \
+		exit 1; \
+	}
+	@command -v protoc-gen-go >/dev/null 2>&1 || { \
+		echo "protoc-gen-go not installed. Install with:"; \
+		echo "  go install google.golang.org/protobuf/cmd/protoc-gen-go@latest"; \
+		exit 1; \
+	}
+	@command -v protoc-gen-go-grpc >/dev/null 2>&1 || { \
+		echo "protoc-gen-go-grpc not installed. Install with:"; \
+		echo "  go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest"; \
+		exit 1; \
+	}
+	@mkdir -p $(TRITON_PB_DIR)
+	@protoc --go_out=$(TRITON_PB_DIR) --go_opt=paths=source_relative \
+		--go-grpc_out=$(TRITON_PB_DIR) --go-grpc_opt=paths=source_relative \
+		-I=$(TRITON_PROTO_DIR) $(TRITON_PROTO_DIR)/grpc_service.proto $(TRITON_PROTO_DIR)/model_config.proto
+	@echo "✓ Go stubs generated in $(TRITON_PB_DIR)"
+

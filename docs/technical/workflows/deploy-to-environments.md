@@ -118,7 +118,7 @@ ArgoCD should auto-sync, but you can force:
 export KUBECONFIG=~/kubeconfigs/kubeconfig-development.yaml
 
 # Login to ArgoCD
-argocd login argocd.dev.ai-aas.local --grpc-web --insecure
+argocd login argocd.dev.otherjamesbrown.com --grpc-web --insecure
 # Or use port-forward: kubectl port-forward svc/argocd-server -n argocd 8080:443
 
 # Sync applications
@@ -136,7 +136,7 @@ argocd app sync -l environment=development
 export KUBECONFIG=~/kubeconfigs/kubeconfig-production.yaml
 
 # Login to ArgoCD
-argocd login argocd.prod.ai-aas.local --grpc-web --insecure
+argocd login argocd.prod.otherjamesbrown.com --grpc-web --insecure
 
 # Sync applications (manual approval required)
 argocd app sync web-portal-production
@@ -160,8 +160,8 @@ kubectl get pods -n default
 argocd app list
 
 # Test endpoints
-curl -k https://api.dev.ai-aas.local/healthz
-curl -k https://portal.dev.ai-aas.local
+curl -k https://api.dev.otherjamesbrown.com/healthz
+curl -k https://portal.dev.otherjamesbrown.com
 ```
 
 ## Deploying a Model (KServe)
@@ -207,7 +207,7 @@ ArgoCD will detect the new application and deploy the `InferenceService`.
 kubectl get inferenceservice my-new-model -n system
 
 # Test the model endpoint (if exposed via Istio)
-curl -k https://my-new-model.system.ai-aas.local/v2/models/my-new-model/infer -d @- <<EOF
+curl -k https://my-new-model.system.otherjamesbrown.com/v2/models/my-new-model/infer -d @- <<EOF
 {
   "inputs": []
 }

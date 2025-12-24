@@ -49,7 +49,7 @@ echo -e "${YELLOW}Step 1: Creating test organization...${NC}"
 # Check if we need to use Host header
 CURL_HOST_HEADER=""
 if [[ "$BASE_URL" =~ ^https?://[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-    CURL_HOST_HEADER="-H Host:api.dev.ai-aas.local"
+    CURL_HOST_HEADER="-H Host:api.dev.otherjamesbrown.com"
 fi
 
 # Try to create org (this may require existing auth or bootstrap endpoint)

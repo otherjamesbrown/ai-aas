@@ -65,6 +65,11 @@ func (v *Validator) Validate(spec *aimodelv1alpha1.ModelRecipeSpec) ValidationRe
 		errors = append(errors, errs...)
 	}
 
+	// Validate runtime-specific resource requirements
+	if errs := v.validateRuntimeResourceRequirements(spec.Runtime, &spec.Resources); len(errs) > 0 {
+		errors = append(errors, errs...)
+	}
+
 	// Validate runtime-specific args
 	if errs := v.validateRuntimeArgs(spec.Runtime, &spec.RuntimeArgs); len(errs) > 0 {
 		errors = append(errors, errs...)
@@ -139,13 +144,14 @@ func (v *Validator) validateRuntime(runtime string) error {
 	}
 
 	validRuntimes := map[string]bool{
-		"vllm":   true,
-		"triton": true,
-		"tgi":    true,
+		"vllm":        true,
+		"triton":      true,
+		"tensorrt-llm": true,
+		"tgi":         true,
 	}
 
 	if !validRuntimes[runtime] {
-		return fmt.Errorf("runtime must be one of: vllm, triton, tgi (got: %s)", runtime)
+		return fmt.Errorf("runtime must be one of: vllm, triton, tensorrt-llm, tgi (got: %s)", runtime)
 	}
 
 	return nil
@@ -172,6 +178,29 @@ func (v *Validator) validateResources(resources *aimodelv1alpha1.RecipeResources
 	// Validate Memory if specified
 	if errs := v.validateMemory(&resources.Memory); len(errs) > 0 {
 		errors = append(errors, errs...)
+	}
+
+	return errors
+}
+
+// validateRuntimeResourceRequirements validates runtime-specific resource requirements
+func (v *Validator) validateRuntimeResourceRequirements(runtime string, resources *aimodelv1alpha1.RecipeResources) []string {
+	if resources == nil {
+		return []string{}
+	}
+
+	var errors []string
+
+	// TensorRT-LLM specific validations
+	if runtime == "tensorrt-llm" {
+		// TensorRT-LLM requires GPU
+		if resources.GPU.Count == 0 {
+			errors = append(errors, "tensorrt-llm runtime requires GPU (gpu.count must be > 0)")
+		}
+		// TensorRT-LLM requires NVIDIA GPU (TensorRT is NVIDIA-specific)
+		if resources.GPU.Vendor != "" && resources.GPU.Vendor != "nvidia" {
+			errors = append(errors, "tensorrt-llm runtime requires nvidia GPU vendor")
+		}
 	}
 
 	return errors

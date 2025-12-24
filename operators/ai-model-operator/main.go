@@ -36,6 +36,7 @@ import (
 	aimodelv1alpha1 "github.com/ai-aas/ai-model-operator/api/v1alpha1"
 	"github.com/ai-aas/ai-model-operator/controllers"
 	"github.com/ai-aas/ai-model-operator/internal/adminapi"
+	"github.com/ai-aas/ai-model-operator/internal/recipe"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -116,6 +117,10 @@ func main() {
 			"reason", "ADMIN_API_BASE_URL or ADMIN_API_KEY not set")
 	}
 
+	// Initialize recipe resolver and validator
+	recipeResolver := recipe.NewResolver(mgr.GetClient())
+	recipeValidator := recipe.NewValidator()
+
 	if err = (&controllers.AIModelReconciler{
 		Client:             mgr.GetClient(),
 		Scheme:             mgr.GetScheme(),
@@ -125,6 +130,8 @@ func main() {
 		DownloaderImage:    downloaderImage,
 		DefaultRuntime:     defaultRuntime,
 		AdminAPIClient:     adminAPIClient,
+		RecipeResolver:     recipeResolver,
+		RecipeValidator:    recipeValidator,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AIModel")
 		os.Exit(1)

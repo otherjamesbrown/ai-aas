@@ -70,6 +70,7 @@ aimodel_crd_spec:
     runtimeArgs: "[]string - CLI args (e.g., --dtype=float16, --max-model-len=4096)"
     runtimeEnv: "[]EnvVar - additional env vars"
     trustRemoteCode: "bool - load from HuggingFace directly (skips S3)"
+    deploymentMode: "Serverless | RawDeployment (optional) - explicit KServe deployment type"
 
   storage:  # Optional if trustRemoteCode=true
     s3Bucket: "Bucket for model artifacts"
@@ -93,6 +94,55 @@ aimodel_crd_status:
   message: "Human-readable status message"
   retryCount: "Download retry attempts"
 ```
+
+---
+
+## Deployment Mode Patterns
+
+### Pattern: Explicit Deployment Mode Selection
+
+**DO**: Use explicit `deploymentMode` field to control KServe deployment type.
+
+```go
+// Good: Explicit mode selection
+deploymentMode := r.determineDeploymentMode(aimodel, recipe)
+builder.WithDeploymentMode(deploymentMode)
+```
+
+**DON'T**: Infer deployment mode from nodeSelector presence.
+
+```go
+// Bad: Implicit mode selection (DEPRECATED)
+if len(nodeSelector) > 0 {
+    deploymentMode = "RawDeployment"  // Don't do this
+}
+```
+
+### Pattern: Runtime-Aware Defaults
+
+When deployment mode is not explicitly set:
+
+| Runtime | GPU | Default Mode |
+|---------|-----|--------------|
+| tensorrt-llm | - | RawDeployment |
+| triton | - | RawDeployment |
+| vllm | Yes | RawDeployment |
+| vllm | No | Serverless |
+| tgi | Yes | RawDeployment |
+| tgi | No | Serverless |
+| Other | - | Serverless |
+
+### Anti-Pattern: Implicit NodeSelector Logic
+
+The old pattern of checking `len(nodeSelector) > 0` to determine deployment mode is deprecated. This was:
+- Implicit and surprising behavior
+- Undocumented
+- Inconsistent across code paths
+
+Always use the `determineDeploymentMode()` function which follows the priority:
+1. AIModel.Spec.DeploymentMode (explicit override)
+2. Recipe.Spec.DeploymentMode (recipe default)
+3. Runtime-based defaults (GPU-aware)
 
 ---
 

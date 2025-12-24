@@ -1,9 +1,7 @@
 # etcd Service Ingress
 # Exposes etcd (config-service) via HTTPS for admin-cli access
 #
-# Access URLs:
-# - Hostname: https://etcd.dev.ai-aas.local (requires /etc/hosts entry)
-# - Public DNS: https://etcd.dev.otherjamesbrown.com
+# Access URL (Development): https://etcd.dev.otherjamesbrown.com
 #
 # Apply with: kubectl apply -f infra/k8s/development/ingress/etcd-ingress.yaml
 apiVersion: networking.k8s.io/v1
@@ -18,16 +16,6 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - host: etcd.dev.ai-aas.local
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: etcd-service
-            port:
-              number: 2379
   - host: etcd.dev.otherjamesbrown.com
     http:
       paths:

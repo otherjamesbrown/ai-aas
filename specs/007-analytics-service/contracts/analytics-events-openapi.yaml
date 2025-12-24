@@ -6,7 +6,7 @@ info:
     Defines the REST validation surface and schema for analytics usage events
     emitted by the API Router and consumed by the Analytics Service via RabbitMQ.
 servers:
-  - url: https://api.ai-aas.local
+  - url: https://api.dev.otherjamesbrown.com
     description: Development cluster
   - url: https://api.ai-aas.prod
     description: Production cluster

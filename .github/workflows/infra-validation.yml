@@ -8,6 +8,7 @@ on:
       - staging
     paths:
       - 'infra/k8s/**'
+      - 'infra/model-recipes/**'
       - 'gitops/**'
       - 'services/**/deployments/helm/**'
       - '.github/workflows/infra-validation.yml'
@@ -18,6 +19,7 @@ on:
       - staging
     paths:
       - 'infra/k8s/**'
+      - 'infra/model-recipes/**'
       - 'gitops/**'
       - 'services/**/deployments/helm/**'
       - '.github/workflows/infra-validation.yml'
@@ -195,6 +197,115 @@ jobs:
             echo "Validating $manifest..."
             kubeval --strict --ignore-missing-schemas "$manifest" || true
           done
+
+  crd-apiversion-validation:
+    name: CRD apiVersion Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Validate ModelRecipe apiVersion
+        run: |
+          set -e
+
+          echo "Validating apiVersion for ModelRecipe custom resources..."
+          echo ""
+
+          ERRORS=0
+          EXPECTED_API_VERSION="aimodel.ai-aas.io/v1alpha1"
+
+          # Find all ModelRecipe files in infra/model-recipes/
+          RECIPE_FILES=$(find infra/model-recipes -name "*.yaml" -type f 2>/dev/null || true)
+
+          if [ -z "$RECIPE_FILES" ]; then
+            echo "No ModelRecipe files found in infra/model-recipes/"
+            exit 0
+          fi
+
+          for file in $RECIPE_FILES; do
+            echo "Checking $file..."
+
+            KIND=$(yq e '.kind' "$file" 2>/dev/null || echo "")
+            if [ "$KIND" != "ModelRecipe" ]; then
+              echo "  ⚠️  Not a ModelRecipe (kind=$KIND), skipping"
+              continue
+            fi
+
+            API_VERSION=$(yq e '.apiVersion' "$file" 2>/dev/null || echo "")
+            if [ "$API_VERSION" != "$EXPECTED_API_VERSION" ]; then
+              echo "  ❌ INVALID apiVersion: '$API_VERSION' (expected: '$EXPECTED_API_VERSION')"
+              echo "     File: $file"
+              ERRORS=$((ERRORS + 1))
+            else
+              echo "  ✅ Valid apiVersion"
+            fi
+          done
+
+          echo ""
+
+          if [ $ERRORS -gt 0 ]; then
+            echo "❌ Found $ERRORS apiVersion validation errors"
+            echo ""
+            echo "All ModelRecipe custom resources must use apiVersion: $EXPECTED_API_VERSION"
+            echo ""
+            echo "This validation prevents CRD version mismatches that cause deployment failures."
+            exit 1
+          fi
+
+          echo "✅ All ModelRecipe files have correct apiVersion"
+
+      - name: Validate AIModel apiVersion (if present)
+        run: |
+          set -e
+
+          echo ""
+          echo "Checking for AIModel custom resources in this repository..."
+          echo ""
+
+          ERRORS=0
+          EXPECTED_API_VERSION="aimodel.ai-aas.io/v1alpha1"
+
+          # AIModel resources are typically in ai-aas-config repo, but check here too
+          AIMODEL_FILES=$(find . -name "*.yaml" -type f -exec grep -l "kind: AIModel" {} \; 2>/dev/null | grep -v ".git" || true)
+
+          if [ -z "$AIMODEL_FILES" ]; then
+            echo "No AIModel files found in this repository (expected - they live in ai-aas-config)"
+            exit 0
+          fi
+
+          for file in $AIMODEL_FILES; do
+            echo "Checking $file..."
+
+            KIND=$(yq e '.kind' "$file" 2>/dev/null || echo "")
+            if [ "$KIND" != "AIModel" ]; then
+              continue
+            fi
+
+            API_VERSION=$(yq e '.apiVersion' "$file" 2>/dev/null || echo "")
+            if [ "$API_VERSION" != "$EXPECTED_API_VERSION" ]; then
+              echo "  ❌ INVALID apiVersion: '$API_VERSION' (expected: '$EXPECTED_API_VERSION')"
+              echo "     File: $file"
+              ERRORS=$((ERRORS + 1))
+            else
+              echo "  ✅ Valid apiVersion"
+            fi
+          done
+
+          echo ""
+
+          if [ $ERRORS -gt 0 ]; then
+            echo "❌ Found $ERRORS apiVersion validation errors"
+            exit 1
+          fi
+
+          echo "✅ All AIModel files have correct apiVersion"
 
   argocd-duplicate-check:
     name: ArgoCD Duplicate Resource Detection

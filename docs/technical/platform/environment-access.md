@@ -24,7 +24,7 @@ git-crypt unlock
 - Access: `kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-development.yaml`
 
 **ArgoCD**
-- URL: https://argocd.dev.ai-aas.local
+- URL: https://argocd.dev.otherjamesbrown.com
 - Username: `admin`
 - Password: Retrieve with `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode`
 - Alternative: Check `secrets/env/.env` for stored credentials
@@ -35,7 +35,7 @@ git-crypt unlock
 - Format: `postgresql://username:password@host:port/database?sslmode=require`
 
 **API Endpoints**
-- API Router: https://api.172.232.58.222.nip.io or https://api.dev.ai-aas.local
+- API Router: https://api.dev.otherjamesbrown.com or https://api.dev.otherjamesbrown.com
 - User Org Service: http://172.232.58.222 (via ingress) or `kubectl port-forward -n user-org-service svc/user-org-service-development-user-org-service 18081:8081`
 - Ingress IP: `172.232.58.222`
 
@@ -62,7 +62,7 @@ git-crypt unlock
 - Context: Use with `--kubeconfig` flag
 
 **ArgoCD**
-- URL: https://argocd.prod.ai-aas.local
+- URL: https://argocd.prod.otherjamesbrown.com
 - Username: `admin`
 - Password: Same retrieval method as development
 

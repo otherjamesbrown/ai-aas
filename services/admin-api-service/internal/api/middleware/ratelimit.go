@@ -130,5 +130,5 @@ func writeTooManyRequests(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.Header().Set("Retry-After", "60")
 	w.WriteHeader(http.StatusTooManyRequests)
-	w.Write([]byte(`{"type":"https://docs.ai-aas.local/errors/rate-limit","title":"Too Many Requests","status":429,"detail":"Rate limit exceeded. Please retry after 60 seconds."}`))
+	w.Write([]byte(`{"type":"https://docs.otherjamesbrown.com/errors/rate-limit","title":"Too Many Requests","status":429,"detail":"Rate limit exceeded. Please retry after 60 seconds."}`))
 }

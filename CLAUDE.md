@@ -27,6 +27,11 @@ bd update <issue-id> --status in_progress  # Update status
 bd close <issue-id>                # Close an issue
 ```
 
+**Bead ID shorthand:**
+- Prefix `aas-` can be omitted when referencing beads
+- "spec030" → aas-spec030
+- "pr93" → aas-pr93
+
 **When ending a session or completing work:**
 - Ask the user: "Would you like to create any beads issues before we finish?"
 - If the user mentions something to do "later" or "eventually", offer to create a beads issue
@@ -107,6 +112,33 @@ In addition to the principles outlined in the main guide, always adhere to:
     - Check if the Admin API already has the endpoint you need
     - If an API endpoint is missing, add it to Admin API first, then use it from CLI
 
+## Workspace & Git Worktree Setup
+
+The development machine uses a **workspace** bash function (defined in `~/.bashrc`) to manage git worktrees for parallel development:
+
+```bash
+workspace <name> [branch]    # Create/switch to a worktree
+workspace                    # List current worktrees
+workspace-remove <name>      # Clean up a worktree
+```
+
+**Key details:**
+- Main repository: `~/ai-aas`
+- Worktrees created in: `~/worktrees/<name>`
+- Permanent worktrees: `develop`, `staging`
+- Temporary worktrees: feature branches, PR reviews
+
+### Git-Crypt
+
+The repository uses **git-crypt** to encrypt sensitive files (`.env`, secrets).
+
+- **Key location**: `~/.config/git-crypt/ai-aas-key`
+- The workspace function auto-unlocks git-crypt when creating new worktrees
+- If you encounter git-crypt errors, manually unlock:
+  ```bash
+  cd ~/ai-aas && git-crypt unlock ~/.config/git-crypt/ai-aas-key
+  ```
+
 ## Environment Access & Credentials
 
 **CRITICAL**: Before searching for credentials or environment access information, ALWAYS check this document first:
@@ -127,9 +159,9 @@ This document contains:
 **Quick Access Examples:**
 - Kubernetes: `kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-development.yaml`
 - Database: Connection string in `secrets/env/.env` as `DATABASE_URL`
-- API Router: `https://api.172.232.58.222.nip.io` or `https://api.dev.ai-aas.local`
+- API Router: `https://api.dev.otherjamesbrown.com`
 - Master Admin API Key: Found in `secrets/env/.env` as `MASTER_ADMIN_API_KEY`
-- ArgoCD: `https://argocd.dev.ai-aas.local` (password retrieved from k8s secret)
+- ArgoCD: `https://argocd.dev.otherjamesbrown.com` (password retrieved from k8s secret)
 
 ## Endpoint URL Management Strategy
 
@@ -254,7 +286,7 @@ kubectl get deployment <name> -n <namespace> -o jsonpath='{.spec.template.spec.c
 ### Reference Documentation:
 
 - `docs/runbooks/deploy-to-environments.md`: Complete deployment runbook
-- ArgoCD endpoints: `argocd.dev.ai-aas.local`, `argocd.prod.ai-aas.local`
+- ArgoCD endpoints: `argocd.dev.otherjamesbrown.com`, `argocd.prod.otherjamesbrown.com`
 
 ## ArgoCD Application Requirements
 
@@ -369,8 +401,8 @@ spec:
 
 | What | Command/URL |
 |------|-------------|
-| **Grafana** | http://grafana.172.232.58.222.nip.io |
-| **Loki API** | http://loki.172.232.58.222.nip.io |
+| **Grafana** | https://grafana.dev.otherjamesbrown.com |
+| **Loki API** | https://loki.dev.otherjamesbrown.com |
 | **Service Logs Dashboard** | Grafana → Dashboards → Service Logs |
 | **Request Tracing Dashboard** | Grafana → Dashboards → Request Tracing |
 
@@ -381,19 +413,19 @@ spec:
 kubectl logs -n <namespace> -l app=<service> --tail=100 | grep -i error
 
 # Query Loki directly for errors (last hour)
-curl -G http://loki.172.232.58.222.nip.io/loki/api/v1/query_range \
+curl -G https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range \
   --data-urlencode 'query={service="api-router-service",level="error"}' \
   --data-urlencode 'limit=50'
 
 # Find logs by trace ID
-curl -G http://loki.172.232.58.222.nip.io/loki/api/v1/query_range \
+curl -G https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range \
   --data-urlencode 'query={trace_id="<TRACE_ID>"}'
 
 # View vLLM/inference backend logs
 kubectl logs -n system -l serving.kserve.io/inferenceservice=<model> --tail=100
 
 # Check for GPU/CUDA errors
-curl -G http://loki.172.232.58.222.nip.io/loki/api/v1/query_range \
+curl -G https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range \
   --data-urlencode 'query={namespace="system"} |~ "(?i)cuda|oom|gpu"'
 ```
 

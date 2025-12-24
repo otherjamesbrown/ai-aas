@@ -1,6 +1,8 @@
 package kserve
 
 import (
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -10,6 +12,11 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
+
+// SpecHashAnnotation is the annotation key for storing the desired spec hash.
+// This hash is computed from the operator's desired spec and used to detect
+// real changes vs server-side mutations (like KServe adding default fields).
+const SpecHashAnnotation = "ai-aas.io/spec-hash"
 
 // InferenceServiceGVK is the GroupVersionKind for KServe InferenceService
 var InferenceServiceGVK = schema.GroupVersionKind{
@@ -45,6 +52,11 @@ type InferenceServiceBuilder struct {
 	containerImage              string
 	modelID                     string // HuggingFace model ID for direct loading
 	livenessInitialDelaySeconds int32  // InitialDelaySeconds for liveness probe
+	// Health probe configuration
+	livenessPath   string // Path for liveness probe (default: /health)
+	readinessPath  string // Path for readiness probe (default: /health)
+	probePort      int32  // Port for health probes (default: 8000)
+	deploymentMode string // Explicit deployment mode ("Serverless" or "RawDeployment")
 }
 
 // NewInferenceServiceBuilder creates a new InferenceServiceBuilder
@@ -192,6 +204,22 @@ func (b *InferenceServiceBuilder) WithLivenessInitialDelay(seconds int32) *Infer
 	return b
 }
 
+// WithHealthProbes sets the health probe paths and port
+func (b *InferenceServiceBuilder) WithHealthProbes(livenessPath, readinessPath string, port int32) *InferenceServiceBuilder {
+	b.livenessPath = livenessPath
+	b.readinessPath = readinessPath
+	b.probePort = port
+	return b
+}
+
+// WithDeploymentMode sets the explicit deployment mode.
+// Valid values: "Serverless" (Knative), "RawDeployment" (standard K8s Deployment)
+// If not set, defaults to "Serverless" for backward compatibility.
+func (b *InferenceServiceBuilder) WithDeploymentMode(mode string) *InferenceServiceBuilder {
+	b.deploymentMode = mode
+	return b
+}
+
 // Build constructs the unstructured InferenceService resource using KServe native model serving
 func (b *InferenceServiceBuilder) Build() (*unstructured.Unstructured, error) {
 	// Validate required fields
@@ -222,8 +250,20 @@ func (b *InferenceServiceBuilder) Build() (*unstructured.Unstructured, error) {
 	// we use aggressive GC settings (min=1, max=2 non-active revisions) to
 	// prevent old revisions from holding GPU resources. See:
 	// infra/k8s/knative-serving/config-gc.yaml
+	//
+	// Deployment mode selection:
+	// - Serverless (Knative): Default mode with autoscaling, but has restrictions
+	//   (single port, no nodeSelector allowed by Knative validation)
+	// - RawDeployment: Uses standard Kubernetes Deployments, allows nodeSelector
+	//   and multiple ports for runtimes like TensorRT-LLM/Triton
+	//
+	// Use explicit mode if set, otherwise default to Serverless for backward compatibility
+	mode := b.deploymentMode
+	if mode == "" {
+		mode = "Serverless"
+	}
 	annotations := map[string]interface{}{
-		"serving.kserve.io/deploymentMode": "Serverless",
+		"serving.kserve.io/deploymentMode": mode,
 		"ai-aas.io/probe-config-version":   probeConfigVersion, // Track probe config version for reconciliation
 	}
 
@@ -338,6 +378,11 @@ func (b *InferenceServiceBuilder) Build() (*unstructured.Unstructured, error) {
 		obj.SetOwnerReferences([]metav1.OwnerReference{*b.ownerRef})
 	}
 
+	// Compute and store spec hash for change detection
+	if err := addSpecHash(obj); err != nil {
+		return nil, fmt.Errorf("failed to compute spec hash: %w", err)
+	}
+
 	return obj, nil
 }
 
@@ -398,10 +443,15 @@ func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructu
 	}
 
 	// Build annotations with extended timeout for model loading
+	// Use explicit mode if set, otherwise default to Serverless for backward compatibility
+	mode := b.deploymentMode
+	if mode == "" {
+		mode = "Serverless"
+	}
 	annotations := map[string]interface{}{
-		"serving.kserve.io/deploymentMode":       "Serverless",
-		"serving.knative.dev/progress-deadline":  "900s", // 15 min for large model download
-		"ai-aas.io/probe-config-version":         probeConfigVersion, // Track probe config version for reconciliation
+		"serving.kserve.io/deploymentMode":      mode,
+		"serving.knative.dev/progress-deadline": "900s",             // 15 min for large model download
+		"ai-aas.io/probe-config-version":        probeConfigVersion, // Track probe config version for reconciliation
 	}
 
 	// Apply update strategy annotation for Knative
@@ -463,6 +513,20 @@ func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructu
 		args = append(args, arg)
 	}
 
+	// Set default probe paths and port if not specified
+	livenessPath := b.livenessPath
+	if livenessPath == "" {
+		livenessPath = "/health"
+	}
+	readinessPath := b.readinessPath
+	if readinessPath == "" {
+		readinessPath = "/health"
+	}
+	probePort := b.probePort
+	if probePort == 0 {
+		probePort = 8000
+	}
+
 	// Build container spec
 	container := map[string]interface{}{
 		"name":      "kserve-container",
@@ -483,8 +547,8 @@ func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructu
 		// See: https://github.com/knative/serving/issues/10037
 		"readinessProbe": map[string]interface{}{
 			"httpGet": map[string]interface{}{
-				"path": "/health",
-				"port": int64(8000),
+				"path": readinessPath,
+				"port": int64(probePort),
 			},
 			"periodSeconds":    int64(10),
 			"failureThreshold": int64(3),
@@ -492,8 +556,8 @@ func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructu
 		},
 		"livenessProbe": map[string]interface{}{
 			"httpGet": map[string]interface{}{
-				"path": "/health",
-				"port": int64(8000),
+				"path": livenessPath,
+				"port": int64(probePort),
 			},
 			"initialDelaySeconds": int64(b.livenessInitialDelaySeconds),
 			"periodSeconds":       int64(30),
@@ -545,5 +609,67 @@ func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructu
 		obj.SetOwnerReferences([]metav1.OwnerReference{*b.ownerRef})
 	}
 
+	// Compute and store spec hash for change detection
+	if err := addSpecHash(obj); err != nil {
+		return nil, fmt.Errorf("failed to compute spec hash: %w", err)
+	}
+
 	return obj, nil
+}
+
+// computeSpecHash computes a SHA256 hash of the spec for change detection.
+// This allows us to detect real changes to the desired spec without being
+// affected by server-side mutations (KServe adding defaults, etc.).
+func computeSpecHash(spec map[string]interface{}) (string, error) {
+	// JSON marshal with sorted keys for deterministic output
+	data, err := json.Marshal(spec)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal spec: %w", err)
+	}
+	hash := sha256.Sum256(data)
+	return fmt.Sprintf("%x", hash[:8]), nil // Use first 8 bytes (16 hex chars) for readability
+}
+
+// addSpecHash computes the spec hash and adds it to the object's annotations.
+func addSpecHash(obj *unstructured.Unstructured) error {
+	spec, found, err := unstructured.NestedMap(obj.Object, "spec")
+	if err != nil || !found {
+		return fmt.Errorf("spec not found in object")
+	}
+
+	hash, err := computeSpecHash(spec)
+	if err != nil {
+		return err
+	}
+
+	annotations := obj.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+	annotations[SpecHashAnnotation] = hash
+	obj.SetAnnotations(annotations)
+	return nil
+}
+
+// GetSpecHash returns the spec hash from an InferenceService's annotations.
+func GetSpecHash(obj *unstructured.Unstructured) string {
+	annotations := obj.GetAnnotations()
+	if annotations == nil {
+		return ""
+	}
+	return annotations[SpecHashAnnotation]
+}
+
+// SpecHashMatches checks if the spec hash of the desired object matches the existing object.
+// Returns true if hashes match (no update needed), false if they differ (update needed).
+func SpecHashMatches(desired, existing *unstructured.Unstructured) bool {
+	desiredHash := GetSpecHash(desired)
+	existingHash := GetSpecHash(existing)
+
+	// If either hash is missing, fall back to requiring an update
+	if desiredHash == "" || existingHash == "" {
+		return false
+	}
+
+	return desiredHash == existingHash
 }

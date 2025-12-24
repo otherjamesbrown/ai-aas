@@ -108,7 +108,7 @@ specs/018-ui-update/
 
 **To `plan.md` (Technical Context):**
 - Testing: Playwright with Chromium/Firefox/WebKit
-- Test Environment: Remote dev cluster (`portal.172.232.58.222.nip.io`)
+- Test Environment: Remote dev cluster (`portal.dev.otherjamesbrown.com`)
 - Test Strategy: Smoke tests (fast) + Integration tests (comprehensive)
 
 #### From `architecture-recommendations.md` → `research.md` + `plan.md`

@@ -427,7 +427,7 @@ ai-aas-cli user model-access migrate \
 2. **Register model** (auto-creates routing policy):
    ```bash
    # The Admin API auto-creates a global routing policy
-   curl -X POST https://api.dev.ai-aas.local/v1/models/register \
+   curl -X POST https://api.dev.otherjamesbrown.com/v1/models/register \
      -H "Authorization: Bearer $API_KEY" \
      -H "Content-Type: application/json" \
      -d '{

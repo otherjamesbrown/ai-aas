@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/api"
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/client"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/registry"
@@ -62,15 +63,16 @@ Examples:
 			}
 			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
 			regClient := registry.NewClient(apiClient)
+			deployClient := client.NewDeploymentClient(apiClient)
 
 			// Single model status
 			if len(args) > 0 {
 				name := args[0]
-				return showModelStatus(ctx, regClient, name, environment, format)
+				return showModelStatus(ctx, regClient, deployClient, name, environment, format)
 			}
 
 			// All models status
-			return showAllModelsStatus(ctx, regClient, environment, format)
+			return showAllModelsStatus(ctx, regClient, deployClient, environment, format)
 		},
 	}
 
@@ -80,14 +82,24 @@ Examples:
 	return cmd
 }
 
-func showModelStatus(ctx context.Context, client *registry.Client, name, environment, format string) error {
-	model, err := client.Get(ctx, name)
+func showModelStatus(ctx context.Context, regClient *registry.Client, deployClient *client.DeploymentClient, name, environment, format string) error {
+	model, err := regClient.Get(ctx, name)
 	if err != nil {
 		return fmt.Errorf("failed to get model: %w", err)
 	}
 
+	// Try to get deployment details if environment is specified
+	var deployment *client.Deployment
+	if environment != "" {
+		deployment, _ = deployClient.Get(ctx, name, environment)
+	}
+
 	if format == "json" {
-		return output.PrintJSON(model, true)
+		result := map[string]interface{}{
+			"model":      model,
+			"deployment": deployment,
+		}
+		return output.PrintJSON(result, true)
 	}
 
 	// Status indicators
@@ -101,11 +113,16 @@ func showModelStatus(ctx context.Context, client *registry.Client, name, environ
 		cacheStatus = "⏳"
 	}
 
-	if model.DeploymentStatus == "ready" {
+	deployStatusStr := model.DeploymentStatus
+	if deployment != nil {
+		deployStatusStr = deployment.Status
+	}
+
+	if deployStatusStr == "ready" {
 		deployStatus = "✅"
-	} else if model.DeploymentStatus == "deploying" {
+	} else if deployStatusStr == "deploying" {
 		deployStatus = "⏳"
-	} else if model.DeploymentStatus == "disabled" {
+	} else if deployStatusStr == "disabled" {
 		deployStatus = "⏸️"
 	}
 
@@ -113,13 +130,20 @@ func showModelStatus(ctx context.Context, client *registry.Client, name, environ
 	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 	fmt.Printf("  Registry:    %s registered\n", registryStatus)
 	fmt.Printf("  Cache:       %s %s\n", cacheStatus, model.CacheStatus)
-	fmt.Printf("  Deployment:  %s %s\n", deployStatus, model.DeploymentStatus)
+
+	// Show deployment status with duration if available
+	if deployment != nil && deployment.StatusChangedAt != nil {
+		duration := output.FormatDurationSince(deployment.StatusChangedAt)
+		fmt.Printf("  Deployment:  %s %s (%s)\n", deployStatus, deployStatusStr, duration)
+	} else {
+		fmt.Printf("  Deployment:  %s %s\n", deployStatus, deployStatusStr)
+	}
 
 	return nil
 }
 
-func showAllModelsStatus(ctx context.Context, client *registry.Client, environment, format string) error {
-	models, err := client.List(ctx, registry.ListOptions{
+func showAllModelsStatus(ctx context.Context, regClient *registry.Client, deployClient *client.DeploymentClient, environment, format string) error {
+	models, err := regClient.List(ctx, registry.ListOptions{
 		Environment: environment,
 	})
 	if err != nil {
@@ -131,16 +155,31 @@ func showAllModelsStatus(ctx context.Context, client *registry.Client, environme
 		return nil
 	}
 
+	// Fetch deployments for duration information if environment specified
+	deploymentsMap := make(map[string]*client.Deployment)
+	if environment != "" {
+		deployments, _ := deployClient.List(ctx, client.ListOptions{
+			Environment: environment,
+		})
+		for i := range deployments {
+			deploymentsMap[deployments[i].ModelName] = &deployments[i]
+		}
+	}
+
 	if format == "json" {
-		return output.PrintJSON(models, true)
+		result := map[string]interface{}{
+			"models":      models,
+			"deployments": deploymentsMap,
+		}
+		return output.PrintJSON(result, true)
 	}
 
 	table := output.NewTableWriter()
-	table.SetHeader([]string{"MODEL", "REGISTRY", "CACHE", "DEPLOY", "STATUS"})
+	table.SetHeader([]string{"MODEL", "REGISTRY", "CACHE", "DEPLOY", "STATUS", "DURATION"})
 
 	for _, m := range models {
 		regIcon := "✅"
-		
+
 		cacheIcon := "❌"
 		if m.CacheStatus == "ready" {
 			cacheIcon = "✅"
@@ -149,19 +188,33 @@ func showAllModelsStatus(ctx context.Context, client *registry.Client, environme
 		}
 
 		deployIcon := "❌"
-		if m.DeploymentStatus == "ready" {
+		deployStatusStr := m.DeploymentStatus
+
+		// Get deployment details if available
+		deployment := deploymentsMap[m.Name]
+		if deployment != nil {
+			deployStatusStr = deployment.Status
+		}
+
+		if deployStatusStr == "ready" {
 			deployIcon = "✅"
-		} else if m.DeploymentStatus == "deploying" {
+		} else if deployStatusStr == "deploying" {
 			deployIcon = "⏳"
-		} else if m.DeploymentStatus == "disabled" {
+		} else if deployStatusStr == "disabled" {
 			deployIcon = "⏸️"
 		}
 
 		status := "registered"
-		if m.DeploymentStatus == "ready" {
+		if deployStatusStr == "ready" {
 			status = "ready"
 		} else if m.CacheStatus == "ready" {
 			status = "cached"
+		}
+
+		// Calculate duration if available
+		durationStr := "-"
+		if deployment != nil && deployment.StatusChangedAt != nil {
+			durationStr = output.FormatDurationSince(deployment.StatusChangedAt)
 		}
 
 		table.Append([]string{
@@ -170,6 +223,7 @@ func showAllModelsStatus(ctx context.Context, client *registry.Client, environme
 			cacheIcon,
 			deployIcon,
 			status,
+			durationStr,
 		})
 	}
 

@@ -165,6 +165,46 @@ func (c *Cache) GetPolicyByAlias(organizationID, alias string) (*RoutingPolicy, 
 	return nil, fmt.Errorf("no policy found with alias %s", alias)
 }
 
+// GetPolicyByExternalName searches for a policy by external name.
+// The external name is the name exposed in OpenAI-compatible APIs.
+func (c *Cache) GetPolicyByExternalName(organizationID, externalName string) (*RoutingPolicy, error) {
+	var policy *RoutingPolicy
+	keyPrefix := organizationID + ":"
+
+	err := c.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket([]byte("policies"))
+		if bucket == nil {
+			return fmt.Errorf("policies bucket not found")
+		}
+
+		return bucket.ForEach(func(k, v []byte) error {
+			key := string(k)
+			// Check if this key is for the right org
+			if strings.HasPrefix(key, keyPrefix) {
+				var p RoutingPolicy
+				if err := json.Unmarshal(v, &p); err != nil {
+					return nil // Skip malformed entries
+				}
+				// Match by ExternalName if set, otherwise fall back to suffix matching
+				if p.ExternalName != "" && p.ExternalName == externalName {
+					policy = &p
+					return fmt.Errorf("found") // Use error to break iteration
+				}
+			}
+			return nil
+		})
+	})
+
+	// "found" error means we found the policy
+	if err != nil && err.Error() == "found" {
+		return policy, nil
+	}
+	if policy != nil {
+		return policy, nil
+	}
+	return nil, fmt.Errorf("no policy found with external name %s", externalName)
+}
+
 // cacheKey generates a cache key for a policy.
 func cacheKey(organizationID, model string) string {
 	return fmt.Sprintf("%s:%s", organizationID, model)

@@ -100,7 +100,7 @@ This document provides the complete routing policy management API that should be
 **400 Bad Request** - Validation failure:
 ```json
 {
-  "type": "https://docs.ai-aas.local/errors/validation-error",
+  "type": "https://docs.otherjamesbrown.com/errors/validation-error",
   "title": "Validation Failed",
   "status": 400,
   "detail": "One or more validation errors occurred",
@@ -121,7 +121,7 @@ This document provides the complete routing policy management API that should be
 **409 Conflict** - Policy already exists:
 ```json
 {
-  "type": "https://docs.ai-aas.local/errors/conflict",
+  "type": "https://docs.otherjamesbrown.com/errors/conflict",
   "title": "Policy Already Exists",
   "status": 409,
   "detail": "A routing policy for model 'gpt-oss-20b' and organization '*' already exists",
@@ -134,7 +134,7 @@ This document provides the complete routing policy management API that should be
 **403 Forbidden** - Insufficient permissions:
 ```json
 {
-  "type": "https://docs.ai-aas.local/errors/forbidden",
+  "type": "https://docs.otherjamesbrown.com/errors/forbidden",
   "title": "Insufficient Permissions",
   "status": 403,
   "detail": "API key does not have permission to create global policies",
@@ -265,7 +265,7 @@ This document provides the complete routing policy management API that should be
 **Error Response** (404 Not Found):
 ```json
 {
-  "type": "https://docs.ai-aas.local/errors/not-found",
+  "type": "https://docs.otherjamesbrown.com/errors/not-found",
   "title": "Policy Not Found",
   "status": 404,
   "detail": "Routing policy with ID 'invalid-uuid' does not exist",
@@ -329,7 +329,7 @@ This document provides the complete routing policy management API that should be
 **409 Conflict** - Concurrent modification:
 ```json
 {
-  "type": "https://docs.ai-aas.local/errors/conflict",
+  "type": "https://docs.otherjamesbrown.com/errors/conflict",
   "title": "Concurrent Modification",
   "status": 409,
   "detail": "Policy was modified by another request. Current version is 5, expected 4",
@@ -357,7 +357,7 @@ This document provides the complete routing policy management API that should be
 **Error Response** (409 Conflict):
 ```json
 {
-  "type": "https://docs.ai-aas.local/errors/conflict",
+  "type": "https://docs.otherjamesbrown.com/errors/conflict",
   "title": "Policy In Use",
   "status": 409,
   "detail": "Cannot delete policy: 1523 requests in last hour. Use ?force=true to override",

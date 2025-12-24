@@ -11,8 +11,8 @@ variable "output_dir" {
 variable "endpoints" {
   description = "Map describing shared services (postgres, redis, rabbitmq, etc.)"
   type = map(object({
-    host = string
-    port = number
+    host     = string
+    port     = number
     protocol = string
   }))
 }

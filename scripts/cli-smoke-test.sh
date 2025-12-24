@@ -33,11 +33,15 @@ build_cli() {
 DEV_USER_ORG="https://user-org.dev.otherjamesbrown.com"
 DEV_API_ROUTER="https://api.dev.otherjamesbrown.com"
 DEV_ADMIN_API="https://admin-api.dev.otherjamesbrown.com"
+DEV_KUBECONFIG="$PROJECT_ROOT/secrets/kubeconfigs/kubeconfig-development.yaml"
+DEV_NAMESPACE="development"
 
 STAGING_USER_ORG="https://user-org.staging.otherjamesbrown.com"
 STAGING_API_ROUTER="https://api.staging.otherjamesbrown.com"
 STAGING_ADMIN_API="https://admin-api.staging.otherjamesbrown.com"
 STAGING_API_KEY="ai-aas__HYQk1SQgY4P_f2aMjYM39zL9NAxG63tcHn_Gx4If3M"
+STAGING_KUBECONFIG="$PROJECT_ROOT/secrets/kubeconfigs/kubeconfig-staging.yaml"
+STAGING_NAMESPACE="staging"
 
 # Colors for output
 RED='\033[0;31m'
@@ -96,6 +100,61 @@ fi
 declare -A RESULTS
 declare -A VERBOSE_DATA
 
+# Format duration from ISO timestamp to human-readable (e.g., "7d 17h", "2h 30m")
+format_duration() {
+    local timestamp="$1"
+    if [[ -z "$timestamp" || "$timestamp" == "null" ]]; then
+        echo "-"
+        return
+    fi
+
+    local then_epoch now_epoch diff_seconds
+    then_epoch=$(date -d "$timestamp" +%s 2>/dev/null || echo "0")
+    now_epoch=$(date +%s)
+    diff_seconds=$((now_epoch - then_epoch))
+
+    if [[ $diff_seconds -lt 0 ]]; then
+        echo "-"
+        return
+    fi
+
+    local days hours minutes
+    days=$((diff_seconds / 86400))
+    hours=$(((diff_seconds % 86400) / 3600))
+    minutes=$(((diff_seconds % 3600) / 60))
+
+    if [[ $days -gt 0 ]]; then
+        echo "${days}d ${hours}h"
+    elif [[ $hours -gt 0 ]]; then
+        echo "${hours}h ${minutes}m"
+    else
+        echo "${minutes}m"
+    fi
+}
+
+# Fetch AIModel data from Kubernetes cluster
+fetch_aimodels() {
+    local kubeconfig="$1"
+    local namespace="$2"
+    local output_file="$3"
+
+    if [[ ! -f "$kubeconfig" ]]; then
+        echo "[]" > "$output_file"
+        return 1
+    fi
+
+    kubectl --kubeconfig="$kubeconfig" get aimodels -n "$namespace" -o json 2>/dev/null | \
+        jq '[.items[] | {
+            internalName: .metadata.name,
+            externalName: (.spec.externalName // .metadata.name),
+            modelID: .spec.modelID,
+            runtime: .spec.runtime,
+            enabled: .spec.enabled,
+            phase: (.status.phase // "Unknown"),
+            statusChangedAt: (.status.statusChangedAt // .metadata.creationTimestamp)
+        }]' > "$output_file" 2>/dev/null || echo "[]" > "$output_file"
+}
+
 # Helper function to check health endpoint
 check_health() {
     local name="$1"
@@ -148,6 +207,8 @@ run_environment_tests() {
     local api_router_endpoint="$3"
     local admin_api_endpoint="$4"
     local api_key="$5"
+    local kubeconfig="$6"
+    local namespace="$7"
 
     local test_id
     test_id=$(date +%s)-$$-$RANDOM
@@ -409,6 +470,11 @@ run_environment_tests() {
     mkdir -p "$verbose_dir"
     [[ -n "$models_json" ]] && echo "$models_json" > "$verbose_dir/${env_name}_models.json"
     [[ "$inference_json_array" != "[]" ]] && echo "$inference_json_array" > "$verbose_dir/${env_name}_inference.json"
+
+    # Fetch AIModel data from Kubernetes for enhanced model table
+    if [[ -n "$kubeconfig" && -n "$namespace" ]]; then
+        fetch_aimodels "$kubeconfig" "$namespace" "$verbose_dir/${env_name}_aimodels.json"
+    fi
 }
 
 # Parse results string into associative array
@@ -691,13 +757,13 @@ print_inference_details() {
 print_verbose_details() {
     local verbose_dir="/tmp/smoke-test-verbose-${SMOKE_TEST_ID:-$$}"
 
-    # Models table
+    # Enhanced ALL MODELS table with runtime, status, duration
     echo ""
-    echo "╔══════════════════════════════════════════════════════════════════════════════╗"
-    echo "║                              PUBLISHED MODELS                                ║"
-    echo "╠═════════════╦══════════════════════════════════════════════════╦════════════╣"
-    echo "║ Environment ║ Model ID                                         ║ Owner      ║"
-    echo "╠═════════════╬══════════════════════════════════════════════════╬════════════╣"
+    echo "╔══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗"
+    echo "║                                                           ALL MODELS                                                                         ║"
+    echo "╠═════════════╦══════════════════════════╦════════════════════════════════════╦══════════════╦══════════════════════════╦══════════════════════╣"
+    echo "║ Environment ║ Published Name           ║ Internal Name                      ║ Engine       ║ Status                   ║ HuggingFace Model ID ║"
+    echo "╠═════════════╬══════════════════════════╬════════════════════════════════════╬══════════════╬══════════════════════════╬══════════════════════╣"
 
     for env in dev staging; do
         [[ "$env" == "dev" && "$RUN_DEV" != "true" ]] && continue
@@ -706,27 +772,79 @@ print_verbose_details() {
         local env_label="Development"
         [[ "$env" == "staging" ]] && env_label="Staging"
 
-        local models_file="$verbose_dir/${env}_models.json"
-        if [[ -f "$models_file" ]]; then
-            local models
-            models=$(cat "$models_file" | jq -r '.data[] | "\(.id)|\(.owned_by // "unknown")"' 2>/dev/null)
-            local first=true
-            while IFS='|' read -r model_id owner; do
-                if [[ -n "$model_id" ]]; then
+        local aimodels_file="$verbose_dir/${env}_aimodels.json"
+        if [[ -f "$aimodels_file" ]]; then
+            local count
+            count=$(cat "$aimodels_file" | jq 'length' 2>/dev/null || echo "0")
+
+            if [[ "$count" -gt 0 ]]; then
+                local first=true
+                for ((i=0; i<count; i++)); do
+                    local external_name internal_name model_id runtime phase status_changed_at
+                    external_name=$(cat "$aimodels_file" | jq -r ".[$i].externalName // \"\"" 2>/dev/null)
+                    internal_name=$(cat "$aimodels_file" | jq -r ".[$i].internalName // \"\"" 2>/dev/null)
+                    model_id=$(cat "$aimodels_file" | jq -r ".[$i].modelID // \"\"" 2>/dev/null)
+                    runtime=$(cat "$aimodels_file" | jq -r ".[$i].runtime // \"unknown\"" 2>/dev/null)
+                    phase=$(cat "$aimodels_file" | jq -r ".[$i].phase // \"Unknown\"" 2>/dev/null)
+                    status_changed_at=$(cat "$aimodels_file" | jq -r ".[$i].statusChangedAt // \"\"" 2>/dev/null)
+
+                    # Calculate duration in current status
+                    local duration
+                    duration=$(format_duration "$status_changed_at")
+
+                    # Format status with duration
+                    local status_with_duration
+                    local status_icon="⏳"
+                    case "$phase" in
+                        Ready) status_icon="✅" ;;
+                        Disabled) status_icon="⏸️" ;;
+                        Failed|Error) status_icon="❌" ;;
+                        Deploying|Downloading) status_icon="⏳" ;;
+                    esac
+                    status_with_duration="$status_icon $phase ($duration)"
+
                     local display_env=""
                     if [[ "$first" == "true" ]]; then
                         display_env="$env_label"
                         first=false
                     fi
-                    # Truncate model_id if too long
-                    local truncated_model="${model_id:0:48}"
-                    printf "║ %-11s ║ %-48s ║ %-10s ║\n" "$display_env" "$truncated_model" "${owner:0:10}"
-                fi
-            done <<< "$models"
+
+                    # Truncate fields to fit columns
+                    printf "║ %-11s ║ %-24s ║ %-34s ║ %-12s ║ %-24s ║ %-20s ║\n" \
+                        "$display_env" \
+                        "${external_name:0:24}" \
+                        "${internal_name:0:34}" \
+                        "${runtime:0:12}" \
+                        "${status_with_duration:0:24}" \
+                        "${model_id:0:20}"
+                done
+            else
+                printf "║ %-11s ║ %-24s ║ %-34s ║ %-12s ║ %-24s ║ %-20s ║\n" \
+                    "$env_label" "(no models found)" "-" "-" "-" "-"
+            fi
+        else
+            # Fall back to published models from API if no kubectl access
+            local models_file="$verbose_dir/${env}_models.json"
+            if [[ -f "$models_file" ]]; then
+                local models
+                models=$(cat "$models_file" | jq -r '.data[] | "\(.id)|\(.owned_by // "unknown")"' 2>/dev/null)
+                local first=true
+                while IFS='|' read -r pub_model_id owner; do
+                    if [[ -n "$pub_model_id" ]]; then
+                        local display_env=""
+                        if [[ "$first" == "true" ]]; then
+                            display_env="$env_label"
+                            first=false
+                        fi
+                        printf "║ %-11s ║ %-24s ║ %-34s ║ %-12s ║ %-24s ║ %-20s ║\n" \
+                            "$display_env" "${pub_model_id:0:24}" "(via API)" "-" "✅ Published" "-"
+                    fi
+                done <<< "$models"
+            fi
         fi
     done
 
-    echo "╚═════════════╩══════════════════════════════════════════════════╩════════════╝"
+    echo "╚═════════════╩══════════════════════════╩════════════════════════════════════╩══════════════╩══════════════════════════╩══════════════════════╝"
 
     # Q&A details for each inference
     echo ""
@@ -804,10 +922,10 @@ main() {
         local staging_tmp=$(mktemp)
 
         # Run both in background
-        (run_environment_tests "dev" "$DEV_USER_ORG" "$DEV_API_ROUTER" "$DEV_ADMIN_API" "$MASTER_ADMIN_API_KEY" > "$dev_tmp") &
+        (run_environment_tests "dev" "$DEV_USER_ORG" "$DEV_API_ROUTER" "$DEV_ADMIN_API" "$MASTER_ADMIN_API_KEY" "$DEV_KUBECONFIG" "$DEV_NAMESPACE" > "$dev_tmp") &
         local dev_pid=$!
 
-        (run_environment_tests "staging" "$STAGING_USER_ORG" "$STAGING_API_ROUTER" "$STAGING_ADMIN_API" "$STAGING_API_KEY" > "$staging_tmp") &
+        (run_environment_tests "staging" "$STAGING_USER_ORG" "$STAGING_API_ROUTER" "$STAGING_ADMIN_API" "$STAGING_API_KEY" "$STAGING_KUBECONFIG" "$STAGING_NAMESPACE" > "$staging_tmp") &
         local staging_pid=$!
 
         # Wait for both
@@ -820,9 +938,9 @@ main() {
         rm -f "$dev_tmp" "$staging_tmp"
 
     elif [[ "$RUN_DEV" == "true" ]]; then
-        dev_results_str=$(run_environment_tests "dev" "$DEV_USER_ORG" "$DEV_API_ROUTER" "$DEV_ADMIN_API" "$MASTER_ADMIN_API_KEY")
+        dev_results_str=$(run_environment_tests "dev" "$DEV_USER_ORG" "$DEV_API_ROUTER" "$DEV_ADMIN_API" "$MASTER_ADMIN_API_KEY" "$DEV_KUBECONFIG" "$DEV_NAMESPACE")
     elif [[ "$RUN_STAGING" == "true" ]]; then
-        staging_results_str=$(run_environment_tests "staging" "$STAGING_USER_ORG" "$STAGING_API_ROUTER" "$STAGING_ADMIN_API" "$STAGING_API_KEY")
+        staging_results_str=$(run_environment_tests "staging" "$STAGING_USER_ORG" "$STAGING_API_ROUTER" "$STAGING_ADMIN_API" "$STAGING_API_KEY" "$STAGING_KUBECONFIG" "$STAGING_NAMESPACE")
     fi
 
     # Parse results

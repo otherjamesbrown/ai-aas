@@ -318,15 +318,15 @@ sudo ./scripts/infra/update-hosts-file.sh --ingress-ip 192.168.1.100
 ```
 
 **Domains added**:
-- `api.dev.ai-aas.local` - API Router Service
-- `portal.dev.ai-aas.local` - Web Portal
-- `grafana.dev.ai-aas.local` - Grafana
-- `argocd.dev.ai-aas.local` - ArgoCD
+- `api.dev.otherjamesbrown.com` - API Router Service
+- `portal.dev.otherjamesbrown.com` - Web Portal
+- `grafana.dev.otherjamesbrown.com` - Grafana
+- `argocd.dev.otherjamesbrown.com` - ArgoCD
 
 **Verify**:
 ```bash
-ping api.dev.ai-aas.local
-curl -k https://api.dev.ai-aas.local/healthz
+ping api.dev.otherjamesbrown.com
+curl -k https://api.dev.otherjamesbrown.com/healthz
 ```
 
 ### 10. Start Local Databases (if needed)

@@ -57,7 +57,7 @@ git push
 kubectl get pods -n monitoring -l app=loki
 
 # Test Loki API
-curl -s http://loki.172.232.58.222.nip.io/ready
+curl -s https://loki.dev.otherjamesbrown.com/ready
 # Expected: "ready"
 ```
 
@@ -89,7 +89,7 @@ kubectl get pods -n monitoring -l app=promtail
 kubectl logs -n monitoring -l app=promtail --tail=20 | grep -i "loki"
 
 # Query Loki for recent logs
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
   --data-urlencode 'query={}' \
   --data-urlencode 'limit=10' | jq '.data.result | length'
 # Expected: > 0
@@ -99,7 +99,7 @@ curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
 
 ### 3.1 Add Loki datasource
 
-In Grafana UI (`http://grafana.172.232.58.222.nip.io`):
+In Grafana UI (`https://grafana.dev.otherjamesbrown.com`):
 
 1. Go to **Configuration > Data Sources**
 2. Click **Add data source**
@@ -110,7 +110,7 @@ In Grafana UI (`http://grafana.172.232.58.222.nip.io`):
 Or via API:
 
 ```bash
-curl -X POST http://grafana.172.232.58.222.nip.io/api/datasources \
+curl -X POST https://grafana.dev.otherjamesbrown.com/api/datasources \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Loki",
@@ -149,10 +149,10 @@ git commit -m "feat(api-router): Add request logger middleware"
 git push
 
 # After deployment, make a test request
-curl -i https://api.172.232.58.222.nip.io/v1/models
+curl -i https://api.dev.otherjamesbrown.com/v1/models
 
 # Check logs in Loki
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
   --data-urlencode 'query={service="api-router-service"} |= "request_completed"' \
   --data-urlencode 'limit=5' | jq '.data.result[].values[][1]'
 ```
@@ -163,12 +163,12 @@ curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
 
 ```bash
 # Query vLLM logs
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
   --data-urlencode 'query={container=~"vllm|kserve-container"}' \
   --data-urlencode 'limit=20' | jq '.data.result'
 
 # Check for GPU errors
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
   --data-urlencode 'query={container=~"vllm|kserve-container"} |~ "(?i)cuda|oom"' \
   --data-urlencode 'limit=10' | jq '.data.result'
 ```
@@ -192,7 +192,7 @@ Create `infra/k8s/monitoring/grafana/dashboards/logs-overview.json` with panels 
 
 - [ ] Loki pod running: `kubectl get pods -n monitoring -l app=loki`
 - [ ] Promtail DaemonSet running: `kubectl get ds -n monitoring promtail`
-- [ ] Loki API responds: `curl http://loki.172.232.58.222.nip.io/ready`
+- [ ] Loki API responds: `curl https://loki.dev.otherjamesbrown.com/ready`
 - [ ] Logs visible in Grafana Explore
 - [ ] Platform service logs have `service` label
 - [ ] vLLM logs have `container` label

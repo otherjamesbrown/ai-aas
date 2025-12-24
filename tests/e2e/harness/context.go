@@ -49,7 +49,7 @@ func NewContext(config *Config) (*Context, error) {
 	// If using IP address, set Host header for ingress routing
 	// Check if URL is an IP address (contains only digits and dots)
 	if isIPAddress(config.APIURLs.UserOrgService) {
-		client.SetHeader("Host", "api.dev.ai-aas.local")
+		client.SetHeader("Host", "api.dev.otherjamesbrown.com")
 	}
 
 	ctx := &Context{

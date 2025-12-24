@@ -1,7 +1,7 @@
 # Environment Access Guide
 
 ---
-last_updated: 2025-12-13
+last_updated: 2025-12-24
 document_type: reference
 ---
 
@@ -11,7 +11,7 @@ This document provides quick access information for all environments and service
 
 **All actual credentials are stored in encrypted files**:
 - Database passwords, API keys, tokens: `secrets/env/.env` (git-crypt encrypted)
-- Kubeconfigs: `secrets/kubeconfigs/` directory (git-crypt encrypted)
+- Kubeconfigs: `~/kubeconfigs/` directory (not in repo - stored in home directory)
 - SSH keys: `secrets/` directory (git-crypt encrypted)
 
 **To access encrypted secrets**:
@@ -24,9 +24,9 @@ git-crypt unlock
 ### Development Environment
 
 **Kubernetes Cluster**
-- Kubeconfig: `secrets/kubeconfigs/kubeconfig-development.yaml` (encrypted with git-crypt)
+- Kubeconfig: `~/kubeconfigs/kubeconfig-development.yaml` (stored in home directory)
 - Context: Use with `--kubeconfig` flag
-- Access: `kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-development.yaml`
+- Access: `kubectl --kubeconfig=/home/dev/kubeconfigs/kubeconfig-development.yaml`
 
 **ArgoCD**
 - URL: https://argocd.dev.otherjamesbrown.com (pending - see ai-aas-jas)
@@ -57,16 +57,16 @@ git-crypt unlock
 - Loki API: `https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range`
 - Tempo (Tracing): `http://tempo.system.svc.cluster.local:3100` (cluster internal only)
 
-**Quick Access (nip.io - no TLS/DNS setup required)**:
+**Quick Access**:
 ```bash
 # Open Grafana in browser
-open http://grafana.172.232.58.222.nip.io
+open https://grafana.dev.otherjamesbrown.com
 
 # Test Loki readiness
-curl http://loki.172.232.58.222.nip.io/ready
+curl https://loki.dev.otherjamesbrown.com/ready
 
 # Query Loki logs (last 1 hour errors)
-curl -G http://loki.172.232.58.222.nip.io/loki/api/v1/query_range \
+curl -G https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range \
   --data-urlencode 'query={level="error"}' \
   --data-urlencode 'start='$(date -d '1 hour ago' +%s)000000000 \
   --data-urlencode 'end='$(date +%s)000000000 \
@@ -94,9 +94,9 @@ curl -G http://loki.172.232.58.222.nip.io/loki/api/v1/query_range \
 ### Staging Environment
 
 **Kubernetes Cluster**
-- Kubeconfig: `secrets/kubeconfigs/kubeconfig-staging.yaml` (encrypted with git-crypt)
+- Kubeconfig: `~/kubeconfigs/kubeconfig-staging.yaml` (stored in home directory)
 - Context: Use with `--kubeconfig` flag
-- Access: `kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-staging.yaml`
+- Access: `kubectl --kubeconfig=/home/dev/kubeconfigs/kubeconfig-staging.yaml`
 
 **ArgoCD**
 - URL: https://argocd.staging.otherjamesbrown.com
@@ -147,8 +147,9 @@ curl -G http://loki.172.232.58.222.nip.io/loki/api/v1/query_range \
 ### Production Environment
 
 **Kubernetes Cluster**
-- Kubeconfig: `secrets/kubeconfigs/kubeconfig-production.yaml` (encrypted with git-crypt)
+- Kubeconfig: `~/kubeconfigs/kubeconfig-production.yaml` (stored in home directory)
 - Context: Use with `--kubeconfig` flag
+- Access: `kubectl --kubeconfig=/home/dev/kubeconfigs/kubeconfig-production.yaml`
 
 **ArgoCD**
 - URL: https://argocd.prod.otherjamesbrown.com (pending - see ai-aas-jas)

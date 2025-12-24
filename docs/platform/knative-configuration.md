@@ -112,7 +112,7 @@ kubectl get configmap -n knative-serving
 
 | ConfigMap | Purpose | Key Settings |
 |-----------|---------|--------------|
-| `config-domain` | Default domain for Knative Services | `dev.ai-aas.local` |
+| `config-domain` | Default domain for Knative Services | `dev.otherjamesbrown.com` |
 | `config-network` | Networking configuration | Ingress class: `istio` |
 | `config-autoscaler` | Autoscaling behavior | Container concurrency, scale targets |
 | `config-deployment` | Deployment settings | Queue proxy resources, timeouts |
@@ -132,18 +132,18 @@ metadata:
   namespace: knative-serving
 data:
   # Domain for development environment
-  dev.ai-aas.local: ""
+  dev.otherjamesbrown.com: ""
 ```
 
 This sets the default domain suffix for all Knative Services. For example, a Service named `mistral-7b-development-predictor` in namespace `development` will be accessible at:
 ```
-http://mistral-7b-development-predictor.development.dev.ai-aas.local
+http://mistral-7b-development-predictor.development.dev.otherjamesbrown.com
 ```
 
 **Customization**:
-- Development: `dev.ai-aas.local`
-- Staging: `staging.ai-aas.local` (recommended)
-- Production: `prod.ai-aas.local` or custom domain
+- Development: `dev.otherjamesbrown.com`
+- Staging: `staging.otherjamesbrown.com` (recommended)
+- Production: `prod.otherjamesbrown.com` or custom domain
 
 ### Network Configuration
 
@@ -436,7 +436,7 @@ kubectl get podautoscaler <service-name> -n development \
 # Test internal service DNS
 kubectl run test-pod --rm -it --image=curlimages/curl -- sh
 # Inside pod:
-curl http://mistral-7b-development-predictor.development.dev.ai-aas.local
+curl http://mistral-7b-development-predictor.development.dev.otherjamesbrown.com
 
 # Check if route exists
 kubectl get route <service-name> -n development -o yaml

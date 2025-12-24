@@ -134,14 +134,14 @@ git commit -m "fix: ..."  # Debugger should NEVER commit fixes
 bd create "Investigate: <symptom>" --type bug
 bd update <id> --add-label "investigation"
 bd update <id> --add-label "context-gap"  # if applicable
-bd close <id> --reason "INVESTIGATED: <category>. Fix bead: ai-aas-yyy"
+bd close <id> --reason "INVESTIGATED: <category>. Fix bead: aas-yyy"
 
 # Logs (read-only)
 kubectl logs -n <namespace> -l app=<service> --tail=100
 kubectl describe pod <pod> -n <namespace>
 
 # Loki
-curl -G http://loki.172.232.58.222.nip.io/loki/api/v1/query_range \
+curl -G https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range \
   --data-urlencode 'query={service="<service>"}' \
   --data-urlencode 'limit=100'
 
@@ -162,7 +162,7 @@ go test ./... -v -run <TestName>
 |----------|----------|
 | Agent definition | `.claude/agents/debugger.md` |
 | Debugging workflow | `docs/runbooks/ai-debugging-workflow.md` |
-| Loki/Grafana | `http://grafana.172.232.58.222.nip.io` |
+| Loki/Grafana | `https://grafana.dev.otherjamesbrown.com` |
 | Context gap tracking | `context/CONTEXT_EFFECTIVENESS_LOG.md` |
 | Bead templates | `context/templates/beads.md` |
 

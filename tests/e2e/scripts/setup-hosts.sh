@@ -51,8 +51,8 @@ add_hosts_entries() {
     
     # Entries to add
     local entries=(
-        "$ip api.dev.ai-aas.local"
-        "$ip portal.dev.ai-aas.local"
+        "$ip api.dev.otherjamesbrown.com"
+        "$ip portal.dev.otherjamesbrown.com"
         "$ip user-org.api.ai-aas.dev"
         "$ip router.api.ai-aas.dev"
         "$ip analytics.api.ai-aas.dev"
@@ -95,8 +95,8 @@ main() {
     echo ""
     echo -e "${GREEN}Setup complete! You can now run tests with:${NC}"
     echo "  cd tests/e2e"
-    echo "  export USER_ORG_SERVICE_URL=http://api.dev.ai-aas.local"
-    echo "  export API_ROUTER_SERVICE_URL=http://api.dev.ai-aas.local"
+    echo "  export USER_ORG_SERVICE_URL=http://api.dev.otherjamesbrown.com"
+    echo "  export API_ROUTER_SERVICE_URL=http://api.dev.otherjamesbrown.com"
     echo "  make test-dev-internet"
 }
 

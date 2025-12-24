@@ -202,7 +202,7 @@ Follow the GitOps workflow (do NOT use `kubectl apply` directly):
 ```bash
 # 1. Commit changes
 git add services/<service-name>/deployments/helm/<service-name>/values-<environment>.yaml
-git commit -m "fix(helm): Add GHCR pull secret to <service-name> [ai-aas-xxx]"
+git commit -m "fix(helm): Add GHCR pull secret to <service-name> [aas-xxx]"
 
 # 2. Push to repository
 git push origin <branch>  # develop, staging, or main

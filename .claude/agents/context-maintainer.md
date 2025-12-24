@@ -361,7 +361,7 @@ Generate a report in this format:
 
 - [ ] Edit context/go-services-developer/agents.md (add endpoint, anti-pattern)
 - [ ] Edit context/agents.md (add spawn trigger)
-- [ ] Create bead ai-aas-xxx for branch targeting clarification
+- [ ] Create bead aas-xxx for branch targeting clarification
 ```
 
 ---
@@ -381,12 +381,12 @@ Maintain `context/CONTEXT_EFFECTIVENESS_LOG.md` to track gaps and measure improv
 
 ```yaml
 - date: 2025-12-13
-  bug_bead: ai-aas-xxx
+  bug_bead: aas-xxx
   gap_type: missing_antipattern  # missing_pattern | missing_antipattern | stale_content | missing_rule
   context_file: context/go-services-developer/agents.md
   what_was_missing: "No example showing N+1 query anti-pattern"
   fix_applied: "Added WRONG example for N+1 queries in Anti-patterns section"
-  fix_bead: ai-aas-yyy
+  fix_bead: aas-yyy
   prevented_bugs: []  # Update later when similar bugs don't happen
 ```
 

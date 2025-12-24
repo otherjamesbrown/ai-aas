@@ -26,7 +26,7 @@ global:
     # Base domain for this environment (override per environment)
     base: "dev.otherjamesbrown.com"
     # Local hostname for /etc/hosts access (optional)
-    local: "dev.ai-aas.local"
+    local: "dev.otherjamesbrown.com"
     # Protocol for URLs
     protocol: "https"
   tls:
@@ -49,6 +49,11 @@ image:
 serviceAccount:
   create: true
   name: ""
+
+# RBAC configuration for pod and InferenceService access
+rbac:
+  # Create ClusterRole and ClusterRoleBinding for pod health queries
+  create: true
 
 podAnnotations:
   prometheus.io/scrape: "true"

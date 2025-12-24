@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -18,6 +19,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
+	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/adapter/preprocessor"
+	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/adapter/triton"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/api"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/auth"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/config"
@@ -34,12 +37,33 @@ type Handler struct {
 	backendRegistry   *config.BackendRegistry
 	routingEngine     *routing.Engine
 	routingMetrics    *telemetry.RoutingMetrics
+	tokenMetrics      *telemetry.TokenMetrics
 	usageHook         *UsageHook
 	tracer            trace.Tracer
 	errorBuilder      *api.ErrorBuilder
 	backendURIs       map[string]string // Map of backend ID to URI (for testing/configuration - overrides registry)
 	httpClient        *http.Client      // Shared HTTP client for OpenAI requests (PR#16 Issue#4)
 	userOrgServiceURL string            // URL for user-org-service (for auth proxy)
+	adminAPIEndpoint  string            // URL for admin-api-service (for models endpoint)
+	adminAPIKey       string            // API key for admin-api-service
+	defaultTimeout    time.Duration     // Default backend timeout
+
+	// Triton protocol translation support (spec032)
+	tritonTranslators map[string]*triton.Translator // keyed by tokenizer encoding
+	translatorMu      sync.RWMutex
+
+	// Triton gRPC streaming support (spec030-grpc)
+	grpcClients     *gRPCClientManager     // gRPC client connections
+	grpcTranslators *gRPCTranslatorManager // gRPC protocol translators
+
+	// Preprocessor service support (for model-specific chat templates)
+	preprocessorClients *preprocessor.ClientManager
+
+	// Models cache (to avoid hitting Admin API rate limits)
+	modelsCache     []AdminAPIModelResponse
+	modelsCacheTime time.Time
+	modelsCacheMu   sync.RWMutex
+	modelsCacheTTL  time.Duration
 }
 
 // NewHandler creates a new public API handler.
@@ -51,26 +75,82 @@ func NewHandler(
 	backendRegistry *config.BackendRegistry,
 	routingEngine *routing.Engine,
 	routingMetrics *telemetry.RoutingMetrics,
+	tokenMetrics *telemetry.TokenMetrics,
 	usageHook *UsageHook,
+	adminAPIEndpoint string,
+	adminAPIKey string,
+	defaultTimeout time.Duration,
+	modelsCacheTTL time.Duration,
 ) *Handler {
 	tracer := otel.Tracer("api-router-service")
 	return &Handler{
-		logger:          logger,
-		authenticator:   authenticator,
-		configLoader:    configLoader,
-		backendClient:   backendClient,
-		backendRegistry: backendRegistry,
-		routingEngine:   routingEngine,
-		routingMetrics:  routingMetrics,
-		usageHook:       usageHook,
-		tracer:          tracer,
-		errorBuilder:    api.NewErrorBuilder(tracer),
-		backendURIs:     make(map[string]string),
+		logger:            logger,
+		authenticator:     authenticator,
+		configLoader:      configLoader,
+		backendClient:     backendClient,
+		backendRegistry:   backendRegistry,
+		routingEngine:     routingEngine,
+		routingMetrics:    routingMetrics,
+		usageHook:         usageHook,
+		tracer:            tracer,
+		errorBuilder:      api.NewErrorBuilder(tracer),
+		backendURIs:       make(map[string]string),
+		adminAPIEndpoint:  adminAPIEndpoint,
+		adminAPIKey:       adminAPIKey,
+		defaultTimeout:    defaultTimeout,
+		tritonTranslators:   make(map[string]*triton.Translator),
+		grpcClients:         newGRPCClientManager(logger),
+		grpcTranslators:     newGRPCTranslatorManager(),
+		preprocessorClients: preprocessor.NewClientManager(logger),
+		modelsCacheTTL:      modelsCacheTTL,
 		httpClient: &http.Client{
 			// Shared client without timeout - we'll use context for per-request timeouts (PR#16 Issue#4)
 			Timeout: 0,
 		},
 	}
+}
+
+// Close cleans up handler resources, including gRPC client connections.
+func (h *Handler) Close() {
+	if h.grpcClients != nil {
+		h.grpcClients.close()
+	}
+	if h.preprocessorClients != nil {
+		_ = h.preprocessorClients.Close()
+	}
+}
+
+// getOrCreateTranslator returns a cached Triton translator or creates one for the encoding.
+// Uses double-checked locking for thread-safe lazy initialization.
+func (h *Handler) getOrCreateTranslator(encoding string) (*triton.Translator, error) {
+	// Fast path: check with read lock
+	h.translatorMu.RLock()
+	if t, ok := h.tritonTranslators[encoding]; ok {
+		h.translatorMu.RUnlock()
+		return t, nil
+	}
+	h.translatorMu.RUnlock()
+
+	// Slow path: acquire write lock and create translator
+	h.translatorMu.Lock()
+	defer h.translatorMu.Unlock()
+
+	// Double-check after acquiring write lock
+	if t, ok := h.tritonTranslators[encoding]; ok {
+		return t, nil
+	}
+
+	t, err := triton.NewTranslator(encoding)
+	if err != nil {
+		return nil, fmt.Errorf("create translator for encoding %q: %w", encoding, err)
+	}
+
+	h.tritonTranslators[encoding] = t
+	h.logger.Info("created triton translator",
+		zap.String("encoding", encoding),
+	)
+
+	return t, nil
 }
 
 // SetBackendURI sets the URI for a backend ID (useful for testing).
@@ -361,7 +441,7 @@ func (h *Handler) fallbackRouting(
 // buildBackendEndpoint constructs a BackendEndpoint from a backend ID.
 func (h *Handler) buildBackendEndpoint(backendID, model string) *routing.BackendEndpoint {
 	var uri string
-	var timeout time.Duration = 30 * time.Second
+	timeout := h.defaultTimeout
 
 	// Check test override first (for testing)
 	if h.backendURIs != nil {

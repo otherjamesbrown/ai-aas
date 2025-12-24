@@ -54,11 +54,14 @@ type AdminPolicy struct {
 	PolicyID          string         `json:"policy_id"`
 	OrganizationID    string         `json:"organization_id"`
 	Model             string         `json:"model"`
+	ExternalName      string         `json:"external_name,omitempty"`
 	Backends          []AdminBackend `json:"backends"`
 	FallbackBackends  []AdminBackend `json:"fallback_backends,omitempty"`
 	FailoverThreshold int            `json:"failover_threshold"`
 	Enabled           bool           `json:"enabled"`
 	Version           int            `json:"version"`
+	BackendType       string         `json:"backend_type,omitempty"` // "openai" (default) | "triton"
+	Tokenizer         string         `json:"tokenizer,omitempty"`    // tiktoken encoding name
 	Deleted           bool           `json:"deleted,omitempty"`
 	CreatedAt         time.Time      `json:"created_at"`
 	UpdatedAt         time.Time      `json:"updated_at"`
@@ -226,12 +229,21 @@ func (c *AdminSyncClient) convertPolicy(admin *AdminPolicy) *RoutingPolicy {
 		}
 	}
 
+	// Default backend_type to "openai" if not specified
+	backendType := admin.BackendType
+	if backendType == "" {
+		backendType = "openai"
+	}
+
 	return &RoutingPolicy{
 		PolicyID:          admin.PolicyID,
 		OrganizationID:    admin.OrganizationID,
 		Model:             admin.Model,
+		ExternalName:      admin.ExternalName,
 		Backends:          backends,
 		FailoverThreshold: admin.FailoverThreshold,
+		BackendType:       backendType,
+		Tokenizer:         admin.Tokenizer,
 		UpdatedAt:         admin.UpdatedAt,
 		Version:           int64(admin.Version),
 	}

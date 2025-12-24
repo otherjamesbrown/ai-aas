@@ -46,7 +46,7 @@ func TestSmokeModelsAvailable(t *testing.T) {
 
 	// If using IP address, set Host header for ingress routing
 	if isIPAddress(ctx.Config.APIURLs.APIRouterService) {
-		routerClient.SetHeader("Host", "api.dev.ai-aas.local")
+		routerClient.SetHeader("Host", "api.dev.otherjamesbrown.com")
 	}
 
 	// GET /v1/models - should be publicly accessible (no auth required)
@@ -101,7 +101,7 @@ func TestSmokeInferenceWithUsage(t *testing.T) {
 	routerClient.SetHeader("Authorization", "Bearer "+apiKey.Key)
 
 	if isIPAddress(ctx.Config.APIURLs.APIRouterService) {
-		routerClient.SetHeader("Host", "api.dev.ai-aas.local")
+		routerClient.SetHeader("Host", "api.dev.otherjamesbrown.com")
 	}
 
 	modelsResp, err := routerClient.GET("/v1/models")
@@ -172,7 +172,7 @@ func TestSmokeInferenceWithUsage(t *testing.T) {
 		analyticsClient.SetHeader("Authorization", "Bearer "+apiKey.Key)
 
 		if isIPAddress(ctx.Config.APIURLs.AnalyticsService) {
-			analyticsClient.SetHeader("Host", "analytics.dev.ai-aas.local")
+			analyticsClient.SetHeader("Host", "analytics.dev.otherjamesbrown.com")
 		}
 
 		usageResp, err := analyticsClient.GET("/analytics/v1/usage/summary?org_id=" + org.ID)
@@ -210,7 +210,7 @@ func TestSmokeEndToEnd(t *testing.T) {
 	t.Log("Step 1: Health Check")
 	routerClient := harness.NewClient(ctx.Config.APIURLs.APIRouterService, ctx.Config.Timeouts.RequestTimeout)
 	if isIPAddress(ctx.Config.APIURLs.APIRouterService) {
-		routerClient.SetHeader("Host", "api.dev.ai-aas.local")
+		routerClient.SetHeader("Host", "api.dev.otherjamesbrown.com")
 	}
 
 	healthResp, err := routerClient.GET("/v1/status/healthz")
@@ -264,7 +264,7 @@ func TestSmokeEndToEnd(t *testing.T) {
 	t.Log("Step 4: User-Org Service Health")
 	userOrgClient := harness.NewClient(ctx.Config.APIURLs.UserOrgService, ctx.Config.Timeouts.RequestTimeout)
 	if isIPAddress(ctx.Config.APIURLs.UserOrgService) {
-		userOrgClient.SetHeader("Host", "user-org.dev.ai-aas.local")
+		userOrgClient.SetHeader("Host", "user-org.dev.otherjamesbrown.com")
 	}
 	userOrgHealth, err := userOrgClient.GET("/healthz")
 	if err != nil {
@@ -339,7 +339,7 @@ func TestSmokeEndToEnd(t *testing.T) {
 	} else {
 		analyticsClient := harness.NewClient(ctx.Config.APIURLs.AnalyticsService, ctx.Config.Timeouts.RequestTimeout)
 		if isIPAddress(ctx.Config.APIURLs.AnalyticsService) {
-			analyticsClient.SetHeader("Host", "analytics.dev.ai-aas.local")
+			analyticsClient.SetHeader("Host", "analytics.dev.otherjamesbrown.com")
 		}
 		analyticsHealth, err := analyticsClient.GET("/analytics/v1/status/healthz")
 		if err != nil {

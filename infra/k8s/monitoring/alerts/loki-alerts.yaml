@@ -36,7 +36,6 @@ spec:
           annotations:
             summary: "Loki log ingestion is down"
             description: "No log ingestion activity detected for 5 minutes. Logs may be lost."
-            runbook_url: "https://docs.ai-aas.local/runbooks/loki-ingestion-down"
 
         - alert: LokiIngestionSlowdown
           expr: |
@@ -81,7 +80,6 @@ spec:
           annotations:
             summary: "Loki PersistentVolume disk space warning"
             description: "Loki PV {{ $labels.persistentvolumeclaim }} is {{ $value | humanizePercentage }} full (threshold: 80%)"
-            runbook_url: "https://docs.ai-aas.local/runbooks/loki-disk-space"
 
         - alert: LokiDiskSpaceCritical
           expr: |
@@ -114,7 +112,6 @@ spec:
           annotations:
             summary: "High pod restart rate detected"
             description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has restarted {{ $value }} times in the last hour (threshold: 10)"
-            runbook_url: "https://docs.ai-aas.local/runbooks/pod-restart-investigation"
 
     # Kubernetes Node Health
     - name: kubernetes-node-health
@@ -135,4 +132,3 @@ spec:
           annotations:
             summary: "Node memory overcommitment detected"
             description: "Node {{ $labels.node }} has memory limits {{ $value | humanizePercentage }} of allocatable capacity (threshold: 100%). This may cause pod evictions under load."
-            runbook_url: "https://docs.ai-aas.local/runbooks/node-resource-management"

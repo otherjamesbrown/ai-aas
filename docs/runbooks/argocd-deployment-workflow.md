@@ -148,7 +148,7 @@ argocd app sync web-portal-development
    - Trust the GitOps workflow
 
 4. **Monitor ArgoCD sync status**
-   - Check ArgoCD UI: `https://argocd.dev.ai-aas.local`
+   - Check ArgoCD UI: `https://argocd.dev.otherjamesbrown.com`
    - Use `kubectl get application` to check status
    - Watch for sync errors in ArgoCD logs
 
@@ -167,7 +167,7 @@ kubectl get application web-portal-development -n argocd -o jsonpath='{.status.s
 
 **View ArgoCD UI:**
 ```
-https://argocd.dev.ai-aas.local
+https://argocd.dev.otherjamesbrown.com
 Username: admin
 Password: (get from secret: kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 -d)
 ```

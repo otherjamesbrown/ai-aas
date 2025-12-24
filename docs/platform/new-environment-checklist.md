@@ -337,7 +337,7 @@ kubectl get ingress -n argocd
 kubectl get svc argocd-server -n argocd
 
 # Test ArgoCD API (if ingress configured)
-curl -k https://argocd.<environment>.ai-aas.local/healthz
+curl -k https://argocd.<environment>.otherjamesbrown.com/healthz
 ```
 
 **Expected State**:
@@ -1077,7 +1077,7 @@ kubectl get pvc -A
 
 **Additional Checks**:
 - [ ] Self-signed certificates trusted locally (if testing from laptop)
-- [ ] Hosts file configured for `*.ai-aas.local` domains
+- [ ] Hosts file configured for `*.otherjamesbrown.com` domains
 - [ ] ArgoCD auto-sync enabled (faster iteration)
 - [ ] Resource requests/limits lower (cost optimization)
 

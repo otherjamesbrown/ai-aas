@@ -6,17 +6,10 @@
 # This file uses environment-specific domain values. When creating for a new environment:
 # 1. Reference configs/environments/{env}.yaml for the correct baseDomain
 # 2. Replace "dev.otherjamesbrown.com" with the environment's baseDomain
-# 3. Replace "dev.ai-aas.local" with the environment's localDomain
 #
-# Access URLs (Development):
-# - nip.io: http://loki.172.232.58.222.nip.io (no DNS/TLS setup needed - PRIMARY for debugging)
-# - Hostname: https://loki.dev.ai-aas.local (requires /etc/hosts entry)
-# - Public DNS: https://loki.dev.otherjamesbrown.com
+# Access URL (Development): https://loki.dev.otherjamesbrown.com
 #
-# Example queries:
-# curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
-#   --data-urlencode 'query={level="error"}' \
-#   --data-urlencode 'limit=50'
+# Example query:
 # curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
 #   --data-urlencode 'query={level="error"}' \
 #   --data-urlencode 'limit=50'
@@ -26,36 +19,14 @@ metadata:
   name: loki-ingress
   namespace: monitoring
   annotations:
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"  # Allow HTTP for nip.io
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
 spec:
   ingressClassName: nginx
   rules:
-    # nip.io endpoint - PRIMARY for debugging (no TLS)
-    - host: loki.172.232.58.222.nip.io
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: loki
-                port:
-                  number: 3100
-    # Local development endpoint
-    - host: loki.dev.ai-aas.local
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: loki
-                port:
-                  number: 3100
-    # Public DNS endpoint (with TLS)
     - host: loki.dev.otherjamesbrown.com
       http:
         paths:

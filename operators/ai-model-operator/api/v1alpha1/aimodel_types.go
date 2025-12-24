@@ -30,11 +30,25 @@ type AIModelSpec struct {
 	// Important: Run "make generate" to regenerate code after modifying this file
 
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^[a-z]([a-z0-9-]*[a-z0-9])?$`
 	// ModelName is the human-readable name of the AI model.
+	// Must be DNS-compatible: lowercase alphanumeric and hyphens only, must start
+	// with a letter and end with alphanumeric. No periods allowed (use hyphens instead,
+	// e.g., "llama-3-1-8b" not "llama-3.1-8b").
 	ModelName string `json:"modelName"`
 
 	// ModelID is the unique identifier for the model (e.g., HuggingFace model ID).
+	// This is the full internal path used by all internal systems (e.g., "unsloth/gpt-oss-20b").
 	ModelID string `json:"modelID"`
+
+	// ExternalName is the name exposed in OpenAI-compatible APIs (/v1/models, /v1/chat/completions).
+	// If not specified, derived from ModelID by taking the part after the last "/".
+	// Example: modelID "unsloth/gpt-oss-20b" -> externalName "gpt-oss-20b"
+	// This allows multiple models with the same base name from different providers to coexist
+	// with different external names (e.g., "gpt-oss-20b-unsloth" vs "gpt-oss-20b-openai").
+	// Must be unique per environment.
+	// +optional
+	ExternalName string `json:"externalName,omitempty"`
 
 	// S3Bucket is the S3 bucket where model artifacts are stored.
 	// Optional when TrustRemoteCode is true (model loads directly from HuggingFace).
@@ -52,7 +66,7 @@ type AIModelSpec struct {
 	Enabled bool `json:"enabled,omitempty"`
 
 	// Runtime specifies the inference runtime to use.
-	// +kubebuilder:validation:Enum=vllm;triton;tgi
+	// +kubebuilder:validation:Enum=vllm;triton;tensorrt-llm;tgi
 	// +kubebuilder:default=vllm
 	Runtime string `json:"runtime,omitempty"`
 
@@ -60,6 +74,12 @@ type AIModelSpec struct {
 	// If not specified, the operator will use the default runtime based on the Runtime field.
 	// +optional
 	RuntimeName string `json:"runtimeName,omitempty"`
+
+	// DeploymentMode specifies how the model should be deployed.
+	// If set, overrides recipe and runtime-based defaults.
+	// +kubebuilder:validation:Enum=Serverless;RawDeployment
+	// +optional
+	DeploymentMode string `json:"deploymentMode,omitempty"`
 
 	// MinReplicas is the minimum number of replicas for autoscaling.
 	// Set to 0 to enable scale-to-zero.

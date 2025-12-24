@@ -60,5 +60,5 @@ ingress:
   enabled: true
   # subdomain: admin-api (default from values.yaml)
   # Hosts are computed automatically:
-  #   - admin-api.dev.ai-aas.local (local domain)
+  #   - admin-api.dev.otherjamesbrown.com (local domain)
   #   - admin-api.dev.otherjamesbrown.com (public domain)

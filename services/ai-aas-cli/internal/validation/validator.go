@@ -50,7 +50,7 @@ type Validator struct {
 // NewValidator creates a new validator with default checks
 func NewValidator() *Validator {
 	v := &Validator{
-		timeout: 30 * time.Second,
+		timeout: 90 * time.Second, // Increased from 30s for GPU model validation
 	}
 
 	// Register default checks

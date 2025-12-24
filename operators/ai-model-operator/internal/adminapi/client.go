@@ -32,6 +32,8 @@ func NewClient(baseURL, apiKey string) *Client {
 // deploymentStatusDTO represents the status of a deployment for API transfer
 type deploymentStatusDTO struct {
 	Status               string     `json:"status"`
+	ModelID              string     `json:"model_id,omitempty"`
+	ExternalName         string     `json:"external_name,omitempty"`
 	InferenceServiceName string     `json:"inferenceservice_name,omitempty"`
 	Endpoint             string     `json:"endpoint,omitempty"`
 	ReplicasReady        int        `json:"replicas_ready,omitempty"`
@@ -41,23 +43,29 @@ type deploymentStatusDTO struct {
 
 // createDeploymentRequestDTO contains data for creating a deployment
 type createDeploymentRequestDTO struct {
-	ModelName   string `json:"model_name"`
-	Environment string `json:"environment"`
-	Namespace   string `json:"namespace"`
-	Replicas    int    `json:"replicas,omitempty"`
+	ModelName    string `json:"model_name"`
+	ModelID      string `json:"model_id,omitempty"`
+	ExternalName string `json:"external_name,omitempty"`
+	Environment  string `json:"environment"`
+	Namespace    string `json:"namespace"`
+	Replicas     int    `json:"replicas,omitempty"`
 }
 
 // CreateDeploymentRequest contains data for creating a deployment
 type CreateDeploymentRequest struct {
-	ModelName   string
-	Environment string
-	Namespace   string
-	Replicas    int
+	ModelName    string
+	ModelID      string // Full model path (e.g., "unsloth/gpt-oss-20b")
+	ExternalName string // Name exposed in OpenAI-compatible APIs
+	Environment  string
+	Namespace    string
+	Replicas     int
 }
 
 // DeploymentStatus represents the status of a deployment
 type DeploymentStatus struct {
 	Status               string
+	ModelID              string // Full model path (e.g., "unsloth/gpt-oss-20b")
+	ExternalName         string // Name exposed in OpenAI-compatible APIs
 	InferenceServiceName string
 	Endpoint             string
 	ReplicasReady        int
@@ -66,10 +74,12 @@ type DeploymentStatus struct {
 // CreateDeployment creates a new deployment record
 func (c *Client) CreateDeployment(ctx context.Context, req CreateDeploymentRequest) error {
 	dto := createDeploymentRequestDTO{
-		ModelName:   req.ModelName,
-		Environment: req.Environment,
-		Namespace:   req.Namespace,
-		Replicas:    req.Replicas,
+		ModelName:    req.ModelName,
+		ModelID:      req.ModelID,
+		ExternalName: req.ExternalName,
+		Environment:  req.Environment,
+		Namespace:    req.Namespace,
+		Replicas:     req.Replicas,
 	}
 	return c.request(ctx, http.MethodPost, "/v1/deployments", dto, nil)
 }
@@ -78,6 +88,8 @@ func (c *Client) CreateDeployment(ctx context.Context, req CreateDeploymentReque
 func (c *Client) UpdateDeploymentStatus(ctx context.Context, modelName, environment string, status DeploymentStatus) error {
 	dto := deploymentStatusDTO{
 		Status:               status.Status,
+		ModelID:              status.ModelID,
+		ExternalName:         status.ExternalName,
 		InferenceServiceName: status.InferenceServiceName,
 		Endpoint:             status.Endpoint,
 		ReplicasReady:        status.ReplicasReady,

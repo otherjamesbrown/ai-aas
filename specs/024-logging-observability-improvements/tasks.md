@@ -10,7 +10,7 @@
 - [ ] Write Loki StatefulSet manifest with persistent storage
 - [ ] Write Loki ConfigMap with retention policies
 - [ ] Write Loki Service for internal cluster access
-- [ ] Write Loki Ingress for external access via nip.io
+- [x] Write Loki Ingress for external access via otherjamesbrown.com
 - [ ] Create ArgoCD Application for Loki
 - [ ] Verify Loki is receiving logs via API
 - [ ] Verify Loki is accessible via ingress endpoint
@@ -23,13 +23,13 @@
 - `gitops/clusters/development/apps/loki.yaml`
 
 **Ingress Endpoints:**
-- `http://loki.172.232.58.222.nip.io` (primary - no DNS setup needed)
-- `http://loki.dev.ai-aas.local` (alternative - requires local DNS)
+- `https://loki.dev.otherjamesbrown.com` (primary - no DNS setup needed)
+- `http://loki.dev.otherjamesbrown.com` (alternative - requires local DNS)
 
 **Acceptance Criteria:**
 - Loki pod is running and healthy
-- Can query Loki API at `http://loki.172.232.58.222.nip.io/ready`
-- Can query logs via `curl http://loki.172.232.58.222.nip.io/loki/api/v1/query_range?query={level="error"}`
+- Can query Loki API at `https://loki.dev.otherjamesbrown.com/ready`
+- Can query logs via `curl https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range?query={level="error"}`
 - PersistentVolume is bound and storing data
 
 ---
@@ -66,7 +66,7 @@
 **Estimate:** Low complexity
 
 - [ ] Add Loki as datasource in Grafana
-- [ ] Create Grafana Ingress for external access via nip.io
+- [x] Create Grafana Ingress for external access via otherjamesbrown.com
 - [ ] Create basic log exploration dashboard
 - [ ] Create service-specific log panels
 - [ ] Create error rate visualization
@@ -80,11 +80,11 @@
 - `infra/k8s/monitoring/grafana/dashboards/logs-overview.json`
 
 **Ingress Endpoints:**
-- `http://grafana.172.232.58.222.nip.io` (primary - no DNS setup needed)
-- `http://grafana.dev.ai-aas.local` (alternative - requires local DNS)
+- `https://grafana.dev.otherjamesbrown.com` (primary - no DNS setup needed)
+- `http://grafana.dev.otherjamesbrown.com` (alternative - requires local DNS)
 
 **Acceptance Criteria:**
-- Can access Grafana at `http://grafana.172.232.58.222.nip.io`
+- Can access Grafana at `https://grafana.dev.otherjamesbrown.com`
 - Loki datasource configured and working
 - Can query logs in Grafana Explore
 - Dashboard shows log volume by service
@@ -553,8 +553,8 @@ export KUBECONFIG=secrets/kubeconfigs/kubeconfig-development.yaml
 
 | Service | Endpoint | Purpose |
 |---------|----------|---------|
-| Loki | http://loki.172.232.58.222.nip.io | Log aggregation API |
-| Grafana | http://grafana.172.232.58.222.nip.io | Dashboard & log exploration |
+| Loki | https://loki.dev.otherjamesbrown.com | Log aggregation API |
+| Grafana | https://grafana.dev.otherjamesbrown.com | Dashboard & log exploration |
 
 ## Quick Reference Commands
 
@@ -572,23 +572,23 @@ kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-development.yaml \
 ### Query Loki via HTTP Endpoint (Recommended)
 
 # Find all errors in last 15 minutes
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
   --data-urlencode 'query={level="error"}' \
   --data-urlencode 'limit=50' \
   --data-urlencode 'since=15m' | jq '.data.result'
 
 # Find logs for specific service
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
   --data-urlencode 'query={service="api-router-service"}' \
   --data-urlencode 'limit=100' | jq '.data.result'
 
 # Find logs containing request_id
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
   --data-urlencode 'query={service="api-router-service"} |= "<request-id>"' \
   --data-urlencode 'limit=50' | jq '.data.result'
 
 # Find errors with stack traces
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
   --data-urlencode 'query={level="error"} | json | line_format "{{.msg}} {{.error}}"' \
   --data-urlencode 'limit=20' | jq -r '.data.result[].values[][1]'
 
@@ -596,14 +596,14 @@ curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
 
 # Query a specific time window (ISO8601 format, nanoseconds)
 # Use: date -d "2024-01-15T10:30:00Z" +%s to convert to unix timestamp
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
   --data-urlencode 'query={level="error"}' \
   --data-urlencode 'start=1705314600000000000' \
   --data-urlencode 'end=1705315500000000000' \
   --data-urlencode 'limit=100' | jq '.data.result'
 
 # Last N minutes/hours/days
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
   --data-urlencode 'query={service="api-router-service"}' \
   --data-urlencode 'since=1h' \       # 1 hour
   --data-urlencode 'limit=200' | jq '.data.result'
@@ -614,55 +614,55 @@ curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
 ### Aggregation Queries (Metrics from Logs)
 
 # Count errors by service in last hour
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query' \
   --data-urlencode 'query=sum by(service) (count_over_time({level="error"}[1h]))' \
   | jq '.data.result'
 
 # Error rate over time (for graphing)
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
   --data-urlencode 'query=sum(rate({level="error"}[5m]))' \
   --data-urlencode 'since=1h' \
   --data-urlencode 'step=60' | jq '.data.result'
 
 # Top error messages
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query' \
   --data-urlencode 'query=topk(10, sum by(msg) (count_over_time({level="error"} | json [1h])))' \
   | jq '.data.result'
 
 # Log volume by service
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query' \
   --data-urlencode 'query=sum by(service) (count_over_time({}[1h]))' \
   | jq '.data.result'
 
 ### Inference Backend / vLLM Log Queries
 
 # All vLLM logs
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
   --data-urlencode 'query={container=~"vllm|kserve-container"}' \
   --data-urlencode 'limit=100' | jq '.data.result'
 
 # Model loading events
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
   --data-urlencode 'query={container=~"vllm|kserve-container"} |~ "(?i)loading model|model loaded|failed to load"' \
   --data-urlencode 'limit=50' | jq '.data.result'
 
 # GPU/CUDA errors (CRITICAL)
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
   --data-urlencode 'query={container=~"vllm|kserve-container"} |~ "(?i)cuda|out.?of.?memory|oom|gpu"' \
   --data-urlencode 'limit=50' | jq '.data.result'
 
 # Specific model logs
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
   --data-urlencode 'query={model="gpt-oss-20b"}' \
   --data-urlencode 'limit=100' | jq '.data.result'
 
 # vLLM errors only
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
   --data-urlencode 'query={container=~"vllm|kserve-container"} |~ "(?i)error|exception|failed|traceback"' \
   --data-urlencode 'limit=50' | jq '.data.result'
 
 # AsyncEngineDeadError (vLLM crash)
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
   --data-urlencode 'query={container=~"vllm|kserve-container"} |~ "AsyncEngineDeadError"' \
   --data-urlencode 'limit=20' | jq '.data.result'
 
@@ -680,7 +680,7 @@ kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-development.yaml \
 git add . && git commit -m "fix: description" && git push
 # ArgoCD syncs automatically for development
 # Or check sync status:
-# Open https://argocd.dev.ai-aas.local or use CLI
+# Open https://argocd.dev.otherjamesbrown.com or use CLI
 
 ### 2. Run Tests
 # Integration tests
@@ -692,18 +692,18 @@ cd services/<service> && go test ./...
 ### 3. On Test Failure - Query Logs
 
 #### Find errors in the last 15 minutes (all services)
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
   --data-urlencode 'query={level="error"}' \
   --data-urlencode 'limit=100' \
   --data-urlencode 'since=15m' | jq '.data.result'
 
 #### Find logs for specific service with errors
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
   --data-urlencode 'query={service="api-router-service", level=~"error|warn"}' \
   --data-urlencode 'limit=100' | jq '.data.result'
 
 #### Search logs by request_id
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
   --data-urlencode 'query={} |= "<request-id>"' \
   --data-urlencode 'limit=50' | jq '.data.result'
 
@@ -719,14 +719,14 @@ curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
 ### API Returns 500
 1. Get request_id from response headers
 2. Query Loki for that request_id across all services:
-   curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+   curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
      --data-urlencode 'query={} |= "<request_id>"' \
      --data-urlencode 'limit=50' | jq '.data.result'
 3. Check downstream services with same request_id
 
 ### Test Timeout
 1. Query service logs during test window:
-   curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+   curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
      --data-urlencode 'query={service="<service>"}' \
      --data-urlencode 'since=5m' \
      --data-urlencode 'limit=200' | jq '.data.result'
@@ -735,7 +735,7 @@ curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
 
 ### Authentication Failure
 1. Check user-org-service logs:
-   curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+   curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
      --data-urlencode 'query={service="user-org-service"} |= "auth"' \
      --data-urlencode 'limit=100' | jq '.data.result'
 2. Check for token validation errors
@@ -757,11 +757,11 @@ curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
    kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-development.yaml \
      get pods -n system -l app=vllm
 2. Query Loki for model loading events:
-   curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+   curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
      --data-urlencode 'query={container=~"vllm|kserve-container"} |~ "(?i)loading|failed|error"' \
      --data-urlencode 'since=30m' | jq '.data.result'
 3. Check for GPU/CUDA issues:
-   curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+   curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
      --data-urlencode 'query={container=~"vllm|kserve-container"} |~ "(?i)cuda|oom|gpu|memory"' \
      --data-urlencode 'since=30m' | jq '.data.result'
 4. Check pod events for resource issues:
@@ -771,15 +771,15 @@ curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
 ### Inference Returns Error / Slow Response
 1. Get request_id from API response
 2. Trace through api-router to vLLM:
-   curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+   curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
      --data-urlencode 'query={} |= "<request_id>"' \
      --data-urlencode 'limit=50' | jq '.data.result'
 3. Check vLLM queue/inference timing:
-   curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+   curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
      --data-urlencode 'query={container=~"vllm|kserve-container"} | json | duration_ms > 5000' \
      --data-urlencode 'since=15m' | jq '.data.result'
 4. Check for OOM during inference:
-   curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+   curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
      --data-urlencode 'query={container=~"vllm|kserve-container"} |~ "OutOfMemory"' \
      --data-urlencode 'since=15m' | jq '.data.result'
 
@@ -788,17 +788,17 @@ curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
    kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-development.yaml \
      exec -n system deployment/vllm -- nvidia-smi
 2. Query for OOM events:
-   curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+   curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
      --data-urlencode 'query={container=~"vllm|kserve-container"} |~ "(?i)out.?of.?memory|oom|cuda.*memory"' \
      --data-urlencode 'since=1h' | jq '.data.result'
 3. Check for KV cache warnings:
-   curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+   curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
      --data-urlencode 'query={container=~"vllm|kserve-container"} |~ "KV cache"' \
      --data-urlencode 'since=1h' | jq '.data.result'
 
 ## Grafana Dashboard Access (Visual Log Exploration)
 # Open directly in browser - no port-forward needed:
-http://grafana.172.232.58.222.nip.io
+https://grafana.dev.otherjamesbrown.com
 
 # Navigate to Explore > Select Loki datasource
 # Use LogQL queries like: {service="api-router-service", level="error"}
@@ -839,8 +839,8 @@ When debugging issues or investigating test failures, use the logging infrastruc
 
 | Service | Endpoint | Purpose |
 |---------|----------|---------|
-| Loki | http://loki.172.232.58.222.nip.io | Log aggregation API |
-| Grafana | http://grafana.172.232.58.222.nip.io | Dashboard & log exploration |
+| Loki | https://loki.dev.otherjamesbrown.com | Log aggregation API |
+| Grafana | https://grafana.dev.otherjamesbrown.com | Dashboard & log exploration |
 
 ### Quick Log Access
 
@@ -849,17 +849,17 @@ kubectl --kubeconfig=secrets/kubeconfigs/kubeconfig-development.yaml \
   logs -f deployment/api-router-service -n default --tail=100
 
 # Query Loki for errors (recommended)
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
   --data-urlencode 'query={level="error"}' \
   --data-urlencode 'limit=50' | jq '.data.result'
 
 # Query specific service
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
   --data-urlencode 'query={service="api-router-service"}' \
   --data-urlencode 'limit=100' | jq '.data.result'
 
 # Search by request_id
-curl -s 'http://loki.172.232.58.222.nip.io/loki/api/v1/query_range' \
+curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
   --data-urlencode 'query={} |= "<request-id>"' \
   --data-urlencode 'limit=50' | jq '.data.result'
 

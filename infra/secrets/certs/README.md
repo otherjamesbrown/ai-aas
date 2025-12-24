@@ -13,7 +13,7 @@ This directory contains self-signed SSL certificates for local development envir
 
 - **`tls.crt`** - TLS certificate for all domains
   - **Purpose**: Used by Kubernetes ingress for HTTPS
-  - **Domains**: Covers all dev/prod endpoints (`*.ai-aas.local`)
+  - **Domains**: Covers all dev/prod endpoints (`*.otherjamesbrown.com`)
   - **Distribution**: Committed to git for consistency
 
 - **`ai-aas-ca.srl`** - Serial number file
@@ -108,7 +108,7 @@ If you need to regenerate certificates (e.g., adding new domains):
 ./scripts/infra/generate-self-signed-certs.sh
 
 # Or regenerate with custom domains
-./scripts/infra/generate-self-signed-certs.sh --domains "api.dev.ai-aas.local,portal.dev.ai-aas.local"
+./scripts/infra/generate-self-signed-certs.sh --domains "api.dev.otherjamesbrown.com,portal.dev.otherjamesbrown.com"
 ```
 
 **Note**: Regenerating requires the CA private key (`ai-aas-ca.key`). If you've lost it, you'll need to generate a new CA and re-trust it on all machines.
@@ -126,14 +126,14 @@ If you need to regenerate certificates (e.g., adding new domains):
    - TLS certificate: 1 year (regenerate annually)
 
 4. **Domain Coverage**: Current certificates cover:
-   - `api.dev.ai-aas.local`
-   - `portal.dev.ai-aas.local`
-   - `grafana.dev.ai-aas.local`
-   - `argocd.dev.ai-aas.local`
-   - `api.prod.ai-aas.local`
-   - `portal.prod.ai-aas.local`
-   - `grafana.prod.ai-aas.local`
-   - `argocd.prod.ai-aas.local`
+   - `api.dev.otherjamesbrown.com`
+   - `portal.dev.otherjamesbrown.com`
+   - `grafana.dev.otherjamesbrown.com`
+   - `argocd.dev.otherjamesbrown.com`
+   - `api.prod.otherjamesbrown.com`
+   - `portal.prod.otherjamesbrown.com`
+   - `grafana.prod.otherjamesbrown.com`
+   - `argocd.prod.otherjamesbrown.com`
 
 ## Troubleshooting
 

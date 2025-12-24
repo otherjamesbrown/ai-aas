@@ -62,6 +62,10 @@ patterns:
     pattern: "<service>.<namespace>.svc.cluster.local"
     never: Hardcode external IPs in values files
 
+  kserve_access:
+    rawdeployment: "Internal only - external returns 404, route via API Router"
+    serverless: "Gets external VirtualService via Istio"
+
   environment_access:
     reference: docs/platform/environment-access.md
     kubeconfig: "~/kubeconfigs/kubeconfig-development.yaml"
