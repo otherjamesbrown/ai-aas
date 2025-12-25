@@ -41,20 +41,15 @@ data:
         verbosity: basic
 
       # Loki exporter for OTLP logs
-      # Note: labels.attributes and labels.resource must be lists of attribute keys
-      # The exporter uses these to extract labels from log records
+      # Note: This exporter is deprecated - Loki 3.x supports native OTLP ingestion
+      # For now, using default_labels_enabled which adds: job, instance, exporter, level
       loki:
         endpoint: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
-        labels:
-          attributes:
-            - level
-            - trace_id
-          resource:
-            - service.name
-            - service.namespace
         default_labels_enabled:
           exporter: true
           job: true
+          instance: true
+          level: true
 
       # Tempo exporter for trace storage
       otlp/tempo:
