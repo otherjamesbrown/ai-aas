@@ -27,7 +27,3 @@ CREATE INDEX IF NOT EXISTS idx_routing_policies_org ON routing_policies(organiza
 CREATE INDEX IF NOT EXISTS idx_routing_policies_enabled ON routing_policies(enabled) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_routing_policies_updated_at ON routing_policies(updated_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_routing_policies_unique_org_model ON routing_policies(organization_id, model) WHERE deleted_at IS NULL;
-
--- +goose Down
--- Rollback: Drop routing_policies table
-DROP TABLE IF EXISTS routing_policies;

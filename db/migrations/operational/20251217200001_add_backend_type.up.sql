@@ -13,8 +13,3 @@ ALTER TABLE routing_policies
 
 COMMENT ON COLUMN routing_policies.backend_type IS 'Backend protocol: openai (default) for vLLM, triton for Triton Inference Server';
 COMMENT ON COLUMN routing_policies.tokenizer IS 'Tiktoken encoding name for token counting (e.g., cl100k_base, llama3)';
-
--- +goose Down
-ALTER TABLE routing_policies DROP CONSTRAINT IF EXISTS check_backend_type;
-ALTER TABLE routing_policies DROP COLUMN IF EXISTS tokenizer;
-ALTER TABLE routing_policies DROP COLUMN IF EXISTS backend_type;
