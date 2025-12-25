@@ -512,8 +512,9 @@ func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructu
 	var args []interface{}
 	switch b.containerRuntime {
 	case "tgi":
-		// TGI uses --model-id for model path
+		// TGI uses --model-id for model path and requires explicit port
 		args = append(args, fmt.Sprintf("--model-id=%s", b.modelID))
+		args = append(args, "--port=8000") // TGI defaults to 80, but we need 8000 for probes
 	default:
 		// vLLM uses --model and --served-model-name
 		args = append(args, fmt.Sprintf("--model=%s", b.modelID))
