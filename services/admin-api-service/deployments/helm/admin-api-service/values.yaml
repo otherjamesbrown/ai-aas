@@ -92,8 +92,6 @@ env:
     value: "8080"
   - name: ENVIRONMENT
     value: development
-  - name: LOG_LEVEL
-    value: info
 
 extraEnv: []
 
