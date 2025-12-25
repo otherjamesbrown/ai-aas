@@ -39,9 +39,9 @@ func TestGetTestImageBase64(t *testing.T) {
 		t.Error("GetTestImageBase64() returned empty string")
 	}
 	
-	// Should be roughly 849 bytes (base64 encoded)
-	if len(image) < 800 || len(image) > 900 {
-		t.Errorf("GetTestImageBase64() length = %d, expected ~849", len(image))
+	// Should be roughly 5100 bytes (base64 encoded 128x128 cat JPEG)
+	if len(image) < 5000 || len(image) > 5500 {
+		t.Errorf("GetTestImageBase64() length = %d, expected ~5100", len(image))
 	}
 	
 	// Should start with JPEG base64 signature
