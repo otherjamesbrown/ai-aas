@@ -1,6 +1,6 @@
 # Go Services Developer Context
 
-> **Inherits**: context/agents.md | **Verified**: 2025-12-14 | **Commit**: 5b8479c4
+> **Inherits**: context/agents.md | **Verified**: 2025-12-25 | **Commit**: 084a4b2e
 
 ---
 
@@ -69,6 +69,17 @@ patterns:
       - Unit tests for business logic
       - Integration tests for API endpoints
     coverage: go test ./... -coverprofile=coverage.out
+
+  triton_tensorrt_llm:
+    model_name: "Always use 'ensemble' as model name"
+    why: "TRT-LLM pipeline uses ensemble (preprocessing → inference → postprocessing)"
+    applies_to:
+      http: "/v2/models/ensemble/infer"
+      grpc: "ModelInferRequest.ModelName = 'ensemble'"
+    routing: "Service selection (which pod) determines which model, not model name"
+    never:
+      - "Use policy.Model or user-facing model name for TRT-LLM"
+      - "Vary model name based on which model is being called"
 
 api_endpoints:
   admin-api-service:  # /v1 prefix
@@ -283,6 +294,17 @@ tiktoken.SetBpeLoader(loader.NewOfflineLoader())
 // - Config fetched from remote URL without fallback
 // - License validation that phones home
 // All will fail in network-isolated pods!
+
+// WRONG: Using user-facing model name for TensorRT-LLM backends
+// Triton returns "model not found" because TRT-LLM only exposes "ensemble"
+grpcReq.ModelName = policy.Model  // e.g., "meta-llama/Llama-3.1-8B-Instruct"
+httpPath := fmt.Sprintf("/v2/models/%s/infer", policy.Model)
+
+// CORRECT: Always use "ensemble" for TRT-LLM Triton backends
+// The pod selection (routing) determines which model, not the model name param
+grpcReq.ModelName = "ensemble"
+httpPath := "/v2/models/ensemble/infer"
+// TRT-LLM uses "ensemble" because it chains: preprocessing → inference → postprocessing
 ```
 
 ---
