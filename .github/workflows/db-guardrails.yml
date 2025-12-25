@@ -93,6 +93,7 @@ jobs:
           scripts/db/measure-window.sh --env migrate.env --component operational --version "$VERSION" --rollback
         env:
           MIGRATION_ACTOR: ci-guardrail
+          MIGRATION_APPROVED_BY: ci-guardrail
 
       - name: Run rollback downtime test
         run: MIGRATION_ENV_FILE=migrate.env MIGRATION_TEST_VERSION=$(ls db/migrations/operational/*.up.sql | sort | tail -1 | xargs -n1 basename | sed 's/.up.sql$//') go test ./tests/infra/perf -run TestRollbackDowntimeUnderOneMinute -count=1
