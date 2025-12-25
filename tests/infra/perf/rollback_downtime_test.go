@@ -9,18 +9,19 @@ import (
 	"time"
 )
 
-// repoRoot finds the repository root by looking for go.mod
+// repoRoot finds the repository root by looking for .git (file or directory)
 func repoRoot() string {
 	// Start from the test file location and walk up
 	_, filename, _, _ := runtime.Caller(0)
 	dir := filepath.Dir(filename)
 	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+		// Check for .git (can be a directory in normal repos or a file in worktrees)
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
 			return dir
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			// Reached filesystem root without finding go.mod
+			// Reached filesystem root without finding .git
 			return ""
 		}
 		dir = parent
@@ -40,7 +41,7 @@ func TestRollbackDowntimeUnderOneMinute(t *testing.T) {
 
 	root := repoRoot()
 	if root == "" {
-		t.Fatal("could not find repository root (go.mod)")
+		t.Fatal("could not find repository root (.git)")
 	}
 
 	rollbackScript := filepath.Join(root, "scripts", "db", "rollback.sh")
