@@ -158,6 +158,51 @@ gitops/clusters/development/apps/aimodels-config.yaml  # Points to ai-aas-config
 # ArgoCD v3 detects cert-manager's caBundle injection as drift
 # This causes constant OutOfSync status for webhooks
 # Must use ignoreDifferences to ignore the injected field
+
+# WRONG: Duplicate environment variables in Helm charts
+# Defining same env var in BOTH values file AND deployment template
+# values.yaml:
+env:
+  - name: LOG_LEVEL
+    value: info
+# templates/deployment.yaml (also defines LOG_LEVEL):
+env:
+  - name: LOG_LEVEL
+    valueFrom:
+      configMapKeyRef:
+        name: config
+        key: log-level
+# This creates duplicate env vars - ArgoCD validation rejects this!
+# FIX: Define in ONE place only (values OR template, never both)
+# Related bug: aas-exfp
+
+# WRONG: Kustomize commonLabels affecting immutable selectors
+# Kustomize commonLabels applies to ALL label fields including Deployment selectors
+kustomization.yaml:
+  commonLabels:
+    app.kubernetes.io/part-of: observability  # BREAKS: modifies immutable selectors!
+# FIX: Use commonAnnotations instead (annotations are mutable):
+  commonAnnotations:
+    app.kubernetes.io/part-of: observability
+# OR: Use patches to target pod template labels only
+# Related bug: aas-7yh3
+
+# WRONG: TGI VLM models without PREFIX_CACHING=0
+# TGI v2.0+ enables prefix caching by default, but VLMs don't support it
+# Symptom: Pod crashes with "NotImplementedError: Vlm do not work with prefix caching yet"
+# AIModel CR missing runtimeEnv:
+spec:
+  runtime: tgi
+  modelName: Qwen/Qwen2-VL-7B-Instruct
+  # Missing: runtimeEnv with PREFIX_CACHING=0
+# FIX: Add runtimeEnv to disable prefix caching for VLMs:
+spec:
+  runtime: tgi
+  runtimeEnv:
+    - name: PREFIX_CACHING
+      value: "0"
+# Applies to: Qwen2-VL, Gemma-3-Vision, LLaVA, any TGI VLM
+# Related bug: aas-t8gr
 ```
 
 ### Duplicate ArgoCD App Detection
