@@ -85,12 +85,6 @@ WHERE rollup.bucket_start IS NULL
 		cfg.intervalUnit,
 	)
 
-	rows, err := conn.Query(ctx, query)
-	if err != nil {
-		t.Fatalf("query: %v", err)
-	}
-	defer rows.Close()
-
 	// In CI environments with seeded test data, the seed timestamps might not be
 	// within the rollup window. Check if there's any data to validate.
 	var hasUsageData bool
@@ -101,6 +95,12 @@ WHERE rollup.bucket_start IS NULL
 	if !hasUsageData {
 		t.Skip("no usage_events data within rollup window; skipping reconciliation")
 	}
+
+	rows, err := conn.Query(ctx, query)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	defer rows.Close()
 
 	if rows.Next() {
 		t.Fatalf("%s", cfg.resultIdentifier)
