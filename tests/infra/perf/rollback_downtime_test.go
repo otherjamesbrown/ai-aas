@@ -47,10 +47,15 @@ func TestRollbackDowntimeUnderOneMinute(t *testing.T) {
 	rollbackScript := filepath.Join(root, "scripts", "db", "rollback.sh")
 	applyScript := filepath.Join(root, "scripts", "db", "apply.sh")
 
+	migrationEnv := []string{
+		"MIGRATION_REQUIRE_CONFIRMATION=0",
+		"MIGRATION_APPROVED_BY=ci-test",
+	}
+
 	start := time.Now()
 	cmd := exec.Command(rollbackScript, "--component", "operational", "--env", envFile, "--version", version, "--yes")
 	cmd.Dir = root
-	cmd.Env = append(os.Environ(), "MIGRATION_REQUIRE_CONFIRMATION=0")
+	cmd.Env = append(os.Environ(), migrationEnv...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -64,7 +69,7 @@ func TestRollbackDowntimeUnderOneMinute(t *testing.T) {
 	// Reapply to restore state for subsequent tests.
 	apply := exec.Command(applyScript, "--component", "operational", "--env", envFile, "--version", version, "--yes")
 	apply.Dir = root
-	apply.Env = append(os.Environ(), "MIGRATION_REQUIRE_CONFIRMATION=0")
+	apply.Env = append(os.Environ(), migrationEnv...)
 	apply.Stdout = os.Stdout
 	apply.Stderr = os.Stderr
 	if err := apply.Run(); err != nil {
