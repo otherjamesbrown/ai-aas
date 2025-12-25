@@ -200,6 +200,26 @@ sanitize_result() {
     echo "$1" | tr ' ' '_' | tr -d '\n' | head -c 30
 }
 
+# Detect if a model is a VLM (Vision Language Model)
+is_vlm() {
+    local model_name="$1"
+    local model_lower
+    model_lower=$(echo "$model_name" | tr '[:upper:]' '[:lower:]')
+
+    # VLM patterns (case-insensitive)
+    if echo "$model_lower" | grep -qE '(qwen2-vl|llava|internvl|pixtral|phi-3-vision)'; then
+        return 0  # true
+    else
+        return 1  # false
+    fi
+}
+
+# Get embedded test image base64
+get_test_image_base64() {
+    # Embedded 32x32 cat-like image as JPEG base64 (~850 bytes)
+    echo "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAgACADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlbaWmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD3+iiigAooooA//9k="
+}
+
 # Run tests for a single environment
 run_environment_tests() {
     local env_name="$1"
@@ -363,6 +383,7 @@ run_environment_tests() {
     # Test ALL published models and report results for each
     local inference_json_array="[]"
     local inference_prompt="What is the capital of France?"
+    local vlm_prompt="What animal is in this image? Answer in one word."
     if [[ -n "$new_api_key" ]]; then
         local all_model_ids
         all_model_ids=$(echo "$models_output" | jq -r '.data[].id' 2>/dev/null)
@@ -376,16 +397,56 @@ run_environment_tests() {
             local start_time end_time duration_ms
             start_time=$(date +%s%3N)
 
+            # Detect if this is a VLM and prepare appropriate request
+            local request_body
+            local test_prompt
+            if is_vlm "$model_id"; then
+                # VLM: Send multimodal content (image + text)
+                local image_base64
+                image_base64=$(get_test_image_base64)
+                test_prompt="$vlm_prompt"
+                request_body=$(jq -n \
+                    --arg model "$model_id" \
+                    --arg prompt "$test_prompt" \
+                    --arg image_data "data:image/jpeg;base64,$image_base64" \
+                    '{
+                        "model": $model,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "image_url",
+                                        "image_url": {"url": $image_data}
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": $prompt
+                                    }
+                                ]
+                            }
+                        ],
+                        "max_tokens": 50
+                    }')
+            else
+                # Regular LLM: Send simple text
+                test_prompt="$inference_prompt"
+                request_body=$(jq -n \
+                    --arg model "$model_id" \
+                    --arg prompt "$test_prompt" \
+                    '{
+                        "model": $model,
+                        "messages": [{"role": "user", "content": $prompt}],
+                        "max_tokens": 50
+                    }')
+            fi
+
             local inference_output
             inference_output=$(curl -sk --connect-timeout 10 --max-time 30 \
                 "$api_router_endpoint/v1/chat/completions" \
                 -H "Authorization: Bearer $new_api_key" \
                 -H "Content-Type: application/json" \
-                -d "{
-                    \"model\": \"$model_id\",
-                    \"messages\": [{\"role\": \"user\", \"content\": \"$inference_prompt\"}],
-                    \"max_tokens\": 50
-                }" 2>&1)
+                -d "$request_body" 2>&1)
 
             end_time=$(date +%s%3N)
             duration_ms=$((end_time - start_time))
@@ -404,12 +465,12 @@ run_environment_tests() {
                 # Escape quotes for JSON
                 response_text=$(echo "$response_text" | sed 's/"/\\"/g')
 
-                inference_results+=("{\"model\":\"$model_id\",\"status\":\"PASS\",\"prompt_tokens\":$prompt_tokens,\"completion_tokens\":$completion_tokens,\"total_tokens\":$total_tokens,\"duration_ms\":$duration_ms,\"prompt\":\"$inference_prompt\",\"response\":\"$response_text\"}")
+                inference_results+=("{\"model\":\"$model_id\",\"status\":\"PASS\",\"prompt_tokens\":$prompt_tokens,\"completion_tokens\":$completion_tokens,\"total_tokens\":$total_tokens,\"duration_ms\":$duration_ms,\"prompt\":\"$test_prompt\",\"response\":\"$response_text\"}")
                 ((inference_pass_count++))
             else
                 local error_msg
                 error_msg=$(echo "$inference_output" | jq -r '.error.message // .error // "unknown error"' 2>/dev/null | head -c 50 | sed 's/"/\\"/g')
-                inference_results+=("{\"model\":\"$model_id\",\"status\":\"FAIL\",\"prompt_tokens\":0,\"completion_tokens\":0,\"total_tokens\":0,\"duration_ms\":$duration_ms,\"prompt\":\"$inference_prompt\",\"response\":\"\",\"error\":\"$error_msg\"}")
+                inference_results+=("{\"model\":\"$model_id\",\"status\":\"FAIL\",\"prompt_tokens\":0,\"completion_tokens\":0,\"total_tokens\":0,\"duration_ms\":$duration_ms,\"prompt\":\"$test_prompt\",\"response\":\"\",\"error\":\"$error_msg\"}")
                 ((inference_fail_count++))
             fi
         done

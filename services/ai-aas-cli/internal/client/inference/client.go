@@ -58,8 +58,20 @@ type ModelsResponse struct {
 
 // ChatMessage represents a message in the chat conversation.
 type ChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role    string      `json:"role"`
+	Content interface{} `json:"content"` // Can be string or []ContentPart for multimodal
+}
+
+// ContentPart represents a part of multimodal content
+type ContentPart struct {
+	Type     string    `json:"type"`      // "text" or "image_url"
+	Text     string    `json:"text,omitempty"`
+	ImageURL *ImageURL `json:"image_url,omitempty"`
+}
+
+// ImageURL represents an image URL in multimodal content
+type ImageURL struct {
+	URL string `json:"url"` // Can be HTTP URL or data URI (data:image/jpeg;base64,...)
 }
 
 // ChatCompletionRequest represents a request to POST /v1/chat/completions.

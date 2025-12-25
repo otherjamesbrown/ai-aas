@@ -67,8 +67,20 @@ type ChatCompletionRequest struct {
 
 // Message represents a chat message
 type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role    string      `json:"role"`
+	Content interface{} `json:"content"` // Can be string or []ContentPart for multimodal
+}
+
+// ContentPart represents a part of multimodal content
+type ContentPart struct {
+	Type     string    `json:"type"`      // "text" or "image_url"
+	Text     string    `json:"text,omitempty"`
+	ImageURL *ImageURL `json:"image_url,omitempty"`
+}
+
+// ImageURL represents an image URL in multimodal content
+type ImageURL struct {
+	URL string `json:"url"` // Can be HTTP URL or data URI (data:image/jpeg;base64,...)
 }
 
 // ChatCompletionResponse is the OpenAI-compatible chat completion response
@@ -95,8 +107,37 @@ type Usage struct {
 	TotalTokens      int `json:"total_tokens"`
 }
 
+// IsVLM detects if a model name indicates a vision-language model
+func IsVLM(modelName string) bool {
+	modelLower := strings.ToLower(modelName)
+	vlmPatterns := []string{
+		"qwen2-vl",
+		"llava",
+		"internvl",
+		"pixtral",
+		"phi-3-vision",
+	}
+	for _, pattern := range vlmPatterns {
+		if strings.Contains(modelLower, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+// GetTestImageBase64 returns a base64-encoded test image (32x32 JPEG, ~850 bytes)
+func GetTestImageBase64() string {
+	// Embedded 32x32 cat-like image as JPEG base64
+	return "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAgACADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlbaWmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD3+iiigAooooA//9k="
+}
+
 // ValidateEndpoint validates an inference endpoint
 func (v *InferenceValidator) ValidateEndpoint(ctx context.Context, endpoint, apiKey string) *InferenceResult {
+	return v.ValidateEndpointWithModel(ctx, endpoint, apiKey, "default")
+}
+
+// ValidateEndpointWithModel validates an inference endpoint with a specific model name
+func (v *InferenceValidator) ValidateEndpointWithModel(ctx context.Context, endpoint, apiKey, modelName string) *InferenceResult {
 	start := time.Now()
 	result := &InferenceResult{}
 
@@ -106,11 +147,33 @@ func (v *InferenceValidator) ValidateEndpoint(ctx context.Context, endpoint, api
 		url = strings.TrimSuffix(url, "/") + "/v1/chat/completions"
 	}
 
+	// Detect if this is a VLM and create appropriate message content
+	var messageContent interface{}
+	if IsVLM(modelName) {
+		// VLM: Send multimodal content (image + text)
+		imageBase64 := GetTestImageBase64()
+		messageContent = []ContentPart{
+			{
+				Type: "image_url",
+				ImageURL: &ImageURL{
+					URL: "data:image/jpeg;base64," + imageBase64,
+				},
+			},
+			{
+				Type: "text",
+				Text: "What animal is in this image? Answer in one word.",
+			},
+		}
+	} else {
+		// Regular LLM: Send simple text
+		messageContent = "Say hello in one word."
+	}
+
 	// Create request
 	reqBody := ChatCompletionRequest{
-		Model: "default",
+		Model: modelName,
 		Messages: []Message{
-			{Role: "user", Content: "Say hello in one word."},
+			{Role: "user", Content: messageContent},
 		},
 		MaxTokens:   10,
 		Temperature: 0,
