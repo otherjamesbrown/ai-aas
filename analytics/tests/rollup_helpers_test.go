@@ -92,6 +92,6 @@ WHERE rollup.bucket_start IS NULL
 	defer rows.Close()
 
 	if rows.Next() {
-		t.Fatalf(cfg.resultIdentifier)
+		t.Fatalf("%s", cfg.resultIdentifier)
 	}
 }
