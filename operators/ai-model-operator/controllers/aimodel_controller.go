@@ -1283,10 +1283,17 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 	// from the HuggingFace repo, which isn't preserved in S3 storage.
 	if aiModel.Spec.TrustRemoteCode && aiModel.Spec.ModelID != "" {
 		log.Info("Using container-based deployment for trust_remote_code model",
-			"name", aiModel.Name, "modelID", aiModel.Spec.ModelID)
+			"name", aiModel.Name, "modelID", aiModel.Spec.ModelID, "runtime", runtime)
 
-		// Use vLLM image - v0.10.2 has native support for GPT-OSS and other modern architectures
-		containerImage := "vllm/vllm-openai:v0.10.2"
+		// Select container image based on runtime
+		var containerImage string
+		switch runtime {
+		case "tgi":
+			containerImage = "ghcr.io/huggingface/text-generation-inference:2.4"
+		default:
+			// Use vLLM image - v0.10.2 has native support for GPT-OSS and other modern architectures
+			containerImage = "vllm/vllm-openai:v0.10.2"
+		}
 
 		// Determine liveness probe initial delay (default 300s if not specified)
 		livenessInitialDelay := int32(300)
@@ -1299,6 +1306,7 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		// models with the same base name but different sources to coexist.
 		isvc, err = kserve.NewInferenceServiceBuilder(sanitizeInferenceServiceName(aiModel.Name), aiModel.Namespace).
 			WithContainerImage(containerImage).
+			WithContainerRuntime(runtime).
 			WithModelID(aiModel.Spec.ModelID).
 			WithServedName(aiModel.Spec.ModelID).
 			WithDeploymentMode(deploymentMode).

@@ -51,6 +51,7 @@ type InferenceServiceBuilder struct {
 	// Container-based deployment fields (for trust_remote_code models)
 	containerImage              string
 	modelID                     string // HuggingFace model ID for direct loading
+	containerRuntime            string // Runtime type for container-based deployment (vllm, tgi)
 	livenessInitialDelaySeconds int32  // InitialDelaySeconds for liveness probe
 	// Health probe configuration
 	livenessPath   string // Path for liveness probe (default: /health)
@@ -189,6 +190,12 @@ func (b *InferenceServiceBuilder) WithContainerImage(image string) *InferenceSer
 // WithModelID sets the HuggingFace model ID for direct loading
 func (b *InferenceServiceBuilder) WithModelID(modelID string) *InferenceServiceBuilder {
 	b.modelID = modelID
+	return b
+}
+
+// WithContainerRuntime sets the runtime type for container-based deployment (vllm, tgi)
+func (b *InferenceServiceBuilder) WithContainerRuntime(runtime string) *InferenceServiceBuilder {
+	b.containerRuntime = runtime
 	return b
 }
 
@@ -501,13 +508,18 @@ func (b *InferenceServiceBuilder) BuildContainerBased() (*unstructured.Unstructu
 		tolerations = append(tolerations, toleration)
 	}
 
-	// Build args: prepend --model=<modelID> to ensure it's used
-	// Also add --served-model-name for API compatibility
-	args := []interface{}{
-		fmt.Sprintf("--model=%s", b.modelID),
-	}
-	if b.servedName != "" {
-		args = append(args, fmt.Sprintf("--served-model-name=%s", b.servedName))
+	// Build args based on container runtime type
+	var args []interface{}
+	switch b.containerRuntime {
+	case "tgi":
+		// TGI uses --model-id for model path
+		args = append(args, fmt.Sprintf("--model-id=%s", b.modelID))
+	default:
+		// vLLM uses --model and --served-model-name
+		args = append(args, fmt.Sprintf("--model=%s", b.modelID))
+		if b.servedName != "" {
+			args = append(args, fmt.Sprintf("--served-model-name=%s", b.servedName))
+		}
 	}
 	for _, arg := range b.runtimeArgs {
 		args = append(args, arg)
