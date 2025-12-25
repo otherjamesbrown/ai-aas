@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:15-alpine
+        image: timescale/timescaledb:latest-pg15
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
