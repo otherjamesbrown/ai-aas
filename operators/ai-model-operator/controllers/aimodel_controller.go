@@ -32,6 +32,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1510,6 +1511,9 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 		return fmt.Errorf("failed to re-fetch AIModel before status update: %w", err)
 	}
 
+	// Save original status for comparison to prevent infinite reconcile loops
+	originalStatus := latestAIModel.Status.DeepCopy()
+
 	// Update AIModel status fields (use sanitized name for InferenceService)
 	latestAIModel.Status.InferenceServiceName = isvcName
 	latestAIModel.Status.InferenceEndpoint = status.URL
@@ -1609,6 +1613,17 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 			latestAIModel.Status.Message = status.String()
 		}
 	}
+
+	// Only update status if something actually changed to prevent infinite reconcile loops
+	if equality.Semantic.DeepEqual(originalStatus, &latestAIModel.Status) {
+		log.V(1).Info("Status unchanged, skipping update to prevent infinite reconcile loop", "name", aiModel.Name)
+		return nil
+	}
+
+	log.V(1).Info("Status changed, performing update",
+		"name", aiModel.Name,
+		"oldPhase", originalStatus.Phase,
+		"newPhase", latestAIModel.Status.Phase)
 
 	// Update status with retry on conflict using exponential backoff
 	// This is critical - without proper retry, the phase can get stuck
