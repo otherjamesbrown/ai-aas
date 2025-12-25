@@ -10,6 +10,12 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: platform-development
+  # Ignore status field changes - operator updates these dynamically
+  ignoreDifferences:
+    - group: aimodel.ai-aas.io
+      kind: AIModel
+      jsonPointers:
+        - /status
   source:
     repoURL: https://github.com/otherjamesbrown/ai-aas-config
     targetRevision: develop
