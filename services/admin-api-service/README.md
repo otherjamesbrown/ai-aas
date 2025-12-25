@@ -1,7 +1,7 @@
 # Admin API Service
 
 ---
-last_updated: 2025-12-09
+last_updated: 2025-12-25
 ---
 
 Internal HTTP API for platform administration.
@@ -108,6 +108,24 @@ Validation:
 | GET | `/readyz` | Readiness probe |
 | GET | `/metrics` | Prometheus metrics |
 
+## Rate Limiting
+
+The Admin API implements traffic class differentiation for rate limiting:
+
+- **Data Plane (User Traffic)**: Standard rate limit (configurable via `RATE_LIMIT_PER_MIN`)
+- **Control Plane (Operator Traffic)**: 5x higher rate limit
+
+Traffic is classified based on:
+1. `X-Client-Type` header: Set to `operator` or `control-plane` for operator traffic
+2. `User-Agent` header: Checked for `ai-model-operator` or `kubernetes-operator` patterns
+
+This prevents operator control plane traffic (deployment status updates) from starving user API requests during high-frequency reconciliation loops.
+
+Rate limit responses include:
+- HTTP 429 status
+- `X-RateLimit-Class` header indicating which traffic class was limited
+- `Retry-After` header with seconds to wait
+
 ## Configuration
 
 See `config.example.env` for all configuration options.
@@ -118,6 +136,7 @@ Key environment variables:
 - `USER_ORG_SERVICE_URL` - URL of user-org-service
 - `PORT` - HTTP port (default: 8080)
 - `LOG_LEVEL` - Logging level (default: info)
+- `RATE_LIMIT_PER_MIN` - Base rate limit for data plane traffic (default: 100)
 
 ## Architecture
 

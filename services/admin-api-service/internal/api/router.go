@@ -42,8 +42,12 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 	requestLoggerConfig := sharedMiddleware.DefaultRequestLoggerConfig()
 	r.Use(sharedMiddleware.RequestLogger(logger, requestLoggerConfig))
 
-	// Rate limiter
-	rateLimiter := middleware.NewRateLimiter(cfg.RateLimitPerMin)
+	// Rate limiter with traffic class differentiation
+	// Control plane (operator) gets 5x the rate limit of data plane (users)
+	rateLimiter := middleware.NewRateLimiterWithConfig(middleware.RateLimiterConfig{
+		DataPlaneRequestsPerMin:    cfg.RateLimitPerMin,
+		ControlPlaneRequestsPerMin: cfg.RateLimitPerMin * 5,
+	})
 
 	// Create handlers
 	healthHandler := handlers.NewHealthHandler(db, cfg.Version)
