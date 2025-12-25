@@ -8,7 +8,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
+)
+
+const (
+	// Retry configuration for rate limiting (429 responses)
+	maxRetries     = 5
+	initialBackoff = 1 * time.Second
+	maxBackoff     = 30 * time.Second
+	backoffFactor  = 2
 )
 
 // Client provides methods for calling the Admin API
@@ -27,6 +36,26 @@ func NewClient(baseURL, apiKey string) *Client {
 			Timeout: 30 * time.Second,
 		},
 	}
+}
+
+// calculateBackoff calculates the exponential backoff duration for retry attempts
+func calculateBackoff(attempt int, initial, max time.Duration) time.Duration {
+	backoff := initial
+	for i := 0; i < attempt; i++ {
+		backoff *= backoffFactor
+		if backoff > max {
+			return max
+		}
+	}
+	return backoff
+}
+
+// min returns the minimum of two time.Duration values
+func min(a, b time.Duration) time.Duration {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // deploymentStatusDTO represents the status of a deployment for API transfer
@@ -104,50 +133,94 @@ func (c *Client) DeleteDeployment(ctx context.Context, modelName, environment st
 	return c.request(ctx, http.MethodDelete, path, nil, nil)
 }
 
-// request performs an HTTP request to the Admin API
+// request performs an HTTP request to the Admin API with retry logic for rate limiting
 func (c *Client) request(ctx context.Context, method, path string, body interface{}, result interface{}) error {
 	url := c.baseURL + path
 
-	var bodyReader io.Reader
+	// Marshal body once (will be reused on retries)
+	var bodyData []byte
 	if body != nil {
-		data, err := json.Marshal(body)
+		var err error
+		bodyData, err = json.Marshal(body)
 		if err != nil {
 			return fmt.Errorf("marshal body: %w", err)
 		}
-		bodyReader = bytes.NewReader(data)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
-	if err != nil {
-		return fmt.Errorf("create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	if c.apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+c.apiKey)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("execute request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("read response: %w", err)
-	}
-
-	if resp.StatusCode >= 400 {
-		return fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(respBody))
-	}
-
-	if result != nil && len(respBody) > 0 {
-		if err := json.Unmarshal(respBody, result); err != nil {
-			return fmt.Errorf("decode response: %w", err)
+	var lastErr error
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		// Create new request for each attempt (body reader must be fresh)
+		var bodyReader io.Reader
+		if bodyData != nil {
+			bodyReader = bytes.NewReader(bodyData)
 		}
+
+		req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
+		if err != nil {
+			return fmt.Errorf("create request: %w", err)
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+		if c.apiKey != "" {
+			req.Header.Set("Authorization", "Bearer "+c.apiKey)
+		}
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("execute request: %w", err)
+		}
+
+		respBody, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			return fmt.Errorf("read response: %w", err)
+		}
+
+		// Handle rate limiting (429)
+		if resp.StatusCode == http.StatusTooManyRequests {
+			lastErr = fmt.Errorf("rate limited (429): %s", string(respBody))
+
+			// Max retries exceeded
+			if attempt >= maxRetries {
+				return fmt.Errorf("max retries (%d) exceeded: %w", maxRetries, lastErr)
+			}
+
+			// Calculate backoff duration
+			backoff := calculateBackoff(attempt, initialBackoff, maxBackoff)
+
+			// Check for Retry-After header (RFC 6585)
+			if retryAfter := resp.Header.Get("Retry-After"); retryAfter != "" {
+				if seconds, err := strconv.Atoi(retryAfter); err == nil {
+					backoff = min(time.Duration(seconds)*time.Second, maxBackoff)
+				}
+			}
+
+			// Wait before retry
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("context cancelled during backoff: %w", ctx.Err())
+			case <-time.After(backoff):
+				// Continue to next attempt
+				continue
+			}
+		}
+
+		// Handle other errors
+		if resp.StatusCode >= 400 {
+			return fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(respBody))
+		}
+
+		// Success - decode response if needed
+		if result != nil && len(respBody) > 0 {
+			if err := json.Unmarshal(respBody, result); err != nil {
+				return fmt.Errorf("decode response: %w", err)
+			}
+		}
+
+		return nil
 	}
 
-	return nil
+	// Should not reach here, but safeguard
+	return fmt.Errorf("unexpected retry loop exit: %w", lastErr)
 }
