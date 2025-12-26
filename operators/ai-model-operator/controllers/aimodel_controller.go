@@ -1691,6 +1691,8 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 			freshAIModel.Status.RetryCount = latestAIModel.Status.RetryCount
 			freshAIModel.Status.LastRetryTime = latestAIModel.Status.LastRetryTime
 			freshAIModel.Status.NextRetryTime = latestAIModel.Status.NextRetryTime
+			freshAIModel.Status.DeploymentStartedAt = latestAIModel.Status.DeploymentStartedAt
+			freshAIModel.Status.LastFailureReason = latestAIModel.Status.LastFailureReason
 
 			latestAIModel = freshAIModel
 		}
@@ -1713,7 +1715,14 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 		if statusRetryCount > 0 {
 			log.Info("Status update succeeded after retries",
 				"name", aiModel.Name,
-				"attempts", statusRetryCount+1)
+				"attempts", statusRetryCount+1,
+				"oldPhase", originalStatus.Phase,
+				"newPhase", latestAIModel.Status.Phase)
+		} else {
+			log.Info("Status update succeeded",
+				"name", aiModel.Name,
+				"oldPhase", originalStatus.Phase,
+				"newPhase", latestAIModel.Status.Phase)
 		}
 		return true, nil
 	})
