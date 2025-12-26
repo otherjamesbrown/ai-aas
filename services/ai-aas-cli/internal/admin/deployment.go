@@ -14,7 +14,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -170,17 +169,14 @@ func queryDeploymentStatusesFromAPI(ctx context.Context, client *deploymentregis
 		return []map[string]interface{}{modelToStatusMap(model)}, nil
 	}
 
-	// List all models in the environment
-	resp, err := client.List(ctx, deploymentregistry.ListParams{
-		Environment: environment,
-		Limit:       1000, // High limit to get all results
-	})
+	// List all models in the environment with proper pagination
+	models, err := listAllModels(ctx, client, environment, "")
 	if err != nil {
 		return nil, fmt.Errorf("list models: %w", err)
 	}
 
-	statuses := make([]map[string]interface{}, 0, len(resp.Models))
-	for _, model := range resp.Models {
+	statuses := make([]map[string]interface{}, 0, len(models))
+	for _, model := range models {
 		statuses = append(statuses, modelToStatusMap(&model))
 	}
 
@@ -205,11 +201,3 @@ func modelToStatusMap(model *deploymentregistry.Model) map[string]interface{} {
 	}
 }
 
-// isNotFoundError checks if an error indicates a not found condition.
-func isNotFoundError(err error) bool {
-	if err == nil {
-		return false
-	}
-	errStr := err.Error()
-	return strings.Contains(errStr, "not found") || strings.Contains(errStr, "404")
-}

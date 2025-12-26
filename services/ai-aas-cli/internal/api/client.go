@@ -132,6 +132,7 @@ func (c *Client) Request(ctx context.Context, method, path string, body interfac
 		if err := json.Unmarshal(respBody, &apiErr); err != nil {
 			return fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(respBody))
 		}
+		apiErr.StatusCode = resp.StatusCode
 		return &apiErr
 	}
 

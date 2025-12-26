@@ -19,7 +19,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/api"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/client/deploymentregistry"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/errors"
@@ -41,25 +40,6 @@ func RegistryCommand() *cobra.Command {
 	cmd.AddCommand(registryListCommand())
 
 	return cmd
-}
-
-// newRegistryClient creates a deployment registry client from config.
-func newRegistryClient(cfg *config.Config) *deploymentregistry.Client {
-	endpoint := cfg.AdminAPIEndpoint
-	if endpoint == "" {
-		endpoint = cfg.APIEndpoint
-	}
-
-	opts := []api.ClientOption{}
-	if cfg.TLSInsecure {
-		opts = append(opts, api.WithInsecureSkipVerify())
-	}
-	if cfg.Timeout > 0 {
-		opts = append(opts, api.WithTimeout(time.Duration(cfg.Timeout)*time.Second))
-	}
-
-	apiClient := api.NewClient(endpoint, cfg.APIKey, opts...)
-	return deploymentregistry.NewClient(apiClient)
 }
 
 func registryRegisterCommand() *cobra.Command {
@@ -286,8 +266,8 @@ func runRegistryDeregister(cmd *cobra.Command, args []string, modelName, environ
 
 	model, err := client.UpdateStatus(ctx, modelName, environment, deploymentregistry.StatusDisabled)
 	if err != nil {
-		// Check if it's a not found error
-		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "404") {
+		// Check if it's a not found error using typed error checking
+		if isNotFoundError(err) {
 			return errors.NewOperationError(
 				fmt.Sprintf("model not found: %s in %s environment", modelName, environment),
 				"Check that the model name and environment are correct.",
@@ -418,8 +398,8 @@ func updateModelStatus(modelName, environment, status string, quiet, dryRun bool
 
 	model, err := client.UpdateStatus(ctx, modelName, environment, status)
 	if err != nil {
-		// Check if it's a not found error
-		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "404") {
+		// Check if it's a not found error using typed error checking
+		if isNotFoundError(err) {
 			return errors.NewOperationError(
 				fmt.Sprintf("model not found: %s in %s environment", modelName, environment),
 				"Check that the model name and environment are correct.",
@@ -488,17 +468,13 @@ func runRegistryList(cmd *cobra.Command, args []string, environment, status, fla
 		)
 	}
 
-	// Create API client and list via Admin API
+	// Create API client and list via Admin API with pagination
 	client := newRegistryClient(cfg)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	resp, err := client.List(ctx, deploymentregistry.ListParams{
-		Environment: environment,
-		Status:      status,
-		Limit:       1000, // High limit to get all results
-	})
+	models, err := listAllModels(ctx, client, environment, status)
 	if err != nil {
 		return errors.NewOperationError(
 			fmt.Sprintf("failed to list registry: %v", err),
@@ -506,8 +482,8 @@ func runRegistryList(cmd *cobra.Command, args []string, environment, status, fla
 		)
 	}
 
-	entries := make([]map[string]interface{}, 0, len(resp.Models))
-	for _, model := range resp.Models {
+	entries := make([]map[string]interface{}, 0, len(models))
+	for _, model := range models {
 		healthCheck := ""
 		if model.LastHealthCheckAt != nil {
 			healthCheck = model.LastHealthCheckAt.Format(time.RFC3339)
