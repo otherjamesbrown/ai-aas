@@ -38,7 +38,7 @@ func DefaultRetryConfig() RetryConfig {
 		MaxAttempts:  3,
 		InitialDelay: 1 * time.Second,
 		MaxDelay:     4 * time.Second,
-		Timeout:      30 * time.Second,
+		Timeout:      90 * time.Second, // Increased from 30s for GPU inference validation
 	}
 }
 

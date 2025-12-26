@@ -25,11 +25,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.uber.org/zap"
+
+	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/adapter/triton"
 )
 
 // Loader manages configuration loading and watching from Config Service.
@@ -52,14 +55,99 @@ const (
 
 // RoutingPolicy represents a routing policy configuration.
 type RoutingPolicy struct {
-	PolicyID         string
-	OrganizationID   string // "*" for global
-	Model            string
-	Backends         []BackendWeight
+	PolicyID          string
+	OrganizationID    string // "*" for global
+	Model             string // Full internal model path (e.g., "unsloth/gpt-oss-20b")
+	ExternalName      string // Name exposed in OpenAI API (e.g., "gpt-oss-20b")
+	Backends          []BackendWeight
 	FailoverThreshold int
 	DegradedBackends  []string
-	UpdatedAt        time.Time
-	Version          int64
+	BackendType       string              // "openai" (default) | "triton" | "triton-grpc" - protocol for backend communication
+	Tokenizer         string              // tiktoken encoding name (e.g., cl100k_base, llama3) for token counting
+	TritonConfig      *TritonConfig       // Optional Triton-specific configuration
+	PreprocessorConfig *PreprocessorConfig // Optional preprocessor service configuration
+	UpdatedAt         time.Time
+	Version           int64
+}
+
+// TritonConfig holds Triton-specific backend configuration.
+// Used for both HTTP and gRPC protocol options.
+type TritonConfig struct {
+	// Protocol specifies the communication protocol: "http" (default) or "grpc"
+	Protocol string
+
+	// HTTPPort is the port for HTTP inference (default: 8000)
+	HTTPPort int
+
+	// GRPCPort is the port for gRPC inference (default: 8001)
+	GRPCPort int
+
+	// GRPCSecure enables TLS for gRPC connections
+	GRPCSecure bool
+}
+
+// DefaultTritonConfig returns a TritonConfig with default values.
+// Note: TRT-LLM/Triton uses port 9000 for gRPC by default (not Triton's standard 8001)
+func DefaultTritonConfig() *TritonConfig {
+	return &TritonConfig{
+		Protocol: "http",
+		HTTPPort: 8000,
+		GRPCPort: 9000, // TRT-LLM default gRPC port
+	}
+}
+
+// IsGRPC returns true if the Triton backend should use gRPC protocol.
+func (t *TritonConfig) IsGRPC() bool {
+	if t == nil {
+		return false
+	}
+	return t.Protocol == "grpc"
+}
+
+// GetGRPCPort returns the gRPC port, using default if not set.
+func (t *TritonConfig) GetGRPCPort() int {
+	if t == nil || t.GRPCPort == 0 {
+		return 8001
+	}
+	return t.GRPCPort
+}
+
+// GetHTTPPort returns the HTTP port, using default if not set.
+func (t *TritonConfig) GetHTTPPort() int {
+	if t == nil || t.HTTPPort == 0 {
+		return 8000
+	}
+	return t.HTTPPort
+}
+
+// PreprocessorConfig holds configuration for the preprocessing service.
+// The preprocessor applies model-specific chat templates using HuggingFace.
+type PreprocessorConfig struct {
+	// Enabled determines if preprocessing should be applied
+	Enabled bool `json:"enabled"`
+
+	// Endpoint is the gRPC address of the preprocessor service
+	// Example: "preprocessor-service.development.svc.cluster.local:50051"
+	Endpoint string `json:"endpoint"`
+
+	// ModelID is the HuggingFace model ID for tokenizer lookup
+	// Example: "meta-llama/Llama-3.1-8B-Instruct"
+	ModelID string `json:"model_id"`
+
+	// BypassOnFailure determines behavior when preprocessing fails
+	// true = bypass and use original request, false = fail the request
+	BypassOnFailure bool `json:"bypass_on_failure"`
+
+	// Timeout for preprocessing requests (default: 5s)
+	Timeout time.Duration `json:"timeout,omitempty"`
+}
+
+// GetTimeout returns the timeout, using default if not set.
+func (p *PreprocessorConfig) GetTimeout() time.Duration {
+	if p == nil || p.Timeout == 0 {
+		return 5 * time.Second
+	}
+	return p.Timeout
 }
 
 // BackendWeight defines a backend with its routing weight.
@@ -279,8 +367,14 @@ func (l *Loader) handleWatchEvent(ctx context.Context, event *clientv3.Event) er
 // GetPolicy retrieves a routing policy for the given organization and model.
 // Returns nil if no policy is found.
 // First checks cache, then etcd if cache miss and etcd is available.
+//
+// Model name resolution:
+//   - First tries exact match (e.g., "unsloth/gpt-oss-20b")
+//   - If no "/" in model name, tries external_name lookup (explicit mapping from OpenAI API name)
+//   - Falls back to alias lookup by matching models ending with "/<model>"
+//     (e.g., "gpt-oss-20b" matches "unsloth/gpt-oss-20b")
 func (l *Loader) GetPolicy(organizationID, model string) (*RoutingPolicy, error) {
-	// First check cache
+	// First check cache with exact match
 	if l.cache != nil {
 		policy, err := l.cache.GetPolicy(organizationID, model)
 		if err == nil && policy != nil {
@@ -291,6 +385,33 @@ func (l *Loader) GetPolicy(organizationID, model string) (*RoutingPolicy, error)
 			policy, err := l.cache.GetPolicy(etcdGlobalOrgID, model)
 			if err == nil && policy != nil {
 				return policy, nil
+			}
+		}
+
+		// External name lookup: if model has no "/", try finding a policy by external_name
+		if !strings.Contains(model, "/") {
+			// Try external name match first (explicit configuration)
+			policy, err := l.cache.GetPolicyByExternalName(organizationID, model)
+			if err == nil && policy != nil {
+				return policy, nil
+			}
+			if organizationID != etcdGlobalOrgID {
+				policy, err := l.cache.GetPolicyByExternalName(etcdGlobalOrgID, model)
+				if err == nil && policy != nil {
+					return policy, nil
+				}
+			}
+
+			// Fall back to alias lookup (suffix matching for backwards compatibility)
+			policy, err = l.cache.GetPolicyByAlias(organizationID, model)
+			if err == nil && policy != nil {
+				return policy, nil
+			}
+			if organizationID != etcdGlobalOrgID {
+				policy, err := l.cache.GetPolicyByAlias(etcdGlobalOrgID, model)
+				if err == nil && policy != nil {
+					return policy, nil
+				}
 			}
 		}
 	}
@@ -319,6 +440,26 @@ func (l *Loader) GetPolicy(organizationID, model string) (*RoutingPolicy, error)
 					_ = l.cache.StorePolicy(ctx, policy)
 				}
 				return policy, nil
+			}
+		}
+
+		// Alias lookup from etcd if model has no "/"
+		if !strings.Contains(model, "/") {
+			policy, err := l.getPolicyByAliasFromEtcd(ctx, organizationID, model)
+			if err == nil && policy != nil {
+				if l.cache != nil {
+					_ = l.cache.StorePolicy(ctx, policy)
+				}
+				return policy, nil
+			}
+			if organizationID != etcdGlobalOrgID {
+				policy, err := l.getPolicyByAliasFromEtcd(ctx, etcdGlobalOrgID, model)
+				if err == nil && policy != nil {
+					if l.cache != nil {
+						_ = l.cache.StorePolicy(ctx, policy)
+					}
+					return policy, nil
+				}
 			}
 		}
 	}
@@ -350,6 +491,32 @@ func (l *Loader) getPolicyFromEtcd(ctx context.Context, organizationID, model st
 // etcdPolicyKey generates an etcd key for a routing policy.
 func etcdPolicyKey(organizationID, model string) string {
 	return fmt.Sprintf("%s/%s/%s", etcdKeyPrefix, organizationID, model)
+}
+
+// getPolicyByAliasFromEtcd searches for a policy by alias (model name suffix).
+// For example, alias "gpt-oss-20b" matches policy with model "unsloth/gpt-oss-20b".
+func (l *Loader) getPolicyByAliasFromEtcd(ctx context.Context, organizationID, alias string) (*RoutingPolicy, error) {
+	// List all policies for this org and find one matching the alias
+	prefix := fmt.Sprintf("%s/%s/", etcdKeyPrefix, organizationID)
+	suffix := "/" + alias
+
+	resp, err := l.client.Get(ctx, prefix, clientv3.WithPrefix())
+	if err != nil {
+		return nil, fmt.Errorf("etcd prefix get: %w", err)
+	}
+
+	for _, kv := range resp.Kvs {
+		var policy RoutingPolicy
+		if err := json.Unmarshal(kv.Value, &policy); err != nil {
+			continue
+		}
+		// Check if the model name ends with the alias (e.g., "unsloth/gpt-oss-20b" ends with "/gpt-oss-20b")
+		if strings.HasSuffix(policy.Model, suffix) {
+			return &policy, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no policy found with alias %s", alias)
 }
 
 // Stop stops watching for configuration updates and closes the etcd connection.
@@ -395,5 +562,96 @@ func (l *Loader) Health(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// ValidateTritonPolicy validates a routing policy configured for Triton backend.
+// This function performs the following validations:
+//   - Tokenizer encoding must be valid (strict - returns error if invalid)
+//   - Backend health is checked (warning only - logs if unreachable)
+//
+// This implements spec032 FR-5 (Configuration Validation).
+func (l *Loader) ValidateTritonPolicy(ctx context.Context, policy *RoutingPolicy, backendEndpoint string) error {
+	if policy.BackendType != "triton" {
+		return nil // No validation needed for non-triton backends
+	}
+
+	// 1. Validate tokenizer encoding exists (strict - fail if invalid)
+	if policy.Tokenizer == "" {
+		l.logger.Error("triton policy missing tokenizer",
+			zap.String("policy_id", policy.PolicyID),
+			zap.String("model", policy.Model),
+		)
+		return fmt.Errorf("tokenizer encoding is required for triton backend type")
+	}
+
+	// Try to create a tokenizer with this encoding
+	_, err := triton.NewTokenizer(policy.Tokenizer)
+	if err != nil {
+		l.logger.Error("triton policy has invalid tokenizer encoding",
+			zap.String("policy_id", policy.PolicyID),
+			zap.String("model", policy.Model),
+			zap.String("tokenizer", policy.Tokenizer),
+			zap.Error(err),
+		)
+		return fmt.Errorf("invalid tokenizer encoding %q: %w", policy.Tokenizer, err)
+	}
+
+	l.logger.Debug("triton policy tokenizer validation passed",
+		zap.String("policy_id", policy.PolicyID),
+		zap.String("tokenizer", policy.Tokenizer),
+	)
+
+	// 2. Validate backend health (warning only - logs if unreachable)
+	// Only check if a backend endpoint is provided
+	if backendEndpoint != "" {
+		l.checkTritonBackendHealth(ctx, policy, backendEndpoint)
+	}
+
+	return nil
+}
+
+// checkTritonBackendHealth checks if a Triton backend is reachable.
+// This is a warning-only check - it logs issues but doesn't fail policy sync.
+func (l *Loader) checkTritonBackendHealth(ctx context.Context, policy *RoutingPolicy, backendEndpoint string) {
+	// Triton V2 health endpoint: /v2/health/ready
+	healthURL := strings.TrimSuffix(backendEndpoint, "/") + "/v2/health/ready"
+
+	client := &http.Client{Timeout: 3 * time.Second}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
+	if err != nil {
+		l.logger.Warn("failed to create triton health check request",
+			zap.String("policy_id", policy.PolicyID),
+			zap.String("endpoint", backendEndpoint),
+			zap.Error(err),
+		)
+		return
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		l.logger.Warn("triton backend unreachable",
+			zap.String("policy_id", policy.PolicyID),
+			zap.String("model", policy.Model),
+			zap.String("endpoint", backendEndpoint),
+			zap.Error(err),
+		)
+		return
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		l.logger.Warn("triton backend unhealthy",
+			zap.String("policy_id", policy.PolicyID),
+			zap.String("model", policy.Model),
+			zap.String("endpoint", backendEndpoint),
+			zap.Int("status", resp.StatusCode),
+		)
+		return
+	}
+
+	l.logger.Debug("triton backend health check passed",
+		zap.String("policy_id", policy.PolicyID),
+		zap.String("endpoint", backendEndpoint),
+	)
 }
 

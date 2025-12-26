@@ -369,7 +369,7 @@ When you deploy a model with KServe:
 3. **Knative controller** creates a Configuration, Revision, and Route
 4. **net-istio controller** automatically creates an Istio VirtualService
 5. **VirtualService** routes traffic from the Knative Gateway to the model pod
-6. **External access**: `http://<model-name>.<namespace>.dev.ai-aas.local` → Istio ingress gateway → VirtualService → Pod
+6. **External access**: `http://<model-name>.<namespace>.dev.otherjamesbrown.com` → Istio ingress gateway → VirtualService → Pod
 
 ### Example: VirtualService for a Model
 
@@ -389,7 +389,7 @@ spec:
     - knative-serving/knative-local-gateway    # Cluster-local gateway
   hosts:
     - gpt-oss-20b-development-predictor.development
-    - gpt-oss-20b-development-predictor.development.dev.ai-aas.local
+    - gpt-oss-20b-development-predictor.development.dev.otherjamesbrown.com
     - gpt-oss-20b-development-predictor.development.svc
     - gpt-oss-20b-development-predictor.development.svc.cluster.local
   http:
@@ -484,7 +484,7 @@ spec:
         name: http
         protocol: HTTP
       hosts:
-        - "custom.dev.ai-aas.local"
+        - "custom.dev.otherjamesbrown.com"
 ```
 
 ### VirtualService Example (Manual)
@@ -497,7 +497,7 @@ metadata:
   namespace: development
 spec:
   hosts:
-    - "custom.dev.ai-aas.local"
+    - "custom.dev.otherjamesbrown.com"
   gateways:
     - custom-gateway
   http:
@@ -705,7 +705,7 @@ kubectl exec -n istio-system deploy/istiod -- pilot-discovery request GET /debug
 
 ### Ingress Gateway Not Reachable
 
-**Symptoms**: Cannot access `http://<model>.development.dev.ai-aas.local`
+**Symptoms**: Cannot access `http://<model>.development.dev.otherjamesbrown.com`
 
 **Debug steps**:
 
@@ -724,7 +724,7 @@ kubectl logs -n istio-system -l app=istio-ingressgateway
 kubectl get gateway knative-ingress-gateway -n knative-serving
 
 # 5. Check DNS resolution
-nslookup gpt-oss-20b-development-predictor.development.dev.ai-aas.local
+nslookup gpt-oss-20b-development-predictor.development.dev.otherjamesbrown.com
 # Should resolve to LoadBalancer IP
 ```
 
@@ -889,7 +889,7 @@ kubectl logs -n istio-system -l app=istio-ingressgateway | grep "503"
 LB_IP=$(kubectl get svc istio-ingressgateway-development -n istio-system -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 
 # Test HTTP connectivity
-curl -v -H "Host: gpt-oss-20b-development-predictor.development.dev.ai-aas.local" http://$LB_IP/
+curl -v -H "Host: gpt-oss-20b-development-predictor.development.dev.otherjamesbrown.com" http://$LB_IP/
 
 # Test cluster-local gateway (from inside cluster)
 kubectl run test-pod --rm -it --image=curlimages/curl -- sh
@@ -1032,7 +1032,7 @@ meshConfig:
 6. **Verify functionality**:
    ```bash
    # Test model inference
-   curl http://gpt-oss-20b-development-predictor.development.dev.ai-aas.local/v1/chat/completions
+   curl http://gpt-oss-20b-development-predictor.development.dev.otherjamesbrown.com/v1/chat/completions
    ```
 
 7. **Promote to staging/production** after successful testing

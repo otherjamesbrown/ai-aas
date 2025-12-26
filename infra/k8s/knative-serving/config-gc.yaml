@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-gc
+  namespace: knative-serving
+  labels:
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/name: knative-serving
+data:
+  # Garbage collection settings optimized for GPU workloads
+  # GPU resources are expensive and limited, so we aggressively clean up
+  # old revisions to prevent resource exhaustion.
+
+  # Keep only 1 non-active revision for quick rollback capability
+  min-non-active-revisions: "1"
+
+  # Maximum 2 non-active revisions to prevent GPU resource buildup
+  # This ensures that even in rapid update scenarios, we don't accumulate
+  # more than 2 old revisions holding GPUs
+  max-non-active-revisions: "2"
+
+  # Clean up revisions 5 minutes after they become inactive
+  # This is aggressive but necessary for GPU workloads where each revision
+  # may hold a full GPU (e.g., 1 GPU per revision)
+  retain-since-last-active-time: "5m"
+
+  # Clean up revisions 10 minutes after creation if they're not active
+  # This prevents CrashLoopBackOff revisions from holding resources indefinitely
+  retain-since-create-time: "10m"

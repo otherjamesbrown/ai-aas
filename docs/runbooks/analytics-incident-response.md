@@ -48,7 +48,7 @@ This runbook provides step-by-step procedures for responding to incidents affect
 
 1. **Check Reliability API**:
    ```bash
-   curl "https://api.ai-aas.local/analytics/v1/orgs/{orgId}/reliability?start={start}&end={end}&granularity=hour" \
+   curl "https://api.dev.otherjamesbrown.com/analytics/v1/orgs/{orgId}/reliability?start={start}&end={end}&granularity=hour" \
      -H "X-Actor-Subject: operator" \
      -H "X-Actor-Roles: analytics:reliability:read,admin"
    ```
@@ -101,7 +101,7 @@ This runbook provides step-by-step procedures for responding to incidents affect
 
 1. **Check Reliability API**:
    ```bash
-   curl "https://api.ai-aas.local/analytics/v1/orgs/{orgId}/reliability?start={start}&end={end}&granularity=hour&percentile=p95" \
+   curl "https://api.dev.otherjamesbrown.com/analytics/v1/orgs/{orgId}/reliability?start={start}&end={end}&granularity=hour&percentile=p95" \
      -H "X-Actor-Subject: operator" \
      -H "X-Actor-Roles: analytics:reliability:read,admin"
    ```
@@ -265,7 +265,7 @@ Export jobs are created via the API and processed asynchronously by the export w
 
 ```bash
 # Create export job
-curl -X POST "https://api.ai-aas.local/analytics/v1/orgs/{orgId}/exports" \
+curl -X POST "https://api.dev.otherjamesbrown.com/analytics/v1/orgs/{orgId}/exports" \
   -H "X-Actor-Subject: user-123" \
   -H "X-Actor-Roles: analytics:exports:create,admin" \
   -H "Content-Type: application/json" \
@@ -278,12 +278,12 @@ curl -X POST "https://api.ai-aas.local/analytics/v1/orgs/{orgId}/exports" \
   }'
 
 # Check job status
-curl "https://api.ai-aas.local/analytics/v1/orgs/{orgId}/exports/{jobId}" \
+curl "https://api.dev.otherjamesbrown.com/analytics/v1/orgs/{orgId}/exports/{jobId}" \
   -H "X-Actor-Subject: user-123" \
   -H "X-Actor-Roles: analytics:exports:read,admin"
 
 # Download CSV (when status is succeeded)
-curl "https://api.ai-aas.local/analytics/v1/orgs/{orgId}/exports/{jobId}/download" \
+curl "https://api.dev.otherjamesbrown.com/analytics/v1/orgs/{orgId}/exports/{jobId}/download" \
   -H "X-Actor-Subject: user-123" \
   -H "X-Actor-Roles: analytics:exports:download,admin" \
   -L -o export.csv

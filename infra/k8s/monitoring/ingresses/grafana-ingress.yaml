@@ -1,0 +1,42 @@
+# Grafana Ingress
+# Exposes Grafana dashboard via HTTPS
+#
+# Points to kube-prometheus-stack Grafana (not standalone deployment)
+#
+# Domain Configuration:
+# ---------------------
+# This file uses environment-specific domain values. When creating for a new environment:
+# 1. Reference configs/environments/{env}.yaml for the correct baseDomain
+# 2. Replace "dev.otherjamesbrown.com" with the environment's baseDomain
+#
+# Access URL (Development): https://grafana.dev.otherjamesbrown.com
+#
+# Default credentials: admin / (retrieve from secret kube-prometheus-stack-grafana)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana-ingress
+  namespace: monitoring
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: grafana.dev.otherjamesbrown.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kube-prometheus-stack-grafana
+                port:
+                  number: 80
+  tls:
+    - secretName: grafana-tls
+      hosts:
+        - grafana.dev.otherjamesbrown.com

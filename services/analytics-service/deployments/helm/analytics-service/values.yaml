@@ -28,7 +28,7 @@ global:
     # Base domain for this environment (override per environment)
     base: "dev.otherjamesbrown.com"
     # Local hostname for /etc/hosts access (optional)
-    local: "dev.ai-aas.local"
+    local: "dev.otherjamesbrown.com"
     # Protocol for URLs
     protocol: "https"
   tls:

@@ -14,17 +14,17 @@ Extract spec number from argument.
 
 Check that dev validation passed:
 ```bash
-bd show ai-aas-spec$SPEC_NUMBER.dev
+bd show aas-spec$SPEC_NUMBER.dev
 ```
 
 If open issues exist, warn user before proceeding.
 
 ### Step 3: Find Epic Bead
 
-Epic bead ID follows convention: `ai-aas-spec$SPEC_NUMBER`
+Epic bead ID follows convention: `aas-spec$SPEC_NUMBER`
 
 ```bash
-bd show ai-aas-spec$SPEC_NUMBER
+bd show aas-spec$SPEC_NUMBER
 ```
 
 ### Step 4: Create Staging Sub-Bead
@@ -32,11 +32,11 @@ bd show ai-aas-spec$SPEC_NUMBER
 Create staging bead with period-based naming:
 
 ```bash
-bd create --id="ai-aas-spec$SPEC_NUMBER.stg" --title="Spec $SPEC_NUMBER - Staging Validation" --type=task --priority=1 --parent=ai-aas-spec$SPEC_NUMBER
-bd update ai-aas-spec$SPEC_NUMBER.stg --label="spec$SPEC_NUMBER" --label="staging" --label="validation"
+bd create --id="aas-spec$SPEC_NUMBER.stg" --title="Spec $SPEC_NUMBER - Staging Validation" --type=task --priority=1 --parent=aas-spec$SPEC_NUMBER
+bd update aas-spec$SPEC_NUMBER.stg --label="spec$SPEC_NUMBER" --label="staging" --label="validation"
 ```
 
-Staging bead ID: `ai-aas-spec$SPEC_NUMBER.stg`
+Staging bead ID: `aas-spec$SPEC_NUMBER.stg`
 
 ### Step 5: Create PR develop → staging
 
@@ -48,15 +48,15 @@ gh pr create \
   --body "Promotes changes from spec $SPEC_NUMBER after successful development validation.
 
 Related beads:
-- Epic: ai-aas-spec$SPEC_NUMBER
-- Dev validation: ai-aas-spec$SPEC_NUMBER.dev
-- Staging: ai-aas-spec$SPEC_NUMBER.stg"
+- Epic: aas-spec$SPEC_NUMBER
+- Dev validation: aas-spec$SPEC_NUMBER.dev
+- Staging: aas-spec$SPEC_NUMBER.stg"
 ```
 
 ### Step 6: Update Bead with PR
 
 ```bash
-bd comments add ai-aas-spec$SPEC_NUMBER.stg "Created PR #$PR_NUMBER for develop → staging promotion"
+bd comments add aas-spec$SPEC_NUMBER.stg "Created PR #$PR_NUMBER for develop → staging promotion"
 ```
 
 ### Step 7: After PR Merge - Run Validation
@@ -70,7 +70,7 @@ Similar to dev validation:
 ### Step 8: Create Issue Beads for Failures
 
 ```bash
-bd create --title="Staging: $ISSUE_DESCRIPTION" --type=bug --priority=1 --parent=ai-aas-spec$SPEC_NUMBER.stg
+bd create --title="Staging: $ISSUE_DESCRIPTION" --type=bug --priority=1 --parent=aas-spec$SPEC_NUMBER.stg
 bd update $ISSUE_BEAD_ID --label="spec$SPEC_NUMBER" --label="staging-issue"
 ```
 
@@ -81,7 +81,7 @@ bd update $ISSUE_BEAD_ID --label="spec$SPEC_NUMBER" --label="staging-issue"
  /jb-6-staging $ARGUMENTS - COMPLETE
 ═══════════════════════════════════════════════════
 
- Staging Bead:     ai-aas-spec$SPEC_NUMBER.stg
+ Staging Bead:     aas-spec$SPEC_NUMBER.stg
  PR Created:       #$PR_NUMBER (develop → staging)
 
  Validation Status:
@@ -100,5 +100,5 @@ bd update $ISSUE_BEAD_ID --label="spec$SPEC_NUMBER" --label="staging-issue"
 ## Notes
 
 - Staging validation may find issues not caught in dev
-- Track all fixes as child beads of ai-aas-spec$SPEC_NUMBER.stg
+- Track all fixes as child beads of aas-spec$SPEC_NUMBER.stg
 - Production promotion requires clean staging validation

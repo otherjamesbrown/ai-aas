@@ -1,3 +1,4 @@
+-- +goose Up
 BEGIN;
 
 CREATE TABLE IF NOT EXISTS analytics_hourly_rollups (

@@ -17,4 +17,3 @@ DROP TABLE IF EXISTS analytics.usage_events;
 -- Note: We don't drop the schema or extension as they may be used by other objects
 
 COMMIT;
-

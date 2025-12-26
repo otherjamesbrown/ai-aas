@@ -6,13 +6,10 @@
 # This file uses environment-specific domain values. When creating for a new environment:
 # 1. Reference configs/environments/{env}.yaml for the correct baseDomain
 # 2. Replace "dev.otherjamesbrown.com" with the environment's baseDomain
-# 3. Replace "dev.ai-aas.local" with the environment's localDomain
 #
-# Access URLs (Development):
-# - Hostname: https://loki.dev.ai-aas.local (requires /etc/hosts entry)
-# - Public DNS: https://loki.dev.otherjamesbrown.com
+# Access URL (Development): https://loki.dev.otherjamesbrown.com
 #
-# Example queries:
+# Example query:
 # curl -s 'https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range' \
 #   --data-urlencode 'query={level="error"}' \
 #   --data-urlencode 'limit=50'
@@ -24,22 +21,12 @@ metadata:
   annotations:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
-    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: nginx
   rules:
-    - host: loki.dev.ai-aas.local
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: loki
-                port:
-                  number: 3100
     - host: loki.dev.otherjamesbrown.com
       http:
         paths:

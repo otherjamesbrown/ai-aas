@@ -1,0 +1,31 @@
+# Development environment values for AI Model Operator
+replicaCount: 1
+
+image:
+  repository: ghcr.io/otherjamesbrown/ai-aas/ai-model-operator
+  pullPolicy: Always
+  tag: "develop"  # Use develop branch builds
+
+# Model downloader image (Go-based, supports Linode Object Storage)
+downloaderImage: "ghcr.io/otherjamesbrown/ai-aas/model-downloader:dev"
+
+# Development gets slightly more resources for debugging
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Environment-specific configuration
+env:
+  - name: LOG_LEVEL
+    value: "debug"
+  - name: ADMIN_API_BASE_URL
+    value: "http://admin-api-service-development.admin-api-service.svc.cluster.local:8080"
+  - name: ADMIN_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: admin-api-credentials
+        key: api-key

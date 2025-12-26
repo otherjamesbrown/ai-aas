@@ -86,17 +86,9 @@ variable "backup_enabled" {
   default     = false
 }
 
-variable "backup_schedule" {
-  description = "Backup schedule (daily, weekly, biweekly)"
-  type = object({
-    day    = string
-    window = string
-  })
-  default = {
-    day    = "Sunday"
-    window = "W0"
-  }
-}
+# DEPRECATED: backup_schedule is no longer supported by the Linode provider
+# Backups are enabled via backups_enabled but schedule is managed by Linode
+# variable "backup_schedule" { ... }
 
 variable "watchdog_enabled" {
   description = "Enable Linode Watchdog service"

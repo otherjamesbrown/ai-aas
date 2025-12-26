@@ -21,7 +21,7 @@ This implementation provides all the necessary infrastructure and code changes t
 ```
 infra/k8s/
 ├── knative-serving/
-│   ├── config-domain.yaml          # Knative domain configuration (dev.ai-aas.local)
+│   ├── config-domain.yaml          # Knative domain configuration (dev.otherjamesbrown.com)
 │   └── config-network.yaml         # Knative network configuration (Istio integration)
 └── kserve/
     ├── base/

@@ -8,10 +8,10 @@ The AI-AAS platform exposes a public HTTPS API that implements OpenAI-compatible
 
 ## Endpoint
 
-**Base URL**: `https://api.dev.ai-aas.local`
+**Base URL**: `https://api.dev.otherjamesbrown.com`
 **Protocol**: HTTPS (TLS 1.2+)
 
-**Note**: For development environments where DNS is not configured, you can use the ingress IP address `172.232.58.222` with the `Host` header set to `api.dev.ai-aas.local`.
+**Note**: For development environments where DNS is not configured, you can use the ingress IP address `172.232.58.222` with the `Host` header set to `api.dev.otherjamesbrown.com`.
 
 ## Authentication
 
@@ -33,7 +33,7 @@ OpenAI-compatible chat completions endpoint.
 
 **Example Request**:
 ```bash
-curl -X POST https://api.dev.ai-aas.local/v1/chat/completions \
+curl -X POST https://api.dev.otherjamesbrown.com/v1/chat/completions \
   -H "X-API-Key: <your-api-key>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -79,7 +79,7 @@ OpenAI-compatible text completions endpoint.
 
 **Example Request**:
 ```bash
-curl -k -X POST https://api.dev.ai-aas.local/v1/completions \
+curl -k -X POST https://api.dev.otherjamesbrown.com/v1/completions \
   -H "X-API-Key: <your-api-key>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -150,7 +150,7 @@ Messages must include `role` and `content`:
 
 To list available models:
 ```bash
-curl -k -X GET https://api.dev.ai-aas.local/v1/models \
+curl -k -X GET https://api.dev.otherjamesbrown.com/v1/models \
   -H "X-API-Key: <your-api-key>"
 ```
 
@@ -211,7 +211,7 @@ from openai import OpenAI
 
 client = OpenAI(
     api_key="<your-api-key>",
-    base_url="https://api.dev.ai-aas.local/v1"
+    base_url="https://api.dev.otherjamesbrown.com/v1"
     # For development with self-signed certs, add:
     # http_client=httpx.Client(verify=False)
 )
@@ -236,7 +236,7 @@ import https from 'https';
 
 const client = new OpenAI({
   apiKey: '<your-api-key>',
-  baseURL: 'https://api.dev.ai-aas.local/v1'
+  baseURL: 'https://api.dev.otherjamesbrown.com/v1'
   // For development with self-signed certs, add:
   // httpAgent: new https.Agent({ rejectUnauthorized: false })
 });
@@ -269,7 +269,7 @@ The platform enforces HTTPS for security. HTTP requests will be redirected to HT
 When DNS is not configured, you can use the ingress IP address with the `Host` header:
 ```bash
 curl -X POST https://172.232.58.222/v1/chat/completions \
-  -H "Host: api.dev.ai-aas.local" \
+  -H "Host: api.dev.otherjamesbrown.com" \
   -H "X-API-Key: <your-api-key>" \
   ...
 ```
@@ -312,7 +312,7 @@ X-RateLimit-Reset: 1732147260
 ### Certificate Errors
 For development environments with self-signed certificates, use `-k` flag in curl:
 ```bash
-curl -k https://api.dev.ai-aas.local/v1/chat/completions ...
+curl -k https://api.dev.otherjamesbrown.com/v1/chat/completions ...
 ```
 
 Or disable certificate verification in client libraries (development only).
@@ -326,7 +326,7 @@ kubectl get ingress -n development api-router-service-development-api-router-ser
 ### Authentication Errors
 Verify your API key is valid:
 ```bash
-curl -k -X POST https://api.dev.ai-aas.local/v1/chat/completions \
+curl -k -X POST https://api.dev.otherjamesbrown.com/v1/chat/completions \
   -H "X-API-Key: <your-api-key>" \
   -v
 ```
@@ -336,7 +336,7 @@ Check the response status code and error message.
 ### Model Not Available
 List available models to verify the model name:
 ```bash
-curl -k -X GET https://api.dev.ai-aas.local/v1/models \
+curl -k -X GET https://api.dev.otherjamesbrown.com/v1/models \
   -H "X-API-Key: <your-api-key>"
 ```
 

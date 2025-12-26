@@ -297,9 +297,9 @@ kubectl get ksvc -n development
 
 ### Environment URLs
 
-- **Development**: `https://api.172.232.58.222.nip.io`
-- **Web Portal**: `https://portal.172.232.58.222.nip.io`
-- **Grafana**: `http://grafana.172.232.58.222.nip.io`
+- **Development**: `https://api.dev.otherjamesbrown.com`
+- **Web Portal**: `https://portal.dev.otherjamesbrown.com`
+- **Grafana**: `https://grafana.dev.otherjamesbrown.com`
 
 ---
 

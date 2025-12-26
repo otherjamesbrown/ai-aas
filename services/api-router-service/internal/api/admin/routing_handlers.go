@@ -139,9 +139,10 @@ func (h *Handler) MarkBackendHealthy(w http.ResponseWriter, r *http.Request) {
 		backendCfg, err := h.backendRegistry.GetBackend(backendID)
 		if err == nil {
 			endpoint := &routing.BackendEndpoint{
-				ID:   backendCfg.ID,
-				URI:  backendCfg.URI,
-				Timeout: backendCfg.Timeout,
+				ID:         backendCfg.ID,
+				URI:        backendCfg.URI,
+				Timeout:    backendCfg.Timeout,
+				HealthPath: backendCfg.GetHealthPath(),
 			}
 			_ = h.healthMonitor.CheckBackendNow(backendID, endpoint)
 		}

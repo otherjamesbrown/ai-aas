@@ -251,6 +251,17 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Set auto_grant for admin users
+	if containsRole(req.Roles, "admin") {
+		_, err := h.runtime.Postgres.SetUserAccessMode(ctx, orgID, createdUser.ID, "auto_grant")
+		if err != nil {
+			h.logger.Warn("failed to set auto_grant for admin user",
+				zap.String("user_id", createdUser.ID.String()),
+				zap.Error(err))
+			// Don't fail user creation, just log warning
+		}
+	}
+
 	// Store invite token hash in separate table (in tenant transaction for RLS)
 	tx, err := h.runtime.Postgres.Pool().BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
@@ -402,6 +413,17 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("failed to create user", zap.Error(err), zap.String("email", email))
 		http.Error(w, "failed to create user", http.StatusInternalServerError)
 		return
+	}
+
+	// Set auto_grant for admin users
+	if containsRole(req.Roles, "admin") {
+		_, err := h.runtime.Postgres.SetUserAccessMode(ctx, orgID, createdUser.ID, "auto_grant")
+		if err != nil {
+			h.logger.Warn("failed to set auto_grant for admin user",
+				zap.String("user_id", createdUser.ID.String()),
+				zap.Error(err))
+			// Don't fail user creation, just log warning
+		}
 	}
 
 	// Emit audit event
@@ -807,4 +829,14 @@ func (h *Handler) requireOrgAccess(ctx context.Context, orgID uuid.UUID) error {
 
 	// Otherwise, verify user is a member of the target org
 	return h.runtime.Postgres.ValidateUserOrgMembership(ctx, userID, orgID)
+}
+
+// containsRole checks if a role exists in the roles slice (case-insensitive).
+func containsRole(roles []string, target string) bool {
+	for _, r := range roles {
+		if strings.EqualFold(r, target) {
+			return true
+		}
+	}
+	return false
 }

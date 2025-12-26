@@ -174,7 +174,7 @@ A user can perform all ai-aas-cli operations via the web portal UI, with equival
 - **NFR-003**: Login page MUST load in under 3 seconds.
 - **NFR-004**: Service health check MUST display without visible flickering or rapid re-rendering.
 - **NFR-005**: API responses MUST complete in under 1 second for typical requests.
-- **NFR-006**: Tests MUST support execution against remote dev cluster (`portal.172.232.58.222.nip.io`).
+- **NFR-006**: Tests MUST support execution against remote dev cluster (`portal.dev.otherjamesbrown.com`).
 - **NFR-007**: Tests MUST have > 95% success rate (no flaky tests after 3 retries).
 - **NFR-008**: Portal MUST work correctly in localhost, nip.io, and production domain environments.
 - **NFR-009**: Portal MUST support system-aware theming with automatic light/dark mode detection.
@@ -253,7 +253,7 @@ Each task is complete when:
 1. Backend APIs remain stable and unchanged during UI rebuild
 2. Existing authentication flow (email/password, OAuth) continues to work
 3. Test users (`admin@example-acme.com`, `member@example-acme.com`) are seeded in dev environment
-4. Remote dev cluster (`portal.172.232.58.222.nip.io`) is accessible for testing
+4. Remote dev cluster (`portal.dev.otherjamesbrown.com`) is accessible for testing
 5. CI/CD pipeline can be updated to include Playwright smoke tests
 6. ArgoCD deployment to development environment is available
 

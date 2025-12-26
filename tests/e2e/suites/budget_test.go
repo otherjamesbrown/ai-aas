@@ -93,7 +93,7 @@ func TestBudgetExceededDenial(t *testing.T) {
 	
 	// If using IP address, set Host header
 	if isIPAddress(ctx.Config.APIURLs.APIRouterService) {
-		routerClient.SetHeader("Host", "api.dev.ai-aas.local")
+		routerClient.SetHeader("Host", "api.dev.otherjamesbrown.com")
 	}
 
 	// Get budget status to verify it exists

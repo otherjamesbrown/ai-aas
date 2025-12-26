@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, ReactNode 
 import { publicClient } from '@/lib/http/client';
 import { tokenManager } from '@/services/tokenManager';
 import { oauthConfig } from '@/config/api';
+import { logger } from '@/lib/logger';
 
 interface User {
   id: string;
@@ -83,12 +84,12 @@ export function AuthProvider({
             // tokenManager will handle refresh scheduling
             tokenManager.scheduleRefresh(3300); // 55 minutes default
           } catch (error) {
-            console.error('Failed to restore session:', error);
+            logger.error('Failed to restore session', { component: 'AuthProvider' }, error instanceof Error ? error : undefined);
             clearAuth();
           }
         }
       } catch (error) {
-        console.error('Auth initialization error:', error);
+        logger.error('Auth initialization error', { component: 'AuthProvider' }, error instanceof Error ? error : undefined);
       } finally {
         setIsLoading(false);
       }
@@ -156,7 +157,7 @@ export function AuthProvider({
       sessionStorage.setItem('oauth_state', authUrl.searchParams.get('state') || '');
       window.location.href = authUrl.toString();
     } catch (error) {
-      console.error('Login initiation failed:', error);
+      logger.error('Login initiation failed', { component: 'AuthProvider', action: 'login', provider }, error instanceof Error ? error : undefined);
       throw error;
     }
   };
@@ -206,13 +207,13 @@ export function AuthProvider({
           sessionStorage.setItem('auth_user', JSON.stringify(userInfo));
         } catch (userInfoError) {
           // Token is stored, login successful even without user info
-          console.warn('Failed to fetch user info:', userInfoError);
+          logger.warn('Failed to fetch user info', { component: 'AuthProvider', action: 'loginWithPassword', email });
         }
       } else {
         throw new Error('No access token received');
       }
     } catch (error) {
-      console.error('Password login failed:', error);
+      logger.error('Password login failed', { component: 'AuthProvider', action: 'loginWithPassword', email }, error instanceof Error ? error : undefined);
       clearAuth();
 
       let errorMessage = 'Login failed. Please try again.';
@@ -275,7 +276,7 @@ export function AuthProvider({
 
       return false;
     } catch (error) {
-      console.error('OAuth callback failed:', error);
+      logger.error('OAuth callback failed', { component: 'AuthProvider', action: 'handleCallback' }, error instanceof Error ? error : undefined);
       clearAuth();
       return false;
     }

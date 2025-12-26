@@ -1,0 +1,40 @@
+# Loki Log-Based Alerting Rules Application
+# ==========================================
+# Deploys PrometheusRule resources for Loki log-based alerting
+# Monitors: Service errors, log ingestion health, vLLM inference issues
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: loki-alerts-development
+  namespace: argocd
+  labels:
+    environment: development
+    app: loki-alerts
+    component: observability
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform-development
+  source:
+    repoURL: https://github.com/otherjamesbrown/ai-aas
+    targetRevision: develop
+    path: infra/k8s/monitoring/alerts
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

@@ -9,8 +9,8 @@ resource "null_resource" "prepare" {
 }
 
 resource "local_file" "applicationset" {
-  filename   = local.appset_path
-  content    = templatefile("${path.module}/templates/applicationset.yaml.tmpl", {
+  filename = local.appset_path
+  content = templatefile("${path.module}/templates/applicationset.yaml.tmpl", {
     environment = var.environment
     repo_url    = var.repo_url
     revision    = var.revision

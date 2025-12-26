@@ -1,5 +1,10 @@
 # KServe Management Guide
 
+---
+last_updated: 2025-12-12
+document_type: guide
+---
+
 Quick reference for managing KServe InferenceServices on the AI-AAS platform.
 
 ## Table of Contents
@@ -67,13 +72,15 @@ kubectl delete inferenceservice mistral-7b-instruct -n development
 
 ## Deploying New Models
 
-### 1. Create InferenceService Manifest
+### 1. Create AIModel Custom Resource
 
-Use the template from `infra/k8s/kserve/templates/inference-service-vllm-template.yaml`:
+The platform uses AIModel CRs (managed by the AI Model Operator) to deploy models. The operator automatically creates and manages the underlying KServe InferenceServices.
+
+Use the template from `infra/k8s/aimodels/staging/mistral-7b-instruct-v03.yaml`:
 
 ```yaml
-apiVersion: serving.kserve.io/v1beta1
-kind: InferenceService
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
 metadata:
   name: <model-name>
   namespace: development
@@ -81,51 +88,69 @@ metadata:
     app: vllm-inference
     model: <model-name>
     environment: development
-  annotations:
-    serving.kserve.io/deploymentMode: "Serverless"
-    autoscaling.knative.dev/target: "5"
-    autoscaling.knative.dev/scaleDownDelay: "5m"
 spec:
-  predictor:
-    minReplicas: 1
-    maxReplicas: 3
-    containers:
-      - name: kserve-container
-        image: vllm/vllm-openai:v0.6.3
-        args:
-          - --model=<huggingface-model-id>
-          - --dtype=float16
-          - --max-model-len=4096
-          - --gpu-memory-utilization=0.9
-          - --trust-remote-code
-          - --served-model-name=<model-name>
-        resources:
-          requests:
-            cpu: "4"
-            memory: "16Gi"
-            nvidia.com/gpu: 1
-          limits:
-            cpu: "8"
-            memory: "32Gi"
-            nvidia.com/gpu: 1
+  # Model identification
+  modelName: <model-name>
+  modelID: <huggingface-model-id>
+
+  # Deployment configuration
+  enabled: true
+  runtime: vllm
+
+  # Replica configuration
+  minReplicas: 1
+  maxReplicas: 3
+
+  # Resource requirements
+  resources:
+    requests:
+      cpu: "4"
+      memory: "16Gi"
+      nvidia.com/gpu: "1"
+    limits:
+      cpu: "8"
+      memory: "32Gi"
+      nvidia.com/gpu: "1"
+
+  # GPU node scheduling
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+    - key: gpu-workload
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+
+  # vLLM runtime arguments
+  runtimeArgs:
+    - --dtype=auto
+    - --max-model-len=4096
+    - --gpu-memory-utilization=0.9
+
+  # Security: only enable for trusted models
+  trustRemoteCode: true
 ```
 
 ### 2. Apply via GitOps
 
 ```bash
-# Save to infra/k8s/kserve/models/<model-name>.yaml
-git add infra/k8s/kserve/models/<model-name>.yaml
-git commit -m "Add <model-name> InferenceService"
+# Save to infra/k8s/aimodels/development/<model-name>.yaml
+git add infra/k8s/aimodels/development/<model-name>.yaml
+git commit -m "Add <model-name> AIModel CR"
 git push origin develop
 ```
 
-ArgoCD will automatically sync and deploy the model.
+ArgoCD will automatically sync and deploy the model. The AI Model Operator will create the KServe InferenceService and manage its lifecycle.
 
 ### 3. Verify Deployment
 
 ```bash
-# Watch status
-kubectl get inferenceservice <model-name> -n development -w
+# Check AIModel status
+kubectl get aimodel <model-name> -n development -w
+
+# Check InferenceService created by the operator
+kubectl get inferenceservice <model-name> -n development
 
 # Check pods
 kubectl get pods -n development -l serving.kserve.io/inferenceservice=<model-name>
@@ -255,6 +280,7 @@ spec:
 - **Don't use public service URLs** internally (adds unnecessary latency via Istio)
 - **Don't ignore resource limits** (GPU OOM kills are hard to debug)
 - **Don't commit secrets** to git (use Sealed Secrets for HF tokens)
+- **Don't use startupProbe** - KServe/Knative ignores it (see Health Probes section below)
 
 ### Resource Guidelines
 
@@ -271,6 +297,50 @@ For models with slow cold starts (>30s):
 2. Implement model caching with persistent volumes
 3. Use smaller quantized models (int8, int4)
 4. Pre-download models to nodes
+
+### Health Probes for Large Models
+
+**CRITICAL LIMITATION**: KServe/Knative does NOT support `startupProbe`. Any startupProbe defined in the InferenceService spec will be **silently ignored**.
+
+**Problem**: Large models (20B+ parameters) can take 5-10 minutes to initialize. Without startupProbe support, the liveness probe starts immediately and may kill the pod during initialization.
+
+**Solution**: Use lenient readinessProbe and livenessProbe settings:
+
+```yaml
+spec:
+  predictor:
+    containers:
+      - name: kserve-container
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60  # Delay before first check
+          periodSeconds: 10        # Check every 10 seconds
+          failureThreshold: 90     # Total: 60s + 90*10s = 16 minutes
+          timeoutSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 600  # Don't check for first 10 minutes
+          periodSeconds: 60         # Check every minute
+          failureThreshold: 10      # Allow 10 minutes of downtime
+          timeoutSeconds: 5
+```
+
+**Rationale**:
+- **readinessProbe**: Prevents traffic routing until model is loaded (can take 16 min)
+- **livenessProbe**: Avoids killing pod during initialization (10 min grace + 10 min tolerance)
+- **Without proper settings**: Pod enters crash loop, restarting repeatedly
+
+**Model Load Time Estimates** (GPU memory loading):
+- 7B params: 30-60 seconds
+- 13B params: 1-2 minutes
+- 20B params: 5-10 minutes
+- 70B+ params: 10-20 minutes
+
+Adjust `initialDelaySeconds` and `failureThreshold` based on observed model load times.
 
 ---
 
@@ -297,9 +367,9 @@ kubectl get ksvc -n development
 
 ### Environment URLs
 
-- **Development**: `https://api.172.232.58.222.nip.io`
-- **Web Portal**: `https://portal.172.232.58.222.nip.io`
-- **Grafana**: `http://grafana.172.232.58.222.nip.io`
+- **Development**: `https://api.dev.otherjamesbrown.com`
+- **Web Portal**: `https://portal.dev.otherjamesbrown.com`
+- **Grafana**: `https://grafana.dev.otherjamesbrown.com`
 
 ---
 

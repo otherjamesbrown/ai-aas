@@ -5,7 +5,7 @@
 //   for all authorization decisions made by the RBAC middleware.
 //
 // Dependencies:
-//   - github.com/otherjamesbrown/ai-aas/shared/go/auth: Shared authorization audit events
+//   - github.com/ai-aas/shared-go/auth: Shared authorization audit events
 //   - go.uber.org/zap: Structured logging
 package audit
 
@@ -14,7 +14,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/otherjamesbrown/ai-aas/shared/go/auth"
+	"github.com/ai-aas/shared-go/auth"
 )
 
 // Logger provides audit logging functionality.

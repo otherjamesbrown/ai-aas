@@ -35,29 +35,29 @@ module "lke_cluster" {
 }
 
 module "network" {
-  source             = "../../modules/network"
-  environment        = var.environment
-  namespace          = var.environment
-  output_dir         = local.output_dir
-  ingress_whitelist  = local.config.ingress_whitelist
+  source               = "../../modules/network"
+  environment          = var.environment
+  namespace            = var.environment
+  output_dir           = local.output_dir
+  ingress_whitelist    = local.config.ingress_whitelist
   allowed_egress_cidrs = ["0.0.0.0/0"]
-  depends_on         = [null_resource.prepare_output]
+  depends_on           = [null_resource.prepare_output]
 }
 
 module "secrets_bootstrap" {
-  source           = "../../modules/secrets-bootstrap"
-  environment      = var.environment
-  output_dir       = local.output_dir
+  source            = "../../modules/secrets-bootstrap"
+  environment       = var.environment
+  output_dir        = local.output_dir
   bootstrap_secrets = local.bootstrap_secrets
-  depends_on       = [null_resource.prepare_output]
+  depends_on        = [null_resource.prepare_output]
 }
 
 module "observability" {
-  source       = "../../modules/observability"
-  environment  = var.environment
-  output_dir   = local.output_dir
+  source         = "../../modules/observability"
+  environment    = var.environment
+  output_dir     = local.output_dir
   retention_days = 30
-  depends_on   = [null_resource.prepare_output]
+  depends_on     = [null_resource.prepare_output]
 }
 
 module "data_services" {

@@ -1,0 +1,46 @@
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: ModelRecipe
+metadata:
+  name: gpt-oss-20b
+  namespace: ai-model-system
+  labels:
+    ai.ai-aas.io/model-family: gpt
+    ai.ai-aas.io/model-size: 20b
+    ai.ai-aas.io/task: text-generation
+    ai.ai-aas.io/runtime: vllm
+spec:
+  modelID: EleutherAI/gpt-neox-20b
+  displayName: "GPT OSS 20B"
+  description: "Open-source GPT-NeoX 20B parameter model for text generation"
+  runtime: vllm
+  resources:
+    gpu:
+      vendor: nvidia
+      count: 2
+      minMemoryGB: 40
+    cpu:
+      requests: "8"
+      limits: "16"
+    memory:
+      requests: "32Gi"
+      limits: "48Gi"
+  runtimeArgs:
+    vllm:
+      dtype: auto
+      maxModelLen: 4096
+      gpuMemoryUtilization: "0.9"
+  scheduling:
+    tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+  healthCheck:
+    startupProbeSeconds: 300
+    livenessPath: /health
+    readinessPath: /health
+  metadata:
+    parameters: "20B"
+    contextLength: 4096
+    architecture: GPT-NeoX
+    license: Apache-2.0
+    sourceURL: https://huggingface.co/EleutherAI/gpt-neox-20b

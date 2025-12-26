@@ -51,7 +51,7 @@ Run these commands to verify deployment status:
 export KUBECONFIG=secrets/kubeconfigs/kubeconfig-development.yaml
 
 # T-S018-P02-006: Verify ArgoCD sync status
-argocd app get kserve-models --server argocd.dev.ai-aas.local
+argocd app get kserve-models --server argocd.dev.otherjamesbrown.com
 
 # T-S018-P02-007-009: Check pod status for all models
 kubectl get pods -n development -l app=vllm-inference
@@ -87,7 +87,7 @@ kubectl get pods -n development -l serving.kserve.io/inferenceservice=gpt-oss-20
 kubectl describe pod -n development -l serving.kserve.io/inferenceservice=gpt-oss-20b | grep -A 15 "Events:"
 
 # Test inference immediately after 2/2 Ready
-curl -X POST "https://api.172.232.58.222.nip.io/v1/chat/completions" \
+curl -X POST "https://api.dev.otherjamesbrown.com/v1/chat/completions" \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model": "gpt-oss-20b", "messages": [{"role": "user", "content": "Hello"}], "max_tokens": 10}'

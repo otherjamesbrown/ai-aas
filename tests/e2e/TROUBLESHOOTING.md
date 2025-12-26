@@ -8,7 +8,7 @@ This guide helps diagnose and resolve common issues when running end-to-end test
 
 **Symptoms:**
 ```
-dial tcp: lookup api.dev.ai-aas.local: no such host
+dial tcp: lookup api.dev.otherjamesbrown.com: no such host
 ```
 
 **Solutions:**
@@ -22,7 +22,7 @@ make test-dev-ip
 
 **Option B: Add to /etc/hosts (requires sudo)**
 ```bash
-echo "172.232.58.222 api.dev.ai-aas.local" | sudo tee -a /etc/hosts
+echo "172.232.58.222 api.dev.otherjamesbrown.com" | sudo tee -a /etc/hosts
 ```
 
 **Option C: Use port-forwarding**
@@ -67,7 +67,7 @@ status 404, body: 404 page not found
 
 1. **Verify Host header is set:**
    - The test client automatically sets Host header when using IP addresses
-   - Check that `api.dev.ai-aas.local` is the correct hostname
+   - Check that `api.dev.otherjamesbrown.com` is the correct hostname
 
 2. **Verify ingress is configured:**
    ```bash
@@ -113,12 +113,12 @@ context deadline exceeded
 
 2. **Check service health:**
    ```bash
-   curl https://api.dev.ai-aas.local/health
+   curl https://api.dev.otherjamesbrown.com/health
    ```
 
 3. **Verify network connectivity:**
    ```bash
-   ping api.dev.ai-aas.local
+   ping api.dev.otherjamesbrown.com
    ```
 
 ### 6. Test Data Cleanup Failures
@@ -217,11 +217,11 @@ t.Logf("Correlation ID: %s", corrID)
 ```bash
 # Check user-org-service
 curl -k https://172.232.58.222/health \
-  -H "Host: api.dev.ai-aas.local"
+  -H "Host: api.dev.otherjamesbrown.com"
 
 # Check api-router-service
 curl -k https://172.232.58.222/v1/status/healthz \
-  -H "Host: api.dev.ai-aas.local"
+  -H "Host: api.dev.otherjamesbrown.com"
 ```
 
 ### Check Kubernetes Resources

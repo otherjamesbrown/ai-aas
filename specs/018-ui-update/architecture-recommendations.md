@@ -434,8 +434,8 @@ metadata:
 data:
   config.json: |
     {
-      "apiUrl": "https://api.dev.ai-aas.local/api",
-      "baseUrl": "https://api.dev.ai-aas.local"
+      "apiUrl": "https://api.dev.otherjamesbrown.com/api",
+      "baseUrl": "https://api.dev.otherjamesbrown.com"
     }
 ```
 
@@ -551,8 +551,8 @@ export const tokenManager = new TokenManager();
 After implementation, verify:
 
 - [ ] Login works via `localhost:5173`
-- [ ] Login works via `portal.172.232.58.222.nip.io`
-- [ ] Login works via `portal.dev.ai-aas.local`
+- [ ] Login works via `portal.dev.otherjamesbrown.com`
+- [ ] Login works via `portal.dev.otherjamesbrown.com`
 - [ ] ServiceHealthCheck does not flicker/re-render rapidly
 - [ ] Health checks complete within 5 seconds
 - [ ] Token refresh works after login

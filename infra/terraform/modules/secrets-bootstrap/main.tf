@@ -1,6 +1,6 @@
 locals {
   output_path = "${var.output_dir}/secrets/${var.environment}-bootstrap.yaml"
-  manifest    = templatefile("${path.module}/templates/sealed-secret.yaml.tmpl", {
+  manifest = templatefile("${path.module}/templates/sealed-secret.yaml.tmpl", {
     environment = var.environment
     secrets     = var.bootstrap_secrets
   })

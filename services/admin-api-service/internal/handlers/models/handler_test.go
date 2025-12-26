@@ -181,6 +181,44 @@ func (m *mockService) DeleteCredential(credType string) error {
 	return testErrCredentialNotFound
 }
 
+// Deployment operations (stub implementations for testing)
+func (m *mockService) ListDeployments(opts ListDeploymentsOptions) ([]Deployment, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return []Deployment{}, nil
+}
+
+func (m *mockService) GetDeployment(modelName, environment string) (*Deployment, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return &Deployment{
+		ModelName:   modelName,
+		Environment: environment,
+		Status:      "ready",
+	}, nil
+}
+
+func (m *mockService) CreateDeployment(req CreateDeploymentRequest) (*Deployment, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return &Deployment{
+		ModelName:   req.ModelName,
+		Environment: req.Environment,
+		Status:      "deploying",
+	}, nil
+}
+
+func (m *mockService) UpdateDeploymentStatus(modelName, environment string, req UpdateDeploymentStatusRequest) error {
+	return m.err
+}
+
+func (m *mockService) DeleteDeployment(modelName, environment string) error {
+	return m.err
+}
+
 // Sentinel errors for mock (use different names from handler.go)
 var testErrModelNotFound = &modelError{"model not found"}
 var testErrCredentialNotFound = &modelError{"credential not found"}

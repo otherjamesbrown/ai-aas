@@ -11,13 +11,14 @@ This document outlines production-grade best practices for deploying, operating,
 
 1. [Deployment Practices](#deployment-practices)
 2. [Configuration Management](#configuration-management)
-3. [Resource Management](#resource-management)
-4. [Security](#security)
-5. [Monitoring and Observability](#monitoring-and-observability)
-6. [Operations](#operations)
-7. [Performance Optimization](#performance-optimization)
-8. [Cost Optimization](#cost-optimization)
-9. [Disaster Recovery](#disaster-recovery)
+3. [Deployment Mode for GPU Workloads](#deployment-mode-for-gpu-workloads)
+4. [Resource Management](#resource-management)
+5. [Security](#security)
+6. [Monitoring and Observability](#monitoring-and-observability)
+7. [Operations](#operations)
+8. [Performance Optimization](#performance-optimization)
+9. [Cost Optimization](#cost-optimization)
+10. [Disaster Recovery](#disaster-recovery)
 
 ---
 
@@ -303,6 +304,47 @@ spec:
 - `gpt-oss-20b`: minReplicas: 1 ✓
 - `mistral-7b-instruct`: minReplicas: 1 ✓
 - `llama-2-7b`: minReplicas: 1 ✓
+
+---
+
+## Deployment Mode for GPU Workloads
+
+When deploying vLLM with GPU support, use **RawDeployment** mode instead of Knative Serverless.
+
+### Why RawDeployment for GPU?
+
+| Concern | Serverless (Knative) | RawDeployment |
+|---------|---------------------|---------------|
+| NodeSelector | ❌ Rejected by Knative | ✅ Supported |
+| Scale-to-zero | ✅ Supported | ❌ Not supported |
+| Cold start | 5-10 min model load | N/A (always running) |
+| Cost efficiency | Good for sporadic traffic | Better for steady traffic |
+
+### Configuration
+
+For GPU-accelerated vLLM deployments, explicitly set `deploymentMode`:
+
+```yaml
+apiVersion: ai.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: llama-3-8b-vllm
+spec:
+  runtime: vllm
+  deploymentMode: RawDeployment  # Required for GPU
+  resources:
+    requests:
+      nvidia.com/gpu: "1"
+```
+
+**Note**: If `deploymentMode` is not set, vLLM with GPU resources will automatically default to RawDeployment. However, explicitly setting it improves clarity and ensures consistent behavior.
+
+### When to Use Serverless
+
+Consider Serverless mode for:
+- CPU-only vLLM deployments (small models, embeddings)
+- Development/testing environments where cost matters more than latency
+- Models with low, sporadic traffic patterns
 
 ---
 

@@ -1,3 +1,4 @@
+-- +goose Up
 -- Initial analytics schema: usage_events, ingestion_batches, freshness_status
 BEGIN;
 
@@ -23,7 +24,9 @@ CREATE TABLE IF NOT EXISTS analytics.usage_events (
     cost_estimate_cents NUMERIC(18,4) NOT NULL DEFAULT 0,
     metadata JSONB NOT NULL DEFAULT '{}'::JSONB,
     batch_id UUID,
-    PRIMARY KEY (event_id, org_id)
+    -- TimescaleDB requires partitioning column in primary key
+    -- event_id (UUID) provides global uniqueness, occurred_at enables hypertable partitioning
+    PRIMARY KEY (event_id, occurred_at)
 );
 
 -- Convert to TimescaleDB hypertable partitioned by occurred_at
@@ -33,12 +36,12 @@ SELECT create_hypertable('analytics.usage_events', 'occurred_at',
 );
 
 -- Indexes for common query patterns
-CREATE INDEX IF NOT EXISTS idx_usage_events_org_model_time 
+CREATE INDEX IF NOT EXISTS idx_usage_events_org_model_time
     ON analytics.usage_events (org_id, model_id, occurred_at DESC);
-CREATE INDEX IF NOT EXISTS idx_usage_events_status 
-    ON analytics.usage_events (status) 
+CREATE INDEX IF NOT EXISTS idx_usage_events_status
+    ON analytics.usage_events (status)
     WHERE status != 'success';
-CREATE INDEX IF NOT EXISTS idx_usage_events_batch 
+CREATE INDEX IF NOT EXISTS idx_usage_events_batch
     ON analytics.usage_events (batch_id);
 
 -- ingestion_batches: Track consumer offsets and dedupe status
@@ -53,9 +56,9 @@ CREATE TABLE IF NOT EXISTS analytics.ingestion_batches (
     retry_count INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE INDEX IF NOT EXISTS idx_ingestion_batches_completed 
+CREATE INDEX IF NOT EXISTS idx_ingestion_batches_completed
     ON analytics.ingestion_batches (completed_at);
-CREATE INDEX IF NOT EXISTS idx_ingestion_batches_late 
+CREATE INDEX IF NOT EXISTS idx_ingestion_batches_late
     ON analytics.ingestion_batches (late_arrival, completed_at);
 
 -- freshness_status: Track latest ingestion and aggregation timestamps
@@ -70,8 +73,7 @@ CREATE TABLE IF NOT EXISTS analytics.freshness_status (
     PRIMARY KEY (org_id, model_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_freshness_status_status 
+CREATE INDEX IF NOT EXISTS idx_freshness_status_status
     ON analytics.freshness_status (status, updated_at DESC);
 
 COMMIT;
-

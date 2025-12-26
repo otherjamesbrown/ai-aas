@@ -75,7 +75,9 @@ Examples:
   # Output as JSON
   ai-aas-cli engine list --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load()
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
@@ -164,7 +166,9 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			engineName := args[0]
 
-			cfg, err := config.Load()
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
@@ -309,7 +313,9 @@ Examples:
 				return fmt.Errorf("--image flag is required")
 			}
 
-			cfg, err := config.Load()
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
@@ -381,7 +387,9 @@ Examples:
 			engineName := args[0]
 			version := args[1]
 
-			cfg, err := config.Load()
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
@@ -429,7 +437,9 @@ Examples:
 			engineName := args[0]
 			version := args[1]
 
-			cfg, err := config.Load()
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
@@ -512,7 +522,9 @@ Examples:
   # Output as JSON
   ai-aas-cli engine config list --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load()
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
@@ -596,7 +608,9 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			configName := args[0]
 
-			cfg, err := config.Load()
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
@@ -725,7 +739,9 @@ Examples:
 				return fmt.Errorf("--engine flag is required")
 			}
 
-			cfg, err := config.Load()
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
@@ -824,7 +840,9 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			configName := args[0]
 
-			cfg, err := config.Load()
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}

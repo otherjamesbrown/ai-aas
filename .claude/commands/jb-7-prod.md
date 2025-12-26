@@ -14,17 +14,17 @@ Extract spec number from argument.
 
 Check that staging validation passed:
 ```bash
-bd show ai-aas-spec$SPEC_NUMBER.stg
+bd show aas-spec$SPEC_NUMBER.stg
 ```
 
 If open issues exist, **DO NOT PROCEED**. Warn user.
 
 ### Step 3: Find Epic Bead
 
-Epic bead ID follows convention: `ai-aas-spec$SPEC_NUMBER`
+Epic bead ID follows convention: `aas-spec$SPEC_NUMBER`
 
 ```bash
-bd show ai-aas-spec$SPEC_NUMBER
+bd show aas-spec$SPEC_NUMBER
 ```
 
 ### Step 4: Create Production Sub-Bead
@@ -32,11 +32,11 @@ bd show ai-aas-spec$SPEC_NUMBER
 Create production bead with period-based naming:
 
 ```bash
-bd create --id="ai-aas-spec$SPEC_NUMBER.prod" --title="Spec $SPEC_NUMBER - Production Deployment" --type=task --priority=1 --parent=ai-aas-spec$SPEC_NUMBER
-bd update ai-aas-spec$SPEC_NUMBER.prod --label="spec$SPEC_NUMBER" --label="production" --label="validation"
+bd create --id="aas-spec$SPEC_NUMBER.prod" --title="Spec $SPEC_NUMBER - Production Deployment" --type=task --priority=1 --parent=aas-spec$SPEC_NUMBER
+bd update aas-spec$SPEC_NUMBER.prod --label="spec$SPEC_NUMBER" --label="production" --label="validation"
 ```
 
-Production bead ID: `ai-aas-spec$SPEC_NUMBER.prod`
+Production bead ID: `aas-spec$SPEC_NUMBER.prod`
 
 ### Step 5: Create PR staging → main
 
@@ -48,10 +48,10 @@ gh pr create \
   --body "Releases changes from spec $SPEC_NUMBER after successful staging validation.
 
 Related beads:
-- Epic: ai-aas-spec$SPEC_NUMBER
-- Dev validation: ai-aas-spec$SPEC_NUMBER.dev
-- Staging validation: ai-aas-spec$SPEC_NUMBER.stg
-- Production: ai-aas-spec$SPEC_NUMBER.prod
+- Epic: aas-spec$SPEC_NUMBER
+- Dev validation: aas-spec$SPEC_NUMBER.dev
+- Staging validation: aas-spec$SPEC_NUMBER.stg
+- Production: aas-spec$SPEC_NUMBER.prod
 
 ## Checklist
 - [ ] Staging validation passed
@@ -62,7 +62,7 @@ Related beads:
 ### Step 6: Update Bead with PR
 
 ```bash
-bd comments add ai-aas-spec$SPEC_NUMBER.prod "Created PR #$PR_NUMBER for staging → main promotion"
+bd comments add aas-spec$SPEC_NUMBER.prod "Created PR #$PR_NUMBER for staging → main promotion"
 ```
 
 ### Step 7: After PR Merge - Run Validation
@@ -76,7 +76,7 @@ bd comments add ai-aas-spec$SPEC_NUMBER.prod "Created PR #$PR_NUMBER for staging
 ### Step 8: Create Issue Beads for Failures
 
 ```bash
-bd create --title="PROD: $ISSUE_DESCRIPTION" --type=bug --priority=0 --parent=ai-aas-spec$SPEC_NUMBER.prod
+bd create --title="PROD: $ISSUE_DESCRIPTION" --type=bug --priority=0 --parent=aas-spec$SPEC_NUMBER.prod
 bd update $ISSUE_BEAD_ID --label="spec$SPEC_NUMBER" --label="prod-issue" --label="urgent"
 ```
 
@@ -89,7 +89,7 @@ bd update $ISSUE_BEAD_ID --label="spec$SPEC_NUMBER" --label="prod-issue" --label
  /jb-7-prod $ARGUMENTS - COMPLETE
 ═══════════════════════════════════════════════════
 
- Production Bead:  ai-aas-spec$SPEC_NUMBER.prod
+ Production Bead:  aas-spec$SPEC_NUMBER.prod
  PR Created:       #$PR_NUMBER (staging → main)
 
  Validation Status:

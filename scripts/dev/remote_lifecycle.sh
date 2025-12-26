@@ -6,7 +6,7 @@ set -euo pipefail
 
 # Source common helper library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/dev/common.sh
+# shellcheck source=scripts/dev/common.sh disable=SC1091
 source "${SCRIPT_DIR}/common.sh"
 
 # Default values
@@ -19,6 +19,7 @@ AUDIT_LOG="${AUDIT_LOG:-${HOME}/.ai-aas/workspace-audit.log}"
 # Parse arguments
 parse_args "$@"
 
+# shellcheck disable=SC2317  # Called indirectly by parse_args --help
 show_usage() {
   cat <<EOF
 Usage: $0 <action> [OPTIONS]
@@ -227,7 +228,7 @@ check_ttl() {
   
   # Check if workspace has expired
   local created_at
-  created_at=$(ssh_exec "${WORKSPACE_HOST}" "stat -c %Y /etc/ai-aas/workspace-metadata.json 2>/dev/null || echo $(date +%s)" || echo "$(date +%s)")
+  created_at=$(ssh_exec "${WORKSPACE_HOST}" "stat -c %Y /etc/ai-aas/workspace-metadata.json 2>/dev/null || date +%s" || date +%s)
   
   local now
   now=$(date +%s)

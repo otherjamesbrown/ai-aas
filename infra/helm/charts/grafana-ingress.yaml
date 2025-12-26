@@ -1,38 +1,40 @@
 # Grafana Ingress Configuration
-# Apply this after Grafana is deployed
+# NOTE: This is a template/example. The actual deployed ingress is at:
+# infra/k8s/monitoring/grafana/ingress.yaml
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: grafana-ingress
-  namespace: default  # Adjust namespace if Grafana is in a different namespace
+  namespace: monitoring
   annotations:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: nginx
   tls:
-    - secretName: ai-aas-tls
+    - secretName: grafana-tls
       hosts:
-        - grafana.dev.ai-aas.local
-        - grafana.prod.ai-aas.local
+        - grafana.dev.otherjamesbrown.com
+        - grafana.prod.otherjamesbrown.com
   rules:
-    - host: grafana.dev.ai-aas.local
+    - host: grafana.dev.otherjamesbrown.com
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: grafana  # Adjust service name if different
+                name: grafana
                 port:
                   number: 3000
-    - host: grafana.prod.ai-aas.local
+    - host: grafana.prod.otherjamesbrown.com
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: grafana  # Adjust service name if different
+                name: grafana
                 port:
                   number: 3000
 

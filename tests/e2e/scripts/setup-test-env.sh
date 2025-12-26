@@ -91,8 +91,8 @@ fi
 echo ""
 echo -e "${YELLOW}Step 4: Verifying service connectivity...${NC}"
 
-if curl -s -k --max-time 5 -H "Host: api.dev.ai-aas.local" "$USER_ORG_SERVICE_URL/health" > /dev/null 2>&1 || \
-   curl -s -k --max-time 5 -H "Host: api.dev.ai-aas.local" "$USER_ORG_SERVICE_URL/v1/health" > /dev/null 2>&1; then
+if curl -s -k --max-time 5 -H "Host: api.dev.otherjamesbrown.com" "$USER_ORG_SERVICE_URL/health" > /dev/null 2>&1 || \
+   curl -s -k --max-time 5 -H "Host: api.dev.otherjamesbrown.com" "$USER_ORG_SERVICE_URL/v1/health" > /dev/null 2>&1; then
     echo -e "${GREEN}✓ Services are reachable${NC}"
 else
     echo -e "${YELLOW}⚠ Could not verify service health (may be expected)${NC}"

@@ -11,7 +11,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - host: vllm.dev.ai-aas.local
+  - host: vllm.dev.otherjamesbrown.com
     http:
       paths:
       - path: /

@@ -47,7 +47,7 @@ func (r *ModelRepository) Upsert(ctx context.Context, reg *domain.ModelRegistrat
 	var created bool
 
 	query := `
-		INSERT INTO model_registry (
+		INSERT INTO model_registry_entries (
 			model_id, model_name, deployment_endpoint, deployment_environment,
 			deployment_namespace, deployment_status, deployment_target,
 			revision, cost_per_1k_tokens, metadata, created_at, updated_at
@@ -99,7 +99,7 @@ func (r *ModelRepository) GetByNameAndEnv(ctx context.Context, name, environment
 		SELECT model_id, model_name, deployment_endpoint, deployment_environment,
 			deployment_namespace, deployment_status, deployment_target, revision,
 			cost_per_1k_tokens, metadata, created_at, updated_at
-		FROM model_registry
+		FROM model_registry_entries
 		WHERE model_name = $1 AND deployment_environment = $2
 	`
 
@@ -129,7 +129,7 @@ func (r *ModelRepository) GetByNameAndEnv(ctx context.Context, name, environment
 // List retrieves models with filtering and pagination
 func (r *ModelRepository) List(ctx context.Context, params domain.ModelListParams) (*domain.ModelListResponse, error) {
 	// Build query
-	baseQuery := `FROM model_registry WHERE 1=1`
+	baseQuery := `FROM model_registry_entries WHERE 1=1`
 	args := []interface{}{}
 	argNum := 1
 
@@ -251,7 +251,7 @@ func (r *ModelRepository) Update(ctx context.Context, name, environment string, 
 	args = append(args, name, environment)
 
 	query := fmt.Sprintf(`
-		UPDATE model_registry SET %s
+		UPDATE model_registry_entries SET %s
 		WHERE model_name = $%d AND deployment_environment = $%d
 		RETURNING model_id, model_name, deployment_endpoint, deployment_environment,
 			deployment_namespace, deployment_status, deployment_target, revision,
@@ -283,7 +283,7 @@ func (r *ModelRepository) Update(ctx context.Context, name, environment string, 
 
 // Delete removes a model
 func (r *ModelRepository) Delete(ctx context.Context, name, environment string) error {
-	query := `DELETE FROM model_registry WHERE model_name = $1 AND deployment_environment = $2`
+	query := `DELETE FROM model_registry_entries WHERE model_name = $1 AND deployment_environment = $2`
 	_, err := r.db.Pool().Exec(ctx, query, name, environment)
 	return err
 }

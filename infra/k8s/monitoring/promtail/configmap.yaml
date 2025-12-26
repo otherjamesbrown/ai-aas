@@ -81,11 +81,14 @@ data:
                       msg: msg
                       service: service
                       trace_id: trace_id
+                      correlation_id: correlation_id
                       request_id: request_id
                       user_id: user_id
                       org_id: org_id
                       error: error
                       duration: duration
+                      path: path
+                      method: method
 
                 # Extract level as label for filtering
                 - labels:
@@ -103,6 +106,133 @@ data:
                       - RFC3339
                       - UnixMs
 
+          # Drop health check endpoints to reduce noise
+          - match:
+              selector: '{namespace=~".+"}'
+              stages:
+                - json:
+                    expressions:
+                      path: path
+                # Drop logs for health/ready endpoints
+                - drop:
+                    source: path
+                    expression: '^/(health|healthz|ready|readyz|livez|ping)$'
+                    drop_counter_reason: health_check_endpoint
+
+      # Scrape inference backend pods (vLLM, KServe) from ai-models, system, kserve namespaces
+      - job_name: kubernetes-inference-backends
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - ai-models
+                - system
+                - kserve
+        relabel_configs:
+          # Set namespace label
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+
+          # Set pod label
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+
+          # Set container label
+          - source_labels: [__meta_kubernetes_pod_container_name]
+            target_label: container
+
+          # Set app label from pod label
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            target_label: app
+
+          # Extract model name from pod labels (KServe label)
+          - source_labels: [__meta_kubernetes_pod_label_serving_kserve_io_inferenceservice]
+            target_label: model
+            regex: (.+)
+
+          # Fallback: extract model from pod name if KServe label not present
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: model
+            regex: ^([^-]+)-.*
+            action: replace
+
+          # Set node label
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
+
+          # Set log file path
+          - source_labels: [__meta_kubernetes_pod_uid, __meta_kubernetes_pod_container_name]
+            target_label: __path__
+            separator: /
+            replacement: /var/log/pods/*$1/*.log
+
+        pipeline_stages:
+          # vLLM produces mixed-format logs: JSON and plain text
+          # Try JSON parsing first, fall back to regex for plain text
+
+          # Attempt JSON parsing
+          - match:
+              selector: '{namespace=~"ai-models|system|kserve"}'
+              stages:
+                - json:
+                    expressions:
+                      level: level
+                      msg: message
+                      error: error
+
+          # Parse plain text vLLM logs for key patterns
+          - match:
+              selector: '{namespace=~"ai-models|system|kserve"}'
+              stages:
+                # Extract log level from plain text logs
+                - regex:
+                    expression: '^(?P<timestamp>\S+\s+\S+)\s+(?P<level>INFO|WARNING|ERROR|DEBUG|CRITICAL)'
+                - labels:
+                    level:
+
+          # Extract GPU errors and OOM patterns
+          - match:
+              selector: '{namespace=~"ai-models|system|kserve"}'
+              stages:
+                - regex:
+                    expression: '(?i)(cuda|out.?of.?memory|oom|gpu.*error)'
+                - labels:
+                    gpu_error: "true"
+
+          # Extract model loading status
+          - match:
+              selector: '{namespace=~"ai-models|system|kserve"}'
+              stages:
+                - regex:
+                    expression: '(?i)(loading model|model loaded|initialized)'
+                - labels:
+                    model_status: "loading"
+
+          - match:
+              selector: '{namespace=~"ai-models|system|kserve"}'
+              stages:
+                - regex:
+                    expression: '(?i)(model.*(ready|available|loaded successfully))'
+                - labels:
+                    model_status: "ready"
+
+          - match:
+              selector: '{namespace=~"ai-models|system|kserve"}'
+              stages:
+                - regex:
+                    expression: '(?i)(failed to load|model.*error|initialization failed)'
+                - labels:
+                    model_status: "failed"
+
+          # Extract GPU ID from logs
+          - match:
+              selector: '{namespace=~"ai-models|system|kserve"}'
+              stages:
+                - regex:
+                    expression: 'GPU[:\s]+(?P<gpu_id>\d+)'
+                - labels:
+                    gpu_id:
+
       # Scrape all pods (fallback for pods without annotation)
       - job_name: kubernetes-pods-all
         kubernetes_sd_configs:
@@ -113,10 +243,10 @@ data:
             action: drop
             regex: "true"
 
-          # Skip system namespaces
+          # Skip inference backend namespaces (already handled above)
           - source_labels: [__meta_kubernetes_namespace]
             action: drop
-            regex: (kube-system|kube-public|kube-node-lease)
+            regex: (kube-system|kube-public|kube-node-lease|ai-models|system|kserve)
 
           # Set labels
           - source_labels: [__meta_kubernetes_namespace]

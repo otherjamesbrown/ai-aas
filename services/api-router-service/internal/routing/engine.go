@@ -41,20 +41,22 @@ type RoutingDecision struct {
 
 // Engine provides intelligent routing with weighted selection and failover.
 type Engine struct {
-	healthMonitor   *HealthMonitor
-	backendRegistry *config.BackendRegistry
-	modelRegistry   *Registry // Model registry for vLLM deployments
-	logger          *zap.Logger
-	decisions       []RoutingDecision // For metrics/debugging
-	mu              sync.RWMutex
+	healthMonitor      *HealthMonitor
+	backendRegistry    *config.BackendRegistry
+	modelRegistry      *Registry // Model registry for vLLM deployments
+	defaultTimeout     time.Duration
+	logger             *zap.Logger
+	decisions          []RoutingDecision // For metrics/debugging
+	mu                 sync.RWMutex
 }
 
 // NewEngine creates a new routing engine.
-func NewEngine(healthMonitor *HealthMonitor, backendRegistry *config.BackendRegistry, logger *zap.Logger) *Engine {
+func NewEngine(healthMonitor *HealthMonitor, backendRegistry *config.BackendRegistry, defaultTimeout time.Duration, logger *zap.Logger) *Engine {
 	return &Engine{
 		healthMonitor:   healthMonitor,
 		backendRegistry: backendRegistry,
 		modelRegistry:   nil, // Set via SetModelRegistry
+		defaultTimeout:  defaultTimeout,
 		logger:          logger,
 		decisions:       make([]RoutingDecision, 0),
 	}
@@ -216,7 +218,7 @@ func (e *Engine) RouteToRegisteredModel(
 		ID:           fmt.Sprintf("vllm-%s-%s", entry.ModelName, entry.DeploymentEnvironment),
 		URI:          fmt.Sprintf("http://%s/v1/completions", entry.DeploymentEndpoint),
 		ModelVariant: entry.ModelName,
-		Timeout:      30 * time.Second,
+		Timeout:      e.defaultTimeout,
 	}
 
 	decision := &RoutingDecision{

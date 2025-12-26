@@ -66,8 +66,14 @@ type Config struct {
 	// Health Monitoring
 	HealthCheckInterval time.Duration `envconfig:"HEALTH_CHECK_INTERVAL" default:"10s"`
 
+	// Backend Timeout
+	DefaultBackendTimeout time.Duration `envconfig:"DEFAULT_BACKEND_TIMEOUT" default:"90s"`
+
 	// Usage Accounting
 	UsageBufferDir string `envconfig:"USAGE_BUFFER_DIR" default:"/tmp/api-router-usage-buffer"`
+
+	// Models Cache
+	ModelsCacheTTL time.Duration `envconfig:"MODELS_CACHE_TTL" default:"10s"`
 
 	// CORS Configuration
 	CORSEnabled        bool   `envconfig:"CORS_ENABLED" default:"true"`
@@ -85,6 +91,22 @@ type BackendEndpointConfig struct {
 	URI         string
 	ModelVariant string
 	Timeout     time.Duration
+	HealthPath  string // Health check path (default: "/health", triton: "/v2/health/ready")
+}
+
+// GetHealthPath returns the appropriate health check path for this backend.
+// Triton/TensorRT-LLM backends use /v2/health/ready (KServe V2 protocol),
+// while vLLM and other OpenAI-compatible backends use /health.
+func (c *BackendEndpointConfig) GetHealthPath() string {
+	if c.HealthPath != "" {
+		return c.HealthPath
+	}
+	// Triton/TensorRT-LLM backends typically have "trtllm" in their service name
+	if strings.Contains(c.URI, "trtllm") {
+		return "/v2/health/ready"
+	}
+	// Default to /health for vLLM and other OpenAI-compatible backends
+	return "/health"
 }
 
 // BackendRegistry manages backend endpoint configurations.
@@ -119,7 +141,7 @@ func NewBackendRegistry(cfg *Config) *BackendRegistry {
 				ID:          backendID,
 				URI:         backendURI,
 				ModelVariant: "", // Will be set from routing policy
-				Timeout:     30 * time.Second,
+				Timeout:     cfg.DefaultBackendTimeout,
 			}
 		}
 	}

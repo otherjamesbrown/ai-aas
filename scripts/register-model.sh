@@ -404,7 +404,7 @@ main() {
     echo "  4. → Verify API routing (if API Router is integrated)"
     echo ""
     echo "To verify routing:"
-    echo "  curl -X POST https://api.${environment}.ai-aas.local/v1/chat/completions \\"
+    echo "  curl -X POST https://api.${environment}.otherjamesbrown.com/v1/chat/completions \\"
     echo "    -H \"X-API-Key: your-api-key\" \\"
     echo "    -H \"Content-Type: application/json\" \\"
     echo "    -d '{\"model\": \"$model_name\", \"messages\": [{\"role\": \"user\", \"content\": \"Hello\"}]}'"

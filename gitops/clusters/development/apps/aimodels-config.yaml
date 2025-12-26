@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: aimodels-config-development
+  namespace: argocd
+  labels:
+    environment: development
+    app: aimodels-config
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform-development
+  # Ignore status field changes - operator updates these dynamically
+  ignoreDifferences:
+    - group: aimodel.ai-aas.io
+      kind: AIModel
+      jsonPointers:
+        - /status
+  source:
+    repoURL: https://github.com/otherjamesbrown/ai-aas-config
+    targetRevision: develop
+    path: environments/development/models
+    directory:
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: development
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: true  # Allow empty directory initially
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

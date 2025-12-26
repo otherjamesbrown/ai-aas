@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package preprocessor;
+
+option go_package = "github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/adapter/preprocessor/pb";
+
+// PreprocessorService handles model-specific preprocessing for inference requests.
+// It applies HuggingFace chat templates and returns formatted prompts or tokenized inputs.
+service PreprocessorService {
+  // Preprocess applies model-specific chat template and returns formatted output
+  rpc Preprocess(PreprocessRequest) returns (PreprocessResponse);
+
+  // HealthCheck verifies service readiness and lists loaded tokenizers
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// Message represents a single chat message in OpenAI format
+message Message {
+  string role = 1;      // "system", "user", "assistant"
+  string content = 2;   // Text content
+  // Phase 2: repeated ImageContent images = 3;
+}
+
+// PreprocessRequest contains the chat messages to preprocess
+message PreprocessRequest {
+  // model_id is the HuggingFace model identifier for tokenizer lookup
+  // Example: "meta-llama/Llama-3.1-8B-Instruct", "openai/gpt-oss-20b"
+  string model_id = 1;
+
+  // engine_type determines output format:
+  // - "vllm", "triton_string": returns formatted_prompt only
+  // - "triton_tensor": returns input_ids for direct tensor input
+  string engine_type = 2;
+
+  // messages is the chat history in OpenAI format
+  repeated Message messages = 3;
+
+  // Optional generation parameters (passed through for tensor mode)
+  int32 max_tokens = 10;
+  float temperature = 11;
+  float top_p = 12;
+  bool stream = 13;
+
+  // Phase 2: repeated bytes images = 20;
+}
+
+// PreprocessResponse contains the preprocessed output
+message PreprocessResponse {
+  // formatted_prompt is the fully formatted prompt string with chat template applied
+  // Used for vLLM and triton_string engine types
+  string formatted_prompt = 1;
+
+  // input_ids is the tokenized prompt as int32 array
+  // Used for triton_tensor engine type
+  repeated int32 input_ids = 2;
+
+  // input_shape describes the tensor shape for input_ids (e.g., [1, 256])
+  repeated int64 input_shape = 3;
+
+  // prompt_token_count is the number of tokens in the prompt
+  int32 prompt_token_count = 5;
+
+  // error_message contains any error that occurred during preprocessing
+  string error_message = 10;
+
+  // Phase 2: Vision tensor outputs
+  // repeated float pixel_values = 6;
+  // repeated int64 pixel_shape = 7;
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  // ready indicates if the service is ready to handle requests
+  bool ready = 1;
+
+  // message provides additional status information
+  string message = 2;
+
+  // loaded_tokenizers maps model_id to load status (true if cached)
+  map<string, bool> loaded_tokenizers = 3;
+}

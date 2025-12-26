@@ -159,7 +159,7 @@ echo "   argocd app get user-org-service-production"
 echo "   kubectl get pods -n user-org-service"
 echo ""
 echo "4. Monitor application health:"
-echo "   https://argocd.dev.ai-aas.local"  # Update with your ArgoCD URL
+echo "   https://argocd.dev.otherjamesbrown.com"  # Update with your ArgoCD URL
 echo ""
 echo -e "${BLUE}📊 View release on GitHub:${NC}"
 echo "   https://github.com/otherjamesbrown/ai-aas/releases/tag/$VERSION"

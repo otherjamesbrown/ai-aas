@@ -82,6 +82,6 @@ func writeUnauthorized(w http.ResponseWriter, message string) {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.Header().Set("WWW-Authenticate", "Bearer")
 	w.WriteHeader(http.StatusUnauthorized)
-	w.Write([]byte(`{"type":"https://docs.ai-aas.local/errors/unauthorized","title":"Unauthorized","status":401,"detail":"` + message + `"}`))
+	w.Write([]byte(`{"type":"https://docs.otherjamesbrown.com/errors/unauthorized","title":"Unauthorized","status":401,"detail":"` + message + `"}`))
 }
 

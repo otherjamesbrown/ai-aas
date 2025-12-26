@@ -1,0 +1,100 @@
+# Default values for preprocessor-service
+replicaCount: 2
+
+image:
+  repository: ghcr.io/otherjamesbrown/preprocessor-service
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+
+securityContext: {}
+
+service:
+  type: ClusterIP
+  port: 50051
+  targetPort: 50051
+
+# gRPC health probes
+livenessProbe:
+  grpc:
+    port: 50051
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  grpc:
+    port: 50051
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+startupProbe:
+  grpc:
+    port: 50051
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 5
+  failureThreshold: 30
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 2Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Environment variables
+env:
+  - name: GRPC_PORT
+    value: "50051"
+  - name: LOG_LEVEL
+    value: "INFO"
+  - name: LOG_FORMAT
+    value: "json"
+  - name: HF_HOME
+    value: "/app/hf_cache"
+  - name: MAX_CACHED_TOKENIZERS
+    value: "50"
+  # HF_TOKEN should be set via secret for gated models like Llama-3
+  # - name: HF_TOKEN
+  #   valueFrom:
+  #     secretKeyRef:
+  #       name: huggingface-token
+  #       key: token
+
+# Models to preload at startup (comma-separated)
+preloadModels: "meta-llama/Llama-3.1-8B-Instruct"
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
