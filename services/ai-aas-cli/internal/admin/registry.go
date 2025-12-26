@@ -1,4 +1,4 @@
-// Package commands provides model registry management commands.
+// Package admin provides model registry management commands.
 //
 // Purpose:
 //
@@ -8,20 +8,18 @@
 // Requirements Reference:
 //   - specs/010-vllm-deployment/spec.md#US-002 (Register models for routing)
 //   - specs/010-vllm-deployment/tasks.md#T-S010-P04-032 (Model registration command)
-//
 package admin
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
-	_ "github.com/lib/pq" // PostgreSQL driver
 	"github.com/spf13/cobra"
 
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/client/deploymentregistry"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/errors"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
@@ -141,64 +139,23 @@ func runRegistryRegister(cmd *cobra.Command, args []string, modelName, endpoint,
 		return nil
 	}
 
-	// Connect to database
-	db, err := sql.Open("postgres", cfg.DatabaseURL)
-	if err != nil {
-		return errors.NewOperationError(
-			fmt.Sprintf("failed to connect to database: %v", err),
-			"Check your database configuration and connectivity.",
-		)
-	}
-	defer db.Close()
+	// Create API client and register via Admin API
+	client := newRegistryClient(cfg)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Upsert model registry entry
-	query := `
-		INSERT INTO model_registry_entries (
-			model_name,
-			deployment_endpoint,
-			deployment_status,
-			deployment_environment,
-			deployment_namespace,
-			created_at,
-			updated_at
-		) VALUES ($1, $2, 'ready', $3, $4, NOW(), NOW())
-		ON CONFLICT (model_name, deployment_environment)
-		DO UPDATE SET
-			deployment_endpoint = EXCLUDED.deployment_endpoint,
-			deployment_status = 'ready',
-			deployment_namespace = EXCLUDED.deployment_namespace,
-			updated_at = NOW()
-		RETURNING id, model_name, deployment_endpoint, deployment_status, deployment_environment, deployment_namespace, created_at, updated_at
-	`
-
-	var entry struct {
-		ID                    int64
-		ModelName             string
-		DeploymentEndpoint    string
-		DeploymentStatus      string
-		DeploymentEnvironment string
-		DeploymentNamespace   string
-		CreatedAt             time.Time
-		UpdatedAt             time.Time
-	}
-
-	err = db.QueryRowContext(ctx, query, modelName, endpoint, environment, namespace).Scan(
-		&entry.ID,
-		&entry.ModelName,
-		&entry.DeploymentEndpoint,
-		&entry.DeploymentStatus,
-		&entry.DeploymentEnvironment,
-		&entry.DeploymentNamespace,
-		&entry.CreatedAt,
-		&entry.UpdatedAt,
-	)
+	model, err := client.Register(ctx, deploymentregistry.RegisterRequest{
+		ModelName:             modelName,
+		DeploymentEndpoint:    endpoint,
+		DeploymentEnvironment: environment,
+		DeploymentNamespace:   namespace,
+		DeploymentStatus:      deploymentregistry.StatusReady,
+	})
 	if err != nil {
 		return errors.NewOperationError(
 			fmt.Sprintf("failed to register model: %v", err),
-			"Check database permissions and schema migrations.",
+			"Check API connectivity and permissions.",
 		)
 	}
 
@@ -206,22 +163,22 @@ func runRegistryRegister(cmd *cobra.Command, args []string, modelName, endpoint,
 
 	if !quiet {
 		fmt.Fprintf(os.Stderr, "✓ Model registered successfully in %.2fs\n", duration.Seconds())
-		fmt.Fprintf(os.Stderr, "  ID: %d\n", entry.ID)
-		fmt.Fprintf(os.Stderr, "  Status: %s\n", entry.DeploymentStatus)
-		fmt.Fprintf(os.Stderr, "  Updated: %s\n", entry.UpdatedAt.Format(time.RFC3339))
+		fmt.Fprintf(os.Stderr, "  ID: %s\n", model.ModelID)
+		fmt.Fprintf(os.Stderr, "  Status: %s\n", model.DeploymentStatus)
+		fmt.Fprintf(os.Stderr, "  Updated: %s\n", model.UpdatedAt.Format(time.RFC3339))
 	}
 
 	// Output structured data
 	if flagFormat == "json" {
 		data := map[string]interface{}{
-			"id":          entry.ID,
-			"model_name":  entry.ModelName,
-			"endpoint":    entry.DeploymentEndpoint,
-			"status":      entry.DeploymentStatus,
-			"environment": entry.DeploymentEnvironment,
-			"namespace":   entry.DeploymentNamespace,
-			"created_at":  entry.CreatedAt,
-			"updated_at":  entry.UpdatedAt,
+			"id":          model.ModelID,
+			"model_name":  model.ModelName,
+			"endpoint":    model.DeploymentEndpoint,
+			"status":      model.DeploymentStatus,
+			"environment": model.DeploymentEnvironment,
+			"namespace":   model.DeploymentNamespace,
+			"created_at":  model.CreatedAt,
+			"updated_at":  model.UpdatedAt,
 		}
 		return output.PrintJSON(data)
 	}
@@ -301,49 +258,24 @@ func runRegistryDeregister(cmd *cobra.Command, args []string, modelName, environ
 		return nil
 	}
 
-	// Connect to database
-	db, err := sql.Open("postgres", cfg.DatabaseURL)
-	if err != nil {
-		return errors.NewOperationError(
-			fmt.Sprintf("failed to connect to database: %v", err),
-			"Check your database configuration and connectivity.",
-		)
-	}
-	defer db.Close()
+	// Create API client and update status via Admin API
+	client := newRegistryClient(cfg)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Update deployment status to disabled
-	query := `
-		UPDATE model_registry_entries
-		SET deployment_status = 'disabled', updated_at = NOW()
-		WHERE model_name = $1 AND deployment_environment = $2
-		RETURNING id, model_name, deployment_status, deployment_environment
-	`
-
-	var entry struct {
-		ID                    int64
-		ModelName             string
-		DeploymentStatus      string
-		DeploymentEnvironment string
-	}
-
-	err = db.QueryRowContext(ctx, query, modelName, environment).Scan(
-		&entry.ID,
-		&entry.ModelName,
-		&entry.DeploymentStatus,
-		&entry.DeploymentEnvironment,
-	)
-	if err == sql.ErrNoRows {
-		return errors.NewOperationError(
-			fmt.Sprintf("model not found: %s in %s environment", modelName, environment),
-			"Check that the model name and environment are correct.",
-		)
-	} else if err != nil {
+	model, err := client.UpdateStatus(ctx, modelName, environment, deploymentregistry.StatusDisabled)
+	if err != nil {
+		// Check if it's a not found error using typed error checking
+		if isNotFoundError(err) {
+			return errors.NewOperationError(
+				fmt.Sprintf("model not found: %s in %s environment", modelName, environment),
+				"Check that the model name and environment are correct.",
+			)
+		}
 		return errors.NewOperationError(
 			fmt.Sprintf("failed to deregister model: %v", err),
-			"Check database permissions and connectivity.",
+			"Check API connectivity and permissions.",
 		)
 	}
 
@@ -351,8 +283,8 @@ func runRegistryDeregister(cmd *cobra.Command, args []string, modelName, environ
 
 	if !quiet {
 		fmt.Fprintf(os.Stderr, "✓ Model deregistered successfully in %.2fs\n", duration.Seconds())
-		fmt.Fprintf(os.Stderr, "  ID: %d\n", entry.ID)
-		fmt.Fprintf(os.Stderr, "  Status: %s\n", entry.DeploymentStatus)
+		fmt.Fprintf(os.Stderr, "  ID: %s\n", model.ModelID)
+		fmt.Fprintf(os.Stderr, "  Status: %s\n", model.DeploymentStatus)
 	}
 
 	return nil
@@ -386,7 +318,7 @@ func registryEnableCommand() *cobra.Command {
 }
 
 func runRegistryEnable(cmd *cobra.Command, args []string, modelName, environment string, quiet, dryRun bool) error {
-	return updateModelStatus(modelName, environment, "ready", quiet, dryRun, "enabled")
+	return updateModelStatus(modelName, environment, deploymentregistry.StatusReady, quiet, dryRun, "enabled")
 }
 
 func registryDisableCommand() *cobra.Command {
@@ -417,7 +349,7 @@ func registryDisableCommand() *cobra.Command {
 }
 
 func runRegistryDisable(cmd *cobra.Command, args []string, modelName, environment string, quiet, dryRun bool) error {
-	return updateModelStatus(modelName, environment, "disabled", quiet, dryRun, "disabled")
+	return updateModelStatus(modelName, environment, deploymentregistry.StatusDisabled, quiet, dryRun, "disabled")
 }
 
 func updateModelStatus(modelName, environment, status string, quiet, dryRun bool, action string) error {
@@ -458,47 +390,24 @@ func updateModelStatus(modelName, environment, status string, quiet, dryRun bool
 		return nil
 	}
 
-	// Connect to database
-	db, err := sql.Open("postgres", cfg.DatabaseURL)
-	if err != nil {
-		return errors.NewOperationError(
-			fmt.Sprintf("failed to connect to database: %v", err),
-			"Check your database configuration and connectivity.",
-		)
-	}
-	defer db.Close()
+	// Create API client and update status via Admin API
+	client := newRegistryClient(cfg)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Update status
-	query := `
-		UPDATE model_registry_entries
-		SET deployment_status = $3, updated_at = NOW()
-		WHERE model_name = $1 AND deployment_environment = $2
-		RETURNING id, model_name, deployment_status
-	`
-
-	var entry struct {
-		ID               int64
-		ModelName        string
-		DeploymentStatus string
-	}
-
-	err = db.QueryRowContext(ctx, query, modelName, environment, status).Scan(
-		&entry.ID,
-		&entry.ModelName,
-		&entry.DeploymentStatus,
-	)
-	if err == sql.ErrNoRows {
-		return errors.NewOperationError(
-			fmt.Sprintf("model not found: %s in %s environment", modelName, environment),
-			"Check that the model name and environment are correct.",
-		)
-	} else if err != nil {
+	model, err := client.UpdateStatus(ctx, modelName, environment, status)
+	if err != nil {
+		// Check if it's a not found error using typed error checking
+		if isNotFoundError(err) {
+			return errors.NewOperationError(
+				fmt.Sprintf("model not found: %s in %s environment", modelName, environment),
+				"Check that the model name and environment are correct.",
+			)
+		}
 		return errors.NewOperationError(
 			fmt.Sprintf("failed to update model status: %v", err),
-			"Check database permissions and connectivity.",
+			"Check API connectivity and permissions.",
 		)
 	}
 
@@ -506,8 +415,8 @@ func updateModelStatus(modelName, environment, status string, quiet, dryRun bool
 
 	if !quiet {
 		fmt.Fprintf(os.Stderr, "✓ Model %s successfully in %.2fs\n", action, duration.Seconds())
-		fmt.Fprintf(os.Stderr, "  ID: %d\n", entry.ID)
-		fmt.Fprintf(os.Stderr, "  Status: %s\n", entry.DeploymentStatus)
+		fmt.Fprintf(os.Stderr, "  ID: %s\n", model.ModelID)
+		fmt.Fprintf(os.Stderr, "  Status: %s\n", model.DeploymentStatus)
 	}
 
 	return nil
@@ -559,115 +468,38 @@ func runRegistryList(cmd *cobra.Command, args []string, environment, status, fla
 		)
 	}
 
-	// Connect to database
-	db, err := sql.Open("postgres", cfg.DatabaseURL)
-	if err != nil {
-		return errors.NewOperationError(
-			fmt.Sprintf("failed to connect to database: %v", err),
-			"Check your database configuration and connectivity.",
-		)
-	}
-	defer db.Close()
+	// Create API client and list via Admin API with pagination
+	client := newRegistryClient(cfg)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Build query with filters
-	query := `
-		SELECT
-			id,
-			model_name,
-			deployment_endpoint,
-			deployment_status,
-			deployment_environment,
-			deployment_namespace,
-			last_health_check_at,
-			created_at,
-			updated_at
-		FROM model_registry_entries
-		WHERE deployment_endpoint IS NOT NULL
-	`
-	queryArgs := []interface{}{}
-	argCount := 1
-
-	if environment != "" {
-		query += fmt.Sprintf(" AND deployment_environment = $%d", argCount)
-		queryArgs = append(queryArgs, environment)
-		argCount++
-	}
-
-	if status != "" {
-		query += fmt.Sprintf(" AND deployment_status = $%d", argCount)
-		queryArgs = append(queryArgs, status)
-		argCount++
-	}
-
-	query += " ORDER BY deployment_environment, model_name"
-
-	rows, err := db.QueryContext(ctx, query, queryArgs...)
+	models, err := listAllModels(ctx, client, environment, status)
 	if err != nil {
 		return errors.NewOperationError(
-			fmt.Sprintf("failed to query registry: %v", err),
-			"Check database connectivity and permissions.",
+			fmt.Sprintf("failed to list registry: %v", err),
+			"Check API connectivity and permissions.",
 		)
 	}
-	defer rows.Close()
 
-	entries := []map[string]interface{}{}
-	for rows.Next() {
-		var entry struct {
-			ID                    int64
-			ModelName             string
-			DeploymentEndpoint    sql.NullString
-			DeploymentStatus      sql.NullString
-			DeploymentEnvironment sql.NullString
-			DeploymentNamespace   sql.NullString
-			LastHealthCheckAt     sql.NullTime
-			CreatedAt             time.Time
-			UpdatedAt             time.Time
-		}
-
-		err := rows.Scan(
-			&entry.ID,
-			&entry.ModelName,
-			&entry.DeploymentEndpoint,
-			&entry.DeploymentStatus,
-			&entry.DeploymentEnvironment,
-			&entry.DeploymentNamespace,
-			&entry.LastHealthCheckAt,
-			&entry.CreatedAt,
-			&entry.UpdatedAt,
-		)
-		if err != nil {
-			return errors.NewOperationError(
-				fmt.Sprintf("failed to scan row: %v", err),
-				"Check database schema and migrations.",
-			)
-		}
-
+	entries := make([]map[string]interface{}, 0, len(models))
+	for _, model := range models {
 		healthCheck := ""
-		if entry.LastHealthCheckAt.Valid {
-			healthCheck = entry.LastHealthCheckAt.Time.Format(time.RFC3339)
+		if model.LastHealthCheckAt != nil {
+			healthCheck = model.LastHealthCheckAt.Format(time.RFC3339)
 		}
 
 		entries = append(entries, map[string]interface{}{
-			"id":          entry.ID,
-			"model_name":  entry.ModelName,
-			"endpoint":    entry.DeploymentEndpoint.String,
-			"status":      entry.DeploymentStatus.String,
-			"environment": entry.DeploymentEnvironment.String,
-			"namespace":   entry.DeploymentNamespace.String,
+			"id":          model.ModelID,
+			"model_name":  model.ModelName,
+			"endpoint":    model.DeploymentEndpoint,
+			"status":      model.DeploymentStatus,
+			"environment": model.DeploymentEnvironment,
+			"namespace":   model.DeploymentNamespace,
 			"last_health": healthCheck,
-			"created_at":  entry.CreatedAt,
-			"updated_at":  entry.UpdatedAt,
+			"created_at":  model.CreatedAt,
+			"updated_at":  model.UpdatedAt,
 		})
-	}
-
-	if err = rows.Err(); err != nil {
-		return errors.NewOperationError(
-			fmt.Sprintf("error iterating rows: %v", err),
-			"Check database connectivity.",
-		)
 	}
 
 	if !quiet {
@@ -691,7 +523,7 @@ func runRegistryList(cmd *cobra.Command, args []string, environment, status, fla
 	var tableRows [][]string
 	for _, entry := range entries {
 		tableRows = append(tableRows, []string{
-			fmt.Sprintf("%d", entry["id"]),
+			fmt.Sprintf("%s", entry["id"]),
 			fmt.Sprintf("%s", entry["model_name"]),
 			fmt.Sprintf("%s", entry["endpoint"]),
 			fmt.Sprintf("%s", entry["status"]),

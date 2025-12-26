@@ -46,9 +46,6 @@ type Config struct {
 	CACertFile     string `mapstructure:"ca_cert_file" json:"ca_cert_file,omitempty"`
 	TLSInsecure    bool   `mapstructure:"tls_insecure" json:"tls_insecure,omitempty"`
 
-	// Database (for direct DB commands)
-	DatabaseURL string `mapstructure:"database_url" json:"database_url,omitempty"`
-
 	// Retry Settings
 	MaxRetries int `mapstructure:"max_retries" json:"max_retries,omitempty"`
 	Timeout    int `mapstructure:"timeout" json:"timeout,omitempty"`
@@ -140,10 +137,18 @@ func Load() (*Config, error) {
 		}
 	}
 
+	// AI_AAS_HF_TOKEN overrides config file HuggingFace token
+	if hfTokenOverride := os.Getenv("AI_AAS_HF_TOKEN"); hfTokenOverride != "" {
+		cfg.HFToken = hfTokenOverride
+	}
+
 	// Ensure inference timeout has a reasonable value
 	if cfg.InferenceTimeout <= 0 {
 		cfg.InferenceTimeout = 90
 	}
+
+	// Warn about secrets in config file (deprecation notice)
+	warnSecretsInConfigFile()
 
 	return &cfg, nil
 }
@@ -257,13 +262,58 @@ func MaskSecret(s string) string {
 	return "****" + s[len(s)-4:]
 }
 
+// warnSecretsInConfigFile checks for secrets in the config file and warns the user.
+// This is a deprecation notice to encourage migration to environment variables.
+func warnSecretsInConfigFile() {
+	configPath, err := GetConfigPath()
+	if err != nil {
+		return
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return // Config file doesn't exist or can't be read
+	}
+
+	content := string(data)
+	var warnings []string
+
+	// Check for secrets in config file (not from env vars)
+	if strings.Contains(content, "api_key:") && os.Getenv("AI_AAS_API_KEY") == "" {
+		warnings = append(warnings, "api_key (use AI_AAS_API_KEY environment variable)")
+	}
+	if strings.Contains(content, "hf_token:") && os.Getenv("AI_AAS_HF_TOKEN") == "" {
+		warnings = append(warnings, "hf_token (use AI_AAS_HF_TOKEN environment variable)")
+	}
+	if strings.Contains(content, "database_url:") {
+		warnings = append(warnings, "database_url (no longer needed, remove from config)")
+	}
+
+	// Check for S3 credentials
+	if (strings.Contains(content, "access_key:") || strings.Contains(content, "secret_key:")) &&
+		os.Getenv("AWS_ACCESS_KEY_ID") == "" && os.Getenv("LINODE_OBJECT_STORAGE_ACCESS_KEY") == "" {
+		warnings = append(warnings, "s3 credentials (use AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY)")
+	}
+
+	if len(warnings) > 0 {
+		fmt.Fprintf(os.Stderr, "\nWARNING: Secrets found in config file %s\n", configPath)
+		fmt.Fprintf(os.Stderr, "  For security, please migrate to environment variables:\n")
+		for _, w := range warnings {
+			fmt.Fprintf(os.Stderr, "    - %s\n", w)
+		}
+		fmt.Fprintf(os.Stderr, "\n  Add to your shell profile (~/.bashrc or ~/.zshrc):\n")
+		fmt.Fprintf(os.Stderr, "    export AI_AAS_API_KEY=\"your-api-key\"\n")
+		fmt.Fprintf(os.Stderr, "    export AI_AAS_HF_TOKEN=\"your-hf-token\"\n\n")
+	}
+}
+
 // Validate validates the configuration
 func (c *Config) Validate() error {
 	if c.APIEndpoint == "" {
 		return fmt.Errorf("api_endpoint is required")
 	}
 	if c.APIKey == "" {
-		return fmt.Errorf("api_key is required")
+		return fmt.Errorf("API key is required. Set AI_AAS_API_KEY environment variable")
 	}
 	return nil
 }

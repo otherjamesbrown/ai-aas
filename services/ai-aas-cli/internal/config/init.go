@@ -190,7 +190,25 @@ func (w *InitWizard) collectAPIEndpoint() error {
 func (w *InitWizard) collectAPIKey() error {
 	fmt.Println("API Key")
 	fmt.Println("  Your Admin API key for authentication")
-	fmt.Println("  (This will be stored securely)")
+	fmt.Println()
+
+	// Check if API key is set via environment variable (preferred)
+	envKey := os.Getenv("AI_AAS_API_KEY")
+	if envKey != "" {
+		fmt.Println("  ✓ Found AI_AAS_API_KEY in environment (recommended)")
+		fmt.Printf("  Using: %s\n", MaskSecret(envKey))
+		w.config.APIKey = envKey
+		fmt.Println()
+		return nil
+	}
+
+	// Show security warning about storing in config file
+	fmt.Println("  RECOMMENDED: Set AI_AAS_API_KEY environment variable instead")
+	fmt.Println("  Add to your shell profile (~/.bashrc or ~/.zshrc):")
+	fmt.Println("    export AI_AAS_API_KEY=\"your-api-key\"")
+	fmt.Println()
+	fmt.Println("  If you enter a key here, it will be stored in the config file.")
+	fmt.Println("  This is less secure on shared systems.")
 	fmt.Println()
 
 	// Show existing value if present (masked)
@@ -201,7 +219,7 @@ func (w *InitWizard) collectAPIKey() error {
 		fmt.Println()
 	}
 
-	key, err := w.prompt("API Key: ")
+	key, err := w.prompt("API Key (or press Enter to skip): ")
 	if err != nil {
 		return err
 	}
@@ -215,7 +233,10 @@ func (w *InitWizard) collectAPIKey() error {
 			fmt.Println()
 			return nil
 		}
-		return fmt.Errorf("API key is required")
+		// Allow skipping if they plan to use env var
+		fmt.Println("  ⚠ No API key set. Set AI_AAS_API_KEY before using CLI commands.")
+		fmt.Println()
+		return nil
 	}
 
 	w.config.APIKey = key
