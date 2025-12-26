@@ -1,0 +1,315 @@
+name: Nightly E2E Tests
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # 2 AM UTC daily - runs both environments
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Test environment (or "all" for both)'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - development
+          - staging
+      test_tier:
+        description: 'Test tier to run'
+        required: true
+        default: 'nightly'
+        type: choice
+        options:
+          - smoke
+          - nightly
+          - full
+
+env:
+  GO_VERSION: '1.24.x'
+  TEST_TIMEOUT: '30m'
+  # Uses existing Linode Object Storage bucket with e2e-results/ prefix
+  RESULTS_BUCKET: ai-aas-models
+  RESULTS_PREFIX: e2e-results
+  # Linode Object Storage endpoint (us-east-1 region)
+  S3_ENDPOINT: https://us-east-1.linodeobjects.com
+
+jobs:
+  # Determine which environments to test
+  setup:
+    name: Setup Test Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      environments: ${{ steps.set-matrix.outputs.environments }}
+    steps:
+      - name: Set environment matrix
+        id: set-matrix
+        run: |
+          if [ "${{ github.event_name }}" == "schedule" ]; then
+            # Scheduled runs test both environments
+            echo 'environments=["development", "staging"]' >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.inputs.environment }}" == "all" ]; then
+            echo 'environments=["development", "staging"]' >> $GITHUB_OUTPUT
+          else
+            echo 'environments=["${{ github.event.inputs.environment }}"]' >> $GITHUB_OUTPUT
+          fi
+
+  nightly-e2e:
+    name: E2E (${{ matrix.environment }})
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: ${{ matrix.environment }}
+    strategy:
+      fail-fast: false  # Continue other environments if one fails
+      matrix:
+        environment: ${{ fromJson(needs.setup.outputs.environments) }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-e2e-${{ hashFiles('tests/e2e/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-e2e-
+            ${{ runner.os }}-go-
+
+      - name: Install dependencies
+        run: |
+          cd tests/e2e
+          go mod download
+          go mod verify
+
+      - name: Determine test tier
+        id: tier
+        run: |
+          TIER="${{ github.event.inputs.test_tier || 'nightly' }}"
+          echo "tier=$TIER" >> $GITHUB_OUTPUT
+
+          case $TIER in
+            smoke)
+              echo "tags=-tags=smoke" >> $GITHUB_OUTPUT
+              echo "run=-run=TestSmoke" >> $GITHUB_OUTPUT
+              ;;
+            nightly)
+              echo "tags=-tags=nightly" >> $GITHUB_OUTPUT
+              echo "run=" >> $GITHUB_OUTPUT
+              ;;
+            full)
+              echo "tags=-tags=full" >> $GITHUB_OUTPUT
+              echo "run=" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+      - name: Configure test environment
+        run: |
+          ENV="${{ matrix.environment }}"
+          echo "TEST_ENV=$ENV" >> $GITHUB_ENV
+
+          if [ "$ENV" = "development" ]; then
+            echo "USER_ORG_SERVICE_URL=https://user-org.api.ai-aas.dev" >> $GITHUB_ENV
+            echo "API_ROUTER_SERVICE_URL=https://router.api.ai-aas.dev" >> $GITHUB_ENV
+            echo "ANALYTICS_SERVICE_URL=https://analytics.api.ai-aas.dev" >> $GITHUB_ENV
+          elif [ "$ENV" = "staging" ]; then
+            echo "USER_ORG_SERVICE_URL=https://user-org.api.ai-aas.staging" >> $GITHUB_ENV
+            echo "API_ROUTER_SERVICE_URL=https://router.api.ai-aas.staging" >> $GITHUB_ENV
+            echo "ANALYTICS_SERVICE_URL=https://analytics.api.ai-aas.staging" >> $GITHUB_ENV
+          fi
+
+          # Use environment-specific admin API key
+          if [ "$ENV" = "development" ]; then
+            echo "ADMIN_API_KEY=${{ secrets.MASTER_ADMIN_API_KEY }}" >> $GITHUB_ENV
+          elif [ "$ENV" = "staging" ]; then
+            echo "ADMIN_API_KEY=${{ secrets.STAGING_MASTER_ADMIN_API_KEY }}" >> $GITHUB_ENV
+          fi
+          echo "REQUEST_TIMEOUT_MS=30000" >> $GITHUB_ENV
+
+      - name: Run E2E tests
+        id: tests
+        working-directory: tests/e2e
+        run: |
+          set +e
+          START_TIME=$(date +%s)
+
+          go test -v ./suites/... \
+            ${{ steps.tier.outputs.tags }} \
+            ${{ steps.tier.outputs.run }} \
+            -timeout ${{ env.TEST_TIMEOUT }} \
+            -json > results.json 2>&1
+
+          EXIT_CODE=$?
+          END_TIME=$(date +%s)
+          DURATION=$((END_TIME - START_TIME))
+
+          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+          echo "duration=$DURATION" >> $GITHUB_OUTPUT
+          echo "date=$(date -u +%Y-%m-%d)" >> $GITHUB_OUTPUT
+          echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+
+          # Count pass/fail from JSON output
+          PASSED=$(grep -c '"Action":"pass"' results.json || echo 0)
+          FAILED=$(grep -c '"Action":"fail"' results.json || echo 0)
+          echo "passed=$PASSED" >> $GITHUB_OUTPUT
+          echo "failed=$FAILED" >> $GITHUB_OUTPUT
+
+          exit $EXIT_CODE
+
+      - name: Generate JUnit XML report
+        if: always()
+        working-directory: tests/e2e
+        run: |
+          go install github.com/jstemmer/go-junit-report/v2@latest
+          cat results.json | go-junit-report -parser gojson > results.xml
+
+      - name: Generate metrics summary
+        if: always()
+        working-directory: tests/e2e
+        run: |
+          cat > metrics.json << EOF
+          {
+            "timestamp": "${{ steps.tests.outputs.timestamp }}",
+            "date": "${{ steps.tests.outputs.date }}",
+            "environment": "${{ matrix.environment }}",
+            "tier": "${{ steps.tier.outputs.tier }}",
+            "duration_seconds": ${{ steps.tests.outputs.duration }},
+            "tests_passed": ${{ steps.tests.outputs.passed }},
+            "tests_failed": ${{ steps.tests.outputs.failed }},
+            "exit_code": ${{ steps.tests.outputs.exit_code }},
+            "run_id": "${{ github.run_id }}",
+            "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "commit_sha": "${{ github.sha }}",
+            "branch": "${{ github.ref_name }}"
+          }
+          EOF
+          cat metrics.json
+
+      - name: Upload results to Object Storage
+        if: always()
+        env:
+          # Use existing Linode Object Storage credentials from environment secrets
+          AWS_ACCESS_KEY_ID: ${{ secrets.LINODE_OBJECT_STORAGE_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.LINODE_OBJECT_STORAGE_SECRET_KEY }}
+        run: |
+          cd tests/e2e
+          DATE="${{ steps.tests.outputs.date }}"
+          ENV="${{ matrix.environment }}"
+          PREFIX="${{ env.RESULTS_PREFIX }}"
+
+          # Upload to dated folder (using Linode Object Storage endpoint)
+          aws s3 cp results.json "s3://${{ env.RESULTS_BUCKET }}/${PREFIX}/nightly/${ENV}/${DATE}/results.json" \
+            --endpoint-url ${{ env.S3_ENDPOINT }}
+          aws s3 cp results.xml "s3://${{ env.RESULTS_BUCKET }}/${PREFIX}/nightly/${ENV}/${DATE}/results.xml" \
+            --endpoint-url ${{ env.S3_ENDPOINT }}
+          aws s3 cp metrics.json "s3://${{ env.RESULTS_BUCKET }}/${PREFIX}/nightly/${ENV}/${DATE}/metrics.json" \
+            --endpoint-url ${{ env.S3_ENDPOINT }}
+
+          # Also upload to latest for easy access
+          aws s3 cp metrics.json "s3://${{ env.RESULTS_BUCKET }}/${PREFIX}/nightly/${ENV}/latest/metrics.json" \
+            --endpoint-url ${{ env.S3_ENDPOINT }}
+
+      - name: Upload GitHub artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results-${{ matrix.environment }}-${{ steps.tests.outputs.date }}
+          path: |
+            tests/e2e/results.json
+            tests/e2e/results.xml
+            tests/e2e/metrics.json
+          retention-days: 90
+
+      - name: Update Grafana annotations
+        if: always()
+        continue-on-error: true
+        run: |
+          # Post annotation to Grafana for the test run
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.GRAFANA_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            "${{ secrets.GRAFANA_URL }}/api/annotations" \
+            -d '{
+              "dashboardUID": "e2e-trends",
+              "time": '$(($(date +%s) * 1000))',
+              "tags": ["e2e", "nightly", "${{ matrix.environment }}"],
+              "text": "E2E (${{ matrix.environment }}): ${{ steps.tests.outputs.passed }} passed, ${{ steps.tests.outputs.failed }} failed"
+            }'
+
+      - name: Check test results
+        if: always()
+        run: |
+          if [ "${{ steps.tests.outputs.exit_code }}" != "0" ]; then
+            echo "::error::E2E tests failed for ${{ matrix.environment }} with ${{ steps.tests.outputs.failed }} failures"
+            exit 1
+          fi
+          echo "::notice::E2E tests passed for ${{ matrix.environment }}: ${{ steps.tests.outputs.passed }} tests"
+
+  # Aggregate trends after all environments complete
+  aggregate-trends:
+    name: Aggregate Trends
+    needs: nightly-e2e
+    if: always()
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [development, staging]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Aggregate last 30 days of metrics
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.LINODE_OBJECT_STORAGE_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.LINODE_OBJECT_STORAGE_SECRET_KEY }}
+        run: |
+          ENV="${{ matrix.environment }}"
+          PREFIX="${{ env.RESULTS_PREFIX }}"
+
+          # Download last 30 days of metrics
+          mkdir -p /tmp/metrics
+          for i in $(seq 0 29); do
+            DATE=$(date -u -d "$i days ago" +%Y-%m-%d)
+            aws s3 cp "s3://${{ env.RESULTS_BUCKET }}/${PREFIX}/nightly/${ENV}/${DATE}/metrics.json" \
+              "/tmp/metrics/${DATE}.json" --endpoint-url ${{ env.S3_ENDPOINT }} 2>/dev/null || true
+          done
+
+          # Combine into trends file
+          echo "[" > /tmp/trends.json
+          first=true
+          for f in /tmp/metrics/*.json; do
+            [ -f "$f" ] || continue
+            if [ "$first" = true ]; then
+              first=false
+            else
+              echo "," >> /tmp/trends.json
+            fi
+            cat "$f" >> /tmp/trends.json
+          done
+          echo "]" >> /tmp/trends.json
+
+          # Upload aggregated trends
+          aws s3 cp /tmp/trends.json "s3://${{ env.RESULTS_BUCKET }}/${PREFIX}/trends/${ENV}/last-30-days.json" \
+            --endpoint-url ${{ env.S3_ENDPOINT }}
+
+  # Summary job for branch protection
+  summary:
+    name: E2E Summary
+    needs: [nightly-e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          if [ "${{ needs.nightly-e2e.result }}" == "failure" ]; then
+            echo "::error::One or more E2E test environments failed"
+            exit 1
+          fi
+          echo "All E2E tests passed!"
