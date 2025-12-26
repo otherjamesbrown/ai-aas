@@ -61,6 +61,7 @@ type Model struct {
 	RecommendedGPUMemoryGB *int32
 	RecommendedCPUMemoryGB *int32
 	PinnedVersion          *string
+	ModelType              *string
 	Metadata               []byte
 	CreatedAt              time.Time
 	UpdatedAt              time.Time
@@ -87,7 +88,7 @@ func (s *Service) ListModels(ctx context.Context, opts ListModelsOptions) ([]Mod
 			r.id, r.name, r.external_name, r.hf_model_id, r.hf_revision, r.requires_auth, r.is_gated,
 			r.license_type, r.license_url, r.license_accepted_at, r.license_accepted_by,
 			r.recommended_gpu_memory_gb, r.recommended_cpu_memory_gb,
-			r.pinned_version, r.metadata, r.created_at, r.updated_at,
+			r.pinned_version, r.model_type, r.metadata, r.created_at, r.updated_at,
 			-- Cache status: get status of the most recent cache entry
 			(SELECT status FROM model_cache WHERE model_id = r.id ORDER BY cached_at DESC LIMIT 1) as cache_status,
 			-- Deployment status: get status if any deployment exists (priority: ready > deploying > others)
@@ -119,7 +120,7 @@ func (s *Service) ListModels(ctx context.Context, opts ListModelsOptions) ([]Mod
 			&m.ID, &m.Name, &m.ExternalName, &m.HFModelID, &m.HFRevision, &m.RequiresAuth, &m.IsGated,
 			&m.LicenseType, &m.LicenseURL, &m.LicenseAcceptedAt, &m.LicenseAcceptedBy,
 			&m.RecommendedGPUMemoryGB, &m.RecommendedCPUMemoryGB,
-			&m.PinnedVersion, &m.Metadata, &m.CreatedAt, &m.UpdatedAt,
+			&m.PinnedVersion, &m.ModelType, &m.Metadata, &m.CreatedAt, &m.UpdatedAt,
 			&m.CacheStatus, &m.DeploymentStatus,
 		)
 		if err != nil {
@@ -138,7 +139,7 @@ func (s *Service) GetModel(ctx context.Context, name string) (*Model, error) {
 			r.id, r.name, r.external_name, r.hf_model_id, r.hf_revision, r.requires_auth, r.is_gated,
 			r.license_type, r.license_url, r.license_accepted_at, r.license_accepted_by,
 			r.recommended_gpu_memory_gb, r.recommended_cpu_memory_gb,
-			r.pinned_version, r.metadata, r.created_at, r.updated_at,
+			r.pinned_version, r.model_type, r.metadata, r.created_at, r.updated_at,
 			-- Cache status: get status of the most recent cache entry
 			(SELECT status FROM model_cache WHERE model_id = r.id ORDER BY cached_at DESC LIMIT 1) as cache_status,
 			-- Deployment status: get status if any deployment exists
@@ -162,7 +163,7 @@ func (s *Service) GetModel(ctx context.Context, name string) (*Model, error) {
 		&m.ID, &m.Name, &m.ExternalName, &m.HFModelID, &m.HFRevision, &m.RequiresAuth, &m.IsGated,
 		&m.LicenseType, &m.LicenseURL, &m.LicenseAcceptedAt, &m.LicenseAcceptedBy,
 		&m.RecommendedGPUMemoryGB, &m.RecommendedCPUMemoryGB,
-		&m.PinnedVersion, &m.Metadata, &m.CreatedAt, &m.UpdatedAt,
+		&m.PinnedVersion, &m.ModelType, &m.Metadata, &m.CreatedAt, &m.UpdatedAt,
 		&m.CacheStatus, &m.DeploymentStatus,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -187,6 +188,7 @@ type AddModelRequest struct {
 	AcceptedBy     string
 	GPUMemoryGB    int
 	CPUMemoryGB    int
+	ModelType      string
 }
 
 // AddModel registers a new model
@@ -225,12 +227,20 @@ func (s *Service) AddModel(ctx context.Context, req AddModelRequest) (*Model, er
 		externalNamePtr = &externalName
 	}
 
+	// Set model_type, defaulting to "text" if not provided
+	var modelTypePtr *string
+	modelType := req.ModelType
+	if modelType == "" {
+		modelType = "text"
+	}
+	modelTypePtr = &modelType
+
 	query := `
 		INSERT INTO model_registry (
 			name, external_name, hf_model_id, hf_revision, requires_auth, is_gated,
 			license_type, license_accepted_at, license_accepted_by,
-			recommended_gpu_memory_gb, recommended_cpu_memory_gb
-		) VALUES ($1, $2, $3, 'main', $4, $5, $6, $7, $8, $9, $10)
+			recommended_gpu_memory_gb, recommended_cpu_memory_gb, model_type
+		) VALUES ($1, $2, $3, 'main', $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING id, created_at, updated_at
 	`
 
@@ -246,12 +256,13 @@ func (s *Service) AddModel(ctx context.Context, req AddModelRequest) (*Model, er
 		LicenseAcceptedBy:      licenseAcceptedBy,
 		RecommendedGPUMemoryGB: gpuMemory,
 		RecommendedCPUMemoryGB: cpuMemory,
+		ModelType:              modelTypePtr,
 	}
 
 	err := s.pool.QueryRow(ctx, query,
 		m.Name, m.ExternalName, m.HFModelID, m.RequiresAuth, m.IsGated,
 		m.LicenseType, m.LicenseAcceptedAt, m.LicenseAcceptedBy,
-		m.RecommendedGPUMemoryGB, m.RecommendedCPUMemoryGB,
+		m.RecommendedGPUMemoryGB, m.RecommendedCPUMemoryGB, m.ModelType,
 	).Scan(&m.ID, &m.CreatedAt, &m.UpdatedAt)
 
 	if err != nil {

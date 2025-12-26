@@ -77,6 +77,7 @@ func (a *ServiceAdapter) AddModel(req AddModelRequest) (*Model, error) {
 		AcceptLicense: req.AcceptLicense,
 		GPUMemoryGB:   req.GPUMemoryGB,
 		CPUMemoryGB:   req.CPUMemoryGB,
+		ModelType:     req.ModelType,
 	}
 
 	m, err := a.svc.AddModel(a.ctx, svcReq)
@@ -564,6 +565,9 @@ func convertModel(m svcModels.Model) Model {
 	}
 	if m.PinnedVersion != nil {
 		model.PinnedVersion = *m.PinnedVersion
+	}
+	if m.ModelType != nil {
+		model.ModelType = *m.ModelType
 	}
 	if m.CacheStatus != nil {
 		model.CacheStatus = *m.CacheStatus
