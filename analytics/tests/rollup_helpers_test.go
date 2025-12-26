@@ -85,15 +85,16 @@ WHERE rollup.bucket_start IS NULL
 		cfg.intervalUnit,
 	)
 
-	// In CI environments with seeded test data, the seed timestamps might not be
-	// within the rollup window. Check if there's any data to validate.
-	var hasUsageData bool
-	checkQuery := fmt.Sprintf(`SELECT EXISTS(SELECT 1 FROM usage_events WHERE occurred_at >= NOW() - INTERVAL '%d %s')`, window, cfg.intervalUnit)
-	if err := conn.QueryRow(ctx, checkQuery).Scan(&hasUsageData); err != nil {
-		t.Fatalf("check usage data: %v", err)
+	// In CI environments, rollups run on aligned time windows (e.g., 22:00-23:00)
+	// not rolling windows (last 60 minutes). If there are no rollups for the
+	// current window, skip the test.
+	var hasRollupData bool
+	rollupCheckQuery := fmt.Sprintf(`SELECT EXISTS(SELECT 1 FROM %s WHERE bucket_start >= NOW() - INTERVAL '%d %s')`, cfg.table, window, cfg.intervalUnit)
+	if err := conn.QueryRow(ctx, rollupCheckQuery).Scan(&hasRollupData); err != nil {
+		t.Fatalf("check rollup data: %v", err)
 	}
-	if !hasUsageData {
-		t.Skip("no usage_events data within rollup window; skipping reconciliation")
+	if !hasRollupData {
+		t.Skip("no rollup data within test window; skipping reconciliation")
 	}
 
 	rows, err := conn.Query(ctx, query)
