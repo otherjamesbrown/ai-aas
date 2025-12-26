@@ -2031,14 +2031,17 @@ func hasGPUResource(resources corev1.ResourceList) bool {
 
 // setDeployingPhaseWithTimestamp sets the phase to Deploying and records the start time.
 // Only sets the timestamp if transitioning FROM a different phase TO Deploying.
+// Does NOT overwrite Ready phase - that's a terminal success state.
 func setDeployingPhaseWithTimestamp(aiModel *aimodelv1alpha1.AIModel) bool {
-	if aiModel.Status.Phase != aimodelv1alpha1.AIModelPhaseDeploying {
-		now := metav1.Now()
-		aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
-		aiModel.Status.DeploymentStartedAt = &now
-		return true // Phase changed
+	// Don't transition if already in Deploying or Ready phase
+	if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhaseDeploying ||
+		aiModel.Status.Phase == aimodelv1alpha1.AIModelPhaseReady {
+		return false // Already in Deploying or Ready phase
 	}
-	return false // Already in Deploying phase
+	now := metav1.Now()
+	aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
+	aiModel.Status.DeploymentStartedAt = &now
+	return true // Phase changed
 }
 
 // checkDeploymentTimeout checks if the deployment has exceeded the timeout.
