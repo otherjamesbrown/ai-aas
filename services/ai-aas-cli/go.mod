@@ -7,7 +7,7 @@ toolchain go1.24.2
 require (
 	github.com/ai-aas/shared-go v0.0.0-00010101000000-000000000000
 	github.com/fatih/color v1.18.0
-	github.com/lib/pq v1.10.9
+	github.com/google/uuid v1.6.0
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/schollz/progressbar/v3 v3.17.1
 	github.com/spf13/cobra v1.10.1
@@ -56,7 +56,6 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/pprof v0.0.0-20250923004556-9e5a51aed1e8 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect

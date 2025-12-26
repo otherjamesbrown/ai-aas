@@ -1,26 +1,25 @@
-// Package commands provides deployment status inspection commands.
+// Package admin provides deployment status inspection commands.
 //
 // Purpose:
 //
 //	Deployment status inspection commands: status aggregation from multiple sources
-//	(Helm, Kubernetes, database registry) with health check monitoring.
+//	(Admin API, Kubernetes, Helm) with health check monitoring.
 //
 // Requirements Reference:
 //   - specs/010-vllm-deployment/spec.md#US-003 (Safe operations)
 //   - specs/010-vllm-deployment/tasks.md#T-S010-P05-052 (Status inspection)
-//
 package admin
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
-	_ "github.com/lib/pq" // PostgreSQL driver
 	"github.com/spf13/cobra"
 
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/client/deploymentregistry"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/errors"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
@@ -50,7 +49,7 @@ func deploymentStatusCommand() *cobra.Command {
 		Use:   "status",
 		Short: "Inspect deployment status across multiple sources",
 		Long: `Inspect deployment status by aggregating information from:
-- Model registry database (deployment metadata, health checks)
+- Admin API model registry (deployment metadata, health checks)
 - Kubernetes (pod status, readiness) - if kubectl configured
 - Helm (release status, revisions) - if helm configured
 
@@ -98,25 +97,18 @@ func runDeploymentStatus(cmd *cobra.Command, args []string, modelName, environme
 		fmt.Fprintf(os.Stderr, "\n")
 	}
 
-	// Connect to database
-	db, err := sql.Open("postgres", cfg.DatabaseURL)
-	if err != nil {
-		return errors.NewOperationError(
-			fmt.Sprintf("failed to connect to database: %v", err),
-			"Check your database configuration and connectivity.",
-		)
-	}
-	defer db.Close()
+	// Create API client and query via Admin API
+	client := newRegistryClient(cfg)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Query deployment status from registry
-	statuses, err := queryDeploymentStatuses(ctx, db, modelName, environment)
+	// Query deployment status from registry API
+	statuses, err := queryDeploymentStatusesFromAPI(ctx, client, modelName, environment)
 	if err != nil {
 		return errors.NewOperationError(
 			fmt.Sprintf("failed to query deployment status: %v", err),
-			"Check database connectivity and schema.",
+			"Check API connectivity and permissions.",
 		)
 	}
 
@@ -162,81 +154,62 @@ func runDeploymentStatus(cmd *cobra.Command, args []string, modelName, environme
 	return output.PrintTable(headers, tableRows)
 }
 
-// queryDeploymentStatuses queries the database for deployment statuses.
-func queryDeploymentStatuses(ctx context.Context, db *sql.DB, modelName, environment string) ([]map[string]interface{}, error) {
-	query := `
-		SELECT
-			model_name,
-			deployment_endpoint,
-			deployment_status,
-			deployment_environment,
-			deployment_namespace,
-			last_health_check_at,
-			updated_at
-		FROM model_registry_entries
-		WHERE deployment_environment = $1
-		  AND deployment_endpoint IS NOT NULL
-	`
-
-	args := []interface{}{environment}
-
+// queryDeploymentStatusesFromAPI queries the Admin API for deployment statuses.
+func queryDeploymentStatusesFromAPI(ctx context.Context, client *deploymentregistry.Client, modelName, environment string) ([]map[string]interface{}, error) {
+	// If a specific model is requested, use Get
 	if modelName != "" {
-		query += " AND model_name = $2"
-		args = append(args, modelName)
-	}
-
-	query += " ORDER BY model_name"
-
-	rows, err := db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("query deployment status: %w", err)
-	}
-	defer rows.Close()
-
-	var statuses []map[string]interface{}
-	for rows.Next() {
-		var (
-			modelName   string
-			endpoint    string
-			status      string
-			env         string
-			namespace   string
-			lastHealth  sql.NullTime
-			updatedAt   time.Time
-		)
-
-		err := rows.Scan(
-			&modelName,
-			&endpoint,
-			&status,
-			&env,
-			&namespace,
-			&lastHealth,
-			&updatedAt,
-		)
+		model, err := client.Get(ctx, modelName, environment)
 		if err != nil {
-			return nil, fmt.Errorf("scan row: %w", err)
+			// Check if it's a not found error - return empty list
+			if isNotFoundError(err) {
+				return nil, nil
+			}
+			return nil, fmt.Errorf("get model: %w", err)
 		}
 
-		healthStr := ""
-		if lastHealth.Valid {
-			healthStr = lastHealth.Time.Format(time.RFC3339)
-		}
-
-		statuses = append(statuses, map[string]interface{}{
-			"model_name":  modelName,
-			"endpoint":    endpoint,
-			"status":      status,
-			"environment": env,
-			"namespace":   namespace,
-			"last_health": healthStr,
-			"updated_at":  updatedAt,
-		})
+		return []map[string]interface{}{modelToStatusMap(model)}, nil
 	}
 
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate rows: %w", err)
+	// List all models in the environment
+	resp, err := client.List(ctx, deploymentregistry.ListParams{
+		Environment: environment,
+		Limit:       1000, // High limit to get all results
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list models: %w", err)
+	}
+
+	statuses := make([]map[string]interface{}, 0, len(resp.Models))
+	for _, model := range resp.Models {
+		statuses = append(statuses, modelToStatusMap(&model))
 	}
 
 	return statuses, nil
+}
+
+// modelToStatusMap converts a Model to a status map for output.
+func modelToStatusMap(model *deploymentregistry.Model) map[string]interface{} {
+	healthStr := ""
+	if model.LastHealthCheckAt != nil {
+		healthStr = model.LastHealthCheckAt.Format(time.RFC3339)
+	}
+
+	return map[string]interface{}{
+		"model_name":  model.ModelName,
+		"endpoint":    model.DeploymentEndpoint,
+		"status":      model.DeploymentStatus,
+		"environment": model.DeploymentEnvironment,
+		"namespace":   model.DeploymentNamespace,
+		"last_health": healthStr,
+		"updated_at":  model.UpdatedAt,
+	}
+}
+
+// isNotFoundError checks if an error indicates a not found condition.
+func isNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "not found") || strings.Contains(errStr, "404")
 }
