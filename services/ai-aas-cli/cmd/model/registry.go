@@ -66,6 +66,7 @@ func newRegistryAddCommand() *cobra.Command {
 		acceptLicense bool
 		gpuMemory     int
 		cpuMemory     int
+		modelType     string
 	)
 
 	cmd := &cobra.Command{
@@ -76,9 +77,19 @@ func newRegistryAddCommand() *cobra.Command {
 This command fetches model metadata from HuggingFace and creates a registry entry.
 For gated models (like Llama), you must first accept the license on HuggingFace.
 
+Model types: text (default), vision-language, embedding, audio
+
 Examples:
-  # Add a public model
+  # Add a text model (default type)
   ai-aas model registry add mistralai/Mistral-7B-v0.1 --name mistral-7b
+
+  # Add a vision-language model
+  ai-aas model registry add Qwen/Qwen2-VL-7B-Instruct \
+    --name qwen2-vl-7b-instruct --model-type vision-language --gpu-memory 16
+
+  # Add an embedding model
+  ai-aas model registry add sentence-transformers/all-MiniLM-L6-v2 \
+    --name all-minilm-l6-v2 --model-type embedding
 
   # Add a gated model (must accept license on HuggingFace first)
   ai-aas model registry add meta-llama/Llama-3-8B-Instruct \
@@ -95,6 +106,21 @@ See Also:
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			hfModelID := args[0]
+
+			// Validate model type
+			validModelTypes := []string{"text", "vision-language", "embedding", "audio"}
+			if modelType != "" {
+				valid := false
+				for _, vt := range validModelTypes {
+					if modelType == vt {
+						valid = true
+						break
+					}
+				}
+				if !valid {
+					return fmt.Errorf("invalid model type: %s\nValid types: text, vision-language, embedding, audio", modelType)
+				}
+			}
 
 			// Get profile flag and load config with profile support
 			profileName, _ := cmd.Flags().GetString("profile")
@@ -169,6 +195,7 @@ See Also:
 				AcceptLicense: acceptLicense,
 				GPUMemoryGB:   gpuMemory,
 				CPUMemoryGB:   cpuMemory,
+				ModelType:     modelType,
 			})
 			if err != nil {
 				return fmt.Errorf("failed to register model: %w", err)
@@ -187,6 +214,7 @@ See Also:
 	cmd.Flags().BoolVar(&acceptLicense, "accept-license", false, "accept gated model license terms")
 	cmd.Flags().IntVar(&gpuMemory, "gpu-memory", 0, "recommended GPU memory in GB")
 	cmd.Flags().IntVar(&cpuMemory, "cpu-memory", 0, "recommended CPU memory in GB")
+	cmd.Flags().StringVar(&modelType, "model-type", "", "model type (text, vision-language, embedding, audio)")
 
 	cmd.MarkFlagRequired("name")
 
@@ -393,6 +421,9 @@ See Also:
 			fmt.Printf("  ID:            %s\n", model.ID)
 			fmt.Printf("  HF Model ID:   %s\n", model.HFModelID)
 			fmt.Printf("  HF Revision:   %s\n", model.HFRevision)
+			if model.ModelType != "" {
+				fmt.Printf("  Model Type:    %s\n", model.ModelType)
+			}
 			fmt.Printf("  Created:       %s\n", model.CreatedAt.Format(time.RFC3339))
 			fmt.Printf("  Updated:       %s\n", model.UpdatedAt.Format(time.RFC3339))
 

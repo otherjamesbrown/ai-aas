@@ -33,6 +33,7 @@ type Model struct {
 	LicenseAcceptedBy      string                 `json:"license_accepted_by,omitempty"`
 	RecommendedGPUMemoryGB int                    `json:"recommended_gpu_memory_gb,omitempty"`
 	RecommendedCPUMemoryGB int                    `json:"recommended_cpu_memory_gb,omitempty"`
+	ModelType              string                 `json:"model_type,omitempty"`
 	PinnedVersion          string                 `json:"pinned_version,omitempty"`
 	Metadata               map[string]interface{} `json:"metadata,omitempty"`
 	CreatedAt              time.Time              `json:"created_at"`
@@ -103,6 +104,7 @@ type AddRequest struct {
 	AcceptLicense bool   `json:"accept_license"`
 	GPUMemoryGB   int    `json:"gpu_memory_gb,omitempty"`
 	CPUMemoryGB   int    `json:"cpu_memory_gb,omitempty"`
+	ModelType     string `json:"model_type,omitempty"`
 }
 
 // Add registers a new model
