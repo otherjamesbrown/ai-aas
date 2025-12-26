@@ -83,7 +83,7 @@ func TestAuditEventVerification(t *testing.T) {
 		t.Logf("User invitation created: invite=%s", invite.InviteID)
 	}
 
-	apiKey, err := apiKeyFixture.Create(ctx, org.ID, "audit-test-key", []string{"inference:read"})
+	apiKey, err := apiKeyFixture.CreateWithServiceAccount(ctx, org.ID, "audit-test-key", []string{"inference:read"})
 	if err == nil {
 		time.Sleep(500 * time.Millisecond)
 		t.Logf("API key created: key=%s", apiKey.ID)
@@ -121,7 +121,7 @@ func TestCorrelationIDValidation(t *testing.T) {
 	}
 
 	// Create API key with same correlation ID
-	apiKey, err := apiKeyFixture.Create(ctx, org1.ID, "correlation-test-key", []string{"inference:read"})
+	apiKey, err := apiKeyFixture.CreateWithServiceAccount(ctx, org1.ID, "correlation-test-key", []string{"inference:read"})
 	if err == nil {
 		t.Logf("API key created with correlation ID: key=%s", apiKey.ID)
 	}
@@ -244,7 +244,7 @@ func TestDenialEventVerification(t *testing.T) {
 	}
 
 	// Create an API key with limited scopes
-	apiKey, err := apiKeyFixture.Create(ctx, org.ID, "limited-key", []string{"inference:read"})
+	apiKey, err := apiKeyFixture.CreateWithServiceAccount(ctx, org.ID, "limited-key", []string{"inference:read"})
 	if err != nil {
 		t.Fatalf("Failed to create API key: %v", err)
 	}

@@ -10,11 +10,13 @@ import (
 
 // Organization represents a test organization fixture
 type Organization struct {
-	ID        string            `json:"id"`
+	ID        string            `json:"orgId"`
 	Name      string            `json:"name"`
 	Slug      string            `json:"slug"`
-	CreatedAt time.Time         `json:"created_at"`
-	Metadata   map[string]string `json:"metadata"`
+	Status    string            `json:"status"`
+	CreatedAt time.Time         `json:"createdAt"`
+	UpdatedAt time.Time         `json:"updatedAt"`
+	Metadata  map[string]string `json:"metadata,omitempty"`
 }
 
 // OrganizationFixture provides methods for creating and managing organization fixtures
@@ -53,7 +55,7 @@ func (of *OrganizationFixture) Create(ctx *harness.Context, name string) (*Organ
 		return nil, fmt.Errorf("create organization: %w", err)
 	}
 
-	if resp.StatusCode != 201 {
+	if resp.StatusCode != 200 && resp.StatusCode != 201 {
 		return nil, fmt.Errorf("create organization failed: status %d, body: %s", resp.StatusCode, resp.String())
 	}
 

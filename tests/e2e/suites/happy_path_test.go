@@ -123,7 +123,7 @@ func TestAPIKeyIssuance(t *testing.T) {
 	}
 
 	// Create API key
-	apiKey, err := apiKeyFixture.Create(ctx, org.ID, "", []string{"inference:read", "inference:write"})
+	apiKey, err := apiKeyFixture.CreateWithServiceAccount(ctx, org.ID, "", []string{"inference:read", "inference:write"})
 	if err != nil {
 		t.Fatalf("Failed to create API key: %v", err)
 	}
@@ -159,7 +159,7 @@ func TestModelRequestRouting(t *testing.T) {
 	}
 
 	// Create API key
-	apiKey, err := apiKeyFixture.Create(ctx, org.ID, "", []string{"inference:read", "inference:write"})
+	apiKey, err := apiKeyFixture.CreateWithServiceAccount(ctx, org.ID, "", []string{"inference:read", "inference:write"})
 	if err != nil {
 		t.Fatalf("Failed to create API key: %v", err)
 	}
@@ -225,7 +225,7 @@ func TestSuccessfulCompletion(t *testing.T) {
 	t.Logf("Step 2: Created user %s", user.ID)
 
 	// Step 3: Create API key
-	apiKey, err := apiKeyFixture.Create(ctx, org.ID, "", []string{"inference:read", "inference:write"})
+	apiKey, err := apiKeyFixture.CreateWithServiceAccount(ctx, org.ID, "", []string{"inference:read", "inference:write"})
 	if err != nil {
 		t.Fatalf("Step 3 failed - create API key: %v", err)
 	}
