@@ -263,11 +263,13 @@ func (t *GRPCTranslator) extractTextFromOutput(
 }
 
 // createStringInput creates a string/BYTES input tensor for gRPC.
+// Shape is [1, 1] to include batch dimension required by TensorRT-LLM models
+// with max_batch_size > 0.
 func (t *GRPCTranslator) createStringInput(name, value string) *pb.ModelInferRequest_InferInputTensor {
 	return &pb.ModelInferRequest_InferInputTensor{
 		Name:     name,
 		Datatype: DatatypeBYTES,
-		Shape:    []int64{1},
+		Shape:    []int64{1, 1}, // [batch_size, 1] - TRT-LLM requires batch dimension
 		Contents: &pb.InferTensorContents{
 			BytesContents: [][]byte{[]byte(value)},
 		},
@@ -275,11 +277,13 @@ func (t *GRPCTranslator) createStringInput(name, value string) *pb.ModelInferReq
 }
 
 // createInt32Input creates an INT32 input tensor for gRPC.
+// Shape is [1, 1] to include batch dimension required by TensorRT-LLM models
+// with max_batch_size > 0.
 func (t *GRPCTranslator) createInt32Input(name string, value int32) *pb.ModelInferRequest_InferInputTensor {
 	return &pb.ModelInferRequest_InferInputTensor{
 		Name:     name,
 		Datatype: DatatypeINT32,
-		Shape:    []int64{1},
+		Shape:    []int64{1, 1}, // [batch_size, 1] - TRT-LLM requires batch dimension
 		Contents: &pb.InferTensorContents{
 			IntContents: []int32{value},
 		},
@@ -287,11 +291,13 @@ func (t *GRPCTranslator) createInt32Input(name string, value int32) *pb.ModelInf
 }
 
 // createFloat32Input creates an FP32 input tensor for gRPC.
+// Shape is [1, 1] to include batch dimension required by TensorRT-LLM models
+// with max_batch_size > 0.
 func (t *GRPCTranslator) createFloat32Input(name string, value float32) *pb.ModelInferRequest_InferInputTensor {
 	return &pb.ModelInferRequest_InferInputTensor{
 		Name:     name,
 		Datatype: DatatypeFP32,
-		Shape:    []int64{1},
+		Shape:    []int64{1, 1}, // [batch_size, 1] - TRT-LLM requires batch dimension
 		Contents: &pb.InferTensorContents{
 			Fp32Contents: []float32{value},
 		},
@@ -299,11 +305,13 @@ func (t *GRPCTranslator) createFloat32Input(name string, value float32) *pb.Mode
 }
 
 // createBoolInput creates a BOOL input tensor for gRPC.
+// Shape is [1, 1] to include batch dimension required by TensorRT-LLM models
+// with max_batch_size > 0.
 func (t *GRPCTranslator) createBoolInput(name string, value bool) *pb.ModelInferRequest_InferInputTensor {
 	return &pb.ModelInferRequest_InferInputTensor{
 		Name:     name,
 		Datatype: DatatypeBOOL,
-		Shape:    []int64{1},
+		Shape:    []int64{1, 1}, // [batch_size, 1] - TRT-LLM requires batch dimension
 		Contents: &pb.InferTensorContents{
 			BoolContents: []bool{value},
 		},
