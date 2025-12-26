@@ -272,6 +272,14 @@ type AIModelStatus struct {
 	// NextRetryTime is when the next retry will be attempted (if in retry state).
 	NextRetryTime *metav1.Time `json:"nextRetryTime,omitempty"`
 
+	// DeploymentStartedAt is when the Deploying phase started.
+	// Used for timeout detection to prevent stuck deployments.
+	DeploymentStartedAt *metav1.Time `json:"deploymentStartedAt,omitempty"`
+
+	// LastFailureReason provides the reason for the last failure.
+	// Set when transitioning to Failed phase.
+	LastFailureReason string `json:"lastFailureReason,omitempty"`
+
 	// DEPRECATED: Use InferenceServiceName instead.
 	VLLMDeploymentName string `json:"vllmDeploymentName,omitempty"`
 

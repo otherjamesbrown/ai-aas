@@ -24,6 +24,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -69,6 +70,11 @@ const (
 	maxDeploymentRetries        = 10               // More retries for transient resource issues
 	initialDeploymentRetryDelay = 30 * time.Second // Shorter initial delay for scheduling
 	maxDeploymentRetryDelay     = 10 * time.Minute // Max wait between retries
+)
+
+// Deployment timeout configuration
+const (
+	defaultDeploymentTimeout = 30 * time.Minute // Max time for deployment before marking as Failed
 )
 
 // sanitizeInferenceServiceName converts an AIModel name to a KServe-compatible name.
@@ -127,7 +133,8 @@ func init() {
 // AIModelReconciler reconciles an AIModel object
 type AIModelReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 
 	// Download retry configuration
 	MaxDownloadRetries int32
@@ -310,7 +317,7 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		// Set phase to Deploying to proceed to InferenceService creation
 		if aiModel.Status.Phase != aimodelv1alpha1.AIModelPhaseDeploying &&
 			aiModel.Status.Phase != aimodelv1alpha1.AIModelPhaseReady {
-			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
+			setDeployingPhaseWithTimestamp(aiModel)
 			if err := r.Status().Update(ctx, aiModel); err != nil {
 				log.Error(err, "unable to update AIModel status to Deploying")
 				reconcileTotal.WithLabelValues("error").Inc()
@@ -362,7 +369,7 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			if exists {
 				// Artifacts already exist in S3, skip download phase
 				log.Info("S3 artifacts already exist, skipping download", "Bucket", aiModel.Spec.S3Bucket, "Key", aiModel.Spec.S3Key)
-				aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
+				setDeployingPhaseWithTimestamp(aiModel)
 				// Reset retry count on success
 				aiModel.Status.RetryCount = 0
 				aiModel.Status.LastRetryTime = nil
@@ -401,7 +408,7 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			if jobIsComplete(foundJob) {
 				log.Info("Model Downloader Job completed successfully", "Job.Name", jobName)
 				if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhaseDownloading || aiModel.Status.Phase == aimodelv1alpha1.AIModelPhasePending {
-					aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
+					setDeployingPhaseWithTimestamp(aiModel)
 					// Reset retry tracking on success
 					aiModel.Status.RetryCount = 0
 					aiModel.Status.LastRetryTime = nil
@@ -549,6 +556,34 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
+	// Check for deployment timeout (only applies to Deploying phase)
+	timedOut, err := r.checkDeploymentTimeout(ctx, aiModel)
+	if err != nil {
+		log.Error(err, "Failed to check deployment timeout", "name", aiModel.Name)
+		// Don't fail reconciliation on timeout check error - continue
+	}
+	if timedOut {
+		// Deployment has exceeded timeout - transition to Failed
+		aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
+		aiModel.Status.LastFailureReason = "Deployment timeout exceeded"
+		aiModel.Status.Message = fmt.Sprintf("Deployment timed out after %v. Manual intervention required.", defaultDeploymentTimeout)
+
+		// Emit Kubernetes Event
+		r.Recorder.Event(aiModel, corev1.EventTypeWarning, "PhaseTimeout",
+			fmt.Sprintf("Deployment stuck in Deploying phase for %v, exceeded timeout of %v",
+				time.Since(aiModel.Status.DeploymentStartedAt.Time), defaultDeploymentTimeout))
+
+		if err := r.Status().Update(ctx, aiModel); err != nil {
+			log.Error(err, "Failed to update AIModel status to Failed after timeout")
+			reconcileTotal.WithLabelValues("error").Inc()
+			return ctrl.Result{}, err
+		}
+
+		log.Info("Deployment timeout - marked as Failed", "name", aiModel.Name, "timeout", defaultDeploymentTimeout)
+		reconcileTotal.WithLabelValues("timeout").Inc()
+		return ctrl.Result{}, nil // Don't requeue - manual intervention needed
+	}
+
 	// Handle deployment retry pending state
 	if aiModel.Status.Phase == aimodelv1alpha1.AIModelPhaseRetryPending {
 		if aiModel.Status.NextRetryTime != nil {
@@ -565,7 +600,7 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			// Time to retry - transition back to Deploying phase
 			log.Info("Deployment retry time reached, retrying",
 				"retryCount", aiModel.Status.RetryCount)
-			aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
+			setDeployingPhaseWithTimestamp(aiModel)
 			aiModel.Status.Message = fmt.Sprintf("Retrying deployment (attempt %d)", aiModel.Status.RetryCount)
 			if err := r.Status().Update(ctx, aiModel); err != nil {
 				log.Error(err, "unable to update AIModel status to Deploying for retry")
@@ -1526,10 +1561,11 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 			log.Info("InferenceService is ready, transitioning to Ready phase", "name", aiModel.Name, "url", status.URL)
 			latestAIModel.Status.Phase = aimodelv1alpha1.AIModelPhaseReady
 			latestAIModel.Status.Message = fmt.Sprintf("Model is ready at %s", status.URL)
-			// Reset retry tracking on success
+			// Reset retry tracking and deployment timeout tracking on success
 			latestAIModel.Status.RetryCount = 0
 			latestAIModel.Status.LastRetryTime = nil
 			latestAIModel.Status.NextRetryTime = nil
+			latestAIModel.Status.DeploymentStartedAt = nil // Clear deployment start time
 
 			// Sync deployment state to Admin API only on transition to Ready
 			// This prevents hammering the API with PUT requests on every reconcile
@@ -1608,7 +1644,7 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 					"name", aiModel.Name,
 					"currentPhase", latestAIModel.Status.Phase,
 					"status", status.String())
-				latestAIModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
+				setDeployingPhaseWithTimestamp(latestAIModel)
 			}
 			latestAIModel.Status.Message = status.String()
 		}
@@ -1982,6 +2018,49 @@ func hasGPUResource(resources corev1.ResourceList) bool {
 		}
 	}
 	return false
+}
+
+// setDeployingPhaseWithTimestamp sets the phase to Deploying and records the start time.
+// Only sets the timestamp if transitioning FROM a different phase TO Deploying.
+func setDeployingPhaseWithTimestamp(aiModel *aimodelv1alpha1.AIModel) bool {
+	if aiModel.Status.Phase != aimodelv1alpha1.AIModelPhaseDeploying {
+		now := metav1.Now()
+		aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
+		aiModel.Status.DeploymentStartedAt = &now
+		return true // Phase changed
+	}
+	return false // Already in Deploying phase
+}
+
+// checkDeploymentTimeout checks if the deployment has exceeded the timeout.
+// Returns true if timeout exceeded, false otherwise.
+func (r *AIModelReconciler) checkDeploymentTimeout(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) (bool, error) {
+	// Only check timeout when in Deploying phase
+	if aiModel.Status.Phase != aimodelv1alpha1.AIModelPhaseDeploying {
+		return false, nil
+	}
+
+	// No timeout if deploymentStartedAt is not set (shouldn't happen, but be defensive)
+	if aiModel.Status.DeploymentStartedAt == nil {
+		return false, nil
+	}
+
+	// Calculate elapsed time since deployment started
+	elapsed := time.Since(aiModel.Status.DeploymentStartedAt.Time)
+	timeout := defaultDeploymentTimeout
+
+	// Check if timeout exceeded
+	if elapsed > timeout {
+		log := log.FromContext(ctx)
+		log.Info("Deployment timeout exceeded",
+			"name", aiModel.Name,
+			"elapsed", elapsed,
+			"timeout", timeout,
+			"deploymentStartedAt", aiModel.Status.DeploymentStartedAt.Time)
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

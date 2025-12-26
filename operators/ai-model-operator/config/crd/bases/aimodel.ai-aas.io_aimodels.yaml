@@ -77,6 +77,15 @@ spec:
                   Enabled determines if the model deployment should be active.
                   If false, the InferenceService will be scaled to zero replicas.
                 type: boolean
+              externalName:
+                description: |-
+                  ExternalName is the name exposed in OpenAI-compatible APIs (/v1/models, /v1/chat/completions).
+                  If not specified, derived from ModelID by taking the part after the last "/".
+                  Example: modelID "unsloth/gpt-oss-20b" -> externalName "gpt-oss-20b"
+                  This allows multiple models with the same base name from different providers to coexist
+                  with different external names (e.g., "gpt-oss-20b-unsloth" vs "gpt-oss-20b-openai").
+                  Must be unique per environment.
+                type: string
               maxReplicas:
                 default: 1
                 description: MaxReplicas is the maximum number of replicas for autoscaling.
@@ -91,16 +100,6 @@ spec:
                 format: int32
                 minimum: 0
                 type: integer
-              externalName:
-                description: |-
-                  ExternalName is the name exposed in OpenAI-compatible APIs (/v1/models, /v1/chat/completions).
-                  If not specified, derived from ModelID by taking the part after the last "/".
-                  Example: modelID "unsloth/gpt-oss-20b" -> externalName "gpt-oss-20b"
-                  This allows multiple models with the same base name from different providers to coexist
-                  with different external names (e.g., "gpt-oss-20b-unsloth" vs "gpt-oss-20b-openai").
-                  Must be unique per environment.
-                maxLength: 255
-                type: string
               modelID:
                 description: |-
                   ModelID is the unique identifier for the model (e.g., HuggingFace model ID).
@@ -1729,6 +1728,12 @@ spec:
                   - type
                   type: object
                 type: array
+              deploymentStartedAt:
+                description: |-
+                  DeploymentStartedAt is when the Deploying phase started.
+                  Used for timeout detection to prevent stuck deployments.
+                format: date-time
+                type: string
               downloadProgress:
                 description: DownloadProgress indicates the progress of model artifact
                   download (0-100).
@@ -1743,6 +1748,11 @@ spec:
               inferenceServiceName:
                 description: InferenceServiceName is the name of the associated KServe
                   InferenceService.
+                type: string
+              lastFailureReason:
+                description: |-
+                  LastFailureReason provides the reason for the last failure.
+                  Set when transitioning to Failed phase.
                 type: string
               lastRetryTime:
                 description: LastRetryTime is when the last retry was attempted.

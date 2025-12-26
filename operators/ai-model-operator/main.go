@@ -124,6 +124,7 @@ func main() {
 	if err = (&controllers.AIModelReconciler{
 		Client:             mgr.GetClient(),
 		Scheme:             mgr.GetScheme(),
+		Recorder:           mgr.GetEventRecorderFor("ai-model-operator"),
 		MaxDownloadRetries: int32(maxDownloadRetries),
 		InitialRetryDelay:  initialRetryDelay,
 		MaxRetryDelay:      maxRetryDelay,
