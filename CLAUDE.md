@@ -40,6 +40,26 @@ bd close <issue-id>                # Close an issue
 - Use `bd list --status open` to check for relevant issues
 - Use `bd ready` to find tasks with no blockers
 
+### Tracking Discovered Work
+
+**CRITICAL**: When working on a bead and you discover a follow-on bug or issue:
+
+1. **Create a new bead immediately** - Don't just fix it inline
+2. **Link to the parent bead** using `bd dep add <new-bead> <parent-bead>`
+3. **Use descriptive titles** that reference the discovery context
+
+```bash
+# Example: Discovered tensor shape issue while fixing aas-ih6c
+bd create --title="TRT-LLM tensor shape: add batch dimension" --type=bug --priority=1
+bd dep add <new-bead-id> aas-ih6c  # New bead depends on (was discovered from) parent
+```
+
+**Why this matters:**
+- Creates audit trail for debugging decisions
+- Helps future developers understand why changes were made
+- Enables proper root cause analysis across related issues
+- Prevents "mystery fixes" that lack context
+
 ## CLI-First Operations
 
 **IMPORTANT**: When performing platform operations, ALWAYS prefer the CLI over direct API calls or kubectl commands.
