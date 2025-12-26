@@ -52,63 +52,63 @@ Check your InferenceService image tag to determine the version.
 
 ---
 
-## Step 2: Add Progress Deadline to InferenceService Manifest
+## Step 2: Add Progress Deadline to AIModel CR
+
+The platform uses AIModel CRs (managed by the AI Model Operator) to deploy models. Health probes and progress deadlines are automatically configured by the operator based on best practices for each runtime.
 
 ### Standard Configuration (7B Models)
 
 ```yaml
-apiVersion: serving.kserve.io/v1beta1
-kind: InferenceService
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
 metadata:
   name: mistral-7b-instruct
   namespace: development
-  annotations:
-    serving.kserve.io/deploymentMode: "Serverless"
-    # CRITICAL: Allow 6 minutes for 7B model to load into GPU memory
-    serving.knative.dev/progress-deadline: "360s"
 spec:
-  predictor:
-    minReplicas: 1  # Keep 1 replica warm to avoid cold starts
-    containers:
-      - name: kserve-container
-        image: vllm/vllm-openai:v0.10.2
-        ports:
-          - containerPort: 8000
-            name: http1
-            protocol: TCP
-        # NOTE: Container-level startupProbe is NOT honored by Knative
-        # Use the progress-deadline annotation instead
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 8000
-          periodSeconds: 10
-          failureThreshold: 3
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8000
-          periodSeconds: 30
-          failureThreshold: 3
+  modelName: mistral-7b-instruct
+  modelID: mistralai/Mistral-7B-Instruct-v0.3
+  enabled: true
+  runtime: vllm
+
+  # Keep 1 replica warm to avoid cold starts
+  minReplicas: 1
+  maxReplicas: 3
+
+  resources:
+    requests:
+      cpu: "4"
+      memory: "16Gi"
+      nvidia.com/gpu: "1"
+    limits:
+      cpu: "8"
+      memory: "32Gi"
+      nvidia.com/gpu: "1"
+
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+
+  runtimeArgs:
+    - --dtype=auto
+    - --max-model-len=8192
+    - --gpu-memory-utilization=0.9
+
+  trustRemoteCode: true
 ```
+
+**Note:** The AI Model Operator automatically configures:
+- `serving.knative.dev/progress-deadline: "360s"` annotation for 7B models
+- Appropriate readiness and liveness probes with vLLM health endpoints
+- Container-level health checks (though Knative ignores startupProbe)
 
 ### Large Model Configuration (20B+)
 
-```yaml
-  annotations:
-    serving.kserve.io/deploymentMode: "Serverless"
-    # Allow 15 minutes for 20B model to load
-    serving.knative.dev/progress-deadline: "900s"
-```
+For larger models, the operator automatically adjusts timeout values. No manual annotation changes are needed - the operator derives appropriate values from model size and runtime.
 
 ### Very Large Model Configuration (70B+)
 
-```yaml
-  annotations:
-    serving.kserve.io/deploymentMode: "Serverless"
-    # Allow 30 minutes for 70B+ models
-    serving.knative.dev/progress-deadline: "1800s"
-```
+Same as above - the operator handles timeout configuration automatically based on the model's resource requirements.
 
 ### What the Progress Deadline Does
 
@@ -117,18 +117,20 @@ spec:
 3. **readinessProbe**: Still controls when Knative routes traffic (vLLM /health returns 200 only after model loaded)
 4. **livenessProbe**: Restarts hung pods after model is loaded
 
+**Note:** The AI Model Operator automatically configures these settings when creating the InferenceService from your AIModel CR
+
 ---
 
 ## Step 3: Deploy via GitOps
 
 ```bash
-# 1. Commit your changes
-git add infra/k8s/kserve/models/your-model.yaml
-git commit -m "feat(kserve): Add readiness probes for your-model
+# 1. Commit your AIModel CR
+git add infra/k8s/aimodels/development/your-model.yaml
+git commit -m "feat(aimodels): Deploy your-model with AIModel CR
 
-- Add startup probe with 6 min timeout for 7B model
-- Add readiness probe (10s period)
-- Add liveness probe (30s period)
+- Configure vLLM runtime with appropriate timeouts
+- Set resource limits for 7B model
+- Enable GPU scheduling with tolerations
 
 Resolves: timeout errors during autoscaling"
 git push origin your-branch
@@ -136,7 +138,7 @@ git push origin your-branch
 # 2. Create PR and merge to development
 
 # 3. ArgoCD syncs automatically (development) or manually sync
-argocd app sync kserve-models --server argocd.dev.ai-aas.local
+argocd app sync aimodels-development --server argocd.dev.otherjamesbrown.com
 ```
 
 ---
@@ -182,7 +184,7 @@ kubectl get pod -n development -l serving.kserve.io/inferenceservice=gpt-oss-20b
 
 ```bash
 # Send test request immediately after pod shows 2/2 Running
-curl -X POST "https://api.172.232.58.222.nip.io/v1/chat/completions" \
+curl -X POST "https://api.dev.otherjamesbrown.com/v1/chat/completions" \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -198,7 +200,7 @@ curl -X POST "https://api.172.232.58.222.nip.io/v1/chat/completions" \
 
 ```bash
 # Time the first request after pod Ready
-time curl -X POST "https://api.172.232.58.222.nip.io/v1/chat/completions" \
+time curl -X POST "https://api.dev.otherjamesbrown.com/v1/chat/completions" \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -293,17 +295,19 @@ livenessProbe:
 
 ## Rollback Procedure
 
-If probes cause issues, revert the manifest:
+If the AIModel deployment causes issues, revert the manifest:
 
 ```bash
 # 1. Revert the commit
 git revert HEAD
 git push origin your-branch
 
-# 2. Or manually remove probes from manifest and redeploy
-kubectl apply -f infra/k8s/kserve/models/your-model.yaml
+# 2. Or delete the AIModel CR (this will remove the InferenceService)
+kubectl delete aimodel your-model -n development
 
-# 3. Verify pods restart without probes
+# 3. Verify cleanup
+kubectl get aimodel -n development
+kubectl get inferenceservice -n development
 kubectl get pods -n development -l serving.kserve.io/inferenceservice=your-model -w
 ```
 

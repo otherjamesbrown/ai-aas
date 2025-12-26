@@ -3,9 +3,30 @@ package perf
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
+
+// repoRoot finds the repository root by looking for .git (file or directory)
+func repoRoot() string {
+	// Start from the test file location and walk up
+	_, filename, _, _ := runtime.Caller(0)
+	dir := filepath.Dir(filename)
+	for {
+		// Check for .git (can be a directory in normal repos or a file in worktrees)
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			// Reached filesystem root without finding .git
+			return ""
+		}
+		dir = parent
+	}
+}
 
 func TestRollbackDowntimeUnderOneMinute(t *testing.T) {
 	version := os.Getenv("MIGRATION_TEST_VERSION")
@@ -18,9 +39,23 @@ func TestRollbackDowntimeUnderOneMinute(t *testing.T) {
 		envFile = "migrate.env"
 	}
 
+	root := repoRoot()
+	if root == "" {
+		t.Fatal("could not find repository root (.git)")
+	}
+
+	rollbackScript := filepath.Join(root, "scripts", "db", "rollback.sh")
+	applyScript := filepath.Join(root, "scripts", "db", "apply.sh")
+
+	migrationEnv := []string{
+		"MIGRATION_REQUIRE_CONFIRMATION=0",
+		"MIGRATION_APPROVED_BY=ci-test",
+	}
+
 	start := time.Now()
-	cmd := exec.Command("scripts/db/rollback.sh", "--component", "operational", "--env", envFile, "--version", version, "--yes")
-	cmd.Env = append(os.Environ(), "MIGRATION_REQUIRE_CONFIRMATION=0")
+	cmd := exec.Command(rollbackScript, "--component", "operational", "--env", envFile, "--version", version, "--yes")
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(), migrationEnv...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -32,8 +67,9 @@ func TestRollbackDowntimeUnderOneMinute(t *testing.T) {
 	}
 
 	// Reapply to restore state for subsequent tests.
-	apply := exec.Command("scripts/db/apply.sh", "--component", "operational", "--env", envFile, "--version", version, "--yes")
-	apply.Env = append(os.Environ(), "MIGRATION_REQUIRE_CONFIRMATION=0")
+	apply := exec.Command(applyScript, "--component", "operational", "--env", envFile, "--version", version, "--yes")
+	apply.Dir = root
+	apply.Env = append(os.Environ(), migrationEnv...)
 	apply.Stdout = os.Stdout
 	apply.Stderr = os.Stderr
 	if err := apply.Run(); err != nil {

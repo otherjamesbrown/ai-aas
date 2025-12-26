@@ -54,39 +54,39 @@ Extract spec number from argument (e.g., `spec030`, `030`).
 
 ### Step 4: Find Epic Bead
 
-Epic bead ID follows convention: `ai-aas-spec$SPEC_NUMBER`
+Epic bead ID follows convention: `aas-spec$SPEC_NUMBER`
 
 ```bash
-bd show ai-aas-spec$SPEC_NUMBER
+bd show aas-spec$SPEC_NUMBER
 ```
 
 ### Step 5: Find or Create Dev Sub-Bead (REQUIRED)
 
 **CRITICAL**: Always ensure dev sub-bead exists to track deployment issues.
 
-Dev bead ID: `ai-aas-spec$SPEC_NUMBER.dev`
+Dev bead ID: `aas-spec$SPEC_NUMBER.dev`
 
 Check if dev bead already exists:
 ```bash
-bd show ai-aas-spec$SPEC_NUMBER.dev
+bd show aas-spec$SPEC_NUMBER.dev
 ```
 
 If exists:
 - Set status to in_progress
 ```bash
-bd update ai-aas-spec$SPEC_NUMBER.dev --status=in_progress
+bd update aas-spec$SPEC_NUMBER.dev --status=in_progress
 ```
 
 If NOT exists, create it with period-based naming:
 
 ```bash
-bd create --id="ai-aas-spec$SPEC_NUMBER.dev" --title="Spec $SPEC_NUMBER - Development Validation" --type=task --priority=1 --parent=ai-aas-spec$SPEC_NUMBER
-bd update ai-aas-spec$SPEC_NUMBER.dev --label="spec$SPEC_NUMBER" --label="dev" --label="validation"
+bd create --id="aas-spec$SPEC_NUMBER.dev" --title="Spec $SPEC_NUMBER - Development Validation" --type=task --priority=1 --parent=aas-spec$SPEC_NUMBER
+bd update aas-spec$SPEC_NUMBER.dev --label="spec$SPEC_NUMBER" --label="dev" --label="validation"
 ```
 
 Show bead status:
 ```bash
-bd show ai-aas-spec$SPEC_NUMBER.dev
+bd show aas-spec$SPEC_NUMBER.dev
 ```
 
 ### Step 6: Check CI/CD Status
@@ -127,14 +127,14 @@ For each validation step in spec.md:
 
 For each failure:
 ```bash
-bd create --title="Dev: $ISSUE_DESCRIPTION" --type=bug --priority=1 --parent=ai-aas-spec$SPEC_NUMBER.dev
+bd create --title="Dev: $ISSUE_DESCRIPTION" --type=bug --priority=1 --parent=aas-spec$SPEC_NUMBER.dev
 bd update $ISSUE_BEAD_ID --label="spec$SPEC_NUMBER" --label="dev-issue"
 ```
 
 ### Step 11: Update Dev Bead
 
 ```bash
-bd comments add ai-aas-spec$SPEC_NUMBER.dev "Validation results:
+bd comments add aas-spec$SPEC_NUMBER.dev "Validation results:
 - Smoke tests: $PASS_FAIL
 - Feature validation: $PASS_FAIL
 - Issues found: $COUNT"
@@ -150,7 +150,7 @@ bd comments add ai-aas-spec$SPEC_NUMBER.dev "Validation results:
  Branch:           develop ✓
  Remote Sync:      Up to date ✓
 
- Dev Bead:         ai-aas-spec$SPEC_NUMBER.dev
+ Dev Bead:         aas-spec$SPEC_NUMBER.dev
  Validation Steps: $COUNT defined in spec.md
 
  Tests Run:
@@ -160,7 +160,7 @@ bd comments add ai-aas-spec$SPEC_NUMBER.dev "Validation results:
    $ISSUE_LIST
 
  Next Steps:
-   - Fix issues tracked in ai-aas-spec$SPEC_NUMBER.dev
+   - Fix issues tracked in aas-spec$SPEC_NUMBER.dev
    - Re-run /jb-5-validate $ARGUMENTS when ready
    - When all pass: /jb-6-staging $ARGUMENTS
 ═══════════════════════════════════════════════════

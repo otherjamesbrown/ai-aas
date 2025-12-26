@@ -254,7 +254,7 @@ func runRoutingPolicyCreate(orgID, model, backends string, global bool, flagForm
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cfg.APIKey))
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := &http.Client{Timeout: 90 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return errors.NewOperationError(
@@ -377,7 +377,7 @@ func runRoutingPolicyList(flagFormat, filterModel, filterOrgID string) error {
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cfg.APIKey))
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := &http.Client{Timeout: 90 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return errors.NewOperationError(
@@ -512,7 +512,7 @@ func runRoutingPolicyDelete(policyID string, quiet bool) error {
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cfg.APIKey))
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := &http.Client{Timeout: 90 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return errors.NewOperationError(

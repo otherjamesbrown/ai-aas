@@ -86,12 +86,18 @@ pnpm dev
 
 ### Environment Variables
 
-Create a `.env.local` file:
+Copy `.env.example` to `.env.local` and configure for your local development:
 
-```env
-VITE_USER_ORG_SERVICE_URL=http://localhost:8081
-VITE_API_ROUTER_SERVICE_URL=http://localhost:8080
+```bash
+cp .env.example .env.local
 ```
+
+See `.env.example` for all available environment variables including:
+- OAuth configuration (client ID, issuer URL, redirect URI)
+- API endpoints (base URL, feature flags)
+- OpenTelemetry configuration (service name, OTLP endpoint)
+- Sentry configuration (DSN for error tracking)
+- Log level (debug, info, warn, error)
 
 ## Testing
 

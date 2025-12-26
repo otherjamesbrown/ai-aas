@@ -433,7 +433,7 @@ func updateEndpointPort(endpoint, newPort string) string {
 	}
 
 	// Fallback: Try to parse as host:port (no scheme)
-	if host, oldPort, err := net.SplitHostPort(endpoint); err == nil {
+	if host, _, err := net.SplitHostPort(endpoint); err == nil {
 		// Valid host:port format - replace port
 		return net.JoinHostPort(host, newPort)
 	}

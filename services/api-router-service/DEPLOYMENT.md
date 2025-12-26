@@ -1,7 +1,7 @@
 # api-router-service Deployment Specification
 
 ---
-last_updated: 2025-12-08
+last_updated: 2025-12-22
 maintained_by: go-services-developer
 consumed_by: infra-ops-manager
 ---
@@ -54,6 +54,7 @@ This document defines the deployment requirements for the api-router-service. Th
 | `CONFIG_WATCH_ENABLED` | Enable config watching | `true` |
 | `RATE_LIMIT_DEFAULT_RPS` | Default rate limit | `100` |
 | `RATE_LIMIT_BURST_SIZE` | Rate limit burst | `200` |
+| `DEFAULT_BACKEND_TIMEOUT` | Backend request timeout | `90s` |
 | `OTEL_ENABLED` | Enable OpenTelemetry | `false` |
 | `OTEL_COLLECTOR_ENDPOINT` | OTEL collector URL | (empty) |
 

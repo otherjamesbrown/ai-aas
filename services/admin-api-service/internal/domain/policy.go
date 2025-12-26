@@ -15,12 +15,15 @@ type RoutingPolicy struct {
 	PolicyID          string                 `json:"policy_id"`
 	OrganizationID    string                 `json:"organization_id"`
 	Model             string                 `json:"model"`
+	ExternalName      string                 `json:"external_name,omitempty"` // Name exposed in OpenAI API
 	Backends          []Backend              `json:"backends"`
 	FallbackBackends  []Backend              `json:"fallback_backends,omitempty"`
 	FailoverThreshold int                    `json:"failover_threshold"`
 	Enabled           bool                   `json:"enabled"`
 	Version           int                    `json:"version"`
 	Metadata          map[string]interface{} `json:"metadata,omitempty"`
+	BackendType       string                 `json:"backend_type,omitempty"`  // "openai" (default) | "triton"
+	Tokenizer         string                 `json:"tokenizer,omitempty"`     // tiktoken encoding name (e.g., cl100k_base, llama3)
 	CreatedAt         time.Time              `json:"created_at"`
 	UpdatedAt         time.Time              `json:"updated_at"`
 	CreatedBy         *string                `json:"created_by,omitempty"`
@@ -46,6 +49,8 @@ type PolicyCreate struct {
 	FailoverThreshold int                    `json:"failover_threshold,omitempty"`
 	Enabled           *bool                  `json:"enabled,omitempty"`
 	Metadata          map[string]interface{} `json:"metadata,omitempty"`
+	BackendType       string                 `json:"backend_type,omitempty"` // "openai" (default) | "triton"
+	Tokenizer         string                 `json:"tokenizer,omitempty"`    // tiktoken encoding name
 }
 
 // PolicyUpdate represents a partial policy update
@@ -55,6 +60,8 @@ type PolicyUpdate struct {
 	FailoverThreshold *int                   `json:"failover_threshold,omitempty"`
 	Enabled           *bool                  `json:"enabled,omitempty"`
 	Metadata          map[string]interface{} `json:"metadata,omitempty"`
+	BackendType       *string                `json:"backend_type,omitempty"` // "openai" (default) | "triton"
+	Tokenizer         *string                `json:"tokenizer,omitempty"`    // tiktoken encoding name
 }
 
 // PolicyListParams represents query parameters for listing policies

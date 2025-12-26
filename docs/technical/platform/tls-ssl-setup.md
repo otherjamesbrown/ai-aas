@@ -86,11 +86,11 @@ Production domains follow the pattern:
 
 ### Domains
 
-Local development domains use `.ai-aas.local`:
-- `api.dev.ai-aas.local` - API Router Service
-- `portal.dev.ai-aas.local` - Web Portal
-- `grafana.dev.ai-aas.local` - Grafana
-- `argocd.dev.ai-aas.local` - ArgoCD
+Local development domains use `.otherjamesbrown.com`:
+- `api.dev.otherjamesbrown.com` - API Router Service
+- `portal.dev.otherjamesbrown.com` - Web Portal
+- `grafana.dev.otherjamesbrown.com` - Grafana
+- `argocd.dev.otherjamesbrown.com` - ArgoCD
 
 ### Certificate Files
 
@@ -162,7 +162,7 @@ sudo ./scripts/infra/update-hosts-file.sh
 
 ### DNS Resolution Issues
 
-- Verify hosts file entries: `cat /etc/hosts | grep ai-aas.local`
+- Verify hosts file entries: `cat /etc/hosts | grep otherjamesbrown.com`
 - Check ingress IP: `kubectl get svc -n ingress-nginx ingress-nginx-controller`
 - Update hosts file: `sudo ./scripts/infra/update-hosts-file.sh`
 

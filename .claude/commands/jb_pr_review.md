@@ -37,14 +37,14 @@ Comprehensive review and action workflow for a GitHub Pull Request with integrat
 
 After displaying the summary, create a bead to track this PR review work:
 
-1. **Create the tracking bead** with explicit ID `ai-aas-pr<PR_NUMBER>`:
+1. **Create the tracking bead** with explicit ID `aas-pr<PR_NUMBER>`:
    ```bash
-   bd create "PR#<PR_NUMBER>: <PR_TITLE>" --id ai-aas-pr<PR_NUMBER> --type task --priority 1 --force
+   bd create "PR#<PR_NUMBER>: <PR_TITLE>" --id aas-pr<PR_NUMBER> --type task --priority 1 --force
    ```
 
    **Note**: The `--force` flag is required because the custom ID format triggers a prefix mismatch warning.
 
-   Example: For PR #55, the bead ID will be `ai-aas-pr55`.
+   Example: For PR #55, the bead ID will be `aas-pr55`.
 
 2. **Update the bead with PR details**:
    ```bash
@@ -63,8 +63,8 @@ After displaying the summary, create a bead to track this PR review work:
 
 4. **Inform the user**: Display the created bead ID so they can reference it:
    ```
-   📋 Created tracking bead: ai-aas-pr<PR_NUMBER>
-   Use `bd show ai-aas-pr<PR_NUMBER>` to view progress.
+   📋 Created tracking bead: aas-pr<PR_NUMBER>
+   Use `bd show aas-pr<PR_NUMBER>` to view progress.
    ```
 
 ---
@@ -360,7 +360,7 @@ When all issues are resolved and the code is stable in the target environment:
 - The only user interaction in Phase 3A should be the initial selection in Phase 2
 
 ### Bead Tracking Notes
-- **Tracking bead**: Created in Phase 1.5 with explicit ID `ai-aas-pr<PR_NUMBER>` (e.g., `ai-aas-pr55`). Requires `--force` flag due to prefix parsing.
+- **Tracking bead**: Created in Phase 1.5 with explicit ID `aas-pr<PR_NUMBER>` (e.g., `aas-pr55`). Requires `--force` flag due to prefix parsing.
 - **Labels used**:
   - `pr-review` - Identifies this as a PR review tracking bead
   - `pr-<PR_NUMBER>` - Links to the specific PR number
@@ -369,7 +369,7 @@ When all issues are resolved and the code is stable in the target environment:
   - `parent-<BEAD_ID>` - Used on sub-beads to link to parent
 - **Sub-beads**: Created in Phase 4 to track individual fixes needed after environment promotion
 - **Dependencies**: Use `bd dep add <child> <parent>` to establish relationships
-- **Finding PR beads**: `bd show ai-aas-pr<NUMBER>` (direct lookup) or `bd list --label pr-review`
+- **Finding PR beads**: `bd show aas-pr<NUMBER>` (direct lookup) or `bd list --label pr-review`
 - **Workflow**:
   1. Bead created at PR review start
   2. Comments added as work progresses

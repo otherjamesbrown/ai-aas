@@ -466,7 +466,9 @@ See Also:
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
 
-			cfg, err := config.Load()
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
 			}
@@ -643,7 +645,9 @@ See Also:
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 
-			cfg, err := config.Load()
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
@@ -690,8 +694,11 @@ See Also:
 			results := make(map[string]*ModelValidationResult)
 			allPassed := true
 
+			// Get inference timeout from config (in seconds)
+			inferenceTimeout := time.Duration(cfg.InferenceTimeout) * time.Second
+
 			for _, modelName := range modelNames {
-				result := validateModel(ctx, modelName, environment, regClient, skipSet)
+				result := validateModel(ctx, modelName, environment, regClient, skipSet, inferenceTimeout)
 				results[modelName] = result
 				if !result.Passed {
 					allPassed = false

@@ -10,4 +10,3 @@ DROP TYPE IF EXISTS analytics.export_job_granularity;
 DROP TYPE IF EXISTS analytics.export_job_status;
 
 COMMIT;
-

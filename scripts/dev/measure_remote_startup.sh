@@ -16,6 +16,7 @@ WORKSPACE_NAME="${WORKSPACE_NAME:-}"
 STARTUP_TIMEOUT="${STARTUP_TIMEOUT:-300}"  # 5 minutes
 STATUS_TIMEOUT="${STATUS_TIMEOUT:-10}"     # 10 seconds
 
+# shellcheck disable=SC2317  # Called indirectly by parse_args --help
 show_usage() {
   cat <<EOF
 Usage: $0 [OPTIONS]

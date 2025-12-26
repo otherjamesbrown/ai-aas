@@ -10,6 +10,7 @@ on:
     paths:
       - 'services/**'
       - 'shared/**'
+      - 'db/migrations/**'
       - '.github/workflows/service-ci.yml'
       - '.github/workflows/reusable-build.yml'
   pull_request:
@@ -57,6 +58,13 @@ jobs:
       target: test
       go-version: "1.24.x"
 
+  model-downloader:
+    uses: ./.github/workflows/reusable-build.yml
+    with:
+      service: model-downloader
+      target: test
+      go-version: "1.24.x"
+
   user-org-service:
     uses: ./.github/workflows/reusable-build.yml
     with:
@@ -79,6 +87,7 @@ jobs:
       - analytics-service
       - api-router-service
       - hello-service
+      - model-downloader
       - user-org-service
       - world-service
     runs-on: ubuntu-latest
@@ -87,6 +96,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.24.x"
+      - name: Check Go Module Path Consistency
+        run: ./scripts/ci/check-go-modules.sh
       - name: Run go vet on all services
         run: |
           for dir in services/*/; do
@@ -158,11 +169,17 @@ jobs:
           - admin-api-service
           - analytics-service
           - api-router-service
+          - model-downloader
           - user-org-service
           # Note: hello-service and world-service don't have Dockerfiles
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -186,6 +203,15 @@ jobs:
             type=raw,value=staging,enable=${{ github.ref == 'refs/heads/staging' }}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
+      - name: Determine platforms
+        id: platforms
+        run: |
+          if [ "${{ matrix.service }}" == "model-downloader" ]; then
+            echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_OUTPUT
+          else
+            echo "platforms=linux/amd64" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
         with:
@@ -196,4 +222,4 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64
+          platforms: ${{ steps.platforms.outputs.platforms }}

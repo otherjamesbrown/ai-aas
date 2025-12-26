@@ -1,0 +1,155 @@
+# Example: Embedding Model Recipe for BGE Large (TEI Runtime)
+# This shows how to deploy embedding models with Text Embeddings Inference
+apiVersion: ai.ai-aas.io/v1alpha1
+kind: ModelRecipe
+metadata:
+  name: bge-large-en-v1.5
+  namespace: ai-model-system
+  labels:
+    ai.ai-aas.io/model-family: bge
+    ai.ai-aas.io/task: embedding
+    ai.ai-aas.io/runtime: tei
+spec:
+  modelID: BAAI/bge-large-en-v1.5
+  displayName: "BGE Large English v1.5"
+  description: |
+    BAAI's BGE (BERT-based General Embedding) model, English version.
+    Excellent for semantic search, RAG retrieval, and text similarity.
+    Produces 1024-dimensional embeddings.
+
+  runtime: tei
+  image: ghcr.io/huggingface/text-embeddings-inference:1.5
+
+  resources:
+    gpu:
+      type: nvidia
+      count: 1
+      minMemoryGB: 4  # BGE-large needs ~1.3GB, leave room for batching
+    cpu:
+      requests: "2"
+      limits: "4"
+    memory:
+      requests: "4Gi"
+      limits: "8Gi"
+
+  runtimeArgs:
+    tei:
+      # Model type determines the API behavior
+      modelType: embedding
+
+      # Batching configuration for high throughput
+      maxBatchTokens: 16384    # Maximum tokens per batch
+      maxConcurrentRequests: 512
+
+      # Precision - float16 is good balance of speed/quality
+      dtype: float16
+
+      # Pooling strategy for embeddings
+      # cls: Use [CLS] token (recommended for BGE)
+      # mean: Average all tokens
+      # splade: Sparse embeddings
+      pooling: cls
+
+      # Optional: normalize embeddings (recommended for cosine similarity)
+      # Note: BGE models recommend using normalized embeddings
+      extraArgs:
+        - --auto-truncate
+
+  scheduling:
+    tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      - key: gpu-workload
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+
+  healthCheck:
+    startupProbeSeconds: 60  # Embedding models load quickly
+    livenessPath: /health
+    readinessPath: /health
+
+  metadata:
+    parameters: "335M"
+    dimensions: 1024
+    maxSequenceLength: 512
+    architecture: "BertModel"
+    license: "MIT"
+    sourceURL: "https://huggingface.co/BAAI/bge-large-en-v1.5"
+    notes: |
+      - Prepend "query: " to queries and "passage: " to documents for best results
+      - Normalized embeddings recommended for cosine similarity
+      - Supports up to 512 tokens per input
+
+---
+# Multilingual variant - BGE-M3
+apiVersion: ai.ai-aas.io/v1alpha1
+kind: ModelRecipe
+metadata:
+  name: bge-m3
+  namespace: ai-model-system
+  labels:
+    ai.ai-aas.io/model-family: bge
+    ai.ai-aas.io/task: embedding
+    ai.ai-aas.io/runtime: tei
+spec:
+  modelID: BAAI/bge-m3
+  displayName: "BGE-M3 Multilingual"
+  description: |
+    BGE-M3: Multi-Functionality, Multi-Linguality, Multi-Granularity.
+    Supports 100+ languages and multiple retrieval modes (dense, sparse, multi-vector).
+    Best choice for multilingual RAG applications.
+
+  runtime: tei
+  image: ghcr.io/huggingface/text-embeddings-inference:1.5
+
+  resources:
+    gpu:
+      type: nvidia
+      count: 1
+      minMemoryGB: 8  # M3 is larger than bge-large
+    cpu:
+      requests: "2"
+      limits: "4"
+    memory:
+      requests: "8Gi"
+      limits: "16Gi"
+
+  runtimeArgs:
+    tei:
+      modelType: embedding
+      maxBatchTokens: 8192  # Lower due to longer sequences
+      maxConcurrentRequests: 256
+      dtype: float16
+      pooling: cls
+      extraArgs:
+        - --auto-truncate
+
+  scheduling:
+    tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      - key: gpu-workload
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+
+  healthCheck:
+    startupProbeSeconds: 90
+    livenessPath: /health
+    readinessPath: /health
+
+  metadata:
+    parameters: "568M"
+    dimensions: 1024
+    maxSequenceLength: 8192  # Supports long documents!
+    architecture: "XLMRobertaModel"
+    license: "MIT"
+    sourceURL: "https://huggingface.co/BAAI/bge-m3"
+    supportedLanguages: "100+"
+    notes: |
+      - Supports dense, sparse (lexical), and multi-vector retrieval
+      - 8K context length for long documents
+      - Use for multilingual or cross-lingual search

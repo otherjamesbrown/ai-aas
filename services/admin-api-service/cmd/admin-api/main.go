@@ -55,11 +55,11 @@ func main() {
 	var pullWorker *worker.Worker
 	if cfg.WorkerEnabled {
 		// Create credential getter from models service
-		modelsSvc := modelsHandler.CreateModelsService(db.Pool())
+		modelsSvc := modelsHandler.CreateModelsService(db.ConcretePool())
 		credGetter := &credentialGetterAdapter{svc: modelsSvc}
 
 		pullWorker = worker.New(
-			db.Pool(),
+			db.ConcretePool(),
 			credGetter,
 			worker.Config{
 				PollInterval:           cfg.WorkerPollInterval,

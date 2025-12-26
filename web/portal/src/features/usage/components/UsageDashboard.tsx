@@ -4,6 +4,7 @@ import { UsageEmptyState, UsageDegradedState } from './UsageEmptyState';
 import { StatusBadge } from './StatusBadge';
 import { exportUsageCsv } from '../workers/exportUsageCsv';
 import type { TimeRange, OperationType } from '../types';
+import { logger } from '@/lib/logger';
 
 /**
  * Usage dashboard UI with charts and KPIs
@@ -28,7 +29,7 @@ export default function UsageDashboard() {
     try {
       await exportUsageCsv(filters);
     } catch (err) {
-      console.error('Export failed:', err);
+      logger.error('Usage export failed', { component: 'UsageDashboard', filters }, err instanceof Error ? err : undefined);
       alert('Failed to export usage data. Please try again.');
     } finally {
       setIsExporting(false);

@@ -5,7 +5,7 @@ go 1.24.0
 toolchain go1.24.2
 
 require (
-	github.com/ai-aas/shared-go v0.0.0
+	github.com/ai-aas/shared-go v0.0.0-00010101000000-000000000000
 	github.com/fatih/color v1.18.0
 	github.com/lib/pq v1.10.9
 	github.com/olekukonko/tablewriter v0.0.5

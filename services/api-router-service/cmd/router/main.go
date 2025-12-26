@@ -45,6 +45,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -68,6 +69,9 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/routing"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/telemetry"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/usage"
+
+	sharedMiddleware "github.com/ai-aas/shared-go/middleware"
+	"github.com/ai-aas/shared-go/observability"
 )
 
 func main() {
@@ -235,9 +239,15 @@ func main() {
 	// Base middleware stack (applies to all routes including health endpoints)
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
-	router.Use(middleware.Logger)
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.Timeout(60 * time.Second))
+
+	// Request context middleware (for request IDs and correlation)
+	router.Use(observability.RequestContextMiddleware)
+
+	// Request logger middleware (structured logging for all requests)
+	requestLoggerConfig := sharedMiddleware.DefaultRequestLoggerConfig()
+	router.Use(sharedMiddleware.RequestLogger(logger, requestLoggerConfig))
 
 	// Initialize authentication
 	authenticator := auth.NewAuthenticator(logger, cfg.UserOrgServiceURL, cfg.UserOrgServiceTimeout)
@@ -372,13 +382,13 @@ func main() {
 	router.Get("/v1/platform/health", platformHealthHandler.PlatformHealth)
 
 	// Initialize backend client
-	backendClient := routing.NewBackendClient(logger, 30*time.Second)
+	backendClient := routing.NewBackendClient(logger, cfg.DefaultBackendTimeout)
 
 	// Initialize health monitor
 	healthMonitor := routing.NewHealthMonitor(backendClient, logger, cfg.HealthCheckInterval)
-	
+
 	// Initialize routing engine
-	routingEngine := routing.NewEngine(healthMonitor, backendRegistry, logger)
+	routingEngine := routing.NewEngine(healthMonitor, backendRegistry, cfg.DefaultBackendTimeout, logger)
 	
 	// Initialize routing metrics
 	routingMetrics, err := telemetry.NewRoutingMetrics(logger)
@@ -387,26 +397,42 @@ func main() {
 		routingMetrics = nil
 	}
 
+	// Initialize token metrics
+	tokenMetrics, err := telemetry.NewTokenMetrics(logger)
+	if err != nil {
+		logger.Warn("failed to initialize token metrics", zap.Error(err))
+		tokenMetrics = nil
+	}
+
 	// Register backends with health monitor
 	for _, backendID := range backendRegistry.ListBackends() {
 		backendCfg, err := backendRegistry.GetBackend(backendID)
 		if err == nil {
 			endpoint := &routing.BackendEndpoint{
-				ID:      backendCfg.ID,
-				URI:     backendCfg.URI,
-				Timeout: backendCfg.Timeout,
+				ID:         backendCfg.ID,
+				URI:        backendCfg.URI,
+				Timeout:    backendCfg.Timeout,
+				HealthPath: getHealthPathForBackend(backendCfg.URI),
 			}
 			healthMonitor.RegisterBackend(backendID, endpoint)
 		}
 	}
+
+	// Probe backend connectivity at startup
+	// This helps detect NetworkPolicy or routing issues early, before inference requests timeout
+	probeBackendConnectivity(backendRegistry, logger)
 
 	// Start health monitor
 	healthMonitor.Start()
 	defer healthMonitor.Stop()
 
 	// Initialize public API handler with routing engine and usage hook
-	publicHandler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, routingEngine, routingMetrics, usageHook)
+	publicHandler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, routingEngine, routingMetrics, tokenMetrics, usageHook, cfg.AdminAPIEndpoint, cfg.AdminAPIKey, cfg.DefaultBackendTimeout, cfg.ModelsCacheTTL)
 	publicHandler.SetUserOrgServiceURL(cfg.UserOrgServiceURL)
+
+	// Register unauthenticated chat completions health endpoint on main router
+	// This allows benchmarking tools like guidellm to verify the endpoint is reachable without requiring an API key
+	router.Get("/v1/chat/completions/health", publicHandler.HandleChatCompletionsHealth)
 
 	// Create tracer for middleware
 	tracer := otel.Tracer("api-router-service")
@@ -545,4 +571,117 @@ func getEnvOrDefault(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// probeBackendConnectivity checks connectivity to all configured backends at startup.
+// This helps detect NetworkPolicy or routing issues early, instead of discovering them
+// during inference requests which timeout after 30+ seconds.
+//
+// For each backend:
+// - Extracts the host:port from the backend URI
+// - Attempts a TCP dial with 5-second timeout
+// - Logs WARNING for unreachable backends (does not fail startup)
+// - Logs INFO for successful connections
+//
+// This is a diagnostic tool - startup proceeds regardless of results.
+// Operators should check logs for warnings indicating misconfiguration.
+func probeBackendConnectivity(backendRegistry *config.BackendRegistry, logger *zap.Logger) {
+	backendIDs := backendRegistry.ListBackends()
+	if len(backendIDs) == 0 {
+		logger.Warn("no backends configured - skipping connectivity check")
+		return
+	}
+
+	logger.Info("probing backend connectivity", zap.Int("backend_count", len(backendIDs)))
+
+	for _, backendID := range backendIDs {
+		backendCfg, err := backendRegistry.GetBackend(backendID)
+		if err != nil {
+			logger.Warn("failed to get backend config",
+				zap.String("backend", backendID),
+				zap.Error(err),
+			)
+			continue
+		}
+
+		// Extract host:port from URI (e.g., "http://localhost:8000/v1" -> "localhost:8000")
+		host, port, err := extractHostPort(backendCfg.URI)
+		if err != nil {
+			logger.Warn("failed to parse backend URI",
+				zap.String("backend", backendID),
+				zap.String("uri", backendCfg.URI),
+				zap.Error(err),
+			)
+			continue
+		}
+
+		addr := net.JoinHostPort(host, port)
+
+		// Attempt TCP connection with 5-second timeout
+		conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
+		if err != nil {
+			logger.Warn("backend unreachable at startup - check NetworkPolicy and service endpoints",
+				zap.String("backend", backendID),
+				zap.String("uri", backendCfg.URI),
+				zap.String("address", addr),
+				zap.Error(err),
+			)
+			continue
+		}
+
+		// Connection successful
+		conn.Close()
+		logger.Info("backend connectivity verified",
+			zap.String("backend", backendID),
+			zap.String("uri", backendCfg.URI),
+			zap.String("address", addr),
+		)
+	}
+}
+
+// extractHostPort extracts host and port from a backend URI.
+// Examples:
+//   - "http://localhost:8000/v1" -> ("localhost", "8000", nil)
+//   - "https://model.svc.cluster.local:8080" -> ("model.svc.cluster.local", "8080", nil)
+//   - "http://10.0.0.1" -> ("10.0.0.1", "80", nil)
+//   - "https://10.0.0.1" -> ("10.0.0.1", "443", nil)
+func extractHostPort(uri string) (host, port string, err error) {
+	// Detect scheme before removing it
+	isHTTPS := strings.HasPrefix(uri, "https://")
+
+	// Remove scheme (http:// or https://)
+	uri = strings.TrimPrefix(uri, "http://")
+	uri = strings.TrimPrefix(uri, "https://")
+
+	// Remove path component (e.g., /v1/completions)
+	if idx := strings.Index(uri, "/"); idx != -1 {
+		uri = uri[:idx]
+	}
+
+	// Check if port is explicitly specified
+	if strings.Contains(uri, ":") {
+		host, port, err = net.SplitHostPort(uri)
+		if err != nil {
+			return "", "", fmt.Errorf("invalid host:port format: %w", err)
+		}
+		return host, port, nil
+	}
+
+	// No port specified - infer default from original scheme
+	if isHTTPS {
+		return uri, "443", nil
+	}
+	return uri, "80", nil
+}
+
+// getHealthPathForBackend determines the appropriate health check path for a backend.
+// Triton/TensorRT-LLM backends use the KServe V2 protocol (/v2/health/ready),
+// while vLLM and other OpenAI-compatible backends use /health.
+func getHealthPathForBackend(uri string) string {
+	// Triton/TensorRT-LLM backends typically have "trtllm" in their service name
+	if strings.Contains(uri, "trtllm") {
+		return "/v2/health/ready"
+	}
+	// Default to /health for vLLM and other OpenAI-compatible backends
+	return "/health"
 }

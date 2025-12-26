@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:15-alpine
+        image: timescale/timescaledb:latest-pg15
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -38,7 +38,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24.2'
+          go-version: '1.23.4'
 
       - name: Wait for Postgres
         run: |
@@ -56,13 +56,13 @@ jobs:
       - name: Create migrate env
         run: |
           DB_DSN="postgres://postgres:postgres@localhost:5432/ai_aas?sslmode=disable"
-          cat > migrate.env <<ENV
-DB_URL=$DB_DSN
-ANALYTICS_URL=$DB_DSN
-MIGRATION_EMAIL_HASH_KEY=ci-guardrail-email-hmac
-MIGRATION_COMPONENT=operational
-MIGRATION_REQUIRE_CONFIRMATION=0
-ENV
+          {
+            echo "DB_URL=$DB_DSN"
+            echo "ANALYTICS_URL=$DB_DSN"
+            echo "MIGRATION_EMAIL_HASH_KEY=ci-guardrail-email-hmac"
+            echo "MIGRATION_COMPONENT=operational"
+            echo "MIGRATION_REQUIRE_CONFIRMATION=0"
+          } > migrate.env
 
       - name: Run migration lint
         run: |
@@ -93,6 +93,7 @@ ENV
           scripts/db/measure-window.sh --env migrate.env --component operational --version "$VERSION" --rollback
         env:
           MIGRATION_ACTOR: ci-guardrail
+          MIGRATION_APPROVED_BY: ci-guardrail
 
       - name: Run rollback downtime test
         run: MIGRATION_ENV_FILE=migrate.env MIGRATION_TEST_VERSION=$(ls db/migrations/operational/*.up.sql | sort | tail -1 | xargs -n1 basename | sed 's/.up.sql$//') go test ./tests/infra/perf -run TestRollbackDowntimeUnderOneMinute -count=1

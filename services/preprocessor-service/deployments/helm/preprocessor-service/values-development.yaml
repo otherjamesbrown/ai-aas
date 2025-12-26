@@ -1,0 +1,63 @@
+# Development environment values for preprocessor-service
+replicaCount: 2
+
+image:
+  repository: ghcr.io/otherjamesbrown/preprocessor-service
+  pullPolicy: Always
+  tag: "latest"
+
+imagePullSecrets:
+  - name: ghcr-pull-secret
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+env:
+  - name: GRPC_PORT
+    value: "50051"
+  - name: LOG_LEVEL
+    value: "DEBUG"
+  - name: LOG_FORMAT
+    value: "json"
+  - name: HF_HOME
+    value: "/app/hf_cache"
+  - name: TRANSFORMERS_OFFLINE
+    value: "0"
+  - name: MAX_CACHED_TOKENIZERS
+    value: "50"
+  - name: HF_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: preprocessor-hf-token
+        key: token
+
+# Models to preload at startup
+preloadModels: "meta-llama/Llama-3.1-8B-Instruct"
+
+# Faster probes for development
+livenessProbe:
+  grpc:
+    port: 50051
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  grpc:
+    port: 50051
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 5
+  failureThreshold: 3

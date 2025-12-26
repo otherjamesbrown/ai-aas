@@ -53,7 +53,7 @@ See the [Model Registration Workflow](./model-registration-workflow.md) for deta
 To test the integration, you can send a request to the API Router with a valid API key and the name of a KServe-deployed model.
 
 ```bash
-curl -X POST https://api.dev.ai-aas.local/v1/chat/completions \
+curl -X POST https://api.dev.otherjamesbrown.com/v1/chat/completions \
   -H 'Authorization: Bearer <your-api-key>' \
   -H 'Content-Type: application/json' \
   -d '{

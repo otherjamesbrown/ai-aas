@@ -1,0 +1,30 @@
+# Production environment values for AI Model Operator
+replicaCount: 2  # HA deployment for production
+
+image:
+  repository: ghcr.io/otherjamesbrown/ai-aas/ai-model-operator
+  pullPolicy: IfNotPresent
+  tag: "latest"  # Use main branch builds (tagged as latest)
+
+# Model downloader image (Go-based, supports Linode Object Storage)
+downloaderImage: "ghcr.io/otherjamesbrown/ai-aas/model-downloader:latest"
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Environment-specific configuration
+env:
+  - name: LOG_LEVEL
+    value: "info"
+  - name: ADMIN_API_BASE_URL
+    value: "http://admin-api-service-production.admin-api-service.svc.cluster.local:8080"
+  - name: ADMIN_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: admin-api-credentials
+        key: api-key

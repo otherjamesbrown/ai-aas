@@ -46,7 +46,7 @@ Use the API key secret with the API Router Service:
 
 ```bash
 # Example API call with the E2E admin API key
-curl -X POST https://api.dev.ai-aas.local/v1/chat/completions \
+curl -X POST https://api.dev.otherjamesbrown.com/v1/chat/completions \
   -H "X-API-Key: 1z_V2QVOJJt0d2f2aQI9PUwQfudAugmOs4issi96jv0" \
   -H "Content-Type: application/json" \
   -d '{

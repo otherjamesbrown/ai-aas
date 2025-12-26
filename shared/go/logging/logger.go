@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -44,12 +45,17 @@ func New(cfg Config) (*Logger, error) {
 	// Build encoder config
 	encoderConfig := getEncoderConfig(cfg.IsDevelopment())
 
-	// Create core
-	core := zapcore.NewCore(
-		zapcore.NewJSONEncoder(encoderConfig),
-		zapcore.AddSync(writer),
-		zapcore.Level(level),
-	)
+	// Create core with level-specific sampling if configured
+	var core zapcore.Core
+	if cfg.Sampling != nil && cfg.Sampling.Enabled {
+		core = buildSamplingCore(encoderConfig, writer, level, cfg.Sampling)
+	} else {
+		core = zapcore.NewCore(
+			zapcore.NewJSONEncoder(encoderConfig),
+			zapcore.AddSync(writer),
+			zapcore.Level(level),
+		)
+	}
 
 	// Build logger with options
 	opts := []zap.Option{
@@ -165,5 +171,65 @@ func getOutputWriter(path string) (io.Writer, error) {
 		}
 		return file, nil
 	}
+}
+
+// buildSamplingCore creates a core with level-specific sampling.
+// - Debug and Info levels are sampled based on SamplingConfig
+// - Warn and Error levels are NEVER sampled (always logged)
+func buildSamplingCore(encoderConfig zapcore.EncoderConfig, writer io.Writer, minLevel zapcore.Level, sampling *SamplingConfig) zapcore.Core {
+	writeSyncer := zapcore.AddSync(writer)
+	encoder := zapcore.NewJSONEncoder(encoderConfig)
+
+	// Set defaults for sampling config
+	initial := sampling.Initial
+	if initial == 0 {
+		initial = 100
+	}
+	thereafter := sampling.Thereafter
+	if thereafter == 0 {
+		thereafter = 100
+	}
+
+	// Combine cores: sampled for debug/info, unsampled for warn/error
+	// Only include levels at or above the configured minimum level
+	cores := []zapcore.Core{}
+
+	// Add sampled core if we're logging debug or info
+	if minLevel <= zapcore.InfoLevel {
+		sampledCore := zapcore.NewSamplerWithOptions(
+			zapcore.NewCore(
+				encoder,
+				writeSyncer,
+				levelRangeEnabler{min: minLevel, max: zapcore.InfoLevel},
+			),
+			time.Second,
+			initial,
+			thereafter,
+		)
+		cores = append(cores, sampledCore)
+	}
+
+	// Add unsampled core for warn/error (NEVER sampled)
+	if minLevel <= zapcore.ErrorLevel {
+		unsampledCore := zapcore.NewCore(
+			encoder,
+			writeSyncer,
+			levelRangeEnabler{min: zapcore.WarnLevel, max: zapcore.FatalLevel},
+		)
+		cores = append(cores, unsampledCore)
+	}
+
+	return zapcore.NewTee(cores...)
+}
+
+// levelRangeEnabler enables logs within a specific level range.
+type levelRangeEnabler struct {
+	min zapcore.Level
+	max zapcore.Level
+}
+
+// Enabled returns true if the level is within the range.
+func (l levelRangeEnabler) Enabled(level zapcore.Level) bool {
+	return level >= l.min && level <= l.max
 }
 

@@ -32,9 +32,9 @@ kubectl get pods -A
 
 | Environment | URL | Username |
 |-------------|-----|----------|
-| Development | https://argocd.dev.ai-aas.local | admin |
-| Staging | https://argocd.staging.ai-aas.local | admin |
-| Production | https://argocd.prod.ai-aas.local | admin |
+| Development | https://argocd.dev.otherjamesbrown.com | admin |
+| Staging | https://argocd.staging.otherjamesbrown.com | admin |
+| Production | https://argocd.prod.otherjamesbrown.com | admin |
 
 Password retrieval:
 ```bash

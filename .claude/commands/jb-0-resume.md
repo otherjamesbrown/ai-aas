@@ -44,13 +44,13 @@ bd search "spec $SPEC_NUMBER"
 ```
 
 Show the bead hierarchy:
-- `ai-aas-spec$NNN` (epic)
-- `ai-aas-spec$NNNspec` (implementation)
-- `ai-aas-spec$NNNpr` (PR review)
-- `ai-aas-spec$NNNdev` (dev cluster)
-- `ai-aas-spec$NNNstg` (staging)
-- `ai-aas-spec$NNNprod` (production)
-- `ai-aas-spec$NNNretro` (retrospective)
+- `aas-spec$NNN` (epic)
+- `aas-spec$NNNspec` (implementation)
+- `aas-spec$NNNpr` (PR review)
+- `aas-spec$NNNdev` (dev cluster)
+- `aas-spec$NNNstg` (staging)
+- `aas-spec$NNNprod` (production)
+- `aas-spec$NNNretro` (retrospective)
 
 ### Step 5: Determine Current Phase
 

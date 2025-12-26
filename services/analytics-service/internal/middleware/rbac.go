@@ -5,7 +5,7 @@
 //   to enforce role-based access control on analytics API endpoints.
 //
 // Dependencies:
-//   - github.com/otherjamesbrown/ai-aas/shared/go/auth: Shared authorization middleware
+//   - github.com/ai-aas/shared-go/auth: Shared authorization middleware
 //   - go.uber.org/zap: Structured logging
 package middleware
 
@@ -17,7 +17,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/otherjamesbrown/ai-aas/shared/go/auth"
+	"github.com/ai-aas/shared-go/auth"
 )
 
 // RBACConfig holds configuration for RBAC middleware.

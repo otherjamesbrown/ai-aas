@@ -7,12 +7,13 @@ set -euo pipefail
 
 # Source common helper library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/dev/common.sh
+# shellcheck source=scripts/dev/common.sh disable=SC1091
 source "${SCRIPT_DIR}/common.sh"
 
 STARTUP_TIMEOUT="${STARTUP_TIMEOUT:-300}"  # 5 minutes
 STATUS_TIMEOUT="${STATUS_TIMEOUT:-10}"     # 10 seconds
 
+# shellcheck disable=SC2317  # Called indirectly by parse_args --help
 show_usage() {
   cat <<EOF
 Usage: $0 [OPTIONS]

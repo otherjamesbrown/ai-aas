@@ -10,8 +10,6 @@ metadata:
 domain:
   # Primary public domain for this environment
   baseDomain: dev.otherjamesbrown.com
-  # Internal local hostname (for /etc/hosts access)
-  localDomain: dev.ai-aas.local
   # LoadBalancer IP (from Akamai cloud)
   loadBalancerIP: "172.232.58.222"
   # TLS configuration

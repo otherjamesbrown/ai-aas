@@ -34,10 +34,11 @@ import (
 
 // BackendEndpoint represents a backend model service endpoint.
 type BackendEndpoint struct {
-	ID        string
-	URI       string
+	ID         string
+	URI        string
 	ModelVariant string
-	Timeout   time.Duration
+	Timeout    time.Duration
+	HealthPath string // Health check path (default: "/health", triton: "/v2/health/ready")
 }
 
 // BackendClient wraps HTTP client for backend communication.
@@ -136,12 +137,23 @@ func (c *BackendClient) ForwardRequest(ctx context.Context, backend *BackendEndp
 // HealthCheck checks the health of a backend endpoint.
 func (c *BackendClient) HealthCheck(ctx context.Context, backend *BackendEndpoint) error {
 	healthURL := backend.URI
-	// Try /health endpoint if URI doesn't end with it
-	if len(healthURL) > 0 && healthURL[len(healthURL)-1] != '/' {
-		healthURL += "/health"
-	} else {
-		healthURL += "health"
+
+	// Use configured health path, or default to /health
+	healthPath := backend.HealthPath
+	if healthPath == "" {
+		healthPath = "/health"
 	}
+
+	// Ensure path starts with /
+	if len(healthPath) > 0 && healthPath[0] != '/' {
+		healthPath = "/" + healthPath
+	}
+
+	// Append health path to URI
+	if len(healthURL) > 0 && healthURL[len(healthURL)-1] == '/' {
+		healthURL = healthURL[:len(healthURL)-1] // Remove trailing slash
+	}
+	healthURL += healthPath
 
 	req, err := http.NewRequestWithContext(ctx, "GET", healthURL, nil)
 	if err != nil {

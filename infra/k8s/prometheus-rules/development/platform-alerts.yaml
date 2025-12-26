@@ -29,7 +29,6 @@ spec:
           annotations:
             summary: "High error rate on API Router"
             description: "API Router error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
-            runbook_url: "https://docs.ai-aas.local/runbooks/api-router-errors"
 
         - alert: APIRouterHighLatency
           expr: |
@@ -184,3 +183,40 @@ spec:
           annotations:
             summary: "vLLM GPU memory usage high"
             description: "GPU memory usage is {{ $value | humanizePercentage }}"
+
+        - alert: InferenceServicePodRestarts
+          expr: |
+            increase(kube_pod_container_status_restarts_total{
+              pod=~".*predictor.*"
+            }[1h]) > 1
+          for: 5m
+          labels:
+            severity: warning
+            service: kserve
+            category: inference
+          annotations:
+            summary: "InferenceService pod {{ $labels.pod }} is restarting frequently"
+            description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has restarted {{ $value }} times in the last hour. This may indicate liveness probe failures, OOM kills, or application crashes. Check pod logs and describe the pod for details."
+
+    # Guidellm Runner Alerts
+    - name: guidellm-runner
+      rules:
+        - alert: GuidellmRunnerStuckNoBenchmarks
+          expr: |
+            (
+              guidellm_runner_up == 1
+              and
+              (
+                (increase(guidellm_requests_total[1h]) == 0)
+                or
+                (absent(guidellm_requests_total) == 1)
+              )
+            )
+          for: 1h
+          labels:
+            severity: warning
+            service: guidellm-runner
+            category: monitoring
+          annotations:
+            summary: "Guidellm runner is active but not sending requests"
+            description: "Guidellm runner has been up for over 1 hour but guidellm_requests_total has not increased. This may indicate a validation failure, configuration issue, or stuck benchmark. Check runner logs for validation errors or benchmark failures."

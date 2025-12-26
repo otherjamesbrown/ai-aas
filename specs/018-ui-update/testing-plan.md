@@ -30,8 +30,8 @@ This document defines the testing strategy for the admin portal rebuild, focusin
 | Environment | URL | Purpose |
 |-------------|-----|---------|
 | Local | `https://localhost:5173` | Development iteration |
-| Remote Dev | `https://portal.172.232.58.222.nip.io` | CI/CD smoke tests |
-| Remote Dev (internal) | `https://portal.dev.ai-aas.local` | Full test suite |
+| Remote Dev | `https://portal.dev.otherjamesbrown.com` | CI/CD smoke tests |
+| Remote Dev (internal) | `https://portal.dev.otherjamesbrown.com` | Full test suite |
 
 ---
 
@@ -112,7 +112,7 @@ cd web/portal
 pnpm test:e2e:smoke
 
 # Against remote dev cluster
-PLAYWRIGHT_BASE_URL=https://portal.172.232.58.222.nip.io \
+PLAYWRIGHT_BASE_URL=https://portal.dev.otherjamesbrown.com \
 SKIP_WEBSERVER=true \
 pnpm playwright test tests/e2e/smoke.spec.ts --project=chromium
 ```
@@ -496,7 +496,7 @@ jobs:
           pnpm playwright test --project=smoke
         working-directory: web/portal
         env:
-          PLAYWRIGHT_BASE_URL: https://portal.172.232.58.222.nip.io
+          PLAYWRIGHT_BASE_URL: https://portal.dev.otherjamesbrown.com
           SKIP_WEBSERVER: true
 
       - name: Upload test results
@@ -541,7 +541,7 @@ jobs:
           pnpm playwright test --project=${{ matrix.project }}
         working-directory: web/portal
         env:
-          PLAYWRIGHT_BASE_URL: https://portal.172.232.58.222.nip.io
+          PLAYWRIGHT_BASE_URL: https://portal.dev.otherjamesbrown.com
           SKIP_WEBSERVER: true
           TEST_AUTH_TOKEN: ${{ secrets.TEST_AUTH_TOKEN }}
 
@@ -586,12 +586,12 @@ PLAYWRIGHT_HEADLESS=false pnpm playwright test
 cd web/portal
 
 # Smoke tests against remote dev
-PLAYWRIGHT_BASE_URL=https://portal.172.232.58.222.nip.io \
+PLAYWRIGHT_BASE_URL=https://portal.dev.otherjamesbrown.com \
 SKIP_WEBSERVER=true \
 pnpm playwright test --project=smoke
 
 # Full suite against remote dev
-PLAYWRIGHT_BASE_URL=https://portal.172.232.58.222.nip.io \
+PLAYWRIGHT_BASE_URL=https://portal.dev.otherjamesbrown.com \
 SKIP_WEBSERVER=true \
 TEST_AUTH_TOKEN="<token>" \
 pnpm playwright test

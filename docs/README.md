@@ -7,6 +7,7 @@
 
 ## Directory Structure
 
+*   **`/architecture`**: System architecture documentation including observability stack design
 *   **`/go-services`**: Documentation for the `go-services-developer` agent. Contains patterns, guides, and checklists for Go service development.
 *   **`/platform`**: Documentation for the `infra-ops-manager` agent. Contains architecture, infrastructure, deployment, and observability guides.
 *   **`/runbooks`**: Operational runbooks used by both agents and humans for specific tasks.

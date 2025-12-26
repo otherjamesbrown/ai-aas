@@ -55,7 +55,9 @@ Examples:
 			defer cancel()
 
 			// Get configuration
-			cfg, err := config.Load()
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
@@ -108,8 +110,11 @@ Examples:
 			results := make(map[string]*ModelValidationResult)
 			allPassed := true
 
+			// Get inference timeout from config (in seconds)
+			inferenceTimeout := time.Duration(cfg.InferenceTimeout) * time.Second
+
 			for _, modelName := range modelNames {
-				result := validateModel(ctx, modelName, environment, regClient, skipSet)
+				result := validateModel(ctx, modelName, environment, regClient, skipSet, inferenceTimeout)
 				results[modelName] = result
 				if !result.Passed {
 					allPassed = false
@@ -168,7 +173,7 @@ type CheckResult struct {
 	Skipped  bool              `json:"skipped,omitempty"`
 }
 
-func validateModel(ctx context.Context, modelName, environment string, regClient *registry.Client, skipSet map[string]bool) *ModelValidationResult {
+func validateModel(ctx context.Context, modelName, environment string, regClient *registry.Client, skipSet map[string]bool, inferenceTimeout time.Duration) *ModelValidationResult {
 	start := time.Now()
 	result := &ModelValidationResult{
 		Model:  modelName,
@@ -201,7 +206,7 @@ func validateModel(ctx context.Context, modelName, environment string, regClient
 
 	// Endpoint check
 	if !skipSet["endpoint"] && environment != "" && result.Deployment != nil && result.Deployment.Passed {
-		result.Endpoint = checkEndpoint(ctx, modelName, environment)
+		result.Endpoint = checkEndpoint(ctx, modelName, environment, inferenceTimeout)
 		if !result.Endpoint.Passed && !result.Endpoint.Skipped {
 			result.Passed = false
 		}
@@ -315,7 +320,7 @@ func checkDeployment(ctx context.Context, modelName, environment string) *CheckR
 	return result
 }
 
-func checkEndpoint(ctx context.Context, modelName, environment string) *CheckResult {
+func checkEndpoint(ctx context.Context, modelName, environment string, inferenceTimeout time.Duration) *CheckResult {
 	start := time.Now()
 	result := &CheckResult{}
 
@@ -348,8 +353,8 @@ func checkEndpoint(ctx context.Context, modelName, environment string) *CheckRes
 		return result
 	}
 
-	// Test the endpoint
-	validator := validation.NewInferenceValidator()
+	// Test the endpoint with configured timeout
+	validator := validation.NewInferenceValidatorWithTimeout(inferenceTimeout)
 	inferenceResult := validator.ValidateEndpoint(ctx, status.URL, "")
 
 	result.Details = map[string]string{

@@ -16,7 +16,7 @@ COPY services/admin-api-service/go.mod services/admin-api-service/go.sum /app/se
 
 # Update go.mod replace directive to use the copied path
 WORKDIR /app/services/admin-api-service
-RUN go mod edit -replace github.com/ai-aas/shared-go=/app/shared/go
+RUN go mod edit -replace github.com/otherjamesbrown/ai-aas/shared/go=/app/shared/go
 RUN go mod download
 
 # Copy service source code

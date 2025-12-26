@@ -4,9 +4,6 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-
 # Default values
 SERVICE="${SERVICE:-}"
 LOKI_URL="${LOKI_URL:-http://localhost:3100}"

@@ -100,12 +100,12 @@ pnpm test:e2e
 
 ```bash
 # Run smoke tests against remote cluster
-PLAYWRIGHT_BASE_URL=https://portal.172.232.58.222.nip.io \
+PLAYWRIGHT_BASE_URL=https://portal.dev.otherjamesbrown.com \
 SKIP_WEBSERVER=true \
 pnpm playwright test tests/e2e/smoke.spec.ts --project=chromium
 
 # Run full test suite
-PLAYWRIGHT_BASE_URL=https://portal.172.232.58.222.nip.io \
+PLAYWRIGHT_BASE_URL=https://portal.dev.otherjamesbrown.com \
 SKIP_WEBSERVER=true \
 TEST_AUTH_TOKEN="<token>" \
 pnpm playwright test
@@ -327,13 +327,13 @@ pnpm dev -- --port 5174
 
 ### Nip.io Development
 
-- Portal URL: `https://portal.172.232.58.222.nip.io`
-- API URL: Auto-computed as `https://api.172.232.58.222.nip.io/api`
+- Portal URL: `https://portal.dev.otherjamesbrown.com`
+- API URL: Auto-computed as `https://api.dev.otherjamesbrown.com/api`
 - Auto-detected as `environment: 'development'`
 
 ### Production
 
-- Portal URL: `https://portal.dev.ai-aas.local` (or production domain)
+- Portal URL: `https://portal.dev.otherjamesbrown.com` (or production domain)
 - API URL: From `VITE_API_BASE_URL` env var or computed
 - Auto-detected as `environment: 'production'`
 

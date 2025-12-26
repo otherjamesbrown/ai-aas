@@ -13,7 +13,8 @@ import (
 )
 
 // DefaultInferenceTimeout is the default timeout for inference validation
-const DefaultInferenceTimeout = 30 * time.Second
+// NOTE: This is now 90 seconds to accommodate GPU model cold starts (70B models can take 10-30s)
+const DefaultInferenceTimeout = 90 * time.Second
 
 // InferenceValidator validates model inference endpoints
 type InferenceValidator struct {
@@ -21,12 +22,17 @@ type InferenceValidator struct {
 	Client  *http.Client
 }
 
-// NewInferenceValidator creates a new inference validator
+// NewInferenceValidator creates a new inference validator with default timeout
 func NewInferenceValidator() *InferenceValidator {
+	return NewInferenceValidatorWithTimeout(DefaultInferenceTimeout)
+}
+
+// NewInferenceValidatorWithTimeout creates a new inference validator with custom timeout
+func NewInferenceValidatorWithTimeout(timeout time.Duration) *InferenceValidator {
 	return &InferenceValidator{
-		Timeout: DefaultInferenceTimeout,
+		Timeout: timeout,
 		Client: &http.Client{
-			Timeout: DefaultInferenceTimeout,
+			Timeout: timeout,
 		},
 	}
 }

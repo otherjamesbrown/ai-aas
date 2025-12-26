@@ -10,6 +10,8 @@ import (
 	"github.com/fatih/color"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/cmd/engine"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/cmd/model"
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/cmd/model/recipe"
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/cmd/pod"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/cmd/profile"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/cmd/status"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/admin"
@@ -186,6 +188,10 @@ Environment Variables:
 	credentialsCmd := newCredentialsCommand()
 	credentialsCmd.GroupID = "platform"
 	rootCmd.AddCommand(credentialsCmd)
+
+	podCmd := pod.NewPodCommand()
+	podCmd.GroupID = "platform"
+	rootCmd.AddCommand(podCmd)
 
 	// Utility commands
 	statusCmd := status.NewCommand()
@@ -866,6 +872,7 @@ The model command provides nested subcommands organized by lifecycle stage:
   registry      Discover and register models from HuggingFace Hub
   cache         Download and manage local model files in S3 storage
   deploy        Create and manage KServe InferenceService deployments
+  recipe        Manage model deployment recipes (known-good configurations)
   troubleshoot  Debug deployment issues with logs, events, and diagnostics
   version       Manage model versions, updates, and pinning
   library       Manage organization's enabled model library
@@ -892,6 +899,7 @@ For more information, see: https://docs.ai-aas.io/cli/model`,
 	cmd.AddCommand(model.NewRegistryCommand())
 	cmd.AddCommand(model.NewCacheParentCommand())
 	cmd.AddCommand(model.NewDeployParentCommand())
+	cmd.AddCommand(recipe.NewRecipeCommand())
 	cmd.AddCommand(model.NewTroubleshootParentCommand())
 	cmd.AddCommand(model.NewVersionParentCommand())
 	cmd.AddCommand(model.NewLibraryParentCommand())

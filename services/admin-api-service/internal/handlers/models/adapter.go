@@ -69,6 +69,7 @@ func (a *ServiceAdapter) GetModel(name string) (*Model, error) {
 func (a *ServiceAdapter) AddModel(req AddModelRequest) (*Model, error) {
 	svcReq := svcModels.AddModelRequest{
 		Name:          req.Name,
+		ExternalName:  req.ExternalName,
 		HFModelID:     req.HFModelID,
 		RequiresAuth:  req.RequiresAuth,
 		IsGated:       req.LicenseType != "",
@@ -295,12 +296,14 @@ func (a *ServiceAdapter) GetDeployment(modelName, environment string) (*Deployme
 // CreateDeployment creates a new deployment
 func (a *ServiceAdapter) CreateDeployment(req CreateDeploymentRequest) (*Deployment, error) {
 	svcReq := svcModels.CreateDeploymentRequest{
-		ModelName:   req.ModelName,
-		Environment: req.Environment,
-		Namespace:   req.Namespace,
-		GPUCount:    req.GPUCount,
-		MemoryGB:    req.MemoryGB,
-		Replicas:    req.Replicas,
+		ModelName:    req.ModelName,
+		ModelID:      req.ModelID,
+		ExternalName: req.ExternalName,
+		Environment:  req.Environment,
+		Namespace:    req.Namespace,
+		GPUCount:     req.GPUCount,
+		MemoryGB:     req.MemoryGB,
+		Replicas:     req.Replicas,
 	}
 
 	d, err := a.svc.CreateDeployment(a.ctx, svcReq)
@@ -330,6 +333,33 @@ func (a *ServiceAdapter) ScaleDeployment(modelName, environment string, req Scal
 		MemoryGB:        req.MemoryGB,
 	}
 	return a.svc.ScaleDeployment(a.ctx, modelName, environment, svcReq)
+}
+
+// UpdateDeploymentStatus updates a deployment's status
+func (a *ServiceAdapter) UpdateDeploymentStatus(modelName, environment string, req UpdateDeploymentStatusRequest) error {
+	// Convert handler request to service request
+	svcReq := svcModels.UpdateDeploymentStatusRequest{
+		Status:        req.Status,
+		ModelID:       req.ModelID,
+		ExternalName:  req.ExternalName,
+		ReplicasReady: req.ReplicasReady,
+	}
+
+	if req.InferenceServiceName != "" {
+		svcReq.InferenceServiceName = &req.InferenceServiceName
+	}
+	if req.Endpoint != "" {
+		svcReq.Endpoint = &req.Endpoint
+	}
+	if req.LastHealthCheckAt != nil {
+		svcReq.LastHealthCheckAt = req.LastHealthCheckAt
+	}
+	if req.LastHealthStatus != "" {
+		svcReq.LastHealthStatus = &req.LastHealthStatus
+	}
+
+	// Use UpdateDeploymentStatusWithModel to also update model_registry if needed
+	return a.svc.UpdateDeploymentStatusWithModel(a.ctx, modelName, environment, svcReq)
 }
 
 // DeleteDeployment terminates a deployment
@@ -511,6 +541,9 @@ func convertModel(m svcModels.Model) Model {
 		UpdatedAt:    m.UpdatedAt,
 	}
 
+	if m.ExternalName != nil {
+		model.ExternalName = *m.ExternalName
+	}
 	if m.LicenseType != nil {
 		model.LicenseType = *m.LicenseType
 	}
@@ -531,6 +564,12 @@ func convertModel(m svcModels.Model) Model {
 	}
 	if m.PinnedVersion != nil {
 		model.PinnedVersion = *m.PinnedVersion
+	}
+	if m.CacheStatus != nil {
+		model.CacheStatus = *m.CacheStatus
+	}
+	if m.DeploymentStatus != nil {
+		model.DeploymentStatus = *m.DeploymentStatus
 	}
 
 	return model
@@ -605,6 +644,9 @@ func convertDeployment(d svcModels.Deployment) Deployment {
 	}
 	if d.Endpoint != nil {
 		deployment.Endpoint = *d.Endpoint
+	}
+	if d.StatusChangedAt != nil {
+		deployment.StatusChangedAt = d.StatusChangedAt
 	}
 	if d.MemoryGB != nil {
 		deployment.MemoryGB = *d.MemoryGB

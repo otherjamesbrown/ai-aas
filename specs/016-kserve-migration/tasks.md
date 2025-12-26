@@ -57,7 +57,7 @@ This document outlines the phased implementation plan for migrating from custom 
 3. Configure Knative to use Istio as networking layer
    - Edit `config-network` ConfigMap: `ingress.class: istio.ingress.networking.knative.dev`
 4. Configure Knative domain
-   - Domain: `*.dev.ai-aas.local` for development
+   - Domain: `*.dev.otherjamesbrown.com` for development
 5. Create ArgoCD Application
    - Location: `gitops/clusters/development/apps/knative-serving.yaml`
 6. Deploy via GitOps
@@ -463,7 +463,7 @@ This document outlines the phased implementation plan for migrating from custom 
 **Steps**:
 1. Send OpenAI API request through api-router-service:
    ```bash
-   curl -X POST https://api.dev.ai-aas.local/v1/chat/completions \
+   curl -X POST https://api.dev.otherjamesbrown.com/v1/chat/completions \
      -H "Authorization: Bearer $API_KEY" \
      -H "Content-Type: application/json" \
      -d '{
@@ -480,7 +480,7 @@ This document outlines the phased implementation plan for migrating from custom 
 5. Run load test (50 concurrent users):
    ```bash
    locust -f tests/load/openai_chat.py \
-     --host https://api.dev.ai-aas.local \
+     --host https://api.dev.otherjamesbrown.com \
      --users 50 --spawn-rate 5 --run-time 10m
    ```
 6. Verify no errors, latency acceptable

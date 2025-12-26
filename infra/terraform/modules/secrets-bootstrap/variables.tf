@@ -11,8 +11,8 @@ variable "output_dir" {
 variable "bootstrap_secrets" {
   description = "Map of secret names to key/value pairs"
   type = map(object({
-    data         = map(string)
-    annotations  = optional(map(string), {})
+    data          = map(string)
+    annotations   = optional(map(string), {})
     rotation_days = optional(number, 30)
   }))
 }

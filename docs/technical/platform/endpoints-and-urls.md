@@ -12,7 +12,7 @@ This document identifies all endpoints that need to be exposed with consistent U
 
 ### API Router Service Endpoints
 
-**Base URL**: `https://api.dev.ai-aas.local` (dev) / `https://api.prod.ai-aas.local` (prod)
+**Base URL**: `https://api.dev.otherjamesbrown.com` (dev) / `https://api.prod.otherjamesbrown.com` (prod)
 
 | Endpoint | Method | Description | Auth |
 |----------|--------|-------------|------|
@@ -38,8 +38,8 @@ These are the core application services that need external access:
   - `/v1/inference` - Custom inference endpoint (requires API key)
   - `/v1/chat/completions` - OpenAI-compatible chat completions endpoint (requires API key)
   - `/v1/completions` - OpenAI-compatible text completions endpoint (requires API key)
-- **Current Dev URL**: `api.dev.ai-aas.local` (via ingress)
-- **Current Prod URL**: `api.prod.ai-aas.local` (via ingress)
+- **Current Dev URL**: `api.dev.otherjamesbrown.com` (via ingress)
+- **Current Prod URL**: `api.prod.otherjamesbrown.com` (via ingress)
 - **Ingress**: ✅ Configured
 - **TLS**: ✅ Configured with cert-manager
 - **Authentication**: API key via `X-API-Key` header
@@ -150,30 +150,30 @@ Since we're using local DNS via hosts file and self-signed certificates, we'll u
 
 ```
 # Application Services
-api.dev.ai-aas.local        → API Router Service (gateway)
-portal.dev.ai-aas.local     → Web Portal (frontend)
+api.dev.otherjamesbrown.com        → API Router Service (gateway)
+portal.dev.otherjamesbrown.com     → Web Portal (frontend)
 
 # Observability
-grafana.dev.ai-aas.local    → Grafana
-prometheus.dev.ai-aas.local → Prometheus (optional, usually accessed via Grafana)
+grafana.dev.otherjamesbrown.com    → Grafana
+prometheus.dev.otherjamesbrown.com → Prometheus (optional, usually accessed via Grafana)
 
 # GitOps
-argocd.dev.ai-aas.local     → ArgoCD
+argocd.dev.otherjamesbrown.com     → ArgoCD
 ```
 
 ### Production Environment
 
 ```
 # Application Services
-api.prod.ai-aas.local       → API Router Service (gateway)
-portal.prod.ai-aas.local    → Web Portal (frontend)
+api.prod.otherjamesbrown.com       → API Router Service (gateway)
+portal.prod.otherjamesbrown.com    → Web Portal (frontend)
 
 # Observability
-grafana.prod.ai-aas.local   → Grafana
-prometheus.prod.ai-aas.local → Prometheus (optional, usually accessed via Grafana)
+grafana.prod.otherjamesbrown.com   → Grafana
+prometheus.prod.otherjamesbrown.com → Prometheus (optional, usually accessed via Grafana)
 
 # GitOps
-argocd.prod.ai-aas.local    → ArgoCD
+argocd.prod.otherjamesbrown.com    → ArgoCD
 ```
 
 **Note**: Using `.local` TLD is a common convention for local development. You can use any domain you prefer (e.g., `ai-aas.dev`, `ai-aas.internal`, `localhost.localdomain`).
@@ -184,16 +184,16 @@ You'll need to add entries like this to your hosts file, pointing to your ingres
 
 ```
 # Development Environment
-<INGRESS_IP>  api.dev.ai-aas.local
-<INGRESS_IP>  portal.dev.ai-aas.local
-<INGRESS_IP>  grafana.dev.ai-aas.local
-<INGRESS_IP>  argocd.dev.ai-aas.local
+<INGRESS_IP>  api.dev.otherjamesbrown.com
+<INGRESS_IP>  portal.dev.otherjamesbrown.com
+<INGRESS_IP>  grafana.dev.otherjamesbrown.com
+<INGRESS_IP>  argocd.dev.otherjamesbrown.com
 
 # Production Environment
-<INGRESS_IP>  api.prod.ai-aas.local
-<INGRESS_IP>  portal.prod.ai-aas.local
-<INGRESS_IP>  grafana.prod.ai-aas.local
-<INGRESS_IP>  argocd.prod.ai-aas.local
+<INGRESS_IP>  api.prod.otherjamesbrown.com
+<INGRESS_IP>  portal.prod.otherjamesbrown.com
+<INGRESS_IP>  grafana.prod.otherjamesbrown.com
+<INGRESS_IP>  argocd.prod.otherjamesbrown.com
 ```
 
 Replace `<INGRESS_IP>` with your actual ingress controller's external IP address.
@@ -280,16 +280,16 @@ sudo vim /etc/hosts
 Add entries:
 ```
 # Development Environment
-<INGRESS_IP>  api.dev.ai-aas.local
-<INGRESS_IP>  portal.dev.ai-aas.local
-<INGRESS_IP>  grafana.dev.ai-aas.local
-<INGRESS_IP>  argocd.dev.ai-aas.local
+<INGRESS_IP>  api.dev.otherjamesbrown.com
+<INGRESS_IP>  portal.dev.otherjamesbrown.com
+<INGRESS_IP>  grafana.dev.otherjamesbrown.com
+<INGRESS_IP>  argocd.dev.otherjamesbrown.com
 
 # Production Environment
-<INGRESS_IP>  api.prod.ai-aas.local
-<INGRESS_IP>  portal.prod.ai-aas.local
-<INGRESS_IP>  grafana.prod.ai-aas.local
-<INGRESS_IP>  argocd.prod.ai-aas.local
+<INGRESS_IP>  api.prod.otherjamesbrown.com
+<INGRESS_IP>  portal.prod.otherjamesbrown.com
+<INGRESS_IP>  grafana.prod.otherjamesbrown.com
+<INGRESS_IP>  argocd.prod.otherjamesbrown.com
 ```
 
 #### Windows
@@ -305,11 +305,11 @@ Edit `C:\Windows\System32\drivers\etc\hosts` (run Notepad as Administrator):
 
 ```bash
 # Test DNS resolution
-ping api.dev.ai-aas.local
-nslookup api.dev.ai-aas.local
+ping api.dev.otherjamesbrown.com
+nslookup api.dev.otherjamesbrown.com
 
 # Test HTTPS (will show cert warning until CA is trusted)
-curl -k https://api.dev.ai-aas.local/healthz
+curl -k https://api.dev.otherjamesbrown.com/healthz
 ```
 
 ## Security Considerations
@@ -420,17 +420,17 @@ ingress:
   annotations:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: api.dev.ai-aas.local
+    - host: api.dev.otherjamesbrown.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - secretName: ai-aas-tls  # Secret created in step 3
       hosts:
-        - api.dev.ai-aas.local
-        - portal.dev.ai-aas.local
-        - grafana.dev.ai-aas.local
-        - argocd.dev.ai-aas.local
+        - api.dev.otherjamesbrown.com
+        - portal.dev.otherjamesbrown.com
+        - grafana.dev.otherjamesbrown.com
+        - argocd.dev.otherjamesbrown.com
         # ... add all domains
 ```
 
@@ -438,13 +438,13 @@ ingress:
 
 ```bash
 # Test DNS resolution
-ping api.dev.ai-aas.local
+ping api.dev.otherjamesbrown.com
 
 # Test HTTPS (should work without -k flag after trusting CA)
-curl https://api.dev.ai-aas.local/healthz
+curl https://api.dev.otherjamesbrown.com/healthz
 
 # Open in browser (should not show certificate warning)
-open https://portal.dev.ai-aas.local
+open https://portal.dev.otherjamesbrown.com
 ```
 
 ## References

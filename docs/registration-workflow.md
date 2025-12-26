@@ -152,7 +152,7 @@ Once the API Router is integrated with the registry, test routing:
 
 ```bash
 # Via the public API (assuming ingress is configured)
-curl -X POST https://api.dev.ai-aas.local/v1/chat/completions \
+curl -X POST https://api.dev.otherjamesbrown.com/v1/chat/completions \
   -H "X-API-Key: your-api-key" \
   -H "Content-Type: application/json" \
   -d '{

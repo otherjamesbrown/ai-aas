@@ -209,7 +209,7 @@ echo -e "${YELLOW}Step 2: Getting authentication credentials...${NC}"
 BASE_URL="${USER_ORG_SERVICE_URL:-https://172.232.58.222}"
 CURL_HOST_HEADER=""
 if [[ "$BASE_URL" =~ ^https?://[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-    CURL_HOST_HEADER="-H Host:api.dev.ai-aas.local"
+    CURL_HOST_HEADER="-H Host:api.dev.otherjamesbrown.com"
 fi
 
 # Check if we have a password from seed, or use existing admin key

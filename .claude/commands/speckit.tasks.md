@@ -101,7 +101,7 @@ Add metadata to the epic:
 - Link to plan: `specs/[feature]/plan.md`
 - Link to tasks: `specs/[feature]/tasks.md`
 
-Note the epic ID (e.g., `ai-aas-42`).
+Note the epic ID (e.g., `aas-42`).
 
 ### Step 7: Create Task Beads
 

@@ -4,7 +4,14 @@ import { RouterProvider } from '@tanstack/react-router';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AppProviders } from '@/providers/AppProviders';
 import { router } from './app/AppRouter';
+import { initSentry } from '@/lib/sentry';
 import './styles/global.css';
+
+/**
+ * Initialize Sentry before React renders
+ * This ensures all errors are captured, including initialization errors
+ */
+initSentry();
 
 /**
  * Main application entry point

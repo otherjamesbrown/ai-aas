@@ -449,3 +449,157 @@ func TestEtcdPolicyKey(t *testing.T) {
 	}
 }
 
+// TestValidateTritonPolicy_ValidConfig tests validation passes for valid triton policies.
+func TestValidateTritonPolicy_ValidConfig(t *testing.T) {
+	cache := setupTestCache(t)
+	defer func() { _ = cache.Close() }()
+
+	logger := zaptest.NewLogger(t)
+	loader := NewLoader("", false, cache, logger)
+
+	policy := &RoutingPolicy{
+		PolicyID:       "triton-policy-valid",
+		OrganizationID: "*",
+		Model:          "meta-llama/Llama-3.1-8B-Instruct",
+		Backends: []BackendWeight{
+			{BackendID: "triton-backend-1", Weight: 100},
+		},
+		BackendType: "triton",
+		Tokenizer:   "cl100k_base",
+	}
+
+	ctx := context.Background()
+	err := loader.ValidateTritonPolicy(ctx, policy, "")
+	if err != nil {
+		t.Errorf("ValidateTritonPolicy() should pass for valid policy: %v", err)
+	}
+}
+
+// TestValidateTritonPolicy_MissingTokenizer tests validation fails when tokenizer is missing.
+func TestValidateTritonPolicy_MissingTokenizer(t *testing.T) {
+	cache := setupTestCache(t)
+	defer func() { _ = cache.Close() }()
+
+	logger := zaptest.NewLogger(t)
+	loader := NewLoader("", false, cache, logger)
+
+	policy := &RoutingPolicy{
+		PolicyID:       "triton-policy-no-tokenizer",
+		OrganizationID: "*",
+		Model:          "meta-llama/Llama-3.1-8B-Instruct",
+		Backends: []BackendWeight{
+			{BackendID: "triton-backend-1", Weight: 100},
+		},
+		BackendType: "triton",
+		Tokenizer:   "", // Missing!
+	}
+
+	ctx := context.Background()
+	err := loader.ValidateTritonPolicy(ctx, policy, "")
+	if err == nil {
+		t.Error("ValidateTritonPolicy() should fail when tokenizer is missing")
+	}
+}
+
+// TestValidateTritonPolicy_InvalidTokenizer tests validation fails for invalid tokenizer.
+func TestValidateTritonPolicy_InvalidTokenizer(t *testing.T) {
+	cache := setupTestCache(t)
+	defer func() { _ = cache.Close() }()
+
+	logger := zaptest.NewLogger(t)
+	loader := NewLoader("", false, cache, logger)
+
+	policy := &RoutingPolicy{
+		PolicyID:       "triton-policy-invalid-tokenizer",
+		OrganizationID: "*",
+		Model:          "meta-llama/Llama-3.1-8B-Instruct",
+		Backends: []BackendWeight{
+			{BackendID: "triton-backend-1", Weight: 100},
+		},
+		BackendType: "triton",
+		Tokenizer:   "invalid_encoding_xyz", // Invalid!
+	}
+
+	ctx := context.Background()
+	err := loader.ValidateTritonPolicy(ctx, policy, "")
+	if err == nil {
+		t.Error("ValidateTritonPolicy() should fail when tokenizer is invalid")
+	}
+}
+
+// TestValidateTritonPolicy_NonTritonBackend tests that non-triton backends skip validation.
+func TestValidateTritonPolicy_NonTritonBackend(t *testing.T) {
+	cache := setupTestCache(t)
+	defer func() { _ = cache.Close() }()
+
+	logger := zaptest.NewLogger(t)
+	loader := NewLoader("", false, cache, logger)
+
+	// OpenAI backend type should skip triton-specific validation
+	policy := &RoutingPolicy{
+		PolicyID:       "openai-policy",
+		OrganizationID: "*",
+		Model:          "gpt-4o",
+		Backends: []BackendWeight{
+			{BackendID: "openai-backend-1", Weight: 100},
+		},
+		BackendType: "openai",
+		Tokenizer:   "", // No tokenizer, but that's OK for openai
+	}
+
+	ctx := context.Background()
+	err := loader.ValidateTritonPolicy(ctx, policy, "")
+	if err != nil {
+		t.Errorf("ValidateTritonPolicy() should skip validation for openai backend: %v", err)
+	}
+
+	// Empty backend type (defaults to openai) should also skip validation
+	policyDefault := &RoutingPolicy{
+		PolicyID:       "default-policy",
+		OrganizationID: "*",
+		Model:          "gpt-4o",
+		Backends: []BackendWeight{
+			{BackendID: "default-backend-1", Weight: 100},
+		},
+		BackendType: "", // Default
+		Tokenizer:   "", // No tokenizer
+	}
+
+	err = loader.ValidateTritonPolicy(ctx, policyDefault, "")
+	if err != nil {
+		t.Errorf("ValidateTritonPolicy() should skip validation for default backend type: %v", err)
+	}
+}
+
+// TestValidateTritonPolicy_SupportedTokenizers tests all supported tokenizer encodings.
+func TestValidateTritonPolicy_SupportedTokenizers(t *testing.T) {
+	cache := setupTestCache(t)
+	defer func() { _ = cache.Close() }()
+
+	logger := zaptest.NewLogger(t)
+	loader := NewLoader("", false, cache, logger)
+
+	supportedEncodings := []string{"cl100k_base", "o200k_base"}
+
+	for _, encoding := range supportedEncodings {
+		t.Run(encoding, func(t *testing.T) {
+			policy := &RoutingPolicy{
+				PolicyID:       "triton-policy-" + encoding,
+				OrganizationID: "*",
+				Model:          "test-model",
+				Backends: []BackendWeight{
+					{BackendID: "triton-backend", Weight: 100},
+				},
+				BackendType: "triton",
+				Tokenizer:   encoding,
+			}
+
+			ctx := context.Background()
+			err := loader.ValidateTritonPolicy(ctx, policy, "")
+			if err != nil {
+				t.Errorf("ValidateTritonPolicy() should pass for encoding %s: %v", encoding, err)
+			}
+		})
+	}
+}
+

@@ -17,7 +17,7 @@ import { loginViaUI, TEST_USERS } from './helpers/auth';
  *   pnpm playwright test tests/e2e/smoke.spec.ts --project=smoke
  *
  * Against remote:
- *   PLAYWRIGHT_BASE_URL=https://portal.172.232.58.222.nip.io SKIP_WEBSERVER=true pnpm playwright test tests/e2e/smoke.spec.ts --project=smoke
+ *   PLAYWRIGHT_BASE_URL=https://portal.dev.otherjamesbrown.com SKIP_WEBSERVER=true pnpm playwright test tests/e2e/smoke.spec.ts --project=smoke
  */
 
 test.describe('Smoke Tests', () => {

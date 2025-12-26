@@ -15,7 +15,6 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
 	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/grpc"
 )
 
 // Config controls the OpenTelemetry initialization.
@@ -90,12 +89,16 @@ func MustInit(ctx context.Context, cfg Config) *Provider {
 }
 
 func initWithConfig(ctx context.Context, cfg Config) (*Provider, error) {
-	client, err := buildClient(ctx, cfg)
+	// Add timeout to prevent hanging on unreachable endpoints
+	timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	client, err := buildClient(timeoutCtx, cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	exporter, err := otlptrace.New(ctx, client)
+	exporter, err := otlptrace.New(timeoutCtx, client)
 	if err != nil {
 		return nil, fmt.Errorf("create otlp exporter: %w", err)
 	}
@@ -160,7 +163,8 @@ func buildClient(ctx context.Context, cfg Config) (otlptrace.Client, error) {
 				MaxInterval:     5 * time.Second,
 				MaxElapsedTime:  0,
 			}),
-			otlptracegrpc.WithDialOption(grpc.WithBlock()),
+			// NOTE: Removed grpc.WithBlock() to prevent startup hangs when OTEL collector is unreachable
+			// The connection will be established asynchronously in the background
 		}
 		if cfg.Insecure {
 			opts = append(opts, otlptracegrpc.WithInsecure())

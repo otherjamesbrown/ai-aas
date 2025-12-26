@@ -19,6 +19,8 @@ image:
   repository: ghcr.io/otherjamesbrown/ai-aas/analytics-service
   tag: dev
   pullPolicy: Always
+  pullSecrets:
+    - ghcr-pull-secret
 
 replicaCount: 1
 
@@ -65,7 +67,7 @@ ingress:
   # subdomain: analytics (default from values.yaml)
   # path: /analytics (default from values.yaml)
   # Hosts are computed automatically:
-  #   - analytics.dev.ai-aas.local (local domain)
+  #   - analytics.dev.otherjamesbrown.com (local domain)
   #   - analytics.dev.otherjamesbrown.com (public domain)
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
@@ -137,3 +139,17 @@ s3:
   accessKey: ""
   secretKey: ""
   bucket: analytics-exports
+
+# Node scheduling - prefer CPU nodes (avoid GPU nodes)
+# GPU nodes have taint nvidia.com/gpu=true:NoSchedule
+# CPU nodes are in pool 770211, GPU nodes are in pool 776664
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - key: lke.linode.com/pool-id
+              operator: In
+              values:
+                - "770211"  # CPU node pool

@@ -48,6 +48,13 @@ type Service interface {
 	SetCredential(credType string, value string, metadata map[string]interface{}) error
 	TestCredential(credType string) (*CredentialTestResult, error)
 	DeleteCredential(credType string) error
+
+	// Deployment operations
+	ListDeployments(opts ListDeploymentsOptions) ([]Deployment, error)
+	GetDeployment(modelName, environment string) (*Deployment, error)
+	CreateDeployment(req CreateDeploymentRequest) (*Deployment, error)
+	UpdateDeploymentStatus(modelName, environment string, req UpdateDeploymentStatusRequest) error
+	DeleteDeployment(modelName, environment string) error
 }
 
 // NewHandler creates a new models handler
@@ -77,6 +84,13 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/credentials", h.SetCredential)
 	r.Post("/credentials/{type}/test", h.TestCredential)
 	r.Delete("/credentials/{type}", h.DeleteCredential)
+
+	// Deployment endpoints
+	r.Get("/deployments", h.ListDeployments)
+	r.Post("/deployments", h.CreateDeployment)
+	r.Get("/deployments/{model_name}/{environment}", h.GetDeployment)
+	r.Put("/deployments/{model_name}/{environment}", h.UpdateDeploymentStatus)
+	r.Delete("/deployments/{model_name}/{environment}", h.DeleteDeployment)
 }
 
 // ListModels handles GET /models
@@ -315,6 +329,91 @@ func (h *Handler) RenameModel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, result)
+}
+
+// ListDeployments handles GET /deployments
+func (h *Handler) ListDeployments(w http.ResponseWriter, r *http.Request) {
+	opts := ListDeploymentsOptions{
+		Environment: r.URL.Query().Get("environment"),
+		ModelName:   r.URL.Query().Get("model_name"),
+		Status:      r.URL.Query().Get("status"),
+	}
+
+	if enabledStr := r.URL.Query().Get("enabled"); enabledStr != "" {
+		enabled := enabledStr == "true"
+		opts.Enabled = &enabled
+	}
+
+	deployments, err := h.service.ListDeployments(opts)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list deployments", err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, deployments)
+}
+
+// GetDeployment handles GET /deployments/{model_name}/{environment}
+func (h *Handler) GetDeployment(w http.ResponseWriter, r *http.Request) {
+	modelName := chi.URLParam(r, "model_name")
+	environment := chi.URLParam(r, "environment")
+
+	deployment, err := h.service.GetDeployment(modelName, environment)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "deployment not found", err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, deployment)
+}
+
+// CreateDeployment handles POST /deployments
+func (h *Handler) CreateDeployment(w http.ResponseWriter, r *http.Request) {
+	var req CreateDeploymentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body", err)
+		return
+	}
+
+	deployment, err := h.service.CreateDeployment(req)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create deployment", err)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, deployment)
+}
+
+// UpdateDeploymentStatus handles PUT /deployments/{model_name}/{environment}
+func (h *Handler) UpdateDeploymentStatus(w http.ResponseWriter, r *http.Request) {
+	modelName := chi.URLParam(r, "model_name")
+	environment := chi.URLParam(r, "environment")
+
+	var req UpdateDeploymentStatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body", err)
+		return
+	}
+
+	if err := h.service.UpdateDeploymentStatus(modelName, environment, req); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update deployment status", err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DeleteDeployment handles DELETE /deployments/{model_name}/{environment}
+func (h *Handler) DeleteDeployment(w http.ResponseWriter, r *http.Request) {
+	modelName := chi.URLParam(r, "model_name")
+	environment := chi.URLParam(r, "environment")
+
+	if err := h.service.DeleteDeployment(modelName, environment); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to delete deployment", err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // Helper functions

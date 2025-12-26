@@ -18,10 +18,10 @@ Per Constitution Gate I (API-First Interfaces), the UI:
 
 ## Backend API References
 
-The UI uses the **same API services and endpoints as the CLI**. Base URLs are computed from the portal domain (e.g., `portal.dev.ai-aas.local` → `api.dev.ai-aas.local`, `user-org.dev.ai-aas.local`).
+The UI uses the **same API services and endpoints as the CLI**. Base URLs are computed from the portal domain (e.g., `portal.dev.otherjamesbrown.com` → `api.dev.otherjamesbrown.com`, `user-org.dev.otherjamesbrown.com`).
 
 ### User-Org Service
-- **Base URL**: `https://user-org.{domain}` (e.g., `https://user-org.dev.ai-aas.local`)
+- **Base URL**: `https://user-org.{domain}` (e.g., `https://user-org.dev.otherjamesbrown.com`)
 - **Authentication**: Bearer token (JWT)
 - **Endpoints Used** (same as CLI):
   - `GET /v1/orgs` - List organizations
@@ -41,7 +41,7 @@ The UI uses the **same API services and endpoints as the CLI**. Base URLs are co
   - `DELETE /v1/orgs/{orgID}/users/{userID}/model-access/grants/{modelName}` - Revoke model access
 
 ### API Router Service (Gateway)
-- **Base URL**: `https://api.{domain}` (e.g., `https://api.dev.ai-aas.local`)
+- **Base URL**: `https://api.{domain}` (e.g., `https://api.dev.otherjamesbrown.com`)
 - **Authentication**: Bearer token (JWT) or API key
 - **Endpoints Used** (same as CLI):
   - `GET /v1/models` - List available models
@@ -55,7 +55,7 @@ The UI uses the **same API services and endpoints as the CLI**. Base URLs are co
   - `GET /v1/auth/userinfo` - Get user info (proxied to user-org-service)
 
 ### Admin API Service
-- **Base URL**: `https://admin-api.{domain}` (e.g., `https://admin-api.dev.ai-aas.local`)
+- **Base URL**: `https://admin-api.{domain}` (e.g., `https://admin-api.dev.otherjamesbrown.com`)
 - **Authentication**: Bearer token (JWT, admin only)
 - **Endpoints Used** (same as CLI):
   - `POST /v1/routing/policies` - Create routing policy
@@ -64,7 +64,7 @@ The UI uses the **same API services and endpoints as the CLI**. Base URLs are co
   - `POST /v1/bootstrap` - Bootstrap platform (first admin account)
 
 ### Analytics Service
-- **Base URL**: `https://analytics.{domain}` (e.g., `https://analytics.dev.ai-aas.local`)
+- **Base URL**: `https://analytics.{domain}` (e.g., `https://analytics.dev.otherjamesbrown.com`)
 - **Authentication**: Bearer token (JWT)
 - **Endpoints Used** (same as CLI):
   - `GET /analytics/v1/usage` - Query usage data

@@ -1,108 +1,127 @@
-# Feature Specification: GitOps-Managed AI Models
+# Product Requirements Document: GitOps AI Model Management
 
-**Feature Branch**: `feature/023-model-gitops-spec`
-**Created**: 2025-12-09
+**Feature ID**: `023-model-gitops`
 **Status**: Draft
+**Owner**: Platform Engineering
 
 ## 1. Overview
 
-This document outlines a declarative, version-controlled workflow for managing the lifecycle of AI models on the platform. The goal is to shift from the current manual, imperative process to a transparent, auditable, and automated system based on GitOps principles.
+This feature introduces a **GitOps-based workflow** for managing the lifecycle of AI models on the AI-AAS platform. By introducing a Kubernetes Operator (`ai-model-operator`) and a Custom Resource Definition (`AIModel`), we shift from an imperative, CLI-driven model registration process to a declarative, version-controlled approach.
 
 ## 2. Problem Statement
 
-Currently, deploying a new model is a multi-step, manual process that is error-prone, lacks a single source of truth, and makes auditing or rollbacks difficult. There is no guarantee that the model registered in the system matches the deployed infrastructure, leading to potential inconsistencies and operational challenges.
+Currently, deploying a new model involves multiple disjointed steps:
+1.  Manually running `admin-cli` to register the model in a Postgres database.
+2.  Manually or script-based downloading of model weights to Object Storage.
+3.  Manually creating/applying a KServe `InferenceService` manifest.
 
-## 3. User Scenarios & Testing
+This process is error-prone, lacks a single source of truth, and makes it difficult to audit changes or rollback versions. There is no guarantee that the registered model matches the deployed infrastructure.
 
-### User Story 1: Declarative Model Management (Priority: P1)
+## 3. Architecture
 
-As a **Platform Engineer**, I want to **define AI models as declarative configuration files in Git** so that I can **manage models using the same auditable GitOps workflow as the rest of our infrastructure**.
+The solution is a **Kubernetes Operator** that reconciles the state of `AIModel` resources.
 
-**Acceptance Scenarios**:
-1.  **Given** a model is defined in a configuration file in the `development` environment directory in Git,
-    **When** the changes are merged,
-    **Then** the system automatically deploys the model to the development environment.
-2.  **Given** an existing model's configuration is updated (e.g., changing a parameter),
-    **When** the changes are merged,
-    **Then** the system automatically applies the new configuration to the deployed model.
+### 3.1 Components
 
-### User Story 2: Simplified Model Deployment (Priority: P1)
+1.  **AIModel CRD**: A high-level abstraction defining the model's metadata, source (HuggingFace), storage location (S3/MinIO), and serving configuration (vLLM/KServe).
+2.  **AI Model Operator**: A controller that:
+    *   Watches `AIModel` resources.
+    *   Orchestrates the download of model artifacts to Object Storage via a Kubernetes Job.
+    *   Manages the lifecycle of the underlying KServe `InferenceService`.
+    *   Updates the model status (Downloading, Ready, Failed).
+3.  **Model Downloader**: A specialized container image responsible for efficiently syncing artifacts from HuggingFace Hub to S3-compatible storage.
 
-As a **Data Scientist**, I want to **propose a new model for deployment by opening a Pull Request** with a model configuration file, so that I **don't need direct cluster access or complex permissions**.
+### 3.2 Workflow
 
-**Acceptance Scenarios**:
-1.  **Given** a Data Scientist does not have deployment permissions,
-    **When** they open a Pull Request with a new model configuration file,
-    **Then** a Platform Engineer can review, approve, and merge it to trigger deployment.
+1.  **Engineer** commits an `AIModel` YAML file to the git repository.
+2.  **ArgoCD** syncs the manifest to the Kubernetes cluster.
+3.  **Operator** detects the new resource.
+4.  **Operator** checks if artifacts exist in the specified S3 bucket.
+    *   *If missing*: Launches a **Downloader Job**.
+    *   *If present*: Proceeds to serving.
+5.  **Operator** creates/updates the KServe `InferenceService` pointing to the S3 artifacts.
+6.  **KServe** spins up the vLLM pod(s).
+7.  **Operator** updates the `AIModel` status to `Ready` with the inference endpoint.
 
-### User Story 3: Automated Model Artifact Handling (Priority: P2)
+### 3.3 Environment Strategy
 
-As a **System**, I want to **automatically download and cache model artifacts in a central storage location** based on the configuration file, so that **users do not have to manually manage large file transfers**.
+We will follow a **Directory-Based Strategy** within a single GitOps repository (monorepo), consistent with the existing platform architecture.
 
-**Acceptance Scenarios**:
-1.  **Given** a new model configuration is approved,
-    **When** the system detects it,
-    **Then** it automatically downloads the specified model weights to the designated object store.
-2.  **Given** a model is deployed,
-    **When** its serving instance restarts,
-    **Then** it loads the model artifacts from the cache instead of re-downloading them.
+*   **Structure**:
+    ```text
+    gitops/
+      clusters/
+        development/
+          apps/
+            ai-models/
+              llama-2-7b.yaml
+              mistral-7b.yaml
+        staging/
+          apps/
+            ai-models/
+              llama-2-7b.yaml
+        production/
+          apps/
+            ai-models/
+              llama-2-7b.yaml
+    ```
+*   **Promotion Flow**:
+    1.  **Dev**: Engineer adds `llama-2-7b.yaml` to `gitops/clusters/development/apps/ai-models/`.
+    2.  **Stage**: After testing, copy the file to `gitops/clusters/staging/...`.
+    3.  **Prod**: Finally, promote to `gitops/clusters/production/...`.
+*   **Kustomize**: We can optionally use Kustomize overlays if we need environment-specific overrides (e.g., `minReplicas: 1` in Dev vs `minReplicas: 3` in Prod), but for simplicity, full manifest copies are often clearer for CRDs.
 
-### User Story 4: Model Deployment Visibility (Priority: P2)
+## 4. User Stories
 
-As an **Operator**, I want to **see the real-time status of a model deployment** (e.g., "Downloading", "Ready", "Failed"), so that I can **monitor its progress and troubleshoot issues**.
+| ID | As a... | I want to... | So that... |
+|----|---------|--------------|------------|
+| **US-1** | Platform Engineer | Define AI models as Kubernetes manifests in Git | I can manage models using the same GitOps workflow as the rest of the infrastructure. |
+| **US-2** | Data Scientist | Add a new model by opening a Pull Request | I don't need CLI access or complex permissions to deploy a model. |
+| **US-3** | System | Automatically download model weights to Object Storage | I don't have to manually manage large file transfers or worry about disk space on my laptop. |
+| **US-4** | Operator | See the status of a model download in Kubernetes | I know if a model is ready to serve or if the download failed. |
+| **US-6** | Data Scientist | Deploy a Vision model using a different runtime (e.g., Triton) | I can support multi-modal use cases beyond just LLMs. |
+| **US-7** | Data Scientist | Deploy the same model twice with different parameters (e.g., quantization, context length) | I can A/B test configurations side-by-side. |
+| **US-8** | Platform Engineer | Target specific GPU hardware (e.g., A100 vs T4) for a model | I can optimize cost and performance for different model sizes. |
+| **US-9** | Operator | Temporarily disable a model without deleting the config | I can stop incurring costs for a model that isn't currently needed but keep its config and cache ready. |
 
-**Acceptance Scenarios**:
-1.  **Given** a new model is being deployed,
-    **When** the system is downloading the artifacts,
-    **Then** the model's status is clearly marked as "Downloading".
-2.  **Given** a model has been successfully deployed and is ready to serve traffic,
-    **When** an Operator checks its status,
-    **Then** the status is "Ready" and the inference endpoint is displayed.
+## 5. Requirements
 
-## 4. Requirements
+### 5.1 Functional Requirements
 
-### Functional Requirements
+*   **FR-1**: The system MUST support downloading models from public and private HuggingFace repositories.
+*   **FR-2**: The system MUST support authentication to HuggingFace via Kubernetes Secrets.
+*   **FR-3**: The system MUST cache model artifacts in S3-compatible Object Storage to prevent re-downloading on pod restarts.
+*   **FR-4**: The system MUST automatically create and manage a KServe `InferenceService` for each `AIModel`.
+*   **FR-5**: The `AIModel` status MUST reflect the detailed state of the download (e.g., "Downloading", "DownloadFailed") and serving (e.g., "Starting", "Ready").
+*   **FR-6**: The system MUST support configuring engine-specific parameters (e.g., CLI args, env vars) via the CRD to enable A/B testing of configurations.
+*   **FR-7**: The system MUST support different inference engines (e.g., vLLM, TGI, Triton) by allowing the user to specify the engine type and optional container image override.
+*   **FR-8**: The system MUST support an `enabled` flag in the CRD. When false, the `InferenceService` should be deleted (stopping costs), but the `AIModel` resource and cached artifacts MUST remain.
+*   **FR-9**: The system MUST support `nodeSelector` and `tolerations` in the CRD to allow targeting specific hardware (e.g., `accelerator: nvidia-a100`).
+*   **FR-10**: The system SHOULD support scale-to-zero configuration. If `minReplicas` is 0, the model should consume no GPU resources when idle.
 
-- **FR-1**: The system MUST allow defining a model's source, including public and private repositories.
-- **FR-2**: The system MUST use securely stored credentials to access private model repositories.
-- **FR-3**: The system MUST cache model artifacts in a designated central storage to prevent re-downloads.
-- **FR-4**: The system MUST manage the lifecycle of a model's serving instance based on its configuration file.
-- **FR-5**: The system MUST provide clear, real-time status updates for each managed model (e.g., "Downloading", "Ready", "Failed").
-- **FR-6**: The system MUST allow users to specify model-specific serving parameters in the configuration.
-- **FR-7**: The system MUST support defining different serving runtimes (e.g., for LLMs vs. Vision models).
-- **FR-8**: The system MUST allow a model to be temporarily disabled (i.e., scaled down to zero) via a configuration flag to save resources.
-- **FR-9**: The system MUST allow specifying hardware preferences (e.g., "needs high-performance GPU") in the configuration.
-- **FR-10**: The system SHOULD allow idle models to scale to zero to conserve resources.
+### 5.2 Non-Functional Requirements
 
-### Key Entities
+*   **NFR-1**: **Reliability**: The downloader job must handle transient network failures with retries.
+*   **NFR-2**: **Security**: HF Tokens must be stored in Kubernetes Secrets and never exposed in plain text logs.
+*   **NFR-3**: **Observability**: The Operator must emit metrics for download duration, success/failure rates, and reconciliation errors.
+*   **NFR-4**: **Efficiency**: The downloader should use concurrent downloads where possible to saturate available bandwidth.
 
-- **Model Configuration**: Represents a single AI model to be deployed. It contains metadata such as the model's name, source URL, serving parameters, and desired hardware.
+## 6. Edge Cases & Failure Modes
 
-## 5. Success Criteria
+*   **EC-1: Invalid HF Token**: The downloader job will fail with a 401/403. The Operator should capture this and update the `AIModel` status to `Failed` with a clear message.
+*   **EC-2: Insufficient Storage**: If the Object Store or local ephemeral storage is full, the download will fail. The system should report "DiskPressure" or similar errors.
+*   **EC-3: Model Too Large for GPU**: If the user requests a 70B model on a 24GB GPU, the vLLM pod will crash-loop. The Operator should reflect the KServe failure state.
+*   **EC-4: Network Interruption**: If the download is interrupted, the job should retry. Ideally, the downloader should support resumable downloads (future improvement).
+*   **EC-5: Configuration Drift**: If someone manually edits the KServe `InferenceService`, the Operator should revert the changes to match the `AIModel` spec (reconciliation).
 
-### Measurable Outcomes
+## 7. Out of Scope
 
-- **SC-1**: Reduce the time to deploy a new model from hours to under 15 minutes (from PR merge to "Ready" status).
-- **SC-2**: Eliminate 100% of deployment errors caused by manual misconfiguration within 3 months of rollout.
-- **SC-3**: A survey of Data Scientists should show a 75% improvement in satisfaction with the model deployment process.
-- **SC-4**: The end-to-end deployment process must be fully auditable through Git history and system logs.
+*   **Fine-tuning**: This spec covers inference serving only. Training/Fine-tuning pipelines are out of scope.
+*   **Model Evaluation**: Automated evaluation of model quality is a separate workflow.
+*   **Multi-Cluster Federation**: The operator manages models within a single cluster context.
 
-## 6. Assumptions
+## 8. Future Improvements
 
-- A GitOps workflow and tooling are already in use for other parts of the infrastructure.
-- A secure secret management system is in place for handling credentials.
-- A central object storage solution is available for caching model artifacts.
-
-## 7. Edge Cases & Failure Modes
-
-- **Invalid Credentials**: The system fails to access a private model source. It must report a "Failed" status with a clear "Authentication Error" message.
-- **Insufficient Storage**: The central storage lacks space. The system must report a "Failed" status with an "Insufficient Storage" message.
-- **Model-Hardware Mismatch**: A model is scheduled to hardware that cannot support it (e.g., not enough VRAM). The serving instance will fail, and the system must report a "Failed" status with a relevant error.
-- **Network Interruption**: The connection is lost during model download. The system MUST retry the download at least 3 times before marking it as "Failed".
-- **Configuration Drift**: A manual change is made to a deployed model's resources. The system MUST detect the drift and automatically reconcile the resources to match the state defined in Git.
-
-## 8. Out of Scope
-
-- Model fine-tuning or training pipelines.
-- Automated evaluation of model quality or performance.
-- Multi-cluster or multi-region model federation.
+*   **Resumable Downloads**: Support resuming interrupted downloads to save bandwidth.
+*   **P2P Distribution**: Use Dragonfly or similar P2P protocols for distributing weights to nodes.
+*   **Model Quantization**: Auto-quantize models during the ingestion phase.

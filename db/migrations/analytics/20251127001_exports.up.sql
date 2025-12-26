@@ -1,3 +1,4 @@
+-- +goose Up
 -- Export jobs table for finance-friendly CSV exports
 BEGIN;
 
@@ -33,11 +34,10 @@ CREATE TABLE IF NOT EXISTS analytics.export_jobs (
 );
 
 -- Indexes for common query patterns
-CREATE INDEX IF NOT EXISTS idx_export_jobs_org_initiated 
+CREATE INDEX IF NOT EXISTS idx_export_jobs_org_initiated
     ON analytics.export_jobs (org_id, initiated_at DESC);
-CREATE INDEX IF NOT EXISTS idx_export_jobs_status_pending_running 
-    ON analytics.export_jobs (status) 
+CREATE INDEX IF NOT EXISTS idx_export_jobs_status_pending_running
+    ON analytics.export_jobs (status)
     WHERE status IN ('pending', 'running');
 
 COMMIT;
-
