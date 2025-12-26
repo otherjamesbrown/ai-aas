@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"github.com/ai-aas/tests/e2e/fixtures"
-	"github.com/ai-aas/tests/e2e/harness"
-	"github.com/ai-aas/tests/e2e/utils"
 )
 
 // TestDeclarativeChangeApplication tests that declarative changes are applied via reconciliation

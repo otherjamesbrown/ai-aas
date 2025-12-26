@@ -24,6 +24,11 @@ func GenerateCorrelationIDs() *CorrelationIDs {
 	}
 }
 
+// GenerateCorrelationID generates a single correlation ID string
+func GenerateCorrelationID() string {
+	return uuid.New().String()
+}
+
 // ExtractCorrelationIDs extracts correlation IDs from HTTP headers
 func ExtractCorrelationIDs(headers http.Header) *CorrelationIDs {
 	ids := &CorrelationIDs{}

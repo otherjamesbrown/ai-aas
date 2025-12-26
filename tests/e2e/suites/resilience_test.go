@@ -33,8 +33,8 @@ func TestBackendFailover(t *testing.T) {
 
 	// Create client for API router service
 	routerClient := harness.NewClient(ctx.Config.APIURLs.APIRouterService, ctx.Config.Timeouts.RequestTimeout)
-	routerClient.SetHeader("Authorization", "Bearer "+apiKey.Secret)
-	routerClient.SetHeader("X-API-Key", apiKey.Secret)
+	routerClient.SetHeader("Authorization", "Bearer "+apiKey.Key)
+	routerClient.SetHeader("X-API-Key", apiKey.Key)
 	if isIPAddress(ctx.Config.APIURLs.APIRouterService) {
 		routerClient.SetHeader("Host", "api.dev.otherjamesbrown.com")
 	}
@@ -174,8 +174,8 @@ func TestPartialOutage(t *testing.T) {
 	// Test that unaffected services continue to work
 	// Even if inference is down, org/user management should work
 	orgClient := harness.NewClient(ctx.Config.APIURLs.UserOrgService, ctx.Config.Timeouts.RequestTimeout)
-	orgClient.SetHeader("Authorization", "Bearer "+apiKey.Secret)
-	orgClient.SetHeader("X-API-Key", apiKey.Secret)
+	orgClient.SetHeader("Authorization", "Bearer "+apiKey.Key)
+	orgClient.SetHeader("X-API-Key", apiKey.Key)
 	if isIPAddress(ctx.Config.APIURLs.UserOrgService) {
 		orgClient.SetHeader("Host", "api.dev.otherjamesbrown.com")
 	}
@@ -192,8 +192,8 @@ func TestPartialOutage(t *testing.T) {
 
 	// Test inference service (may be affected by outage)
 	routerClient := harness.NewClient(ctx.Config.APIURLs.APIRouterService, ctx.Config.Timeouts.RequestTimeout)
-	routerClient.SetHeader("Authorization", "Bearer "+apiKey.Secret)
-	routerClient.SetHeader("X-API-Key", apiKey.Secret)
+	routerClient.SetHeader("Authorization", "Bearer "+apiKey.Key)
+	routerClient.SetHeader("X-API-Key", apiKey.Key)
 	if isIPAddress(ctx.Config.APIURLs.APIRouterService) {
 		routerClient.SetHeader("Host", "api.dev.otherjamesbrown.com")
 	}
@@ -237,8 +237,8 @@ func TestAllBackendsUnavailable(t *testing.T) {
 
 	// Create client for API router
 	routerClient := harness.NewClient(ctx.Config.APIURLs.APIRouterService, ctx.Config.Timeouts.RequestTimeout)
-	routerClient.SetHeader("Authorization", "Bearer "+apiKey.Secret)
-	routerClient.SetHeader("X-API-Key", apiKey.Secret)
+	routerClient.SetHeader("Authorization", "Bearer "+apiKey.Key)
+	routerClient.SetHeader("X-API-Key", apiKey.Key)
 	if isIPAddress(ctx.Config.APIURLs.APIRouterService) {
 		routerClient.SetHeader("Host", "api.dev.otherjamesbrown.com")
 	}

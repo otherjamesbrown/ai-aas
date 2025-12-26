@@ -3,7 +3,6 @@
 package suites
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/ai-aas/tests/e2e/fixtures"
@@ -40,8 +39,8 @@ func TestAuthorizationDenial(t *testing.T) {
 
 	// Create a new client with the limited-scope API key
 	limitedClient := harness.NewClient(ctx.Config.APIURLs.UserOrgService, ctx.Config.Timeouts.RequestTimeout)
-	limitedClient.SetHeader("Authorization", "Bearer "+apiKey.Secret)
-	limitedClient.SetHeader("X-API-Key", apiKey.Secret)
+	limitedClient.SetHeader("Authorization", "Bearer "+apiKey.Key)
+	limitedClient.SetHeader("X-API-Key", apiKey.Key)
 	
 	// If using IP address, set Host header
 	if isIPAddress(ctx.Config.APIURLs.UserOrgService) {

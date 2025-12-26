@@ -251,8 +251,8 @@ func TestDenialEventVerification(t *testing.T) {
 
 	// Create a client with limited permissions
 	limitedClient := harness.NewClient(ctx.Config.APIURLs.UserOrgService, ctx.Config.Timeouts.RequestTimeout)
-	limitedClient.SetHeader("Authorization", "Bearer "+apiKey.Secret)
-	limitedClient.SetHeader("X-API-Key", apiKey.Secret)
+	limitedClient.SetHeader("Authorization", "Bearer "+apiKey.Key)
+	limitedClient.SetHeader("X-API-Key", apiKey.Key)
 	limitedClient.SetHeader("X-Correlation-ID", corrID)
 	if isIPAddress(ctx.Config.APIURLs.UserOrgService) {
 		limitedClient.SetHeader("Host", "api.dev.otherjamesbrown.com")

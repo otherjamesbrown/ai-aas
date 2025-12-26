@@ -3,20 +3,11 @@
 package suites
 
 import (
-	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/ai-aas/tests/e2e/fixtures"
 	"github.com/ai-aas/tests/e2e/harness"
 )
-
-// contains checks if a string contains a substring (case-insensitive)
-func contains(s, substr string) bool {
-	sLower := strings.ToLower(s)
-	substrLower := strings.ToLower(substr)
-	return strings.Contains(sLower, substrLower)
-}
 
 // TestBudgetLimitEnforcement tests that budget limits are enforced
 func TestBudgetLimitEnforcement(t *testing.T) {
@@ -90,8 +81,8 @@ func TestBudgetExceededDenial(t *testing.T) {
 
 	// Create a client for API router service
 	routerClient := harness.NewClient(ctx.Config.APIURLs.APIRouterService, ctx.Config.Timeouts.RequestTimeout)
-	routerClient.SetHeader("Authorization", "Bearer "+apiKey.Secret)
-	routerClient.SetHeader("X-API-Key", apiKey.Secret)
+	routerClient.SetHeader("Authorization", "Bearer "+apiKey.Key)
+	routerClient.SetHeader("X-API-Key", apiKey.Key)
 	
 	// If using IP address, set Host header
 	if isIPAddress(ctx.Config.APIURLs.APIRouterService) {
