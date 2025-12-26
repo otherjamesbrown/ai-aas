@@ -308,6 +308,7 @@ func (m *RoutingMetrics) SetLatencyThreshold(threshold time.Duration) {
 func (m *RoutingMetrics) RecordBackendError(
 	backendID string,
 	backendType string,
+	requestID string,
 	errorMessage string,
 ) {
 	attrs := []attribute.KeyValue{
@@ -321,6 +322,7 @@ func (m *RoutingMetrics) RecordBackendError(
 	m.logger.Error("backend returned error in response",
 		zap.String("backend_id", backendID),
 		zap.String("backend_type", backendType),
+		zap.String("request_id", requestID),
 		zap.String("error_message", errorMessage),
 	)
 }
