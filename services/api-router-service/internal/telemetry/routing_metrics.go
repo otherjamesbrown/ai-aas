@@ -37,14 +37,15 @@ type RoutingMetrics struct {
 	requestsByBackend      metric.Int64Counter
 	requestsByDecision     metric.Int64Counter
 	failoverCount          metric.Int64Counter
-	backendHealthStatus   metric.Int64UpDownCounter
+	backendHealthStatus    metric.Int64UpDownCounter
 	backendLatency         metric.Float64Histogram
 	routingDecisionLatency metric.Float64Histogram
+	backendErrorsTotal     metric.Int64Counter // Tracks backend errors from error_message field
 
 	// Alert thresholds
-	failoverThreshold      int
-	errorRateThreshold     float64
-	latencyThreshold       time.Duration
+	failoverThreshold  int
+	errorRateThreshold float64
+	latencyThreshold   time.Duration
 
 	mu sync.RWMutex
 }
@@ -111,6 +112,14 @@ func NewRoutingMetrics(logger *zap.Logger) (*RoutingMetrics, error) {
 		return nil, err
 	}
 
+	backendErrorsTotal, err := meter.Int64Counter(
+		"router_backend_errors_total",
+		metric.WithDescription("Total backend errors returned in response error_message field"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	return &RoutingMetrics{
 		logger:                 logger,
 		requestsTotal:          requestsTotal,
@@ -120,6 +129,7 @@ func NewRoutingMetrics(logger *zap.Logger) (*RoutingMetrics, error) {
 		backendHealthStatus:    backendHealthStatus,
 		backendLatency:         backendLatency,
 		routingDecisionLatency: routingDecisionLatency,
+		backendErrorsTotal:     backendErrorsTotal,
 		failoverThreshold:      3,
 		errorRateThreshold:     0.1, // 10%
 		latencyThreshold:       3 * time.Second,
@@ -290,5 +300,28 @@ func (m *RoutingMetrics) SetLatencyThreshold(threshold time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.latencyThreshold = threshold
+}
+
+// RecordBackendError records when a backend returns an error in the response error_message field.
+// This metric tracks errors that are returned in the response body (not connection errors).
+// Added as part of aas-ih6c fix to track TensorRT-LLM backend errors.
+func (m *RoutingMetrics) RecordBackendError(
+	backendID string,
+	backendType string,
+	errorMessage string,
+) {
+	attrs := []attribute.KeyValue{
+		attribute.String("backend_id", backendID),
+		attribute.String("backend_type", backendType),
+	}
+
+	ctx := context.Background()
+	m.backendErrorsTotal.Add(ctx, 1, metric.WithAttributes(attrs...))
+
+	m.logger.Error("backend returned error in response",
+		zap.String("backend_id", backendID),
+		zap.String("backend_type", backendType),
+		zap.String("error_message", errorMessage),
+	)
 }
 

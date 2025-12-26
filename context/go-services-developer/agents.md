@@ -77,9 +77,23 @@ patterns:
       http: "/v2/models/ensemble/infer"
       grpc: "ModelInferRequest.ModelName = 'ensemble'"
     routing: "Service selection (which pod) determines which model, not model name"
+    input_tensors:
+      required: ["text_input", "max_tokens"]
+      optional: ["temperature", "top_p", "stop_words"]
+      note: "TRT-LLM ensemble rejects requests with unexpected inputs"
+    grpc_error_handling:
+      rule: "Always check ModelStreamInferResponse.ErrorMessage"
+      why: "Backend errors appear in error_message, not gRPC status"
+      symptom: "Empty completions (0 tokens) = likely error_message ignored"
+      pattern: |
+        if resp.ErrorMessage != "" {
+          return fmt.Errorf("backend error: %s", resp.ErrorMessage)
+        }
     never:
       - "Use policy.Model or user-facing model name for TRT-LLM"
       - "Vary model name based on which model is being called"
+      - "Add 'stream' input tensor (streaming is via gRPC StreamInfer, not input)"
+      - "Ignore error_message field (causes silent empty responses)"
 
 api_endpoints:
   admin-api-service:  # /v1 prefix

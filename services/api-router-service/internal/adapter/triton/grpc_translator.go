@@ -104,8 +104,10 @@ func (t *GRPCTranslator) TranslateOpenAIToGRPC(req *OpenAIChatCompletionRequest,
 		inputs = append(inputs, t.createStringInput(TensorInputStopWords, string(stopWordsJSON)))
 	}
 
-	// Enable streaming
-	inputs = append(inputs, t.createBoolInput(TensorInputStream, true))
+	// Note: We intentionally do NOT add a "stream" input tensor here.
+	// TensorRT-LLM ensemble models only accept required inputs (text_input, max_tokens).
+	// Adding extra inputs causes "expected N inputs but got N+1" errors.
+	// Streaming is controlled at the gRPC level via StreamInfer(), not via input tensors.
 
 	// Request the text_output tensor
 	outputs := []*pb.ModelInferRequest_InferRequestedOutputTensor{

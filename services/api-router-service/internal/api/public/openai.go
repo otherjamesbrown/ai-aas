@@ -837,6 +837,17 @@ func (h *Handler) handleTritonNonStreamingGRPC(
 			zap.String("error_message", resp.ErrorMessage),
 		)
 
+		// Check for backend error in response - fail fast instead of returning empty response
+		if resp.ErrorMessage != "" {
+			h.logger.Error("backend returned error in gRPC response",
+				zap.String("request_id", requestID),
+				zap.String("backend_id", backendID),
+				zap.String("error_message", resp.ErrorMessage),
+			)
+			h.writeError(w, r, fmt.Errorf("backend error: %s", resp.ErrorMessage), api.ErrCodeBackendError)
+			return
+		}
+
 		if resp.InferResponse != nil {
 			h.logger.Debug("gRPC response details",
 				zap.String("request_id", requestID),

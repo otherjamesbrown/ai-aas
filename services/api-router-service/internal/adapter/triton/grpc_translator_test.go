@@ -85,9 +85,10 @@ func TestGRPCTranslator_TranslateOpenAIToGRPC(t *testing.T) {
 		if grpcReq.ModelName != "test-model" {
 			t.Errorf("expected model name 'test-model', got %q", grpcReq.ModelName)
 		}
-		// Should have text_input, max_tokens (always included), and stream inputs
-		if len(grpcReq.Inputs) < 3 {
-			t.Errorf("expected at least 3 inputs (text_input, max_tokens, stream), got %d", len(grpcReq.Inputs))
+		// Should have text_input and max_tokens (always included)
+		// Note: We do NOT add stream input as TensorRT-LLM ensemble models reject extra inputs
+		if len(grpcReq.Inputs) != 2 {
+			t.Errorf("expected 2 inputs (text_input, max_tokens), got %d", len(grpcReq.Inputs))
 		}
 		// Verify max_tokens is present with default value
 		foundMaxTokens := false
@@ -125,8 +126,9 @@ func TestGRPCTranslator_TranslateOpenAIToGRPC(t *testing.T) {
 			return
 		}
 
-		// Verify inputs: text_input, max_tokens, temperature, top_p, stop_words, stream
-		expectedInputs := 6
+		// Verify inputs: text_input, max_tokens, temperature, top_p, stop_words
+		// Note: stream is NOT included - TensorRT-LLM ensemble models reject extra inputs
+		expectedInputs := 5
 		if len(grpcReq.Inputs) != expectedInputs {
 			t.Errorf("expected %d inputs, got %d", expectedInputs, len(grpcReq.Inputs))
 		}
@@ -137,11 +139,16 @@ func TestGRPCTranslator_TranslateOpenAIToGRPC(t *testing.T) {
 			inputNames[input.Name] = true
 		}
 
-		expected := []string{TensorInputTextInput, TensorInputMaxTokens, TensorInputTemperature, TensorInputTopP, TensorInputStopWords, TensorInputStream}
+		expected := []string{TensorInputTextInput, TensorInputMaxTokens, TensorInputTemperature, TensorInputTopP, TensorInputStopWords}
 		for _, name := range expected {
 			if !inputNames[name] {
 				t.Errorf("missing expected input: %s", name)
 			}
+		}
+
+		// Verify stream is NOT included (causes TensorRT-LLM ensemble errors)
+		if inputNames[TensorInputStream] {
+			t.Error("stream input should NOT be included - causes TensorRT-LLM ensemble model errors")
 		}
 	})
 
