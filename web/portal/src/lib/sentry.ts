@@ -52,8 +52,7 @@ export function initSentry(): void {
     environment,
 
     integrations: [
-      // Browser tracing for performance monitoring
-      new Sentry.BrowserTracing({
+      Sentry.browserTracingIntegration({
         // Trace HTTP requests to our API endpoints
         tracePropagationTargets: [
           'localhost',
@@ -61,17 +60,8 @@ export function initSentry(): void {
           /^https:\/\/.*\.ai-aas\.local/,
           /^https:\/\/.*\.otherjamesbrown\.com/,
         ],
-        // Automatic route change tracking for React Router
-        routingInstrumentation: Sentry.reactRouterV6Instrumentation(
-          // Using React.useEffect and useLocation from react-router
-          // @ts-expect-error - Sentry types don't match our router exactly
-          React.useEffect,
-          // @ts-expect-error - Sentry types don't match our router exactly
-          window.history
-        ),
       }),
-      // Session replay for error reproduction
-      new Sentry.Replay({
+      Sentry.replayIntegration({
         // Mask sensitive input fields (passwords, etc.)
         maskAllText: false,
         maskAllInputs: true,

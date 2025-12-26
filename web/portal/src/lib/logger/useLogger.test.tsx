@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, type MockInstance } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useLogger } from './index';
 
 describe('useLogger', () => {
-  let consoleInfoSpy: ReturnType<typeof vi.spyOn>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let consoleInfoSpy: MockInstance<any[], any>;
 
   beforeEach(() => {
     consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});

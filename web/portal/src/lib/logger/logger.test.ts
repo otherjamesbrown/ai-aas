@@ -1,11 +1,15 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, type MockInstance } from 'vitest';
 import { Logger, logger, LogContext } from './index';
 
 describe('Logger', () => {
-  let consoleDebugSpy: ReturnType<typeof vi.spyOn>;
-  let consoleInfoSpy: ReturnType<typeof vi.spyOn>;
-  let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
-  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let consoleDebugSpy: MockInstance<any[], any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let consoleInfoSpy: MockInstance<any[], any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let consoleWarnSpy: MockInstance<any[], any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let consoleErrorSpy: MockInstance<any[], any>;
 
   beforeEach(() => {
     // Spy on console methods
@@ -420,7 +424,8 @@ describe('Logger', () => {
   });
 
   describe('Remote Logging', () => {
-    let fetchSpy: ReturnType<typeof vi.spyOn>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let fetchSpy: MockInstance<any[], any>;
 
     beforeEach(() => {
       fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(new Response());
