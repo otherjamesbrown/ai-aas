@@ -96,7 +96,8 @@ func (t *Tokenizer) CountMessagesTokens(messages []ChatMessage) int {
 	for _, msg := range messages {
 		total += tokensPerMessage
 		total += t.CountTokens(msg.Role)
-		total += t.CountTokens(msg.Content)
+		// Extract text content for token counting (handles both string and multimodal)
+		total += t.CountTokens(msg.GetTextContent())
 		// Add name tokens if applicable (we don't track name in ChatMessage, so skip)
 		_ = tokensPerName
 	}

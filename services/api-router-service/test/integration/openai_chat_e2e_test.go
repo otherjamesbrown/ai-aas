@@ -198,7 +198,7 @@ func TestOpenAIChatCompletions_E2E(t *testing.T) {
 	}
 
 	// THE CRITICAL TEST: Validate the answer contains "Paris"
-	answerText := response.Choices[0].Message.Content
+	answerText := response.Choices[0].Message.GetTextContent()
 	t.Logf("Model Answer: %s", answerText)
 
 	if !strings.Contains(strings.ToLower(answerText), "paris") {

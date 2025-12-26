@@ -10,7 +10,10 @@
 //
 package triton
 
-import "encoding/base64"
+import (
+	"encoding/base64"
+	"strings"
+)
 
 // InferRequest represents a Triton V2 inference request.
 // Reference: https://github.com/triton-inference-server/server/blob/main/docs/protocol/extension_generate.md
@@ -71,9 +74,50 @@ type OpenAIChatCompletionRequest struct {
 }
 
 // ChatMessage represents a message in the OpenAI chat format.
+// Content can be either:
+// - A plain string: "Hello"
+// - An array of content parts: [{"type": "text", "text": "..."}, {"type": "image_url", "image_url": {...}}]
 type ChatMessage struct {
-	Role    string `json:"role"`    // "system", "user", "assistant"
-	Content string `json:"content"`
+	Role    string      `json:"role"`    // "system", "user", "assistant"
+	Content interface{} `json:"content"` // string OR []ContentPart
+}
+
+// ContentPart represents a single part of multimodal message content.
+// Supports text and image_url content types for vision models.
+type ContentPart struct {
+	Type     string           `json:"type"` // "text" or "image_url"
+	Text     string           `json:"text,omitempty"`
+	ImageURL *ImageURLContent `json:"image_url,omitempty"`
+}
+
+// ImageURLContent represents an image URL in a multimodal message.
+type ImageURLContent struct {
+	URL    string `json:"url"`              // Image URL (data URI or HTTP URL)
+	Detail string `json:"detail,omitempty"` // "low", "high", "auto"
+}
+
+// GetTextContent extracts text from Content, handling both string and multimodal formats.
+// For multimodal content, it concatenates all text parts with spaces.
+// This is useful for text-only backends that need to extract prompts from potentially multimodal messages.
+func (m *ChatMessage) GetTextContent() string {
+	switch v := m.Content.(type) {
+	case string:
+		return v
+	case []interface{}:
+		var texts []string
+		for _, part := range v {
+			if partMap, ok := part.(map[string]interface{}); ok {
+				if partMap["type"] == "text" {
+					if text, ok := partMap["text"].(string); ok {
+						texts = append(texts, text)
+					}
+				}
+			}
+		}
+		return strings.Join(texts, " ")
+	default:
+		return ""
+	}
 }
 
 // OpenAIChatCompletionResponse represents an OpenAI Chat Completions API response.

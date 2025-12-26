@@ -334,21 +334,24 @@ func (t *GRPCTranslator) formatPrompt(messages []ChatMessage) (string, error) {
 	sb.WriteString("<|begin_of_text|>")
 
 	for _, msg := range messages {
+		// Extract text content from message (handles both string and multimodal)
+		textContent := msg.GetTextContent()
+
 		switch msg.Role {
 		case "system":
 			sb.WriteString("<|start_header_id|>system<|end_header_id|>\n\n")
-			sb.WriteString(msg.Content)
+			sb.WriteString(textContent)
 			sb.WriteString("<|eot_id|>")
 		case "user":
 			sb.WriteString("<|start_header_id|>user<|end_header_id|>\n\n")
-			sb.WriteString(msg.Content)
+			sb.WriteString(textContent)
 			sb.WriteString("<|eot_id|>")
 		case "assistant":
 			sb.WriteString("<|start_header_id|>assistant<|end_header_id|>\n\n")
-			sb.WriteString(msg.Content)
+			sb.WriteString(textContent)
 			sb.WriteString("<|eot_id|>")
 		default:
-			sb.WriteString(msg.Content)
+			sb.WriteString(textContent)
 		}
 	}
 

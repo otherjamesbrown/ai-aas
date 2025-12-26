@@ -1030,11 +1030,12 @@ func (h *Handler) preprocessRequest(
 	defer cancel()
 
 	// Convert messages to preprocessor format
+	// Extract text content from multimodal messages for preprocessing
 	messages := make([]preprocessor.Message, len(req.Messages))
 	for i, msg := range req.Messages {
 		messages[i] = preprocessor.Message{
 			Role:    msg.Role,
-			Content: msg.Content,
+			Content: msg.GetTextContent(),
 		}
 	}
 

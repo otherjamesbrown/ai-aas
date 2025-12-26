@@ -50,7 +50,7 @@ func mockOpenAIBackendServer(t *testing.T) *httptest.Server {
 		var userMessage string
 		for _, msg := range req.Messages {
 			if msg.Role == "user" {
-				userMessage = msg.Content
+				userMessage = msg.GetTextContent()
 			}
 		}
 
@@ -208,7 +208,7 @@ func TestOpenAIChatCompletions(t *testing.T) {
 	}
 
 	// Validate the answer contains "Paris"
-	answerText := response.Choices[0].Message.Content
+	answerText := response.Choices[0].Message.GetTextContent()
 	if !strings.Contains(answerText, "Paris") {
 		t.Errorf("expected answer to contain 'Paris', got: %s", answerText)
 	}
