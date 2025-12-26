@@ -24,7 +24,9 @@ CREATE TABLE IF NOT EXISTS analytics.usage_events (
     cost_estimate_cents NUMERIC(18,4) NOT NULL DEFAULT 0,
     metadata JSONB NOT NULL DEFAULT '{}'::JSONB,
     batch_id UUID,
-    PRIMARY KEY (event_id, org_id)
+    -- TimescaleDB requires partitioning column in primary key
+    -- event_id (UUID) provides global uniqueness, occurred_at enables hypertable partitioning
+    PRIMARY KEY (event_id, occurred_at)
 );
 
 -- Convert to TimescaleDB hypertable partitioned by occurred_at
@@ -73,26 +75,5 @@ CREATE TABLE IF NOT EXISTS analytics.freshness_status (
 
 CREATE INDEX IF NOT EXISTS idx_freshness_status_status
     ON analytics.freshness_status (status, updated_at DESC);
-
-COMMIT;
-
--- +goose Down
--- Rollback initial analytics schema
-BEGIN;
-
-DROP INDEX IF EXISTS analytics.idx_freshness_status_status;
-DROP TABLE IF EXISTS analytics.freshness_status;
-
-DROP INDEX IF EXISTS analytics.idx_ingestion_batches_late;
-DROP INDEX IF EXISTS analytics.idx_ingestion_batches_completed;
-DROP TABLE IF EXISTS analytics.ingestion_batches;
-
-DROP INDEX IF EXISTS analytics.idx_usage_events_batch;
-DROP INDEX IF EXISTS analytics.idx_usage_events_status;
-DROP INDEX IF EXISTS analytics.idx_usage_events_org_model_time;
--- Note: Hypertable drop handled automatically when table is dropped
-DROP TABLE IF EXISTS analytics.usage_events;
-
--- Note: We don't drop the schema or extension as they may be used by other objects
 
 COMMIT;

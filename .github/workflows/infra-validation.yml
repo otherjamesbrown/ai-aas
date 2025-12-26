@@ -11,6 +11,7 @@ on:
       - 'infra/model-recipes/**'
       - 'gitops/**'
       - 'services/**/deployments/helm/**'
+      - 'secrets/kubeconfigs/**'
       - '.github/workflows/infra-validation.yml'
   pull_request:
     branches:
@@ -22,6 +23,7 @@ on:
       - 'infra/model-recipes/**'
       - 'gitops/**'
       - 'services/**/deployments/helm/**'
+      - 'secrets/kubeconfigs/**'
       - '.github/workflows/infra-validation.yml'
   workflow_dispatch:
 
@@ -401,3 +403,63 @@ jobs:
           fi
 
           echo "✅ No duplicate resource management detected"
+
+  kubeconfig-validation:
+    name: Kubeconfig File Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate kubeconfig files exist for all environments
+        run: |
+          set -e
+          echo "Checking that kubeconfig files exist for all environments..."
+          echo ""
+
+          ERRORS=0
+
+          # Find all environment directories in gitops/clusters/
+          for env_dir in gitops/clusters/*/; do
+            if [ ! -d "$env_dir" ]; then
+              continue
+            fi
+
+            # Extract environment name from path (e.g., gitops/clusters/development/ -> development)
+            ENV_NAME=$(basename "$env_dir")
+
+            # Skip non-environment directories (like 'base' if it exists)
+            if [ "$ENV_NAME" = "base" ]; then
+              continue
+            fi
+
+            KUBECONFIG_PATH="secrets/kubeconfigs/kubeconfig-${ENV_NAME}.yaml"
+
+            echo "Checking $ENV_NAME environment..."
+            if [ -f "$KUBECONFIG_PATH" ]; then
+              echo "  ✅ Found $KUBECONFIG_PATH"
+            else
+              echo "  ❌ MISSING: $KUBECONFIG_PATH"
+              echo "     Environment '$ENV_NAME' has ArgoCD apps but no kubeconfig!"
+              ERRORS=$((ERRORS + 1))
+            fi
+          done
+
+          echo ""
+
+          if [ $ERRORS -gt 0 ]; then
+            echo "❌ Found $ERRORS missing kubeconfig files"
+            echo ""
+            echo "Each environment in gitops/clusters/ requires a matching kubeconfig:"
+            echo "  secrets/kubeconfigs/kubeconfig-{environment}.yaml"
+            echo ""
+            echo "To add a missing kubeconfig:"
+            echo "  1. Obtain the kubeconfig from your cloud provider"
+            echo "  2. Save it to secrets/kubeconfigs/kubeconfig-{env}.yaml"
+            echo "  3. Encrypt with git-crypt: git-crypt status secrets/"
+            echo "  4. Force add (if gitignored): git add -f secrets/kubeconfigs/kubeconfig-{env}.yaml"
+            exit 1
+          fi
+
+          echo "✅ All environments have kubeconfig files"

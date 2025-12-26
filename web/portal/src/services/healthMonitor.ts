@@ -1,5 +1,4 @@
 import { publicClient } from '@/lib/http/client';
-import { logger } from '@/lib/logger';
 
 type ServiceStatus = 'checking' | 'healthy' | 'degraded' | 'unhealthy' | 'error';
 

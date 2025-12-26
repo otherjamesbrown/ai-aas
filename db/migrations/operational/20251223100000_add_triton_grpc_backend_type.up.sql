@@ -9,8 +9,3 @@ ALTER TABLE routing_policies
     ADD CONSTRAINT check_backend_type CHECK (backend_type IN ('openai', 'triton', 'triton-grpc'));
 
 COMMENT ON COLUMN routing_policies.backend_type IS 'Backend protocol: openai (default) for vLLM, triton for Triton HTTP, triton-grpc for Triton gRPC (TRT-LLM)';
-
--- +goose Down
-ALTER TABLE routing_policies DROP CONSTRAINT IF EXISTS check_backend_type;
-ALTER TABLE routing_policies
-    ADD CONSTRAINT check_backend_type CHECK (backend_type IN ('openai', 'triton'));

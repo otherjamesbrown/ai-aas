@@ -37,13 +37,3 @@ COMMENT ON COLUMN model_registry.external_name IS
 'The name exposed in OpenAI-compatible APIs (/v1/models). If not set explicitly, derived from hf_model_id. Must be unique per environment.';
 
 COMMIT;
-
--- +goose Down
--- Rollback external_name from model_registry table
-
-BEGIN;
-
-DROP INDEX IF EXISTS idx_model_registry_external_name;
-ALTER TABLE model_registry DROP COLUMN IF EXISTS external_name;
-
-COMMIT;
