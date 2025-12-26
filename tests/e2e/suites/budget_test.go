@@ -74,7 +74,7 @@ func TestBudgetExceededDenial(t *testing.T) {
 	}
 
 	// Create an API key for making requests
-	apiKey, err := apiKeyFixture.Create(ctx, org.ID, "test-budget-key", []string{"inference:read", "inference:write"})
+	apiKey, err := apiKeyFixture.CreateWithServiceAccount(ctx, org.ID, "test-budget-key", []string{"inference:read", "inference:write"})
 	if err != nil {
 		t.Fatalf("Failed to create API key: %v", err)
 	}

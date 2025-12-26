@@ -26,7 +26,7 @@ func TestBackendFailover(t *testing.T) {
 		t.Fatalf("Failed to create organization: %v", err)
 	}
 
-	apiKey, err := apiKeyFixture.Create(ctx, org.ID, "failover-test-key", []string{"inference:read", "inference:write"})
+	apiKey, err := apiKeyFixture.CreateWithServiceAccount(ctx, org.ID, "failover-test-key", []string{"inference:read", "inference:write"})
 	if err != nil {
 		t.Fatalf("Failed to create API key: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestPartialOutage(t *testing.T) {
 		t.Fatalf("Failed to create organization: %v", err)
 	}
 
-	apiKey, err := apiKeyFixture.Create(ctx, org.ID, "outage-test-key", []string{"inference:read"})
+	apiKey, err := apiKeyFixture.CreateWithServiceAccount(ctx, org.ID, "outage-test-key", []string{"inference:read"})
 	if err != nil {
 		t.Fatalf("Failed to create API key: %v", err)
 	}
@@ -230,7 +230,7 @@ func TestAllBackendsUnavailable(t *testing.T) {
 		t.Fatalf("Failed to create organization: %v", err)
 	}
 
-	apiKey, err := apiKeyFixture.Create(ctx, org.ID, "all-backends-down-key", []string{"inference:read", "inference:write"})
+	apiKey, err := apiKeyFixture.CreateWithServiceAccount(ctx, org.ID, "all-backends-down-key", []string{"inference:read", "inference:write"})
 	if err != nil {
 		t.Fatalf("Failed to create API key: %v", err)
 	}

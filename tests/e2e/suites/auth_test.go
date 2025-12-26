@@ -32,7 +32,7 @@ func TestAuthorizationDenial(t *testing.T) {
 
 	// Create an API key with limited scopes (read-only)
 	// Note: API key creation may require a service account, but we'll test with basic scopes
-	apiKey, err := apiKeyFixture.Create(ctx, org.ID, "test-limited-key", []string{"inference:read"})
+	apiKey, err := apiKeyFixture.CreateWithServiceAccount(ctx, org.ID, "test-limited-key", []string{"inference:read"})
 	if err != nil {
 		t.Fatalf("Failed to create API key: %v", err)
 	}

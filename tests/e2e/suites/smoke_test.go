@@ -82,6 +82,7 @@ func TestSmokeInferenceWithUsage(t *testing.T) {
 	defer ctx.Cleanup()
 
 	orgFixture := fixtures.NewOrganizationFixture(ctx.Client, ctx.Fixtures)
+	saFixture := fixtures.NewServiceAccountFixture(ctx.Client, ctx.Fixtures)
 	apiKeyFixture := fixtures.NewAPIKeyFixture(ctx.Client, ctx.Fixtures)
 
 	// Step 1: Create organization
@@ -91,8 +92,15 @@ func TestSmokeInferenceWithUsage(t *testing.T) {
 	}
 	t.Logf("Created organization: %s", org.ID)
 
-	// Step 2: Create API key
-	apiKey, err := apiKeyFixture.Create(ctx, org.ID, "", []string{"inference:read", "inference:write"})
+	// Step 2: Create service account
+	sa, err := saFixture.Create(ctx, org.ID, "")
+	if err != nil {
+		t.Fatalf("Failed to create service account: %v", err)
+	}
+	t.Logf("Created service account: %s", sa.ID)
+
+	// Step 3: Create API key for service account
+	apiKey, err := apiKeyFixture.Create(ctx, org.ID, sa.ID, "", []string{"inference:read", "inference:write"})
 	if err != nil {
 		t.Fatalf("Failed to create API key: %v", err)
 	}

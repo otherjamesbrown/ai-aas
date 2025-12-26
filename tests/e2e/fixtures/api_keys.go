@@ -9,14 +9,11 @@ import (
 
 // APIKey represents a test API key fixture
 type APIKey struct {
-	ID             string            `json:"id"`
-	Key            string            `json:"key"`
-	OrganizationID string            `json:"organization_id"`
-	Name           string            `json:"name"`
-	Scopes         []string          `json:"scopes"`
-	ExpiresAt      *time.Time        `json:"expires_at,omitempty"`
-	CreatedAt      time.Time         `json:"created_at"`
-	Metadata       map[string]string `json:"metadata"`
+	ID          string `json:"keyId"`
+	Key         string `json:"token"`
+	Fingerprint string `json:"fingerprint"`
+	Status      string `json:"status"`
+	Name        string `json:"name,omitempty"`
 }
 
 // APIKeyFixture provides methods for creating and managing API key fixtures
@@ -33,8 +30,9 @@ func NewAPIKeyFixture(client *harness.Client, fm *harness.FixtureManager) *APIKe
 	}
 }
 
-// Create creates a new API key for testing
-func (akf *APIKeyFixture) Create(ctx *harness.Context, orgID string, name string, scopes []string) (*APIKey, error) {
+// Create creates a new API key for testing.
+// Requires orgID and serviceAccountID - use ServiceAccountFixture.Create first.
+func (akf *APIKeyFixture) Create(ctx *harness.Context, orgID string, serviceAccountID string, name string, scopes []string) (*APIKey, error) {
 	if name == "" {
 		name = ctx.GenerateResourceName("key")
 	}
@@ -43,17 +41,17 @@ func (akf *APIKeyFixture) Create(ctx *harness.Context, orgID string, name string
 	}
 
 	reqBody := map[string]interface{}{
-		"name":           name,
-		"organization_id": orgID,
-		"scopes":         scopes,
+		"name":   name,
+		"scopes": scopes,
 	}
 
-	resp, err := akf.client.POST("/v1/api-keys", reqBody)
+	// Use the correct route: /v1/orgs/{orgId}/service-accounts/{serviceAccountId}/api-keys
+	resp, err := akf.client.POST(fmt.Sprintf("/v1/orgs/%s/service-accounts/%s/api-keys", orgID, serviceAccountID), reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("create API key: %w", err)
 	}
 
-	if resp.StatusCode != 201 {
+	if resp.StatusCode != 201 && resp.StatusCode != 200 {
 		return nil, fmt.Errorf("create API key failed: status %d, body: %s", resp.StatusCode, resp.String())
 	}
 
@@ -64,12 +62,27 @@ func (akf *APIKeyFixture) Create(ctx *harness.Context, orgID string, name string
 
 	// Register for cleanup
 	akf.fm.Register("api_key", apiKey.ID, map[string]string{
-		"name": apiKey.Name,
-		"organization_id": orgID,
-		"test_run_id": ctx.RunID,
+		"name":               apiKey.Name,
+		"organization_id":    orgID,
+		"service_account_id": serviceAccountID,
+		"test_run_id":        ctx.RunID,
 	})
 
 	return &apiKey, nil
+}
+
+// CreateWithServiceAccount is a convenience method that creates a service account
+// and then creates an API key for it. Use when you don't need the service account separately.
+func (akf *APIKeyFixture) CreateWithServiceAccount(ctx *harness.Context, orgID string, name string, scopes []string) (*APIKey, error) {
+	// Create service account first
+	saFixture := NewServiceAccountFixture(akf.client, akf.fm)
+	sa, err := saFixture.Create(ctx, orgID, "")
+	if err != nil {
+		return nil, fmt.Errorf("create service account for API key: %w", err)
+	}
+
+	// Then create API key
+	return akf.Create(ctx, orgID, sa.ID, name, scopes)
 }
 
 // Validate validates an API key by making an authenticated request
