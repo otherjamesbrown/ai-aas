@@ -179,6 +179,42 @@ make test-ci
 - **Audit Tests** (`suites/audit_test.go`): Audit trail validation
 - **Resilience Tests** (`suites/resilience_test.go`): Service health and failure handling
 
+## Test Tiers
+
+Tests are organized into tiers using Go build tags for selective execution:
+
+| Tier | Tests Included | Duration | Use Case |
+|------|----------------|----------|----------|
+| **smoke** | `smoke_test.go` | ~2 min | Quick health validation |
+| **nightly** | smoke + happy_path, auth, budget, resilience | ~15 min | Daily regression |
+| **full** | All tests including audit, declarative, recipe_deploy | ~30 min | Weekly/pre-release |
+
+### Running by Tier
+
+```bash
+# Smoke tests only (fastest)
+go test -v ./suites/... -tags=smoke
+
+# Nightly tier (default for scheduled runs)
+go test -v ./suites/... -tags=nightly
+
+# Full regression suite
+go test -v ./suites/... -tags=full
+
+# All tests (no tier filter - runs everything)
+go test -v ./suites/...
+```
+
+### Build Tag Structure
+
+Each test file has a build tag at the top:
+
+```go
+//go:build nightly || full || !e2e_tier
+```
+
+The `!e2e_tier` allows tests to run by default when no tier tag is specified.
+
 ## Configuration
 
 See `specs/012-e2e-tests/quickstart.md` for detailed configuration options.
