@@ -172,7 +172,8 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=sha,prefix={{branch}}-
+            type=ref,event=branch,suffix=-{{sha}}
+            type=ref,event=pr,prefix=pr-,suffix=-{{sha}}
             type=sha,format=short
             type=raw,value=dev,enable={{is_default_branch}}
             type=raw,value=latest,enable={{is_default_branch}}
