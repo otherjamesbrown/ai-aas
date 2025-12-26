@@ -435,11 +435,10 @@ func (h *Handler) forwardOpenAIRequest(ctx context.Context, backend *routing.Bac
 		if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
 			return nil, nil, fmt.Errorf("unmarshal OpenAI chat response: %w", err)
 		}
-		// Normalize nil content to empty string for backward compatibility
+		// Normalize content: extract from reasoning_content if content is empty (for reasoning models)
 		for i := range chatResp.Choices {
-			if chatResp.Choices[i].Message.Content == nil {
-				chatResp.Choices[i].Message.Content = ""
-			}
+			normalized := chatResp.Choices[i].Message.NormalizeContent()
+			chatResp.Choices[i].Message.Content = normalized
 		}
 		openAIResp = chatResp
 	} else {

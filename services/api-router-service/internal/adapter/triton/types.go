@@ -77,9 +77,12 @@ type OpenAIChatCompletionRequest struct {
 // Content can be either:
 // - A plain string: "Hello"
 // - An array of content parts: [{"type": "text", "text": "..."}, {"type": "image_url", "image_url": {...}}]
+// Reasoning models may return content in Reasoning or ReasoningContent fields instead.
 type ChatMessage struct {
-	Role    string      `json:"role"`    // "system", "user", "assistant"
-	Content interface{} `json:"content"` // string OR []ContentPart
+	Role             string      `json:"role"`              // "system", "user", "assistant"
+	Content          interface{} `json:"content"`           // string OR []ContentPart
+	Reasoning        interface{} `json:"reasoning,omitempty"`         // Some models return reasoning instead of content
+	ReasoningContent interface{} `json:"reasoning_content,omitempty"` // Alternative reasoning field
 }
 
 // ContentPart represents a single part of multimodal message content.
@@ -118,6 +121,46 @@ func (m *ChatMessage) GetTextContent() string {
 	default:
 		return ""
 	}
+}
+
+// NormalizeContent extracts content from Content, Reasoning, or ReasoningContent fields.
+// Reasoning models (like gpt-oss-20b) may return content in reasoning_content field instead of content.
+// This method provides backward compatibility by extracting from the first non-empty field.
+// Returns the content as interface{} to preserve the original type (string or []ContentPart).
+func (m *ChatMessage) NormalizeContent() interface{} {
+	// Try Content first (standard field)
+	if m.Content != nil {
+		if str, ok := m.Content.(string); ok && str != "" {
+			return m.Content
+		}
+		// For non-string content (multimodal), if it's non-nil and non-empty array, use it
+		if arr, ok := m.Content.([]interface{}); ok && len(arr) > 0 {
+			return m.Content
+		}
+	}
+
+	// Fallback to Reasoning field
+	if m.Reasoning != nil {
+		if str, ok := m.Reasoning.(string); ok && str != "" {
+			return m.Reasoning
+		}
+		if arr, ok := m.Reasoning.([]interface{}); ok && len(arr) > 0 {
+			return m.Reasoning
+		}
+	}
+
+	// Fallback to ReasoningContent field
+	if m.ReasoningContent != nil {
+		if str, ok := m.ReasoningContent.(string); ok && str != "" {
+			return m.ReasoningContent
+		}
+		if arr, ok := m.ReasoningContent.([]interface{}); ok && len(arr) > 0 {
+			return m.ReasoningContent
+		}
+	}
+
+	// All fields are empty, return empty string for backward compatibility
+	return ""
 }
 
 // OpenAIChatCompletionResponse represents an OpenAI Chat Completions API response.
