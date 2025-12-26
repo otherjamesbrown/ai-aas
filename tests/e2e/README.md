@@ -193,13 +193,13 @@ Tests are organized into tiers using Go build tags for selective execution:
 
 ```bash
 # Smoke tests only (fastest)
-go test -v ./suites/... -tags=smoke
+go test -v ./suites/... -tags="smoke,e2e_tier"
 
 # Nightly tier (default for scheduled runs)
-go test -v ./suites/... -tags=nightly
+go test -v ./suites/... -tags="nightly,e2e_tier"
 
 # Full regression suite
-go test -v ./suites/... -tags=full
+go test -v ./suites/... -tags="full,e2e_tier"
 
 # All tests (no tier filter - runs everything)
 go test -v ./suites/...
@@ -207,13 +207,21 @@ go test -v ./suites/...
 
 ### Build Tag Structure
 
-Each test file has a build tag at the top:
+Each test file has a build tag at the top that controls tier inclusion:
 
 ```go
-//go:build nightly || full || !e2e_tier
+// Smoke tests (included in all tiers):
+//go:build (smoke || nightly || full) && e2e_tier || !e2e_tier
+
+// Nightly tests (included in nightly and full):
+//go:build (nightly || full) && e2e_tier || !e2e_tier
+
+// Full-only tests:
+//go:build full && e2e_tier || !e2e_tier
 ```
 
-The `!e2e_tier` allows tests to run by default when no tier tag is specified.
+The `e2e_tier` tag activates tier-based filtering. The `!e2e_tier` fallback allows
+all tests to run by default when no tier tag is specified.
 
 ## Configuration
 

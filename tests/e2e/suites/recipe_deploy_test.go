@@ -1,4 +1,4 @@
-//go:build full || !e2e_tier
+//go:build full && e2e_tier || !e2e_tier
 
 package suites
 

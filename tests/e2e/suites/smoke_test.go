@@ -1,4 +1,4 @@
-//go:build smoke || nightly || full || !e2e_tier
+//go:build (smoke || nightly || full) && e2e_tier || !e2e_tier
 
 package suites
 

@@ -109,8 +109,8 @@ check_file() {
 # Generate metrics.json if it doesn't exist
 generate_metrics() {
     if [[ -f "$RESULTS_JSON" ]]; then
-        PASSED=$(grep -c '"Action":"pass"' "$RESULTS_JSON" 2>/dev/null || echo 0)
-        FAILED=$(grep -c '"Action":"fail"' "$RESULTS_JSON" 2>/dev/null || echo 0)
+        PASSED=$(jq -c 'select(.Action == "pass")' "$RESULTS_JSON" 2>/dev/null | wc -l || echo 0)
+        FAILED=$(jq -c 'select(.Action == "fail")' "$RESULTS_JSON" 2>/dev/null | wc -l || echo 0)
     else
         PASSED=0
         FAILED=0
