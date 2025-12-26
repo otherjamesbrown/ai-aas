@@ -435,6 +435,12 @@ func (h *Handler) forwardOpenAIRequest(ctx context.Context, backend *routing.Bac
 		if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
 			return nil, nil, fmt.Errorf("unmarshal OpenAI chat response: %w", err)
 		}
+		// Normalize nil content to empty string for backward compatibility
+		for i := range chatResp.Choices {
+			if chatResp.Choices[i].Message.Content == nil {
+				chatResp.Choices[i].Message.Content = ""
+			}
+		}
 		openAIResp = chatResp
 	} else {
 		var completionResp OpenAICompletionResponse
@@ -915,6 +921,12 @@ func (h *Handler) handleTritonNonStreamingGRPC(
 	completionTokens := translator.CountCompletionTokens(accumulatedText)
 
 	// Build OpenAI response
+	// Normalize accumulated text to prevent nil content
+	content := interface{}(accumulatedText)
+	if content == nil || content == "" {
+		content = ""
+	}
+
 	openAIResp := triton.OpenAIChatCompletionResponse{
 		ID:      requestID,
 		Object:  "chat.completion",
@@ -925,7 +937,7 @@ func (h *Handler) handleTritonNonStreamingGRPC(
 				Index: 0,
 				Message: triton.ChatMessage{
 					Role:    "assistant",
-					Content: accumulatedText,
+					Content: content,
 				},
 				FinishReason: "stop",
 			},

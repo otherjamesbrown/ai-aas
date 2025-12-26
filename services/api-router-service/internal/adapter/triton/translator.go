@@ -144,12 +144,18 @@ func (t *Translator) TranslateTritonToOpenAI(
 	// Determine finish reason
 	finishReason := t.determineFinishReason(resp, originalReq, completionTokens)
 
+	// Normalize completion text to prevent nil content
+	content := interface{}(completionText)
+	if content == nil {
+		content = ""
+	}
+
 	// Build OpenAI response
 	choice := ChatCompletionChoice{
 		Index: 0,
 		Message: ChatMessage{
 			Role:    "assistant",
-			Content: completionText,
+			Content: content,
 		},
 		FinishReason: finishReason,
 	}

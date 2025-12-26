@@ -452,25 +452,50 @@ run_environment_tests() {
             duration_ms=$((end_time - start_time))
 
             if echo "$inference_output" | jq -e '.choices[0].message.content' >/dev/null 2>&1; then
-                # Parse all fields in one jq call for efficiency
-                local parsed_fields
-                parsed_fields=$(echo "$inference_output" | jq -r '[
-                    .usage.prompt_tokens // 0,
-                    .usage.completion_tokens // 0,
-                    .usage.total_tokens // 0,
-                    (.choices[0].message.content // "" | gsub("\n"; " ") | .[0:100])
-                ] | @tsv')
-                local prompt_tokens completion_tokens total_tokens response_text
-                IFS=$'\t' read -r prompt_tokens completion_tokens total_tokens response_text <<< "$parsed_fields"
-                # Escape quotes for JSON
-                response_text=$(echo "$response_text" | sed 's/"/\\"/g')
+                # Parse token counts
+                local prompt_tokens completion_tokens total_tokens
+                prompt_tokens=$(echo "$inference_output" | jq -r '.usage.prompt_tokens // 0' 2>/dev/null)
+                completion_tokens=$(echo "$inference_output" | jq -r '.usage.completion_tokens // 0' 2>/dev/null)
+                total_tokens=$(echo "$inference_output" | jq -r '.usage.total_tokens // 0' 2>/dev/null)
 
-                inference_results+=("{\"model\":\"$model_id\",\"status\":\"PASS\",\"prompt_tokens\":$prompt_tokens,\"completion_tokens\":$completion_tokens,\"total_tokens\":$total_tokens,\"duration_ms\":$duration_ms,\"prompt\":\"$test_prompt\",\"response\":\"$response_text\"}")
+                # Get response text - properly escaped by jq, filter null bytes
+                local response_text
+                response_text=$(echo "$inference_output" | jq -r '.choices[0].message.content // "" | gsub("\n"; " ") | .[0:100]' 2>/dev/null | tr -d '\0')
+
+                # Build JSON object using jq to ensure proper escaping
+                local json_obj
+                json_obj=$(jq -n \
+                    --arg model "$model_id" \
+                    --arg status "PASS" \
+                    --argjson prompt_tokens "${prompt_tokens:-0}" \
+                    --argjson completion_tokens "${completion_tokens:-0}" \
+                    --argjson total_tokens "${total_tokens:-0}" \
+                    --argjson duration_ms "$duration_ms" \
+                    --arg prompt "$test_prompt" \
+                    --arg response "$response_text" \
+                    '{model: $model, status: $status, prompt_tokens: $prompt_tokens, completion_tokens: $completion_tokens, total_tokens: $total_tokens, duration_ms: $duration_ms, prompt: $prompt, response: $response}')
+
+                inference_results+=("$json_obj")
                 ((inference_pass_count++))
             else
                 local error_msg
-                error_msg=$(echo "$inference_output" | jq -r '.error.message // .error // "unknown error"' 2>/dev/null | head -c 50 | sed 's/"/\\"/g')
-                inference_results+=("{\"model\":\"$model_id\",\"status\":\"FAIL\",\"prompt_tokens\":0,\"completion_tokens\":0,\"total_tokens\":0,\"duration_ms\":$duration_ms,\"prompt\":\"$test_prompt\",\"response\":\"\",\"error\":\"$error_msg\"}")
+                error_msg=$(echo "$inference_output" | jq -r '.error.message // .error // "unknown error"' 2>/dev/null | head -c 50)
+
+                # Build JSON object using jq to ensure proper escaping
+                local json_obj
+                json_obj=$(jq -n \
+                    --arg model "$model_id" \
+                    --arg status "FAIL" \
+                    --argjson prompt_tokens 0 \
+                    --argjson completion_tokens 0 \
+                    --argjson total_tokens 0 \
+                    --argjson duration_ms "$duration_ms" \
+                    --arg prompt "$test_prompt" \
+                    --arg response "" \
+                    --arg error "$error_msg" \
+                    '{model: $model, status: $status, prompt_tokens: $prompt_tokens, completion_tokens: $completion_tokens, total_tokens: $total_tokens, duration_ms: $duration_ms, prompt: $prompt, response: $response, error: $error}')
+
+                inference_results+=("$json_obj")
                 ((inference_fail_count++))
             fi
         done
@@ -487,11 +512,10 @@ run_environment_tests() {
             results+=("inference:PASS:${inference_pass_count}/${total_models}_models")
         fi
 
-        # Build JSON array of all inference results
-        local old_ifs="$IFS"
-        IFS=','
-        inference_json_array="[${inference_results[*]}]"
-        IFS="$old_ifs"
+        # Build JSON array of all inference results using jq for proper formatting
+        if [[ ${#inference_results[@]} -gt 0 ]]; then
+            inference_json_array=$(printf '%s\n' "${inference_results[@]}" | jq -s '.')
+        fi
     else
         results+=("inference:SKIP:no_API_key")
     fi
@@ -779,11 +803,12 @@ print_inference_details() {
         [[ "$env" == "staging" ]] && env_label="Staging"
 
         local inference_file="$verbose_dir/${env}_inference.json"
-        if [[ -f "$inference_file" ]]; then
+        if [[ -f "$inference_file" && -s "$inference_file" ]]; then
             local first=true
             # Read each inference result from the array
             local count
-            count=$(cat "$inference_file" | jq 'length' 2>/dev/null)
+            count=$(jq 'length' "$inference_file" 2>/dev/null || echo 0)
+            count=${count:-0}
             for ((i=0; i<count; i++)); do
                 local model status prompt_tokens completion_tokens duration_ms
                 model=$(cat "$inference_file" | jq -r ".[$i].model // \"unknown\"" 2>/dev/null)
@@ -921,12 +946,16 @@ print_verbose_details() {
         [[ "$env" == "staging" ]] && env_label="Staging"
 
         local inference_file="$verbose_dir/${env}_inference.json"
-        if [[ -f "$inference_file" ]]; then
-            echo ""
-            echo "┌─ $env_label ─────────────────────────────────────────────────────────────────────────┐"
-
+        if [[ -f "$inference_file" && -s "$inference_file" ]]; then
             local count
-            count=$(cat "$inference_file" | jq 'length' 2>/dev/null)
+            count=$(jq 'length' "$inference_file" 2>/dev/null || echo 0)
+            count=${count:-0}
+
+            if [[ $count -gt 0 ]]; then
+                echo ""
+                echo "┌─ $env_label ─────────────────────────────────────────────────────────────────────────┐"
+            fi
+
             for ((i=0; i<count; i++)); do
                 local model status prompt response error
                 model=$(cat "$inference_file" | jq -r ".[$i].model // \"unknown\"" 2>/dev/null)
@@ -948,7 +977,9 @@ print_verbose_details() {
                 fi
             done
 
-            echo "└────────────────────────────────────────────────────────────────────────────────────┘"
+            if [[ $count -gt 0 ]]; then
+                echo "└────────────────────────────────────────────────────────────────────────────────────┘"
+            fi
         fi
     done
 }
