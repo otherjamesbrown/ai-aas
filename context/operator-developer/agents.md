@@ -316,6 +316,8 @@ make docker-build docker-push IMG=ghcr.io/ai-aas/ai-model-operator:dev
 | Admin API client | `operators/ai-model-operator/internal/adminapi/client.go` |
 | AIModel examples | `infra/k8s/aimodels/development/` |
 | CRD reference | `docs/operators/ai-model-operator.md` |
+| Behavioral contract | `docs/operators/operator-behavioral-contract.md` |
+| Code patterns | `docs/operators/operator-patterns.md` |
 
 ---
 

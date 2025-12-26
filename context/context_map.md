@@ -138,6 +138,8 @@ maintenance:
 | `CLAUDE.md` | 430 | rules | ✅ UPDATED | Links to context/agents.md |
 | `docs/platform/environment-access.md` | 337 | reference | ✅ UPDATED | Recently cleaned up |
 | `docs/operators/ai-model-operator.md` | 338 | reference | ✅ UPDATED | Links to CRD source |
+| `docs/operators/operator-behavioral-contract.md` | 350 | reference | ✅ NEW | Timeouts, retries, error handling |
+| `docs/operators/operator-patterns.md` | 354 | reference | ✅ OK | Controller-runtime patterns |
 | `docs/architecture/inference-routing.md` | 280 | reference | ✅ NEW | vLLM vs TRT-LLM, routing policies |
 
 ### Level 4: Sources (No changes needed - these ARE the source of truth)
@@ -280,6 +282,21 @@ hierarchy:
         links_to:
           - operators/ai-model-operator/api/v1alpha1/aimodel_types.go (source)
           - infra/k8s/aimodels/ (source)
+
+      docs/operators/operator-behavioral-contract.md:
+        type: reference
+        purpose: Operator behavioral contract (timeouts, retries, error handling)
+        read_when: Implementing phase transitions, error handling, health monitoring
+        links_to:
+          - docs/operators/ai-model-operator.md (reference)
+          - docs/operators/operator-patterns.md (reference)
+
+      docs/operators/operator-patterns.md:
+        type: reference
+        purpose: Controller-runtime patterns (reconciliation, status, finalizers)
+        read_when: Implementing reconciliation logic
+        links_to:
+          - operators/ai-model-operator/controllers/ (source)
 
       docs/architecture/inference-routing.md:
         type: reference
