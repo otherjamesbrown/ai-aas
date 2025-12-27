@@ -78,6 +78,17 @@ spec:
       ports:
         - protocol: TCP
           port: 6379
+    # Allow to Kafka (usage event publishing)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kafka
+          podSelector:
+            matchLabels:
+              app: kafka
+      ports:
+        - protocol: TCP
+          port: 9092
     # Allow to vLLM backends in system namespace (legacy)
     - to:
         - namespaceSelector:
