@@ -94,10 +94,7 @@ See Also:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
 				return fmt.Errorf("API endpoint not configured. Run 'ai-aas-cli --init' first")

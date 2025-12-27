@@ -63,10 +63,7 @@ Examples:
 			}
 
 			// Use Admin API endpoint for registry operations
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint // fallback for backward compatibility
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
 				return fmt.Errorf("Admin API endpoint not configured. Run 'ai-aas-cli --init' first")

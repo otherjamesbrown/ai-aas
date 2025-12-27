@@ -82,10 +82,7 @@ Examples:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
 				return fmt.Errorf("Admin API endpoint not configured. Run 'ai-aas-cli --init' first")
@@ -173,10 +170,7 @@ Examples:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
 				return fmt.Errorf("Admin API endpoint not configured. Run 'ai-aas-cli --init' first")
@@ -320,10 +314,7 @@ Examples:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
@@ -394,10 +385,7 @@ Examples:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
@@ -444,10 +432,7 @@ Examples:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
@@ -529,10 +514,7 @@ Examples:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
@@ -615,10 +597,7 @@ Examples:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
@@ -746,10 +725,7 @@ Examples:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
@@ -847,10 +823,7 @@ Examples:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()

@@ -323,3 +323,13 @@ func (c *Config) IsConfigured() bool {
 	return c.APIEndpoint != "" && c.APIKey != ""
 }
 
+// GetAdminEndpoint returns the Admin API endpoint to use.
+// If AdminAPIEndpoint is set (legacy), it takes precedence.
+// Otherwise, falls back to APIEndpoint (recommended).
+func (c *Config) GetAdminEndpoint() string {
+	if c.AdminAPIEndpoint != "" {
+		return c.AdminAPIEndpoint
+	}
+	return c.APIEndpoint
+}
+

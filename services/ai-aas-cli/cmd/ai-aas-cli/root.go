@@ -441,10 +441,7 @@ func runPartialInit(domain, apiKey, env, hfToken, adminAPI, userOrgAPI string) e
 		updated = true
 
 		// Also sync to Admin API if configured
-		adminEndpoint := cfg.AdminAPIEndpoint
-		if adminEndpoint == "" {
-			adminEndpoint = cfg.APIEndpoint
-		}
+		adminEndpoint := cfg.GetAdminEndpoint()
 		if adminEndpoint != "" && cfg.APIKey != "" {
 			opts := []api.ClientOption{}
 			if cfg.TLSInsecure {

@@ -103,10 +103,7 @@ Examples:
 			fmt.Printf("Registering model in platform as: %s\n", name)
 
 			// Use Admin API endpoint for registry operations
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint // fallback for backward compatibility
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			opts := []api.ClientOption{}
 			if cfg.TLSInsecure {

@@ -91,10 +91,7 @@ Examples:
 			defer cancel()
 
 			// Get model from registry via Admin API
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint // fallback for backward compatibility
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			opts := []api.ClientOption{}
 			if cfg.TLSInsecure {

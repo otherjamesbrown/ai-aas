@@ -141,10 +141,7 @@ See Also:
 			defer cancel()
 
 			// Get model from registry
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			opts := []api.ClientOption{}
 			if cfg.TLSInsecure {
