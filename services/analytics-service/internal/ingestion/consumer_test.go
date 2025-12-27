@@ -463,33 +463,36 @@ func TestEvent_JSONSerialization(t *testing.T) {
 		{
 			name: "full event",
 			event: Event{
-				EventID:      "123e4567-e89b-12d3-a456-426614174000",
-				OrgID:        "123e4567-e89b-12d3-a456-426614174001",
-				ModelID:      "123e4567-e89b-12d3-a456-426614174002",
-				OccurredAt:   now,
-				InputTokens:  100,
-				OutputTokens: 50,
-				LatencyMS:    250,
-				Status:       "success",
-				ErrorCode:    "",
-				CostEstimate: 0.05,
-				Metadata:     map[string]interface{}{"key": "value"},
+				RecordID:       "rec_123e4567",
+				RequestID:      "req_123e4567",
+				OrganizationID: "org_123e4567",
+				APIKeyID:       "key_123e4567",
+				Timestamp:      now,
+				Model:          "meta-llama/Llama-2-7b-hf",
+				BackendID:      "backend_123",
+				TokensInput:    100,
+				TokensOutput:   50,
+				LatencyMS:      250,
+				LimitState:     "WITHIN_LIMIT",
+				DecisionReason: "PRIMARY",
+				CostUSD:        0.05,
+				Metadata:       map[string]interface{}{"key": "value"},
 			},
 		},
 		{
 			name: "minimal event",
 			event: Event{
-				EventID: "123e4567-e89b-12d3-a456-426614174000",
-				OrgID:   "123e4567-e89b-12d3-a456-426614174001",
+				RecordID:       "rec_123e4567",
+				OrganizationID: "org_123e4567",
 			},
 		},
 		{
-			name: "event with error",
+			name: "event with rate limit",
 			event: Event{
-				EventID:   "123e4567-e89b-12d3-a456-426614174000",
-				OrgID:     "123e4567-e89b-12d3-a456-426614174001",
-				Status:    "error",
-				ErrorCode: "TIMEOUT",
+				RecordID:       "rec_123e4567",
+				OrganizationID: "org_123e4567",
+				LimitState:     "RATE_LIMITED",
+				DecisionReason: "RATE_LIMIT",
 			},
 		},
 	}
@@ -506,13 +509,14 @@ func TestEvent_JSONSerialization(t *testing.T) {
 			require.NoError(t, err)
 
 			// Verify round-trip
-			assert.Equal(t, tt.event.EventID, decoded.EventID)
-			assert.Equal(t, tt.event.OrgID, decoded.OrgID)
-			assert.Equal(t, tt.event.ModelID, decoded.ModelID)
-			assert.Equal(t, tt.event.InputTokens, decoded.InputTokens)
-			assert.Equal(t, tt.event.OutputTokens, decoded.OutputTokens)
-			assert.Equal(t, tt.event.Status, decoded.Status)
-			assert.Equal(t, tt.event.ErrorCode, decoded.ErrorCode)
+			assert.Equal(t, tt.event.RecordID, decoded.RecordID)
+			assert.Equal(t, tt.event.OrganizationID, decoded.OrganizationID)
+			assert.Equal(t, tt.event.RequestID, decoded.RequestID)
+			assert.Equal(t, tt.event.Model, decoded.Model)
+			assert.Equal(t, tt.event.TokensInput, decoded.TokensInput)
+			assert.Equal(t, tt.event.TokensOutput, decoded.TokensOutput)
+			assert.Equal(t, tt.event.LimitState, decoded.LimitState)
+			assert.Equal(t, tt.event.DecisionReason, decoded.DecisionReason)
 		})
 	}
 }
