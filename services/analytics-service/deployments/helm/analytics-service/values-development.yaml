@@ -56,6 +56,17 @@ env:
     value: grpc
   - name: OTEL_EXPORTER_OTLP_INSECURE
     value: "true"
+  - name: KAFKA_BROKERS
+    value: kafka.kafka.svc.cluster.local:9092
+  - name: KAFKA_TOPIC
+    value: usage.records.v1
+  - name: KAFKA_CONSUMER_GROUP
+    value: analytics-service-development
+  - name: MASTER_ADMIN_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: analytics-service-secrets
+        key: master-admin-api-key
 
 service:
   type: ClusterIP

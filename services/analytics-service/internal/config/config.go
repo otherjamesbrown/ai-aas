@@ -58,7 +58,8 @@ type Config struct {
 	ExportSignedURLTTL     time.Duration `envconfig:"EXPORT_SIGNED_URL_TTL" default:"24h"`
 
 	// Security
-	EnableRBAC bool `envconfig:"ENABLE_RBAC" default:"true"`
+	EnableRBAC        bool   `envconfig:"ENABLE_RBAC" default:"true"`
+	MasterAdminAPIKey string `envconfig:"MASTER_ADMIN_API_KEY"`
 }
 
 // Load loads configuration from environment variables.

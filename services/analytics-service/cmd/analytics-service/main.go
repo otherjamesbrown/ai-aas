@@ -112,14 +112,15 @@ func main() {
 	// Create HTTP server
 	// RBAC is enabled by default, can be disabled via ENABLE_RBAC=false for development
 	apiServer := api.NewServer(api.Config{
-		Port:         cfg.HTTPPort,
-		Logger:       logger,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
-		EnableRBAC:   cfg.EnableRBAC,
-		Store:        store,
-		RedisClient:  redisClient,
+		Port:              cfg.HTTPPort,
+		Logger:            logger,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		EnableRBAC:        cfg.EnableRBAC,
+		MasterAdminAPIKey: cfg.MasterAdminAPIKey,
+		Store:             store,
+		RedisClient:       redisClient,
 	})
 
 	// Initialize freshness cache

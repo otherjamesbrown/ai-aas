@@ -36,6 +36,7 @@ type Server struct {
 	router             *chi.Mux
 	logger             *zap.Logger
 	port               int
+	authCfg            rbacmiddleware.AuthConfig
 	rbacCfg            rbacmiddleware.RBACConfig
 	store              *postgres.Store
 	redisClient        *redis.Client
@@ -53,6 +54,8 @@ type Config struct {
 	IdleTimeout  time.Duration
 	// EnableRBAC controls whether RBAC middleware is enabled (default: true)
 	EnableRBAC bool
+	// MasterAdminAPIKey is used for Bearer token authentication
+	MasterAdminAPIKey string
 	// Dependencies for readiness checks
 	Store       *postgres.Store
 	RedisClient *redis.Client
@@ -79,6 +82,13 @@ func NewServer(cfg Config) *Server {
 	requestLoggerConfig := sharedMiddleware.DefaultRequestLoggerConfig()
 	r.Use(sharedMiddleware.RequestLogger(cfg.Logger, requestLoggerConfig))
 
+	// Auth configuration - validates Bearer tokens
+	authCfg := rbacmiddleware.AuthConfig{
+		Logger:            cfg.Logger,
+		MasterAdminAPIKey: cfg.MasterAdminAPIKey,
+		EnableAuth:        cfg.EnableRBAC, // Auth is enabled when RBAC is enabled
+	}
+
 	// RBAC configuration - will be applied to analytics API routes
 	rbacCfg := rbacmiddleware.RBACConfig{
 		Logger:     cfg.Logger,
@@ -89,6 +99,7 @@ func NewServer(cfg Config) *Server {
 		router:      r,
 		logger:      cfg.Logger,
 		port:        cfg.Port,
+		authCfg:     authCfg,
 		rbacCfg:     rbacCfg,
 		store:       cfg.Store,
 		redisClient: cfg.RedisClient,
@@ -134,7 +145,8 @@ func (s *Server) RegisterExportsRoutes(handler *ExportsHandler) {
 // setupRoutes consolidates all API routes under a single /analytics/v1 path
 func (s *Server) setupRoutes() {
 	s.router.Route("/analytics/v1", func(r chi.Router) {
-		r.Use(rbacmiddleware.RBAC(s.rbacCfg)) // Apply RBAC middleware
+		r.Use(rbacmiddleware.Auth(s.authCfg)) // Auth: validate Bearer token, set X-Actor-* headers
+		r.Use(rbacmiddleware.RBAC(s.rbacCfg)) // RBAC: check X-Actor-Roles against policy
 		r.Route("/orgs/{orgId}", func(r chi.Router) {
 			// Usage routes
 			if s.usageHandler != nil {
