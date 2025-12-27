@@ -260,7 +260,9 @@ run_environment_tests() {
         --user-org-endpoint "$user_org_endpoint" \
         --api-key "$api_key" 2>&1)
 
+    local org_id=""
     if echo "$org_output" | grep -q '"outcome": "success"'; then
+        org_id=$(extract_json_field "$org_output" "orgId")
         results+=("create_org:PASS:$org_slug")
     else
         local error_msg
@@ -538,12 +540,13 @@ run_environment_tests() {
 
     # Test 8: Usage Query (validates usage tracking pipeline)
     # Wait briefly for usage data to flow through Kafka -> analytics-service -> TimescaleDB
-    if [[ -n "$analytics_endpoint" && -n "$new_api_key" && $inference_pass_count -gt 0 ]]; then
+    if [[ -n "$analytics_endpoint" && -n "$new_api_key" && $inference_pass_count -gt 0 && -n "$org_id" ]]; then
         sleep 8  # Allow time for async pipeline processing
 
         local usage_output
+        # Use org_id (UUID) instead of org_slug - analytics service requires UUID
         usage_output=$(run_cli usage query \
-            --org-id "$org_slug" \
+            --org-id "$org_id" \
             --last-hour \
             --granularity hour \
             --analytics-endpoint "$analytics_endpoint" \
@@ -568,7 +571,7 @@ run_environment_tests() {
             results+=("usage_query:FAIL:$error_msg")
         fi
     else
-        results+=("usage_query:SKIP:no_analytics_or_inference")
+        results+=("usage_query:SKIP:missing_deps")
     fi
 
     # Cleanup: Delete Organization
