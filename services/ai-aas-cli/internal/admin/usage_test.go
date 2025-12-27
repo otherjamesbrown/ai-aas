@@ -226,7 +226,7 @@ func TestRunUsageQuery_ExplicitDateRange(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := runUsageQuery(
 				cmd, []string{},
-				tt.orgID, tt.from, tt.to, tt.granularity, tt.model,
+				tt.orgID, "", tt.from, tt.to, tt.granularity, tt.model,
 				tt.format, tt.verbose, tt.quiet, tt.endpoint, tt.apiKey,
 				tt.lastHour, tt.last24h, tt.last7d, tt.allTime,
 			)
@@ -339,7 +339,7 @@ func TestRunUsageQuery_ConvenienceFlags(t *testing.T) {
 			// but we can verify the errors and flag validation
 			err := runUsageQuery(
 				cmd, []string{},
-				tt.orgID, "", "", "day", "",
+				tt.orgID, "", "", "", "day", "",
 				"table", false, false, "http://test-analytics:8080", "test-key",
 				tt.lastHour, tt.last24h, tt.last7d, tt.allTime,
 			)
@@ -437,7 +437,7 @@ func TestRunUsageQuery_MutualExclusivity(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := runUsageQuery(
 				cmd, []string{},
-				tt.orgID, tt.from, tt.to, "day", "",
+				tt.orgID, "", tt.from, tt.to, "day", "",
 				"table", false, false, "http://test-analytics:8080", "test-key",
 				tt.lastHour, tt.last24h, tt.last7d, tt.allTime,
 			)
@@ -481,7 +481,7 @@ func TestRunUsageQuery_OutputFormats(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := runUsageQuery(
 				cmd, []string{},
-				"test-org", "2025-01-01", "2025-01-31", "day", "",
+				"test-org", "", "2025-01-01", "2025-01-31", "day", "",
 				tt.format, false, false, "http://test-analytics:8080", "test-key",
 				false, false, false, false,
 			)
@@ -539,7 +539,7 @@ func TestRunUsageQuery_ValidationErrorTypes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := runUsageQuery(
 				cmd, []string{},
-				tt.orgID, tt.from, tt.to, "day", "",
+				tt.orgID, "", tt.from, tt.to, "day", "",
 				"table", false, false, "http://test-analytics:8080", "test-key",
 				false, false, false, false,
 			)
@@ -602,7 +602,7 @@ func TestRunUsageQuery_DatetimeFormatSupport(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := runUsageQuery(
 				cmd, []string{},
-				"test-org", tt.from, tt.to, "day", "",
+				"test-org", "", tt.from, tt.to, "day", "",
 				"table", false, false, "http://test-analytics:8080", "test-key",
 				false, false, false, false,
 			)
@@ -804,7 +804,7 @@ func TestErrorMessageQuality(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := runUsageQuery(
 				cmd, []string{},
-				tt.orgID, tt.from, tt.to, "day", "",
+				tt.orgID, "", tt.from, tt.to, "day", "",
 				"table", false, false, "http://test-analytics:8080", "test-key",
 				false, false, false, false,
 			)
