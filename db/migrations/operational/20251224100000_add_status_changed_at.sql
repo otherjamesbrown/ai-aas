@@ -1,3 +1,4 @@
+-- +goose Up
 -- Migration: Add status_changed_at to model_deployments
 -- Feature: ai-aas-yk31
 -- Description: Track when deployment status last changed for phase duration tracking and operator sync
@@ -33,3 +34,9 @@ CREATE TRIGGER trigger_deployment_status_changed_at
     EXECUTE FUNCTION update_deployment_status_changed_at();
 
 COMMENT ON COLUMN model_deployments.status_changed_at IS 'Timestamp when status last changed (for phase duration tracking)';
+
+-- +goose Down
+DROP TRIGGER IF EXISTS trigger_deployment_status_changed_at ON model_deployments;
+DROP FUNCTION IF EXISTS update_deployment_status_changed_at();
+ALTER TABLE model_deployments
+DROP COLUMN IF EXISTS status_changed_at;
