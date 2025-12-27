@@ -18,7 +18,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: create-topics
-          image: bitnami/kafka:3.6
+          image: bitnami/kafka:3.6.1
           command:
             - /bin/bash
             - -c
