@@ -1,10 +1,8 @@
 -- +goose Up
 -- Ensure analytics tables exist (recovery from goose version mismatch)
 -- This migration re-creates tables from 20251112001_init.sql if they were skipped
+-- NOTE: TimescaleDB removed for compatibility - hypertable can be added later
 BEGIN;
-
--- Enable TimescaleDB extension
-CREATE EXTENSION IF NOT EXISTS timescaledb;
 
 -- Create schema if it doesn't exist
 CREATE SCHEMA IF NOT EXISTS analytics;
@@ -25,15 +23,8 @@ CREATE TABLE IF NOT EXISTS analytics.usage_events (
     cost_estimate_cents NUMERIC(18,4) NOT NULL DEFAULT 0,
     metadata JSONB NOT NULL DEFAULT '{}'::JSONB,
     batch_id UUID,
-    -- TimescaleDB requires partitioning column in primary key
-    -- event_id (UUID) provides global uniqueness, occurred_at enables hypertable partitioning
+    -- Composite primary key for deduplication
     PRIMARY KEY (event_id, occurred_at)
-);
-
--- Convert to TimescaleDB hypertable partitioned by occurred_at
-SELECT create_hypertable('analytics.usage_events', 'occurred_at',
-    chunk_time_interval => INTERVAL '1 day',
-    if_not_exists => TRUE
 );
 
 -- Indexes for common query patterns
