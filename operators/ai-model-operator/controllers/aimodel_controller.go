@@ -1808,6 +1808,7 @@ func (r *AIModelReconciler) syncDeploymentToAdminAPI(ctx context.Context, aiMode
 			Environment:  environment,
 			Namespace:    aiModel.Namespace,
 			Replicas:     replicas,
+			ModelType:    aiModel.Spec.ModelType,
 		})
 		if createErr != nil {
 			return fmt.Errorf("failed to create deployment: %w", createErr)
