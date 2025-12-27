@@ -117,11 +117,9 @@ readinessProbe:
   failureThreshold: 3
 
 # Telemetry configuration
+# Note: OTEL_* env vars are set directly in env: list above
 otel:
-  enabled: true
-  collectorEndpoint: otel-collector.monitoring.svc.cluster.local:4317
-  protocol: grpc
-  insecure: true
+  enabled: false  # Disabled to avoid duplicate env vars
 
 # Prometheus metrics
 prometheus:
@@ -130,18 +128,21 @@ prometheus:
   path: /metrics
 
 # Database configuration
+# Note: DATABASE_URL is set directly in env: list above
 database:
-  urlSecretName: analytics-service-secrets
+  urlSecretName: ""  # Disabled to avoid duplicate env var
 
 # Redis configuration
+# Note: REDIS_URL is set directly in env: list above
 redis:
-  url: redis://redis.development.svc.cluster.local:6379
+  url: ""  # Disabled to avoid duplicate env var
 
 # RabbitMQ configuration
+# Note: RABBITMQ_* env vars are set directly in env: list above
 rabbitmq:
-  urlSecretName: analytics-service-secrets
-  stream: usage.events.v1
-  consumer: analytics-service-development
+  urlSecretName: ""  # Disabled to avoid duplicate env var
+  stream: ""
+  consumer: ""
 
 # S3 configuration (disabled for development)
 s3:
