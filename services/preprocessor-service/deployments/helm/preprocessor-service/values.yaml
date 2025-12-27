@@ -17,9 +17,19 @@ serviceAccount:
 
 podAnnotations: {}
 
-podSecurityContext: {}
+# Pod-level security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
 
-securityContext: {}
+# Container-level security context
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
 
 service:
   type: ClusterIP

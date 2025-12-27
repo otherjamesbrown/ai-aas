@@ -25,6 +25,10 @@ spec:
         {{- end }}
       {{- end }}
       serviceAccountName: {{ include "analytics-service.serviceAccountName" . }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- if .Values.migrations.enabled }}
       initContainers:
         - name: migrate
@@ -78,6 +82,10 @@ spec:
       {{- end }}
       containers:
         - name: analytics
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["/app/analytics"]
@@ -206,11 +214,15 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
             {{- range .Values.extraVolumeMounts }}
             - name: {{ .name }}
               mountPath: {{ .mountPath }}
             {{- end }}
       volumes:
+        - name: tmp
+          emptyDir: {}
         {{- range .Values.extraVolumes }}
         - name: {{ .name }}
           {{- toYaml .volume | nindent 8 }}
