@@ -17,11 +17,53 @@ func TestNewConsumer(t *testing.T) {
 		wantErr string
 	}{
 		{
+			name: "missing brokers",
+			cfg: Config{
+				Brokers:   []string{},
+				Topic:     "test-topic",
+				GroupID:   "test-group",
+				BatchSize: 100,
+				Workers:   4,
+				Store:     nil,
+				Logger:    logger,
+			},
+			wantErr: "brokers are required",
+		},
+		{
+			name: "missing topic",
+			cfg: Config{
+				Brokers:   []string{"localhost:9092"},
+				Topic:     "",
+				GroupID:   "test-group",
+				BatchSize: 100,
+				Workers:   4,
+				Store:     nil,
+				Logger:    logger,
+			},
+			wantErr: "topic is required",
+		},
+		{
+			name: "missing group ID",
+			cfg: Config{
+				Brokers:   []string{"localhost:9092"},
+				Topic:     "test-topic",
+				GroupID:   "",
+				BatchSize: 100,
+				Workers:   4,
+				Store:     nil,
+				Logger:    logger,
+			},
+			wantErr: "group ID is required",
+		},
+		{
 			name: "invalid batch size - zero",
 			cfg: Config{
+				Brokers:   []string{"localhost:9092"},
+				Topic:     "test-topic",
+				GroupID:   "test-group",
 				BatchSize: 0,
 				Workers:   4,
-				Store:     nil, // Will fail on store check
+				Store:     nil,
 				Logger:    logger,
 			},
 			wantErr: "batch size must be positive",
@@ -29,6 +71,9 @@ func TestNewConsumer(t *testing.T) {
 		{
 			name: "invalid batch size - negative",
 			cfg: Config{
+				Brokers:   []string{"localhost:9092"},
+				Topic:     "test-topic",
+				GroupID:   "test-group",
 				BatchSize: -10,
 				Workers:   4,
 				Store:     nil,
@@ -39,6 +84,9 @@ func TestNewConsumer(t *testing.T) {
 		{
 			name: "invalid workers - zero",
 			cfg: Config{
+				Brokers:   []string{"localhost:9092"},
+				Topic:     "test-topic",
+				GroupID:   "test-group",
 				BatchSize: 100,
 				Workers:   0,
 				Store:     nil,
@@ -49,6 +97,9 @@ func TestNewConsumer(t *testing.T) {
 		{
 			name: "invalid workers - negative",
 			cfg: Config{
+				Brokers:   []string{"localhost:9092"},
+				Topic:     "test-topic",
+				GroupID:   "test-group",
 				BatchSize: 100,
 				Workers:   -5,
 				Store:     nil,
@@ -59,6 +110,9 @@ func TestNewConsumer(t *testing.T) {
 		{
 			name: "nil store",
 			cfg: Config{
+				Brokers:   []string{"localhost:9092"},
+				Topic:     "test-topic",
+				GroupID:   "test-group",
 				BatchSize: 100,
 				Workers:   4,
 				Store:     nil,
@@ -78,106 +132,6 @@ func TestNewConsumer(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				assert.NotNil(t, consumer)
-			}
-		})
-	}
-}
-
-func TestParseRabbitMQURL(t *testing.T) {
-	tests := []struct {
-		name         string
-		url          string
-		wantHost     string
-		wantPort     int
-		wantUser     string
-		wantPassword string
-		wantErr      bool
-	}{
-		{
-			name:         "empty URL returns defaults",
-			url:          "",
-			wantHost:     "localhost",
-			wantPort:     5552,
-			wantUser:     "guest",
-			wantPassword: "guest",
-			wantErr:      false,
-		},
-		{
-			name:         "amqp URL with credentials",
-			url:          "amqp://myuser:mypass@rabbitmq.example.com:5672",
-			wantHost:     "rabbitmq.example.com",
-			wantPort:     5672,
-			wantUser:     "myuser",
-			wantPassword: "mypass",
-			wantErr:      false,
-		},
-		{
-			name:         "stream URL with custom port",
-			url:          "stream://rabbitmq.example.com:5553",
-			wantHost:     "rabbitmq.example.com",
-			wantPort:     5553,
-			wantUser:     "guest",
-			wantPassword: "guest",
-			wantErr:      false,
-		},
-		{
-			name:         "amqp URL without port uses default amqp port",
-			url:          "amqp://user:pass@host",
-			wantHost:     "host",
-			wantPort:     5672,
-			wantUser:     "user",
-			wantPassword: "pass",
-			wantErr:      false,
-		},
-		{
-			name:         "stream URL without port uses default stream port",
-			url:          "stream://host",
-			wantHost:     "host",
-			wantPort:     5552,
-			wantUser:     "guest",
-			wantPassword: "guest",
-			wantErr:      false,
-		},
-		{
-			name:         "URL with only host",
-			url:          "amqp://localhost",
-			wantHost:     "localhost",
-			wantPort:     5672,
-			wantUser:     "guest",
-			wantPassword: "guest",
-			wantErr:      false,
-		},
-		{
-			name:         "URL with special characters in password",
-			url:          "amqp://admin:p%40ssw0rd@host:5672",
-			wantHost:     "host",
-			wantPort:     5672,
-			wantUser:     "admin",
-			wantPassword: "p@ssw0rd",
-			wantErr:      false,
-		},
-		{
-			name:         "URL with IPv4 address",
-			url:          "amqp://guest:guest@192.168.1.100:5672",
-			wantHost:     "192.168.1.100",
-			wantPort:     5672,
-			wantUser:     "guest",
-			wantPassword: "guest",
-			wantErr:      false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			host, port, user, password, err := parseRabbitMQURL(tt.url)
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.wantHost, host)
-				assert.Equal(t, tt.wantPort, port)
-				assert.Equal(t, tt.wantUser, user)
-				assert.Equal(t, tt.wantPassword, password)
 			}
 		})
 	}
