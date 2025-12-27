@@ -150,7 +150,8 @@ func Load() (*Config, error) {
 	}
 
 	// Warn about secrets in config file (deprecation notice)
-	warnSecretsInConfigFile()
+	// Skip warning in JSON mode to avoid polluting machine-readable output
+	warnSecretsInConfigFile(&cfg)
 
 	return &cfg, nil
 }
@@ -266,7 +267,36 @@ func MaskSecret(s string) string {
 
 // warnSecretsInConfigFile checks for secrets in the config file and warns the user.
 // This is a deprecation notice to encourage migration to environment variables.
-func warnSecretsInConfigFile() {
+// The warning is suppressed in JSON output mode to avoid polluting machine-readable output.
+func warnSecretsInConfigFile(cfg *Config) {
+	// Skip warning in JSON mode to avoid polluting parseable output
+	// Check both config file setting and environment variable (which has higher precedence)
+	outputFormat := cfg.OutputFormat
+	if envFormat := os.Getenv("AI_AAS_OUTPUT_FORMAT"); envFormat != "" {
+		outputFormat = envFormat
+	}
+
+	// Also check common command-line flag patterns
+	for _, arg := range os.Args {
+		if arg == "--format=json" || arg == "-f=json" {
+			outputFormat = "json"
+			break
+		}
+		// Check for --format json (two separate args)
+		if arg == "--format" || arg == "-f" {
+			for i, a := range os.Args {
+				if a == arg && i+1 < len(os.Args) && os.Args[i+1] == "json" {
+					outputFormat = "json"
+					break
+				}
+			}
+		}
+	}
+
+	if outputFormat == "json" {
+		return
+	}
+
 	configPath, err := GetConfigPath()
 	if err != nil {
 		return
