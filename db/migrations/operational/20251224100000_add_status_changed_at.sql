@@ -3,7 +3,6 @@
 -- Feature: ai-aas-yk31
 -- Description: Track when deployment status last changed for phase duration tracking and operator sync
 
--- +goose Up
 ALTER TABLE model_deployments
 ADD COLUMN IF NOT EXISTS status_changed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 
