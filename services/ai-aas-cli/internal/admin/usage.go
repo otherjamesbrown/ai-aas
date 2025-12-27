@@ -49,6 +49,10 @@ func usageQueryCommand() *cobra.Command {
 	var flagQuiet bool
 	var flagAnalyticsEndpoint string
 	var flagAPIKey string
+	var flagLastHour bool
+	var flagLast24h bool
+	var flagLast7d bool
+	var flagAllTime bool
 
 	cmd := &cobra.Command{
 		Use:   "query",
@@ -56,6 +60,15 @@ func usageQueryCommand() *cobra.Command {
 		Long:  "Retrieve filtered usage data for an organization",
 		Example: `  # Query usage for January 2025
   admin-cli usage query --org-id acme-corp --from 2025-01-01 --to 2025-01-31
+
+  # Query usage for last 24 hours (convenience flag)
+  admin-cli usage query --org-id acme-corp --last-24h
+
+  # Query usage for last 7 days
+  admin-cli usage query --org-id acme-corp --last-7d
+
+  # Query usage for last hour with hourly granularity
+  admin-cli usage query --org-id acme-corp --last-hour --granularity hour
 
   # Query with hourly granularity
   admin-cli usage query --org-id acme-corp --from 2025-01-01 --to 2025-01-07 --granularity hour
@@ -67,13 +80,14 @@ func usageQueryCommand() *cobra.Command {
   admin-cli usage query --org-id acme-corp --from 2025-01-01 --to 2025-01-31 --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runUsageQuery(cmd, args, flagOrgID, flagFrom, flagTo, flagGranularity, flagModel,
-				flagFormat, flagVerbose, flagQuiet, flagAnalyticsEndpoint, flagAPIKey)
+				flagFormat, flagVerbose, flagQuiet, flagAnalyticsEndpoint, flagAPIKey,
+				flagLastHour, flagLast24h, flagLast7d, flagAllTime)
 		},
 	}
 
 	cmd.Flags().StringVar(&flagOrgID, "org-id", "", "Organization ID or slug (required)")
-	cmd.Flags().StringVar(&flagFrom, "from", "", "Start date (YYYY-MM-DD) (required)")
-	cmd.Flags().StringVar(&flagTo, "to", "", "End date (YYYY-MM-DD) (required)")
+	cmd.Flags().StringVar(&flagFrom, "from", "", "Start date (YYYY-MM-DD)")
+	cmd.Flags().StringVar(&flagTo, "to", "", "End date (YYYY-MM-DD)")
 	cmd.Flags().StringVar(&flagGranularity, "granularity", "day", "Data granularity: hour, day")
 	cmd.Flags().StringVar(&flagModel, "model", "", "Filter by model ID (optional)")
 	cmd.Flags().StringVar(&flagFormat, "format", "table", "Output format: table, json, csv")
@@ -82,11 +96,18 @@ func usageQueryCommand() *cobra.Command {
 	cmd.Flags().StringVar(&flagAnalyticsEndpoint, "analytics-endpoint", "", "Analytics-service endpoint (overrides config)")
 	cmd.Flags().StringVar(&flagAPIKey, "api-key", "", "API key for authentication (overrides config)")
 
+	// Convenience time range flags
+	cmd.Flags().BoolVar(&flagLastHour, "last-hour", false, "Usage in the last 60 minutes")
+	cmd.Flags().BoolVar(&flagLast24h, "last-24h", false, "Usage in the last 24 hours")
+	cmd.Flags().BoolVar(&flagLast7d, "last-7d", false, "Usage in the last 7 days")
+	cmd.Flags().BoolVar(&flagAllTime, "all-time", false, "All usage data (no time filter)")
+
 	return cmd
 }
 
 func runUsageQuery(cmd *cobra.Command, args []string, flagOrgID, flagFrom, flagTo, flagGranularity, flagModel string,
-	flagFormat string, flagVerbose, flagQuiet bool, flagAnalyticsEndpoint, flagAPIKey string) error {
+	flagFormat string, flagVerbose, flagQuiet bool, flagAnalyticsEndpoint, flagAPIKey string,
+	flagLastHour, flagLast24h, flagLast7d, flagAllTime bool) error {
 	startTime := time.Now()
 
 	// Load configuration
@@ -130,33 +151,91 @@ func runUsageQuery(cmd *cobra.Command, args []string, flagOrgID, flagFrom, flagT
 			"Provide organization ID or slug with --org-id flag",
 		)
 	}
+
+	// Check for mutual exclusivity between convenience flags and explicit dates
+	convenientFlagsCount := 0
+	if flagLastHour {
+		convenientFlagsCount++
+	}
+	if flagLast24h {
+		convenientFlagsCount++
+	}
+	if flagLast7d {
+		convenientFlagsCount++
+	}
+	if flagAllTime {
+		convenientFlagsCount++
+	}
+
+	if convenientFlagsCount > 1 {
+		return errors.NewValidationError(
+			"only one convenience time range flag can be used at a time",
+			"Use either --last-hour, --last-24h, --last-7d, or --all-time",
+		)
+	}
+
+	if convenientFlagsCount > 0 && (flagFrom != "" || flagTo != "") {
+		return errors.NewValidationError(
+			"cannot use convenience time range flags with --from/--to",
+			"Use either convenience flags (--last-hour, --last-24h, --last-7d, --all-time) OR explicit dates (--from/--to)",
+		)
+	}
+
+	// Calculate date range from convenience flags
+	now := time.Now()
+	if flagLastHour {
+		flagFrom = now.Add(-1 * time.Hour).Format("2006-01-02T15:04:05")
+		flagTo = now.Format("2006-01-02T15:04:05")
+	} else if flagLast24h {
+		flagFrom = now.Add(-24 * time.Hour).Format("2006-01-02")
+		flagTo = now.Format("2006-01-02")
+	} else if flagLast7d {
+		flagFrom = now.AddDate(0, 0, -7).Format("2006-01-02")
+		flagTo = now.Format("2006-01-02")
+	} else if flagAllTime {
+		// Use a very early date for all-time queries
+		flagFrom = "2000-01-01"
+		flagTo = now.Format("2006-01-02")
+	}
+
+	// Now validate explicit dates if no convenience flag was used
 	if flagFrom == "" {
 		return errors.NewValidationError(
 			"--from is required",
-			"Provide start date with --from flag (YYYY-MM-DD)",
+			"Provide start date with --from flag (YYYY-MM-DD) or use a convenience flag (--last-hour, --last-24h, --last-7d, --all-time)",
 		)
 	}
 	if flagTo == "" {
 		return errors.NewValidationError(
 			"--to is required",
-			"Provide end date with --to flag (YYYY-MM-DD)",
+			"Provide end date with --to flag (YYYY-MM-DD) or use a convenience flag (--last-hour, --last-24h, --last-7d, --all-time)",
 		)
 	}
 
-	// Parse and validate dates
-	fromDate, err := time.Parse("2006-01-02", flagFrom)
+	// Parse and validate dates (support both date-only and datetime formats)
+	var fromDate, toDate time.Time
+
+	// Try parsing with datetime format first (for --last-hour), then fall back to date-only
+	fromDate, err = time.Parse("2006-01-02T15:04:05", flagFrom)
 	if err != nil {
-		return errors.NewValidationError(
-			"invalid 'from' date format",
-			"Use YYYY-MM-DD format (e.g., 2025-01-01)",
-		)
+		fromDate, err = time.Parse("2006-01-02", flagFrom)
+		if err != nil {
+			return errors.NewValidationError(
+				"invalid 'from' date format",
+				"Use YYYY-MM-DD format (e.g., 2025-01-01)",
+			)
+		}
 	}
-	toDate, err := time.Parse("2006-01-02", flagTo)
+
+	toDate, err = time.Parse("2006-01-02T15:04:05", flagTo)
 	if err != nil {
-		return errors.NewValidationError(
-			"invalid 'to' date format",
-			"Use YYYY-MM-DD format (e.g., 2025-01-31)",
-		)
+		toDate, err = time.Parse("2006-01-02", flagTo)
+		if err != nil {
+			return errors.NewValidationError(
+				"invalid 'to' date format",
+				"Use YYYY-MM-DD format (e.g., 2025-01-31)",
+			)
+		}
 	}
 
 	if fromDate.After(toDate) {

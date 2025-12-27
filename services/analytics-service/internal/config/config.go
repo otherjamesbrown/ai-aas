@@ -22,10 +22,10 @@ type Config struct {
 	// Redis
 	RedisURL string `envconfig:"REDIS_URL" default:"redis://localhost:6379"`
 
-	// RabbitMQ
-	RabbitMQURL      string `envconfig:"RABBITMQ_URL" default:"amqp://guest:guest@localhost:5672"`
-	RabbitMQStream   string `envconfig:"RABBITMQ_STREAM" default:"analytics.usage.v1"`
-	RabbitMQConsumer string `envconfig:"RABBITMQ_CONSUMER" default:"analytics-service"`
+	// Kafka
+	KafkaBrokers       []string `envconfig:"KAFKA_BROKERS" default:"localhost:9092"`
+	KafkaTopic         string   `envconfig:"KAFKA_TOPIC" default:"usage.records.v1"`
+	KafkaConsumerGroup string   `envconfig:"KAFKA_CONSUMER_GROUP" default:"analytics-service"`
 
 	// Linode Object Storage (S3-compatible)
 	S3Endpoint  string `envconfig:"S3_ENDPOINT"` // Linode Object Storage endpoint (e.g., us-east-1.linodeobjects.com)

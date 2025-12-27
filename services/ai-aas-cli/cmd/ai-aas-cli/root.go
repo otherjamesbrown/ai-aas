@@ -168,6 +168,10 @@ Environment Variables:
 	apikeyCmd.GroupID = "access"
 	rootCmd.AddCommand(apikeyCmd)
 
+	usageCmd := admin.UsageCommand()
+	usageCmd.GroupID = "access"
+	rootCmd.AddCommand(usageCmd)
+
 	// Platform Operations commands
 	bootstrapCmd := admin.BootstrapCommand()
 	bootstrapCmd.GroupID = "platform"
