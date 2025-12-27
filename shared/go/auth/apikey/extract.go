@@ -26,7 +26,7 @@ func ExtractBearerToken(r *http.Request) string {
 	}
 
 	parts := strings.SplitN(auth, " ", 2)
-	if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
+	if len(parts) != 2 || !strings.EqualFold(parts[0], AuthorizationScheme) {
 		return ""
 	}
 

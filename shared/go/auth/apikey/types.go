@@ -80,11 +80,21 @@ func (c *AuthenticatedContext) HasScope(scope string) bool {
 
 // HasAnyScope checks if the context has any of the specified scopes.
 func (c *AuthenticatedContext) HasAnyScope(scopes ...string) bool {
+	if c == nil || len(scopes) == 0 {
+		return false
+	}
+
+	scopesToCheck := make(map[string]struct{}, len(scopes))
 	for _, scope := range scopes {
-		if c.HasScope(scope) {
+		scopesToCheck[scope] = struct{}{}
+	}
+
+	for _, s := range c.Scopes {
+		if _, ok := scopesToCheck[s]; ok {
 			return true
 		}
 	}
+
 	return false
 }
 

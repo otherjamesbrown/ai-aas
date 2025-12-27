@@ -84,58 +84,54 @@ const (
 	ErrCodeServiceUnavailable = "SERVICE_UNAVAILABLE"
 )
 
+// httpStatusMap maps error codes to HTTP status codes.
+var httpStatusMap = map[string]int{
+	// Authentication errors (401)
+	ErrCodeUnauthorized:  http.StatusUnauthorized,
+	ErrCodeInvalidAPIKey: http.StatusUnauthorized,
+	ErrCodeAuthInvalid:   http.StatusUnauthorized,
+
+	// Authorization errors (403)
+	ErrCodeForbidden:    http.StatusForbidden,
+	ErrCodeAccessDenied: http.StatusForbidden,
+
+	// Validation errors (400)
+	ErrCodeInvalidRequest:  http.StatusBadRequest,
+	ErrCodeMissingField:    http.StatusBadRequest,
+	ErrCodeValidationError: http.StatusBadRequest,
+
+	// Rate limiting (429)
+	ErrCodeRateLimitExceeded: http.StatusTooManyRequests,
+
+	// Budget/quota (402)
+	ErrCodeBudgetExceeded: http.StatusPaymentRequired,
+	ErrCodeQuotaExceeded:  http.StatusPaymentRequired,
+
+	// Backend errors (502, 503, 504)
+	ErrCodeBackendUnavailable: http.StatusServiceUnavailable,
+	ErrCodeBackendTimeout:     http.StatusGatewayTimeout,
+	ErrCodeBackendError:       http.StatusBadGateway,
+
+	// Routing errors (500, 503)
+	ErrCodeNoBackendAvailable: http.StatusServiceUnavailable,
+	ErrCodeRoutingError:       http.StatusInternalServerError,
+
+	// Resource errors (404, 409)
+	ErrCodeNotFound:        http.StatusNotFound,
+	ErrCodeRequestNotFound: http.StatusNotFound,
+	ErrCodeConflict:        http.StatusConflict,
+
+	// Internal errors (500, 503)
+	ErrCodeInternalError:      http.StatusInternalServerError,
+	ErrCodeServiceUnavailable: http.StatusServiceUnavailable,
+}
+
 // GetHTTPStatus maps an error code to an HTTP status code.
 func GetHTTPStatus(code string) int {
-	switch code {
-	// Authentication errors
-	case ErrCodeUnauthorized, ErrCodeInvalidAPIKey, ErrCodeAuthInvalid:
-		return http.StatusUnauthorized
-
-	// Authorization errors
-	case ErrCodeForbidden, ErrCodeAccessDenied:
-		return http.StatusForbidden
-
-	// Validation errors
-	case ErrCodeInvalidRequest, ErrCodeMissingField, ErrCodeValidationError:
-		return http.StatusBadRequest
-
-	// Rate limiting
-	case ErrCodeRateLimitExceeded:
-		return http.StatusTooManyRequests
-
-	// Budget/quota
-	case ErrCodeBudgetExceeded, ErrCodeQuotaExceeded:
-		return http.StatusPaymentRequired
-
-	// Backend errors
-	case ErrCodeBackendUnavailable:
-		return http.StatusServiceUnavailable
-	case ErrCodeBackendTimeout:
-		return http.StatusGatewayTimeout
-	case ErrCodeBackendError:
-		return http.StatusBadGateway
-
-	// Routing errors
-	case ErrCodeNoBackendAvailable:
-		return http.StatusServiceUnavailable
-	case ErrCodeRoutingError:
-		return http.StatusInternalServerError
-
-	// Resource errors
-	case ErrCodeNotFound, ErrCodeRequestNotFound:
-		return http.StatusNotFound
-	case ErrCodeConflict:
-		return http.StatusConflict
-
-	// Internal errors
-	case ErrCodeInternalError:
-		return http.StatusInternalServerError
-	case ErrCodeServiceUnavailable:
-		return http.StatusServiceUnavailable
-
-	default:
-		return http.StatusInternalServerError
+	if status, ok := httpStatusMap[code]; ok {
+		return status
 	}
+	return http.StatusInternalServerError
 }
 
 // IsRetryable returns true if the error code indicates a retryable condition.
