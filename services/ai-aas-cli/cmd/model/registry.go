@@ -289,7 +289,7 @@ See Also:
 
 			// Table output
 			table := output.NewTableWriter()
-			table.SetHeader([]string{"NAME", "HF MODEL ID", "CACHED", "DEPLOYED", "STATUS"})
+			table.SetHeader([]string{"NAME", "TYPE", "HF MODEL ID", "CACHED", "DEPLOYED", "STATUS"})
 
 			for _, m := range models {
 				cached := "No"
@@ -309,8 +309,15 @@ See Also:
 					status = "cached"
 				}
 
+				// Default to "text" if model type is empty
+				modelType := m.ModelType
+				if modelType == "" {
+					modelType = "text"
+				}
+
 				table.Append([]string{
 					m.Name,
+					modelType,
 					truncate(m.HFModelID, 35),
 					cached,
 					deployed,
