@@ -65,7 +65,7 @@ func (s *Store) InsertUsageEvents(ctx context.Context, events []UsageEvent, batc
 			input_tokens, output_tokens, latency_ms, status, error_code,
 			cost_estimate_cents, metadata, batch_id
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-		ON CONFLICT (event_id, org_id) DO NOTHING
+		ON CONFLICT (event_id) DO NOTHING
 	`
 
 	inserted := 0
