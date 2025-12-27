@@ -50,6 +50,12 @@ type AIModelSpec struct {
 	// +optional
 	ExternalName string `json:"externalName,omitempty"`
 
+	// ModelType indicates the type of model (text, vision-language, embedding, audio).
+	// This is used for routing and client display purposes.
+	// +kubebuilder:validation:Enum=text;vision-language;embedding;audio
+	// +optional
+	ModelType string `json:"modelType,omitempty"`
+
 	// S3Bucket is the S3 bucket where model artifacts are stored.
 	// Optional when TrustRemoteCode is true (model loads directly from HuggingFace).
 	// +optional
@@ -248,6 +254,10 @@ type AIModelStatus struct {
 
 	// InferenceEndpoint is the URL where the model can be accessed for inference.
 	InferenceEndpoint string `json:"inferenceEndpoint,omitempty"`
+
+	// ModelType indicates the type of model (text, vision-language, embedding, audio).
+	// Reflects the value from spec.modelType.
+	ModelType string `json:"modelType,omitempty"`
 
 	// ReadyReplicas is the number of replicas that are ready to serve requests.
 	ReadyReplicas int32 `json:"readyReplicas,omitempty"`

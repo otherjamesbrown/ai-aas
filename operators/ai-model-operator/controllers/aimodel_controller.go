@@ -219,6 +219,16 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 	}
 
+	// Sync modelType from spec to status
+	if aiModel.Status.ModelType != aiModel.Spec.ModelType {
+		aiModel.Status.ModelType = aiModel.Spec.ModelType
+		if err := r.Status().Update(ctx, aiModel); err != nil {
+			log.Error(err, "unable to update AIModel status modelType")
+			reconcileTotal.WithLabelValues("error").Inc()
+			return ctrl.Result{}, err
+		}
+	}
+
 	// Examine if the object is being deleted
 	isAIModelMarkedToBeDeleted := aiModel.GetDeletionTimestamp() != nil
 	if isAIModelMarkedToBeDeleted {
