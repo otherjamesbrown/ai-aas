@@ -18,14 +18,14 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: create-topics
-          image: confluentinc/cp-kafka:7.5.0
+          image: bitnami/kafka:3.6
           command:
             - /bin/bash
             - -c
             - |
               # Wait for Kafka to be ready
               echo "Waiting for Kafka to be ready..."
-              until kafka-topics --bootstrap-server kafka.kafka.svc.cluster.local:9092 --list &> /dev/null; do
+              until /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka.kafka.svc.cluster.local:9092 --list &> /dev/null; do
                 echo "Kafka not ready, waiting..."
                 sleep 5
               done
@@ -33,7 +33,7 @@ spec:
 
               # Create usage.records.v1 topic
               echo "Creating topic: usage.records.v1"
-              kafka-topics --bootstrap-server kafka.kafka.svc.cluster.local:9092 \
+              /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka.kafka.svc.cluster.local:9092 \
                 --create \
                 --if-not-exists \
                 --topic usage.records.v1 \
@@ -44,7 +44,7 @@ spec:
 
               # Create audit.router topic
               echo "Creating topic: audit.router"
-              kafka-topics --bootstrap-server kafka.kafka.svc.cluster.local:9092 \
+              /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka.kafka.svc.cluster.local:9092 \
                 --create \
                 --if-not-exists \
                 --topic audit.router \
@@ -55,7 +55,7 @@ spec:
 
               # List all topics
               echo "Topics created successfully:"
-              kafka-topics --bootstrap-server kafka.kafka.svc.cluster.local:9092 --list
+              /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka.kafka.svc.cluster.local:9092 --list
 
               echo "Topic details:"
-              kafka-topics --bootstrap-server kafka.kafka.svc.cluster.local:9092 --describe
+              /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka.kafka.svc.cluster.local:9092 --describe
