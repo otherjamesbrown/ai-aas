@@ -376,6 +376,150 @@ func TestUsageSeriesResponse(t *testing.T) {
 	assert.Equal(t, response.Freshness.Status, decoded.Freshness.Status)
 }
 
+// TestUsageHandler_GetAPIKeyUsage_Validation tests input validation for the API key usage endpoint.
+func TestUsageHandler_GetAPIKeyUsage_Validation(t *testing.T) {
+	logger := zap.NewNop()
+	handler := NewUsageHandler(nil, logger, nil)
+
+	tests := []struct {
+		name       string
+		orgID      string
+		apiKeyID   string
+		query      string
+		wantStatus int
+		wantDetail string
+	}{
+		{
+			name:       "invalid org_id",
+			orgID:      "not-a-uuid",
+			apiKeyID:   uuid.New().String(),
+			query:      "?start=2024-01-01T00:00:00Z&end=2024-01-02T00:00:00Z",
+			wantStatus: http.StatusBadRequest,
+			wantDetail: "invalid org_id",
+		},
+		{
+			name:       "invalid api_key_id",
+			orgID:      uuid.New().String(),
+			apiKeyID:   "not-a-uuid",
+			query:      "?start=2024-01-01T00:00:00Z&end=2024-01-02T00:00:00Z",
+			wantStatus: http.StatusBadRequest,
+			wantDetail: "invalid api_key_id",
+		},
+		{
+			name:       "invalid start parameter",
+			orgID:      uuid.New().String(),
+			apiKeyID:   uuid.New().String(),
+			query:      "?start=invalid&end=2024-01-02T00:00:00Z",
+			wantStatus: http.StatusBadRequest,
+			wantDetail: "invalid start parameter",
+		},
+		{
+			name:       "invalid end parameter",
+			orgID:      uuid.New().String(),
+			apiKeyID:   uuid.New().String(),
+			query:      "?start=2024-01-01T00:00:00Z&end=invalid",
+			wantStatus: http.StatusBadRequest,
+			wantDetail: "invalid end parameter",
+		},
+		{
+			name:       "end before start",
+			orgID:      uuid.New().String(),
+			apiKeyID:   uuid.New().String(),
+			query:      "?start=2024-01-02T00:00:00Z&end=2024-01-01T00:00:00Z",
+			wantStatus: http.StatusBadRequest,
+			wantDetail: "end must be after start",
+		},
+		{
+			name:       "invalid granularity",
+			orgID:      uuid.New().String(),
+			apiKeyID:   uuid.New().String(),
+			query:      "?start=2024-01-01T00:00:00Z&end=2024-01-02T00:00:00Z&granularity=minute",
+			wantStatus: http.StatusBadRequest,
+			wantDetail: "granularity must be 'hour' or 'day'",
+		},
+		{
+			name:       "invalid model_id",
+			orgID:      uuid.New().String(),
+			apiKeyID:   uuid.New().String(),
+			query:      "?start=2024-01-01T00:00:00Z&end=2024-01-02T00:00:00Z&modelId=not-a-uuid",
+			wantStatus: http.StatusBadRequest,
+			wantDetail: "invalid model_id",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := chi.NewRouter()
+			r.Get("/analytics/v1/orgs/{orgId}/apikeys/{apiKeyId}/usage", handler.GetAPIKeyUsage)
+
+			req := httptest.NewRequest("GET", "/analytics/v1/orgs/"+tt.orgID+"/apikeys/"+tt.apiKeyID+"/usage"+tt.query, nil)
+			w := httptest.NewRecorder()
+
+			r.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.wantStatus, w.Code)
+
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			require.NoError(t, err)
+			assert.Contains(t, response["detail"], tt.wantDetail)
+		})
+	}
+}
+
+// TestAPIKeyUsageSeriesResponse tests serialization of API key usage response.
+func TestAPIKeyUsageSeriesResponse(t *testing.T) {
+	now := time.Now().UTC()
+	orgID := uuid.New()
+	apiKeyID := uuid.New()
+
+	response := APIKeyUsageSeriesResponse{
+		OrgID:       orgID.String(),
+		APIKeyID:    apiKeyID.String(),
+		Granularity: "hour",
+		Series: []UsagePointResponse{
+			{
+				BucketStart:       now.Format(time.RFC3339),
+				Invocations:       100,
+				InputTokens:       5000,
+				OutputTokens:      2500,
+				CostEstimateCents: 75,
+			},
+		},
+		Totals: UsageTotalsResponse{
+			Invocations:       100,
+			InputTokens:       5000,
+			OutputTokens:      2500,
+			CostEstimateCents: 75,
+		},
+		Freshness: FreshnessIndicator{
+			Status:     "fresh",
+			LagSeconds: 60,
+		},
+	}
+
+	// Verify JSON serialization
+	jsonBytes, err := json.Marshal(response)
+	require.NoError(t, err)
+
+	var decoded APIKeyUsageSeriesResponse
+	err = json.Unmarshal(jsonBytes, &decoded)
+	require.NoError(t, err)
+
+	assert.Equal(t, response.OrgID, decoded.OrgID)
+	assert.Equal(t, response.APIKeyID, decoded.APIKeyID)
+	assert.Equal(t, response.Granularity, decoded.Granularity)
+	assert.Len(t, decoded.Series, 1)
+	assert.Equal(t, response.Totals.Invocations, decoded.Totals.Invocations)
+	assert.Equal(t, response.Freshness.Status, decoded.Freshness.Status)
+
+	// Verify apiKeyId is present in JSON
+	var rawJSON map[string]interface{}
+	err = json.Unmarshal(jsonBytes, &rawJSON)
+	require.NoError(t, err)
+	assert.Equal(t, apiKeyID.String(), rawJSON["apiKeyId"])
+}
+
 // ptrString returns a pointer to the given string
 func ptrString(s string) *string {
 	return &s
