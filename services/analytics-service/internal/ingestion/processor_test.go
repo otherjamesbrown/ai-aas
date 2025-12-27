@@ -29,67 +29,74 @@ func TestProcessor_convertEvent(t *testing.T) {
 		{
 			name: "valid event with all fields",
 			event: Event{
-				EventID:      "123e4567-e89b-12d3-a456-426614174000",
-				OrgID:        "123e4567-e89b-12d3-a456-426614174001",
-				ModelID:      "123e4567-e89b-12d3-a456-426614174002",
-				OccurredAt:   now,
-				InputTokens:  100,
-				OutputTokens: 50,
-				LatencyMS:    250,
-				Status:       "success",
-				CostEstimate: 0.0015,
-				Metadata:     map[string]interface{}{"key": "value"},
+				RecordID:       "123e4567-e89b-12d3-a456-426614174000",
+				RequestID:      "req-123",
+				OrganizationID: "123e4567-e89b-12d3-a456-426614174001",
+				APIKeyID:       "123e4567-e89b-12d3-a456-426614174002",
+				Timestamp:      now,
+				Model:          "gpt-4o",
+				BackendID:      "backend-1",
+				TokensInput:    100,
+				TokensOutput:   50,
+				CostUSD:        0.0015,
+				LatencyMS:      250,
+				LimitState:     "WITHIN_LIMIT",
+				DecisionReason: "PRIMARY",
+				Metadata:       map[string]interface{}{"key": "value"},
 			},
 			wantErr: "",
 		},
 		{
-			name: "valid event without model_id",
+			name: "valid event without api_key_id",
 			event: Event{
-				EventID:      "123e4567-e89b-12d3-a456-426614174000",
-				OrgID:        "123e4567-e89b-12d3-a456-426614174001",
-				ModelID:      "",
-				OccurredAt:   now,
-				InputTokens:  100,
-				OutputTokens: 50,
-				Status:       "success",
+				RecordID:       "123e4567-e89b-12d3-a456-426614174000",
+				OrganizationID: "123e4567-e89b-12d3-a456-426614174001",
+				APIKeyID:       "",
+				Timestamp:      now,
+				Model:          "gpt-3.5-turbo",
+				TokensInput:    100,
+				TokensOutput:   50,
+				LimitState:     "WITHIN_LIMIT",
+				DecisionReason: "PRIMARY",
 			},
 			wantErr: "",
 		},
 		{
-			name: "invalid event_id",
+			name: "invalid record_id",
 			event: Event{
-				EventID: "not-a-uuid",
-				OrgID:   "123e4567-e89b-12d3-a456-426614174001",
+				RecordID:       "not-a-uuid",
+				OrganizationID: "123e4567-e89b-12d3-a456-426614174001",
 			},
-			wantErr: "invalid event_id",
+			wantErr: "invalid record_id",
 		},
 		{
-			name: "invalid org_id",
+			name: "invalid organization_id",
 			event: Event{
-				EventID: "123e4567-e89b-12d3-a456-426614174000",
-				OrgID:   "not-a-uuid",
+				RecordID:       "123e4567-e89b-12d3-a456-426614174000",
+				OrganizationID: "not-a-uuid",
 			},
-			wantErr: "invalid org_id",
+			wantErr: "invalid organization_id",
 		},
 		{
-			name: "invalid model_id",
+			name: "invalid api_key_id",
 			event: Event{
-				EventID: "123e4567-e89b-12d3-a456-426614174000",
-				OrgID:   "123e4567-e89b-12d3-a456-426614174001",
-				ModelID: "not-a-uuid",
+				RecordID:       "123e4567-e89b-12d3-a456-426614174000",
+				OrganizationID: "123e4567-e89b-12d3-a456-426614174001",
+				APIKeyID:       "not-a-uuid",
 			},
-			wantErr: "invalid model_id",
+			wantErr: "invalid api_key_id",
 		},
 		{
-			name: "event with error status",
+			name: "event with rate limited status",
 			event: Event{
-				EventID:      "123e4567-e89b-12d3-a456-426614174000",
-				OrgID:        "123e4567-e89b-12d3-a456-426614174001",
-				OccurredAt:   now,
-				Status:       "error",
-				ErrorCode:    "RATE_LIMIT_EXCEEDED",
-				InputTokens:  0,
-				OutputTokens: 0,
+				RecordID:       "123e4567-e89b-12d3-a456-426614174000",
+				OrganizationID: "123e4567-e89b-12d3-a456-426614174001",
+				Timestamp:      now,
+				Model:          "gpt-4o",
+				LimitState:     "RATE_LIMITED",
+				DecisionReason: "RATE_LIMIT",
+				TokensInput:    0,
+				TokensOutput:   0,
 			},
 			wantErr: "",
 		},
@@ -103,11 +110,16 @@ func TestProcessor_convertEvent(t *testing.T) {
 				assert.Contains(t, err.Error(), tt.wantErr)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, tt.event.InputTokens, dbEvent.InputTokens)
-				assert.Equal(t, tt.event.OutputTokens, dbEvent.OutputTokens)
-				assert.Equal(t, tt.event.Status, dbEvent.Status)
-				assert.Equal(t, tt.event.ErrorCode, dbEvent.ErrorCode)
+				assert.Equal(t, int64(tt.event.TokensInput), dbEvent.InputTokens)
+				assert.Equal(t, int64(tt.event.TokensOutput), dbEvent.OutputTokens)
 				assert.Equal(t, tt.event.LatencyMS, dbEvent.LatencyMS)
+				// Verify metadata contains routing fields
+				if tt.event.Model != "" {
+					assert.Equal(t, tt.event.Model, dbEvent.Metadata["model"])
+				}
+				if tt.event.BackendID != "" {
+					assert.Equal(t, tt.event.BackendID, dbEvent.Metadata["backend_id"])
+				}
 			}
 		})
 	}
@@ -122,17 +134,22 @@ func TestProcessor_convertEvent_FieldMapping(t *testing.T) {
 
 	now := time.Now().UTC()
 	event := Event{
-		EventID:      "123e4567-e89b-12d3-a456-426614174000",
-		OrgID:        "123e4567-e89b-12d3-a456-426614174001",
-		ModelID:      "123e4567-e89b-12d3-a456-426614174002",
-		OccurredAt:   now,
-		InputTokens:  150,
-		OutputTokens: 75,
-		LatencyMS:    300,
-		Status:       "success",
-		ErrorCode:    "",
-		CostEstimate: 0.025,
-		Metadata:     map[string]interface{}{"request_id": "req-123"},
+		RecordID:       "123e4567-e89b-12d3-a456-426614174000",
+		RequestID:      "req-123",
+		OrganizationID: "123e4567-e89b-12d3-a456-426614174001",
+		APIKeyID:       "123e4567-e89b-12d3-a456-426614174002",
+		Timestamp:      now,
+		Model:          "gpt-4o",
+		BackendID:      "backend-vllm-1",
+		TokensInput:    150,
+		TokensOutput:   75,
+		CostUSD:        0.025,
+		LatencyMS:      300,
+		LimitState:     "WITHIN_LIMIT",
+		DecisionReason: "PRIMARY",
+		TraceID:        "trace-abc",
+		SpanID:         "span-123",
+		Metadata:       map[string]interface{}{"custom_key": "custom_value"},
 	}
 
 	dbEvent, err := p.convertEvent(event)
@@ -141,13 +158,23 @@ func TestProcessor_convertEvent_FieldMapping(t *testing.T) {
 	// Verify field mapping
 	assert.Equal(t, "123e4567-e89b-12d3-a456-426614174000", dbEvent.EventID.String())
 	assert.Equal(t, "123e4567-e89b-12d3-a456-426614174001", dbEvent.OrgID.String())
-	assert.Equal(t, "123e4567-e89b-12d3-a456-426614174002", dbEvent.ModelID.String())
-	assert.Equal(t, now, dbEvent.OccurredAt)
+	assert.Equal(t, "123e4567-e89b-12d3-a456-426614174002", dbEvent.ActorID.String()) // api_key_id → actor_id
+	assert.Equal(t, now, dbEvent.OccurredAt)                                          // timestamp → occurred_at
 	assert.Equal(t, int64(150), dbEvent.InputTokens)
 	assert.Equal(t, int64(75), dbEvent.OutputTokens)
 	assert.Equal(t, 300, dbEvent.LatencyMS)
 	assert.Equal(t, "success", dbEvent.Status)
 	assert.Equal(t, 0.025, dbEvent.CostEstimateCents)
+
+	// Verify routing metadata is stored
+	assert.Equal(t, "gpt-4o", dbEvent.Metadata["model"])
+	assert.Equal(t, "backend-vllm-1", dbEvent.Metadata["backend_id"])
+	assert.Equal(t, "WITHIN_LIMIT", dbEvent.Metadata["limit_state"])
+	assert.Equal(t, "PRIMARY", dbEvent.Metadata["decision_reason"])
+	assert.Equal(t, "req-123", dbEvent.Metadata["request_id"])
+	assert.Equal(t, "trace-abc", dbEvent.Metadata["trace_id"])
+	assert.Equal(t, "span-123", dbEvent.Metadata["span_id"])
+	assert.Equal(t, "custom_value", dbEvent.Metadata["custom_key"]) // Original metadata preserved
 
 	// ReceivedAt should be set to current time (approximately)
 	assert.WithinDuration(t, time.Now(), dbEvent.ReceivedAt, 5*time.Second)

@@ -41,9 +41,9 @@ func (p *Processor) ProcessBatch(ctx context.Context, events []Event, streamOffs
 	// Extract unique org IDs for batch tracking
 	orgSet := make(map[uuid.UUID]struct{})
 	for _, e := range events {
-		orgID, err := uuid.Parse(e.OrgID)
+		orgID, err := uuid.Parse(e.OrganizationID)
 		if err != nil {
-			p.logger.Warn("invalid org_id in event", zap.String("event_id", e.EventID), zap.Error(err))
+			p.logger.Warn("invalid organization_id in event", zap.String("record_id", e.RecordID), zap.Error(err))
 			continue
 		}
 		orgSet[orgID] = struct{}{}
@@ -65,7 +65,7 @@ func (p *Processor) ProcessBatch(ctx context.Context, events []Event, streamOffs
 	for _, e := range events {
 		dbEvent, err := p.convertEvent(e)
 		if err != nil {
-			p.logger.Warn("skipping invalid event", zap.String("event_id", e.EventID), zap.Error(err))
+			p.logger.Warn("skipping invalid event", zap.String("record_id", e.RecordID), zap.Error(err))
 			continue
 		}
 		dbEvents = append(dbEvents, dbEvent)
@@ -96,42 +96,81 @@ func (p *Processor) ProcessBatch(ctx context.Context, events []Event, streamOffs
 
 // convertEvent converts an Event to a postgres.UsageEvent.
 func (p *Processor) convertEvent(e Event) (postgres.UsageEvent, error) {
-	eventID, err := uuid.Parse(e.EventID)
+	// Parse record_id (maps to event_id in database)
+	recordID, err := uuid.Parse(e.RecordID)
 	if err != nil {
-		return postgres.UsageEvent{}, fmt.Errorf("invalid event_id: %w", err)
+		return postgres.UsageEvent{}, fmt.Errorf("invalid record_id: %w", err)
 	}
 
-	orgID, err := uuid.Parse(e.OrgID)
+	// Parse organization_id
+	orgID, err := uuid.Parse(e.OrganizationID)
 	if err != nil {
-		return postgres.UsageEvent{}, fmt.Errorf("invalid org_id: %w", err)
+		return postgres.UsageEvent{}, fmt.Errorf("invalid organization_id: %w", err)
 	}
 
-	var modelID uuid.UUID
-	if e.ModelID != "" {
-		modelID, err = uuid.Parse(e.ModelID)
+	// Parse api_key_id (maps to actor_id in database - represents the actor making the request)
+	var actorID uuid.UUID
+	if e.APIKeyID != "" {
+		actorID, err = uuid.Parse(e.APIKeyID)
 		if err != nil {
-			return postgres.UsageEvent{}, fmt.Errorf("invalid model_id: %w", err)
+			return postgres.UsageEvent{}, fmt.Errorf("invalid api_key_id: %w", err)
 		}
 	}
 
-	var actorID uuid.UUID
-	// ActorID is optional, leave as Nil if not provided
+	// Model is a string (user-facing model name, not UUID)
+	// We'll store this in metadata for now, and use Nil for ModelID
+	// TODO: Consider adding a model_name field to the database schema
+	var modelID uuid.UUID
+	// modelID remains Nil - we don't have a model registry ID mapping yet
+
+	// Convert token counts to int64 for database
+	inputTokens := int64(e.TokensInput)
+	outputTokens := int64(e.TokensOutput)
+
+	// Map limit_state to status field
+	// WITHIN_LIMIT → "success", RATE_LIMITED/BUDGET_EXCEEDED → "limited"
+	status := "success"
+	if e.LimitState == "RATE_LIMITED" || e.LimitState == "BUDGET_EXCEEDED" {
+		status = "limited"
+	}
+
+	// Store routing metadata in metadata field
+	metadata := e.Metadata
+	if metadata == nil {
+		metadata = make(map[string]interface{})
+	}
+	metadata["model"] = e.Model
+	metadata["backend_id"] = e.BackendID
+	metadata["limit_state"] = e.LimitState
+	metadata["decision_reason"] = e.DecisionReason
+	if e.RequestID != "" {
+		metadata["request_id"] = e.RequestID
+	}
+	if e.RetryCount > 0 {
+		metadata["retry_count"] = e.RetryCount
+	}
+	if e.TraceID != "" {
+		metadata["trace_id"] = e.TraceID
+	}
+	if e.SpanID != "" {
+		metadata["span_id"] = e.SpanID
+	}
 
 	now := time.Now()
 	return postgres.UsageEvent{
-		EventID:           eventID,
+		EventID:           recordID, // record_id maps to event_id
 		OrgID:             orgID,
-		OccurredAt:        e.OccurredAt,
+		OccurredAt:        e.Timestamp, // timestamp maps to occurred_at
 		ReceivedAt:        now,
-		ModelID:           modelID,
-		ActorID:           actorID,
-		InputTokens:       e.InputTokens,
-		OutputTokens:      e.OutputTokens,
+		ModelID:           modelID, // Nil for now - no model registry mapping
+		ActorID:           actorID, // api_key_id maps to actor_id
+		InputTokens:       inputTokens,
+		OutputTokens:      outputTokens,
 		LatencyMS:         e.LatencyMS,
-		Status:            e.Status,
-		ErrorCode:         e.ErrorCode,
-		CostEstimateCents: e.CostEstimate,
-		Metadata:          e.Metadata,
+		Status:            status,
+		ErrorCode:         "", // No error code in UsageRecord schema
+		CostEstimateCents: e.CostUSD,
+		Metadata:          metadata,
 	}, nil
 }
 

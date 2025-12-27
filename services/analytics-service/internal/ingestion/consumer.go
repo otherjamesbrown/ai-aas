@@ -254,12 +254,12 @@ func (c *Consumer) parseMessage(msg kafka.Message) (Event, error) {
 		return Event{}, fmt.Errorf("unmarshal event: %w", err)
 	}
 
-	// Validate required fields
-	if event.EventID == "" {
-		return Event{}, fmt.Errorf("event_id is required")
+	// Validate required fields (matching UsageRecord schema)
+	if event.RecordID == "" {
+		return Event{}, fmt.Errorf("record_id is required")
 	}
-	if event.OrgID == "" {
-		return Event{}, fmt.Errorf("org_id is required")
+	if event.OrganizationID == "" {
+		return Event{}, fmt.Errorf("organization_id is required")
 	}
 
 	return event, nil
@@ -307,16 +307,33 @@ func (c *Consumer) processBatch(ctx context.Context, events []Event, messages []
 }
 
 // Event represents a usage event from Kafka.
+// This struct MUST match the UsageRecord schema from api-router-service
+// (see services/api-router-service/internal/usage/record.go).
 type Event struct {
-	EventID      string                 `json:"event_id"`
-	OrgID        string                 `json:"org_id"`
-	ModelID      string                 `json:"model_id"`
-	OccurredAt   time.Time              `json:"occurred_at"`
-	InputTokens  int64                  `json:"input_tokens"`
-	OutputTokens int64                  `json:"output_tokens"`
-	LatencyMS    int                    `json:"latency_ms"`
-	Status       string                 `json:"status"`
-	ErrorCode    string                 `json:"error_code,omitempty"`
-	CostEstimate float64                `json:"cost_estimate"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	// Core identification
+	RecordID       string    `json:"record_id"`        // Maps to UsageRecord.RecordID
+	RequestID      string    `json:"request_id"`       // Maps to UsageRecord.RequestID
+	OrganizationID string    `json:"organization_id"`  // Maps to UsageRecord.OrganizationID
+	APIKeyID       string    `json:"api_key_id"`       // Maps to UsageRecord.APIKeyID
+	Timestamp      time.Time `json:"timestamp"`        // Maps to UsageRecord.Timestamp
+
+	// Model and backend
+	Model     string `json:"model"`      // Maps to UsageRecord.Model (user-facing model name)
+	BackendID string `json:"backend_id"` // Maps to UsageRecord.BackendID
+
+	// Token usage and cost
+	TokensInput  int     `json:"tokens_input"`  // Maps to UsageRecord.TokensInput
+	TokensOutput int     `json:"tokens_output"` // Maps to UsageRecord.TokensOutput
+	CostUSD      float64 `json:"cost_usd"`      // Maps to UsageRecord.CostUSD
+
+	// Performance and routing
+	LatencyMS      int    `json:"latency_ms"`      // Maps to UsageRecord.LatencyMS
+	LimitState     string `json:"limit_state"`     // Maps to UsageRecord.LimitState (WITHIN_LIMIT, RATE_LIMITED, BUDGET_EXCEEDED)
+	DecisionReason string `json:"decision_reason"` // Maps to UsageRecord.DecisionReason (PRIMARY, FAILOVER, OVERRIDE, RATE_LIMIT)
+
+	// Optional fields
+	RetryCount int                    `json:"retry_count,omitempty"` // Maps to UsageRecord.RetryCount
+	TraceID    string                 `json:"trace_id,omitempty"`    // Maps to UsageRecord.TraceID
+	SpanID     string                 `json:"span_id,omitempty"`     // Maps to UsageRecord.SpanID
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`    // Maps to UsageRecord.Metadata
 }
