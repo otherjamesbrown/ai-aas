@@ -34,7 +34,7 @@ RUN apk --no-cache add ca-certificates
 # Install goose for migrations
 RUN apk --no-cache add go
 WORKDIR /tmp
-RUN go install github.com/pressly/goose/v3/cmd/goose@latest
+RUN go install github.com/pressly/goose/v3/cmd/goose@v3.24.1
 RUN cp /root/go/bin/goose /usr/local/bin/goose
 
 WORKDIR /app
