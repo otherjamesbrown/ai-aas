@@ -139,6 +139,8 @@ func (s *Server) setupRoutes() {
 			// Usage routes
 			if s.usageHandler != nil {
 				r.Get("/usage", s.usageHandler.GetOrgUsage)
+				// API key usage route
+				r.Get("/apikeys/{apiKeyId}/usage", s.usageHandler.GetAPIKeyUsage)
 			}
 			// Reliability routes
 			if s.reliabilityHandler != nil {

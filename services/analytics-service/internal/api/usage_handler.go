@@ -30,6 +30,133 @@ func NewUsageHandler(store *postgres.Store, logger *zap.Logger, cache *freshness
 	}
 }
 
+// GetAPIKeyUsage handles GET /analytics/v1/orgs/{orgId}/apikeys/{apiKeyId}/usage
+func (h *UsageHandler) GetAPIKeyUsage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Parse org ID
+	orgIDStr := chi.URLParam(r, "orgId")
+	orgID, err := uuid.Parse(orgIDStr)
+	if err != nil {
+		h.respondError(w, http.StatusBadRequest, "invalid org_id", err)
+		return
+	}
+
+	// Parse API key ID
+	apiKeyIDStr := chi.URLParam(r, "apiKeyId")
+	apiKeyID, err := uuid.Parse(apiKeyIDStr)
+	if err != nil {
+		h.respondError(w, http.StatusBadRequest, "invalid api_key_id", err)
+		return
+	}
+
+	// Parse query parameters
+	startStr := r.URL.Query().Get("start")
+	endStr := r.URL.Query().Get("end")
+	granularity := r.URL.Query().Get("granularity")
+	if granularity == "" {
+		granularity = "day"
+	}
+	modelIDStr := r.URL.Query().Get("modelId")
+
+	start, err := time.Parse(time.RFC3339, startStr)
+	if err != nil {
+		h.respondError(w, http.StatusBadRequest, "invalid start parameter", err)
+		return
+	}
+
+	end, err := time.Parse(time.RFC3339, endStr)
+	if err != nil {
+		h.respondError(w, http.StatusBadRequest, "invalid end parameter", err)
+		return
+	}
+
+	if end.Before(start) {
+		h.respondError(w, http.StatusBadRequest, "end must be after start", nil)
+		return
+	}
+
+	// Validate granularity
+	if granularity != "hour" && granularity != "day" {
+		h.respondError(w, http.StatusBadRequest, "granularity must be 'hour' or 'day'", nil)
+		return
+	}
+
+	var modelID *uuid.UUID
+	if modelIDStr != "" {
+		parsed, err := uuid.Parse(modelIDStr)
+		if err != nil {
+			h.respondError(w, http.StatusBadRequest, "invalid model_id", err)
+			return
+		}
+		modelID = &parsed
+	}
+
+	// Query usage series for API key
+	points, err := h.store.GetUsageSeriesForAPIKey(ctx, orgID, apiKeyID, start, end, granularity, modelID)
+	if err != nil {
+		h.logger.Error("failed to get API key usage series", zap.Error(err))
+		h.respondError(w, http.StatusInternalServerError, "failed to retrieve usage data", err)
+		return
+	}
+
+	// Query totals for API key
+	totals, err := h.store.GetUsageTotalsForAPIKey(ctx, orgID, apiKeyID, start, end, modelID)
+	if err != nil {
+		h.logger.Error("failed to get API key usage totals", zap.Error(err))
+		h.respondError(w, http.StatusInternalServerError, "failed to retrieve totals", err)
+		return
+	}
+
+	// Get freshness indicator from cache or database
+	var freshnessIndicator FreshnessIndicator
+	if cached, err := h.freshnessCache.Get(ctx, orgID, modelID); err == nil && cached != nil {
+		freshnessIndicator = FreshnessIndicator{
+			Status:       cached.Status,
+			LagSeconds:   cached.LagSeconds,
+			LastEventAt:  cached.LastEventAt,
+			LastRollupAt: cached.LastRollupAt,
+		}
+	} else {
+		// Fallback to database if cache miss
+		if dbFreshness, err := h.store.GetFreshnessStatus(ctx, orgID, modelID); err == nil {
+			freshnessIndicator = FreshnessIndicator{
+				Status:       dbFreshness.Status,
+				LagSeconds:   dbFreshness.LagSeconds,
+				LastEventAt:  dbFreshness.LastEventAt,
+				LastRollupAt: dbFreshness.LastRollupAt,
+			}
+			// Cache it for next time
+			_ = h.freshnessCache.Set(ctx, dbFreshness)
+		} else {
+			// Default if not found
+			freshnessIndicator = FreshnessIndicator{
+				Status:       "fresh",
+				LagSeconds:   0,
+				LastEventAt:  time.Now().Add(-5 * time.Minute),
+				LastRollupAt: time.Now().Add(-1 * time.Minute),
+			}
+		}
+	}
+
+	// Build response
+	response := APIKeyUsageSeriesResponse{
+		OrgID:       orgID.String(),
+		APIKeyID:    apiKeyID.String(),
+		Granularity: granularity,
+		Series:      convertPoints(points),
+		Totals: UsageTotalsResponse{
+			Invocations:       totals.Invocations,
+			InputTokens:       totals.InputTokens,
+			OutputTokens:      totals.OutputTokens,
+			CostEstimateCents: int64(totals.CostEstimateCents * 100), // Convert to cents
+		},
+		Freshness: freshnessIndicator,
+	}
+
+	h.respondJSON(w, http.StatusOK, response)
+}
+
 // GetOrgUsage handles GET /analytics/v1/orgs/{orgId}/usage
 func (h *UsageHandler) GetOrgUsage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -151,6 +278,16 @@ func (h *UsageHandler) GetOrgUsage(w http.ResponseWriter, r *http.Request) {
 // UsageSeriesResponse matches the OpenAPI schema.
 type UsageSeriesResponse struct {
 	OrgID       string                `json:"orgId"`
+	Granularity string                `json:"granularity"`
+	Series      []UsagePointResponse  `json:"series"`
+	Totals      UsageTotalsResponse   `json:"totals"`
+	Freshness   FreshnessIndicator    `json:"freshness"`
+}
+
+// APIKeyUsageSeriesResponse matches the OpenAPI schema for API key usage.
+type APIKeyUsageSeriesResponse struct {
+	OrgID       string                `json:"orgId"`
+	APIKeyID    string                `json:"apiKeyId"`
 	Granularity string                `json:"granularity"`
 	Series      []UsagePointResponse  `json:"series"`
 	Totals      UsageTotalsResponse   `json:"totals"`

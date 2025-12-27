@@ -19,6 +19,7 @@ type ExportUsageRequest struct {
 // UsageQueryParams represents parameters for usage queries.
 type UsageQueryParams struct {
 	OrgID       string
+	APIKeyID    string    // Optional - queries per-API-key usage if provided
 	Start       time.Time
 	End         time.Time
 	Granularity string // "hour" or "day"

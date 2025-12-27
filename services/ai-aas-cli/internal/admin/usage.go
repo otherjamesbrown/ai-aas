@@ -40,6 +40,7 @@ func UsageCommand() *cobra.Command {
 
 func usageQueryCommand() *cobra.Command {
 	var flagOrgID string
+	var flagAPIKeyID string
 	var flagFrom string
 	var flagTo string
 	var flagGranularity string
@@ -77,15 +78,19 @@ func usageQueryCommand() *cobra.Command {
   admin-cli usage query --org-id acme-corp --from 2025-01-01 --to 2025-01-31 --model gpt-4
 
   # Output as JSON
-  admin-cli usage query --org-id acme-corp --from 2025-01-01 --to 2025-01-31 --format json`,
+  admin-cli usage query --org-id acme-corp --from 2025-01-01 --to 2025-01-31 --format json
+
+  # Query usage for a specific API key
+  admin-cli usage query --org-id acme-corp --api-key-id <api-key-id> --last-7d`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runUsageQuery(cmd, args, flagOrgID, flagFrom, flagTo, flagGranularity, flagModel,
+			return runUsageQuery(cmd, args, flagOrgID, flagAPIKeyID, flagFrom, flagTo, flagGranularity, flagModel,
 				flagFormat, flagVerbose, flagQuiet, flagAnalyticsEndpoint, flagAPIKey,
 				flagLastHour, flagLast24h, flagLast7d, flagAllTime)
 		},
 	}
 
 	cmd.Flags().StringVar(&flagOrgID, "org-id", "", "Organization ID or slug (required)")
+	cmd.Flags().StringVar(&flagAPIKeyID, "api-key-id", "", "API key ID (optional, queries per-API-key usage)")
 	cmd.Flags().StringVar(&flagFrom, "from", "", "Start date (YYYY-MM-DD)")
 	cmd.Flags().StringVar(&flagTo, "to", "", "End date (YYYY-MM-DD)")
 	cmd.Flags().StringVar(&flagGranularity, "granularity", "day", "Data granularity: hour, day")
@@ -105,7 +110,7 @@ func usageQueryCommand() *cobra.Command {
 	return cmd
 }
 
-func runUsageQuery(cmd *cobra.Command, args []string, flagOrgID, flagFrom, flagTo, flagGranularity, flagModel string,
+func runUsageQuery(cmd *cobra.Command, args []string, flagOrgID, flagAPIKeyID, flagFrom, flagTo, flagGranularity, flagModel string,
 	flagFormat string, flagVerbose, flagQuiet bool, flagAnalyticsEndpoint, flagAPIKey string,
 	flagLastHour, flagLast24h, flagLast7d, flagAllTime bool) error {
 	startTime := time.Now()
@@ -267,6 +272,7 @@ func runUsageQuery(cmd *cobra.Command, args []string, flagOrgID, flagFrom, flagT
 
 	params := analytics.UsageQueryParams{
 		OrgID:       flagOrgID,
+		APIKeyID:    flagAPIKeyID,
 		Start:       fromDate,
 		End:         toDate.AddDate(0, 0, 1), // End date is inclusive, add 1 day
 		Granularity: flagGranularity,
