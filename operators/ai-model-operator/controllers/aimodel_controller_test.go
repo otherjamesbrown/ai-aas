@@ -442,6 +442,118 @@ func TestAIModelReconciler_StatusUpdateFromInferenceService(t *testing.T) {
 	t.Log("Test passed: Controller correctly extracts and updates status from InferenceService")
 }
 
+// TestAIModelReconciler_StatusSyncBackToCaller verifies that after updateStatusFromInferenceService
+// returns, the caller's aiModel object has the updated status. This prevents the race condition
+// where a re-fetch after the call would get a stale cached copy (aas-lhx0).
+func TestAIModelReconciler_StatusSyncBackToCaller(t *testing.T) {
+	// Register operator types with the scheme
+	s := setupScheme()
+
+	// Define a sample AIModel object starting in Deploying phase
+	aiModelName := "test-model-sync"
+	aiModelNamespace := "default"
+	aiModel := &aimodelv1alpha1.AIModel{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      aiModelName,
+			Namespace: aiModelNamespace,
+			UID:       types.UID("test-uid-sync"),
+		},
+		Spec: aimodelv1alpha1.AIModelSpec{
+			ModelName: "mistral-7b",
+			ModelID:   "mistral-7b-v0.1",
+			S3Bucket:  "ai-models",
+			S3Key:     "mistral-7b",
+			Runtime:   "vllm",
+			Enabled:   true,
+		},
+		Status: aimodelv1alpha1.AIModelStatus{
+			Phase:   aimodelv1alpha1.AIModelPhaseDeploying,
+			Message: "Deploying model",
+		},
+	}
+
+	// Verify starting state
+	if aiModel.Status.Phase != aimodelv1alpha1.AIModelPhaseDeploying {
+		t.Fatalf("Expected initial phase to be Deploying, got %s", aiModel.Status.Phase)
+	}
+
+	// Create a ready InferenceService
+	readyIsvc := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "serving.kserve.io/v1beta1",
+			"kind":       "InferenceService",
+			"metadata": map[string]interface{}{
+				"name":      aiModelName,
+				"namespace": aiModelNamespace,
+			},
+			"spec": map[string]interface{}{
+				"predictor": map[string]interface{}{
+					"minReplicas": int64(1),
+					"maxReplicas": int64(3),
+				},
+			},
+			"status": map[string]interface{}{
+				"url": "http://test-model-sync.default.example.com",
+				"conditions": []interface{}{
+					map[string]interface{}{
+						"type":    "Ready",
+						"status":  "True",
+						"reason":  "PredictorReady",
+						"message": "Predictor is ready",
+					},
+				},
+				"readyReplicas": int64(1),
+			},
+		},
+	}
+
+	// Create a fake client with the sample objects
+	cl := fake.NewClientBuilder().
+		WithScheme(s).
+		WithObjects(aiModel, readyIsvc).
+		WithStatusSubresource(aiModel).
+		Build()
+
+	// Create the Reconciler
+	r := &AIModelReconciler{
+		MaxDownloadRetries: 5,
+		InitialRetryDelay:  1 * time.Minute,
+		MaxRetryDelay:      16 * time.Minute,
+		Client:             cl,
+		Scheme:             s,
+	}
+
+	// Call updateStatusFromInferenceService - the key test is that AFTER this call,
+	// the caller's aiModel object should have the updated status (not require a re-fetch)
+	t.Log("Test: Calling updateStatusFromInferenceService and verifying caller's object is updated")
+	err := r.updateStatusFromInferenceService(context.Background(), aiModel)
+	if err != nil {
+		t.Fatalf("updateStatusFromInferenceService: (%v)", err)
+	}
+
+	// CRITICAL: The caller's aiModel object should now have the Ready phase
+	// This is what the fix in aas-lhx0 addresses - previously, the caller would need
+	// to re-fetch to get the updated status, but that re-fetch could return a stale copy
+	if aiModel.Status.Phase != aimodelv1alpha1.AIModelPhaseReady {
+		t.Errorf("RACE CONDITION BUG: Caller's aiModel.Status.Phase should be Ready after updateStatusFromInferenceService, got %s", aiModel.Status.Phase)
+	}
+
+	// Also verify other status fields were synced back to the caller
+	if aiModel.Status.InferenceEndpoint != "http://test-model-sync.default.example.com" {
+		t.Errorf("Caller's aiModel.Status.InferenceEndpoint not synced, got %s", aiModel.Status.InferenceEndpoint)
+	}
+
+	if aiModel.Status.ReadyReplicas != 1 {
+		t.Errorf("Caller's aiModel.Status.ReadyReplicas not synced, got %d", aiModel.Status.ReadyReplicas)
+	}
+
+	if aiModel.Status.InferenceServiceName != aiModelName {
+		t.Errorf("Caller's aiModel.Status.InferenceServiceName not synced, got %s", aiModel.Status.InferenceServiceName)
+	}
+
+	t.Log("Test passed: Caller's aiModel object correctly updated after updateStatusFromInferenceService (no stale cache issue)")
+}
+
 func TestAIModelReconciler_FinalizerDeletesInferenceService(t *testing.T) {
 	// Register operator types with the scheme
 	s := setupScheme()

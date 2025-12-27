@@ -552,16 +552,10 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// Update status from InferenceService (this will check if already Ready and set appropriate phase)
+	// Note: updateStatusFromInferenceService now syncs the status back to aiModel directly,
+	// eliminating the need for a re-fetch which was causing stale cache issues (aas-lhx0)
 	if err := r.updateStatusFromInferenceService(ctx, aiModel); err != nil {
 		log.Error(err, "Failed to update status from InferenceService", "name", aiModel.Name)
-		reconcileTotal.WithLabelValues("error").Inc()
-		return ctrl.Result{}, err
-	}
-
-	// Re-fetch the AIModel to get the latest status after update
-	// This is necessary because updateStatusFromInferenceService uses a fresh copy
-	if err := r.Get(ctx, req.NamespacedName, aiModel); err != nil {
-		log.Error(err, "Failed to re-fetch AIModel after status update", "name", aiModel.Name)
 		reconcileTotal.WithLabelValues("error").Inc()
 		return ctrl.Result{}, err
 	}
@@ -1747,6 +1741,11 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 		}
 		return fmt.Errorf("status update failed: %w", err)
 	}
+
+	// Sync the updated status back to the caller's aiModel object
+	// This prevents the caller from needing to re-fetch and getting a stale cached copy
+	// which was causing the race condition where Ready status would be overwritten by Deploying
+	aiModel.Status = latestAIModel.Status
 
 	return nil
 }
