@@ -122,11 +122,7 @@ See Also:
 			defer cancel()
 
 			// Create API client
-			opts := []api.ClientOption{}
-			if cfg.TLSInsecure {
-				opts = append(opts, api.WithInsecureSkipVerify())
-			}
-			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+			apiClient := cfg.NewAPIClient(adminEndpoint)
 
 			// Determine revision
 			if revision == "" {

@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"time"
 
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/api"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/client/deploymentregistry"
@@ -14,20 +13,8 @@ import (
 
 // newRegistryClient creates a deployment registry client from config.
 func newRegistryClient(cfg *config.Config) *deploymentregistry.Client {
-	endpoint := cfg.AdminAPIEndpoint
-	if endpoint == "" {
-		endpoint = cfg.APIEndpoint
-	}
-
-	opts := []api.ClientOption{}
-	if cfg.TLSInsecure {
-		opts = append(opts, api.WithInsecureSkipVerify())
-	}
-	if cfg.Timeout > 0 {
-		opts = append(opts, api.WithTimeout(time.Duration(cfg.Timeout)*time.Second))
-	}
-
-	apiClient := api.NewClient(endpoint, cfg.APIKey, opts...)
+	endpoint := cfg.GetAdminEndpoint()
+	apiClient := cfg.NewAPIClient(endpoint)
 	return deploymentregistry.NewClient(apiClient)
 }
 

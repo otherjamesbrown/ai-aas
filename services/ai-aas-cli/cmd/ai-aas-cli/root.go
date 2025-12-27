@@ -443,11 +443,7 @@ func runPartialInit(domain, apiKey, env, hfToken, adminAPI, userOrgAPI string) e
 		// Also sync to Admin API if configured
 		adminEndpoint := cfg.GetAdminEndpoint()
 		if adminEndpoint != "" && cfg.APIKey != "" {
-			opts := []api.ClientOption{}
-			if cfg.TLSInsecure {
-				opts = append(opts, api.WithInsecureSkipVerify())
-			}
-			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+			apiClient := cfg.NewAPIClient(adminEndpoint)
 			credClient := credentials.NewClient(apiClient)
 			ctx := context.Background()
 			if err := credClient.Set(ctx, "hf-token", hfToken, nil); err != nil {

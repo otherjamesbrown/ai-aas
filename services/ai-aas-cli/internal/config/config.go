@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/api"
 	"github.com/spf13/viper"
 )
 
@@ -331,5 +333,21 @@ func (c *Config) GetAdminEndpoint() string {
 		return c.AdminAPIEndpoint
 	}
 	return c.APIEndpoint
+}
+
+// NewAPIClient creates a new API client with appropriate options based on config.
+// This centralizes client creation logic to ensure consistent TLS and timeout handling.
+func (c *Config) NewAPIClient(endpoint string) *api.Client {
+	opts := []api.ClientOption{}
+
+	if c.TLSInsecure {
+		opts = append(opts, api.WithInsecureSkipVerify())
+	}
+
+	if c.Timeout > 0 {
+		opts = append(opts, api.WithTimeout(time.Duration(c.Timeout)*time.Second))
+	}
+
+	return api.NewClient(endpoint, c.APIKey, opts...)
 }
 
