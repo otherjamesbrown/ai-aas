@@ -10,7 +10,7 @@ import (
 type Model struct {
 	ModelID               uuid.UUID              `json:"model_id"`
 	ModelName             string                 `json:"model_name"`
-	DeploymentEndpoint    string                 `json:"deployment_endpoint"`
+	DeploymentEndpoint    *string                `json:"deployment_endpoint,omitempty"`
 	DeploymentEnvironment string                 `json:"deployment_environment"`
 	DeploymentNamespace   string                 `json:"deployment_namespace"`
 	DeploymentStatus      string                 `json:"deployment_status"`

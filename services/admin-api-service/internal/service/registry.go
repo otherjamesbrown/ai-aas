@@ -102,10 +102,15 @@ func (s *ModelRegistryService) createDefaultRoutingPolicy(ctx context.Context, m
 	// Build the backend ID from model name (matches deployment naming convention)
 	backendID := model.ModelName
 
+	endpoint := ""
+	if model.DeploymentEndpoint != nil {
+		endpoint = *model.DeploymentEndpoint
+	}
+
 	s.logger.Debug("building policy create request",
 		zap.String("model_name", model.ModelName),
 		zap.String("backend_id", backendID),
-		zap.String("endpoint", model.DeploymentEndpoint),
+		zap.String("endpoint", endpoint),
 	)
 
 	policyCreate := &domain.PolicyCreate{
@@ -121,7 +126,7 @@ func (s *ModelRegistryService) createDefaultRoutingPolicy(ctx context.Context, m
 		Metadata: map[string]interface{}{
 			"auto_created":  true,
 			"model_id":      model.ModelID.String(),
-			"endpoint":      model.DeploymentEndpoint,
+			"endpoint":      endpoint,
 			"namespace":     model.DeploymentNamespace,
 			"environment":   model.DeploymentEnvironment,
 			"created_reason": "auto-created on model registration",
