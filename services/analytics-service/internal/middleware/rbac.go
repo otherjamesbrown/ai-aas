@@ -78,11 +78,21 @@ func buildPolicyEngine() (*auth.Engine, error) {
 // uuidRegex matches UUIDs in paths
 var uuidRegex = regexp.MustCompile(`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
 
-// normalizePath normalizes request paths by replacing UUIDs with placeholders.
+// orgIdRegex matches org IDs/slugs after /orgs/ (alphanumeric with hyphens/underscores)
+var orgIdRegex = regexp.MustCompile(`/orgs/([a-zA-Z0-9_-]+)`)
+
+// apiKeyIdRegex matches API key IDs after /apikeys/
+var apiKeyIdRegex = regexp.MustCompile(`/apikeys/([a-zA-Z0-9_-]+)`)
+
+// normalizePath normalizes request paths by replacing IDs with placeholders.
 // This allows the policy engine to match routes with path parameters.
 func normalizePath(path string) string {
 	// Replace UUIDs with {id} placeholder
 	normalized := uuidRegex.ReplaceAllString(path, "{id}")
+	// Replace org IDs/slugs with {id}
+	normalized = orgIdRegex.ReplaceAllString(normalized, "/orgs/{id}")
+	// Replace API key IDs with {id}
+	normalized = apiKeyIdRegex.ReplaceAllString(normalized, "/apikeys/{id}")
 	return normalized
 }
 
