@@ -44,6 +44,19 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
 }
 
+// HTTPStatus returns the HTTP status code for this error based on its Code.
+func (e *Error) HTTPStatus() int {
+	return GetHTTPStatus(e.Code)
+}
+
+// Is implements errors.Is for typed error comparison by code.
+func (e *Error) Is(target error) bool {
+	if t, ok := target.(*Error); ok {
+		return e.Code == t.Code
+	}
+	return false
+}
+
 // WithDetail attaches a detail string.
 func WithDetail(detail string) Option {
 	return func(e *Error) {
