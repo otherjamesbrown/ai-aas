@@ -57,6 +57,16 @@ spec:
           {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: hf-cache
+              mountPath: /app/hf_cache
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: hf-cache
+          emptyDir: {}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

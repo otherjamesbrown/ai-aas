@@ -26,6 +26,33 @@ resources:
     cpu: 250m
     memory: 256Mi
 
+# Pod-level security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+# Container-level security context
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Pod Disruption Budget - ensures availability during upgrades/maintenance
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
 livenessProbe:
   path: /healthz
   initialDelaySeconds: 10

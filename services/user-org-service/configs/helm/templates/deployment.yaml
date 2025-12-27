@@ -5,7 +5,9 @@ metadata:
   labels:
     {{- include "user-org-service.labels" . | nindent 4 }}
 spec:
+  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "user-org-service.selectorLabels" . | nindent 6 }}
@@ -25,6 +27,10 @@ spec:
         {{- end }}
       {{- end }}
       serviceAccountName: {{ include "user-org-service.serviceAccountName" . }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- if .Values.migrations.enabled }}
       initContainers:
         - name: migrate
@@ -75,6 +81,10 @@ spec:
       {{- end }}
       containers:
         - name: admin-api
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["/app/admin-api"]
@@ -117,11 +127,17 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
             {{- range .Values.extraVolumeMounts }}
             - name: {{ .name }}
               mountPath: {{ .mountPath }}
             {{- end }}
         - name: reconciler
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["/app/reconciler"]
@@ -164,11 +180,15 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
             {{- range .Values.extraVolumeMounts }}
             - name: {{ .name }}
               mountPath: {{ .mountPath }}
             {{- end }}
       volumes:
+        - name: tmp
+          emptyDir: {}
         {{- range .Values.extraVolumes }}
         - name: {{ .name }}
           {{- toYaml .volume | nindent 8 }}
