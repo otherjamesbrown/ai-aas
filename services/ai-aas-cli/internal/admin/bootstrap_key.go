@@ -156,12 +156,14 @@ func runBootstrapKeyList(cmd *cobra.Command, flagFormat, flagOrgID, flagUserOrgE
 
 	// Audit log
 	auditLogger := audit.NewLogger(nil)
-	_ = auditLogger.LogOperation(audit.Operation{
+	if err := auditLogger.LogOperation(audit.Operation{
 		Type:     "bootstrap_key_list",
 		Command:  "bootstrap-key list",
 		Outcome:  "success",
 		Duration: time.Since(startTime),
-	})
+	}); err != nil {
+		output.WarningMsg("Failed to write to audit log: %v", err)
+	}
 
 	// Output
 	if cfg.OutputFormat == "json" {
@@ -302,12 +304,14 @@ func runBootstrapKeyCreate(cmd *cobra.Command, flagOrgID string, flagExpiresInDa
 
 	// Audit log
 	auditLogger := audit.NewLogger(nil)
-	_ = auditLogger.LogOperation(audit.Operation{
+	if err := auditLogger.LogOperation(audit.Operation{
 		Type:     "bootstrap_key_create",
 		Command:  "bootstrap-key create",
 		Outcome:  "success",
 		Duration: time.Since(startTime),
-	})
+	}); err != nil {
+		output.WarningMsg("Failed to write to audit log: %v", err)
+	}
 
 	// Output
 	if cfg.OutputFormat == "json" {
@@ -430,12 +434,14 @@ func runBootstrapKeyRevoke(cmd *cobra.Command, flagKeyID string, flagConfirm boo
 
 	// Audit log
 	auditLogger := audit.NewLogger(nil)
-	_ = auditLogger.LogOperation(audit.Operation{
+	if err := auditLogger.LogOperation(audit.Operation{
 		Type:     "bootstrap_key_revoke",
 		Command:  "bootstrap-key revoke",
 		Outcome:  "success",
 		Duration: time.Since(startTime),
-	})
+	}); err != nil {
+		output.WarningMsg("Failed to write to audit log: %v", err)
+	}
 
 	output.SuccessMsg("Bootstrap key %s has been revoked.", flagKeyID)
 	return nil

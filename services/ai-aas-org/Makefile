@@ -29,16 +29,16 @@ build:
 ## build-all: Build for all platforms
 build-all: clean
 	mkdir -p $(DIST_DIR)
-	GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY_NAME)_linux_amd64 ./cmd/ai-aas-org
-	GOOS=linux GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY_NAME)_linux_arm64 ./cmd/ai-aas-org
-	GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY_NAME)_darwin_amd64 ./cmd/ai-aas-org
-	GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY_NAME)_darwin_arm64 ./cmd/ai-aas-org
+	GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY_NAME)_$(VERSION)_linux_amd64/$(BINARY_NAME) ./cmd/ai-aas-org
+	GOOS=linux GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY_NAME)_$(VERSION)_linux_arm64/$(BINARY_NAME) ./cmd/ai-aas-org
+	GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY_NAME)_$(VERSION)_darwin_amd64/$(BINARY_NAME) ./cmd/ai-aas-org
+	GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY_NAME)_$(VERSION)_darwin_arm64/$(BINARY_NAME) ./cmd/ai-aas-org
 
-## release: Build release archives
+## release: Build release archives with version in filename
 release: build-all
 	cd $(DIST_DIR) && \
-	for f in $(BINARY_NAME)_*; do \
-		tar -czf "$$f.tar.gz" "$$f"; \
+	for d in $(BINARY_NAME)_$(VERSION)_*; do \
+		tar -czf "$$d.tar.gz" -C "$$d" $(BINARY_NAME); \
 	done
 
 ## test: Run tests
@@ -55,9 +55,9 @@ tidy:
 	$(GOMOD) tidy
 	$(GOMOD) verify
 
-## install: Install binary to GOPATH/bin
+## install: Install binary to GOPATH/bin (or GOBIN if set)
 install:
-	$(GOBUILD) $(LDFLAGS) -o $(GOPATH)/bin/$(BINARY_NAME) ./cmd/ai-aas-org
+	$(GOCMD) install $(LDFLAGS) ./cmd/ai-aas-org
 
 ## clean: Clean build artifacts
 clean:

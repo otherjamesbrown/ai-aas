@@ -55,6 +55,22 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
+// LoadFrom loads configuration from a specific file path.
+// This is useful for testing or loading config from non-default locations.
+func LoadFrom(configPath string) (*Config, error) {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	cfg := &Config{}
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	return cfg, nil
+}
+
 // Save saves the configuration to file.
 func Save(cfg *Config) error {
 	configFile := viper.ConfigFileUsed()

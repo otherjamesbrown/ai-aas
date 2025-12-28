@@ -21,7 +21,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/client"
@@ -728,12 +730,12 @@ func (c *Client) CreateBootstrapKey(ctx context.Context, req BootstrapKeyRequest
 
 // ListBootstrapKeys lists bootstrap keys, optionally filtered by organization.
 func (c *Client) ListBootstrapKeys(ctx context.Context, orgID string) ([]BootstrapKeyResponse, error) {
-	url := fmt.Sprintf("%s/v1/bootstrap-keys", c.baseURL)
+	reqURL := fmt.Sprintf("%s/v1/bootstrap-keys", c.baseURL)
 	if orgID != "" {
-		url = fmt.Sprintf("%s?orgId=%s", url, orgID)
+		reqURL = fmt.Sprintf("%s?orgId=%s", reqURL, url.QueryEscape(orgID))
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -749,7 +751,8 @@ func (c *Client) ListBootstrapKeys(ctx context.Context, orgID string) ([]Bootstr
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("list bootstrap keys failed: status %d", resp.StatusCode)
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("list bootstrap keys failed: status %d, body: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	var result BootstrapKeyListResponse

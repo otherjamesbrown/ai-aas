@@ -42,6 +42,9 @@ import (
 // TokenPrefix is the prefix for bootstrap key tokens.
 const TokenPrefix = "bsk_"
 
+// APIKeyPrefix is the prefix for API key tokens.
+const APIKeyPrefix = "ai-aas_"
+
 // DefaultExpiryDays is the default expiry in days for bootstrap keys.
 const DefaultExpiryDays = 7
 
@@ -407,31 +410,78 @@ func (h *Handler) RedeemBootstrapKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create an org admin user (or get existing)
-	// For now, we create an API key for org management
-	// TODO: Implement full user creation flow
-
-	// Mark key as redeemed
-	if err := h.runtime.Postgres.RedeemBootstrapKey(ctx, key.ID, "org-admin"); err != nil {
-		h.logger.Error("failed to redeem bootstrap key", zap.Error(err))
-		http.Error(w, "failed to redeem bootstrap key", http.StatusInternalServerError)
+	// Generate API key token for org admin
+	tokenBytes := make([]byte, 32) // 256 bits of entropy
+	if _, err := rand.Read(tokenBytes); err != nil {
+		h.logger.Error("failed to generate API key token", zap.Error(err))
+		http.Error(w, "failed to generate API key", http.StatusInternalServerError)
 		return
 	}
 
-	// Create API key for org admin
-	// TODO: Create actual API key via apikeys package
+	// Encode token as base64url with ai-aas_ prefix
+	tokenRaw := base64.RawURLEncoding.EncodeToString(tokenBytes)
+	apiKeyToken := APIKeyPrefix + tokenRaw
 
-	// Emit audit event
+	// Compute fingerprint (SHA-256 hash of full token including prefix)
+	apiKeyFingerprintHash := sha256.Sum256([]byte(apiKeyToken))
+	apiKeyFingerprint := base64.RawURLEncoding.EncodeToString(apiKeyFingerprintHash[:])
+
+	// Create API key record for org admin (90-day expiry)
+	apiKeyExpiry := time.Now().UTC().Add(90 * 24 * time.Hour)
+	apiKeyParams := postgres.CreateAPIKeyParams{
+		OrgID:         key.OrgID,
+		PrincipalType: postgres.PrincipalTypeUser,
+		PrincipalID:   uuid.Nil, // System-generated key (no specific user)
+		Notes:         "Org admin key (generated via bootstrap)",
+		Fingerprint:   apiKeyFingerprint,
+		Status:        "active",
+		Scopes:        []string{"org:admin", "org:read", "org:write", "user:manage", "apikey:manage"},
+		ExpiresAt:     &apiKeyExpiry,
+		Annotations:   map[string]any{"bootstrap_key_id": key.KeyID},
+	}
+
+	apiKey, err := h.runtime.Postgres.CreateAPIKey(ctx, apiKeyParams)
+	if err != nil {
+		h.logger.Error("failed to create API key", zap.Error(err), zap.String("orgId", key.OrgID.String()))
+		http.Error(w, "failed to create API key", http.StatusInternalServerError)
+		return
+	}
+
+	// Mark bootstrap key as redeemed (after API key created successfully)
+	if err := h.runtime.Postgres.RedeemBootstrapKey(ctx, key.ID, apiKey.KeyID); err != nil {
+		h.logger.Error("failed to redeem bootstrap key", zap.Error(err))
+		// API key was created but we couldn't mark bootstrap key as redeemed
+		// This is a partial failure state - log and continue
+	}
+
+	// Emit audit event for bootstrap key redemption
 	event := audit.BuildEvent(key.OrgID, uuid.Nil, audit.ActorTypeSystem, audit.ActionBootstrapKeyRedeem, audit.TargetTypeBootstrapKey, &key.ID)
 	event = audit.BuildEventFromRequest(event, r)
+	event.Metadata = map[string]any{
+		"api_key_id": apiKey.KeyID,
+	}
 	_ = h.runtime.Audit.Emit(ctx, event)
+
+	// Emit audit event for API key creation
+	apiKeyEvent := audit.BuildEvent(key.OrgID, uuid.Nil, audit.ActorTypeSystem, audit.ActionAPIKeyIssue, audit.TargetTypeAPIKey, &apiKey.ID)
+	apiKeyEvent = audit.BuildEventFromRequest(apiKeyEvent, r)
+	apiKeyEvent.Metadata = map[string]any{
+		"bootstrap_key_id": key.KeyID,
+		"scopes":           apiKeyParams.Scopes,
+	}
+	_ = h.runtime.Audit.Emit(ctx, apiKeyEvent)
+
+	h.logger.Info("bootstrap key redeemed, org admin API key created",
+		zap.String("bootstrapKeyId", key.KeyID),
+		zap.String("apiKeyId", apiKey.KeyID),
+		zap.String("orgId", key.OrgID.String()))
 
 	// Build response
 	resp := RedeemBootstrapKeyResponse{
 		OrgID:       org.ID.String(),
 		OrgName:     org.Name,
 		APIEndpoint: h.runtime.Config.OIDCBaseURL,
-		APIKey:      "org-admin-key-placeholder", // TODO: Return actual API key
+		APIKey:      apiKeyToken, // Return the actual API key token (shown once)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

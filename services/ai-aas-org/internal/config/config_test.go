@@ -74,31 +74,68 @@ func TestConfigValidate(t *testing.T) {
 }
 
 func TestSaveAndLoad(t *testing.T) {
-	// Create a temp file for testing
+	// Create a temp config file
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, ".ai-aas-org.yaml")
 
-	cfg := &Config{
-		APIEndpoint: "https://api.test.com",
-		APIKey:      "test_key_123",
-		OrgID:       "test_org",
-		OrgName:     "Test Organization",
-		AdminEmail:  "admin@test.com",
-		AdminUserID: "usr_admin",
+	// Write test config to temp file
+	testConfig := `api_endpoint: https://api.test.com
+api_key: test_key_123
+org_id: test_org
+org_name: Test Organization
+admin_email: admin@test.com
+admin_user_id: usr_admin
+`
+	if err := os.WriteFile(tmpFile, []byte(testConfig), 0600); err != nil {
+		t.Fatalf("Failed to write test config: %v", err)
 	}
 
-	// Write config to temp file
-	// Note: We can't easily test Save() because it uses viper.ConfigFileUsed()
-	// But we can test the yaml marshaling
-	data, err := cfg.MarshalYAML()
-	if err == nil {
-		t.Log("Config marshals to YAML successfully")
+	// Load the config using LoadFrom
+	cfg, err := LoadFrom(tmpFile)
+	if err != nil {
+		t.Fatalf("LoadFrom() error = %v", err)
 	}
-	_ = data
-	_ = tmpFile
+
+	// Verify loaded values
+	tests := []struct {
+		name string
+		got  string
+		want string
+	}{
+		{"APIEndpoint", cfg.APIEndpoint, "https://api.test.com"},
+		{"APIKey", cfg.APIKey, "test_key_123"},
+		{"OrgID", cfg.OrgID, "test_org"},
+		{"OrgName", cfg.OrgName, "Test Organization"},
+		{"AdminEmail", cfg.AdminEmail, "admin@test.com"},
+		{"AdminUserID", cfg.AdminUserID, "usr_admin"},
+	}
+
+	for _, tt := range tests {
+		if tt.got != tt.want {
+			t.Errorf("%s = %q, want %q", tt.name, tt.got, tt.want)
+		}
+	}
 }
 
-// MarshalYAML is a helper for testing
-func (c *Config) MarshalYAML() ([]byte, error) {
-	return []byte{}, nil // Placeholder
+func TestLoadFrom_FileNotFound(t *testing.T) {
+	_, err := LoadFrom("/nonexistent/path/.ai-aas-org.yaml")
+	if err == nil {
+		t.Error("LoadFrom() expected error for non-existent file, got nil")
+	}
+}
+
+func TestLoadFrom_InvalidYAML(t *testing.T) {
+	// Create a temp file with invalid YAML
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, ".ai-aas-org.yaml")
+
+	invalidYAML := `[[[invalid yaml content`
+	if err := os.WriteFile(tmpFile, []byte(invalidYAML), 0600); err != nil {
+		t.Fatalf("Failed to write test config: %v", err)
+	}
+
+	_, err := LoadFrom(tmpFile)
+	if err == nil {
+		t.Error("LoadFrom() expected error for invalid YAML, got nil")
+	}
 }
