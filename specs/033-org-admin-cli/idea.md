@@ -200,7 +200,40 @@ Configuration saved to ~/.ai-aas-org.yaml
 
 ## Notes
 
-- Can reuse much of the existing client code from ai-aas-cli
+- **CRITICAL: Shared Components** - Both ai-aas-cli and ai-aas-org will share common functionality. Must factor out shared code into reusable packages to avoid duplication.
 - Need to ensure API enforces org-scoping (users can only see/modify their own org)
 - Consider generating shell completions (bash/zsh/fish) for better UX
 - Help text should include real examples, not just flag descriptions
+
+## Shared Components Strategy
+
+The following should be extracted/shared between both CLIs:
+
+| Component | Current Location | Shared Package |
+|-----------|------------------|----------------|
+| API clients | `internal/api/`, `internal/client/` | Keep as-is (already reusable) |
+| User/Org client | `internal/client/userorg/` | Keep as-is |
+| Output formatting | `internal/output/` | Extract to shared |
+| Progress indicators | `internal/progress/` | Extract to shared |
+| Config management | `internal/config/` | Extract base, CLI-specific extensions |
+| Error types | `internal/errors/` | Extract to shared |
+| Credentials | `internal/credentials/` | Keep as-is |
+| Logging | `internal/logging/` | Extract to shared |
+| Validation | `internal/validation/` | Keep in ai-aas-cli (platform-specific) |
+
+Proposed structure:
+```
+services/
+├── ai-aas-cli/           # Platform admin CLI
+│   ├── cmd/
+│   └── internal/         # Platform-specific code only
+├── ai-aas-org/           # Org admin CLI (NEW)
+│   ├── cmd/
+│   └── internal/         # Org-specific code only
+└── cli-shared/           # Shared CLI components (NEW)
+    ├── output/           # Table, JSON, progress formatting
+    ├── errors/           # CLI error types
+    ├── config/           # Base config handling
+    ├── prompt/           # Interactive prompts, confirmations
+    └── help/             # Help system, guides
+```
