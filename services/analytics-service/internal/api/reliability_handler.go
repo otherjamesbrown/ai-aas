@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ai-aas/shared-go/httputil"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -159,14 +160,6 @@ func (h *ReliabilityHandler) respondJSON(w http.ResponseWriter, status int, data
 
 func (h *ReliabilityHandler) respondError(w http.ResponseWriter, status int, message string, err error) {
 	h.logger.Warn(message, zap.Error(err), zap.Int("status", status))
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(map[string]interface{}{
-		"status": status,
-		"title":  http.StatusText(status),
-		"detail": message,
-	}); err != nil {
-		h.logger.Error("failed to encode error response", zap.Error(err))
-	}
+	httputil.WriteProblemDetails(w, status, http.StatusText(status), message)
 }
 

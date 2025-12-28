@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ai-aas/shared-go/logging"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/api"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/config"
 	modelsHandler "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/handlers/models"
@@ -18,13 +19,14 @@ import (
 )
 
 func main() {
-	// Initialize logger
-	logger, err := zap.NewProduction()
+	// Initialize logger with shared logging library
+	sharedLogger, err := logging.New(logging.DefaultConfig().WithServiceName("admin-api-service"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v\n", err)
 		os.Exit(1)
 	}
-	defer logger.Sync()
+	defer sharedLogger.Sync()
+	logger := sharedLogger.Logger // Extract underlying *zap.Logger for compatibility
 
 	// Load configuration
 	cfg, err := config.Load()

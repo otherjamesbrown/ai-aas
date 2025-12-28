@@ -20,8 +20,10 @@ package auth
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -52,6 +54,8 @@ type ValidateAPIKeyResponse struct {
 	// Model access control (Spec 022)
 	ModelAccessMode string   `json:"modelAccessMode,omitempty"` // "restricted" or "auto_grant"
 	GrantedModels   []string `json:"grantedModels,omitempty"`   // List of granted model names
+	// HMAC secret for request signing (derived from fingerprint + server secret)
+	HMACSecret string `json:"hmacSecret,omitempty"`
 }
 
 // getStore returns the APIKeyValidator to use for database operations.
@@ -190,6 +194,14 @@ func (h *Handler) ValidateAPIKey(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// Service accounts default to auto_grant (all models accessible)
 		response.ModelAccessMode = "auto_grant"
+	}
+
+	// Compute HMAC secret for request signing (derived from fingerprint + server secret)
+	// This allows API clients to sign requests for additional security
+	if h.runtime != nil && h.runtime.Config != nil && h.runtime.Config.OAuthHMACSecret != "" {
+		mac := hmac.New(sha256.New, []byte(h.runtime.Config.OAuthHMACSecret))
+		mac.Write([]byte(fingerprint))
+		response.HMACSecret = hex.EncodeToString(mac.Sum(nil))
 	}
 
 	w.Header().Set("Content-Type", "application/json")
