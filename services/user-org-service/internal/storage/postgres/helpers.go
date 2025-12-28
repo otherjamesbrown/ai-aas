@@ -1,7 +1,10 @@
 package postgres
 
 import (
+	"crypto/rand"
+	"encoding/base32"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -77,4 +80,20 @@ func timePtr(t pgtype.Timestamptz) *time.Time {
 	}
 	ts := t.Time
 	return &ts
+}
+
+// generateKeyID creates a short, human-readable key ID with the given prefix.
+// Format: prefix_xxxxxxxxxxxx (12 random chars, base32 encoded, lowercase)
+func generateKeyID(prefix string) string {
+	// 8 bytes = 64 bits of entropy, base32 encodes to ~13 chars
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	encoded := base32.StdEncoding.EncodeToString(b)
+	// Trim padding and convert to lowercase for readability
+	encoded = strings.TrimRight(strings.ToLower(encoded), "=")
+	// Truncate to 12 chars for consistent length
+	if len(encoded) > 12 {
+		encoded = encoded[:12]
+	}
+	return prefix + "_" + encoded
 }

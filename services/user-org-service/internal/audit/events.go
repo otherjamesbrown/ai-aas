@@ -330,14 +330,20 @@ const (
 	ActionRecoveryApprove  = "recovery.approve"
 	ActionRecoveryReject   = "recovery.reject"
 	ActionRecoveryComplete = "recovery.complete"
+
+	// Bootstrap key actions
+	ActionBootstrapKeyCreate = "bootstrap_key.create"
+	ActionBootstrapKeyRevoke = "bootstrap_key.revoke"
+	ActionBootstrapKeyRedeem = "bootstrap_key.redeem"
 )
 
 // Common target type constants.
 const (
-	TargetTypeOrg    = "org"
-	TargetTypeUser   = "user"
-	TargetTypeRole   = "role"
-	TargetTypeAPIKey = "api_key"
+	TargetTypeOrg          = "org"
+	TargetTypeUser         = "user"
+	TargetTypeRole         = "role"
+	TargetTypeAPIKey       = "api_key"
+	TargetTypeBootstrapKey = "bootstrap_key"
 )
 
 // Common actor type constants.
