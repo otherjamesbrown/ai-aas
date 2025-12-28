@@ -41,16 +41,23 @@ This document provides a comprehensive overview of the AI-AAS platform architect
 └────────────┘    │ • RBAC          │    │ • Audit logs        │
                   └─────────────────┘    └─────────────────────┘
           │
-          │ Forward inference request
+          │ Forward inference request (via Protocol Adapters)
           ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                        Model Inference Layer                                 │
+│                                                                             │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │   Model A    │  │   Model B    │  │   Model C    │  │   Model D    │     │
-│  │   (vLLM)     │  │   (vLLM)     │  │   (vLLM)     │  │   (vLLM)     │     │
+│  │  gpt-oss-20b │  │  llama-3-8b  │  │  mistral-7b  │  │ codellama-34b│     │
 │  │              │  │              │  │              │  │              │     │
-│  │  GPU Pod     │  │  GPU Pod     │  │  GPU Pod     │  │  GPU Pod     │     │
+│  │    vLLM      │  │ TensorRT-LLM │  │    vLLM      │  │   Triton     │     │
+│  │  ┌────────┐  │  │  ┌────────┐  │  │  ┌────────┐  │  │  ┌────────┐  │     │
+│  │  │ OpenAI │  │  │  │ Triton │  │  │  │ OpenAI │  │  │  │ gRPC   │  │     │
+│  │  │  API   │  │  │  │  V2    │  │  │  │  API   │  │  │  │  V2    │  │     │
+│  │  └────────┘  │  │  └────────┘  │  │  └────────┘  │  │  └────────┘  │     │
+│  │   RTX 6000   │  │   A100 80GB  │  │   RTX 4000   │  │   A100 40GB  │     │
 │  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘     │
+│                                                                             │
+│  Runtimes: vLLM (OpenAI-native) │ TensorRT-LLM (Triton) │ Triton (gRPC/HTTP)│
 └─────────────────────────────────────────────────────────────────────────────┘
           │
           │ Usage events (async)
@@ -398,7 +405,7 @@ spec:
 
 ### Multiple Models Example
 
-With multiple models deployed:
+With multiple models deployed using different runtimes:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -408,12 +415,16 @@ With multiple models deployed:
 │  ┌─────────────────────────────────────────────────────────────────┐   │
 │  │                                                                  │   │
 │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │   │
-│  │  │  gpt-oss-20b │  │  llama-7b    │  │  mistral-7b  │          │   │
+│  │  │  gpt-oss-20b │  │ llama-3-8b   │  │  mistral-7b  │          │   │
+│  │  │              │  │   -instruct  │  │              │          │   │
+│  │  │  Runtime:    │  │  Runtime:    │  │  Runtime:    │          │   │
+│  │  │    vLLM      │  │ TensorRT-LLM │  │    vLLM      │          │   │
 │  │  │              │  │              │  │              │          │   │
-│  │  │  GPU: RTX6000│  │  GPU: RTX6000│  │  GPU: A100   │          │   │
-│  │  │  Memory: 24GB│  │  Memory: 24GB│  │  Memory: 40GB│          │   │
+│  │  │  Protocol:   │  │  Protocol:   │  │  Protocol:   │          │   │
+│  │  │  OpenAI API  │  │  Triton V2   │  │  OpenAI API  │          │   │
 │  │  │              │  │              │  │              │          │   │
-│  │  │  vLLM Pod    │  │  vLLM Pod    │  │  vLLM Pod    │          │   │
+│  │  │  GPU: RTX6000│  │  GPU: A100   │  │  GPU: RTX4000│          │   │
+│  │  │  Mode: Raw   │  │  Mode: Raw   │  │  Mode: Raw   │          │   │
 │  │  └──────────────┘  └──────────────┘  └──────────────┘          │   │
 │  │         ▲                 ▲                 ▲                   │   │
 │  │         │                 │                 │                   │   │
@@ -422,6 +433,13 @@ With multiple models deployed:
 │  │                    ┌──────────────┐                             │   │
 │  │                    │ AI-Model     │                             │   │
 │  │                    │ Operator     │                             │   │
+│  │                    │              │                             │   │
+│  │                    │ • Creates    │                             │   │
+│  │                    │   ISVCs      │                             │   │
+│  │                    │ • Selects    │                             │   │
+│  │                    │   runtime    │                             │   │
+│  │                    │ • Configures │                             │   │
+│  │                    │   probes     │                             │   │
 │  │                    └──────────────┘                             │   │
 │  │                                                                  │   │
 │  └─────────────────────────────────────────────────────────────────┘   │
