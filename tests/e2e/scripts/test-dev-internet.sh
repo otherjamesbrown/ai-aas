@@ -15,9 +15,10 @@ NC='\033[0m' # No Color
 
 # Default public URLs (can be overridden via environment variables)
 # These assume ingress is configured and accessible
-USER_ORG_URL="${USER_ORG_SERVICE_URL:-https://user-org.api.ai-aas.dev}"
-API_ROUTER_URL="${API_ROUTER_SERVICE_URL:-https://router.api.ai-aas.dev}"
-ANALYTICS_URL="${ANALYTICS_SERVICE_URL:-https://analytics.api.ai-aas.dev}"
+# Domain pattern: *.dev.otherjamesbrown.com
+USER_ORG_URL="${USER_ORG_SERVICE_URL:-https://user-org.dev.otherjamesbrown.com}"
+API_ROUTER_URL="${API_ROUTER_SERVICE_URL:-https://api.dev.otherjamesbrown.com}"
+ANALYTICS_URL="${ANALYTICS_SERVICE_URL:-https://analytics.dev.otherjamesbrown.com}"
 
 # Check if URLs are accessible
 check_service_connectivity() {

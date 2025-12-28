@@ -1,0 +1,238 @@
+package cmd
+
+import (
+	"testing"
+
+	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// TestAPIKeyCommand verifies the apikey command structure
+func TestAPIKeyCommand(t *testing.T) {
+	require.NotNil(t, apikeyCmd, "apikeyCmd should not be nil")
+
+	assert.Equal(t, "apikey", apikeyCmd.Use, "command Use should be 'apikey'")
+	assert.NotEmpty(t, apikeyCmd.Short, "Short description should not be empty")
+	assert.NotEmpty(t, apikeyCmd.Long, "Long description should not be empty")
+
+	// Verify aliases
+	assert.Contains(t, apikeyCmd.Aliases, "key", "apikey should have 'key' alias")
+	assert.Contains(t, apikeyCmd.Aliases, "keys", "apikey should have 'keys' alias")
+
+	// Verify subcommands exist
+	expectedSubcommands := []string{"list", "create", "delete", "rotate"}
+	for _, subcmd := range expectedSubcommands {
+		found := false
+		for _, c := range apikeyCmd.Commands() {
+			if c.Name() == subcmd {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "subcommand %q should exist", subcmd)
+	}
+}
+
+// TestAPIKeyCommand_Examples verifies examples are provided
+func TestAPIKeyCommand_Examples(t *testing.T) {
+	assert.Contains(t, apikeyCmd.Long, "Examples:", "Long description should contain examples")
+	assert.Contains(t, apikeyCmd.Long, "apikey list", "Examples should show list command")
+	assert.Contains(t, apikeyCmd.Long, "apikey create", "Examples should show create command")
+	assert.Contains(t, apikeyCmd.Long, "apikey delete", "Examples should show delete command")
+}
+
+// TestAPIKeyListCommand verifies apikey list command structure
+func TestAPIKeyListCommand(t *testing.T) {
+	var listCmd *cobra.Command
+	for _, cmd := range apikeyCmd.Commands() {
+		if cmd.Name() == "list" {
+			listCmd = cmd
+			break
+		}
+	}
+	require.NotNil(t, listCmd, "list subcommand should exist")
+
+	assert.Equal(t, "list", listCmd.Use, "command Use should be 'list'")
+	assert.NotEmpty(t, listCmd.Short, "Short description should not be empty")
+	assert.NotEmpty(t, listCmd.Long, "Long description should not be empty")
+	assert.NotNil(t, listCmd.RunE, "RunE function should be set")
+}
+
+// TestAPIKeyListCommand_Flags verifies list command flags
+func TestAPIKeyListCommand_Flags(t *testing.T) {
+	var listCmd *cobra.Command
+	for _, cmd := range apikeyCmd.Commands() {
+		if cmd.Name() == "list" {
+			listCmd = cmd
+			break
+		}
+	}
+	require.NotNil(t, listCmd)
+
+	userFlag := listCmd.Flags().Lookup("user")
+	assert.NotNil(t, userFlag, "user flag should exist")
+	assert.Equal(t, "", userFlag.DefValue, "user flag should default to empty string")
+}
+
+// TestAPIKeyListCommand_Examples verifies list command examples
+func TestAPIKeyListCommand_Examples(t *testing.T) {
+	var listCmd *cobra.Command
+	for _, cmd := range apikeyCmd.Commands() {
+		if cmd.Name() == "list" {
+			listCmd = cmd
+			break
+		}
+	}
+	require.NotNil(t, listCmd)
+
+	assert.Contains(t, listCmd.Long, "Examples:", "Long description should contain examples")
+	assert.Contains(t, listCmd.Long, "apikey list", "Examples should show basic list usage")
+	assert.Contains(t, listCmd.Long, "--user", "Examples should show user filter flag")
+}
+
+// TestAPIKeyCreateCommand verifies apikey create command structure
+func TestAPIKeyCreateCommand(t *testing.T) {
+	var createCmd *cobra.Command
+	for _, cmd := range apikeyCmd.Commands() {
+		if cmd.Name() == "create" {
+			createCmd = cmd
+			break
+		}
+	}
+	require.NotNil(t, createCmd, "create subcommand should exist")
+
+	assert.Equal(t, "create", createCmd.Use, "command Use should be 'create'")
+	assert.NotEmpty(t, createCmd.Short, "Short description should not be empty")
+	assert.NotEmpty(t, createCmd.Long, "Long description should not be empty")
+	assert.NotNil(t, createCmd.RunE, "RunE function should be set")
+}
+
+// TestAPIKeyCreateCommand_Flags verifies create command flags
+func TestAPIKeyCreateCommand_Flags(t *testing.T) {
+	var createCmd *cobra.Command
+	for _, cmd := range apikeyCmd.Commands() {
+		if cmd.Name() == "create" {
+			createCmd = cmd
+			break
+		}
+	}
+	require.NotNil(t, createCmd)
+
+	flagTests := []struct {
+		name string
+	}{
+		{"user"},
+		{"name"},
+		{"expires"},
+	}
+
+	for _, tt := range flagTests {
+		t.Run(tt.name, func(t *testing.T) {
+			flag := createCmd.Flags().Lookup(tt.name)
+			assert.NotNil(t, flag, "flag %q should exist", tt.name)
+		})
+	}
+}
+
+// TestAPIKeyCreateCommand_Examples verifies create command examples
+func TestAPIKeyCreateCommand_Examples(t *testing.T) {
+	var createCmd *cobra.Command
+	for _, cmd := range apikeyCmd.Commands() {
+		if cmd.Name() == "create" {
+			createCmd = cmd
+			break
+		}
+	}
+	require.NotNil(t, createCmd)
+
+	assert.Contains(t, createCmd.Long, "Examples:", "Long description should contain examples")
+	assert.Contains(t, createCmd.Long, "--user", "Examples should show user flag")
+	assert.Contains(t, createCmd.Long, "--name", "Examples should show name flag")
+	assert.Contains(t, createCmd.Long, "--expires", "Examples should show expires flag")
+	assert.Contains(t, createCmd.Long, "only be displayed once", "Long description should warn about one-time display")
+}
+
+// TestAPIKeyDeleteCommand verifies apikey delete command structure
+func TestAPIKeyDeleteCommand(t *testing.T) {
+	var deleteCmd *cobra.Command
+	for _, cmd := range apikeyCmd.Commands() {
+		if cmd.Name() == "delete" {
+			deleteCmd = cmd
+			break
+		}
+	}
+	require.NotNil(t, deleteCmd, "delete subcommand should exist")
+
+	assert.Equal(t, "delete <key-id>", deleteCmd.Use, "command Use should be 'delete <key-id>'")
+	assert.NotEmpty(t, deleteCmd.Short, "Short description should not be empty")
+	assert.NotEmpty(t, deleteCmd.Long, "Long description should not be empty")
+	assert.NotNil(t, deleteCmd.RunE, "RunE function should be set")
+	assert.NotNil(t, deleteCmd.Args, "Args validator should be set")
+}
+
+// TestAPIKeyDeleteCommand_Flags verifies delete command flags
+func TestAPIKeyDeleteCommand_Flags(t *testing.T) {
+	var deleteCmd *cobra.Command
+	for _, cmd := range apikeyCmd.Commands() {
+		if cmd.Name() == "delete" {
+			deleteCmd = cmd
+			break
+		}
+	}
+	require.NotNil(t, deleteCmd)
+
+	forceFlag := deleteCmd.Flags().Lookup("force")
+	assert.NotNil(t, forceFlag, "force flag should exist")
+	assert.Equal(t, "false", forceFlag.DefValue, "force flag should default to false")
+}
+
+// TestAPIKeyDeleteCommand_Examples verifies delete command examples
+func TestAPIKeyDeleteCommand_Examples(t *testing.T) {
+	var deleteCmd *cobra.Command
+	for _, cmd := range apikeyCmd.Commands() {
+		if cmd.Name() == "delete" {
+			deleteCmd = cmd
+			break
+		}
+	}
+	require.NotNil(t, deleteCmd)
+
+	assert.Contains(t, deleteCmd.Long, "Examples:", "Long description should contain examples")
+	assert.Contains(t, deleteCmd.Long, "apikey delete", "Examples should show delete command")
+	assert.Contains(t, deleteCmd.Long, "cannot be undone", "Long description should warn about irreversibility")
+}
+
+// TestAPIKeyRotateCommand verifies apikey rotate command structure
+func TestAPIKeyRotateCommand(t *testing.T) {
+	var rotateCmd *cobra.Command
+	for _, cmd := range apikeyCmd.Commands() {
+		if cmd.Name() == "rotate" {
+			rotateCmd = cmd
+			break
+		}
+	}
+	require.NotNil(t, rotateCmd, "rotate subcommand should exist")
+
+	assert.Equal(t, "rotate <key-id>", rotateCmd.Use, "command Use should be 'rotate <key-id>'")
+	assert.NotEmpty(t, rotateCmd.Short, "Short description should not be empty")
+	assert.NotEmpty(t, rotateCmd.Long, "Long description should not be empty")
+	assert.NotNil(t, rotateCmd.RunE, "RunE function should be set")
+	assert.NotNil(t, rotateCmd.Args, "Args validator should be set")
+}
+
+// TestAPIKeyRotateCommand_Examples verifies rotate command examples
+func TestAPIKeyRotateCommand_Examples(t *testing.T) {
+	var rotateCmd *cobra.Command
+	for _, cmd := range apikeyCmd.Commands() {
+		if cmd.Name() == "rotate" {
+			rotateCmd = cmd
+			break
+		}
+	}
+	require.NotNil(t, rotateCmd)
+
+	assert.Contains(t, rotateCmd.Long, "Examples:", "Long description should contain examples")
+	assert.Contains(t, rotateCmd.Long, "apikey rotate", "Examples should show rotate command")
+	assert.Contains(t, rotateCmd.Long, "security", "Long description should mention security")
+}
