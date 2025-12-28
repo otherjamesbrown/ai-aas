@@ -420,6 +420,10 @@ type runnerTargetRequest struct {
 	Model       string `json:"model"`
 	Environment string `json:"environment,omitempty"`
 	APIKey      string `json:"api_key,omitempty"`
+	Profile     string `json:"profile,omitempty"`
+	Rate        *int   `json:"rate,omitempty"`
+	MaxSeconds  *int   `json:"max_seconds,omitempty"`
+	RequestType string `json:"request_type,omitempty"` // chat_completions or text_completions
 }
 
 // runnerTriggerRequest represents a trigger request to the guidellm-runner API
@@ -440,6 +444,35 @@ func (s *BenchmarkService) startTargetOnRunner(ctx context.Context, target *doma
 		URL:         endpointURL,
 		Model:       target.ModelName,
 		Environment: target.Environment,
+	}
+
+	// Look up scenario to get benchmark configuration
+	if target.ScenarioName != "" {
+		scenario, err := s.repo.GetScenarioByName(ctx, target.ScenarioName)
+		if err != nil {
+			s.logger.Warn("failed to get scenario for target",
+				zap.String("target", target.Name),
+				zap.String("scenario", target.ScenarioName),
+				zap.Error(err))
+		} else if scenario != nil && scenario.Config != nil {
+			// Extract defaults from scenario config
+			if defaults, ok := scenario.Config["defaults"].(map[string]interface{}); ok {
+				if profile, ok := defaults["profile"].(string); ok {
+					reqBody.Profile = profile
+				}
+				if rate, ok := defaults["rate"].(float64); ok {
+					rateInt := int(rate)
+					reqBody.Rate = &rateInt
+				}
+				if maxSeconds, ok := defaults["max_seconds"].(float64); ok {
+					maxSecondsInt := int(maxSeconds)
+					reqBody.MaxSeconds = &maxSecondsInt
+				}
+				if requestType, ok := defaults["request_type"].(string); ok {
+					reqBody.RequestType = requestType
+				}
+			}
+		}
 	}
 
 	body, err := json.Marshal(reqBody)
