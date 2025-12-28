@@ -413,13 +413,13 @@ func (s *BenchmarkService) TriggerRun(ctx context.Context, targetID uuid.UUID, t
 // ============================================================================
 
 // runnerTargetRequest represents a request to the guidellm-runner API
+// Field names match guidellm-runner's AddTargetRequest
 type runnerTargetRequest struct {
-	Name            string                 `json:"name"`
-	ModelName       string                 `json:"model_name"`
-	ScenarioName    string                 `json:"scenario_name"`
-	EndpointURL     string                 `json:"endpoint_url,omitempty"`
-	IntervalSeconds int                    `json:"interval_seconds,omitempty"`
-	ConfigOverrides map[string]interface{} `json:"config_overrides,omitempty"`
+	Name        string `json:"name"`
+	URL         string `json:"url"`
+	Model       string `json:"model"`
+	Environment string `json:"environment,omitempty"`
+	APIKey      string `json:"api_key,omitempty"`
 }
 
 // runnerTriggerRequest represents a trigger request to the guidellm-runner API
@@ -429,20 +429,17 @@ type runnerTriggerRequest struct {
 }
 
 func (s *BenchmarkService) startTargetOnRunner(ctx context.Context, target *domain.BenchmarkTarget) error {
-	reqBody := runnerTargetRequest{
-		Name:         target.Name,
-		ModelName:    target.ModelName,
-		ScenarioName: target.ScenarioName,
+	// Determine endpoint URL - use target's override or default to API router
+	endpointURL := "https://api.dev.otherjamesbrown.com"
+	if target.EndpointURL != nil && *target.EndpointURL != "" {
+		endpointURL = *target.EndpointURL
 	}
 
-	if target.EndpointURL != nil {
-		reqBody.EndpointURL = *target.EndpointURL
-	}
-	if target.IntervalSeconds != nil {
-		reqBody.IntervalSeconds = *target.IntervalSeconds
-	}
-	if target.ConfigOverrides != nil {
-		reqBody.ConfigOverrides = target.ConfigOverrides
+	reqBody := runnerTargetRequest{
+		Name:        target.Name,
+		URL:         endpointURL,
+		Model:       target.ModelName,
+		Environment: target.Environment,
 	}
 
 	body, err := json.Marshal(reqBody)
