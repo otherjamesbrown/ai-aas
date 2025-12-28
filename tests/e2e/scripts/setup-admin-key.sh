@@ -35,7 +35,7 @@ fi
 
 # Try to get key from secrets
 if [ -f "$SECRETS_FILE" ]; then
-    MASTER_KEY=$(grep "^MASTER_ADMIN_API_KEY=" "$SECRETS_FILE" | cut -d'=' -f2 | tr -d '"' | tr -d "'" || echo "")
+    MASTER_KEY=$(grep "^MASTER_ADMIN_API_KEY=" "$SECRETS_FILE" | cut -d'=' -f2- | tr -d "'\""  || echo "")
 
     if [ -n "$MASTER_KEY" ]; then
         cat > "$OUTPUT_FILE" << EOF
