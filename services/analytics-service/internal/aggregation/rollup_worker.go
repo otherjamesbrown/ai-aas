@@ -11,9 +11,40 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.uber.org/zap"
 
 	"github.com/otherjamesbrown/ai-aas/services/analytics-service/internal/storage/postgres"
+)
+
+var (
+	// rollupSuccessesTotal tracks successful rollup executions
+	rollupSuccessesTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "analytics_rollup_successes_total",
+			Help: "Total number of successful rollup executions",
+		},
+		[]string{"rollup_type"}, // hourly or daily
+	)
+
+	// rollupFailuresTotal tracks failed rollup executions
+	rollupFailuresTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "analytics_rollup_failures_total",
+			Help: "Total number of failed rollup executions",
+		},
+		[]string{"rollup_type"}, // hourly or daily
+	)
+
+	// rollupLastSuccessTimestamp tracks the timestamp of the last successful rollup
+	rollupLastSuccessTimestamp = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "analytics_rollup_last_success_timestamp",
+			Help: "Unix timestamp of the last successful rollup execution",
+		},
+		[]string{"rollup_type"}, // hourly or daily
+	)
 )
 
 // Worker orchestrates rollup jobs.
@@ -168,8 +199,13 @@ func (w *Worker) runHourlyRollup(ctx context.Context, start, end time.Time) erro
 
 	_, err := w.store.Pool().Exec(ctx, query, start, end)
 	if err != nil {
+		rollupFailuresTotal.WithLabelValues("hourly").Inc()
 		return fmt.Errorf("execute hourly rollup: %w", err)
 	}
+
+	// Record success
+	rollupSuccessesTotal.WithLabelValues("hourly").Inc()
+	rollupLastSuccessTimestamp.WithLabelValues("hourly").SetToCurrentTime()
 
 	w.logger.Debug("hourly rollup completed",
 		zap.Time("start", start),
@@ -222,8 +258,13 @@ func (w *Worker) runDailyRollup(ctx context.Context, start, end time.Time) error
 
 	_, err := w.store.Pool().Exec(ctx, query, start, end)
 	if err != nil {
+		rollupFailuresTotal.WithLabelValues("daily").Inc()
 		return fmt.Errorf("execute daily rollup: %w", err)
 	}
+
+	// Record success
+	rollupSuccessesTotal.WithLabelValues("daily").Inc()
+	rollupLastSuccessTimestamp.WithLabelValues("daily").SetToCurrentTime()
 
 	w.logger.Debug("daily rollup completed",
 		zap.Time("start", start),
