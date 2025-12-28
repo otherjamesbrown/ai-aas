@@ -15,8 +15,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// Default guidellm-runner service URL
-const defaultGuideLLMRunnerURL = "http://guidellm-runner.development.svc.cluster.local:8080"
+// Default guidellm-runner service URL (matches Helm release name pattern)
+const defaultGuideLLMRunnerURL = "http://guidellm-runner-development.development.svc.cluster.local:8080"
 
 // BenchmarkService handles benchmark business logic
 type BenchmarkService struct {
