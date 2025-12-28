@@ -1,0 +1,82 @@
+# Analytics Service Rollup Worker Alerts
+# =======================================
+# PrometheusRule for analytics rollup job health monitoring
+#
+# Context:
+#   The rollup worker aggregates usage_events into hourly/daily rollups.
+#   Silent failures went unnoticed for 33 days, causing analytics queries to fail.
+#   This rule alerts when rollup jobs fail or stop running.
+#
+# Metrics (exposed by analytics-service):
+#   - analytics_rollup_failures_total{rollup_type="hourly|daily"}
+#   - analytics_rollup_successes_total{rollup_type="hourly|daily"}
+#   - analytics_rollup_last_success_timestamp{rollup_type="hourly|daily"}
+#
+# Related bead: aas-4c2r
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: analytics-rollup-alerts
+  namespace: monitoring
+  labels:
+    app: prometheus
+    release: prometheus
+    prometheus: kube-prometheus
+spec:
+  groups:
+    - name: analytics-rollup-health
+      interval: 1m
+      rules:
+        # Alert if rollup failures exceed threshold
+        - alert: AnalyticsRollupFailureRate
+          expr: |
+            (
+              increase(analytics_rollup_failures_total[1h]) > 3
+            )
+          for: 5m
+          labels:
+            severity: critical
+            category: application
+            alert_type: data-pipeline
+            service: analytics-service
+          annotations:
+            summary: "Analytics rollup failures detected"
+            description: "Rollup type {{ $labels.rollup_type }} has failed {{ $value }} times in the last hour (threshold: 3). Usage analytics queries may return stale data."
+            runbook: "Check analytics-service logs for rollup worker errors. Verify database connectivity and TimescaleDB continuous aggregates."
+
+        # Alert if no successful rollup in expected time window
+        - alert: AnalyticsRollupStale
+          expr: |
+            (
+              time() - analytics_rollup_last_success_timestamp > 7200
+            )
+          for: 10m
+          labels:
+            severity: critical
+            category: application
+            alert_type: data-pipeline
+            service: analytics-service
+          annotations:
+            summary: "Analytics rollup has not run successfully"
+            description: "Rollup type {{ $labels.rollup_type }} has not succeeded in {{ $value | humanizeDuration }}. Expected interval: 1 hour for hourly, 24 hours for daily. Analytics data is stale."
+            runbook: "Check if analytics-service rollup worker is running. Check pod status and logs. Verify database connection and query performance."
+
+        # Alert if rollup worker pod is down
+        - alert: AnalyticsServiceDown
+          expr: |
+            (
+              absent(up{job="analytics-service"}) == 1
+              or
+              up{job="analytics-service"} == 0
+            )
+          for: 5m
+          labels:
+            severity: critical
+            category: application
+            alert_type: component-health
+            service: analytics-service
+          annotations:
+            summary: "Analytics service is down"
+            description: "Analytics service is not responding. Rollup jobs will not run and usage analytics will become stale."
+            runbook: "Check analytics-service pod status in Kubernetes. Check for recent deployments or configuration changes."

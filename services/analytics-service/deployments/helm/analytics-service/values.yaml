@@ -53,8 +53,12 @@ fullnameOverride: ""
 
 # Pod annotations
 # logging.enabled: "true" enables Promtail log collection
+# prometheus.io annotations enable Prometheus scraping
 podAnnotations:
   logging.enabled: "true"
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8084"
+  prometheus.io/path: "/metrics"
 
 serviceAccount:
   create: true
