@@ -30,6 +30,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/bootstrap"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httputil"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/storage/postgres"
 )
 
@@ -75,11 +76,11 @@ func (h *Handler) CreateServiceAccount(w http.ResponseWriter, r *http.Request) {
 		org, err := h.runtime.Postgres.GetOrgBySlug(ctx, orgIDParam)
 		if err != nil {
 			if err == postgres.ErrNotFound {
-				http.Error(w, "organization not found", http.StatusNotFound)
+				httputil.WriteNotFound(w, r, "organization", "")
 				return
 			}
 			h.logger.Error("failed to resolve organization", zap.Error(err), zap.String("orgId", orgIDParam))
-			http.Error(w, "failed to resolve organization", http.StatusInternalServerError)
+			httputil.WriteInternalError(w, r)
 			return
 		}
 		orgID = org.ID
@@ -87,12 +88,12 @@ func (h *Handler) CreateServiceAccount(w http.ResponseWriter, r *http.Request) {
 
 	var req CreateServiceAccountRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid request payload")
 		return
 	}
 
 	if req.Name == "" {
-		http.Error(w, "name is required", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "name is required")
 		return
 	}
 
@@ -108,7 +109,7 @@ func (h *Handler) CreateServiceAccount(w http.ResponseWriter, r *http.Request) {
 	serviceAccount, err := h.runtime.Postgres.CreateServiceAccount(ctx, params)
 	if err != nil {
 		h.logger.Error("failed to create service account", zap.Error(err), zap.String("orgId", orgID.String()), zap.String("name", req.Name))
-		http.Error(w, "failed to create service account", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -140,7 +141,7 @@ func (h *Handler) GetServiceAccount(w http.ResponseWriter, r *http.Request) {
 	if orgID, err = uuid.Parse(orgIDParam); err != nil {
 		org, err := h.runtime.Postgres.GetOrgBySlug(ctx, orgIDParam)
 		if err != nil {
-			http.Error(w, "organization not found", http.StatusNotFound)
+			httputil.WriteNotFound(w, r, "organization", "")
 			return
 		}
 		orgID = org.ID
@@ -149,7 +150,7 @@ func (h *Handler) GetServiceAccount(w http.ResponseWriter, r *http.Request) {
 	// Parse service account ID
 	serviceAccountID, err := uuid.Parse(serviceAccountIDParam)
 	if err != nil {
-		http.Error(w, "invalid service account ID", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid service account ID")
 		return
 	}
 
@@ -157,17 +158,17 @@ func (h *Handler) GetServiceAccount(w http.ResponseWriter, r *http.Request) {
 	serviceAccount, err := h.runtime.Postgres.GetServiceAccountByID(ctx, serviceAccountID)
 	if err != nil {
 		if err == postgres.ErrNotFound {
-			http.Error(w, "service account not found", http.StatusNotFound)
+			httputil.WriteNotFound(w, r, "service account", "")
 			return
 		}
 		h.logger.Error("failed to get service account", zap.Error(err), zap.String("serviceAccountId", serviceAccountID.String()))
-		http.Error(w, "failed to retrieve service account", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
 	// Verify service account belongs to org
 	if serviceAccount.OrgID != orgID {
-		http.Error(w, "service account not found", http.StatusNotFound)
+		httputil.WriteNotFound(w, r, "service account", "")
 		return
 	}
 
@@ -199,11 +200,11 @@ func (h *Handler) ListServiceAccounts(w http.ResponseWriter, r *http.Request) {
 // UpdateServiceAccount handles PATCH /v1/orgs/{orgId}/service-accounts/{serviceAccountId}.
 func (h *Handler) UpdateServiceAccount(w http.ResponseWriter, r *http.Request) {
 	// TODO: Implement update
-	http.Error(w, "not implemented", http.StatusNotImplemented)
+	httputil.WriteBadRequest(w, r, "not implemented")
 }
 
 // DeleteServiceAccount handles DELETE /v1/orgs/{orgId}/service-accounts/{serviceAccountId}.
 func (h *Handler) DeleteServiceAccount(w http.ResponseWriter, r *http.Request) {
 	// TODO: Implement soft delete
-	http.Error(w, "not implemented", http.StatusNotImplemented)
+	httputil.WriteBadRequest(w, r, "not implemented")
 }

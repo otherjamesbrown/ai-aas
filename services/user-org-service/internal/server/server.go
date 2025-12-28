@@ -14,6 +14,7 @@ import (
 
 	sharedMiddleware "github.com/ai-aas/shared-go/middleware"
 	"github.com/ai-aas/shared-go/observability"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httputil"
 )
 
 // responseWriter wraps http.ResponseWriter to capture status code
@@ -223,7 +224,7 @@ func New(opts Options) *http.Server {
 
 		if err := opts.Readiness(ctx); err != nil {
 			opts.Logger.Warn("readiness check failed", zap.Error(err))
-			http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+			httputil.WriteServiceUnavailable(w, r, "Service Unavailable")
 			return
 		}
 
@@ -250,7 +251,7 @@ func New(opts Options) *http.Server {
 		
 		if err := chi.Walk(router, walkFunc); err != nil {
 			opts.Logger.Error("failed to walk routes", zap.Error(err))
-			http.Error(w, "failed to list routes", http.StatusInternalServerError)
+			httputil.WriteInternalError(w, r)
 			return
 		}
 		

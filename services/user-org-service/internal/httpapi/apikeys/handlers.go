@@ -57,6 +57,7 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/audit"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/bootstrap"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/middleware"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httputil"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/metrics"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/storage/postgres"
 )
@@ -132,11 +133,11 @@ func (h *Handler) IssueAPIKey(w http.ResponseWriter, r *http.Request) {
 		org, err := h.runtime.Postgres.GetOrgBySlug(ctx, orgIDParam)
 		if err != nil {
 			if err == postgres.ErrNotFound {
-				http.Error(w, "organization not found", http.StatusNotFound)
+				httputil.WriteNotFound(w, r, "organization", "")
 				return
 			}
 			h.logger.Error("failed to resolve organization", zap.Error(err), zap.String("orgId", orgIDParam))
-			http.Error(w, "failed to resolve organization", http.StatusInternalServerError)
+			httputil.WriteInternalError(w, r)
 			return
 		}
 		orgID = org.ID
@@ -145,7 +146,7 @@ func (h *Handler) IssueAPIKey(w http.ResponseWriter, r *http.Request) {
 	// Parse service account ID
 	serviceAccountID, err := uuid.Parse(serviceAccountIDParam)
 	if err != nil {
-		http.Error(w, "invalid service account ID", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid service account ID")
 		return
 	}
 
@@ -153,30 +154,30 @@ func (h *Handler) IssueAPIKey(w http.ResponseWriter, r *http.Request) {
 	serviceAccount, err := h.runtime.Postgres.GetServiceAccountByID(ctx, serviceAccountID)
 	if err != nil {
 		if err == postgres.ErrNotFound {
-			http.Error(w, "service account not found", http.StatusNotFound)
+			httputil.WriteNotFound(w, r, "service account", "")
 			return
 		}
 		h.logger.Error("failed to get service account", zap.Error(err), zap.String("serviceAccountId", serviceAccountID.String()))
-		http.Error(w, "failed to retrieve service account", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
 	// Verify service account belongs to org
 	if serviceAccount.OrgID != orgID {
-		http.Error(w, "service account not found", http.StatusNotFound)
+		httputil.WriteNotFound(w, r, "service account", "")
 		return
 	}
 
 	// Verify service account is active
 	if serviceAccount.Status != "active" {
-		http.Error(w, "service account is not active", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "service account is not active")
 		return
 	}
 
 	var req IssueAPIKeyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.Warn("invalid request payload", zap.Error(err))
-		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid request payload")
 		return
 	}
 
@@ -184,7 +185,7 @@ func (h *Handler) IssueAPIKey(w http.ResponseWriter, r *http.Request) {
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
 		h.logger.Error("failed to generate token", zap.Error(err))
-		http.Error(w, "failed to generate API key", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -200,7 +201,7 @@ func (h *Handler) IssueAPIKey(w http.ResponseWriter, r *http.Request) {
 	encryptedSecret, err := h.encryptSecret(ctx, token)
 	if err != nil {
 		h.logger.Error("failed to encrypt token", zap.Error(err))
-		http.Error(w, "failed to encrypt API key", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -227,7 +228,7 @@ func (h *Handler) IssueAPIKey(w http.ResponseWriter, r *http.Request) {
 	apiKey, err := h.runtime.Postgres.CreateAPIKey(ctx, params)
 	if err != nil {
 		h.logger.Error("failed to create API key", zap.Error(err), zap.String("orgId", orgID.String()), zap.String("serviceAccountId", serviceAccountID.String()))
-		http.Error(w, "failed to create API key", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -287,11 +288,11 @@ func (h *Handler) RevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 		org, err := h.runtime.Postgres.GetOrgBySlug(ctx, orgIDParam)
 		if err != nil {
 			if err == postgres.ErrNotFound {
-				http.Error(w, "organization not found", http.StatusNotFound)
+				httputil.WriteNotFound(w, r, "organization", "")
 				return
 			}
 			h.logger.Error("failed to resolve organization", zap.Error(err), zap.String("orgId", orgIDParam))
-			http.Error(w, "failed to resolve organization", http.StatusInternalServerError)
+			httputil.WriteInternalError(w, r)
 			return
 		}
 		orgID = org.ID
@@ -300,7 +301,7 @@ func (h *Handler) RevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 	// Parse API key ID
 	apiKeyID, err := uuid.Parse(apiKeyIDParam)
 	if err != nil {
-		http.Error(w, "invalid API key ID", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid API key ID")
 		return
 	}
 
@@ -308,23 +309,23 @@ func (h *Handler) RevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 	apiKey, err := h.runtime.Postgres.GetAPIKeyByID(ctx, apiKeyID)
 	if err != nil {
 		if err == postgres.ErrNotFound {
-			http.Error(w, "API key not found", http.StatusNotFound)
+			httputil.WriteNotFound(w, r, "API key", "")
 			return
 		}
 		h.logger.Error("failed to get API key", zap.Error(err), zap.String("apiKeyId", apiKeyID.String()))
-		http.Error(w, "failed to retrieve API key", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
 	// Verify key belongs to org
 	if apiKey.OrgID != orgID {
-		http.Error(w, "API key not found", http.StatusNotFound)
+		httputil.WriteNotFound(w, r, "API key", "")
 		return
 	}
 
 	// Check if already revoked
 	if apiKey.Status == "revoked" || apiKey.RevokedAt != nil {
-		http.Error(w, "API key already revoked", http.StatusConflict)
+		httputil.WriteConflict(w, r, "API key already revoked")
 		return
 	}
 
@@ -338,11 +339,11 @@ func (h *Handler) RevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 	}, orgID)
 	if err != nil {
 		if err == postgres.ErrOptimisticLock {
-			http.Error(w, "API key was modified concurrently", http.StatusConflict)
+			httputil.WriteConflict(w, r, "API key was modified concurrently")
 			return
 		}
 		h.logger.Error("failed to revoke API key", zap.Error(err), zap.String("apiKeyId", apiKeyID.String()))
-		http.Error(w, "failed to revoke API key", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -408,11 +409,11 @@ func (h *Handler) IssueUserAPIKey(w http.ResponseWriter, r *http.Request) {
 		org, err := h.runtime.Postgres.GetOrgBySlug(ctx, orgIDParam)
 		if err != nil {
 			if err == postgres.ErrNotFound {
-				http.Error(w, "organization not found", http.StatusNotFound)
+				httputil.WriteNotFound(w, r, "organization", "")
 				return
 			}
 			h.logger.Error("failed to resolve organization", zap.Error(err), zap.String("orgId", orgIDParam))
-			http.Error(w, "failed to resolve organization", http.StatusInternalServerError)
+			httputil.WriteInternalError(w, r)
 			return
 		}
 		orgID = org.ID
@@ -421,7 +422,7 @@ func (h *Handler) IssueUserAPIKey(w http.ResponseWriter, r *http.Request) {
 	// Parse user ID
 	userID, err := uuid.Parse(userIDParam)
 	if err != nil {
-		http.Error(w, "invalid user ID", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid user ID")
 		return
 	}
 
@@ -429,30 +430,30 @@ func (h *Handler) IssueUserAPIKey(w http.ResponseWriter, r *http.Request) {
 	user, err := h.runtime.Postgres.GetUserByID(ctx, orgID, userID)
 	if err != nil {
 		if err == postgres.ErrNotFound {
-			http.Error(w, "user not found", http.StatusNotFound)
+			httputil.WriteNotFound(w, r, "user", "")
 			return
 		}
 		h.logger.Error("failed to get user", zap.Error(err), zap.String("userId", userID.String()))
-		http.Error(w, "failed to retrieve user", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
 	// Verify user belongs to org
 	if user.OrgID != orgID {
-		http.Error(w, "user not found", http.StatusNotFound)
+		httputil.WriteNotFound(w, r, "user", "")
 		return
 	}
 
 	// Verify user is active
 	if user.Status != "active" {
-		http.Error(w, "user is not active", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "user is not active")
 		return
 	}
 
 	var req IssueAPIKeyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.Warn("invalid request payload", zap.Error(err))
-		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid request payload")
 		return
 	}
 
@@ -460,7 +461,7 @@ func (h *Handler) IssueUserAPIKey(w http.ResponseWriter, r *http.Request) {
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
 		h.logger.Error("failed to generate token", zap.Error(err))
-		http.Error(w, "failed to generate API key", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -476,7 +477,7 @@ func (h *Handler) IssueUserAPIKey(w http.ResponseWriter, r *http.Request) {
 	encryptedSecret, err := h.encryptSecret(ctx, token)
 	if err != nil {
 		h.logger.Error("failed to encrypt token", zap.Error(err))
-		http.Error(w, "failed to encrypt API key", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -503,7 +504,7 @@ func (h *Handler) IssueUserAPIKey(w http.ResponseWriter, r *http.Request) {
 	apiKey, err := h.runtime.Postgres.CreateAPIKey(ctx, params)
 	if err != nil {
 		h.logger.Error("failed to create API key", zap.Error(err), zap.String("orgId", orgID.String()), zap.String("userId", userID.String()))
-		http.Error(w, "failed to create API key", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -561,11 +562,11 @@ func (h *Handler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
 		org, err := h.runtime.Postgres.GetOrgBySlug(ctx, orgIDParam)
 		if err != nil {
 			if err == postgres.ErrNotFound {
-				http.Error(w, "organization not found", http.StatusNotFound)
+				httputil.WriteNotFound(w, r, "organization", "")
 				return
 			}
 			h.logger.Error("failed to resolve organization", zap.Error(err), zap.String("orgId", orgIDParam))
-			http.Error(w, "failed to resolve organization", http.StatusInternalServerError)
+			httputil.WriteInternalError(w, r)
 			return
 		}
 		orgID = org.ID
@@ -589,7 +590,7 @@ func (h *Handler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
 	apiKeys, err := h.runtime.Postgres.ListAPIKeysForOrg(ctx, orgID, limit, offset)
 	if err != nil {
 		h.logger.Error("failed to list API keys", zap.Error(err), zap.String("orgId", orgID.String()))
-		http.Error(w, "failed to list API keys", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -638,19 +639,19 @@ func (h *Handler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
 // GetAPIKey handles GET /v1/orgs/{orgId}/api-keys/{apiKeyId} - Get API key details.
 func (h *Handler) GetAPIKey(w http.ResponseWriter, r *http.Request) {
 	// TODO: Implement getting API key
-	http.Error(w, "not implemented", http.StatusNotImplemented)
+	httputil.WriteBadRequest(w, r, "not implemented")
 }
 
 // UpdateAPIKey handles PATCH /v1/orgs/{orgId}/api-keys/{apiKeyId} - Update API key metadata.
 func (h *Handler) UpdateAPIKey(w http.ResponseWriter, r *http.Request) {
 	// TODO: Implement updating API key
-	http.Error(w, "not implemented", http.StatusNotImplemented)
+	httputil.WriteBadRequest(w, r, "not implemented")
 }
 
 // RotateAPIKey handles POST /v1/orgs/{orgId}/api-keys/{apiKeyId}/rotate - Rotate API key.
 func (h *Handler) RotateAPIKey(w http.ResponseWriter, r *http.Request) {
 	// TODO: Implement rotating API key
-	http.Error(w, "not implemented", http.StatusNotImplemented)
+	httputil.WriteBadRequest(w, r, "not implemented")
 }
 
 // Convenience handlers for /organizations/me/* routes that resolve org/user from auth context
@@ -664,11 +665,11 @@ func (h *Handler) IssueUserAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(ctx)
 	
 	if orgID == uuid.Nil {
-		http.Error(w, "organization not found in context", http.StatusUnauthorized)
+		httputil.WriteUnauthorized(w, r, "organization not found in context")
 		return
 	}
 	if userID == uuid.Nil {
-		http.Error(w, "user not found in context", http.StatusUnauthorized)
+		httputil.WriteUnauthorized(w, r, "user not found in context")
 		return
 	}
 	
@@ -676,24 +677,24 @@ func (h *Handler) IssueUserAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 	user, err := h.runtime.Postgres.GetUserByID(ctx, orgID, userID)
 	if err != nil {
 		if err == postgres.ErrNotFound {
-			http.Error(w, "user not found", http.StatusNotFound)
+			httputil.WriteNotFound(w, r, "user", "")
 			return
 		}
 		h.logger.Error("failed to get user", zap.Error(err), zap.String("userId", userID.String()))
-		http.Error(w, "failed to retrieve user", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
 	// Verify user is active
 	if user.Status != "active" {
-		http.Error(w, "user is not active", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "user is not active")
 		return
 	}
 
 	var req IssueAPIKeyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.Warn("invalid request payload", zap.Error(err))
-		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid request payload")
 		return
 	}
 
@@ -701,7 +702,7 @@ func (h *Handler) IssueUserAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
 		h.logger.Error("failed to generate token", zap.Error(err))
-		http.Error(w, "failed to generate API key", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -717,7 +718,7 @@ func (h *Handler) IssueUserAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 	encryptedSecret, err := h.encryptSecret(ctx, token)
 	if err != nil {
 		h.logger.Error("failed to encrypt token", zap.Error(err))
-		http.Error(w, "failed to encrypt API key", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -744,7 +745,7 @@ func (h *Handler) IssueUserAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 	apiKey, err := h.runtime.Postgres.CreateAPIKey(ctx, params)
 	if err != nil {
 		h.logger.Error("failed to create API key", zap.Error(err), zap.String("orgId", orgID.String()), zap.String("userId", userID.String()))
-		http.Error(w, "failed to create API key", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -797,11 +798,11 @@ func (h *Handler) ListAPIKeysForMe(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(ctx)
 	
 	if orgID == uuid.Nil {
-		http.Error(w, "organization not found in context", http.StatusUnauthorized)
+		httputil.WriteUnauthorized(w, r, "organization not found in context")
 		return
 	}
 	if userID == uuid.Nil {
-		http.Error(w, "user not found in context", http.StatusUnauthorized)
+		httputil.WriteUnauthorized(w, r, "user not found in context")
 		return
 	}
 	
@@ -809,7 +810,7 @@ func (h *Handler) ListAPIKeysForMe(w http.ResponseWriter, r *http.Request) {
 	apiKeys, err := h.runtime.Postgres.ListAPIKeysForPrincipal(ctx, orgID, postgres.PrincipalTypeUser, userID)
 	if err != nil {
 		h.logger.Error("failed to list API keys", zap.Error(err), zap.String("orgId", orgID.String()), zap.String("userId", userID.String()))
-		http.Error(w, "failed to list API keys", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 	
@@ -859,14 +860,14 @@ func (h *Handler) GetAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 	// Get org ID from authenticated context
 	orgID := middleware.GetOrgID(ctx)
 	if orgID == uuid.Nil {
-		http.Error(w, "organization not found in context", http.StatusUnauthorized)
+		httputil.WriteUnauthorized(w, r, "organization not found in context")
 		return
 	}
 	
 	// Parse API key ID
 	apiKeyID, err := uuid.Parse(apiKeyIDParam)
 	if err != nil {
-		http.Error(w, "invalid API key ID", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid API key ID")
 		return
 	}
 	
@@ -874,17 +875,17 @@ func (h *Handler) GetAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 	apiKey, err := h.runtime.Postgres.GetAPIKeyByID(ctx, apiKeyID)
 	if err != nil {
 		if err == postgres.ErrNotFound {
-			http.Error(w, "API key not found", http.StatusNotFound)
+			httputil.WriteNotFound(w, r, "API key", "")
 			return
 		}
 		h.logger.Error("failed to get API key", zap.Error(err), zap.String("apiKeyId", apiKeyID.String()))
-		http.Error(w, "failed to retrieve API key", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 	
 	// Verify key belongs to org
 	if apiKey.OrgID != orgID {
-		http.Error(w, "API key not found", http.StatusNotFound)
+		httputil.WriteNotFound(w, r, "API key", "")
 		return
 	}
 	
@@ -926,13 +927,13 @@ func (h *Handler) GetAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 // UpdateAPIKeyForMe handles PATCH /organizations/me/api-keys/{apiKeyId} - Update API key for current user.
 func (h *Handler) UpdateAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 	// TODO: Implement updating API key
-	http.Error(w, "not implemented", http.StatusNotImplemented)
+	httputil.WriteBadRequest(w, r, "not implemented")
 }
 
 // RotateAPIKeyForMe handles POST /organizations/me/api-keys/{apiKeyId}/rotate - Rotate API key for current user.
 func (h *Handler) RotateAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 	// TODO: Implement rotating API key
-	http.Error(w, "not implemented", http.StatusNotImplemented)
+	httputil.WriteBadRequest(w, r, "not implemented")
 }
 
 // RevokeAPIKeyForMe handles POST/DELETE /organizations/me/api-keys/{apiKeyId}/revoke - Revoke API key for current user.
@@ -943,7 +944,7 @@ func (h *Handler) RevokeAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 	// Get org ID from authenticated context
 	orgID := middleware.GetOrgID(ctx)
 	if orgID == uuid.Nil {
-		http.Error(w, "organization not found in context", http.StatusUnauthorized)
+		httputil.WriteUnauthorized(w, r, "organization not found in context")
 		return
 	}
 	

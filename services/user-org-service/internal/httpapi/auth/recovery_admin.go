@@ -15,6 +15,7 @@ import (
 
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/audit"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/middleware"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httputil"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/security"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/storage/postgres"
 )
@@ -40,25 +41,25 @@ func (h *Handler) ApproveRecovery(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	if !h.runtime.Config.RecoveryRequiresAdminApproval {
-		http.Error(w, "admin approval not required", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "admin approval not required")
 		return
 	}
 
 	// Get admin actor ID from context (set by auth middleware)
 	actorID := middleware.GetUserID(r.Context())
 	if actorID == uuid.Nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		httputil.WriteUnauthorized(w, r, "unauthorized")
 		return
 	}
 
 	var req ApproveRecoveryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid request payload")
 		return
 	}
 
 	if req.Token == "" || req.Email == "" {
-		http.Error(w, "token and email are required", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "token and email are required")
 		return
 	}
 
@@ -69,27 +70,27 @@ func (h *Handler) ApproveRecovery(w http.ResponseWriter, r *http.Request) {
 		if orgID, err = uuid.Parse(req.OrgID); err != nil {
 			org, err := h.runtime.Postgres.GetOrgBySlug(ctx, req.OrgID)
 			if err != nil {
-				http.Error(w, "organization not found", http.StatusNotFound)
+				httputil.WriteNotFound(w, r, "organization", "")
 				return
 			}
 			orgID = org.ID
 		}
 	} else {
-		http.Error(w, "org_id is required", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "org_id is required")
 		return
 	}
 
 	// Find user by email
 	user, err := h.runtime.Postgres.GetUserByEmail(ctx, orgID, req.Email)
 	if err != nil {
-		http.Error(w, "user not found", http.StatusNotFound)
+		httputil.WriteNotFound(w, r, "user", "")
 		return
 	}
 
 	// Find and approve the recovery token
 	updatedTokens, found := h.approveRecoveryToken(user.RecoveryTokens, req.Token, actorID)
 	if !found {
-		http.Error(w, "recovery token not found or already processed", http.StatusNotFound)
+		httputil.WriteNotFound(w, r, "recovery token", "")
 		return
 	}
 
@@ -97,10 +98,10 @@ func (h *Handler) ApproveRecovery(w http.ResponseWriter, r *http.Request) {
 	_, err = h.runtime.Postgres.UpdateUserRecoveryTokens(ctx, orgID, user.ID, user.Version, updatedTokens)
 	if err != nil {
 		if err == postgres.ErrOptimisticLock {
-			http.Error(w, "user was modified concurrently", http.StatusConflict)
+			httputil.WriteConflict(w, r, "user was modified concurrently")
 			return
 		}
-		http.Error(w, "failed to update recovery token", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -125,25 +126,25 @@ func (h *Handler) RejectRecovery(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	if !h.runtime.Config.RecoveryRequiresAdminApproval {
-		http.Error(w, "admin approval not required", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "admin approval not required")
 		return
 	}
 
 	// Get admin actor ID from context (set by auth middleware)
 	actorID := middleware.GetUserID(r.Context())
 	if actorID == uuid.Nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		httputil.WriteUnauthorized(w, r, "unauthorized")
 		return
 	}
 
 	var req RejectRecoveryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid request payload")
 		return
 	}
 
 	if req.Token == "" || req.Email == "" {
-		http.Error(w, "token and email are required", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "token and email are required")
 		return
 	}
 
@@ -154,27 +155,27 @@ func (h *Handler) RejectRecovery(w http.ResponseWriter, r *http.Request) {
 		if orgID, err = uuid.Parse(req.OrgID); err != nil {
 			org, err := h.runtime.Postgres.GetOrgBySlug(ctx, req.OrgID)
 			if err != nil {
-				http.Error(w, "organization not found", http.StatusNotFound)
+				httputil.WriteNotFound(w, r, "organization", "")
 				return
 			}
 			orgID = org.ID
 		}
 	} else {
-		http.Error(w, "org_id is required", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "org_id is required")
 		return
 	}
 
 	// Find user by email
 	user, err := h.runtime.Postgres.GetUserByEmail(ctx, orgID, req.Email)
 	if err != nil {
-		http.Error(w, "user not found", http.StatusNotFound)
+		httputil.WriteNotFound(w, r, "user", "")
 		return
 	}
 
 	// Find and reject the recovery token (mark as used to invalidate it)
 	updatedTokens, found := h.rejectRecoveryToken(user.RecoveryTokens, req.Token)
 	if !found {
-		http.Error(w, "recovery token not found or already processed", http.StatusNotFound)
+		httputil.WriteNotFound(w, r, "recovery token", "")
 		return
 	}
 
@@ -182,10 +183,10 @@ func (h *Handler) RejectRecovery(w http.ResponseWriter, r *http.Request) {
 	_, err = h.runtime.Postgres.UpdateUserRecoveryTokens(ctx, orgID, user.ID, user.Version, updatedTokens)
 	if err != nil {
 		if err == postgres.ErrOptimisticLock {
-			http.Error(w, "user was modified concurrently", http.StatusConflict)
+			httputil.WriteConflict(w, r, "user was modified concurrently")
 			return
 		}
-		http.Error(w, "failed to update recovery token", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 

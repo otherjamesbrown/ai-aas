@@ -50,6 +50,7 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httputil"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/audit"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/bootstrap"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/middleware"
@@ -132,27 +133,27 @@ func (h *Handler) CreateOrg(w http.ResponseWriter, r *http.Request) {
 	var req CreateOrgRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.Warn("invalid request payload", zap.Error(err))
-		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid request payload")
 		return
 	}
 
 	// Validate required fields
 	if req.Name == "" || req.Slug == "" {
-		http.Error(w, "name and slug are required", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "name and slug are required")
 		return
 	}
 
 	// Normalize slug (lowercase, no spaces)
 	slug := strings.ToLower(strings.TrimSpace(req.Slug))
 	if slug == "" {
-		http.Error(w, "slug cannot be empty", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "slug cannot be empty")
 		return
 	}
 
 	// Check if org with slug already exists
 	_, err := h.runtime.Postgres.GetOrgBySlug(ctx, slug)
 	if err == nil {
-		http.Error(w, "organization with this slug already exists", http.StatusConflict)
+		httputil.WriteConflict(w, r, "organization with this slug already exists")
 		return
 	}
 	// ErrNotFound is expected, continue
@@ -187,7 +188,7 @@ func (h *Handler) CreateOrg(w http.ResponseWriter, r *http.Request) {
 	org, err := h.runtime.Postgres.CreateOrg(ctx, params)
 	if err != nil {
 		h.logger.Error("failed to create organization", zap.Error(err), zap.String("slug", slug))
-		http.Error(w, "failed to create organization", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -227,11 +228,11 @@ func (h *Handler) GetOrg(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		if err == postgres.ErrNotFound {
-			http.Error(w, "organization not found", http.StatusNotFound)
+			httputil.WriteNotFound(w, r, "organization", "")
 			return
 		}
 		h.logger.Error("failed to get organization", zap.Error(err), zap.String("orgId", orgIDParam))
-		http.Error(w, "failed to retrieve organization", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -259,18 +260,18 @@ func (h *Handler) UpdateOrg(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		if err == postgres.ErrNotFound {
-			http.Error(w, "organization not found", http.StatusNotFound)
+			httputil.WriteNotFound(w, r, "organization", "")
 			return
 		}
 		h.logger.Error("failed to get organization for update", zap.Error(err), zap.String("orgId", orgIDParam))
-		http.Error(w, "failed to retrieve organization", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
 	var req UpdateOrgRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.Warn("invalid request payload", zap.Error(err))
-		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid request payload")
 		return
 	}
 
@@ -289,7 +290,7 @@ func (h *Handler) UpdateOrg(w http.ResponseWriter, r *http.Request) {
 		// Validate status
 		validStatuses := map[string]bool{"active": true, "suspended": true}
 		if !validStatuses[*req.Status] {
-			http.Error(w, "invalid status", http.StatusBadRequest)
+			httputil.WriteBadRequest(w, r, "invalid status")
 			return
 		}
 		params.Status = *req.Status
@@ -325,11 +326,11 @@ func (h *Handler) UpdateOrg(w http.ResponseWriter, r *http.Request) {
 	org, err := h.runtime.Postgres.UpdateOrg(ctx, params)
 	if err != nil {
 		if err == postgres.ErrOptimisticLock {
-			http.Error(w, "organization was modified concurrently", http.StatusConflict)
+			httputil.WriteConflict(w, r, "organization was modified concurrently")
 			return
 		}
 		h.logger.Error("failed to update organization", zap.Error(err), zap.String("orgId", existingOrg.ID.String()))
-		http.Error(w, "failed to update organization", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -377,7 +378,7 @@ func (h *Handler) ListOrgs(w http.ResponseWriter, r *http.Request) {
 	orgs, err := h.runtime.Postgres.ListOrgs(ctx, limit, offset)
 	if err != nil {
 		h.logger.Error("failed to list organizations", zap.Error(err))
-		http.Error(w, "failed to list organizations", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -407,11 +408,11 @@ func (h *Handler) DeleteOrg(w http.ResponseWriter, r *http.Request) {
 		org, err := h.runtime.Postgres.GetOrgBySlug(ctx, orgIDParam)
 		if err != nil {
 			if err == postgres.ErrNotFound {
-				http.Error(w, "organization not found", http.StatusNotFound)
+				httputil.WriteNotFound(w, r, "organization", "")
 				return
 			}
 			h.logger.Error("failed to resolve organization", zap.Error(err), zap.String("orgId", orgIDParam))
-			http.Error(w, "failed to resolve organization", http.StatusInternalServerError)
+			httputil.WriteInternalError(w, r)
 			return
 		}
 		orgID = org.ID
@@ -420,11 +421,11 @@ func (h *Handler) DeleteOrg(w http.ResponseWriter, r *http.Request) {
 	// Perform soft delete
 	if err := h.runtime.Postgres.DeleteOrg(ctx, orgID); err != nil {
 		if err == postgres.ErrNotFound {
-			http.Error(w, "organization not found", http.StatusNotFound)
+			httputil.WriteNotFound(w, r, "organization", "")
 			return
 		}
 		h.logger.Error("failed to delete organization", zap.Error(err), zap.String("orgId", orgID.String()))
-		http.Error(w, "failed to delete organization", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -469,18 +470,18 @@ func (h *Handler) GetOrgForMe(w http.ResponseWriter, r *http.Request) {
 	// Get org ID from authenticated context
 	orgID := middleware.GetOrgID(ctx)
 	if orgID == uuid.Nil {
-		http.Error(w, "organization not found in context", http.StatusUnauthorized)
+		httputil.WriteUnauthorized(w, r, "organization not found in context")
 		return
 	}
 
 	org, err := h.runtime.Postgres.GetOrg(ctx, orgID)
 	if err != nil {
 		if err == postgres.ErrNotFound {
-			http.Error(w, "organization not found", http.StatusNotFound)
+			httputil.WriteNotFound(w, r, "organization", "")
 			return
 		}
 		h.logger.Error("failed to get organization", zap.Error(err), zap.String("orgId", orgID.String()))
-		http.Error(w, "failed to retrieve organization", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -499,7 +500,7 @@ func (h *Handler) UpdateOrgForMe(w http.ResponseWriter, r *http.Request) {
 	// Get org ID from authenticated context
 	orgID := middleware.GetOrgID(ctx)
 	if orgID == uuid.Nil {
-		http.Error(w, "organization not found in context", http.StatusUnauthorized)
+		httputil.WriteUnauthorized(w, r, "organization not found in context")
 		return
 	}
 
@@ -507,18 +508,18 @@ func (h *Handler) UpdateOrgForMe(w http.ResponseWriter, r *http.Request) {
 	existingOrg, err := h.runtime.Postgres.GetOrg(ctx, orgID)
 	if err != nil {
 		if err == postgres.ErrNotFound {
-			http.Error(w, "organization not found", http.StatusNotFound)
+			httputil.WriteNotFound(w, r, "organization", "")
 			return
 		}
 		h.logger.Error("failed to get organization for update", zap.Error(err), zap.String("orgId", orgID.String()))
-		http.Error(w, "failed to retrieve organization", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
 	var req UpdateOrgRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.Warn("invalid request payload", zap.Error(err))
-		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid request payload")
 		return
 	}
 
@@ -537,7 +538,7 @@ func (h *Handler) UpdateOrgForMe(w http.ResponseWriter, r *http.Request) {
 		// Validate status
 		validStatuses := map[string]bool{"active": true, "suspended": true}
 		if !validStatuses[*req.Status] {
-			http.Error(w, "invalid status", http.StatusBadRequest)
+			httputil.WriteBadRequest(w, r, "invalid status")
 			return
 		}
 		params.Status = *req.Status
@@ -573,11 +574,11 @@ func (h *Handler) UpdateOrgForMe(w http.ResponseWriter, r *http.Request) {
 	org, err := h.runtime.Postgres.UpdateOrg(ctx, params)
 	if err != nil {
 		if err == postgres.ErrOptimisticLock {
-			http.Error(w, "organization was modified concurrently", http.StatusConflict)
+			httputil.WriteConflict(w, r, "organization was modified concurrently")
 			return
 		}
 		h.logger.Error("failed to update organization", zap.Error(err), zap.String("orgId", existingOrg.ID.String()))
-		http.Error(w, "failed to update organization", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
