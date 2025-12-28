@@ -346,6 +346,33 @@ func HasAnyScope(ctx context.Context, scopes ...string) bool {
 	return false
 }
 
+// RequireAdminScope returns middleware that enforces admin scope requirements.
+// Checks if the authenticated user has any of the specified scopes.
+// The "admin" and "*" scopes grant access to all admin endpoints.
+// Returns 403 Forbidden if the user lacks all required scopes.
+func RequireAdminScope(scopes ...string) func(http.Handler) http.Handler {
+	// Always accept "admin" and "*" as universal admin scopes
+	acceptedScopes := append([]string{"admin", "*"}, scopes...)
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+
+			// Check if user has any of the required scopes
+			if !HasAnyScope(ctx, acceptedScopes...) {
+				// Build a user-friendly scope requirement message
+				scopeList := strings.Join(scopes, ", ")
+				message := fmt.Sprintf("insufficient scopes: requires one of [%s, admin, *]", scopeList)
+				httputil.WriteForbidden(w, r, message)
+				return
+			}
+
+			// User has required scope, proceed to handler
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // tryAPIKeyAuth attempts to authenticate using the API key from the api_keys table.
 // Returns (true, context) if authentication succeeds, (false, nil) otherwise.
 // Supports both user and service_account principal types.

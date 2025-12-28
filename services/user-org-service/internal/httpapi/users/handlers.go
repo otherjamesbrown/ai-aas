@@ -16,9 +16,11 @@
 //
 // Key Responsibilities:
 //   - InviteUser: POST /v1/orgs/{orgId}/invites - Create user invite
+//   - CreateUser: POST /v1/orgs/{orgId}/users - Create user directly
 //   - ListUsers: GET /v1/orgs/{orgId}/users - List users in organization
 //   - GetUser: GET /v1/orgs/{orgId}/users/{userId} - Retrieve user details
-//   - UpdateUserStatus: PATCH /v1/orgs/{orgId}/users/{userId} - Update user status
+//   - UpdateUser: PATCH /v1/orgs/{orgId}/users/{userId} - Update user profile/status
+//   - DeleteUser: DELETE /v1/orgs/{orgId}/users/{userId} - Soft delete user
 //   - UpdateUserRoles: PUT /v1/orgs/{orgId}/users/{userId}/roles - Update role assignments
 //
 // Requirements Reference:
@@ -79,12 +81,14 @@ func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger *zap.Logger
 	}
 	// Register routes directly under /v1/orgs/{orgId} without using Route()
 	// This prevents the route group from intercepting GET /v1/orgs/{orgId} requests
-	router.Post("/v1/orgs/{orgId}/invites", handler.InviteUser)
-	router.Post("/v1/orgs/{orgId}/users", handler.CreateUser) // Direct user creation
-	router.Get("/v1/orgs/{orgId}/users", handler.ListUsers)
-	router.Get("/v1/orgs/{orgId}/users/{userId}", handler.GetUser)
-	router.Patch("/v1/orgs/{orgId}/users/{userId}", handler.UpdateUser)
-	router.Put("/v1/orgs/{orgId}/users/{userId}/roles", handler.UpdateUserRoles)
+	// Admin operations require user:manage or org:admin scope
+	router.With(middleware.RequireAdminScope("user:manage", "org:admin")).Post("/v1/orgs/{orgId}/invites", handler.InviteUser)
+	router.With(middleware.RequireAdminScope("user:manage", "org:admin")).Post("/v1/orgs/{orgId}/users", handler.CreateUser) // Direct user creation
+	router.With(middleware.RequireAdminScope("org:read", "org:admin")).Get("/v1/orgs/{orgId}/users", handler.ListUsers)
+	router.With(middleware.RequireAdminScope("org:read", "org:admin")).Get("/v1/orgs/{orgId}/users/{userId}", handler.GetUser)
+	router.With(middleware.RequireAdminScope("user:manage", "org:admin")).Patch("/v1/orgs/{orgId}/users/{userId}", handler.UpdateUser)
+	router.With(middleware.RequireAdminScope("user:manage", "org:admin")).Delete("/v1/orgs/{orgId}/users/{userId}", handler.DeleteUser)
+	router.With(middleware.RequireAdminScope("user:manage", "org:admin")).Put("/v1/orgs/{orgId}/users/{userId}/roles", handler.UpdateUserRoles)
 }
 
 // Handler serves user management endpoints.
@@ -673,6 +677,95 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	// No fields to update
 	httputil.WriteBadRequest(w, r, "no fields provided for update")
+}
+
+// DeleteUser handles DELETE /v1/orgs/{orgId}/users/{userId} - Soft delete a user.
+// This sets deleted_at timestamp and revokes all active API keys for the user.
+func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgIDParam := chi.URLParam(r, "orgId")
+	userIDParam := chi.URLParam(r, "userId")
+
+	orgID, err := h.resolveOrgID(ctx, orgIDParam)
+	if err != nil {
+		httputil.WriteNotFound(w, r, "organization", "")
+		return
+	}
+
+	userID, err := uuid.Parse(userIDParam)
+	if err != nil {
+		httputil.WriteBadRequest(w, r, "invalid user ID")
+		return
+	}
+
+	// Verify user exists before deletion
+	existingUser, err := h.runtime.Postgres.GetUserByID(ctx, orgID, userID)
+	if err != nil {
+		if err == postgres.ErrNotFound {
+			httputil.WriteNotFound(w, r, "user", "")
+			return
+		}
+		h.logger.Error("failed to get user for deletion", zap.Error(err), zap.String("userId", userIDParam))
+		httputil.WriteInternalError(w, r)
+		return
+	}
+
+	// Authorization: only org admins or system admins can delete users
+	if err := h.requireOrgAccess(ctx, orgID); err != nil {
+		h.logger.Warn("unauthorized access to delete user", zap.Error(err), zap.String("userId", userIDParam))
+		httputil.WriteForbidden(w, r, "forbidden")
+		return
+	}
+
+	// Soft delete the user
+	if err := h.runtime.Postgres.DeleteUser(ctx, orgID, userID); err != nil {
+		if err == postgres.ErrNotFound {
+			httputil.WriteNotFound(w, r, "user", "")
+			return
+		}
+		h.logger.Error("failed to delete user", zap.Error(err), zap.String("userId", userIDParam))
+		httputil.WriteInternalError(w, r)
+		return
+	}
+
+	// Revoke all active API keys for this user
+	apiKeys, err := h.runtime.Postgres.ListAPIKeysForPrincipal(ctx, orgID, postgres.PrincipalTypeUser, userID)
+	if err != nil {
+		h.logger.Warn("failed to list API keys for deletion", zap.Error(err), zap.String("userId", userIDParam))
+		// Don't fail the deletion - user is already deleted
+	} else {
+		now := time.Now()
+		for _, key := range apiKeys {
+			if key.RevokedAt == nil {
+				_, err := h.runtime.Postgres.RevokeAPIKey(ctx, postgres.RevokeAPIKeyParams{
+					ID:        key.ID,
+					Version:   key.Version,
+					Status:    "revoked",
+					RevokedAt: now,
+				}, orgID)
+				if err != nil {
+					h.logger.Warn("failed to revoke API key during user deletion",
+						zap.Error(err),
+						zap.String("userId", userIDParam),
+						zap.String("apiKeyId", key.ID.String()))
+					// Continue revoking other keys even if one fails
+				}
+			}
+		}
+	}
+
+	// Emit audit event
+	actorID := getActorID(r)
+	event := audit.BuildEvent(orgID, actorID, audit.ActorTypeSystem, audit.ActionUserDelete, audit.TargetTypeUser, &userID)
+	event = audit.BuildEventFromRequest(event, r)
+	event.Metadata = map[string]any{
+		"email":  existingUser.Email,
+		"status": existingUser.Status,
+	}
+	_ = h.runtime.Audit.Emit(ctx, event)
+
+	// Return 204 No Content on successful deletion
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // UpdateUserRoles handles PUT /v1/orgs/{orgId}/users/{userId}/roles - Update role assignments.

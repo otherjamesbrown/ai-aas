@@ -68,19 +68,20 @@ func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger *zap.Logger
 		logger:  logger,
 	}
 	router.Route("/v1/orgs", func(r chi.Router) {
-		r.Post("/", handler.CreateOrg)
-		r.Get("/", handler.ListOrgs)
+		// Org creation typically requires platform admin scope
+		r.With(middleware.RequireAdminScope("org:admin")).Post("/", handler.CreateOrg)
+		r.With(middleware.RequireAdminScope("org:read", "org:admin")).Get("/", handler.ListOrgs)
 		// Register {orgId} routes - these must be registered before users routes
 		// to ensure GET /v1/orgs/{orgId} matches correctly
-		r.Get("/{orgId}", handler.GetOrg)
-		r.Patch("/{orgId}", handler.UpdateOrg)
-		r.Delete("/{orgId}", handler.DeleteOrg)
+		r.With(middleware.RequireAdminScope("org:read", "org:admin")).Get("/{orgId}", handler.GetOrg)
+		r.With(middleware.RequireAdminScope("org:write", "org:admin")).Patch("/{orgId}", handler.UpdateOrg)
+		r.With(middleware.RequireAdminScope("org:admin")).Delete("/{orgId}", handler.DeleteOrg)
 	})
 
 	// Frontend-friendly convenience routes (no /v1 prefix)
 	// These resolve org from authenticated context
-	router.Get("/organizations/me", handler.GetOrgForMe)
-	router.Patch("/organizations/me", handler.UpdateOrgForMe)
+	router.With(middleware.RequireAdminScope("org:read", "org:admin")).Get("/organizations/me", handler.GetOrgForMe)
+	router.With(middleware.RequireAdminScope("org:write", "org:admin")).Patch("/organizations/me", handler.UpdateOrgForMe)
 }
 
 // Handler serves organization management endpoints.

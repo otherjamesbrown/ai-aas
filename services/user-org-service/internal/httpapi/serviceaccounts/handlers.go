@@ -30,6 +30,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/bootstrap"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/middleware"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httputil"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/storage/postgres"
 )
@@ -43,11 +44,12 @@ func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger *zap.Logger
 		runtime: rt,
 		logger:  logger,
 	}
-	router.Post("/v1/orgs/{orgId}/service-accounts", handler.CreateServiceAccount)
-	router.Get("/v1/orgs/{orgId}/service-accounts/{serviceAccountId}", handler.GetServiceAccount)
-	router.Get("/v1/orgs/{orgId}/service-accounts", handler.ListServiceAccounts)
-	router.Patch("/v1/orgs/{orgId}/service-accounts/{serviceAccountId}", handler.UpdateServiceAccount)
-	router.Delete("/v1/orgs/{orgId}/service-accounts/{serviceAccountId}", handler.DeleteServiceAccount)
+	// Service account management requires apikey:manage or org:admin scope
+	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Post("/v1/orgs/{orgId}/service-accounts", handler.CreateServiceAccount)
+	router.With(middleware.RequireAdminScope("org:read", "org:admin")).Get("/v1/orgs/{orgId}/service-accounts/{serviceAccountId}", handler.GetServiceAccount)
+	router.With(middleware.RequireAdminScope("org:read", "org:admin")).Get("/v1/orgs/{orgId}/service-accounts", handler.ListServiceAccounts)
+	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Patch("/v1/orgs/{orgId}/service-accounts/{serviceAccountId}", handler.UpdateServiceAccount)
+	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Delete("/v1/orgs/{orgId}/service-accounts/{serviceAccountId}", handler.DeleteServiceAccount)
 }
 
 // Handler serves service account management endpoints.

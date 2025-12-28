@@ -691,6 +691,25 @@ func (s *Store) UpdateUserRecoveryTokens(ctx context.Context, orgID, userID uuid
 	return out, err
 }
 
+// DeleteUser soft-deletes a user by setting deleted_at timestamp.
+// This does NOT cascade to API keys - caller should revoke them separately.
+func (s *Store) DeleteUser(ctx context.Context, orgID, userID uuid.UUID) error {
+	return s.withTenantTx(ctx, orgID, func(ctx context.Context, tx pgx.Tx) error {
+		result, err := tx.Exec(ctx, `
+			UPDATE users
+			SET deleted_at = NOW(), updated_at = NOW(), version = version + 1
+			WHERE org_id = $1 AND user_id = $2 AND deleted_at IS NULL
+		`, orgID, userID)
+		if err != nil {
+			return err
+		}
+		if result.RowsAffected() == 0 {
+			return ErrNotFound
+		}
+		return nil
+	})
+}
+
 // CreateSession inserts a new session row.
 func (s *Store) CreateSession(ctx context.Context, params CreateSessionParams) (Session, error) {
 	sessionID := params.ID
@@ -1040,8 +1059,7 @@ func (s *Store) RevokeAPIKey(ctx context.Context, params RevokeAPIKeyParams, org
 				revoked_at = $2,
 				version = version + 1
 			WHERE api_key_id = $3 AND version = $4 AND revoked_at IS NULL
-			RETURNING *
-		`,
+			RETURNING `+apiKeyColumns,
 			params.Status,
 			params.RevokedAt,
 			params.ID,
