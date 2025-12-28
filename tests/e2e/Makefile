@@ -13,10 +13,12 @@
 # Default environment
 TEST_ENV ?= local
 
+# Note: Use GOWORK=off because tests/e2e requires Go 1.25 (k8s.io deps) but workspace uses 1.24
+
 # Test execution
 test-local:
 	@echo "Running e2e tests against local environment..."
-	TEST_ENV=local go test -v ./suites/... -timeout 30m
+	GOWORK=off TEST_ENV=local go test -v ./suites/... -timeout 30m
 
 test-dev:
 	@echo "Running e2e tests against development environment..."
@@ -29,7 +31,7 @@ test-dev:
 		echo "Set ADMIN_API_KEY environment variable before running tests."; \
 		echo ""; \
 	fi
-	TEST_ENV=development go test -v ./suites/... -timeout 30m
+	GOWORK=off TEST_ENV=development go test -v ./suites/... -timeout 30m
 
 test-dev-ip:
 	@echo "Running e2e tests against development environment using IP address..."
@@ -46,7 +48,7 @@ test-dev-ip:
 		echo "  export ADMIN_API_KEY=your-admin-api-key"; \
 		echo ""; \
 	fi
-	@TEST_ENV=development \
+	@GOWORK=off TEST_ENV=development \
 	 USER_ORG_SERVICE_URL=https://172.232.58.222 \
 	 API_ROUTER_SERVICE_URL=https://172.232.58.222 \
 	 ANALYTICS_SERVICE_URL=https://172.232.58.222 \
@@ -67,11 +69,11 @@ test-dev-internet:
 
 test-ci:
 	@echo "Running e2e tests in CI environment..."
-	TEST_ENV=ci go test -v ./suites/... -timeout 30m -json > test-results.json
+	GOWORK=off TEST_ENV=ci go test -v ./suites/... -timeout 30m -json > test-results.json
 
 test-parallel:
 	@echo "Running e2e tests in parallel mode..."
-	TEST_ENV=$(TEST_ENV) PARALLEL_WORKERS=4 go test -v ./suites/... -timeout 30m -parallel 4
+	GOWORK=off TEST_ENV=$(TEST_ENV) PARALLEL_WORKERS=4 go test -v ./suites/... -timeout 30m -parallel 4
 
 # Cleanup
 clean:

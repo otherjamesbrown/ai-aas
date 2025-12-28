@@ -331,13 +331,26 @@ func TestSmokeInferenceWithUsage(t *testing.T) {
 		time.Sleep(2 * time.Second)
 
 		analyticsClient := harness.NewClient(ctx.Config.APIURLs.AnalyticsService, ctx.Config.Timeouts.RequestTimeout)
-		analyticsClient.SetHeader("Authorization", "Bearer "+apiKey.Key)
+		// Use admin key for analytics - the newly created API key may not be propagated yet
+		adminKey := ctx.Config.Credentials.AdminAPIKey
+		if adminKey != "" {
+			analyticsClient.SetHeader("Authorization", "Bearer "+adminKey)
+			analyticsClient.SetHeader("X-API-Key", adminKey)
+		} else {
+			analyticsClient.SetHeader("Authorization", "Bearer "+apiKey.Key)
+		}
 
 		if isIPAddress(ctx.Config.APIURLs.AnalyticsService) {
 			analyticsClient.SetHeader("Host", "analytics.dev.otherjamesbrown.com")
 		}
 
-		usageResp, err := analyticsClient.GET("/analytics/v1/usage/summary?org_id=" + org.ID)
+		// Use correct endpoint format: /analytics/v1/orgs/{orgId}/usage with start/end params
+		now := time.Now().UTC()
+		start := now.Add(-1 * time.Hour).Format(time.RFC3339)
+		end := now.Format(time.RFC3339)
+		usagePath := "/analytics/v1/orgs/" + org.ID + "/usage?start=" + start + "&end=" + end
+
+		usageResp, err := analyticsClient.GET(usagePath)
 		if err != nil {
 			t.Logf("Failed to get usage from analytics: %v", err)
 		} else if usageResp.StatusCode == 200 {
@@ -348,7 +361,7 @@ func TestSmokeInferenceWithUsage(t *testing.T) {
 				t.Logf("  - Total tokens: %d", usage.TotalTokens)
 			}
 		} else {
-			t.Logf("Analytics returned status %d (may not be implemented)", usageResp.StatusCode)
+			t.Logf("Analytics returned status %d: %s", usageResp.StatusCode, string(usageResp.Body))
 		}
 	}
 
