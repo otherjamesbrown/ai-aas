@@ -242,6 +242,10 @@ run_environment_tests() {
     local user_id=""
     local new_api_key=""
 
+    # Create temp directory for verbose output data
+    local verbose_dir="/tmp/smoke-test-verbose-${SMOKE_TEST_ID:-$$}"
+    mkdir -p "$verbose_dir"
+
     # Health checks
     local user_org_health api_router_health admin_api_health
     user_org_health=$(check_health "user-org" "$user_org_endpoint/healthz")
@@ -558,6 +562,17 @@ run_environment_tests() {
             total_invocations=$(extract_json_field "$usage_output" "totals.invocations")
             input_tokens=$(extract_json_field "$usage_output" "totals.inputTokens")
             output_tokens=$(extract_json_field "$usage_output" "totals.outputTokens")
+
+            # Store usage data for display
+            local usage_json
+            usage_json=$(jq -n \
+                --arg status "PASS" \
+                --argjson invocations "${total_invocations:-0}" \
+                --argjson input_tokens "${input_tokens:-0}" \
+                --argjson output_tokens "${output_tokens:-0}" \
+                '{status: $status, invocations: $invocations, input_tokens: $input_tokens, output_tokens: $output_tokens}')
+            echo "$usage_json" > "$verbose_dir/${env_name}_usage.json"
+
             if [[ -n "$total_invocations" && "$total_invocations" -gt 0 ]]; then
                 local total_tokens=$((input_tokens + output_tokens))
                 results+=("usage_query:PASS:${total_invocations}_inv_${input_tokens}in_${output_tokens}out")
@@ -569,9 +584,12 @@ run_environment_tests() {
             local error_msg
             error_msg=$(sanitize_result "$(echo "$usage_output" | grep -o '"error":[^,}]*' | head -1 || echo "unknown_error")")
             results+=("usage_query:FAIL:$error_msg")
+            # Store failure data
+            echo '{"status": "FAIL", "invocations": 0, "input_tokens": 0, "output_tokens": 0}' > "$verbose_dir/${env_name}_usage.json"
         fi
     else
         results+=("usage_query:SKIP:missing_deps")
+        echo '{"status": "SKIP", "invocations": 0, "input_tokens": 0, "output_tokens": 0}' > "$verbose_dir/${env_name}_usage.json"
     fi
 
     # Cleanup: Delete Organization
@@ -592,8 +610,6 @@ run_environment_tests() {
     echo "${results[*]}"
 
     # Write data to temp files (always write, cleanup happens in print_inference_details)
-    local verbose_dir="/tmp/smoke-test-verbose-${SMOKE_TEST_ID:-$$}"
-    mkdir -p "$verbose_dir"
     [[ -n "$models_json" ]] && echo "$models_json" > "$verbose_dir/${env_name}_models.json"
     [[ "$inference_json_array" != "[]" ]] && echo "$inference_json_array" > "$verbose_dir/${env_name}_inference.json"
 
@@ -882,6 +898,55 @@ print_inference_details() {
     echo "╚═════════════╩════════════════════════════════════════╩════════╩════════╩════════════╝"
 }
 
+# Print usage query details (token counts from analytics pipeline)
+print_usage_details() {
+    local verbose_dir="/tmp/smoke-test-verbose-${SMOKE_TEST_ID:-$$}"
+
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════════════════════════════╗"
+    echo "║                               USAGE TRACKING DETAILS                                 ║"
+    echo "╠═════════════╦════════════════╦═════════════════╦══════════════════╦═════════════════╣"
+    echo "║ Environment ║ Status         ║ Invocations     ║ Input Tokens     ║ Output Tokens   ║"
+    echo "╠═════════════╬════════════════╬═════════════════╬══════════════════╬═════════════════╣"
+
+    for env in dev staging; do
+        [[ "$env" == "dev" && "$RUN_DEV" != "true" ]] && continue
+        [[ "$env" == "staging" && "$RUN_STAGING" != "true" ]] && continue
+
+        local env_label="Development"
+        [[ "$env" == "staging" ]] && env_label="Staging"
+
+        local usage_file="$verbose_dir/${env}_usage.json"
+        if [[ -f "$usage_file" && -s "$usage_file" ]]; then
+            local status invocations input_tokens output_tokens
+            status=$(jq -r '.status // "UNKNOWN"' "$usage_file" 2>/dev/null)
+            invocations=$(jq -r '.invocations // 0' "$usage_file" 2>/dev/null)
+            input_tokens=$(jq -r '.input_tokens // 0' "$usage_file" 2>/dev/null)
+            output_tokens=$(jq -r '.output_tokens // 0' "$usage_file" 2>/dev/null)
+
+            local status_icon="✅"
+            [[ "$status" == "FAIL" ]] && status_icon="❌"
+            [[ "$status" == "SKIP" ]] && status_icon="⏭️"
+
+            local total_tokens=$((input_tokens + output_tokens))
+            local status_display="$status_icon $status"
+
+            # Add note if pipeline delay
+            if [[ "$status" == "PASS" && "$invocations" -eq 0 ]]; then
+                status_display="$status_icon pending"
+            fi
+
+            printf "║ %-11s ║ %-14s ║ %15s ║ %16s ║ %15s ║\n" \
+                "$env_label" "$status_display" "$invocations" "$input_tokens" "$output_tokens"
+        else
+            printf "║ %-11s ║ %-14s ║ %15s ║ %16s ║ %15s ║\n" \
+                "$env_label" "⏭️ SKIP" "-" "-" "-"
+        fi
+    done
+
+    echo "╚═════════════╩════════════════╩═════════════════╩══════════════════╩═════════════════╝"
+}
+
 # Print verbose details (models table and Q&A for each inference)
 print_verbose_details() {
     local verbose_dir="/tmp/smoke-test-verbose-${SMOKE_TEST_ID:-$$}"
@@ -1091,6 +1156,9 @@ main() {
 
         # Always print inference details for all models
         print_inference_details
+
+        # Always print usage tracking details (token counts)
+        print_usage_details
 
         # Print additional verbose details if requested (models table + Q&A)
         if [[ "$VERBOSE" == "true" ]]; then
