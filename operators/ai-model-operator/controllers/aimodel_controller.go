@@ -379,14 +379,19 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			if exists {
 				// Artifacts already exist in S3, skip download phase
 				log.Info("S3 artifacts already exist, skipping download", "Bucket", aiModel.Spec.S3Bucket, "Key", aiModel.Spec.S3Key)
-				setDeployingPhaseWithTimestamp(aiModel)
-				// Reset retry count on success
-				aiModel.Status.RetryCount = 0
-				aiModel.Status.LastRetryTime = nil
-				aiModel.Status.NextRetryTime = nil
-				if statusErr := r.Status().Update(ctx, aiModel); statusErr != nil {
-					log.Error(statusErr, "unable to update AIModel status to Deploying")
-					return ctrl.Result{}, statusErr
+				// Only transition to Deploying if not already in Deploying or Ready state
+				// This prevents overwriting Ready status on subsequent reconciliations (aas-rzzk)
+				if aiModel.Status.Phase != aimodelv1alpha1.AIModelPhaseDeploying &&
+					aiModel.Status.Phase != aimodelv1alpha1.AIModelPhaseReady {
+					setDeployingPhaseWithTimestamp(aiModel)
+					// Reset retry count on success
+					aiModel.Status.RetryCount = 0
+					aiModel.Status.LastRetryTime = nil
+					aiModel.Status.NextRetryTime = nil
+					if statusErr := r.Status().Update(ctx, aiModel); statusErr != nil {
+						log.Error(statusErr, "unable to update AIModel status to Deploying")
+						return ctrl.Result{}, statusErr
+					}
 				}
 				// Continue to InferenceService creation (fall through)
 			} else {
