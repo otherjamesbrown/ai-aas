@@ -592,9 +592,15 @@ Examples:
 			apiClient := cfg.NewAPIClient(adminEndpoint)
 			bmClient := benchmark.NewClient(apiClient)
 
-			target, err := bmClient.GetTarget(ctx, targetRef)
+			// Resolve target name to ID if needed
+			targetID, err := bmClient.ResolveTargetID(ctx, targetRef)
 			if err != nil {
 				return fmt.Errorf("target not found: %s", targetRef)
+			}
+
+			target, err := bmClient.GetTarget(ctx, targetID)
+			if err != nil {
+				return fmt.Errorf("failed to get target: %w", err)
 			}
 
 			if format == "json" {
@@ -800,10 +806,16 @@ Examples:
 			apiClient := cfg.NewAPIClient(adminEndpoint)
 			bmClient := benchmark.NewClient(apiClient)
 
-			// Get target first to show info
-			target, err := bmClient.GetTarget(ctx, targetRef)
+			// Resolve target name to ID if needed
+			targetID, err := bmClient.ResolveTargetID(ctx, targetRef)
 			if err != nil {
 				return fmt.Errorf("target not found: %s", targetRef)
+			}
+
+			// Get target to show info
+			target, err := bmClient.GetTarget(ctx, targetID)
+			if err != nil {
+				return fmt.Errorf("failed to get target: %w", err)
 			}
 
 			if !force {
