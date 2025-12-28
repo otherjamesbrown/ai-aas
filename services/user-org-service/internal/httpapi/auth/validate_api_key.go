@@ -28,6 +28,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httputil"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/storage/postgres"
 )
 
@@ -70,12 +71,12 @@ func (h *Handler) ValidateAPIKey(w http.ResponseWriter, r *http.Request) {
 
 	var req ValidateAPIKeyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid request payload")
 		return
 	}
 
 	if req.APIKeySecret == "" {
-		http.Error(w, "apiKeySecret is required", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "apiKeySecret is required")
 		return
 	}
 
@@ -95,7 +96,7 @@ func (h *Handler) ValidateAPIKey(w http.ResponseWriter, r *http.Request) {
 			// Try as slug
 			org, err := store.GetOrgBySlug(ctx, req.OrgID)
 			if err != nil {
-				http.Error(w, "organization not found", http.StatusNotFound)
+				httputil.WriteNotFound(w, r, "organization", "")
 				return
 			}
 			orgID = org.ID
@@ -117,7 +118,7 @@ func (h *Handler) ValidateAPIKey(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		http.Error(w, "failed to validate API key", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 

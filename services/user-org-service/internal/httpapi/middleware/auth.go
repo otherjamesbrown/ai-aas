@@ -53,6 +53,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/bootstrap"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httputil"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/oauth"
 )
 
@@ -83,7 +84,7 @@ func RequireAuth(rt *bootstrap.Runtime, logger *zap.Logger) func(http.Handler) h
 		logger.Warn("Runtime not available, auth middleware will reject all requests")
 		return func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				http.Error(w, "authentication not configured", http.StatusInternalServerError)
+				httputil.WriteInternalError(w, r)
 			})
 		}
 	}
@@ -117,7 +118,7 @@ func RequireAuth(rt *bootstrap.Runtime, logger *zap.Logger) func(http.Handler) h
 					zap.String("request_id", requestID),
 					zap.String("origin", r.Header.Get("Origin")),
 					zap.String("user_agent", r.Header.Get("User-Agent")))
-				http.Error(w, "missing authorization header", http.StatusUnauthorized)
+				httputil.WriteUnauthorized(w, r, "missing authorization header")
 				return
 			}
 
@@ -128,7 +129,7 @@ func RequireAuth(rt *bootstrap.Runtime, logger *zap.Logger) func(http.Handler) h
 					zap.String("path", r.URL.Path),
 					zap.String("request_id", requestID),
 					zap.String("auth_header_prefix", parts[0]))
-				http.Error(w, "invalid authorization header format", http.StatusUnauthorized)
+				httputil.WriteUnauthorized(w, r, "invalid authorization header format")
 				return
 			}
 
@@ -137,7 +138,7 @@ func RequireAuth(rt *bootstrap.Runtime, logger *zap.Logger) func(http.Handler) h
 				logger.Warn("RequireAuth: empty bearer token",
 					zap.String("path", r.URL.Path),
 					zap.String("request_id", requestID))
-				http.Error(w, "empty bearer token", http.StatusUnauthorized)
+				httputil.WriteUnauthorized(w, r, "empty bearer token")
 				return
 			}
 
@@ -166,7 +167,7 @@ func RequireAuth(rt *bootstrap.Runtime, logger *zap.Logger) func(http.Handler) h
 				logger.Warn("RequireAuth: OAuth provider not available and API key auth failed",
 					zap.String("path", r.URL.Path),
 					zap.String("request_id", requestID))
-				http.Error(w, "invalid or expired token", http.StatusUnauthorized)
+				httputil.WriteUnauthorized(w, r, "invalid or expired token")
 				return
 			}
 
@@ -179,7 +180,7 @@ func RequireAuth(rt *bootstrap.Runtime, logger *zap.Logger) func(http.Handler) h
 					zap.String("path", r.URL.Path),
 					zap.String("request_id", requestID),
 					zap.String("error_type", fmt.Sprintf("%T", err)))
-				http.Error(w, "invalid or expired token", http.StatusUnauthorized)
+				httputil.WriteUnauthorized(w, r, "invalid or expired token")
 				return
 			}
 
@@ -188,7 +189,7 @@ func RequireAuth(rt *bootstrap.Runtime, logger *zap.Logger) func(http.Handler) h
 				logger.Warn("RequireAuth: token is not active",
 					zap.String("path", r.URL.Path),
 					zap.String("request_id", requestID))
-				http.Error(w, "token is not active", http.StatusUnauthorized)
+				httputil.WriteUnauthorized(w, r, "token is not active")
 				return
 			}
 
@@ -204,7 +205,7 @@ func RequireAuth(rt *bootstrap.Runtime, logger *zap.Logger) func(http.Handler) h
 					zap.String("path", r.URL.Path),
 					zap.String("request_id", requestID),
 					zap.String("session_type", sessionType))
-				http.Error(w, "invalid session", http.StatusUnauthorized)
+				httputil.WriteUnauthorized(w, r, "invalid session")
 				return
 			}
 
@@ -226,7 +227,7 @@ func RequireAuth(rt *bootstrap.Runtime, logger *zap.Logger) func(http.Handler) h
 					zap.String("path", r.URL.Path),
 					zap.String("request_id", requestID),
 					zap.String("subject", session.Subject))
-				http.Error(w, "invalid session: missing user ID", http.StatusUnauthorized)
+				httputil.WriteUnauthorized(w, r, "invalid session: missing user ID")
 				return
 			}
 
@@ -236,7 +237,7 @@ func RequireAuth(rt *bootstrap.Runtime, logger *zap.Logger) func(http.Handler) h
 					zap.Error(err),
 					zap.String("user_id", userIDStr),
 					zap.String("path", r.URL.Path))
-				http.Error(w, "invalid session: invalid user ID", http.StatusUnauthorized)
+				httputil.WriteUnauthorized(w, r, "invalid session: invalid user ID")
 				return
 			}
 
@@ -248,7 +249,7 @@ func RequireAuth(rt *bootstrap.Runtime, logger *zap.Logger) func(http.Handler) h
 						zap.Error(err),
 						zap.String("org_id", session.OrgID),
 						zap.String("path", r.URL.Path))
-					http.Error(w, "invalid session: invalid org ID", http.StatusUnauthorized)
+					httputil.WriteUnauthorized(w, r, "invalid session: invalid org ID")
 					return
 				}
 			}

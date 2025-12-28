@@ -59,6 +59,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httputil"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/audit"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/bootstrap"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/middleware"
@@ -160,28 +161,28 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 	// Resolve org ID (UUID or slug)
 	orgID, err := h.resolveOrgID(ctx, orgIDParam)
 	if err != nil {
-		http.Error(w, "organization not found", http.StatusNotFound)
+		httputil.WriteNotFound(w, r, "organization", "")
 		return
 	}
 
 	var req InviteUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.Warn("invalid request payload", zap.Error(err))
-		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid request payload")
 		return
 	}
 
 	// Validate email
 	email := strings.ToLower(strings.TrimSpace(req.Email))
 	if email == "" {
-		http.Error(w, "email is required", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "email is required")
 		return
 	}
 
 	// Check if user already exists
 	_, err = h.runtime.Postgres.GetUserByEmail(ctx, orgID, email)
 	if err == nil {
-		http.Error(w, "user with this email already exists", http.StatusConflict)
+		httputil.WriteConflict(w, r, "user with this email already exists")
 		return
 	}
 	// ErrNotFound is expected, continue
@@ -197,7 +198,7 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 	inviteToken, err := generateInviteToken()
 	if err != nil {
 		h.logger.Error("failed to generate invite token", zap.Error(err))
-		http.Error(w, "failed to create invite", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -205,7 +206,7 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 	tokenHash, err := security.HashPassword(inviteToken)
 	if err != nil {
 		h.logger.Error("failed to hash invite token", zap.Error(err))
-		http.Error(w, "failed to create invite", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -213,13 +214,13 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 	tempPassword, err := generateInviteToken()
 	if err != nil {
 		h.logger.Error("failed to generate temporary password", zap.Error(err))
-		http.Error(w, "failed to create invite", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 	passwordHash, err := security.HashPassword(tempPassword)
 	if err != nil {
 		h.logger.Error("failed to hash invite password", zap.Error(err))
-		http.Error(w, "failed to create invite", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -247,7 +248,7 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 	createdUser, err := h.runtime.Postgres.CreateUser(ctx, params)
 	if err != nil {
 		h.logger.Error("failed to create invited user", zap.Error(err), zap.String("email", email))
-		http.Error(w, "failed to create invite", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -266,7 +267,7 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 	tx, err := h.runtime.Postgres.Pool().BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		h.logger.Error("failed to begin transaction for invite token", zap.Error(err), zap.String("email", email))
-		http.Error(w, "failed to create invite", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -275,7 +276,7 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 	escapedOrgID := strings.ReplaceAll(orgID.String(), "'", "''")
 	if _, err := tx.Exec(ctx, fmt.Sprintf("SET LOCAL app.org_id = '%s'", escapedOrgID)); err != nil {
 		h.logger.Error("failed to set tenant context", zap.Error(err), zap.String("email", email))
-		http.Error(w, "failed to create invite", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -288,13 +289,13 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("failed to store invite token", zap.Error(err), zap.String("email", email))
 		// User was created but token wasn't - this is a partial failure
 		// In production, consider rolling back or marking user for cleanup
-		http.Error(w, "failed to create invite", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		h.logger.Error("failed to commit invite token transaction", zap.Error(err), zap.String("email", email))
-		http.Error(w, "failed to create invite", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -334,28 +335,28 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	// Resolve org ID (UUID or slug)
 	orgID, err := h.resolveOrgID(ctx, orgIDParam)
 	if err != nil {
-		http.Error(w, "organization not found", http.StatusNotFound)
+		httputil.WriteNotFound(w, r, "organization", "")
 		return
 	}
 
 	var req CreateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.Warn("invalid request payload", zap.Error(err))
-		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid request payload")
 		return
 	}
 
 	// Validate email
 	email := strings.ToLower(strings.TrimSpace(req.Email))
 	if email == "" {
-		http.Error(w, "email is required", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "email is required")
 		return
 	}
 
 	// Check if user already exists
 	_, err = h.runtime.Postgres.GetUserByEmail(ctx, orgID, email)
 	if err == nil {
-		http.Error(w, "user with this email already exists", http.StatusConflict)
+		httputil.WriteConflict(w, r, "user with this email already exists")
 		return
 	}
 	// ErrNotFound is expected, continue
@@ -364,13 +365,13 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	tempPassword, err := generateSecurePassword()
 	if err != nil {
 		h.logger.Error("failed to generate temporary password", zap.Error(err))
-		http.Error(w, "failed to create user", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 	passwordHash, err := security.HashPassword(tempPassword)
 	if err != nil {
 		h.logger.Error("failed to hash password", zap.Error(err))
-		http.Error(w, "failed to create user", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -411,7 +412,7 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	createdUser, err := h.runtime.Postgres.CreateUser(ctx, params)
 	if err != nil {
 		h.logger.Error("failed to create user", zap.Error(err), zap.String("email", email))
-		http.Error(w, "failed to create user", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -460,21 +461,21 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	orgID, err := h.resolveOrgID(ctx, orgIDParam)
 	if err != nil {
-		http.Error(w, "organization not found", http.StatusNotFound)
+		httputil.WriteNotFound(w, r, "organization", "")
 		return
 	}
 
 	// Authorization: verify user has access to this organization
 	if err := h.requireOrgAccess(ctx, orgID); err != nil {
 		h.logger.Warn("unauthorized access to list users", zap.Error(err), zap.String("orgId", orgIDParam))
-		http.Error(w, "forbidden", http.StatusForbidden)
+		httputil.WriteForbidden(w, r, "forbidden")
 		return
 	}
 
 	users, err := h.runtime.Postgres.ListUsersInOrg(ctx, orgID)
 	if err != nil {
 		h.logger.Error("failed to list users", zap.Error(err), zap.String("orgId", orgIDParam))
-		http.Error(w, "failed to list users", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -501,24 +502,24 @@ func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 
 	orgID, err := h.resolveOrgID(ctx, orgIDParam)
 	if err != nil {
-		http.Error(w, "organization not found", http.StatusNotFound)
+		httputil.WriteNotFound(w, r, "organization", "")
 		return
 	}
 
 	userID, err := uuid.Parse(userIDParam)
 	if err != nil {
-		http.Error(w, "invalid user ID", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid user ID")
 		return
 	}
 
 	user, err := h.runtime.Postgres.GetUserByID(ctx, orgID, userID)
 	if err != nil {
 		if err == postgres.ErrNotFound {
-			http.Error(w, "user not found", http.StatusNotFound)
+			httputil.WriteNotFound(w, r, "user", "")
 			return
 		}
 		h.logger.Error("failed to get user", zap.Error(err), zap.String("userId", userIDParam))
-		http.Error(w, "failed to retrieve user", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -538,13 +539,13 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	orgID, err := h.resolveOrgID(ctx, orgIDParam)
 	if err != nil {
-		http.Error(w, "organization not found", http.StatusNotFound)
+		httputil.WriteNotFound(w, r, "organization", "")
 		return
 	}
 
 	userID, err := uuid.Parse(userIDParam)
 	if err != nil {
-		http.Error(w, "invalid user ID", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid user ID")
 		return
 	}
 
@@ -552,18 +553,18 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	existingUser, err := h.runtime.Postgres.GetUserByID(ctx, orgID, userID)
 	if err != nil {
 		if err == postgres.ErrNotFound {
-			http.Error(w, "user not found", http.StatusNotFound)
+			httputil.WriteNotFound(w, r, "user", "")
 			return
 		}
 		h.logger.Error("failed to get user for update", zap.Error(err), zap.String("userId", userIDParam))
-		http.Error(w, "failed to retrieve user", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
 	var req UpdateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.Warn("invalid request payload", zap.Error(err))
-		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid request payload")
 		return
 	}
 
@@ -571,7 +572,7 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	if req.Status != nil {
 		validStatuses := map[string]bool{"active": true, "suspended": true, "invited": true}
 		if !validStatuses[*req.Status] {
-			http.Error(w, "invalid status", http.StatusBadRequest)
+			httputil.WriteBadRequest(w, r, "invalid status")
 			return
 		}
 
@@ -585,11 +586,11 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		user, err := h.runtime.Postgres.UpdateUserStatus(ctx, statusParams)
 		if err != nil {
 			if err == postgres.ErrOptimisticLock {
-				http.Error(w, "user was modified concurrently", http.StatusConflict)
+				httputil.WriteConflict(w, r, "user was modified concurrently")
 				return
 			}
 			h.logger.Error("failed to update user status", zap.Error(err), zap.String("userId", userIDParam))
-			http.Error(w, "failed to update user", http.StatusInternalServerError)
+			httputil.WriteInternalError(w, r)
 			return
 		}
 
@@ -639,11 +640,11 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		user, err := h.runtime.Postgres.UpdateUserProfile(ctx, profileParams)
 		if err != nil {
 			if err == postgres.ErrOptimisticLock {
-				http.Error(w, "user was modified concurrently", http.StatusConflict)
+				httputil.WriteConflict(w, r, "user was modified concurrently")
 				return
 			}
 			h.logger.Error("failed to update user profile", zap.Error(err), zap.String("userId", userIDParam))
-			http.Error(w, "failed to update user", http.StatusInternalServerError)
+			httputil.WriteInternalError(w, r)
 			return
 		}
 
@@ -671,7 +672,7 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// No fields to update
-	http.Error(w, "no fields provided for update", http.StatusBadRequest)
+	httputil.WriteBadRequest(w, r, "no fields provided for update")
 }
 
 // UpdateUserRoles handles PUT /v1/orgs/{orgId}/users/{userId}/roles - Update role assignments.
@@ -683,20 +684,20 @@ func (h *Handler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
 
 	orgID, err := h.resolveOrgID(ctx, orgIDParam)
 	if err != nil {
-		http.Error(w, "organization not found", http.StatusNotFound)
+		httputil.WriteNotFound(w, r, "organization", "")
 		return
 	}
 
 	userID, err := uuid.Parse(userIDParam)
 	if err != nil {
-		http.Error(w, "invalid user ID", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid user ID")
 		return
 	}
 
 	var req RoleAssignmentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.Warn("invalid request payload", zap.Error(err))
-		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid request payload")
 		return
 	}
 

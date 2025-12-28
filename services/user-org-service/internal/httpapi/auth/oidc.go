@@ -35,6 +35,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/config"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httputil"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/metrics"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/oauth"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/storage/postgres"
@@ -143,13 +144,13 @@ func (h *Handler) OIDCLogin(w http.ResponseWriter, r *http.Request) {
 
 	// Get IdP registry from handler
 	if h.idpRegistry == nil {
-		http.Error(w, "IdP federation not configured", http.StatusServiceUnavailable)
+		httputil.WriteServiceUnavailable(w, r, "IdP federation not configured")
 		return
 	}
 
 	provider, err := h.idpRegistry.GetProvider(providerName)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("provider %s not configured", providerName), http.StatusNotFound)
+		httputil.WriteNotFound(w, r, "provider", providerName)
 		return
 	}
 
@@ -167,7 +168,7 @@ func (h *Handler) OIDCLogin(w http.ResponseWriter, r *http.Request) {
 			// Try as slug
 			org, err := h.runtime.Postgres.GetOrgBySlug(ctx, orgIDParam)
 			if err != nil {
-				http.Error(w, "organization not found", http.StatusNotFound)
+				httputil.WriteNotFound(w, r, "organization", "")
 				return
 			}
 			orgID = org.ID
@@ -177,7 +178,7 @@ func (h *Handler) OIDCLogin(w http.ResponseWriter, r *http.Request) {
 	// Generate state token (CSRF protection)
 	stateToken, err := generateStateToken()
 	if err != nil {
-		http.Error(w, "failed to generate state token", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -209,38 +210,38 @@ func (h *Handler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Get IdP registry from handler
 	if h.idpRegistry == nil {
-		http.Error(w, "IdP federation not configured", http.StatusServiceUnavailable)
+		httputil.WriteServiceUnavailable(w, r, "IdP federation not configured")
 		return
 	}
 
 	provider, err := h.idpRegistry.GetProvider(providerName)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("provider %s not configured", providerName), http.StatusNotFound)
+		httputil.WriteNotFound(w, r, "provider", providerName)
 		return
 	}
 
 	// Verify state token
 	stateParam := r.URL.Query().Get("state")
 	if stateParam == "" {
-		http.Error(w, "missing state parameter", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "missing state parameter")
 		return
 	}
 
 	stateJSON, err := base64.RawURLEncoding.DecodeString(stateParam)
 	if err != nil {
-		http.Error(w, "invalid state parameter", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid state parameter")
 		return
 	}
 
 	var stateData map[string]string
 	if err := json.Unmarshal(stateJSON, &stateData); err != nil {
-		http.Error(w, "invalid state parameter", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid state parameter")
 		return
 	}
 
 	orgID, err := uuid.Parse(stateData["org_id"])
 	if err != nil {
-		http.Error(w, "invalid organization", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid organization")
 		return
 	}
 	redirectURI := stateData["redirect_uri"]
@@ -251,20 +252,20 @@ func (h *Handler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 	// Exchange authorization code for token
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		http.Error(w, "missing authorization code", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "missing authorization code")
 		return
 	}
 
 	token, err := provider.OAuth2Config.Exchange(ctx, code)
 	if err != nil {
-		http.Error(w, "failed to exchange authorization code", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
 	// Extract ID token
 	rawIDToken, ok := token.Extra("id_token").(string)
 	if !ok {
-		http.Error(w, "missing id_token in response", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -272,7 +273,7 @@ func (h *Handler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 	verifier := provider.Provider.Verifier(&oidc.Config{ClientID: provider.ClientID})
 	idToken, err := verifier.Verify(ctx, rawIDToken)
 	if err != nil {
-		http.Error(w, "failed to verify ID token", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -283,7 +284,7 @@ func (h *Handler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		Name    string `json:"name"`
 	}
 	if err := idToken.Claims(&claims); err != nil {
-		http.Error(w, "failed to extract claims", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -292,7 +293,7 @@ func (h *Handler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 	user, err := h.findOrCreateUserFromIdP(ctx, orgID, externalIDP, claims.Email, claims.Name)
 	if err != nil {
 		metrics.RecordOIDCCallbackFailure(providerName, "user_creation_failed")
-		http.Error(w, "failed to create or find user", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -310,7 +311,7 @@ func (h *Handler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 	// Get the client from the provider's storage
 	client, err := h.runtime.OAuthStore.GetClient(ctx, h.runtime.Config.OAuthClientID)
 	if err != nil {
-		http.Error(w, "failed to get OAuth client", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
