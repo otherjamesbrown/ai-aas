@@ -427,7 +427,7 @@ func main() {
 	defer healthMonitor.Stop()
 
 	// Initialize public API handler with routing engine and usage hook
-	publicHandler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, routingEngine, routingMetrics, tokenMetrics, usageHook, cfg.AdminAPIEndpoint, cfg.AdminAPIKey, cfg.DefaultBackendTimeout, cfg.ModelsCacheTTL)
+	publicHandler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, routingEngine, routingMetrics, tokenMetrics, usageHook, rateLimiter, cfg.AdminAPIEndpoint, cfg.AdminAPIKey, cfg.DefaultBackendTimeout, cfg.ModelsCacheTTL)
 	publicHandler.SetUserOrgServiceURL(cfg.UserOrgServiceURL)
 
 	// Register unauthenticated chat completions health endpoint on main router
@@ -479,6 +479,19 @@ func main() {
 	// Step 3: Rate limiting (requires auth context)
 	if rateLimiter != nil {
 		appRouter.Use(public.RateLimitMiddleware(rateLimiter, auditLogger, logger, tracer))
+
+		// Token quota middleware (requires auth context and rate limiter)
+		tokenLimits := limiter.TokenQuotaLimits{
+			Hourly:  cfg.RateLimitTokensHourly,
+			Daily:   cfg.RateLimitTokensDaily,
+			Weekly:  cfg.RateLimitTokensWeekly,
+		}
+		appRouter.Use(public.TokenQuotaMiddleware(rateLimiter, tokenLimits, auditLogger, logger, tracer))
+		logger.Info("token quota limits enabled",
+			zap.Int("hourly", tokenLimits.Hourly),
+			zap.Int("daily", tokenLimits.Daily),
+			zap.Int("weekly", tokenLimits.Weekly),
+		)
 	} else {
 		logger.Warn("rate limiting disabled (Redis unavailable)")
 	}

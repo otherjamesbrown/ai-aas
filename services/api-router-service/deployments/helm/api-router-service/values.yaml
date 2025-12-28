@@ -183,6 +183,12 @@ backends:
 rateLimit:
   defaultRPS: 100
   burstSize: 200
+  # Token-based rate limits (hourly/daily/weekly)
+  # Set to 0 to disable a specific limit
+  tokenLimits:
+    hourly: 100000    # 100K tokens per hour
+    daily: 1000000    # 1M tokens per day
+    weekly: 5000000   # 5M tokens per week
 
 # Budget service configuration
 budget:

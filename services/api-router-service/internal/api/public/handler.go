@@ -24,6 +24,7 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/api"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/auth"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/config"
+	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/limiter"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/routing"
 	"github.com/otherjamesbrown/ai-aas/services/api-router-service/internal/telemetry"
 )
@@ -39,6 +40,7 @@ type Handler struct {
 	routingMetrics    *telemetry.RoutingMetrics
 	tokenMetrics      *telemetry.TokenMetrics
 	usageHook         *UsageHook
+	rateLimiter       *limiter.RateLimiter // Rate limiter for token quota tracking
 	tracer            trace.Tracer
 	errorBuilder      *api.ErrorBuilder
 	backendURIs       map[string]string // Map of backend ID to URI (for testing/configuration - overrides registry)
@@ -77,6 +79,7 @@ func NewHandler(
 	routingMetrics *telemetry.RoutingMetrics,
 	tokenMetrics *telemetry.TokenMetrics,
 	usageHook *UsageHook,
+	rateLimiter *limiter.RateLimiter,
 	adminAPIEndpoint string,
 	adminAPIKey string,
 	defaultTimeout time.Duration,
@@ -91,7 +94,9 @@ func NewHandler(
 		backendRegistry:   backendRegistry,
 		routingEngine:     routingEngine,
 		routingMetrics:    routingMetrics,
+		tokenMetrics:      tokenMetrics,
 		usageHook:         usageHook,
+		rateLimiter:       rateLimiter,
 		tracer:            tracer,
 		errorBuilder:      api.NewErrorBuilder(tracer),
 		backendURIs:       make(map[string]string),

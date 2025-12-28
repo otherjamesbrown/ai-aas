@@ -51,6 +51,10 @@ type Config struct {
 	RateLimitRedisAddr string `envconfig:"RATE_LIMIT_REDIS_ADDR" default:"localhost:6379"`
 	RateLimitDefaultRPS int    `envconfig:"RATE_LIMIT_DEFAULT_RPS" default:"100"`
 	RateLimitBurstSize  int    `envconfig:"RATE_LIMIT_BURST_SIZE" default:"200"`
+	// Token-based rate limits (set to 0 to disable)
+	RateLimitTokensHourly  int `envconfig:"RATE_LIMIT_TOKENS_HOURLY" default:"100000"`
+	RateLimitTokensDaily   int `envconfig:"RATE_LIMIT_TOKENS_DAILY" default:"1000000"`
+	RateLimitTokensWeekly  int `envconfig:"RATE_LIMIT_TOKENS_WEEKLY" default:"5000000"`
 
 	// Budget Service
 	BudgetServiceEndpoint string        `envconfig:"BUDGET_SERVICE_ENDPOINT" default:""`

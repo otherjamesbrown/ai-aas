@@ -10,10 +10,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
 	"go.opentelemetry.io/otel/trace"
@@ -414,6 +416,96 @@ func getModelFromRequest(r *http.Request) string {
 		}
 	}
 	return ""
+}
+
+// TokenQuotaMiddleware creates middleware for token-based quota checking.
+// Checks token usage quotas (hourly/daily/weekly) before allowing requests.
+// Token quotas are configured per organization and checked in real-time using Redis counters.
+func TokenQuotaMiddleware(rateLimiter *limiter.RateLimiter, tokenLimits limiter.TokenQuotaLimits, auditLogger *usage.AuditLogger, logger *zap.Logger, tracer trace.Tracer) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Get authenticated context
+			authCtx := r.Context().Value(AuthContextKey)
+			if authCtx == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			authContext, ok := authCtx.(*auth.AuthenticatedContext)
+			if !ok {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Check token quota (only if limits are configured)
+			if tokenLimits.Hourly > 0 || tokenLimits.Daily > 0 || tokenLimits.Weekly > 0 {
+				status, err := rateLimiter.CheckTokenQuota(r.Context(), authContext.OrganizationID, tokenLimits)
+				if err != nil {
+					logger.Warn("token quota check failed, allowing request",
+						zap.String("org_id", authContext.OrganizationID),
+						zap.Error(err),
+					)
+					next.ServeHTTP(w, r)
+					return
+				}
+
+				if status.Exceeded {
+					// Emit audit event
+					if auditLogger != nil {
+						auditLogger.LogDenial(usage.AuditEvent{
+							RequestID:      getRequestID(r),
+							OrganizationID: authContext.OrganizationID,
+							APIKeyID:       authContext.APIKeyID,
+							Model:          getModelFromRequest(r),
+							Action:         "REQUEST_DENIED",
+							DecisionReason: "TOKEN_QUOTA_EXCEEDED",
+							LimitState:     "TOKEN_QUOTA_EXCEEDED",
+						})
+					}
+
+					// Record Prometheus metric
+					telemetry.RecordQuotaDenial(status.Period + "_token_quota")
+
+					// Calculate retry-after in seconds
+					retryAfterSeconds := int(time.Until(status.ResetAt).Seconds())
+					if retryAfterSeconds <= 0 {
+						retryAfterSeconds = 60 // Default to 1 minute
+					}
+
+					// Set headers
+					w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds))
+					w.Header().Set("X-RateLimit-Limit-Tokens", strconv.Itoa(status.Limit))
+					w.Header().Set("X-RateLimit-Remaining-Tokens", strconv.Itoa(status.Limit-status.CurrentUsage))
+					w.Header().Set("X-RateLimit-Reset", status.ResetAt.Format(time.RFC3339))
+
+					limitContext := map[string]interface{}{
+						"current_usage": status.CurrentUsage,
+						"limit":         status.Limit,
+						"period":        status.Period,
+						"reset_at":      status.ResetAt.Format(time.RFC3339),
+					}
+
+					errorBuilder := api.NewErrorBuilder(tracer)
+					response := errorBuilder.BuildLimitError(
+						r.Context(),
+						api.NewError(api.ErrCodeQuotaExceeded, fmt.Sprintf("Token quota exceeded for %s period", status.Period)),
+						api.ErrCodeQuotaExceeded,
+						&retryAfterSeconds,
+						limitContext,
+					)
+
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(api.GetHTTPStatus(api.ErrCodeQuotaExceeded))
+					if err := json.NewEncoder(w).Encode(response); err != nil {
+						logger.Error("failed to write token quota error response", zap.Error(err))
+					}
+					return
+				}
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // ModelAccessMiddleware creates middleware for user-level model access control.

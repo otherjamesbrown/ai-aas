@@ -192,3 +192,148 @@ func (r *RateLimiter) Reset(ctx context.Context, key string) error {
 	return r.client.Del(ctx, key).Err()
 }
 
+// TokenQuotaLimits represents token usage limits for different time periods.
+type TokenQuotaLimits struct {
+	Hourly  int
+	Daily   int
+	Weekly  int
+}
+
+// TokenQuotaStatus represents the current token usage status.
+type TokenQuotaStatus struct {
+	Allowed       bool
+	Exceeded      bool
+	Period        string // "hour", "day", or "week"
+	CurrentUsage  int
+	Limit         int
+	ResetAt       time.Time
+}
+
+// CheckTokenQuota checks if an organization is within their token quota limits.
+// Returns TokenQuotaStatus indicating if the request should be allowed.
+func (r *RateLimiter) CheckTokenQuota(ctx context.Context, orgID string, limits TokenQuotaLimits) (*TokenQuotaStatus, error) {
+	now := time.Now()
+
+	// Check hourly limit
+	if limits.Hourly > 0 {
+		hourlyKey := tokenKey(orgID, "hour", now)
+		hourlyUsage, err := r.client.Get(ctx, hourlyKey).Int()
+		if err != nil && err != redis.Nil {
+			return nil, fmt.Errorf("get hourly token usage: %w", err)
+		}
+		if hourlyUsage >= limits.Hourly {
+			resetAt := now.Truncate(time.Hour).Add(time.Hour)
+			return &TokenQuotaStatus{
+				Allowed:      false,
+				Exceeded:     true,
+				Period:       "hour",
+				CurrentUsage: hourlyUsage,
+				Limit:        limits.Hourly,
+				ResetAt:      resetAt,
+			}, nil
+		}
+	}
+
+	// Check daily limit
+	if limits.Daily > 0 {
+		dailyKey := tokenKey(orgID, "day", now)
+		dailyUsage, err := r.client.Get(ctx, dailyKey).Int()
+		if err != nil && err != redis.Nil {
+			return nil, fmt.Errorf("get daily token usage: %w", err)
+		}
+		if dailyUsage >= limits.Daily {
+			resetAt := now.Truncate(24 * time.Hour).Add(24 * time.Hour)
+			return &TokenQuotaStatus{
+				Allowed:      false,
+				Exceeded:     true,
+				Period:       "day",
+				CurrentUsage: dailyUsage,
+				Limit:        limits.Daily,
+				ResetAt:      resetAt,
+			}, nil
+		}
+	}
+
+	// Check weekly limit
+	if limits.Weekly > 0 {
+		weeklyKey := tokenKey(orgID, "week", now)
+		weeklyUsage, err := r.client.Get(ctx, weeklyKey).Int()
+		if err != nil && err != redis.Nil {
+			return nil, fmt.Errorf("get weekly token usage: %w", err)
+		}
+		if weeklyUsage >= limits.Weekly {
+			// Reset on Sunday at midnight (start of week)
+			daysUntilSunday := (7 - int(now.Weekday())) % 7
+			if daysUntilSunday == 0 {
+				daysUntilSunday = 7
+			}
+			resetAt := now.Truncate(24*time.Hour).AddDate(0, 0, daysUntilSunday)
+			return &TokenQuotaStatus{
+				Allowed:      false,
+				Exceeded:     true,
+				Period:       "week",
+				CurrentUsage: weeklyUsage,
+				Limit:        limits.Weekly,
+				ResetAt:      resetAt,
+			}, nil
+		}
+	}
+
+	return &TokenQuotaStatus{
+		Allowed:  true,
+		Exceeded: false,
+	}, nil
+}
+
+// RecordTokenUsage increments token usage counters for an organization.
+// Updates hourly, daily, and weekly counters with appropriate TTLs.
+func (r *RateLimiter) RecordTokenUsage(ctx context.Context, orgID string, tokens int) error {
+	if tokens <= 0 {
+		return nil
+	}
+
+	now := time.Now()
+	pipe := r.client.Pipeline()
+
+	// Increment hourly counter
+	hourlyKey := tokenKey(orgID, "hour", now)
+	pipe.IncrBy(ctx, hourlyKey, int64(tokens))
+	pipe.Expire(ctx, hourlyKey, time.Hour)
+
+	// Increment daily counter
+	dailyKey := tokenKey(orgID, "day", now)
+	pipe.IncrBy(ctx, dailyKey, int64(tokens))
+	pipe.Expire(ctx, dailyKey, 24*time.Hour)
+
+	// Increment weekly counter
+	weeklyKey := tokenKey(orgID, "week", now)
+	pipe.IncrBy(ctx, weeklyKey, int64(tokens))
+	pipe.Expire(ctx, weeklyKey, 7*24*time.Hour)
+
+	_, err := pipe.Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("record token usage: %w", err)
+	}
+
+	return nil
+}
+
+// tokenKey generates a Redis key for token usage tracking.
+// The key includes a time bucket based on the period (hour/day/week).
+func tokenKey(orgID, period string, t time.Time) string {
+	var bucket int64
+	switch period {
+	case "hour":
+		bucket = t.Truncate(time.Hour).Unix()
+	case "day":
+		bucket = t.Truncate(24 * time.Hour).Unix()
+	case "week":
+		// Start of week (Sunday)
+		startOfWeek := t.AddDate(0, 0, -int(t.Weekday()))
+		bucket = startOfWeek.Truncate(24 * time.Hour).Unix()
+	default:
+		bucket = t.Unix()
+	}
+	return fmt.Sprintf("ratelimit:tokens:%s:%s:%d", orgID, period, bucket)
+}
+

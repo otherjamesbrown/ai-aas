@@ -366,3 +366,204 @@ func TestRateLimiter_ConcurrentAccess(t *testing.T) {
 	}
 }
 
+// TestRateLimiter_RecordTokenUsage tests recording token usage for quota tracking.
+func TestRateLimiter_RecordTokenUsage(t *testing.T) {
+	client := setupTestRedis(t)
+	if client == nil {
+		return
+	}
+	defer func() { _ = client.Close() }()
+
+	logger := zap.NewNop()
+	limiter := NewRateLimiter(client, logger, 10, 20)
+
+	ctx := context.Background()
+	orgID := "test-org-tokens"
+
+	// Record some token usage
+	if err := limiter.RecordTokenUsage(ctx, orgID, 100); err != nil {
+		t.Fatalf("unexpected error recording tokens: %v", err)
+	}
+
+	// Verify tokens were recorded (check via direct Redis access)
+	now := time.Now()
+	hourlyKey := tokenKey(orgID, "hour", now)
+	hourlyUsage, err := client.Get(ctx, hourlyKey).Int()
+	if err != nil {
+		t.Fatalf("unexpected error getting hourly usage: %v", err)
+	}
+	if hourlyUsage != 100 {
+		t.Errorf("expected hourly usage 100, got %d", hourlyUsage)
+	}
+
+	// Record more tokens
+	if err := limiter.RecordTokenUsage(ctx, orgID, 50); err != nil {
+		t.Fatalf("unexpected error recording tokens: %v", err)
+	}
+
+	hourlyUsage, err = client.Get(ctx, hourlyKey).Int()
+	if err != nil {
+		t.Fatalf("unexpected error getting hourly usage: %v", err)
+	}
+	if hourlyUsage != 150 {
+		t.Errorf("expected hourly usage 150, got %d", hourlyUsage)
+	}
+}
+
+// TestRateLimiter_CheckTokenQuota tests token quota checking.
+func TestRateLimiter_CheckTokenQuota(t *testing.T) {
+	client := setupTestRedis(t)
+	if client == nil {
+		return
+	}
+	defer func() { _ = client.Close() }()
+
+	logger := zap.NewNop()
+	limiter := NewRateLimiter(client, logger, 10, 20)
+
+	ctx := context.Background()
+	orgID := "test-org-quota"
+
+	limits := TokenQuotaLimits{
+		Hourly:  1000,
+		Daily:   10000,
+		Weekly:  50000,
+	}
+
+	// Should be allowed initially
+	status, err := limiter.CheckTokenQuota(ctx, orgID, limits)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !status.Allowed {
+		t.Error("expected quota check to allow request initially")
+	}
+	if status.Exceeded {
+		t.Error("expected quota not to be exceeded initially")
+	}
+
+	// Record usage below hourly limit
+	if err := limiter.RecordTokenUsage(ctx, orgID, 500); err != nil {
+		t.Fatalf("unexpected error recording tokens: %v", err)
+	}
+
+	// Should still be allowed
+	status, err = limiter.CheckTokenQuota(ctx, orgID, limits)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !status.Allowed {
+		t.Error("expected quota check to allow request when under limit")
+	}
+
+	// Exceed hourly limit
+	if err := limiter.RecordTokenUsage(ctx, orgID, 600); err != nil {
+		t.Fatalf("unexpected error recording tokens: %v", err)
+	}
+
+	// Should be denied now
+	status, err = limiter.CheckTokenQuota(ctx, orgID, limits)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if status.Allowed {
+		t.Error("expected quota check to deny request when over hourly limit")
+	}
+	if !status.Exceeded {
+		t.Error("expected quota to be exceeded")
+	}
+	if status.Period != "hour" {
+		t.Errorf("expected period 'hour', got %q", status.Period)
+	}
+	if status.CurrentUsage != 1100 {
+		t.Errorf("expected current usage 1100, got %d", status.CurrentUsage)
+	}
+	if status.Limit != 1000 {
+		t.Errorf("expected limit 1000, got %d", status.Limit)
+	}
+	if status.ResetAt.IsZero() {
+		t.Error("expected resetAt to be set")
+	}
+}
+
+// TestRateLimiter_TokenQuotaIsolation tests that token quotas are isolated per organization.
+func TestRateLimiter_TokenQuotaIsolation(t *testing.T) {
+	client := setupTestRedis(t)
+	if client == nil {
+		return
+	}
+	defer func() { _ = client.Close() }()
+
+	logger := zap.NewNop()
+	limiter := NewRateLimiter(client, logger, 10, 20)
+
+	ctx := context.Background()
+	org1 := "test-org-quota-1"
+	org2 := "test-org-quota-2"
+
+	limits := TokenQuotaLimits{
+		Hourly:  1000,
+		Daily:   10000,
+		Weekly:  50000,
+	}
+
+	// Exhaust org1's hourly quota
+	if err := limiter.RecordTokenUsage(ctx, org1, 1100); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Org1 should be denied
+	status, err := limiter.CheckTokenQuota(ctx, org1, limits)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if status.Allowed {
+		t.Error("expected org1 to exceed quota")
+	}
+
+	// Org2 should still be allowed (different bucket)
+	status, err = limiter.CheckTokenQuota(ctx, org2, limits)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !status.Allowed {
+		t.Error("expected org2 to be allowed (isolated from org1)")
+	}
+}
+
+// TestRateLimiter_TokenQuotaDisabled tests that setting limits to 0 disables checks.
+func TestRateLimiter_TokenQuotaDisabled(t *testing.T) {
+	client := setupTestRedis(t)
+	if client == nil {
+		return
+	}
+	defer func() { _ = client.Close() }()
+
+	logger := zap.NewNop()
+	limiter := NewRateLimiter(client, logger, 10, 20)
+
+	ctx := context.Background()
+	orgID := "test-org-quota-disabled"
+
+	// All limits set to 0 (disabled)
+	limits := TokenQuotaLimits{
+		Hourly:  0,
+		Daily:   0,
+		Weekly:  0,
+	}
+
+	// Record lots of tokens
+	if err := limiter.RecordTokenUsage(ctx, orgID, 1000000); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should still be allowed (quota checks disabled)
+	status, err := limiter.CheckTokenQuota(ctx, orgID, limits)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !status.Allowed {
+		t.Error("expected quota check to allow request when limits are 0 (disabled)")
+	}
+}
+

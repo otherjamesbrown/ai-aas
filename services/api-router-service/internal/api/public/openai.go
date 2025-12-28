@@ -222,6 +222,18 @@ func (h *Handler) HandleOpenAIChatCompletions(w http.ResponseWriter, r *http.Req
 		)
 	}
 
+	// Record token usage for quota tracking (aas-o9pl)
+	if h.rateLimiter != nil {
+		totalTokens := openAIResp.Usage.PromptTokens + openAIResp.Usage.CompletionTokens
+		if err := h.rateLimiter.RecordTokenUsage(ctx, authCtx.OrganizationID, totalTokens); err != nil {
+			h.logger.Warn("failed to record token usage",
+				zap.String("org_id", authCtx.OrganizationID),
+				zap.Int("tokens", totalTokens),
+				zap.Error(err),
+			)
+		}
+	}
+
 	// Record per-backend Prometheus metrics for dashboard visibility
 	if routingDecision != nil {
 		requestLatency := time.Since(startTime)
@@ -356,6 +368,18 @@ func (h *Handler) HandleOpenAICompletions(w http.ResponseWriter, r *http.Request
 			openAIResp.Usage.PromptTokens,
 			openAIResp.Usage.CompletionTokens,
 		)
+	}
+
+	// Record token usage for quota tracking (aas-o9pl)
+	if h.rateLimiter != nil {
+		totalTokens := openAIResp.Usage.PromptTokens + openAIResp.Usage.CompletionTokens
+		if err := h.rateLimiter.RecordTokenUsage(ctx, authCtx.OrganizationID, totalTokens); err != nil {
+			h.logger.Warn("failed to record token usage",
+				zap.String("org_id", authCtx.OrganizationID),
+				zap.Int("tokens", totalTokens),
+				zap.Error(err),
+			)
+		}
 	}
 
 	// Record per-backend Prometheus metrics for dashboard visibility
@@ -986,6 +1010,18 @@ func (h *Handler) handleTritonNonStreamingGRPC(
 			openAIResp.Usage.PromptTokens,
 			openAIResp.Usage.CompletionTokens,
 		)
+	}
+
+	// Record token usage for quota tracking (aas-o9pl)
+	if h.rateLimiter != nil {
+		totalTokens := openAIResp.Usage.PromptTokens + openAIResp.Usage.CompletionTokens
+		if err := h.rateLimiter.RecordTokenUsage(ctx, authCtx.OrganizationID, totalTokens); err != nil {
+			h.logger.Warn("failed to record token usage",
+				zap.String("org_id", authCtx.OrganizationID),
+				zap.Int("tokens", totalTokens),
+				zap.Error(err),
+			)
+		}
 	}
 
 	// Record per-backend Prometheus metrics
