@@ -62,16 +62,8 @@ func setupOAuthStore(t *testing.T) (*Store, func()) {
 	db, err := sql.Open("postgres", connString)
 	require.NoError(t, err)
 
-	// Wait for database to be ready with retry
-	var pingErr error
-	for i := 0; i < 10; i++ {
-		pingErr = db.PingContext(ctx)
-		if pingErr == nil {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	require.NoError(t, pingErr, "failed to connect to postgres after retries")
+	// The wait.ForSQL strategy ensures the DB is ready, so a single ping should suffice.
+	require.NoError(t, db.PingContext(ctx), "failed to connect to postgres")
 
 	require.NoError(t, goose.SetDialect("postgres"))
 

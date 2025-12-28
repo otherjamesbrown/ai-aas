@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/schollz/progressbar/v3"
@@ -137,6 +138,7 @@ func (p *ProgressBar) Describe(description string) {
 
 // Spinner provides a simple spinner for indeterminate progress
 type Spinner struct {
+	mu      sync.Mutex
 	done    chan bool
 	message string
 	writer  io.Writer
@@ -159,10 +161,18 @@ func (s *Spinner) Start() {
 		for {
 			select {
 			case <-s.done:
-				fmt.Fprintf(s.writer, "\r%s... done\n", s.message)
+				s.mu.Lock()
+				msg := s.message
+				writer := s.writer
+				s.mu.Unlock()
+				fmt.Fprintf(writer, "\r%s... done\n", msg)
 				return
 			default:
-				fmt.Fprintf(s.writer, "\r%s %s", frames[i], s.message)
+				s.mu.Lock()
+				msg := s.message
+				writer := s.writer
+				s.mu.Unlock()
+				fmt.Fprintf(writer, "\r%s %s", frames[i], msg)
 				i = (i + 1) % len(frames)
 				time.Sleep(100 * time.Millisecond)
 			}
@@ -177,7 +187,9 @@ func (s *Spinner) Stop() {
 
 // StopWithMessage stops the spinner with a custom message
 func (s *Spinner) StopWithMessage(message string) {
+	s.mu.Lock()
 	s.message = message
+	s.mu.Unlock()
 	s.done <- true
 }
 
