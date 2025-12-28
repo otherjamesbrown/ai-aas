@@ -63,6 +63,10 @@ func TestAPIKeyCreateCommand(t *testing.T) {
 
 	formatFlag := createCmd.Flags().Lookup("format")
 	assert.NotNil(t, formatFlag, "format flag should exist")
+
+	platformAdminFlag := createCmd.Flags().Lookup("platform-admin")
+	assert.NotNil(t, platformAdminFlag, "platform-admin flag should exist")
+	assert.Equal(t, "false", platformAdminFlag.DefValue, "platform-admin default should be false")
 }
 
 func TestAPIKeyDeleteCommand(t *testing.T) {
