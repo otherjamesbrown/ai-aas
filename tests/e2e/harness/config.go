@@ -98,8 +98,8 @@ func LoadConfig() (*Config, error) {
 			Workers: getIntEnv("PARALLEL_WORKERS", 1),
 		},
 		Cleanup: Cleanup{
-			Enabled:     getBoolEnv("ENABLE_CLEANUP", true),
-			DelaySeconds: getIntEnv("CLEANUP_DELAY_SECONDS", 60),
+			Enabled:      getBoolEnv("ENABLE_CLEANUP", true),
+			DelaySeconds: getIntEnv("CLEANUP_DELAY_SECONDS", 0), // No delay by default for faster tests
 		},
 		Artifacts: Artifacts{
 			Enabled:            getBoolEnv("ARTIFACTS_ENABLED", true),

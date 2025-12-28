@@ -24,6 +24,8 @@
 - Use libraries that download data at runtime (K8s pods have no internet)
 - Use Knative/Serverless mode for GPU workloads - use RawDeployment (see Architecture below)
 - Nest AIModel fields incorrectly - `deploymentMode` is `spec.deploymentMode` NOT `spec.deployment.deploymentMode`
+- **Ship new code without unit tests** - all new functionality requires tests
+- **Close a bead without running tests** - verify tests pass before marking complete
 
 **ALWAYS:**
 - Create or find a bead BEFORE writing code
@@ -31,6 +33,8 @@
 - Reference bead in commits: `fix(component): description [aas-xxx]`
 - Close bead with details: `bd close <id> --reason "IMPLEMENTED: commit <hash>, <summary>"`
 - Create handoff beads for work outside your domain (with `agent:` label)
+- **Write unit tests** for any new functionality you create
+- **Run relevant unit tests** after completing coding work (use `go test ./...` in the affected package)
 
 ---
 
@@ -246,10 +250,31 @@ git push origin main
 Before reporting complete:
 - [ ] Bead exists
 - [ ] Root cause analysis done (bugs)
-- [ ] Tests added/updated
+- [ ] **Unit tests written** for new functionality (required)
+- [ ] **Unit tests executed** and passing (`go test ./...` in affected packages)
 - [ ] Commits reference bead ID
 - [ ] Bead closed with commit hash
 - [ ] Handoff beads created if needed
+
+### Testing Requirements
+
+**New functionality MUST have tests:**
+```bash
+# After writing code, create corresponding *_test.go file
+# Use table-driven tests for multiple cases
+# Test both success and error paths
+
+# Run tests in the affected package
+go test -v ./path/to/package/...
+
+# Run tests with coverage report
+go test -cover ./path/to/package/...
+```
+
+**Do NOT close a bead if:**
+- New code has no corresponding tests
+- Tests are failing
+- Tests weren't executed
 
 ---
 

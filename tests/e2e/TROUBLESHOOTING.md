@@ -121,7 +121,41 @@ context deadline exceeded
    ping api.dev.otherjamesbrown.com
    ```
 
-### 6. Test Data Cleanup Failures
+### 6. Go Workspace Errors
+
+**Symptoms:**
+```
+go: module . listed in go.work file requires go >= 1.25.0
+go: module k8s.io/api@v0.35.0 requires go >= 1.25.0
+pattern ./suites/...: directory prefix suites does not contain modules listed in go.work
+```
+
+**Cause:**
+The E2E tests use k8s.io dependencies that require Go 1.25, but the workspace uses Go 1.24.
+
+**Solutions:**
+
+1. **Use GOWORK=off (recommended):**
+   ```bash
+   cd tests/e2e
+   GOWORK=off go test -v ./suites/... -run TestSmoke
+   ```
+
+2. **Use Makefile targets (already configured):**
+   ```bash
+   make test-dev-internet  # Automatically sets GOWORK=off
+   make test-local         # Automatically sets GOWORK=off
+   ```
+
+3. **Set environment variable:**
+   ```bash
+   export GOWORK=off
+   go test -v ./suites/...
+   ```
+
+**Note:** The Makefile and test scripts already include `GOWORK=off`. This issue only occurs when running `go test` directly.
+
+### 7. Test Data Cleanup Failures
 
 **Symptoms:**
 ```
@@ -138,7 +172,7 @@ Failed to cleanup resource: org_abc123
    - Ensure fixtures are registered with `ctx.Fixtures.Register()`
    - Verify cleanup is called: `defer ctx.Cleanup()`
 
-### 7. Parallel Execution Issues
+### 8. Parallel Execution Issues
 
 **Symptoms:**
 ```
@@ -161,7 +195,7 @@ Test data leakage between parallel workers
    PARALLEL_WORKERS=1 make test-dev
    ```
 
-### 8. Mock Backend Issues
+### 9. Mock Backend Issues
 
 **Symptoms:**
 ```
