@@ -31,43 +31,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ai-aas/shared-go/auth/apikey"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
-// AuthenticatedContext contains authentication and authorization context.
-type AuthenticatedContext struct {
-	APIKeyID        string
-	OrganizationID  string
-	PrincipalID     string
-	PrincipalType   string
-	Scopes          []string
-	// Model access control (Spec 022)
-	ModelAccessMode string   // "restricted" or "auto_grant"
-	GrantedModels   []string // List of granted model names (only relevant for restricted mode)
-}
-
-// CanAccessModel checks if the authenticated principal has access to a specific model.
-// Returns true if access is allowed, false otherwise.
-func (c *AuthenticatedContext) CanAccessModel(modelName string) bool {
-	// If no access mode is set (legacy or feature disabled), allow access
-	if c.ModelAccessMode == "" || c.ModelAccessMode == "auto_grant" {
-		return true
-	}
-
-	// For restricted mode, check if model is in granted list
-	if c.ModelAccessMode == "restricted" {
-		for _, grantedModel := range c.GrantedModels {
-			if grantedModel == modelName {
-				return true
-			}
-		}
-		return false
-	}
-
-	// Unknown mode - default to deny (fail closed for security)
-	return false
-}
+// AuthenticatedContext is an alias to the shared apikey.AuthenticatedContext type.
+// This maintains backward compatibility while using the shared implementation.
+type AuthenticatedContext = apikey.AuthenticatedContext
 
 // Authenticator handles API key authentication.
 type Authenticator struct {
@@ -96,20 +67,20 @@ func NewAuthenticator(logger *zap.Logger, userOrgURL string, timeout time.Durati
 // Authenticate validates the API key from the request headers.
 // Returns authenticated context or an error.
 func (a *Authenticator) Authenticate(r *http.Request) (*AuthenticatedContext, error) {
-	apiKey := a.extractAPIKey(r)
-	if apiKey == "" {
+	key := apikey.ExtractAPIKey(r)
+	if key == "" {
 		return nil, fmt.Errorf("missing X-API-Key header")
 	}
 
 	// Validate API key against user-org-service
-	ctx, err := a.validateAPIKey(apiKey)
+	ctx, err := a.validateAPIKey(key)
 	if err != nil {
 		return nil, fmt.Errorf("invalid API key: %w", err)
 	}
 
 	// Verify HMAC signature if provided
 	if sig := r.Header.Get("X-HMAC-Signature"); sig != "" {
-		if err := a.verifyHMAC(r, apiKey, sig); err != nil {
+		if err := a.verifyHMAC(r, key, sig); err != nil {
 			return nil, fmt.Errorf("HMAC verification failed: %w", err)
 		}
 	}
@@ -117,29 +88,11 @@ func (a *Authenticator) Authenticate(r *http.Request) (*AuthenticatedContext, er
 	return ctx, nil
 }
 
-// extractAPIKey extracts the API key from request headers.
-func (a *Authenticator) extractAPIKey(r *http.Request) string {
-	// Check X-API-Key header first
-	if key := r.Header.Get("X-API-Key"); key != "" {
-		return strings.TrimSpace(key)
-	}
-
-	// Fallback to Authorization header: Bearer <key>
-	if auth := r.Header.Get("Authorization"); auth != "" {
-		parts := strings.SplitN(auth, " ", 2)
-		if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" {
-			return strings.TrimSpace(parts[1])
-		}
-	}
-
-	return ""
-}
-
 // validateAPIKey validates an API key by calling user-org-service.
 // Falls back to stub validation for dev/test keys if user-org-service is unavailable.
-func (a *Authenticator) validateAPIKey(apiKey string) (*AuthenticatedContext, error) {
+func (a *Authenticator) validateAPIKey(key string) (*AuthenticatedContext, error) {
 	// Check cache first (compute fingerprint for cache key)
-	fingerprint := a.computeFingerprint(apiKey)
+	fingerprint := apikey.ComputeFingerprintHex(key)
 	if cached, ok := a.validationCache[fingerprint]; ok {
 		if time.Now().Before(cached.expiresAt) {
 			a.logger.Debug("API key validation cache hit", zap.String("fingerprint", fingerprint[:8]))
@@ -151,9 +104,9 @@ func (a *Authenticator) validateAPIKey(apiKey string) (*AuthenticatedContext, er
 	}
 
 	// Fallback to stub for dev/test keys (for local development)
-	if strings.HasPrefix(apiKey, "dev-") || strings.HasPrefix(apiKey, "test-") {
-		a.logger.Debug("using stub validator for dev/test key", zap.String("prefix", apiKey[:5]))
-		return a.validateAPIKeyStub(apiKey)
+	if strings.HasPrefix(key, "dev-") || strings.HasPrefix(key, "test-") {
+		a.logger.Debug("using stub validator for dev/test key", zap.String("prefix", key[:5]))
+		return a.validateAPIKeyStub(key)
 	}
 
 	// Validate against user-org-service
@@ -164,7 +117,7 @@ func (a *Authenticator) validateAPIKey(apiKey string) (*AuthenticatedContext, er
 	// Extract org ID from key if possible (for optimization)
 	// For now, we'll try without org_id first, then with org_id if available
 	reqBody := map[string]string{
-		"apiKeySecret": apiKey,
+		"apiKeySecret": key,
 	}
 	reqJSON, err := json.Marshal(reqBody)
 	if err != nil {
@@ -181,8 +134,8 @@ func (a *Authenticator) validateAPIKey(apiKey string) (*AuthenticatedContext, er
 	if err != nil {
 		// If user-org-service is unavailable, fall back to stub for dev keys
 		a.logger.Warn("user-org-service unavailable, falling back to stub validation", zap.Error(err))
-		if strings.HasPrefix(apiKey, "dev-") || strings.HasPrefix(apiKey, "test-") {
-			return a.validateAPIKeyStub(apiKey)
+		if strings.HasPrefix(key, "dev-") || strings.HasPrefix(key, "test-") {
+			return a.validateAPIKeyStub(key)
 		}
 		return nil, fmt.Errorf("user-org-service unavailable: %w", err)
 	}
@@ -259,12 +212,6 @@ func (a *Authenticator) validateAPIKeyStub(apiKey string) (*AuthenticatedContext
 	}
 
 	return nil, fmt.Errorf("invalid API key format")
-}
-
-// computeFingerprint computes the SHA-256 fingerprint of an API key (same algorithm as user-org-service).
-func (a *Authenticator) computeFingerprint(apiKey string) string {
-	hash := sha256.Sum256([]byte(apiKey))
-	return hex.EncodeToString(hash[:])
 }
 
 // verifyHMAC verifies an HMAC signature of the request payload.
