@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/cmd/benchmark"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/cmd/engine"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/cmd/model"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/cmd/model/recipe"
@@ -200,6 +201,10 @@ Environment Variables:
 	podCmd := pod.NewPodCommand()
 	podCmd.GroupID = "platform"
 	rootCmd.AddCommand(podCmd)
+
+	benchmarkCmd := benchmark.NewBenchmarkCommand()
+	benchmarkCmd.GroupID = "platform"
+	rootCmd.AddCommand(benchmarkCmd)
 
 	// Utility commands
 	statusCmd := status.NewCommand()
@@ -896,6 +901,7 @@ For more information, see: https://docs.ai-aas.io/cli/model`,
 	}
 
 	// Add nested parent commands (each has its own subcommands)
+	cmd.AddCommand(model.NewListCommand())
 	cmd.AddCommand(model.NewHFDeployCommand())
 	cmd.AddCommand(model.NewRegistryCommand())
 	cmd.AddCommand(model.NewCacheParentCommand())

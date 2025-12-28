@@ -167,18 +167,33 @@ func (c *Client) Delete(ctx context.Context, path string) error {
 }
 
 // APIError represents an error response from the API
+// Supports both simple format {"error": "message"} and RFC 7807 problem details
 type APIError struct {
 	StatusCode int    `json:"-"`
 	Message    string `json:"error"`
 	Details    string `json:"details,omitempty"`
+	// RFC 7807 Problem Details fields
+	Title  string `json:"title,omitempty"`
+	Detail string `json:"detail,omitempty"`
 }
 
 // Error implements the error interface
 func (e *APIError) Error() string {
+	// Try RFC 7807 format first
+	if e.Title != "" {
+		if e.Detail != "" {
+			return fmt.Sprintf("%s: %s", e.Title, e.Detail)
+		}
+		return e.Title
+	}
+	// Fall back to simple format
 	if e.Details != "" {
 		return fmt.Sprintf("%s: %s", e.Message, e.Details)
 	}
-	return e.Message
+	if e.Message != "" {
+		return e.Message
+	}
+	return fmt.Sprintf("API error (status %d)", e.StatusCode)
 }
 
 // IsNotFound returns true if the error is a 404

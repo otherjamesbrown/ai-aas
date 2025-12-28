@@ -19,7 +19,7 @@
 # 3. Use cert-manager with Let's Encrypt for TLS certificates
 # 4. All deployments MUST go through ArgoCD
 #
-# See docs/ingress-best-practices.md for complete documentation
+# See docs/platform/ingress-best-practices.md for complete documentation
 #
 
 # Global configuration - shared across all services

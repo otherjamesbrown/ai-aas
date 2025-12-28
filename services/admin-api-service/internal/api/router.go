@@ -163,6 +163,32 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 		recipeAdapter := recipesHandler.NewServiceAdapter(recipeSvc)
 		recipeHdlr := recipesHandler.NewHandler(recipeAdapter)
 		recipeHdlr.RegisterRoutes(r)
+
+		// Benchmark management routes (Phase 2 - Benchmark Management System)
+		r.Route("/benchmarks", func(r chi.Router) {
+			benchmarkRepo := repository.NewBenchmarkRepository(db)
+			benchmarkSvc := service.NewBenchmarkService(benchmarkRepo, logger)
+			benchmarkHandler := handlers.NewBenchmarkHandler(benchmarkSvc, logger)
+
+			// Scenario routes
+			r.Get("/scenarios", benchmarkHandler.ListScenarios)
+			r.Get("/scenarios/{name}", benchmarkHandler.GetScenario)
+			r.Post("/scenarios/sync", benchmarkHandler.SyncScenarios)
+
+			// Target routes
+			r.Post("/targets", benchmarkHandler.CreateTarget)
+			r.Get("/targets", benchmarkHandler.ListTargets)
+			r.Get("/targets/{id}", benchmarkHandler.GetTarget)
+			r.Patch("/targets/{id}", benchmarkHandler.UpdateTarget)
+			r.Delete("/targets/{id}", benchmarkHandler.DeleteTarget)
+			r.Post("/targets/{id}/start", benchmarkHandler.StartTarget)
+			r.Post("/targets/{id}/stop", benchmarkHandler.StopTarget)
+			r.Post("/targets/{id}/trigger", benchmarkHandler.TriggerRun)
+
+			// Run routes
+			r.Get("/runs", benchmarkHandler.ListRuns)
+			r.Get("/runs/{id}", benchmarkHandler.GetRun)
+		})
 	})
 
 	return r

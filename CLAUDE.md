@@ -336,7 +336,7 @@ syncPolicy:
 
 ### Branch Targeting Rules
 
-📖 **[docs/development/branching-workflow.md](docs/development/branching-workflow.md)** - Complete branching workflow guide
+📖 **[docs/platform/branching-workflow.md](docs/platform/branching-workflow.md)** - Complete branching workflow guide
 
 The platform uses a three-branch promotion workflow:
 

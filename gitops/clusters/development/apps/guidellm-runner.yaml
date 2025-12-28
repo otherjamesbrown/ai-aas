@@ -1,0 +1,37 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: guidellm-runner-development
+  namespace: argocd
+  labels:
+    environment: development
+    app: guidellm-runner
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform-development
+  source:
+    repoURL: https://github.com/otherjamesbrown/guidellm-runner
+    targetRevision: master
+    path: deployments/helm/guidellm-runner
+    helm:
+      valueFiles:
+        - values-development.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: development
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
