@@ -31,6 +31,14 @@ Tests batch ingestion and aggregation:
 - Verifies all records are ingested
 - Verifies rollup aggregation produces correct totals
 
+### TestUsagePipelineNullModelID
+Tests NULL model_id handling throughout the pipeline:
+- Publishes records with string model names (converted to NULL model_id by processor)
+- Verifies events are stored with model_id=NULL (expected behavior)
+- Verifies rollup worker aggregates NULL model_id using COALESCE sentinel
+- Verifies query endpoint returns correct results despite NULL model_id
+- **Critical**: This test validates the fix for aas-m2kq (rollup PRIMARY KEY constraint violation)
+
 ## Running the Tests
 
 ### Prerequisites
@@ -116,7 +124,10 @@ The test UsageRecord struct matches the schema from api-router-service:
 
 ## Related Beads
 
-- `aas-4tj9`: End-to-end testing of token usage pipeline (this implementation)
+- `aas-4tj9`: End-to-end testing of token usage pipeline (initial implementation)
+- `aas-w0z1`: Add e2e test for NULL model_id pipeline (TestUsagePipelineNullModelID)
+- `aas-m2kq`: Investigation - usage query returns no data (root cause: NULL model_id)
+- `aas-luu9`: Fix rollup schema to allow NULL model_id (adds actor_id, COALESCE primary key)
 - `aas-7pvq`: Replace RabbitMQ consumer with Kafka consumer
 - `aas-emrx`: Align UsageRecord schema between api-router and analytics-service
 

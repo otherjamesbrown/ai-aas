@@ -638,3 +638,195 @@ func TestUsagePipelineMultipleRecords(t *testing.T) {
 	t.Logf("   Expected invocations: %d, got: %d", expectedInvocations, rollupInvocations)
 	t.Logf("   Expected total tokens: %d, got: %d", expectedTotalTokens, rollupTokensTotal)
 }
+
+// TestUsagePipelineNullModelID validates the pipeline with NULL model_id.
+// This test explicitly verifies that events with NULL model_id (the default case
+// when no model registry mapping exists) flow correctly through the entire pipeline:
+// 1. Events are ingested with model_id=NULL (processor.go sets modelID to Nil)
+// 2. Rollup worker aggregates using COALESCE(model_id, '00000000-...')
+// 3. Query endpoint returns correct results despite NULL model_id
+func TestUsagePipelineNullModelID(t *testing.T) {
+	// Setup test infrastructure
+	pool, cleanupDB := setupTestDB(t)
+	defer cleanupDB()
+
+	brokers, cleanupKafka := setupTestKafka(t)
+	defer cleanupKafka()
+
+	ctx := context.Background()
+	store, err := postgres.NewStore(ctx, pool.Config().ConnString())
+	require.NoError(t, err)
+	defer store.Close()
+
+	// Initialize observability
+	obsCfg := observability.Config{
+		ServiceName: "analytics-service-nullmodel-test",
+		Environment: "test",
+		Endpoint:    "http://localhost:4318",
+		Protocol:    "http",
+		LogLevel:    "info",
+	}
+	obs, err := observability.Init(ctx, obsCfg)
+	require.NoError(t, err)
+	defer obs.Shutdown(ctx)
+
+	// Create Kafka topic
+	topic := "usage.records.nullmodel.v1"
+	conn, err := kafka.Dial("tcp", brokers[0])
+	require.NoError(t, err)
+	defer conn.Close()
+
+	controller, err := conn.Controller()
+	require.NoError(t, err)
+
+	controllerConn, err := kafka.Dial("tcp", fmt.Sprintf("%s:%d", controller.Host, controller.Port))
+	require.NoError(t, err)
+	defer controllerConn.Close()
+
+	err = controllerConn.CreateTopics(kafka.TopicConfig{
+		Topic:             topic,
+		NumPartitions:     1,
+		ReplicationFactor: 1,
+	})
+	require.NoError(t, err)
+
+	// Start Kafka consumer
+	consumer, err := ingestion.NewConsumer(ingestion.Config{
+		Brokers:      brokers,
+		Topic:        topic,
+		GroupID:      "analytics-nullmodel-test",
+		BatchSize:    10,
+		Workers:      1,
+		BatchTimeout: 1 * time.Second,
+		Logger:       obs.Logger,
+		Store:        store,
+	})
+	require.NoError(t, err)
+
+	consumerCtx, cancelConsumer := context.WithCancel(ctx)
+	defer cancelConsumer()
+
+	err = consumer.Start(consumerCtx)
+	require.NoError(t, err)
+	defer consumer.Stop(ctx)
+
+	// Start rollup worker
+	rollupWorker := aggregation.NewWorker(aggregation.Config{
+		Store:    store,
+		Interval: 5 * time.Second,
+		Workers:  1,
+		Logger:   obs.Logger,
+	})
+
+	rollupCtx, cancelRollup := context.WithCancel(ctx)
+	defer cancelRollup()
+
+	go rollupWorker.Start(rollupCtx)
+	defer rollupWorker.Stop()
+
+	// Test data - events that will result in NULL model_id
+	orgID := uuid.New()
+	apiKeyID := uuid.New()
+	timestamp := time.Now().UTC().Truncate(time.Second)
+
+	// Publish multiple records with model names (string)
+	// These will be converted to NULL model_id by processor.go
+	expectedTokens := int64(0)
+	recordCount := 5
+
+	for i := 0; i < recordCount; i++ {
+		recordID := uuid.New()
+		requestID := uuid.New()
+
+		inputTokens := 100 + i*10
+		outputTokens := 200 + i*20
+		expectedTokens += int64(inputTokens + outputTokens)
+
+		record := UsageRecord{
+			RecordID:       recordID.String(),
+			RequestID:      requestID.String(),
+			OrganizationID: orgID.String(),
+			APIKeyID:       apiKeyID.String(),
+			Timestamp:      timestamp.Add(time.Duration(i) * time.Minute),
+			Model:          "gpt-4o", // String model name, NOT a UUID
+			BackendID:      "backend-test-1",
+			TokensInput:    inputTokens,
+			TokensOutput:   outputTokens,
+			CostUSD:        0.003 + float64(i)*0.001,
+			LatencyMS:      200 + i*10,
+			LimitState:     "WITHIN_LIMIT",
+			DecisionReason: "PRIMARY",
+		}
+
+		publishUsageRecord(t, brokers, topic, record)
+	}
+
+	// Wait for ingestion
+	time.Sleep(7 * time.Second)
+
+	// Verify events were inserted with NULL model_id
+	var nullModelCount int
+	query := `SELECT COUNT(*) FROM analytics.usage_events WHERE org_id = $1 AND model_id IS NULL`
+	err = pool.QueryRow(ctx, query, orgID).Scan(&nullModelCount)
+	require.NoError(t, err)
+	require.Equal(t, recordCount, nullModelCount, "all events should have NULL model_id")
+
+	t.Logf("✅ Verified: %d events inserted with model_id=NULL", nullModelCount)
+
+	// Wait for rollup worker to aggregate
+	time.Sleep(6 * time.Second)
+
+	// Verify rollup succeeded despite NULL model_id
+	var rollupCount int64
+	var rollupTokens int64
+	rollupQuery := `
+		SELECT
+			COALESCE(SUM(request_count), 0),
+			COALESCE(SUM(tokens_total), 0)
+		FROM analytics_hourly_rollups
+		WHERE organization_id = $1
+		AND model_id IS NULL
+	`
+	err = pool.QueryRow(ctx, rollupQuery, orgID).Scan(&rollupCount, &rollupTokens)
+	require.NoError(t, err)
+	require.Equal(t, int64(recordCount), rollupCount, "rollup should have correct count")
+	require.Equal(t, expectedTokens, rollupTokens, "rollup should have correct token total")
+
+	t.Logf("✅ Verified: Rollup aggregated %d requests with %d tokens (model_id=NULL)", rollupCount, rollupTokens)
+
+	// Verify query endpoint works with NULL model_id data
+	usageHandler := api.NewUsageHandler(store, obs.Logger, nil)
+
+	router := chi.NewRouter()
+	router.Get("/analytics/v1/orgs/{orgId}/apikeys/{apiKeyId}/usage", usageHandler.GetAPIKeyUsage)
+
+	server := httptest.NewServer(router)
+	defer server.Close()
+
+	start := timestamp.Add(-1 * time.Hour).Format(time.RFC3339)
+	end := timestamp.Add(1 * time.Hour).Format(time.RFC3339)
+	apiURL := fmt.Sprintf("%s/analytics/v1/orgs/%s/apikeys/%s/usage?start=%s&end=%s&granularity=hour",
+		server.URL, orgID.String(), apiKeyID.String(), start, end)
+
+	resp, err := http.Get(apiURL)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusOK, resp.StatusCode, "API should return 200 OK")
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	var apiResp APIKeyUsageSeriesResponse
+	err = json.Unmarshal(body, &apiResp)
+	require.NoError(t, err)
+
+	// Verify totals match (despite NULL model_id)
+	require.Equal(t, int64(recordCount), apiResp.Totals.Invocations, "should have correct invocation count")
+	require.Equal(t, expectedTokens, apiResp.Totals.TotalTokens, "should have correct token total")
+
+	t.Logf("✅ E2E test passed: NULL model_id → ingestion → rollup → query")
+	t.Logf("   Events with NULL model_id: %d", nullModelCount)
+	t.Logf("   Rollup aggregated: %d invocations, %d tokens", rollupCount, rollupTokens)
+	t.Logf("   API query returned: %d invocations, %d tokens", apiResp.Totals.Invocations, apiResp.Totals.TotalTokens)
+}
