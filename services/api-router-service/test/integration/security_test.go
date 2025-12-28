@@ -107,7 +107,7 @@ func TestInferenceAuth_WrongScheme(t *testing.T) {
 }
 
 // TestInferenceAuth_BothHeadersXAPIKeyTakesPrecedence tests header priority.
-func TestInferenceAuth_BothHeadersProvided(t *testing.T) {
+func TestInferenceAuth_BothHeadersXAPIKeyTakesPrecedence(t *testing.T) {
 	validKey := "test-key-12345"
 	responses := map[string]*authValidationResponse{
 		validKey: {
@@ -152,12 +152,13 @@ func TestInputValidation_NullBytesInKey(t *testing.T) {
 	req.Header.Set("X-API-Key", "valid-key\x00malicious")
 
 	ctx, err := authenticator.Authenticate(req)
-	// Should either error or use only the part before null byte
-	if ctx != nil && strings.Contains(ctx.APIKeyID, "\x00") {
-		t.Error("null byte should not pass through to API key ID")
+	// Keys with null bytes should be rejected
+	if err == nil {
+		t.Fatal("expected an error when authenticating with a null byte in the key, but got none")
 	}
-	// Just verify no panic occurred - the actual behavior may vary
-	_ = err
+	if ctx != nil {
+		t.Errorf("expected a nil context on authentication failure, but got a context: %+v", ctx)
+	}
 }
 
 // TestInputValidation_NewlinesInKey tests handling of newlines in API key.
@@ -334,7 +335,7 @@ func TestErrorResponse_NoStackTrace(t *testing.T) {
 		errMsg := err.Error()
 		// The error message exposed to caller should not contain stack traces
 		if strings.Contains(errMsg, "file.go:") || strings.Contains(errMsg, "main.main") {
-			t.Logf("Warning: Error may expose stack trace: %s", errMsg)
+			t.Errorf("Error may expose stack trace: %s", errMsg)
 		}
 	}
 }
@@ -361,7 +362,7 @@ func TestErrorResponse_NoInternalPaths(t *testing.T) {
 	if err != nil {
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "/var/") || strings.Contains(errMsg, "secrets") {
-			t.Logf("Warning: Error may expose internal paths: %s", errMsg)
+			t.Errorf("Error may expose internal paths: %s", errMsg)
 		}
 	}
 }
@@ -618,9 +619,24 @@ func TestTokenLifecycle_CacheInvalidationOnRevoke(t *testing.T) {
 	// "Revoke" the key
 	isRevoked = true
 
-	// Note: Due to caching, immediate second request might still succeed
-	// This test documents expected behavior - cache TTL should be short enough
-	// for security-critical changes to propagate quickly
+	// Second request after revocation - should fail
+	// Note: If internal caching is enabled without explicit invalidation,
+	// a brief delay may be needed. This test validates the behavior.
+	req2 := httptest.NewRequest("POST", "/v1/chat/completions", nil)
+	req2.Header.Set("X-API-Key", key)
 
-	t.Log("Cache invalidation behavior documented - verify TTL is appropriate for security")
+	ctx2, err2 := authenticator.Authenticate(req2)
+
+	// With mocks, we can't test real cache invalidation (e.g., pub/sub notifications).
+	// This test documents expected behavior:
+	// - If caching is disabled or TTL-based: revoked key should be rejected
+	// - If caching is enabled without invalidation: key may still be accepted briefly
+	// Real cache invalidation should be tested in E2E tests against live infrastructure.
+	if err2 == nil && ctx2 != nil {
+		t.Logf("NOTE: Revoked key was accepted after revocation (likely cached). "+
+			"Real cache invalidation requires infrastructure support (pub/sub, webhook). "+
+			"This is expected behavior in mock tests. Got context: %+v", ctx2)
+	} else {
+		t.Log("PASS: Revoked key rejected after revocation (or cache properly invalidated)")
+	}
 }

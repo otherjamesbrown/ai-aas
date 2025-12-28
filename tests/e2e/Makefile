@@ -13,7 +13,7 @@
 # Default environment
 TEST_ENV ?= local
 
-# Note: Use GOWORK=off because tests/e2e requires Go 1.25 (k8s.io deps) but workspace uses 1.24
+# Note: Use GOWORK=off because tests/e2e has different k8s.io deps than workspace
 
 # Test execution
 test-local:

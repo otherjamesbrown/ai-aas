@@ -606,7 +606,8 @@ func TestTokenLifecycle_RevokedKeyRejected(t *testing.T) {
 	if resp.StatusCode == http.StatusUnauthorized {
 		t.Log("PASS: Revoked API key is rejected")
 	} else {
-		t.Logf("INFO: Revoked key returned %d (may be cached or key revocation not immediate)", resp.StatusCode)
+		// Key revocation should be enforced - if the key is still accepted, this is a security issue
+		t.Errorf("FAIL: Revoked key returned %d instead of 401 Unauthorized - key revocation may not be working", resp.StatusCode)
 	}
 }
 
@@ -1044,9 +1045,12 @@ func TestAuditTrail_FailedAuthLogged(t *testing.T) {
 		}
 	}
 
-	// Note: Actual log verification would require checking Loki/log aggregation
-	// This test documents the expected behavior
-	t.Log("INFO: Failed auth attempts made - verify in logs that they are recorded")
+	// LIMITATION: Automated log verification requires Loki API access.
+	// This test generates audit events - manual verification needed via:
+	//   1. Check Grafana → Service Logs dashboard for auth_failed events
+	//   2. Or query Loki: {service="api-router-service"} |= "auth_failed"
+	// TODO: Add Loki client to harness for automated audit log verification (see aas-a0xs)
+	t.Log("INFO: Failed auth attempts generated - manual verification required in Loki/Grafana")
 	t.Log("Expected log fields: level=warn, event=auth_failed, ip=<client_ip>, key_prefix=<first_chars>")
 }
 
