@@ -20,27 +20,27 @@ The test harness provides:
 
 ## Initial Setup (One-Time)
 
-Before running tests for the first time, set up the test environment:
+Before running tests for the first time, set up the admin API key:
+
+**Recommended: Simple setup** (if you have access to secrets):
 
 ```bash
 cd tests/e2e
-
-# Run the setup script (handles all configuration)
-make setup
-
-# Or run manually:
-./scripts/setup-test-env.sh
+./scripts/setup-admin-key.sh
 ```
 
-This will:
-1. Check prerequisites
-2. Configure service URLs
-3. Bootstrap an admin API key (if needed)
-4. Verify connectivity
+This extracts `MASTER_ADMIN_API_KEY` from `secrets/env/.env` and saves it to `.admin-key.env`.
+
+**Alternative: Full bootstrap** (creates new org/key):
+
+```bash
+cd tests/e2e
+make setup
+```
 
 The admin key will be saved to `.admin-key.env` (git-ignored) for future use.
 
-**Note**: The bootstrap script requires an existing admin API key or user credentials to create the test organization. If you don't have one:
+**Note**: The bootstrap script requires an existing admin API key or user credentials. If you don't have one:
 
 1. **Option A**: Use the seed command to create an admin user:
    ```bash
@@ -84,9 +84,9 @@ Run tests directly over the internet using public ingress URLs:
 export ADMIN_API_KEY=your-admin-api-key
 
 # Optionally override default URLs (defaults shown below)
-export USER_ORG_SERVICE_URL=https://user-org.api.ai-aas.dev
-export API_ROUTER_SERVICE_URL=https://router.api.ai-aas.dev
-export ANALYTICS_SERVICE_URL=https://analytics.api.ai-aas.dev
+export USER_ORG_SERVICE_URL=https://user-org.dev.otherjamesbrown.com
+export API_ROUTER_SERVICE_URL=https://api.dev.otherjamesbrown.com
+export ANALYTICS_SERVICE_URL=https://analytics.dev.otherjamesbrown.com
 
 # Run tests via internet
 make test-dev-internet

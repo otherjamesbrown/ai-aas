@@ -140,13 +140,23 @@ main() {
     export API_ROUTER_SERVICE_URL="$API_ROUTER_URL"
     export ANALYTICS_SERVICE_URL="$ANALYTICS_URL"
     
-    # Check if ADMIN_API_KEY is set
+    # Load admin API key from .admin-key.env if not already set
     if [ -z "${ADMIN_API_KEY:-}" ]; then
-        echo -e "${YELLOW}Warning: ADMIN_API_KEY not set${NC}"
-        echo "Some tests may fail without admin credentials"
-        echo "Set ADMIN_API_KEY environment variable to provide admin access"
-    else
+        ADMIN_KEY_FILE="${E2E_DIR}/.admin-key.env"
+        if [ -f "$ADMIN_KEY_FILE" ]; then
+            echo -e "${GREEN}Loading admin key from .admin-key.env...${NC}"
+            source "$ADMIN_KEY_FILE"
+        else
+            echo -e "${YELLOW}Warning: ADMIN_API_KEY not set${NC}"
+            echo "Some tests may fail without admin credentials"
+            echo "Run: ./scripts/setup-admin-key.sh"
+            echo "Or set ADMIN_API_KEY environment variable"
+        fi
+    fi
+
+    if [ -n "${ADMIN_API_KEY:-}" ]; then
         export ADMIN_API_KEY
+        echo -e "${GREEN}✓ Admin API key configured${NC}"
     fi
     
     echo ""
@@ -154,8 +164,9 @@ main() {
     echo ""
     
     # Change to e2e directory and run tests
+    # Use GOWORK=off because tests/e2e requires Go 1.25 (k8s.io deps) but workspace uses 1.24
     cd "$E2E_DIR"
-    go test -v ./suites/... -timeout 30m "$@"
+    GOWORK=off go test -v ./suites/... -timeout 30m "$@"
     
     TEST_EXIT_CODE=$?
     
