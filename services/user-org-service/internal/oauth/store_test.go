@@ -16,6 +16,8 @@ import (
 	"github.com/stretchr/testify/require"
 	testcontainers "github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/docker/go-connections/nat"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/security"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/storage/postgres"
@@ -43,6 +45,11 @@ func setupOAuthStore(t *testing.T) (*Store, func()) {
 		tcpostgres.WithDatabase("user_org_service"),
 		tcpostgres.WithUsername("postgres"),
 		tcpostgres.WithPassword("postgres"),
+		testcontainers.WithWaitStrategy(
+			wait.ForSQL("5432/tcp", "postgres", func(host string, port nat.Port) string {
+				return fmt.Sprintf("postgres://postgres:postgres@%s:%s/user_org_service?sslmode=disable", host, port.Port())
+			}).WithStartupTimeout(30*time.Second).WithPollInterval(500*time.Millisecond),
+		),
 	)
 	if err != nil {
 		t.Skipf("skipping OAuth store integration tests: failed to start postgres container: %v", err)
@@ -54,6 +61,17 @@ func setupOAuthStore(t *testing.T) (*Store, func()) {
 
 	db, err := sql.Open("postgres", connString)
 	require.NoError(t, err)
+
+	// Wait for database to be ready with retry
+	var pingErr error
+	for i := 0; i < 10; i++ {
+		pingErr = db.PingContext(ctx)
+		if pingErr == nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	require.NoError(t, pingErr, "failed to connect to postgres after retries")
 
 	require.NoError(t, goose.SetDialect("postgres"))
 

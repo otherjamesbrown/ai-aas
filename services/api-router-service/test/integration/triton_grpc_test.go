@@ -272,7 +272,7 @@ func TestTritonGRPCModelNameStreaming(t *testing.T) {
 
 	handler := public.NewHandler(
 		logger, authenticator, loader, backendClient, backendRegistry,
-		nil, nil, nil, nil, "", "",
+		nil, nil, nil, nil, nil, "", "",
 		30*time.Second, 10*time.Second,
 	)
 	handler.SetBackendURI("mock-triton-grpc-streaming-backend", grpcAddr)
@@ -398,7 +398,7 @@ func TestTritonGRPCErrorMessageHandling(t *testing.T) {
 
 	handler := public.NewHandler(
 		logger, authenticator, loader, backendClient, backendRegistry,
-		nil, nil, nil, nil, "", "",
+		nil, nil, nil, nil, nil, "", "",
 		30*time.Second, 10*time.Second,
 	)
 	handler.SetBackendURI("mock-triton-grpc-error-backend", grpcAddr)
@@ -518,7 +518,7 @@ func TestTritonGRPCInputTensorCount(t *testing.T) {
 
 	handler := public.NewHandler(
 		logger, authenticator, loader, backendClient, backendRegistry,
-		nil, nil, nil, nil, "", "",
+		nil, nil, nil, nil, nil, "", "",
 		30*time.Second, 10*time.Second,
 	)
 	handler.SetBackendURI("mock-triton-grpc-inputs-backend", grpcAddr)

@@ -53,10 +53,20 @@ type ValidateAPIKeyResponse struct {
 	GrantedModels   []string `json:"grantedModels,omitempty"`   // List of granted model names
 }
 
+// getStore returns the APIKeyValidator to use for database operations.
+// Returns the injected store if available (for testing), otherwise uses runtime.Postgres.
+func (h *Handler) getStore() APIKeyValidator {
+	if h.store != nil {
+		return h.store
+	}
+	return h.runtime.Postgres
+}
+
 // ValidateAPIKey handles POST /v1/auth/validate-api-key.
 // Validates an API key by computing its fingerprint and looking up the key in the database.
 func (h *Handler) ValidateAPIKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	store := h.getStore()
 
 	var req ValidateAPIKeyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -83,18 +93,18 @@ func (h *Handler) ValidateAPIKey(w http.ResponseWriter, r *http.Request) {
 		var orgID uuid.UUID
 		if orgID, err = uuid.Parse(req.OrgID); err != nil {
 			// Try as slug
-			org, err := h.runtime.Postgres.GetOrgBySlug(ctx, req.OrgID)
+			org, err := store.GetOrgBySlug(ctx, req.OrgID)
 			if err != nil {
 				http.Error(w, "organization not found", http.StatusNotFound)
 				return
 			}
 			orgID = org.ID
 		}
-		apiKey, err = h.runtime.Postgres.GetAPIKeyByFingerprint(ctx, orgID, fingerprint)
+		apiKey, err = store.GetAPIKeyByFingerprint(ctx, orgID, fingerprint)
 	} else {
 		// Search across all orgs (less efficient, but supports org-agnostic validation)
 		// TODO: Once API Router provides org_id, make this required for security
-		apiKey, err = h.runtime.Postgres.GetAPIKeyByFingerprintAnyOrg(ctx, fingerprint)
+		apiKey, err = store.GetAPIKeyByFingerprintAnyOrg(ctx, fingerprint)
 	}
 
 	if err != nil {
@@ -134,11 +144,11 @@ func (h *Handler) ValidateAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update last_used_at (best-effort, non-blocking)
-	go func() {
+	go func(s APIKeyValidator) {
 		updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		_ = h.runtime.Postgres.UpdateAPIKeyLastUsed(updateCtx, apiKey.ID, time.Now().UTC())
-	}()
+		_ = s.UpdateAPIKeyLastUsed(updateCtx, apiKey.ID, time.Now().UTC())
+	}(store)
 
 	// Build success response
 	expiresAtStr := ""
@@ -161,12 +171,12 @@ func (h *Handler) ValidateAPIKey(w http.ResponseWriter, r *http.Request) {
 
 	// Fetch model access info for user principals (Spec 022)
 	if apiKey.PrincipalType == postgres.PrincipalTypeUser {
-		accessMode, err := h.runtime.Postgres.GetUserAccessMode(ctx, apiKey.OrgID, apiKey.PrincipalID)
+		accessMode, err := store.GetUserAccessMode(ctx, apiKey.OrgID, apiKey.PrincipalID)
 		if err == nil {
 			response.ModelAccessMode = accessMode
 			// For restricted mode, fetch granted models
 			if accessMode == "restricted" {
-				grantedModels, err := h.runtime.Postgres.GetGrantedModelNames(ctx, apiKey.OrgID, apiKey.PrincipalID)
+				grantedModels, err := store.GetGrantedModelNames(ctx, apiKey.OrgID, apiKey.PrincipalID)
 				if err == nil {
 					response.GrantedModels = grantedModels
 				}

@@ -16,19 +16,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/bootstrap"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/storage/postgres"
 )
-
-// mockRuntimeForAPIKeyValidation provides a mock runtime for testing API key validation
-// Since the real postgres.Store is a concrete struct, we use a custom mock struct
-// that implements only the methods needed for ValidateAPIKey
-type mockRuntimeForAPIKeyValidation struct {
-	apiKeys            map[string]postgres.APIKey // Keyed by fingerprint
-	userAccessModes    map[uuid.UUID]string       // Keyed by userID
-	userGrantedModels  map[uuid.UUID][]string     // Keyed by userID
-	orgsBySlug         map[string]postgres.Org
-}
 
 // computeFingerprint calculates the SHA-256 fingerprint for an API key
 func computeFingerprint(secret string) string {
@@ -38,36 +27,28 @@ func computeFingerprint(secret string) string {
 
 // createMockHandler creates a handler with mocked dependencies for testing
 func createMockHandler(apiKeys map[string]postgres.APIKey, accessModes map[uuid.UUID]string, grantedModels map[uuid.UUID][]string, orgsBySlug map[string]postgres.Org) *Handler {
-	// Create a mock postgres store
-	// Since we can't easily mock postgres.Store (it's concrete), we'll use a test helper approach
-	mockStore := &mockPostgresForValidation{
+	mockStore := &mockAPIKeyValidator{
 		apiKeys:           apiKeys,
 		userAccessModes:   accessModes,
 		userGrantedModels: grantedModels,
 		orgsBySlug:        orgsBySlug,
 	}
 
-	rt := &bootstrap.Runtime{
-		Postgres: mockStore,
-	}
-
 	return &Handler{
-		runtime: rt,
-		logger:  zap.NewNop(),
+		store:  mockStore,
+		logger: zap.NewNop(),
 	}
 }
 
-// mockPostgresForValidation provides minimal postgres.Store methods for API key validation testing
-// This wraps a postgres.Store but only implements the methods needed for ValidateAPIKey
-type mockPostgresForValidation struct {
-	*postgres.Store // Embed to satisfy type checking
-	apiKeys            map[string]postgres.APIKey
-	userAccessModes    map[uuid.UUID]string
-	userGrantedModels  map[uuid.UUID][]string
-	orgsBySlug         map[string]postgres.Org
+// mockAPIKeyValidator implements APIKeyValidator for testing
+type mockAPIKeyValidator struct {
+	apiKeys           map[string]postgres.APIKey
+	userAccessModes   map[uuid.UUID]string
+	userGrantedModels map[uuid.UUID][]string
+	orgsBySlug        map[string]postgres.Org
 }
 
-func (m *mockPostgresForValidation) GetAPIKeyByFingerprint(ctx context.Context, orgID uuid.UUID, fingerprint string) (postgres.APIKey, error) {
+func (m *mockAPIKeyValidator) GetAPIKeyByFingerprint(ctx context.Context, orgID uuid.UUID, fingerprint string) (postgres.APIKey, error) {
 	if key, found := m.apiKeys[fingerprint]; found {
 		if key.OrgID == orgID {
 			return key, nil
@@ -76,33 +57,33 @@ func (m *mockPostgresForValidation) GetAPIKeyByFingerprint(ctx context.Context, 
 	return postgres.APIKey{}, postgres.ErrNotFound
 }
 
-func (m *mockPostgresForValidation) GetAPIKeyByFingerprintAnyOrg(ctx context.Context, fingerprint string) (postgres.APIKey, error) {
+func (m *mockAPIKeyValidator) GetAPIKeyByFingerprintAnyOrg(ctx context.Context, fingerprint string) (postgres.APIKey, error) {
 	if key, found := m.apiKeys[fingerprint]; found {
 		return key, nil
 	}
 	return postgres.APIKey{}, postgres.ErrNotFound
 }
 
-func (m *mockPostgresForValidation) GetOrgBySlug(ctx context.Context, slug string) (postgres.Org, error) {
+func (m *mockAPIKeyValidator) GetOrgBySlug(ctx context.Context, slug string) (postgres.Org, error) {
 	if org, found := m.orgsBySlug[slug]; found {
 		return org, nil
 	}
 	return postgres.Org{}, postgres.ErrNotFound
 }
 
-func (m *mockPostgresForValidation) UpdateAPIKeyLastUsed(ctx context.Context, id uuid.UUID, lastUsedAt time.Time) error {
+func (m *mockAPIKeyValidator) UpdateAPIKeyLastUsed(ctx context.Context, id uuid.UUID, lastUsedAt time.Time) error {
 	// No-op for testing
 	return nil
 }
 
-func (m *mockPostgresForValidation) GetUserAccessMode(ctx context.Context, orgID, userID uuid.UUID) (string, error) {
+func (m *mockAPIKeyValidator) GetUserAccessMode(ctx context.Context, orgID, userID uuid.UUID) (string, error) {
 	if mode, found := m.userAccessModes[userID]; found {
 		return mode, nil
 	}
 	return "restricted", nil
 }
 
-func (m *mockPostgresForValidation) GetGrantedModelNames(ctx context.Context, orgID, userID uuid.UUID) ([]string, error) {
+func (m *mockAPIKeyValidator) GetGrantedModelNames(ctx context.Context, orgID, userID uuid.UUID) ([]string, error) {
 	if models, found := m.userGrantedModels[userID]; found {
 		return models, nil
 	}

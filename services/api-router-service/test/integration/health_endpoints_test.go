@@ -369,8 +369,9 @@ func TestReadyzEndpointBackendRegistryEmpty(t *testing.T) {
 		t.Fatalf("failed to unmarshal response: %v. Body: %s", err, w.Body.String())
 	}
 
-	if response.Status != "degraded" {
-		t.Errorf("expected status 'degraded', got '%s'", response.Status)
+	// Empty backend registry is a critical failure, so status should be "not_ready"
+	if response.Status != "not_ready" {
+		t.Errorf("expected status 'not_ready', got '%s'", response.Status)
 	}
 
 	// Validate backend registry is marked as unhealthy

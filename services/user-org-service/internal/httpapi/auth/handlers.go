@@ -103,11 +103,23 @@ func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, idpRegistry *IdPRe
 	})
 }
 
+// APIKeyValidator defines the data store methods needed for API key validation.
+// This interface enables unit testing without a real database.
+type APIKeyValidator interface {
+	GetAPIKeyByFingerprint(ctx context.Context, orgID uuid.UUID, fingerprint string) (postgres.APIKey, error)
+	GetAPIKeyByFingerprintAnyOrg(ctx context.Context, fingerprint string) (postgres.APIKey, error)
+	GetOrgBySlug(ctx context.Context, slug string) (postgres.Org, error)
+	UpdateAPIKeyLastUsed(ctx context.Context, id uuid.UUID, lastUsedAt time.Time) error
+	GetUserAccessMode(ctx context.Context, orgID, userID uuid.UUID) (string, error)
+	GetGrantedModelNames(ctx context.Context, orgID, userID uuid.UUID) ([]string, error)
+}
+
 // Handler serves authentication endpoints backed by Fosité.
 type Handler struct {
 	runtime     *bootstrap.Runtime
-	idpRegistry *IdPRegistry // IdP registry for OIDC federation (optional, nil if not configured)
+	idpRegistry *IdPRegistry     // IdP registry for OIDC federation (optional, nil if not configured)
 	logger      *zap.Logger
+	store       APIKeyValidator  // Optional: for testing. If nil, uses runtime.Postgres
 }
 
 type loginRequest struct {
