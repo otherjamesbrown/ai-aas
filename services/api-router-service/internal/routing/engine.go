@@ -247,7 +247,7 @@ func (e *Engine) getAvailableBackends(policy *config.RoutingPolicy) []config.Bac
 		return nil
 	}
 
-	// Build degraded map
+	// Build degraded map from policy
 	degradedMap := make(map[string]bool)
 	for _, degradedID := range policy.DegradedBackends {
 		degradedMap[degradedID] = true

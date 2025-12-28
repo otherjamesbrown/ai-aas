@@ -138,10 +138,10 @@ func (p *ProgressBar) Describe(description string) {
 
 // Spinner provides a simple spinner for indeterminate progress
 type Spinner struct {
+	mu      sync.Mutex
 	done    chan bool
 	message string
 	writer  io.Writer
-	mu      sync.Mutex
 }
 
 // NewSpinner creates a new spinner
@@ -163,14 +163,16 @@ func (s *Spinner) Start() {
 			case <-s.done:
 				s.mu.Lock()
 				msg := s.message
+				writer := s.writer
 				s.mu.Unlock()
-				fmt.Fprintf(s.writer, "\r%s... done\n", msg)
+				fmt.Fprintf(writer, "\r%s... done\n", msg)
 				return
 			default:
 				s.mu.Lock()
 				msg := s.message
+				writer := s.writer
 				s.mu.Unlock()
-				fmt.Fprintf(s.writer, "\r%s %s", frames[i], msg)
+				fmt.Fprintf(writer, "\r%s %s", frames[i], msg)
 				i = (i + 1) % len(frames)
 				time.Sleep(100 * time.Millisecond)
 			}

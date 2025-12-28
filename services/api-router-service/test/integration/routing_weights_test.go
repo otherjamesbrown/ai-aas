@@ -330,8 +330,20 @@ func TestDegradedBackendExclusion(t *testing.T) {
 		BackendEndpoints: "",
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, nil, "", "", 30*time.Second, 10*time.Second)
 
+	// Register backends in the registry so the routing engine can find them
+	backendRegistry.RegisterBackend("backend-degraded", degradedBackend.URL+"/v1/completions", 30*time.Second)
+	backendRegistry.RegisterBackend("backend-healthy", healthyBackend.URL+"/v1/completions", 30*time.Second)
+
+	// Create routing engine WITHOUT health monitor to test policy-based degradation only.
+	// Note: Using nil health monitor because IsDegraded() returns true for unknown backends,
+	// which would mark ALL backends as degraded and trigger the fallback path.
+	// This test specifically validates DegradedBackends policy, not health-based degradation.
+	routingEngine := routing.NewEngine(nil, backendRegistry, 30*time.Second, logger)
+
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, routingEngine, nil, nil, nil, nil, "", "", 30*time.Second, 10*time.Second)
+
+	// Also set backend URIs in handler for fallback routing
 	handler.SetBackendURI("backend-degraded", degradedBackend.URL+"/v1/completions")
 	handler.SetBackendURI("backend-healthy", healthyBackend.URL+"/v1/completions")
 

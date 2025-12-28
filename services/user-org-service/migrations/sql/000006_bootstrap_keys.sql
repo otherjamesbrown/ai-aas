@@ -7,7 +7,7 @@
 CREATE TABLE IF NOT EXISTS bootstrap_keys (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     key_id TEXT NOT NULL,                           -- Short human-readable ID (e.g., "bsk_abc123")
-    org_id UUID NOT NULL REFERENCES orgs(id),
+    org_id UUID NOT NULL REFERENCES orgs(org_id),
     fingerprint TEXT NOT NULL,                      -- SHA-256 hash of the token
     status TEXT NOT NULL DEFAULT 'active',          -- active, revoked, redeemed, expired
     notes TEXT NOT NULL DEFAULT '',

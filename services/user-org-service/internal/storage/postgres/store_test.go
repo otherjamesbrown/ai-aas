@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -10,11 +11,14 @@ import (
 
 	_ "github.com/lib/pq"
 
+	"github.com/docker/go-connections/nat"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/require"
+	testcontainers "github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/security"
 )
@@ -33,6 +37,11 @@ func setupStore(t *testing.T) (*Store, func()) {
 		tcpostgres.WithDatabase("user_org_service"),
 		tcpostgres.WithUsername("postgres"),
 		tcpostgres.WithPassword("postgres"),
+		testcontainers.WithWaitStrategy(
+			wait.ForSQL("5432/tcp", "postgres", func(host string, port nat.Port) string {
+				return fmt.Sprintf("postgres://postgres:postgres@%s:%s/user_org_service?sslmode=disable", host, port.Port())
+			}).WithStartupTimeout(30*time.Second).WithPollInterval(500*time.Millisecond),
+		),
 	)
 	if err != nil {
 		t.Skipf("skipping postgres store integration tests: testcontainers unavailable: %v", err)
@@ -46,8 +55,9 @@ func setupStore(t *testing.T) (*Store, func()) {
 	require.NoError(t, err)
 
 	_, filename, _, _ := runtime.Caller(0)
-	projectRoot := filepath.Join(filepath.Dir(filename), "..", "..", "..", "..")
-	migrationsDir := filepath.Join(projectRoot, "services", "user-org-service", "migrations", "sql")
+	// Path: internal/storage/postgres/store_test.go -> go up 3 to user-org-service root
+	serviceRoot := filepath.Join(filepath.Dir(filename), "..", "..", "..")
+	migrationsDir := filepath.Join(serviceRoot, "migrations", "sql")
 
 	require.NoError(t, goose.SetDialect("postgres"))
 	require.NoError(t, goose.Up(db, migrationsDir))
