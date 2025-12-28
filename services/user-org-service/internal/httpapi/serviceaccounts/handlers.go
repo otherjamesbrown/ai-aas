@@ -200,11 +200,11 @@ func (h *Handler) ListServiceAccounts(w http.ResponseWriter, r *http.Request) {
 // UpdateServiceAccount handles PATCH /v1/orgs/{orgId}/service-accounts/{serviceAccountId}.
 func (h *Handler) UpdateServiceAccount(w http.ResponseWriter, r *http.Request) {
 	// TODO: Implement update
-	httputil.WriteBadRequest(w, r, "not implemented")
+	httputil.WriteNotImplemented(w, r, "not implemented")
 }
 
 // DeleteServiceAccount handles DELETE /v1/orgs/{orgId}/service-accounts/{serviceAccountId}.
 func (h *Handler) DeleteServiceAccount(w http.ResponseWriter, r *http.Request) {
 	// TODO: Implement soft delete
-	httputil.WriteBadRequest(w, r, "not implemented")
+	httputil.WriteNotImplemented(w, r, "not implemented")
 }

@@ -72,3 +72,11 @@ func WriteNoContent(w http.ResponseWriter) {
 func WriteServiceUnavailable(w http.ResponseWriter, r *http.Request, message string) {
 	sharedhttputil.WriteErrorWithCode(w, r, "SERVICE_UNAVAILABLE", message)
 }
+
+// WriteNotImplemented writes a 501 not implemented response.
+func WriteNotImplemented(w http.ResponseWriter, r *http.Request, message string) {
+	sharedhttputil.WriteJSON(w, http.StatusNotImplemented, map[string]interface{}{
+		"error": message,
+		"code":  "NOT_IMPLEMENTED",
+	})
+}

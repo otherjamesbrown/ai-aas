@@ -639,19 +639,19 @@ func (h *Handler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
 // GetAPIKey handles GET /v1/orgs/{orgId}/api-keys/{apiKeyId} - Get API key details.
 func (h *Handler) GetAPIKey(w http.ResponseWriter, r *http.Request) {
 	// TODO: Implement getting API key
-	httputil.WriteBadRequest(w, r, "not implemented")
+	httputil.WriteNotImplemented(w, r, "not implemented")
 }
 
 // UpdateAPIKey handles PATCH /v1/orgs/{orgId}/api-keys/{apiKeyId} - Update API key metadata.
 func (h *Handler) UpdateAPIKey(w http.ResponseWriter, r *http.Request) {
 	// TODO: Implement updating API key
-	httputil.WriteBadRequest(w, r, "not implemented")
+	httputil.WriteNotImplemented(w, r, "not implemented")
 }
 
 // RotateAPIKey handles POST /v1/orgs/{orgId}/api-keys/{apiKeyId}/rotate - Rotate API key.
 func (h *Handler) RotateAPIKey(w http.ResponseWriter, r *http.Request) {
 	// TODO: Implement rotating API key
-	httputil.WriteBadRequest(w, r, "not implemented")
+	httputil.WriteNotImplemented(w, r, "not implemented")
 }
 
 // Convenience handlers for /organizations/me/* routes that resolve org/user from auth context
@@ -927,13 +927,13 @@ func (h *Handler) GetAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 // UpdateAPIKeyForMe handles PATCH /organizations/me/api-keys/{apiKeyId} - Update API key for current user.
 func (h *Handler) UpdateAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 	// TODO: Implement updating API key
-	httputil.WriteBadRequest(w, r, "not implemented")
+	httputil.WriteNotImplemented(w, r, "not implemented")
 }
 
 // RotateAPIKeyForMe handles POST /organizations/me/api-keys/{apiKeyId}/rotate - Rotate API key for current user.
 func (h *Handler) RotateAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 	// TODO: Implement rotating API key
-	httputil.WriteBadRequest(w, r, "not implemented")
+	httputil.WriteNotImplemented(w, r, "not implemented")
 }
 
 // RevokeAPIKeyForMe handles POST/DELETE /organizations/me/api-keys/{apiKeyId}/revoke - Revoke API key for current user.
