@@ -236,6 +236,7 @@ func apiKeyCreateCommand() *cobra.Command {
 	var flagUserID string
 	var flagEmail string
 	var flagScopes []string
+	var flagPlatformAdmin bool
 	var flagExpiresInDays int
 	var flagFormat string
 	var flagVerbose bool
@@ -266,22 +267,31 @@ Examples:
   ai-aas-cli apikey create --org-id acme --email user@example.com \
     --scopes inference:read,inference:write
 
+  # Create platform admin key (cross-tenant access)
+  ai-aas-cli apikey create --org-id platform-admin --email admin@company.com --platform-admin
+
   # Output in JSON for automation
   ai-aas-cli apikey create --org-id acme --email user@example.com --format json
 
   # Create key and save to profile (uses org_id/user_id from profile)
   ai-aas-cli apikey create --profile acme-admin
 
+Platform Admin Keys:
+  - Use --platform-admin to create keys with 'admin' scope
+  - Admin scope grants cross-tenant access (can manage users/keys in any org)
+  - Required for system administrators who need to manage multiple orgs
+
 Security Best Practices:
   - Set expiration for production keys
   - Rotate keys regularly
   - Use minimal scopes
+  - Only use --platform-admin for trusted system administrators
 
 See Also:
   ai-aas-cli apikey list      List existing keys
   ai-aas-cli apikey delete    Revoke a key`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAPIKeyCreate(cmd, args, flagOrgID, flagUserID, flagEmail, flagScopes, flagExpiresInDays,
+			return runAPIKeyCreate(cmd, args, flagOrgID, flagUserID, flagEmail, flagScopes, flagPlatformAdmin, flagExpiresInDays,
 				flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey, flagProfile)
 		},
 	}
@@ -290,6 +300,7 @@ See Also:
 	cmd.Flags().StringVar(&flagUserID, "user-id", "", "User ID (required if --email not provided)")
 	cmd.Flags().StringVar(&flagEmail, "email", "", "User email (required if --user-id not provided)")
 	cmd.Flags().StringSliceVar(&flagScopes, "scopes", []string{}, "API key scopes")
+	cmd.Flags().BoolVar(&flagPlatformAdmin, "platform-admin", false, "Create platform admin key with cross-tenant access (adds 'admin' scope)")
 	cmd.Flags().IntVar(&flagExpiresInDays, "expires-in-days", 0, "Expiration in days (0 = no expiration)")
 	cmd.Flags().StringVar(&flagFormat, "format", "table", "Output format: table, json, csv")
 	cmd.Flags().BoolVar(&flagVerbose, "verbose", false, "Enable verbose output")
@@ -301,7 +312,7 @@ See Also:
 	return cmd
 }
 
-func runAPIKeyCreate(cmd *cobra.Command, args []string, flagOrgID, flagUserID, flagEmail string, flagScopes []string, flagExpiresInDays int,
+func runAPIKeyCreate(cmd *cobra.Command, args []string, flagOrgID, flagUserID, flagEmail string, flagScopes []string, flagPlatformAdmin bool, flagExpiresInDays int,
 	flagFormat string, flagVerbose, flagQuiet bool, flagUserOrgEndpoint, flagAPIKey string, flagProfile string) error {
 	startTime := time.Now()
 
@@ -408,8 +419,15 @@ func runAPIKeyCreate(cmd *cobra.Command, args []string, flagOrgID, flagUserID, f
 	}
 
 	// Build request
+	scopes := flagScopes
+	if flagPlatformAdmin {
+		// Add 'admin' scope for platform admin keys
+		// This grants cross-tenant access (bypasses requireOrgAccess checks)
+		scopes = append(scopes, "admin")
+	}
+
 	req := userorg.IssueAPIKeyRequest{
-		Scopes: flagScopes,
+		Scopes: scopes,
 	}
 	if flagExpiresInDays > 0 {
 		req.ExpiresInDays = &flagExpiresInDays

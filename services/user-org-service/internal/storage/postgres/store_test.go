@@ -203,10 +203,14 @@ func TestStoreAPIKeyLifecycle(t *testing.T) {
 		Fingerprint:   "fp-123",
 		Status:        "active",
 		Scopes:        []string{"billing.read"},
+		Notes:         "Test API key for billing",
 	})
 	require.NoError(t, err)
 	require.Equal(t, int64(1), key.Version)
 	require.Equal(t, []string{"billing.read"}, key.Scopes)
+	require.NotEmpty(t, key.KeyID, "key_id should be populated")
+	require.Equal(t, "Test API key for billing", key.Notes)
+	originalKeyID := key.KeyID
 
 	revokedAt := time.Now().UTC()
 	key, err = store.RevokeAPIKey(ctx, RevokeAPIKeyParams{
@@ -218,6 +222,9 @@ func TestStoreAPIKeyLifecycle(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(2), key.Version)
 	require.NotNil(t, key.RevokedAt)
+	// Validate that RevokeAPIKey returns all fields correctly (regression test for migration 5 column order issue)
+	require.Equal(t, originalKeyID, key.KeyID, "key_id should be preserved after revocation")
+	require.Equal(t, "Test API key for billing", key.Notes, "notes should be preserved after revocation")
 
 	_, err = store.RevokeAPIKey(ctx, RevokeAPIKeyParams{
 		ID:        key.ID,
