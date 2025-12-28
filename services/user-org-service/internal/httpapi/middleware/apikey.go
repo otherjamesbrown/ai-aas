@@ -5,10 +5,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/bootstrap"
@@ -50,7 +52,7 @@ func tryAPIKeyAuth(ctx context.Context, rt *bootstrap.Runtime, token string, req
 	`, fingerprint).Scan(&apiKeyID, &orgID, &principalID, &principalType, &status, &expiresAt, &scopes)
 
 	if err != nil {
-		if err.Error() != "no rows in result set" {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			logger.Debug("RequireAuth: API key lookup failed",
 				zap.Error(err),
 				zap.String("path", path),
