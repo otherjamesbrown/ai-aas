@@ -199,3 +199,22 @@ type BootstrapKeyListResponse struct {
 	Keys []BootstrapKeyResponse `json:"keys"`
 }
 
+// InspectAPIKeyRequest represents an API key inspection request.
+type InspectAPIKeyRequest struct {
+	Key string `json:"key"` // The API key secret to inspect
+}
+
+// InspectAPIKeyResponse represents an API key inspection response.
+type InspectAPIKeyResponse struct {
+	KeyID         string   `json:"keyId"`
+	OrgID         string   `json:"orgId"`
+	OrgSlug       string   `json:"orgSlug"`
+	PrincipalType string   `json:"principalType"` // "user" or "service_account"
+	PrincipalID   string   `json:"principalId"`
+	Status        string   `json:"status"`       // "active", "revoked", "expired"
+	Scopes        []string `json:"scopes"`
+	CreatedAt     string   `json:"createdAt"`
+	ExpiresAt     string   `json:"expiresAt,omitempty"`
+	LastUsedAt    string   `json:"lastUsedAt,omitempty"`
+}
+

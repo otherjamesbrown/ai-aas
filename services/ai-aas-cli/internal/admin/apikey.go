@@ -67,6 +67,7 @@ See Also:
 	cmd.AddCommand(apiKeyListCommand())
 	cmd.AddCommand(apiKeyCreateCommand())
 	cmd.AddCommand(apiKeyDeleteCommand())
+	cmd.AddCommand(apiKeyInspectCommand())
 
 	return cmd
 }
@@ -687,6 +688,181 @@ func runAPIKeyDelete(cmd *cobra.Command, args []string, flagOrgID, flagAPIKeyID 
 	} else {
 		if !cfg.Quiet {
 			fmt.Printf("API key deleted successfully: %s\n", flagAPIKeyID)
+		}
+	}
+	return nil
+}
+
+func apiKeyInspectCommand() *cobra.Command {
+	var flagKey string
+	var flagFormat string
+	var flagVerbose bool
+	var flagQuiet bool
+	var flagUserOrgEndpoint string
+	var flagAPIKey string
+
+	cmd := &cobra.Command{
+		Use:   "inspect [key]",
+		Short: "Inspect API key details",
+		Long: `Inspect an API key and show its details.
+
+This command accepts an API key secret and returns detailed information about
+the key, including which organization it belongs to, the principal (user or
+service account), scopes, status, and expiration.
+
+Useful for:
+  - Debugging authentication issues
+  - Verifying key ownership and permissions
+  - Checking key status and expiration
+  - Support and troubleshooting scenarios
+
+Examples:
+  # Inspect a key (positional argument)
+  ai-aas-cli apikey inspect ai-aas_xxxxxxxxxxxxx
+
+  # Inspect using --key flag
+  ai-aas-cli apikey inspect --key ai-aas_xxxxxxxxxxxxx
+
+  # Output in JSON format
+  ai-aas-cli apikey inspect ai-aas_xxxxxxxxxxxxx --format json
+
+  # Output in table format (default)
+  ai-aas-cli apikey inspect ai-aas_xxxxxxxxxxxxx --format table
+
+Security:
+  - This operation is logged for audit purposes
+  - Requires admin or apikey:manage scope
+  - The key secret itself is never returned in the response
+
+Output Fields:
+  - Key ID: Unique identifier for the key
+  - Organization: Which org the key belongs to (ID and slug)
+  - Principal: User or service account that owns the key
+  - Status: active, revoked, or expired
+  - Scopes: Permissions granted to the key
+  - Created: When the key was created
+  - Expires: When the key expires (if set)
+  - Last Used: Last time the key was used (if tracked)
+
+See Also:
+  ai-aas-cli apikey list      List all keys in an organization
+  ai-aas-cli apikey create    Create a new API key`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			key := flagKey
+			if key == "" && len(args) > 0 {
+				key = args[0]
+			}
+			return runAPIKeyInspect(cmd, args, key, flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey)
+		},
+	}
+
+	cmd.Flags().StringVar(&flagKey, "key", "", "API key to inspect")
+	cmd.Flags().StringVar(&flagFormat, "format", "table", "Output format: table, json")
+	cmd.Flags().BoolVar(&flagVerbose, "verbose", false, "Enable verbose output")
+	cmd.Flags().BoolVar(&flagQuiet, "quiet", false, "Suppress non-error output")
+	cmd.Flags().StringVar(&flagUserOrgEndpoint, "user-org-endpoint", "", "User-org-service endpoint (overrides config)")
+	cmd.Flags().StringVar(&flagAPIKey, "api-key", "", "API key for authentication (overrides config)")
+
+	return cmd
+}
+
+func runAPIKeyInspect(cmd *cobra.Command, args []string, key, flagFormat string, flagVerbose, flagQuiet bool, flagUserOrgEndpoint, flagAPIKey string) error {
+	startTime := time.Now()
+
+	// Load configuration
+	cfg, err := config.Load()
+	if err != nil {
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to load configuration: %v", err),
+			"Check your configuration file or environment variables.",
+		)
+	}
+
+	// Apply flag overrides
+	if flagUserOrgEndpoint != "" {
+		cfg.UserOrgEndpoint = flagUserOrgEndpoint
+	}
+	if flagAPIKey != "" {
+		cfg.APIKey = flagAPIKey
+	}
+	if flagFormat != "" {
+		cfg.OutputFormat = flagFormat
+	}
+	if flagVerbose {
+		cfg.Verbose = true
+	}
+	if flagQuiet {
+		cfg.Quiet = true
+	}
+
+	// Validate configuration
+	if cfg.UserOrgEndpoint == "" {
+		return errors.NewValidationError(
+			"user-org-service endpoint is required",
+			"Set via --user-org-endpoint flag or ADMIN_CLI_USER_ORG_ENDPOINT environment variable",
+		)
+	}
+
+	// Validate key argument
+	if key == "" {
+		return errors.NewValidationError(
+			"API key is required",
+			"Provide the API key to inspect as a positional argument or with --key flag",
+		)
+	}
+
+	// Health check
+	checker := health.NewChecker(5 * time.Second)
+	requiredServices := map[string]string{
+		"user-org-service": cfg.UserOrgEndpoint,
+	}
+	if _, err := checker.CheckRequired(cmd.Context(), requiredServices); err != nil {
+		return errors.NewServiceUnavailableError("user-org-service", cfg.UserOrgEndpoint)
+	}
+
+	// Create client and inspect API key
+	userOrgClient := userorg.NewClient(cfg.UserOrgEndpoint, cfg.APIKey)
+	keyDetails, err := userOrgClient.InspectAPIKey(cmd.Context(), key)
+	if err != nil {
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to inspect API key: %v", err),
+			"Verify the key is valid and you have permission to inspect API keys.",
+		)
+	}
+
+	// Audit logging
+	auditLogger := audit.NewLogger(nil)
+	_ = auditLogger.LogOperation(audit.Operation{
+		Type:     "apikey_inspect",
+		Command:  "apikey inspect",
+		Outcome:  "success",
+		Duration: time.Since(startTime),
+	})
+
+	// Format output
+	if cfg.OutputFormat == "json" {
+		return output.PrintJSON(keyDetails)
+	} else {
+		// Table format
+		if !cfg.Quiet {
+			fmt.Println("API Key Details")
+			fmt.Println(strings.Repeat("─", 40))
+			fmt.Printf("Key ID:         %s\n", keyDetails.KeyID)
+			fmt.Printf("Organization:   %s (%s)\n", keyDetails.OrgSlug, keyDetails.OrgID)
+			fmt.Printf("Principal:      %s (%s)\n", keyDetails.PrincipalType, keyDetails.PrincipalID)
+			fmt.Printf("Status:         %s\n", keyDetails.Status)
+			fmt.Printf("Scopes:         %s\n", strings.Join(keyDetails.Scopes, ", "))
+			fmt.Printf("Created:        %s\n", keyDetails.CreatedAt)
+			if keyDetails.ExpiresAt != "" {
+				fmt.Printf("Expires:        %s\n", keyDetails.ExpiresAt)
+			} else {
+				fmt.Printf("Expires:        Never\n")
+			}
+			if keyDetails.LastUsedAt != "" {
+				fmt.Printf("Last Used:      %s\n", keyDetails.LastUsedAt)
+			} else {
+				fmt.Printf("Last Used:      Never\n")
+			}
 		}
 	}
 	return nil

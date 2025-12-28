@@ -95,6 +95,30 @@ func TestAPIKeyDeleteCommand(t *testing.T) {
 	assert.NotNil(t, formatFlag, "format flag should exist")
 }
 
+func TestAPIKeyInspectCommand(t *testing.T) {
+	cmd := APIKeyCommand()
+
+	// Find inspect command by name
+	inspectCmd, _, err := cmd.Find([]string{"inspect"})
+	require.NoError(t, err, "inspect command should exist")
+	require.NotNil(t, inspectCmd, "inspect command should not be nil")
+	assert.Equal(t, "inspect [key]", inspectCmd.Use)
+
+	// Test flags
+	keyFlag := inspectCmd.Flags().Lookup("key")
+	assert.NotNil(t, keyFlag, "key flag should exist")
+
+	formatFlag := inspectCmd.Flags().Lookup("format")
+	assert.NotNil(t, formatFlag, "format flag should exist")
+	assert.Equal(t, "table", formatFlag.DefValue, "format default should be table")
+
+	verboseFlag := inspectCmd.Flags().Lookup("verbose")
+	assert.NotNil(t, verboseFlag, "verbose flag should exist")
+
+	quietFlag := inspectCmd.Flags().Lookup("quiet")
+	assert.NotNil(t, quietFlag, "quiet flag should exist")
+}
+
 func TestAPIKeyRotateCommand(t *testing.T) {
 	t.Skip("rotate command not yet implemented")
 }
