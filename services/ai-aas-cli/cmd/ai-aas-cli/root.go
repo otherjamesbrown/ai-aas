@@ -901,6 +901,7 @@ For more information, see: https://docs.ai-aas.io/cli/model`,
 	}
 
 	// Add nested parent commands (each has its own subcommands)
+	cmd.AddCommand(model.NewListCommand())
 	cmd.AddCommand(model.NewHFDeployCommand())
 	cmd.AddCommand(model.NewRegistryCommand())
 	cmd.AddCommand(model.NewCacheParentCommand())
