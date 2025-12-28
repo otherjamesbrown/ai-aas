@@ -43,8 +43,8 @@ Question 2 - Output Level (header: "Output"):
 ### Summary
 | Environment | Tests | Status |
 |-------------|-------|--------|
-| Development | X/9   | PASS/FAIL |
-| Staging     | X/9   | PASS/FAIL |
+| Development | X/10  | PASS/FAIL |
+| Staging     | X/10  | PASS/FAIL |
 
 ### Test Breakdown
 | Test | Development | Staging |
@@ -57,6 +57,7 @@ Question 2 - Output Level (header: "Output"):
 | list_models | PASS/FAIL | PASS/FAIL |
 | inference | PASS/FAIL | PASS/FAIL |
 | inference_health | PASS/FAIL | PASS/FAIL |
+| usage_query | PASS/FAIL | PASS/FAIL |
 | cleanup | PASS/FAIL | PASS/FAIL |
 
 ### Inference Details (All Models)

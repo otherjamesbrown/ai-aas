@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-
-	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/api"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/cli"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/huggingface"
@@ -175,16 +173,9 @@ See Also:
 			// Register in platform via Admin API
 			fmt.Printf("Registering model in platform as: %s\n", name)
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
-			opts := []api.ClientOption{}
-			if cfg.TLSInsecure {
-				opts = append(opts, api.WithInsecureSkipVerify())
-			}
-			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+			apiClient := cfg.NewAPIClient(adminEndpoint)
 			regClient := registry.NewClient(apiClient)
 
 			model, err := regClient.Add(ctx, registry.AddRequest{
@@ -262,10 +253,7 @@ See Also:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
 				return fmt.Errorf("Admin API endpoint not configured. Run 'ai-aas-cli --init' first")
@@ -274,11 +262,7 @@ See Also:
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			opts := []api.ClientOption{}
-			if cfg.TLSInsecure {
-				opts = append(opts, api.WithInsecureSkipVerify())
-			}
-			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+			apiClient := cfg.NewAPIClient(adminEndpoint)
 			regClient := registry.NewClient(apiClient)
 
 			models, err := regClient.List(ctx, registry.ListOptions{
@@ -305,7 +289,7 @@ See Also:
 
 			// Table output
 			table := output.NewTableWriter()
-			table.SetHeader([]string{"NAME", "HF MODEL ID", "CACHED", "DEPLOYED", "STATUS"})
+			table.SetHeader([]string{"NAME", "TYPE", "HF MODEL ID", "CACHED", "DEPLOYED", "STATUS"})
 
 			for _, m := range models {
 				cached := "No"
@@ -325,8 +309,15 @@ See Also:
 					status = "cached"
 				}
 
+				// Default to "text" if model type is empty
+				modelType := m.ModelType
+				if modelType == "" {
+					modelType = "text"
+				}
+
 				table.Append([]string{
 					m.Name,
+					modelType,
 					truncate(m.HFModelID, 35),
 					cached,
 					deployed,
@@ -384,10 +375,7 @@ See Also:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
 				return fmt.Errorf("Admin API endpoint not configured. Run 'ai-aas-cli --init' first")
@@ -396,11 +384,7 @@ See Also:
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			opts := []api.ClientOption{}
-			if cfg.TLSInsecure {
-				opts = append(opts, api.WithInsecureSkipVerify())
-			}
-			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+			apiClient := cfg.NewAPIClient(adminEndpoint)
 			regClient := registry.NewClient(apiClient)
 
 			model, err := regClient.Get(ctx, name)
@@ -536,10 +520,7 @@ See Also:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
 				return fmt.Errorf("Admin API endpoint not configured. Run 'ai-aas-cli --init' first")
@@ -548,11 +529,7 @@ See Also:
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			opts := []api.ClientOption{}
-			if cfg.TLSInsecure {
-				opts = append(opts, api.WithInsecureSkipVerify())
-			}
-			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+			apiClient := cfg.NewAPIClient(adminEndpoint)
 			regClient := registry.NewClient(apiClient)
 
 			// Check if model exists first
@@ -618,10 +595,7 @@ See Also:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
 				return fmt.Errorf("Admin API endpoint not configured. Run 'ai-aas-cli --init' first")
@@ -630,11 +604,7 @@ See Also:
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			opts := []api.ClientOption{}
-			if cfg.TLSInsecure {
-				opts = append(opts, api.WithInsecureSkipVerify())
-			}
-			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+			apiClient := cfg.NewAPIClient(adminEndpoint)
 			regClient := registry.NewClient(apiClient)
 
 			// Single model status
@@ -696,10 +666,7 @@ See Also:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
 				return fmt.Errorf("Admin API endpoint not configured. Run 'ai-aas-cli --init' first")
@@ -708,11 +675,7 @@ See Also:
 			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 			defer cancel()
 
-			opts := []api.ClientOption{}
-			if cfg.TLSInsecure {
-				opts = append(opts, api.WithInsecureSkipVerify())
-			}
-			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+			apiClient := cfg.NewAPIClient(adminEndpoint)
 			regClient := registry.NewClient(apiClient)
 
 			// Display operation

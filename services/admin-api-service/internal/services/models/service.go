@@ -420,3 +420,10 @@ func (s *Service) updateModelExternalName(ctx context.Context, modelID uuid.UUID
 	return err
 }
 
+// updateModelType updates a model's model_type
+func (s *Service) updateModelType(ctx context.Context, modelID uuid.UUID, modelType string) error {
+	query := `UPDATE model_registry SET model_type = $2, updated_at = NOW() WHERE id = $1`
+	_, err := s.pool.Exec(ctx, query, modelID, modelType)
+	return err
+}
+

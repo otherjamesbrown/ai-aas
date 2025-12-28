@@ -143,10 +143,14 @@ spec:
             - name: RABBITMQ_URL
               value: {{ .Values.rabbitmq.url | quote }}
             {{- end }}
+            {{- if .Values.rabbitmq.stream }}
             - name: RABBITMQ_STREAM
               value: {{ .Values.rabbitmq.stream | quote }}
+            {{- end }}
+            {{- if .Values.rabbitmq.consumer }}
             - name: RABBITMQ_CONSUMER
               value: {{ .Values.rabbitmq.consumer | quote }}
+            {{- end }}
             # S3 configuration (optional)
             {{- if .Values.s3.enabled }}
             {{- if .Values.s3.endpointSecretName }}

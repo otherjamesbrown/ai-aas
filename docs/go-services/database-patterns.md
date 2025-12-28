@@ -1,7 +1,7 @@
 # Database Patterns
 
 ---
-last_updated: 2025-12-09
+last_updated: 2025-12-27
 document_type: guide
 ---
 
@@ -256,6 +256,62 @@ Generate with:
 ```bash
 sqlc generate
 ```
+
+## Upserts and Deduplication
+
+### ON CONFLICT Requirements
+
+**CRITICAL**: `ON CONFLICT` clauses MUST match an existing unique constraint exactly.
+
+PostgreSQL requires that the columns in `ON CONFLICT (...)` match a `UNIQUE` constraint, `UNIQUE INDEX`, or `PRIMARY KEY` exactly. Mismatches will cause runtime errors.
+
+```go
+// CORRECT: Matches unique constraint
+// Table: UNIQUE(event_id)
+INSERT INTO events (...) VALUES (...)
+ON CONFLICT (event_id) DO NOTHING
+
+// CORRECT: Matches composite constraint
+// Table: UNIQUE(org_id, user_id)
+INSERT INTO user_access (...) VALUES (...)
+ON CONFLICT (org_id, user_id) DO UPDATE SET ...
+
+// WRONG: No matching constraint
+// Table: PRIMARY KEY (event_id, occurred_at)
+INSERT INTO events (...) VALUES (...)
+ON CONFLICT (event_id) DO NOTHING  // ERROR: constraint doesn't exist
+
+// FIX: Add unique index or use matching columns
+CREATE UNIQUE INDEX idx_events_event_id ON events (event_id);
+-- Now ON CONFLICT (event_id) works
+```
+
+### TimescaleDB Composite Keys
+
+TimescaleDB hypertables require the partitioning column in the primary key. This creates a composite key that may not match your deduplication needs:
+
+```sql
+-- Table design for TimescaleDB
+CREATE TABLE usage_events (
+    event_id UUID NOT NULL,
+    occurred_at TIMESTAMPTZ NOT NULL,
+    -- Other columns...
+    PRIMARY KEY (event_id, occurred_at)  -- Required for hypertable
+);
+
+-- Add unique index for deduplication
+CREATE UNIQUE INDEX idx_usage_events_event_id
+    ON usage_events (event_id);
+
+-- Now ON CONFLICT works
+INSERT INTO usage_events (...) VALUES (...)
+ON CONFLICT (event_id) DO NOTHING;
+```
+
+**Pattern**: When using TimescaleDB or other partitioned tables:
+1. Use composite PRIMARY KEY for partitioning requirements
+2. Add separate UNIQUE INDEX on deduplication column(s)
+3. Reference the UNIQUE INDEX in ON CONFLICT clause
 
 ## Error Handling
 

@@ -112,14 +112,15 @@ func main() {
 	// Create HTTP server
 	// RBAC is enabled by default, can be disabled via ENABLE_RBAC=false for development
 	apiServer := api.NewServer(api.Config{
-		Port:         cfg.HTTPPort,
-		Logger:       logger,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
-		EnableRBAC:   cfg.EnableRBAC,
-		Store:        store,
-		RedisClient:  redisClient,
+		Port:              cfg.HTTPPort,
+		Logger:            logger,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		EnableRBAC:        cfg.EnableRBAC,
+		MasterAdminAPIKey: cfg.MasterAdminAPIKey,
+		Store:             store,
+		RedisClient:       redisClient,
 	})
 
 	// Initialize freshness cache
@@ -221,18 +222,14 @@ func main() {
 
 	// Start ingestion consumer
 	ingestionConsumer, err := ingestion.NewConsumer(ingestion.Config{
-		StreamURL:      cfg.RabbitMQURL,
-		Stream:         cfg.RabbitMQStream,
-		Consumer:       cfg.RabbitMQConsumer,
-		BatchSize:      cfg.IngestionBatchSize,
-		Workers:        cfg.IngestionWorkers,
-		BatchTimeout:   cfg.IngestionBatchTimeout,
-		Logger:         logger,
-		Store:          store,
-		RabbitMQHost:   "", // Will be parsed from URL
-		RabbitMQPort:   0,  // Will be parsed from URL
-		RabbitMQUser:   "", // Will be parsed from URL
-		RabbitMQPass:   "", // Will be parsed from URL
+		Brokers:      cfg.KafkaBrokers,
+		Topic:        cfg.KafkaTopic,
+		GroupID:      cfg.KafkaConsumerGroup,
+		BatchSize:    cfg.IngestionBatchSize,
+		Workers:      cfg.IngestionWorkers,
+		BatchTimeout: cfg.IngestionBatchTimeout,
+		Logger:       logger,
+		Store:        store,
 	})
 	if err != nil {
 		logger.Warn("failed to create ingestion consumer", zap.Error(err))

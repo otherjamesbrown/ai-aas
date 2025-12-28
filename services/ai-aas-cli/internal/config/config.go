@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/api"
 	"github.com/spf13/viper"
 )
 
@@ -148,7 +150,8 @@ func Load() (*Config, error) {
 	}
 
 	// Warn about secrets in config file (deprecation notice)
-	warnSecretsInConfigFile()
+	// Skip warning in JSON mode to avoid polluting machine-readable output
+	warnSecretsInConfigFile(&cfg)
 
 	return &cfg, nil
 }
@@ -264,7 +267,36 @@ func MaskSecret(s string) string {
 
 // warnSecretsInConfigFile checks for secrets in the config file and warns the user.
 // This is a deprecation notice to encourage migration to environment variables.
-func warnSecretsInConfigFile() {
+// The warning is suppressed in JSON output mode to avoid polluting machine-readable output.
+func warnSecretsInConfigFile(cfg *Config) {
+	// Skip warning in JSON mode to avoid polluting parseable output
+	// Check both config file setting and environment variable (which has higher precedence)
+	outputFormat := cfg.OutputFormat
+	if envFormat := os.Getenv("AI_AAS_OUTPUT_FORMAT"); envFormat != "" {
+		outputFormat = envFormat
+	}
+
+	// Also check common command-line flag patterns
+	for _, arg := range os.Args {
+		if arg == "--format=json" || arg == "-f=json" {
+			outputFormat = "json"
+			break
+		}
+		// Check for --format json (two separate args)
+		if arg == "--format" || arg == "-f" {
+			for i, a := range os.Args {
+				if a == arg && i+1 < len(os.Args) && os.Args[i+1] == "json" {
+					outputFormat = "json"
+					break
+				}
+			}
+		}
+	}
+
+	if outputFormat == "json" {
+		return
+	}
+
 	configPath, err := GetConfigPath()
 	if err != nil {
 		return
@@ -321,5 +353,31 @@ func (c *Config) Validate() error {
 // IsConfigured returns true if essential config is set
 func (c *Config) IsConfigured() bool {
 	return c.APIEndpoint != "" && c.APIKey != ""
+}
+
+// GetAdminEndpoint returns the Admin API endpoint to use.
+// If AdminAPIEndpoint is set (legacy), it takes precedence.
+// Otherwise, falls back to APIEndpoint (recommended).
+func (c *Config) GetAdminEndpoint() string {
+	if c.AdminAPIEndpoint != "" {
+		return c.AdminAPIEndpoint
+	}
+	return c.APIEndpoint
+}
+
+// NewAPIClient creates a new API client with appropriate options based on config.
+// This centralizes client creation logic to ensure consistent TLS and timeout handling.
+func (c *Config) NewAPIClient(endpoint string) *api.Client {
+	opts := []api.ClientOption{}
+
+	if c.TLSInsecure {
+		opts = append(opts, api.WithInsecureSkipVerify())
+	}
+
+	if c.Timeout > 0 {
+		opts = append(opts, api.WithTimeout(time.Duration(c.Timeout)*time.Second))
+	}
+
+	return api.NewClient(endpoint, c.APIKey, opts...)
 }
 

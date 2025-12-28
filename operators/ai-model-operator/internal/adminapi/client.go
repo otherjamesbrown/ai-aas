@@ -78,6 +78,7 @@ type createDeploymentRequestDTO struct {
 	Environment  string `json:"environment"`
 	Namespace    string `json:"namespace"`
 	Replicas     int    `json:"replicas,omitempty"`
+	ModelType    string `json:"model_type,omitempty"`
 }
 
 // CreateDeploymentRequest contains data for creating a deployment
@@ -88,6 +89,7 @@ type CreateDeploymentRequest struct {
 	Environment  string
 	Namespace    string
 	Replicas     int
+	ModelType    string // Model type (text, vision-language, embedding, audio)
 }
 
 // DeploymentStatus represents the status of a deployment
@@ -109,6 +111,7 @@ func (c *Client) CreateDeployment(ctx context.Context, req CreateDeploymentReque
 		Environment:  req.Environment,
 		Namespace:    req.Namespace,
 		Replicas:     req.Replicas,
+		ModelType:    req.ModelType,
 	}
 	return c.request(ctx, http.MethodPost, "/v1/deployments", dto, nil)
 }

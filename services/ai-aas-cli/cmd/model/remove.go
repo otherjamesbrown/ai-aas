@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-
-	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/api"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/registry"
 )
@@ -42,10 +40,7 @@ Examples:
 			}
 
 			// Use Admin API endpoint for registry operations
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint // fallback for backward compatibility
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
 				return fmt.Errorf("Admin API endpoint not configured. Run 'ai-aas-cli --init' first")
@@ -54,11 +49,7 @@ Examples:
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			opts := []api.ClientOption{}
-			if cfg.TLSInsecure {
-				opts = append(opts, api.WithInsecureSkipVerify())
-			}
-			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+			apiClient := cfg.NewAPIClient(adminEndpoint)
 			regClient := registry.NewClient(apiClient)
 
 			// Check if model exists first

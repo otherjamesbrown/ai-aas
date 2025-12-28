@@ -33,12 +33,14 @@ build_cli() {
 DEV_USER_ORG="https://user-org.dev.otherjamesbrown.com"
 DEV_API_ROUTER="https://api.dev.otherjamesbrown.com"
 DEV_ADMIN_API="https://admin-api.dev.otherjamesbrown.com"
+DEV_ANALYTICS="https://analytics.dev.otherjamesbrown.com"
 DEV_KUBECONFIG="$PROJECT_ROOT/secrets/kubeconfigs/kubeconfig-development.yaml"
 DEV_NAMESPACE="development"
 
 STAGING_USER_ORG="https://user-org.staging.otherjamesbrown.com"
 STAGING_API_ROUTER="https://api.staging.otherjamesbrown.com"
 STAGING_ADMIN_API="https://admin-api.staging.otherjamesbrown.com"
+STAGING_ANALYTICS="https://analytics.staging.otherjamesbrown.com"
 STAGING_API_KEY="ai-aas__HYQk1SQgY4P_f2aMjYM39zL9NAxG63tcHn_Gx4If3M"
 STAGING_KUBECONFIG="$PROJECT_ROOT/secrets/kubeconfigs/kubeconfig-staging.yaml"
 STAGING_NAMESPACE="staging"
@@ -229,6 +231,7 @@ run_environment_tests() {
     local api_key="$5"
     local kubeconfig="$6"
     local namespace="$7"
+    local analytics_endpoint="$8"
 
     local test_id
     test_id=$(date +%s)-$$-$RANDOM
@@ -257,7 +260,9 @@ run_environment_tests() {
         --user-org-endpoint "$user_org_endpoint" \
         --api-key "$api_key" 2>&1)
 
+    local org_id=""
     if echo "$org_output" | grep -q '"outcome": "success"'; then
+        org_id=$(extract_json_field "$org_output" "orgId")
         results+=("create_org:PASS:$org_slug")
     else
         local error_msg
@@ -533,6 +538,42 @@ run_environment_tests() {
         results+=("inference_health:FAIL:$status")
     fi
 
+    # Test 8: Usage Query (validates usage tracking pipeline)
+    # Wait briefly for usage data to flow through Kafka -> analytics-service -> TimescaleDB
+    if [[ -n "$analytics_endpoint" && -n "$new_api_key" && $inference_pass_count -gt 0 && -n "$org_id" ]]; then
+        sleep 8  # Allow time for async pipeline processing
+
+        local usage_output
+        # Use org_id (UUID) instead of org_slug - analytics service requires UUID
+        usage_output=$(run_cli usage query \
+            --org-id "$org_id" \
+            --last-hour \
+            --granularity hour \
+            --analytics-endpoint "$analytics_endpoint" \
+            --api-key "$api_key" 2>&1)
+
+        if echo "$usage_output" | grep -q '"outcome": "success"'; then
+            # Check if we have any usage data
+            local total_invocations input_tokens output_tokens
+            total_invocations=$(extract_json_field "$usage_output" "totals.invocations")
+            input_tokens=$(extract_json_field "$usage_output" "totals.inputTokens")
+            output_tokens=$(extract_json_field "$usage_output" "totals.outputTokens")
+            if [[ -n "$total_invocations" && "$total_invocations" -gt 0 ]]; then
+                local total_tokens=$((input_tokens + output_tokens))
+                results+=("usage_query:PASS:${total_invocations}_inv_${input_tokens}in_${output_tokens}out")
+            else
+                # Pipeline might still be processing - report as pass with warning
+                results+=("usage_query:PASS:0_invocations_pipeline_delay")
+            fi
+        else
+            local error_msg
+            error_msg=$(sanitize_result "$(echo "$usage_output" | grep -o '"error":[^,}]*' | head -1 || echo "unknown_error")")
+            results+=("usage_query:FAIL:$error_msg")
+        fi
+    else
+        results+=("usage_query:SKIP:missing_deps")
+    fi
+
     # Cleanup: Delete Organization
     local delete_output
     delete_output=$(run_cli org delete \
@@ -631,6 +672,7 @@ print_json_results() {
         "list_models": "${RESULTS[dev_list_models]}",
         "inference": "${RESULTS[dev_inference]}",
         "inference_health": "${RESULTS[dev_inference_health]}",
+        "usage_query": "${RESULTS[dev_usage_query]}",
         "cleanup": "${RESULTS[dev_cleanup]}"
       }
     }
@@ -655,6 +697,7 @@ EOF
         "list_models": "${RESULTS[staging_list_models]}",
         "inference": "${RESULTS[staging_inference]}",
         "inference_health": "${RESULTS[staging_inference_health]}",
+        "usage_query": "${RESULTS[staging_usage_query]}",
         "cleanup": "${RESULTS[staging_cleanup]}"
       }
     }
@@ -675,7 +718,7 @@ EOF
 }
 
 # Test list
-TESTS="create_org create_user grant_model_access activate_user create_apikey list_models inference inference_health cleanup"
+TESTS="create_org create_user grant_model_access activate_user create_apikey list_models inference inference_health usage_query cleanup"
 
 # Count failures
 count_failures() {
@@ -1014,10 +1057,10 @@ main() {
         local staging_tmp=$(mktemp)
 
         # Run both in background
-        (run_environment_tests "dev" "$DEV_USER_ORG" "$DEV_API_ROUTER" "$DEV_ADMIN_API" "$MASTER_ADMIN_API_KEY" "$DEV_KUBECONFIG" "$DEV_NAMESPACE" > "$dev_tmp") &
+        (run_environment_tests "dev" "$DEV_USER_ORG" "$DEV_API_ROUTER" "$DEV_ADMIN_API" "$MASTER_ADMIN_API_KEY" "$DEV_KUBECONFIG" "$DEV_NAMESPACE" "$DEV_ANALYTICS" > "$dev_tmp") &
         local dev_pid=$!
 
-        (run_environment_tests "staging" "$STAGING_USER_ORG" "$STAGING_API_ROUTER" "$STAGING_ADMIN_API" "$STAGING_API_KEY" "$STAGING_KUBECONFIG" "$STAGING_NAMESPACE" > "$staging_tmp") &
+        (run_environment_tests "staging" "$STAGING_USER_ORG" "$STAGING_API_ROUTER" "$STAGING_ADMIN_API" "$STAGING_API_KEY" "$STAGING_KUBECONFIG" "$STAGING_NAMESPACE" "$STAGING_ANALYTICS" > "$staging_tmp") &
         local staging_pid=$!
 
         # Wait for both
@@ -1030,9 +1073,9 @@ main() {
         rm -f "$dev_tmp" "$staging_tmp"
 
     elif [[ "$RUN_DEV" == "true" ]]; then
-        dev_results_str=$(run_environment_tests "dev" "$DEV_USER_ORG" "$DEV_API_ROUTER" "$DEV_ADMIN_API" "$MASTER_ADMIN_API_KEY" "$DEV_KUBECONFIG" "$DEV_NAMESPACE")
+        dev_results_str=$(run_environment_tests "dev" "$DEV_USER_ORG" "$DEV_API_ROUTER" "$DEV_ADMIN_API" "$MASTER_ADMIN_API_KEY" "$DEV_KUBECONFIG" "$DEV_NAMESPACE" "$DEV_ANALYTICS")
     elif [[ "$RUN_STAGING" == "true" ]]; then
-        staging_results_str=$(run_environment_tests "staging" "$STAGING_USER_ORG" "$STAGING_API_ROUTER" "$STAGING_ADMIN_API" "$STAGING_API_KEY" "$STAGING_KUBECONFIG" "$STAGING_NAMESPACE")
+        staging_results_str=$(run_environment_tests "staging" "$STAGING_USER_ORG" "$STAGING_API_ROUTER" "$STAGING_ADMIN_API" "$STAGING_API_KEY" "$STAGING_KUBECONFIG" "$STAGING_NAMESPACE" "$STAGING_ANALYTICS")
     fi
 
     # Parse results

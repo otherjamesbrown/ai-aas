@@ -112,10 +112,7 @@ See Also:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
 				return fmt.Errorf("Admin API endpoint not configured. Run 'ai-aas-cli --init' first")
@@ -125,11 +122,7 @@ See Also:
 			defer cancel()
 
 			// Create API client
-			opts := []api.ClientOption{}
-			if cfg.TLSInsecure {
-				opts = append(opts, api.WithInsecureSkipVerify())
-			}
-			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+			apiClient := cfg.NewAPIClient(adminEndpoint)
 
 			// Determine revision
 			if revision == "" {

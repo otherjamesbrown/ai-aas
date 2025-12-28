@@ -9,8 +9,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
-
-	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/api"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
 )
@@ -58,10 +56,7 @@ func runList(cmd *cobra.Command, args []string) error {
 	}
 
 	// Use Admin API endpoint
-	adminEndpoint := cfg.AdminAPIEndpoint
-	if adminEndpoint == "" {
-		adminEndpoint = cfg.APIEndpoint // fallback for backward compatibility
-	}
+	adminEndpoint := cfg.GetAdminEndpoint()
 
 	if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
 		return fmt.Errorf("Admin API endpoint not configured. Run 'ai-aas-cli --init' first")
@@ -70,11 +65,7 @@ func runList(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	opts := []api.ClientOption{}
-	if cfg.TLSInsecure {
-		opts = append(opts, api.WithInsecureSkipVerify())
-	}
-	apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+	apiClient := cfg.NewAPIClient(adminEndpoint)
 
 	// Build API path with optional runtime filter
 	path := "/v1/recipes"

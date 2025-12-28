@@ -172,7 +172,60 @@ r.Create(ctx, deployment)  // Missing ctrl.SetControllerReference()
 // WRONG: Create without checking existence first
 r.Create(ctx, inferenceService)  // Will error if exists!
 // Should: Get() first, then Create() or Update()
+
+// WRONG: Re-fetch resource immediately after status update (aas-lhx0)
+err := r.Status().Update(ctx, latestAIModel)  // Status persisted to etcd
+if err != nil { return err }
+// Re-fetch to "get latest" - but cache may be stale!
+if err := r.Get(ctx, namespacedName, aiModel); err != nil {
+    return err
+}
+// aiModel may have stale Deploying phase even though we just updated to Ready!
+if aiModel.Status.Phase != Ready {
+    return ctrl.Result{Requeue: true}, nil  // Infinite loop!
+}
+// CORRECT: Sync status back to caller's object directly
+err := r.Status().Update(ctx, latestAIModel)
+if err != nil { return err }
+callerAIModel.Status = latestAIModel.Status  // No cache lag
 ```
+
+### Status Update Cache Race Condition (aas-lhx0)
+
+**CRITICAL**: Never re-fetch a resource immediately after updating its status to check the new state. The Kubernetes client cache may return stale data.
+
+**The Bug Pattern**:
+```go
+// In helper function:
+latestAIModel.Status.Phase = Ready
+r.Status().Update(ctx, latestAIModel)  // Persists to etcd
+
+// Back in caller:
+r.Get(ctx, name, aiModel)  // Gets STALE cached copy
+if aiModel.Status.Phase == Deploying {  // Still shows old phase!
+    return ctrl.Result{Requeue: true}   // Infinite requeue loop
+}
+```
+
+**Why It Happens**:
+- `r.Status().Update()` writes directly to etcd
+- `r.Get()` reads from the controller-runtime informer cache
+- Cache invalidation is asynchronous - may lag by seconds
+- Same-millisecond re-fetch almost always returns pre-update state
+
+**The Fix**:
+After `Status().Update()` succeeds, sync the updated status back to the caller's object:
+```go
+// In helper function:
+if err := r.Status().Update(ctx, latestObj); err != nil {
+    return err
+}
+// Sync back to caller's object - no cache lookup needed
+callerObj.Status = latestObj.Status
+return nil
+```
+
+**Test Coverage**: `TestAIModelReconciler_StatusSyncBackToCaller` verifies this behavior.
 
 ### Knative Serving Probe Configuration
 

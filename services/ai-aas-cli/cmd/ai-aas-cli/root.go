@@ -168,6 +168,10 @@ Environment Variables:
 	apikeyCmd.GroupID = "access"
 	rootCmd.AddCommand(apikeyCmd)
 
+	usageCmd := admin.UsageCommand()
+	usageCmd.GroupID = "access"
+	rootCmd.AddCommand(usageCmd)
+
 	// Platform Operations commands
 	bootstrapCmd := admin.BootstrapCommand()
 	bootstrapCmd.GroupID = "platform"
@@ -441,16 +445,9 @@ func runPartialInit(domain, apiKey, env, hfToken, adminAPI, userOrgAPI string) e
 		updated = true
 
 		// Also sync to Admin API if configured
-		adminEndpoint := cfg.AdminAPIEndpoint
-		if adminEndpoint == "" {
-			adminEndpoint = cfg.APIEndpoint
-		}
+		adminEndpoint := cfg.GetAdminEndpoint()
 		if adminEndpoint != "" && cfg.APIKey != "" {
-			opts := []api.ClientOption{}
-			if cfg.TLSInsecure {
-				opts = append(opts, api.WithInsecureSkipVerify())
-			}
-			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+			apiClient := cfg.NewAPIClient(adminEndpoint)
 			credClient := credentials.NewClient(apiClient)
 			ctx := context.Background()
 			if err := credClient.Set(ctx, "hf-token", hfToken, nil); err != nil {

@@ -305,6 +305,7 @@ func (a *ServiceAdapter) CreateDeployment(req CreateDeploymentRequest) (*Deploym
 		GPUCount:     req.GPUCount,
 		MemoryGB:     req.MemoryGB,
 		Replicas:     req.Replicas,
+		ModelType:    req.ModelType,
 	}
 
 	d, err := a.svc.CreateDeployment(a.ctx, svcReq)

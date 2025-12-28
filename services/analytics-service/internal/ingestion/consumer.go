@@ -1,17 +1,17 @@
-// Package ingestion provides RabbitMQ stream consumer for usage events.
+// Package ingestion provides Kafka consumer for usage events.
 //
 // Purpose:
 //
-//	This package handles consuming usage events from RabbitMQ streams, deduplicating
+//	This package handles consuming usage events from Kafka, deduplicating
 //	them, and persisting to TimescaleDB. It provides backpressure controls and
 //	batch processing for efficient ingestion.
 //
 // Dependencies:
-//   - RabbitMQ Streams plugin
+//   - Kafka for event streaming
 //   - TimescaleDB for persistence
 //
 // Key Responsibilities:
-//   - Connect to RabbitMQ stream
+//   - Connect to Kafka brokers
 //   - Consume events in batches
 //   - Deduplicate events by (event_id, org_id)
 //   - Persist to usage_events table
@@ -22,54 +22,52 @@ package ingestion
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"net/url"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/amqp"
-	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/stream"
+	"github.com/segmentio/kafka-go"
 	"go.uber.org/zap"
 
 	"github.com/otherjamesbrown/ai-aas/services/analytics-service/internal/storage/postgres"
 )
 
-// Consumer handles RabbitMQ stream consumption.
+// Consumer handles Kafka consumption.
 type Consumer struct {
-	logger         *zap.Logger
-	streamName     string
-	consumer       string
-	batchSize      int
-	workers        int
-	processor      *Processor
-	env            *stream.Environment
-	consumerHandle *stream.Consumer
-	stopCh         chan struct{}
-	wg             sync.WaitGroup
-	config         Config // Store config for access in Start
+	logger    *zap.Logger
+	topic     string
+	groupID   string
+	batchSize int
+	workers   int
+	processor *Processor
+	reader    *kafka.Reader
+	stopCh    chan struct{}
+	wg        sync.WaitGroup
 }
 
 // Config holds consumer configuration.
 type Config struct {
-	StreamURL     string
-	Stream        string
-	Consumer      string
-	BatchSize     int
-	Workers       int
-	BatchTimeout  time.Duration
-	Logger        *zap.Logger
-	Store         *postgres.Store
-	RabbitMQHost  string
-	RabbitMQPort  int
-	RabbitMQUser  string
-	RabbitMQPass  string
+	Brokers      []string
+	Topic        string
+	GroupID      string
+	BatchSize    int
+	Workers      int
+	BatchTimeout time.Duration
+	Logger       *zap.Logger
+	Store        *postgres.Store
 }
 
 // NewConsumer creates a new ingestion consumer.
 func NewConsumer(cfg Config) (*Consumer, error) {
+	if len(cfg.Brokers) == 0 {
+		return nil, fmt.Errorf("brokers are required")
+	}
+	if cfg.Topic == "" {
+		return nil, fmt.Errorf("topic is required")
+	}
+	if cfg.GroupID == "" {
+		return nil, fmt.Errorf("group ID is required")
+	}
 	if cfg.BatchSize <= 0 {
 		return nil, fmt.Errorf("batch size must be positive, got %d", cfg.BatchSize)
 	}
@@ -82,119 +80,43 @@ func NewConsumer(cfg Config) (*Consumer, error) {
 
 	processor := NewProcessor(cfg.Store, cfg.Logger)
 
+	// Create Kafka reader
+	reader := kafka.NewReader(kafka.ReaderConfig{
+		Brokers:        cfg.Brokers,
+		Topic:          cfg.Topic,
+		GroupID:        cfg.GroupID,
+		MinBytes:       1,       // Fetch at least 1 byte
+		MaxBytes:       10e6,    // 10MB max per fetch
+		CommitInterval: 1 * time.Second,
+		StartOffset:    kafka.FirstOffset,
+		MaxWait:        500 * time.Millisecond, // Max wait time for batch
+	})
+
 	return &Consumer{
-		logger:     cfg.Logger,
-		streamName: cfg.Stream,
-		consumer:   cfg.Consumer,
-		batchSize:  cfg.BatchSize,
-		workers:    cfg.Workers,
-		processor:  processor,
-		stopCh:     make(chan struct{}),
-		config:     cfg, // Store config
+		logger:    cfg.Logger,
+		topic:     cfg.Topic,
+		groupID:   cfg.GroupID,
+		batchSize: cfg.BatchSize,
+		workers:   cfg.Workers,
+		processor: processor,
+		reader:    reader,
+		stopCh:    make(chan struct{}),
 	}, nil
 }
 
-// Start begins consuming events from the stream.
+// Start begins consuming events from Kafka.
 func (c *Consumer) Start(ctx context.Context) error {
 	c.logger.Info("starting ingestion consumer",
-		zap.String("stream", c.streamName),
-		zap.String("consumer", c.consumer),
+		zap.String("topic", c.topic),
+		zap.String("group_id", c.groupID),
 		zap.Int("batch_size", c.batchSize),
 		zap.Int("workers", c.workers),
 	)
 
-	// Parse connection details from URL or use provided values
-	host := c.config.RabbitMQHost
-	port := c.config.RabbitMQPort
-	user := c.config.RabbitMQUser
-	password := c.config.RabbitMQPass
-
-	// Parse URL if provided and values not set
-	if c.config.StreamURL != "" && (host == "" || port == 0 || user == "" || password == "") {
-		parsedHost, parsedPort, parsedUser, parsedPass, err := parseRabbitMQURL(c.config.StreamURL)
-		if err == nil {
-			if host == "" {
-				host = parsedHost
-			}
-			if port == 0 {
-				port = parsedPort
-			}
-			if user == "" {
-				user = parsedUser
-			}
-			if password == "" {
-				password = parsedPass
-			}
-		}
-	}
-
-	// Defaults
-	if host == "" {
-		host = "localhost"
-	}
-	if port == 0 {
-		port = 5552 // RabbitMQ Streams default port
-	}
-	if user == "" {
-		user = "guest"
-	}
-	if password == "" {
-		password = "guest"
-	}
-
-	// Create RabbitMQ Stream environment
-	env, err := stream.NewEnvironment(
-		stream.NewEnvironmentOptions().
-			SetHost(host).
-			SetPort(port).
-			SetUser(user).
-			SetPassword(password),
-	)
-	if err != nil {
-		return fmt.Errorf("create stream environment: %w", err)
-	}
-	c.env = env
-
-	// Declare stream if it doesn't exist
-	err = env.DeclareStream(c.streamName,
-		stream.NewStreamOptions().
-			SetMaxLengthBytes(stream.ByteCapacity{}.GB(50)),
-	)
-	if err != nil && !errors.Is(err, stream.StreamAlreadyExists) {
-		return fmt.Errorf("declare stream: %w", err)
-	}
-
-	// Create message channel for workers
-	messageCh := make(chan *amqp.Message, c.batchSize*c.workers)
-
-	// Create consumer with callback that sends messages to channel
-	consumer, err := env.NewConsumer(
-		c.streamName,
-		func(consumerContext stream.ConsumerContext, message *amqp.Message) {
-			select {
-			case messageCh <- message:
-				// Message queued successfully
-			case <-c.stopCh:
-				// Consumer stopping, drop message
-				c.logger.Debug("dropping message during shutdown")
-			default:
-				// Channel full - backpressure
-				c.logger.Warn("message channel full, dropping message")
-			}
-		},
-		stream.NewConsumerOptions().
-			SetConsumerName(c.consumer).
-			SetOffset(stream.OffsetSpecification{}.First()),
-	)
-	if err != nil {
-		return fmt.Errorf("create consumer: %w", err)
-	}
-	c.consumerHandle = consumer
-
 	// Start worker goroutines
 	for i := 0; i < c.workers; i++ {
 		c.wg.Add(1)
-		go c.worker(ctx, i, messageCh)
+		go c.worker(ctx, i)
 	}
 
 	c.logger.Info("ingestion consumer started successfully")
@@ -224,17 +146,10 @@ func (c *Consumer) Stop(ctx context.Context) error {
 		c.logger.Warn("timeout waiting for workers to stop")
 	}
 
-	// Close consumer
-	if c.consumerHandle != nil {
-		if err := c.consumerHandle.Close(); err != nil {
-			c.logger.Error("error closing consumer", zap.Error(err))
-		}
-	}
-
-	// Close environment
-	if c.env != nil {
-		if err := c.env.Close(); err != nil {
-			c.logger.Error("error closing stream environment", zap.Error(err))
+	// Close Kafka reader
+	if c.reader != nil {
+		if err := c.reader.Close(); err != nil {
+			c.logger.Error("error closing Kafka reader", zap.Error(err))
 		}
 	}
 
@@ -242,14 +157,15 @@ func (c *Consumer) Stop(ctx context.Context) error {
 	return nil
 }
 
-// worker processes messages from the stream.
-func (c *Consumer) worker(ctx context.Context, id int, messageCh <-chan *amqp.Message) {
+// worker processes messages from Kafka.
+func (c *Consumer) worker(ctx context.Context, id int) {
 	defer c.wg.Done()
 
 	c.logger.Info("worker started", zap.Int("worker_id", id))
 
 	// Batch collection
 	batch := make([]Event, 0, c.batchSize)
+	messages := make([]kafka.Message, 0, c.batchSize)
 	batchTimer := time.NewTimer(5 * time.Second)
 	defer batchTimer.Stop()
 
@@ -259,7 +175,7 @@ func (c *Consumer) worker(ctx context.Context, id int, messageCh <-chan *amqp.Me
 			c.logger.Info("worker stopping due to context cancellation", zap.Int("worker_id", id))
 			// Process remaining batch
 			if len(batch) > 0 {
-				c.processBatch(ctx, batch, id)
+				c.processBatch(ctx, batch, messages, id)
 			}
 			return
 
@@ -267,17 +183,37 @@ func (c *Consumer) worker(ctx context.Context, id int, messageCh <-chan *amqp.Me
 			c.logger.Info("worker stopping", zap.Int("worker_id", id))
 			// Process remaining batch
 			if len(batch) > 0 {
-				c.processBatch(ctx, batch, id)
+				c.processBatch(ctx, batch, messages, id)
 			}
 			return
 
-		case msg, ok := <-messageCh:
-			if !ok {
-				// Channel closed, process remaining batch
-				if len(batch) > 0 {
-					c.processBatch(ctx, batch, id)
+		case <-batchTimer.C:
+			// Process batch on timeout
+			if len(batch) > 0 {
+				c.processBatch(ctx, batch, messages, id)
+				batch = batch[:0]
+				messages = messages[:0]
+			}
+			batchTimer.Reset(5 * time.Second)
+
+		default:
+			// Try to read a message with timeout
+			readCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			msg, err := c.reader.FetchMessage(readCtx)
+			cancel()
+
+			if err != nil {
+				if err == context.DeadlineExceeded {
+					// No message available, check timer
+					continue
 				}
-				return
+				c.logger.Error("failed to fetch message",
+					zap.Int("worker_id", id),
+					zap.Error(err),
+				)
+				// Brief backoff on error
+				time.Sleep(1 * time.Second)
+				continue
 			}
 
 			// Parse event
@@ -287,143 +223,117 @@ func (c *Consumer) worker(ctx context.Context, id int, messageCh <-chan *amqp.Me
 					zap.Int("worker_id", id),
 					zap.Error(err),
 				)
+				// Commit the message even if parsing fails to avoid reprocessing
+				if err := c.reader.CommitMessages(ctx, msg); err != nil {
+					c.logger.Error("failed to commit invalid message",
+						zap.Int("worker_id", id),
+						zap.Error(err),
+					)
+				}
 				continue
 			}
 
 			batch = append(batch, event)
+			messages = append(messages, msg)
 
 			// Process batch if it reaches batch size
 			if len(batch) >= c.batchSize {
-				c.processBatch(ctx, batch, id)
+				c.processBatch(ctx, batch, messages, id)
 				batch = batch[:0]
+				messages = messages[:0]
 				batchTimer.Reset(5 * time.Second)
 			}
-
-		case <-batchTimer.C:
-			// Process batch on timeout
-			if len(batch) > 0 {
-				c.processBatch(ctx, batch, id)
-				batch = batch[:0]
-			}
-			batchTimer.Reset(5 * time.Second)
 		}
 	}
 }
-// parseRabbitMQURL parses a RabbitMQ URL to extract connection details.
-// Supports formats: amqp://user:pass@host:port or stream://host:port
-func parseRabbitMQURL(rawURL string) (host string, port int, user string, password string, err error) {
-	// Defaults
-	host = "localhost"
-	port = 5552 // RabbitMQ Streams default port
-	user = "guest"
-	password = "guest"
 
-	if rawURL == "" {
-		return host, port, user, password, nil
-	}
-
-	// Parse URL
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return host, port, user, password, fmt.Errorf("parse URL: %w", err)
-	}
-
-	// Extract host
-	if u.Hostname() != "" {
-		host = u.Hostname()
-	}
-
-	// Extract port
-	if u.Port() != "" {
-		parsedPort, err := strconv.Atoi(u.Port())
-		if err == nil {
-			port = parsedPort
-		}
-	} else {
-		// Default port based on scheme
-		if strings.HasPrefix(rawURL, "amqp://") {
-			port = 5672 // AMQP port
-		} else if strings.HasPrefix(rawURL, "stream://") {
-			port = 5552 // Stream port
-		}
-	}
-
-	// Extract user and password
-	if u.User != nil {
-		user = u.User.Username()
-		if p, ok := u.User.Password(); ok {
-			password = p
-		}
-	}
-
-	return host, port, user, password, nil
-}
-
-// parseMessage parses a RabbitMQ stream message into an Event.
-func (c *Consumer) parseMessage(msg *amqp.Message) (Event, error) {
+// parseMessage parses a Kafka message into an Event.
+func (c *Consumer) parseMessage(msg kafka.Message) (Event, error) {
 	var event Event
-	// Get message data (may be in multiple parts, concatenate them)
-	data := msg.GetData()
-	if len(data) == 0 && len(msg.Data) > 0 {
-		// Fallback: concatenate all data parts
-		var totalLen int
-		for _, part := range msg.Data {
-			totalLen += len(part)
-		}
-		data = make([]byte, 0, totalLen)
-		for _, part := range msg.Data {
-			data = append(data, part...)
-		}
-	}
-	if err := json.Unmarshal(data, &event); err != nil {
+	if err := json.Unmarshal(msg.Value, &event); err != nil {
 		return Event{}, fmt.Errorf("unmarshal event: %w", err)
 	}
 
-	// Validate required fields
-	if event.EventID == "" {
-		return Event{}, fmt.Errorf("event_id is required")
+	// Validate required fields (matching UsageRecord schema)
+	if event.RecordID == "" {
+		return Event{}, fmt.Errorf("record_id is required")
 	}
-	if event.OrgID == "" {
-		return Event{}, fmt.Errorf("org_id is required")
+	if event.OrganizationID == "" {
+		return Event{}, fmt.Errorf("organization_id is required")
 	}
 
 	return event, nil
 }
 
-// processBatch processes a batch of events.
-func (c *Consumer) processBatch(ctx context.Context, events []Event, workerID int) {
+// processBatch processes a batch of events and commits offsets.
+func (c *Consumer) processBatch(ctx context.Context, events []Event, messages []kafka.Message, workerID int) {
 	if len(events) == 0 {
 		return
 	}
 
 	// Use the processor to handle batch processing
-	// Note: streamOffset would be tracked per message in production
-	streamOffset := int64(0) // Simplified - should track actual offset
+	// For Kafka, we use the last message offset as the stream offset
+	var streamOffset int64
+	if len(messages) > 0 {
+		streamOffset = messages[len(messages)-1].Offset
+	}
+
 	if err := c.processor.ProcessBatch(ctx, events, streamOffset); err != nil {
 		c.logger.Error("failed to process batch",
 			zap.Int("worker_id", workerID),
 			zap.Int("event_count", len(events)),
 			zap.Error(err),
 		)
-	} else {
-		c.logger.Debug("processed batch",
-			zap.Int("worker_id", workerID),
-			zap.Int("event_count", len(events)),
-		)
+		// Don't commit offsets if processing fails
+		return
+	}
+
+	// Commit offsets only after successful processing
+	if len(messages) > 0 {
+		if err := c.reader.CommitMessages(ctx, messages...); err != nil {
+			c.logger.Error("failed to commit offsets",
+				zap.Int("worker_id", workerID),
+				zap.Int("message_count", len(messages)),
+				zap.Error(err),
+			)
+		} else {
+			c.logger.Debug("processed batch",
+				zap.Int("worker_id", workerID),
+				zap.Int("event_count", len(events)),
+				zap.Int64("last_offset", streamOffset),
+			)
+		}
 	}
 }
 
-// Event represents a usage event from RabbitMQ.
+// Event represents a usage event from Kafka.
+// This struct MUST match the UsageRecord schema from api-router-service
+// (see services/api-router-service/internal/usage/record.go).
 type Event struct {
-	EventID      string                 `json:"event_id"`
-	OrgID        string                 `json:"org_id"`
-	ModelID      string                 `json:"model_id"`
-	OccurredAt   time.Time              `json:"occurred_at"`
-	InputTokens  int64                  `json:"input_tokens"`
-	OutputTokens int64                  `json:"output_tokens"`
-	LatencyMS    int                    `json:"latency_ms"`
-	Status       string                 `json:"status"`
-	ErrorCode    string                 `json:"error_code,omitempty"`
-	CostEstimate float64                `json:"cost_estimate"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	// Core identification
+	RecordID       string    `json:"record_id"`        // Maps to UsageRecord.RecordID
+	RequestID      string    `json:"request_id"`       // Maps to UsageRecord.RequestID
+	OrganizationID string    `json:"organization_id"`  // Maps to UsageRecord.OrganizationID
+	APIKeyID       string    `json:"api_key_id"`       // Maps to UsageRecord.APIKeyID
+	Timestamp      time.Time `json:"timestamp"`        // Maps to UsageRecord.Timestamp
+
+	// Model and backend
+	Model     string `json:"model"`      // Maps to UsageRecord.Model (user-facing model name)
+	BackendID string `json:"backend_id"` // Maps to UsageRecord.BackendID
+
+	// Token usage and cost
+	TokensInput  int     `json:"tokens_input"`  // Maps to UsageRecord.TokensInput
+	TokensOutput int     `json:"tokens_output"` // Maps to UsageRecord.TokensOutput
+	CostUSD      float64 `json:"cost_usd"`      // Maps to UsageRecord.CostUSD
+
+	// Performance and routing
+	LatencyMS      int    `json:"latency_ms"`      // Maps to UsageRecord.LatencyMS
+	LimitState     string `json:"limit_state"`     // Maps to UsageRecord.LimitState (WITHIN_LIMIT, RATE_LIMITED, BUDGET_EXCEEDED)
+	DecisionReason string `json:"decision_reason"` // Maps to UsageRecord.DecisionReason (PRIMARY, FAILOVER, OVERRIDE, RATE_LIMIT)
+
+	// Optional fields
+	RetryCount int                    `json:"retry_count,omitempty"` // Maps to UsageRecord.RetryCount
+	TraceID    string                 `json:"trace_id,omitempty"`    // Maps to UsageRecord.TraceID
+	SpanID     string                 `json:"span_id,omitempty"`     // Maps to UsageRecord.SpanID
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`    // Maps to UsageRecord.Metadata
 }

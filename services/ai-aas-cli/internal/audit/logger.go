@@ -53,6 +53,7 @@ func NewLogger(w *os.File) *Logger {
 // LogEntry represents an audit log entry.
 type LogEntry struct {
 	Timestamp    string                 `json:"timestamp"`
+	Level        string                 `json:"level"`       // info, warn, error
 	Operation    string                 `json:"operation"`
 	UserIdentity string                 `json:"user_identity,omitempty"`
 	Command      string                 `json:"command"`
@@ -65,8 +66,12 @@ type LogEntry struct {
 
 // LogOperation logs a privileged operation with all required fields.
 func (l *Logger) LogOperation(op Operation) error {
+	// Determine log level based on outcome and error
+	level := determineLogLevel(op)
+
 	entry := LogEntry{
 		Timestamp:    time.Now().UTC().Format(time.RFC3339),
+		Level:        level,
 		Operation:    op.Type,
 		UserIdentity: op.UserIdentity,
 		Command:      op.Command,
@@ -84,6 +89,29 @@ func (l *Logger) LogOperation(op Operation) error {
 	}
 
 	return l.output.Encode(entry)
+}
+
+// determineLogLevel determines the appropriate log level based on operation outcome.
+func determineLogLevel(op Operation) string {
+	if op.Error != nil || op.Outcome == "failure" {
+		return "error"
+	}
+
+	// Destructive operations get warning level even on success
+	destructiveOps := map[string]bool{
+		"user_delete":   true,
+		"org_delete":    true,
+		"apikey_delete": true,
+		"apikey_rotate": true,
+		"bootstrap":     true,
+		"credential_rotation": true,
+	}
+
+	if destructiveOps[op.Type] {
+		return "warn"
+	}
+
+	return "info"
 }
 
 // Operation represents a privileged operation to be logged.

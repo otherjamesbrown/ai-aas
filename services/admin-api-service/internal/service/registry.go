@@ -52,7 +52,7 @@ func (s *ModelRegistryService) Register(ctx context.Context, reg *domain.ModelRe
 	s.logger.Info("model registered",
 		zap.String("model_id", model.ModelID.String()),
 		zap.String("model_name", model.ModelName),
-		zap.String("environment", model.DeploymentEnvironment),
+		zap.String("environment", stringOrEmpty(model.DeploymentEnvironment)),
 		zap.String("action", action),
 	)
 
@@ -102,10 +102,15 @@ func (s *ModelRegistryService) createDefaultRoutingPolicy(ctx context.Context, m
 	// Build the backend ID from model name (matches deployment naming convention)
 	backendID := model.ModelName
 
+	endpoint := ""
+	if model.DeploymentEndpoint != nil {
+		endpoint = *model.DeploymentEndpoint
+	}
+
 	s.logger.Debug("building policy create request",
 		zap.String("model_name", model.ModelName),
 		zap.String("backend_id", backendID),
-		zap.String("endpoint", model.DeploymentEndpoint),
+		zap.String("endpoint", endpoint),
 	)
 
 	policyCreate := &domain.PolicyCreate{
@@ -121,9 +126,9 @@ func (s *ModelRegistryService) createDefaultRoutingPolicy(ctx context.Context, m
 		Metadata: map[string]interface{}{
 			"auto_created":  true,
 			"model_id":      model.ModelID.String(),
-			"endpoint":      model.DeploymentEndpoint,
-			"namespace":     model.DeploymentNamespace,
-			"environment":   model.DeploymentEnvironment,
+			"endpoint":      endpoint,
+			"namespace":     stringOrEmpty(model.DeploymentNamespace),
+			"environment":   stringOrEmpty(model.DeploymentEnvironment),
 			"created_reason": "auto-created on model registration",
 		},
 	}
@@ -202,7 +207,7 @@ func (s *ModelRegistryService) Update(ctx context.Context, name, environment str
 		s.logger.Info("model updated",
 			zap.String("model_id", model.ModelID.String()),
 			zap.String("model_name", model.ModelName),
-			zap.String("environment", model.DeploymentEnvironment),
+			zap.String("environment", stringOrEmpty(model.DeploymentEnvironment)),
 		)
 	}
 
@@ -266,5 +271,13 @@ func isPolicyAlreadyExistsError(err error) bool {
 	return strings.Contains(errStr, "unique") ||
 		strings.Contains(errStr, "duplicate") ||
 		strings.Contains(errStr, "idx_routing_policies_unique_org_model")
+}
+
+// stringOrEmpty returns the dereferenced string or empty string if nil
+func stringOrEmpty(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 

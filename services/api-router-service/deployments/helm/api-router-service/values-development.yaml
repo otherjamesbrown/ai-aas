@@ -133,9 +133,9 @@ redis:
   password: ""
   db: 0
 
-# Kafka configuration (optional for dev - stubbed if not available)
+# Kafka configuration - enabled for usage tracking pipeline
 kafka:
-  brokers: ""  # Empty = use in-memory stub
+  brokers: "kafka.kafka.svc.cluster.local:9092"  # Kafka service in kafka namespace
   topic: usage.records.v1
   auditTopic: audit.router
 

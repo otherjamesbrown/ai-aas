@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-
-	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/api"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/pod"
@@ -88,11 +86,7 @@ func runHealth(ctx context.Context, namespace, modelName, environment string, un
 	}
 
 	// Create API client
-	opts := []api.ClientOption{}
-	if cfg.TLSInsecure {
-		opts = append(opts, api.WithInsecureSkipVerify())
-	}
-	apiClient := api.NewClient(apiEndpoint, cfg.APIKey, opts...)
+	apiClient := cfg.NewAPIClient(apiEndpoint)
 
 	// Create pod client
 	podClient := pod.NewClient(apiClient)

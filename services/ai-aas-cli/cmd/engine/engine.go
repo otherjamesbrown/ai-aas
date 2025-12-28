@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-
-	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/api"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/engines"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
@@ -82,10 +80,7 @@ Examples:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
 				return fmt.Errorf("Admin API endpoint not configured. Run 'ai-aas-cli --init' first")
@@ -94,11 +89,7 @@ Examples:
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			opts := []api.ClientOption{}
-			if cfg.TLSInsecure {
-				opts = append(opts, api.WithInsecureSkipVerify())
-			}
-			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+			apiClient := cfg.NewAPIClient(adminEndpoint)
 			engClient := engines.NewClient(apiClient)
 
 			engineList, err := engClient.ListEngines(ctx)
@@ -173,10 +164,7 @@ Examples:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
 				return fmt.Errorf("Admin API endpoint not configured. Run 'ai-aas-cli --init' first")
@@ -185,11 +173,7 @@ Examples:
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			opts := []api.ClientOption{}
-			if cfg.TLSInsecure {
-				opts = append(opts, api.WithInsecureSkipVerify())
-			}
-			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+			apiClient := cfg.NewAPIClient(adminEndpoint)
 			engClient := engines.NewClient(apiClient)
 
 			engine, err := engClient.GetEngine(ctx, engineName)
@@ -320,19 +304,12 @@ Examples:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			opts := []api.ClientOption{}
-			if cfg.TLSInsecure {
-				opts = append(opts, api.WithInsecureSkipVerify())
-			}
-			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+			apiClient := cfg.NewAPIClient(adminEndpoint)
 			engClient := engines.NewClient(apiClient)
 
 			req := engines.AddVersionRequest{
@@ -394,19 +371,12 @@ Examples:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			opts := []api.ClientOption{}
-			if cfg.TLSInsecure {
-				opts = append(opts, api.WithInsecureSkipVerify())
-			}
-			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+			apiClient := cfg.NewAPIClient(adminEndpoint)
 			engClient := engines.NewClient(apiClient)
 
 			if err := engClient.SetDefaultVersion(ctx, engineName, version); err != nil {
@@ -444,19 +414,12 @@ Examples:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			opts := []api.ClientOption{}
-			if cfg.TLSInsecure {
-				opts = append(opts, api.WithInsecureSkipVerify())
-			}
-			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+			apiClient := cfg.NewAPIClient(adminEndpoint)
 			engClient := engines.NewClient(apiClient)
 
 			if err := engClient.DeleteVersion(ctx, engineName, version); err != nil {
@@ -529,19 +492,12 @@ Examples:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			opts := []api.ClientOption{}
-			if cfg.TLSInsecure {
-				opts = append(opts, api.WithInsecureSkipVerify())
-			}
-			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+			apiClient := cfg.NewAPIClient(adminEndpoint)
 			engClient := engines.NewClient(apiClient)
 
 			configs, err := engClient.ListConfigs(ctx)
@@ -615,19 +571,12 @@ Examples:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			opts := []api.ClientOption{}
-			if cfg.TLSInsecure {
-				opts = append(opts, api.WithInsecureSkipVerify())
-			}
-			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+			apiClient := cfg.NewAPIClient(adminEndpoint)
 			engClient := engines.NewClient(apiClient)
 
 			config, err := engClient.GetConfig(ctx, configName)
@@ -746,19 +695,12 @@ Examples:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			opts := []api.ClientOption{}
-			if cfg.TLSInsecure {
-				opts = append(opts, api.WithInsecureSkipVerify())
-			}
-			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+			apiClient := cfg.NewAPIClient(adminEndpoint)
 			engClient := engines.NewClient(apiClient)
 
 			// Parse engine args
@@ -847,19 +789,12 @@ Examples:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			adminEndpoint := cfg.AdminAPIEndpoint
-			if adminEndpoint == "" {
-				adminEndpoint = cfg.APIEndpoint
-			}
+			adminEndpoint := cfg.GetAdminEndpoint()
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			opts := []api.ClientOption{}
-			if cfg.TLSInsecure {
-				opts = append(opts, api.WithInsecureSkipVerify())
-			}
-			apiClient := api.NewClient(adminEndpoint, cfg.APIKey, opts...)
+			apiClient := cfg.NewAPIClient(adminEndpoint)
 			engClient := engines.NewClient(apiClient)
 
 			if err := engClient.DeleteConfig(ctx, configName); err != nil {

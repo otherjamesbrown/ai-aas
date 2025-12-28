@@ -120,6 +120,7 @@ maintenance:
 | `context/infra-ops-manager/agents.md` | 143 | ✅ OPTIMIZED | Links to runbooks |
 | `context/web-portal-developer/agents.md` | 149 | ✅ OPTIMIZED | YAML patterns |
 | `context/debugger/agents.md` | 120 | ✅ NEW | Read-only investigation agent |
+| `context/e2e-testing/agents.md` | 180 | ✅ NEW | E2E test harness, fixtures, tiers |
 
 ### Level 2: Templates
 
@@ -151,6 +152,11 @@ sources:
     - operators/ai-model-operator/
     - web/portal/src/
     - shared/
+
+  tests:
+    - tests/e2e/harness/
+    - tests/e2e/fixtures/
+    - tests/e2e/suites/
 
   config:
     - services/*/deployments/helm/
@@ -237,6 +243,17 @@ hierarchy:
         links_to:
           - docs/runbooks/ai-debugging-workflow.md (operational)
           - context/CONTEXT_EFFECTIVENESS_LOG.md (tracking)
+
+      context/e2e-testing/agents.md:
+        type: rules
+        purpose: E2E test patterns (fixtures, tiers, harness)
+        read_when: Working on tests/e2e/, running E2E tests
+        inherits: context/agents.md
+        links_to:
+          - tests/e2e/harness/ (source)
+          - tests/e2e/fixtures/ (source)
+          - tests/e2e/suites/ (source)
+          - tests/e2e/README.md (reference)
 
     templates:
       context/templates/beads.md:

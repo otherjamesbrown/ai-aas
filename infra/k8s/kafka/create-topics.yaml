@@ -1,0 +1,61 @@
+# Kubernetes Job to create Kafka topics
+# Creates usage.records.v1 topic for usage tracking pipeline
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-create-topics
+  namespace: kafka
+  labels:
+    app: kafka-setup
+spec:
+  ttlSecondsAfterFinished: 300  # Auto-cleanup after 5 minutes
+  template:
+    metadata:
+      labels:
+        app: kafka-setup
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: create-topics
+          image: apache/kafka:3.7.0
+          command:
+            - /bin/bash
+            - -c
+            - |
+              # Wait for Kafka to be ready
+              echo "Waiting for Kafka to be ready..."
+              until /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka.kafka.svc.cluster.local:9092 --list &> /dev/null; do
+                echo "Kafka not ready, waiting..."
+                sleep 5
+              done
+              echo "Kafka is ready!"
+
+              # Create usage.records.v1 topic
+              echo "Creating topic: usage.records.v1"
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka.kafka.svc.cluster.local:9092 \
+                --create \
+                --if-not-exists \
+                --topic usage.records.v1 \
+                --partitions 3 \
+                --replication-factor 1 \
+                --config retention.ms=604800000 \
+                --config compression.type=snappy
+
+              # Create audit.router topic
+              echo "Creating topic: audit.router"
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka.kafka.svc.cluster.local:9092 \
+                --create \
+                --if-not-exists \
+                --topic audit.router \
+                --partitions 2 \
+                --replication-factor 1 \
+                --config retention.ms=2592000000 \
+                --config compression.type=snappy
+
+              # List all topics
+              echo "Topics created successfully:"
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka.kafka.svc.cluster.local:9092 --list
+
+              echo "Topic details:"
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka.kafka.svc.cluster.local:9092 --describe

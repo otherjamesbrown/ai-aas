@@ -14,6 +14,7 @@ use (
 	./services/admin-api-service
 	./services/ai-aas-cli
 	./services/analytics-service
+	./services/analytics-service/test/e2e
 	./services/analytics-service/test/integration-phase5
 	./services/analytics-service/test/perf
 	./services/api-router-service

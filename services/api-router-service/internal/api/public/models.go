@@ -14,10 +14,11 @@ import (
 
 // ModelObject represents a single model in the OpenAI format.
 type ModelObject struct {
-	ID      string `json:"id"`
-	Object  string `json:"object"`
-	Created int64  `json:"created"`
-	OwnedBy string `json:"owned_by"`
+	ID        string `json:"id"`
+	Object    string `json:"object"`
+	Created   int64  `json:"created"`
+	OwnedBy   string `json:"owned_by"`
+	ModelType string `json:"model_type,omitempty"`
 }
 
 // ModelsResponse represents the response from GET /v1/models (OpenAI-compatible).
@@ -34,6 +35,7 @@ type AdminAPIModelResponse struct {
 	HFModelID        string  `json:"hf_model_id"`
 	CacheStatus      *string `json:"cache_status"`
 	DeploymentStatus *string `json:"deployment_status"`
+	ModelType        string  `json:"model_type,omitempty"`
 }
 
 // getModelsWithCache returns models from cache if valid, otherwise fetches from Admin API.
@@ -149,10 +151,11 @@ func (h *Handler) HandleModels(w http.ResponseWriter, r *http.Request) {
 				modelID = adminModel.Name
 			}
 			models = append(models, ModelObject{
-				ID:      modelID,
-				Object:  "model",
-				Created: createdTimestamp,
-				OwnedBy: "ai-aas",
+				ID:        modelID,
+				Object:    "model",
+				Created:   createdTimestamp,
+				OwnedBy:   "ai-aas",
+				ModelType: adminModel.ModelType,
 			})
 		}
 	}

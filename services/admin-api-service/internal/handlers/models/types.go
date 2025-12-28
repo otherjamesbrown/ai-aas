@@ -165,6 +165,7 @@ type CreateDeploymentRequest struct {
 	GPUCount     int    `json:"gpu_count,omitempty"`
 	MemoryGB     int    `json:"memory_gb,omitempty"`
 	Replicas     int    `json:"replicas,omitempty"`
+	ModelType    string `json:"model_type,omitempty"`
 }
 
 // UpdateDeploymentStatusRequest represents a request to update deployment status

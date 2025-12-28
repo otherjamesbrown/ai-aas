@@ -119,159 +119,125 @@ func TestListCommand_Examples(t *testing.T) {
 // TestListCommand_Success tests successful recipe listing
 // This test defines the expected behavior when the API returns recipes successfully
 func TestListCommand_Success(t *testing.T) {
-	// TODO: This test will be implemented once we have the mock API client
-	// Expected behavior:
-	// 1. Call admin API GET /api/v1/recipes
-	// 2. Receive list of recipes with pagination
-	// 3. Display recipes in table format (default)
-	// 4. Show columns: Name, Display Name, Runtime, Model ID, Created
-	t.Skip("Test pending implementation - requires mock API client")
+	t.Skip("Test pending - requires refactoring runList to accept injectable API client")
+	// Implementation note: Currently runList creates its own API client using config.GetEffectiveConfig
+	// To test this properly, we need to refactor runList to accept an API client as a parameter
+	// or use dependency injection pattern similar to show_test.go
 }
 
 // TestListCommand_RuntimeFilter tests filtering by runtime
 // This test defines the expected behavior when filtering recipes by runtime
 func TestListCommand_RuntimeFilter(t *testing.T) {
-	// TODO: This test will be implemented once we have the mock API client
-	// Expected behavior:
-	// 1. Command called with --runtime vllm
-	// 2. API client filters by runtime=vllm
-	// 3. Only vLLM recipes are displayed
-	// 4. Other runtime recipes are excluded
-	t.Skip("Test pending implementation - requires mock API client")
+	t.Skip("Test pending - requires refactoring runList to accept injectable API client")
+	// Implementation note: Currently runList creates its own API client using config.GetEffectiveConfig
+	// To test this properly, we need to refactor runList to accept an API client as a parameter
+	// or use dependency injection pattern similar to show_test.go
 }
 
 // TestListCommand_JSONOutput tests JSON output format
 // This test defines the expected behavior for JSON output
 func TestListCommand_JSONOutput(t *testing.T) {
-	// TODO: This test will be implemented once we have the mock API client
-	// Expected behavior:
-	// 1. Command called with --format json
-	// 2. Output is valid JSON array
-	// 3. Each recipe has all fields: id, name, display_name, description, model_id, runtime, spec, created_at, updated_at
-	// 4. JSON is properly formatted (pretty-printed)
-	t.Skip("Test pending implementation - requires mock API client")
+	t.Skip("Test pending - requires refactoring runList to accept injectable API client")
+	// Implementation note: Currently runList creates its own API client using config.GetEffectiveConfig
+	// To test this properly, we need to refactor runList to accept an API client as a parameter
+	// or use dependency injection pattern similar to show_test.go
 }
 
 // TestListCommand_TableOutput tests table output format (default)
 // This test defines the expected behavior for table output
 func TestListCommand_TableOutput(t *testing.T) {
-	// TODO: This test will be implemented once we have the mock API client
-	// Expected behavior:
-	// 1. Command called without --format (or --format table)
-	// 2. Output is formatted as a table
-	// 3. Table has headers: NAME, DISPLAY NAME, RUNTIME, MODEL ID, CREATED
-	// 4. Each row shows recipe information in aligned columns
-	// 5. Timestamps are human-readable
-	t.Skip("Test pending implementation - requires mock API client")
+	t.Skip("Test pending - requires refactoring runList to accept injectable API client")
+	// Implementation note: Currently runList creates its own API client using config.GetEffectiveConfig
+	// To test this properly, we need to refactor runList to accept an API client as a parameter
+	// or use dependency injection pattern similar to show_test.go
 }
 
 // TestListCommand_YAMLOutput tests YAML output format
 // This test defines the expected behavior for YAML output
 func TestListCommand_YAMLOutput(t *testing.T) {
-	// TODO: This test will be implemented once we have the mock API client
-	// Expected behavior:
-	// 1. Command called with --format yaml
-	// 2. Output is valid YAML array
-	// 3. Each recipe has all fields properly formatted
-	// 4. YAML is properly indented
-	t.Skip("Test pending implementation - requires mock API client")
+	t.Skip("Test pending - requires refactoring runList to accept injectable API client")
+	// Implementation note: Currently runList creates its own API client using config.GetEffectiveConfig
+	// To test this properly, we need to refactor runList to accept an API client as a parameter
+	// or use dependency injection pattern similar to show_test.go
 }
 
 // TestListCommand_EmptyList tests handling of empty recipe list
 // This test defines the expected behavior when no recipes exist
 func TestListCommand_EmptyList(t *testing.T) {
-	// TODO: This test will be implemented once we have the mock API client
-	// Expected behavior:
-	// 1. API returns empty list
-	// 2. Command displays friendly message: "No recipes found"
-	// 3. Suggests next steps: "Create a recipe with: ai-aas-cli model recipe create"
-	// 4. Exit code 0 (not an error condition)
-	t.Skip("Test pending implementation - requires mock API client")
+	t.Skip("Test pending - requires refactoring runList to accept injectable API client")
+	// Implementation note: Currently runList creates its own API client using config.GetEffectiveConfig
+	// To test this properly, we need to refactor runList to accept an API client as a parameter
+	// or use dependency injection pattern similar to show_test.go
 }
 
 // TestListCommand_EmptyListWithFilter tests empty list with runtime filter
 // This test defines the expected behavior when filter returns no results
 func TestListCommand_EmptyListWithFilter(t *testing.T) {
-	// TODO: This test will be implemented once we have the mock API client
-	// Expected behavior:
-	// 1. Command called with --runtime triton
-	// 2. API returns empty list (no triton recipes)
-	// 3. Command displays: "No recipes found for runtime: triton"
-	// 4. Suggests: "Try without --runtime to see all recipes"
-	// 5. Exit code 0
-	t.Skip("Test pending implementation - requires mock API client")
+	t.Skip("Test pending - requires refactoring runList to accept injectable API client")
+	// Implementation note: Currently runList creates its own API client using config.GetEffectiveConfig
+	// To test this properly, we need to refactor runList to accept an API client as a parameter
+	// or use dependency injection pattern similar to show_test.go
 }
 
 // TestListCommand_APIError tests handling of API errors
 // This test defines the expected behavior when API returns an error
 func TestListCommand_APIError(t *testing.T) {
-	// TODO: This test will be implemented once we have the mock API client
-	// Expected behavior:
-	// 1. API returns 500 Internal Server Error
-	// 2. Command displays actionable error: "Failed to list recipes: <error message>"
-	// 3. Suggests troubleshooting: "Check API status with: ai-aas-cli status"
-	// 4. Exit code 1 (error)
-	t.Skip("Test pending implementation - requires mock API client")
+	t.Skip("Test pending - requires refactoring runList to accept injectable API client")
+	// Implementation note: Currently runList creates its own API client using config.GetEffectiveConfig
+	// To test this properly, we need to refactor runList to accept an API client as a parameter
+	// or use dependency injection pattern similar to show_test.go
 }
 
 // TestListCommand_NetworkError tests handling of network errors
 // This test defines the expected behavior when network is unavailable
 func TestListCommand_NetworkError(t *testing.T) {
-	// TODO: This test will be implemented once we have the mock API client
-	// Expected behavior:
-	// 1. Network request fails (connection refused, timeout, etc.)
-	// 2. Command displays: "Failed to connect to API: <error>"
-	// 3. Suggests: "Check your network connection and API configuration"
-	// 4. Exit code 1
-	t.Skip("Test pending implementation - requires mock API client")
+	t.Skip("Test pending - requires refactoring runList to accept injectable API client")
+	// Implementation note: Currently runList creates its own API client using config.GetEffectiveConfig
+	// To test this properly, we need to refactor runList to accept an API client as a parameter
+	// or use dependency injection pattern similar to show_test.go
 }
 
 // TestListCommand_UnauthorizedError tests handling of auth errors
 // This test defines the expected behavior when API key is invalid
 func TestListCommand_UnauthorizedError(t *testing.T) {
-	// TODO: This test will be implemented once we have the mock API client
-	// Expected behavior:
-	// 1. API returns 401 Unauthorized
-	// 2. Command displays: "Authentication failed: Invalid API key"
-	// 3. Suggests: "Set API key with: ai-aas-cli credentials set"
-	// 4. Exit code 1
-	t.Skip("Test pending implementation - requires mock API client")
+	t.Skip("Test pending - requires refactoring runList to accept injectable API client")
+	// Implementation note: Currently runList creates its own API client using config.GetEffectiveConfig
+	// To test this properly, we need to refactor runList to accept an API client as a parameter
+	// or use dependency injection pattern similar to show_test.go
 }
 
 // TestListCommand_Pagination tests pagination handling
 // This test defines the expected behavior for paginated results
 func TestListCommand_Pagination(t *testing.T) {
-	// TODO: This test will be implemented once we have the mock API client
-	// Expected behavior:
-	// 1. API returns paginated response with total count
-	// 2. Command displays all recipes from first page
-	// 3. If more pages exist, shows: "Showing 1-50 of 150 recipes"
-	// 4. Future: Add --limit and --offset flags for pagination control
-	t.Skip("Test pending implementation - requires mock API client and pagination support")
+	t.Skip("Test pending - requires pagination support in API and refactored runList")
+	// Implementation note: Current API doesn't support pagination.
+	// Future requirements:
+	// 1. Add pagination to Admin API /v1/recipes endpoint
+	// 2. Add --limit and --offset flags to list command
+	// 3. Refactor runList to accept injectable API client for testing
 }
 
 // TestListCommand_InvalidRuntimeError tests validation of runtime flag
 // This test defines the expected behavior for invalid runtime values
 func TestListCommand_InvalidRuntimeError(t *testing.T) {
-	// TODO: This test will be implemented once we have validation
-	// Expected behavior:
-	// 1. Command called with --runtime invalid_runtime
-	// 2. Command validates before calling API
-	// 3. Displays error: "Invalid runtime: invalid_runtime"
-	// 4. Shows valid options: "Valid runtimes: vllm, triton, tgi"
-	// 5. Exit code 1
-	t.Skip("Test pending implementation - requires runtime validation")
+	t.Skip("Test pending - requires adding runtime validation to list command")
+	// Implementation note: Currently runList does not validate runtime before calling API.
+	// Should add validation similar to:
+	//   validRuntimes := map[string]bool{"vllm": true, "triton": true, "tgi": true}
+	//   if runtime != "" && !validRuntimes[runtime] {
+	//     return fmt.Errorf("invalid runtime: %s (valid: vllm, triton, tgi)", runtime)
+	//   }
 }
 
 // TestListCommand_InvalidFormatError tests validation of format flag
 // This test defines the expected behavior for invalid format values
 func TestListCommand_InvalidFormatError(t *testing.T) {
-	// TODO: This test will be implemented once we have validation
-	// Expected behavior:
-	// 1. Command called with --format xml
-	// 2. Command validates before execution
-	// 3. Displays error: "Invalid format: xml"
-	// 4. Shows valid options: "Valid formats: table, json, yaml"
-	// 5. Exit code 1
-	t.Skip("Test pending implementation - requires format validation")
+	t.Skip("Test pending - requires adding format validation to list command")
+	// Implementation note: Currently runList validates format in the switch statement (returns error on default case).
+	// This validation happens AFTER API call, which is inefficient.
+	// Should add early validation:
+	//   validFormats := map[string]bool{"table": true, "json": true, "yaml": true}
+	//   if !validFormats[format] {
+	//     return fmt.Errorf("invalid format: %s (valid: table, json, yaml)", format)
+	//   }
 }

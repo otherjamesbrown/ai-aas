@@ -10,11 +10,11 @@ import (
 type Model struct {
 	ModelID               uuid.UUID              `json:"model_id"`
 	ModelName             string                 `json:"model_name"`
-	DeploymentEndpoint    string                 `json:"deployment_endpoint"`
-	DeploymentEnvironment string                 `json:"deployment_environment"`
-	DeploymentNamespace   string                 `json:"deployment_namespace"`
-	DeploymentStatus      string                 `json:"deployment_status"`
-	DeploymentTarget      string                 `json:"deployment_target,omitempty"`
+	DeploymentEndpoint    *string                `json:"deployment_endpoint,omitempty"`
+	DeploymentEnvironment *string                `json:"deployment_environment,omitempty"`
+	DeploymentNamespace   *string                `json:"deployment_namespace,omitempty"`
+	DeploymentStatus      *string                `json:"deployment_status,omitempty"`
+	DeploymentTarget      *string                `json:"deployment_target,omitempty"`
 	Revision              int                    `json:"revision"`
 	CostPer1kTokens       *float64               `json:"cost_per_1k_tokens,omitempty"`
 	Metadata              map[string]interface{} `json:"metadata,omitempty"`

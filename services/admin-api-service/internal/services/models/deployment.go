@@ -178,6 +178,7 @@ type CreateDeploymentRequest struct {
 	GPUCount     int
 	MemoryGB     int
 	Replicas     int
+	ModelType    string     // Model type (text, vision-language, embedding, audio)
 }
 
 // CreateDeployment creates a new deployment record
@@ -200,6 +201,7 @@ func (s *Service) CreateDeployment(ctx context.Context, req CreateDeploymentRequ
 				IsGated:      false,
 				GPUMemoryGB:  0, // Will be determined from deployment resources
 				CPUMemoryGB:  0,
+				ModelType:    req.ModelType,
 			}
 			model, err = s.AddModel(ctx, autoRegReq)
 			if err != nil {
@@ -208,8 +210,8 @@ func (s *Service) CreateDeployment(ctx context.Context, req CreateDeploymentRequ
 		} else {
 			return nil, err
 		}
-	} else if req.ModelID != "" || req.ExternalName != "" {
-		// Model exists - update hf_model_id and external_name if provided
+	} else if req.ModelID != "" || req.ExternalName != "" || req.ModelType != "" {
+		// Model exists - update hf_model_id, external_name, and model_type if provided
 		if req.ModelID != "" && model.HFModelID != req.ModelID {
 			err := s.updateModelHFModelID(ctx, model.ID, req.ModelID)
 			if err != nil {
@@ -220,6 +222,12 @@ func (s *Service) CreateDeployment(ctx context.Context, req CreateDeploymentRequ
 			err := s.updateModelExternalName(ctx, model.ID, req.ExternalName)
 			if err != nil {
 				return nil, fmt.Errorf("update model external_name: %w", err)
+			}
+		}
+		if req.ModelType != "" && (model.ModelType == nil || *model.ModelType != req.ModelType) {
+			err := s.updateModelType(ctx, model.ID, req.ModelType)
+			if err != nil {
+				return nil, fmt.Errorf("update model model_type: %w", err)
 			}
 		}
 	}

@@ -114,6 +114,16 @@ spec:
                 minLength: 1
                 pattern: ^[a-z]([a-z0-9-]*[a-z0-9])?$
                 type: string
+              modelType:
+                description: |-
+                  ModelType indicates the type of model (text, vision-language, embedding, audio).
+                  This is used for routing and client display purposes.
+                enum:
+                - text
+                - vision-language
+                - embedding
+                - audio
+                type: string
               nodeSelector:
                 additionalProperties:
                   type: string
@@ -1765,6 +1775,11 @@ spec:
               message:
                 description: Message provides additional information about the current
                   phase.
+                type: string
+              modelType:
+                description: |-
+                  ModelType indicates the type of model (text, vision-language, embedding, audio).
+                  Reflects the value from spec.modelType.
                 type: string
               nextRetryTime:
                 description: NextRetryTime is when the next retry will be attempted

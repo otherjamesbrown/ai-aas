@@ -219,6 +219,16 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 	}
 
+	// Sync modelType from spec to status
+	if aiModel.Status.ModelType != aiModel.Spec.ModelType {
+		aiModel.Status.ModelType = aiModel.Spec.ModelType
+		if err := r.Status().Update(ctx, aiModel); err != nil {
+			log.Error(err, "unable to update AIModel status modelType")
+			reconcileTotal.WithLabelValues("error").Inc()
+			return ctrl.Result{}, err
+		}
+	}
+
 	// Examine if the object is being deleted
 	isAIModelMarkedToBeDeleted := aiModel.GetDeletionTimestamp() != nil
 	if isAIModelMarkedToBeDeleted {
@@ -369,14 +379,19 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			if exists {
 				// Artifacts already exist in S3, skip download phase
 				log.Info("S3 artifacts already exist, skipping download", "Bucket", aiModel.Spec.S3Bucket, "Key", aiModel.Spec.S3Key)
-				setDeployingPhaseWithTimestamp(aiModel)
-				// Reset retry count on success
-				aiModel.Status.RetryCount = 0
-				aiModel.Status.LastRetryTime = nil
-				aiModel.Status.NextRetryTime = nil
-				if statusErr := r.Status().Update(ctx, aiModel); statusErr != nil {
-					log.Error(statusErr, "unable to update AIModel status to Deploying")
-					return ctrl.Result{}, statusErr
+				// Only transition to Deploying if not already in Deploying or Ready state
+				// This prevents overwriting Ready status on subsequent reconciliations (aas-rzzk)
+				if aiModel.Status.Phase != aimodelv1alpha1.AIModelPhaseDeploying &&
+					aiModel.Status.Phase != aimodelv1alpha1.AIModelPhaseReady {
+					setDeployingPhaseWithTimestamp(aiModel)
+					// Reset retry count on success
+					aiModel.Status.RetryCount = 0
+					aiModel.Status.LastRetryTime = nil
+					aiModel.Status.NextRetryTime = nil
+					if statusErr := r.Status().Update(ctx, aiModel); statusErr != nil {
+						log.Error(statusErr, "unable to update AIModel status to Deploying")
+						return ctrl.Result{}, statusErr
+					}
 				}
 				// Continue to InferenceService creation (fall through)
 			} else {
@@ -542,16 +557,10 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// Update status from InferenceService (this will check if already Ready and set appropriate phase)
+	// Note: updateStatusFromInferenceService now syncs the status back to aiModel directly,
+	// eliminating the need for a re-fetch which was causing stale cache issues (aas-lhx0)
 	if err := r.updateStatusFromInferenceService(ctx, aiModel); err != nil {
 		log.Error(err, "Failed to update status from InferenceService", "name", aiModel.Name)
-		reconcileTotal.WithLabelValues("error").Inc()
-		return ctrl.Result{}, err
-	}
-
-	// Re-fetch the AIModel to get the latest status after update
-	// This is necessary because updateStatusFromInferenceService uses a fresh copy
-	if err := r.Get(ctx, req.NamespacedName, aiModel); err != nil {
-		log.Error(err, "Failed to re-fetch AIModel after status update", "name", aiModel.Name)
 		reconcileTotal.WithLabelValues("error").Inc()
 		return ctrl.Result{}, err
 	}
@@ -1738,6 +1747,11 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 		return fmt.Errorf("status update failed: %w", err)
 	}
 
+	// Sync the updated status back to the caller's aiModel object
+	// This prevents the caller from needing to re-fetch and getting a stale cached copy
+	// which was causing the race condition where Ready status would be overwritten by Deploying
+	aiModel.Status = latestAIModel.Status
+
 	return nil
 }
 
@@ -1798,6 +1812,7 @@ func (r *AIModelReconciler) syncDeploymentToAdminAPI(ctx context.Context, aiMode
 			Environment:  environment,
 			Namespace:    aiModel.Namespace,
 			Replicas:     replicas,
+			ModelType:    aiModel.Spec.ModelType,
 		})
 		if createErr != nil {
 			return fmt.Errorf("failed to create deployment: %w", createErr)
