@@ -6,7 +6,7 @@
 # This file contains development-specific overrides.
 # Domain: api.dev.otherjamesbrown.com (via global.domain.base)
 #
-# See docs/ingress-best-practices.md for complete documentation
+# See docs/platform/ingress-best-practices.md for complete documentation
 
 replicaCount: 2  # Multiple replicas for resilience
 

@@ -49,7 +49,7 @@ git-crypt unlock
 - NGINX Ingress IP: `172.232.58.222` - PRIMARY for all external HTTP/HTTPS traffic
 - Istio Gateway IP: `172.232.48.93` - Internal only for KServe/Knative routing
 - All service ingresses use `ingressClassName: nginx`
-- See `docs/technical/platform/ingress-best-practices.md` for architecture details
+- See `docs/platform/ingress-best-practices.md` for architecture details
 
 **Monitoring & Observability**
 - Grafana: https://grafana.dev.otherjamesbrown.com
@@ -118,7 +118,7 @@ curl -G https://loki.dev.otherjamesbrown.com/loki/api/v1/query_range \
 - NGINX Ingress IP: `172.236.135.55` - PRIMARY for all external HTTP/HTTPS traffic
 - Istio Gateway IP: `172.236.132.56` - Internal only for KServe/Knative routing
 - All service ingresses use `ingressClassName: nginx`
-- See `docs/technical/platform/ingress-best-practices.md` for architecture details
+- See `docs/platform/ingress-best-practices.md` for architecture details
 
 **TLS Certificates**
 - Uses Let's Encrypt staging certificates (not trusted by browsers)

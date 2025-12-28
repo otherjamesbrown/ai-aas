@@ -45,7 +45,7 @@ spec:
 
               Current ready pods: {{ $value }}
 
-              Runbook: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/rollback-workflow.md
+              Runbook: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/runbooks/rollback-workflow.md
             dashboard: "https://grafana.example.com/d/vllm-deployment-status"
 
         # HIGH: Partial failure (< 50% pods ready)
@@ -180,7 +180,7 @@ spec:
 
               Consider immediate rollback if recently deployed.
 
-              Runbook: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/rollback-workflow.md
+              Runbook: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/runbooks/rollback-workflow.md
 
         # P95 latency exceeds SLO (production: 3s)
         - alert: VLLMHighLatency
@@ -221,7 +221,7 @@ spec:
               Current P99: {{ $value }}s
               Threshold: 6s
 
-              Runbook: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/rollback-workflow.md
+              Runbook: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/runbooks/rollback-workflow.md
 
         # Throughput drop (request rate decreased significantly)
         - alert: VLLMThroughputDrop
@@ -428,7 +428,7 @@ spec:
               Check: helm status {{ $labels.release }} -n system
               Rollback: helm rollback {{ $labels.release }} -n system
 
-              Runbook: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/rollback-workflow.md
+              Runbook: https://github.com/otherjamesbrown/ai-aas/blob/main/docs/runbooks/rollback-workflow.md
 
     # =========================================================================
     # Health Check Alerts
