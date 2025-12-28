@@ -132,6 +132,7 @@ func (w *Worker) runHourlyRollup(ctx context.Context, start, end time.Time) erro
 			bucket_start,
 			organization_id,
 			model_id,
+			actor_id,
 			request_count,
 			tokens_total,
 			error_count,
@@ -142,6 +143,7 @@ func (w *Worker) runHourlyRollup(ctx context.Context, start, end time.Time) erro
 			date_trunc('hour', occurred_at) AS bucket_start,
 			org_id AS organization_id,
 			model_id,
+			actor_id,
 			COUNT(*) AS request_count,
 			SUM(input_tokens + output_tokens) AS tokens_total,
 			SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS error_count,
@@ -149,8 +151,13 @@ func (w *Worker) runHourlyRollup(ctx context.Context, start, end time.Time) erro
 			NOW() AS updated_at
 		FROM analytics.usage_events
 		WHERE occurred_at >= $1 AND occurred_at < $2
-		GROUP BY 1, 2, 3
-		ON CONFLICT (bucket_start, organization_id, model_id)
+		GROUP BY 1, 2, 3, 4
+		ON CONFLICT (
+			bucket_start,
+			organization_id,
+			COALESCE(model_id, '00000000-0000-0000-0000-000000000000'::uuid),
+			COALESCE(actor_id, '00000000-0000-0000-0000-000000000000'::uuid)
+		)
 		DO UPDATE SET
 			request_count = EXCLUDED.request_count,
 			tokens_total  = EXCLUDED.tokens_total,
@@ -179,6 +186,7 @@ func (w *Worker) runDailyRollup(ctx context.Context, start, end time.Time) error
 			bucket_start,
 			organization_id,
 			model_id,
+			actor_id,
 			request_count,
 			tokens_total,
 			error_count,
@@ -189,6 +197,7 @@ func (w *Worker) runDailyRollup(ctx context.Context, start, end time.Time) error
 			date_trunc('day', occurred_at)::date AS bucket_start,
 			org_id AS organization_id,
 			model_id,
+			actor_id,
 			COUNT(*) AS request_count,
 			SUM(input_tokens + output_tokens) AS tokens_total,
 			SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS error_count,
@@ -196,8 +205,13 @@ func (w *Worker) runDailyRollup(ctx context.Context, start, end time.Time) error
 			NOW() AS updated_at
 		FROM analytics.usage_events
 		WHERE occurred_at >= $1 AND occurred_at < $2
-		GROUP BY 1, 2, 3
-		ON CONFLICT (bucket_start, organization_id, model_id)
+		GROUP BY 1, 2, 3, 4
+		ON CONFLICT (
+			bucket_start,
+			organization_id,
+			COALESCE(model_id, '00000000-0000-0000-0000-000000000000'::uuid),
+			COALESCE(actor_id, '00000000-0000-0000-0000-000000000000'::uuid)
+		)
 		DO UPDATE SET
 			request_count = EXCLUDED.request_count,
 			tokens_total  = EXCLUDED.tokens_total,
