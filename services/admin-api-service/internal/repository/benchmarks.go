@@ -175,10 +175,8 @@ func (r *BenchmarkRepository) CreateTarget(ctx context.Context, create *domain.B
 		return nil, fmt.Errorf("failed to marshal config overrides: %w", err)
 	}
 
-	scheduleEnabled := true
-	if create.ScheduleEnabled != nil {
-		scheduleEnabled = *create.ScheduleEnabled
-	}
+	// Note: scheduleEnabled is always false on creation.
+	// It becomes true when StartTarget is called.
 
 	target := &domain.BenchmarkTarget{
 		ID:              uuid.New(),
@@ -189,9 +187,9 @@ func (r *BenchmarkRepository) CreateTarget(ctx context.Context, create *domain.B
 		Environment:     create.Environment,
 		EndpointURL:     create.EndpointURL,
 		OrgID:           create.OrgID,
-		Status:          "active",
+		Status:          "paused", // Start as paused, becomes active when started
 		IntervalSeconds: create.IntervalSeconds,
-		ScheduleEnabled: scheduleEnabled,
+		ScheduleEnabled: false, // Disabled until explicitly started
 		CreatedAt:       time.Now().UTC(),
 		UpdatedAt:       time.Now().UTC(),
 	}
