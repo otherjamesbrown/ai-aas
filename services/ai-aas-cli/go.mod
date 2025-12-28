@@ -9,12 +9,12 @@ require (
 	github.com/fatih/color v1.18.0
 	github.com/google/uuid v1.6.0
 	github.com/olekukonko/tablewriter v0.0.5
-	github.com/schollz/progressbar/v3 v3.17.1
+	github.com/schollz/progressbar/v3 v3.19.0
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/zap v1.27.0
-	golang.org/x/term v0.36.0
+	golang.org/x/term v0.38.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.32.0
 	k8s.io/apimachinery v0.32.0
@@ -22,6 +22,8 @@ require (
 )
 
 replace github.com/ai-aas/shared-go => ../../shared/go
+
+replace github.com/otherjamesbrown/ai-aas/services/cli-shared => ../cli-shared
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.39.6 // indirect
@@ -42,6 +44,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.7 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.40.2 // indirect
 	github.com/aws/smithy-go v1.23.2 // indirect
+	github.com/clipperhouse/stringish v0.1.1 // indirect
+	github.com/clipperhouse/uax29/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
@@ -64,7 +68,7 @@ require (
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mattn/go-runewidth v0.0.16 // indirect
+	github.com/mattn/go-runewidth v0.0.19 // indirect
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
@@ -88,7 +92,7 @@ require (
 	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
 	golang.org/x/net v0.45.0 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect
-	golang.org/x/sys v0.37.0 // indirect
+	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/text v0.30.0 // indirect
 	golang.org/x/time v0.7.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect

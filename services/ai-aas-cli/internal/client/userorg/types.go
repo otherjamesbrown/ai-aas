@@ -165,3 +165,37 @@ type CreateUserResponse struct {
 	CreatedAt         string `json:"createdAt"`
 }
 
+// BootstrapKeyRequest represents a request to create a bootstrap key.
+type BootstrapKeyRequest struct {
+	OrgID         string `json:"orgId"`
+	ExpiresInDays int    `json:"expiresInDays,omitempty"` // Default 7 days
+	Notes         string `json:"notes,omitempty"`
+}
+
+// BootstrapKeyResponse represents a bootstrap key in API responses.
+type BootstrapKeyResponse struct {
+	KeyID     string `json:"keyId"`
+	OrgID     string `json:"orgId"`
+	OrgName   string `json:"orgName,omitempty"`
+	Status    string `json:"status"` // active, revoked, expired, redeemed
+	Notes     string `json:"notes,omitempty"`
+	CreatedAt string `json:"createdAt"`
+	ExpiresAt string `json:"expiresAt"`
+	RedeemedAt string `json:"redeemedAt,omitempty"`
+	RedeemedBy string `json:"redeemedBy,omitempty"`
+}
+
+// BootstrapKeyCreatedResponse represents a newly created bootstrap key (token shown once).
+type BootstrapKeyCreatedResponse struct {
+	KeyID     string `json:"keyId"`
+	Token     string `json:"token"` // bsk_xxxx - shown only once
+	OrgID     string `json:"orgId"`
+	OrgName   string `json:"orgName,omitempty"`
+	ExpiresAt string `json:"expiresAt"`
+}
+
+// BootstrapKeyListResponse represents the response from listing bootstrap keys.
+type BootstrapKeyListResponse struct {
+	Keys []BootstrapKeyResponse `json:"keys"`
+}
+

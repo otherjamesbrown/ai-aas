@@ -61,6 +61,7 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/apikeys"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/auth"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/bootstrapkeys"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/middleware"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/modelaccess"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/orgs"
@@ -108,6 +109,9 @@ func main() {
 			// Public auth routes (no auth required)
 			auth.RegisterRoutes(r, runtime, idpRegistry, logger)
 
+			// Public bootstrap key routes (redeem endpoint - no auth required)
+			bootstrapkeys.RegisterPublicRoutes(r, runtime, logger)
+
 			// Protected routes (require authentication)
 			r.Group(func(r chi.Router) {
 				// Apply auth middleware to all routes in this group
@@ -124,6 +128,8 @@ func main() {
 				apikeys.RegisterRoutes(r, runtime, logger)
 				// Register model access routes (Spec 022 - User Model Access Control)
 				modelaccess.RegisterRoutes(r, runtime, logger)
+				// Register bootstrap key routes (Spec 033 - Org Admin CLI)
+				bootstrapkeys.RegisterRoutes(r, runtime, logger)
 			})
 		},
 	})

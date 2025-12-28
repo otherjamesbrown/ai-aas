@@ -13,6 +13,8 @@ use (
 	./services/_template
 	./services/admin-api-service
 	./services/ai-aas-cli
+	./services/ai-aas-org
+	./services/cli-shared
 	./services/analytics-service
 	./services/analytics-service/test/e2e
 	./services/analytics-service/test/integration-phase5

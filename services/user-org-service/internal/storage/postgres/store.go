@@ -1317,3 +1317,186 @@ func scanSession(row pgx.Row) (Session, error) {
 	s.DeletedAt = timePtr(deleted)
 	return s, nil
 }
+
+// CreateBootstrapKey creates a new bootstrap key for org admin onboarding.
+func (s *Store) CreateBootstrapKey(ctx context.Context, params CreateBootstrapKeyParams) (BootstrapKey, error) {
+	id := uuid.New()
+	keyID := generateKeyID("bsk")
+	now := time.Now().UTC()
+
+	query := `
+		INSERT INTO bootstrap_keys (id, key_id, org_id, fingerprint, status, notes, expires_at, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, 'active', $5, $6, $7, $7)
+		RETURNING id, key_id, org_id, fingerprint, status, notes, expires_at, redeemed_at, redeemed_by, created_at, updated_at
+	`
+
+	var key BootstrapKey
+	var redeemedAt pgtype.Timestamptz
+	var redeemedBy pgtype.Text
+
+	err := s.pool.QueryRow(ctx, query,
+		id, keyID, params.OrgID, params.Fingerprint, params.Notes, params.ExpiresAt, now,
+	).Scan(
+		&key.ID, &key.KeyID, &key.OrgID, &key.Fingerprint, &key.Status,
+		&key.Notes, &key.ExpiresAt, &redeemedAt, &redeemedBy, &key.CreatedAt, &key.UpdatedAt,
+	)
+	if err != nil {
+		return BootstrapKey{}, fmt.Errorf("insert bootstrap key: %w", err)
+	}
+
+	key.RedeemedAt = timePtr(redeemedAt)
+	if redeemedBy.Valid {
+		key.RedeemedBy = redeemedBy.String
+	}
+
+	return key, nil
+}
+
+// ListBootstrapKeys lists bootstrap keys, optionally filtered by org.
+func (s *Store) ListBootstrapKeys(ctx context.Context, orgID *uuid.UUID) ([]BootstrapKey, error) {
+	query := `
+		SELECT bk.id, bk.key_id, bk.org_id, o.name, bk.fingerprint, bk.status,
+		       bk.notes, bk.expires_at, bk.redeemed_at, bk.redeemed_by, bk.created_at, bk.updated_at
+		FROM bootstrap_keys bk
+		JOIN orgs o ON o.id = bk.org_id
+		WHERE ($1::uuid IS NULL OR bk.org_id = $1)
+		ORDER BY bk.created_at DESC
+	`
+
+	rows, err := s.pool.Query(ctx, query, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("list bootstrap keys: %w", err)
+	}
+	defer rows.Close()
+
+	var keys []BootstrapKey
+	for rows.Next() {
+		var key BootstrapKey
+		var redeemedAt pgtype.Timestamptz
+		var redeemedBy pgtype.Text
+
+		err := rows.Scan(
+			&key.ID, &key.KeyID, &key.OrgID, &key.OrgName, &key.Fingerprint, &key.Status,
+			&key.Notes, &key.ExpiresAt, &redeemedAt, &redeemedBy, &key.CreatedAt, &key.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scan bootstrap key: %w", err)
+		}
+
+		key.RedeemedAt = timePtr(redeemedAt)
+		if redeemedBy.Valid {
+			key.RedeemedBy = redeemedBy.String
+		}
+
+		keys = append(keys, key)
+	}
+
+	return keys, nil
+}
+
+// GetBootstrapKeyByKeyID retrieves a bootstrap key by its key ID (e.g., "bsk_abc123").
+func (s *Store) GetBootstrapKeyByKeyID(ctx context.Context, keyID string) (BootstrapKey, error) {
+	query := `
+		SELECT bk.id, bk.key_id, bk.org_id, o.name, bk.fingerprint, bk.status,
+		       bk.notes, bk.expires_at, bk.redeemed_at, bk.redeemed_by, bk.created_at, bk.updated_at
+		FROM bootstrap_keys bk
+		JOIN orgs o ON o.id = bk.org_id
+		WHERE bk.key_id = $1
+	`
+
+	var key BootstrapKey
+	var redeemedAt pgtype.Timestamptz
+	var redeemedBy pgtype.Text
+
+	err := s.pool.QueryRow(ctx, query, keyID).Scan(
+		&key.ID, &key.KeyID, &key.OrgID, &key.OrgName, &key.Fingerprint, &key.Status,
+		&key.Notes, &key.ExpiresAt, &redeemedAt, &redeemedBy, &key.CreatedAt, &key.UpdatedAt,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return BootstrapKey{}, ErrNotFound
+		}
+		return BootstrapKey{}, fmt.Errorf("get bootstrap key by key_id: %w", err)
+	}
+
+	key.RedeemedAt = timePtr(redeemedAt)
+	if redeemedBy.Valid {
+		key.RedeemedBy = redeemedBy.String
+	}
+
+	return key, nil
+}
+
+// GetBootstrapKeyByFingerprint retrieves a bootstrap key by its fingerprint hash.
+func (s *Store) GetBootstrapKeyByFingerprint(ctx context.Context, fingerprint string) (BootstrapKey, error) {
+	query := `
+		SELECT bk.id, bk.key_id, bk.org_id, o.name, bk.fingerprint, bk.status,
+		       bk.notes, bk.expires_at, bk.redeemed_at, bk.redeemed_by, bk.created_at, bk.updated_at
+		FROM bootstrap_keys bk
+		JOIN orgs o ON o.id = bk.org_id
+		WHERE bk.fingerprint = $1
+	`
+
+	var key BootstrapKey
+	var redeemedAt pgtype.Timestamptz
+	var redeemedBy pgtype.Text
+
+	err := s.pool.QueryRow(ctx, query, fingerprint).Scan(
+		&key.ID, &key.KeyID, &key.OrgID, &key.OrgName, &key.Fingerprint, &key.Status,
+		&key.Notes, &key.ExpiresAt, &redeemedAt, &redeemedBy, &key.CreatedAt, &key.UpdatedAt,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return BootstrapKey{}, ErrNotFound
+		}
+		return BootstrapKey{}, fmt.Errorf("get bootstrap key by fingerprint: %w", err)
+	}
+
+	key.RedeemedAt = timePtr(redeemedAt)
+	if redeemedBy.Valid {
+		key.RedeemedBy = redeemedBy.String
+	}
+
+	return key, nil
+}
+
+// RevokeBootstrapKey marks a bootstrap key as revoked.
+func (s *Store) RevokeBootstrapKey(ctx context.Context, id uuid.UUID) error {
+	query := `
+		UPDATE bootstrap_keys
+		SET status = 'revoked', updated_at = $2
+		WHERE id = $1 AND status = 'active'
+	`
+
+	result, err := s.pool.Exec(ctx, query, id, time.Now().UTC())
+	if err != nil {
+		return fmt.Errorf("revoke bootstrap key: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+// RedeemBootstrapKey marks a bootstrap key as redeemed.
+func (s *Store) RedeemBootstrapKey(ctx context.Context, id uuid.UUID, redeemedBy string) error {
+	now := time.Now().UTC()
+	query := `
+		UPDATE bootstrap_keys
+		SET status = 'redeemed', redeemed_at = $2, redeemed_by = $3, updated_at = $2
+		WHERE id = $1 AND status = 'active'
+	`
+
+	result, err := s.pool.Exec(ctx, query, id, now, redeemedBy)
+	if err != nil {
+		return fmt.Errorf("redeem bootstrap key: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}

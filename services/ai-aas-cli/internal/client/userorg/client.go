@@ -21,7 +21,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/client"
@@ -686,3 +688,105 @@ func (c *Client) CreateUser(ctx context.Context, orgID string, req CreateUserReq
 	return &result, nil
 }
 
+// CreateBootstrapKey creates a bootstrap key for an organization.
+// This key allows an organization admin to initialize their ai-aas-org CLI.
+func (c *Client) CreateBootstrapKey(ctx context.Context, req BootstrapKeyRequest) (*BootstrapKeyCreatedResponse, error) {
+	url := fmt.Sprintf("%s/v1/bootstrap-keys", c.baseURL)
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
+	}
+
+	resp, err := client.DoWithRetry(ctx, c.httpClient, httpReq, c.retryCfg)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		bodyBytes := make([]byte, 1024)
+		n, _ := resp.Body.Read(bodyBytes)
+		return nil, fmt.Errorf("create bootstrap key failed: status %d, body: %s", resp.StatusCode, string(bodyBytes[:n]))
+	}
+
+	var result BootstrapKeyCreatedResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// ListBootstrapKeys lists bootstrap keys, optionally filtered by organization.
+func (c *Client) ListBootstrapKeys(ctx context.Context, orgID string) ([]BootstrapKeyResponse, error) {
+	reqURL := fmt.Sprintf("%s/v1/bootstrap-keys", c.baseURL)
+	if orgID != "" {
+		reqURL = fmt.Sprintf("%s?orgId=%s", reqURL, url.QueryEscape(orgID))
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	if c.apiKey != "" {
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
+	}
+
+	resp, err := client.DoWithRetry(ctx, c.httpClient, httpReq, c.retryCfg)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("list bootstrap keys failed: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result BootstrapKeyListResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	return result.Keys, nil
+}
+
+// RevokeBootstrapKey revokes a bootstrap key.
+func (c *Client) RevokeBootstrapKey(ctx context.Context, keyID string) error {
+	url := fmt.Sprintf("%s/v1/bootstrap-keys/%s/revoke", c.baseURL, keyID)
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, nil)
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+
+	if c.apiKey != "" {
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
+	}
+
+	resp, err := client.DoWithRetry(ctx, c.httpClient, httpReq, c.retryCfg)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		bodyBytes := make([]byte, 1024)
+		n, _ := resp.Body.Read(bodyBytes)
+		return fmt.Errorf("revoke bootstrap key failed: status %d, body: %s", resp.StatusCode, string(bodyBytes[:n]))
+	}
+
+	return nil
+}

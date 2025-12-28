@@ -270,3 +270,27 @@ type UserModelAccessInfo struct {
 	AccessMode    string
 	GrantedModels []UserModelGrant
 }
+
+// BootstrapKey represents a bootstrap key for org admin onboarding.
+type BootstrapKey struct {
+	ID          uuid.UUID
+	KeyID       string     // Short human-readable key ID (e.g., "bsk_abc123")
+	OrgID       uuid.UUID
+	OrgName     string     // Populated from join
+	Fingerprint string     // SHA-256 hash of the token
+	Status      string     // active, revoked, redeemed, expired
+	Notes       string
+	ExpiresAt   time.Time
+	RedeemedAt  *time.Time
+	RedeemedBy  string     // User ID or email who redeemed
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+// CreateBootstrapKeyParams holds parameters for creating a bootstrap key.
+type CreateBootstrapKeyParams struct {
+	OrgID       uuid.UUID
+	Fingerprint string
+	Notes       string
+	ExpiresAt   time.Time
+}
