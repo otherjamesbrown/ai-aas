@@ -48,6 +48,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -90,6 +91,9 @@ func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger *zap.Logger
 	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Post("/organizations/me/api-keys/{apiKeyId}/rotate", handler.RotateAPIKeyForMe)
 	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Post("/organizations/me/api-keys/{apiKeyId}/revoke", handler.RevokeAPIKeyForMe)
 	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Delete("/organizations/me/api-keys/{apiKeyId}", handler.RevokeAPIKeyForMe)
+
+	// API key inspection endpoint (debugging/support) - requires admin scope
+	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Post("/v1/api-keys/inspect", handler.InspectAPIKey)
 }
 
 // Handler serves API key lifecycle endpoints.
@@ -941,15 +945,133 @@ func (h *Handler) RotateAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) RevokeAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	apiKeyIDParam := chi.URLParam(r, "apiKeyId")
-	
+
 	// Get org ID from authenticated context
 	orgID := middleware.GetOrgID(ctx)
 	if orgID == uuid.Nil {
 		httputil.WriteUnauthorized(w, r, "organization not found in context")
 		return
 	}
-	
+
 	// Call the main revoke handler with resolved org ID
 	r.URL.Path = fmt.Sprintf("/v1/orgs/%s/api-keys/%s", orgID.String(), apiKeyIDParam)
 	h.RevokeAPIKey(w, r)
+}
+
+// InspectAPIKeyRequest represents the payload for inspecting an API key.
+type InspectAPIKeyRequest struct {
+	Key string `json:"key"` // The full API key secret (ai-aas_xxx...)
+}
+
+// InspectAPIKeyResponse represents the details returned when inspecting an API key.
+type InspectAPIKeyResponse struct {
+	KeyID         string   `json:"keyId"`
+	OrgID         string   `json:"orgId"`
+	OrgSlug       string   `json:"orgSlug"`
+	PrincipalType string   `json:"principalType"`
+	PrincipalID   string   `json:"principalId"`
+	Status        string   `json:"status"`
+	Scopes        []string `json:"scopes"`
+	CreatedAt     string   `json:"createdAt"`
+	ExpiresAt     *string  `json:"expiresAt,omitempty"`
+	LastUsedAt    *string  `json:"lastUsedAt,omitempty"`
+}
+
+// InspectAPIKey handles POST /v1/api-keys/inspect.
+// Accepts an API key secret and returns key details for debugging/support.
+// This endpoint requires admin scope (apikey:manage or org:admin).
+func (h *Handler) InspectAPIKey(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	requestID := r.Header.Get("X-Request-ID")
+	if requestID == "" {
+		requestID = "unknown"
+	}
+
+	// Parse request body
+	var req InspectAPIKeyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.Warn("invalid request payload", zap.Error(err))
+		httputil.WriteBadRequest(w, r, "invalid request payload")
+		return
+	}
+
+	// Validate key is provided
+	if req.Key == "" {
+		httputil.WriteBadRequest(w, r, "key is required")
+		return
+	}
+
+	// Compute fingerprint from the provided key (same as auth middleware)
+	hash := sha256.Sum256([]byte(req.Key))
+	fingerprint := base64.URLEncoding.EncodeToString(hash[:])
+	fingerprint = strings.TrimRight(fingerprint, "=")
+
+	h.logger.Info("API key inspect request",
+		zap.String("request_id", requestID),
+		zap.String("fingerprint", fingerprint[:min(20, len(fingerprint))]+"..."))
+
+	// Look up API key by fingerprint (across all organizations)
+	apiKey, err := h.runtime.Postgres.GetAPIKeyByFingerprintAnyOrg(ctx, fingerprint)
+	if err != nil {
+		if err == postgres.ErrNotFound {
+			httputil.WriteNotFound(w, r, "API key", "")
+			return
+		}
+		h.logger.Error("failed to get API key by fingerprint", zap.Error(err), zap.String("request_id", requestID))
+		httputil.WriteInternalError(w, r)
+		return
+	}
+
+	// Get organization details to include slug
+	org, err := h.runtime.Postgres.GetOrg(ctx, apiKey.OrgID)
+	if err != nil {
+		if err == postgres.ErrNotFound {
+			// API key exists but org doesn't - data inconsistency
+			h.logger.Error("API key references non-existent org",
+				zap.String("api_key_id", apiKey.ID.String()),
+				zap.String("org_id", apiKey.OrgID.String()),
+				zap.String("request_id", requestID))
+			httputil.WriteInternalError(w, r)
+			return
+		}
+		h.logger.Error("failed to get organization", zap.Error(err), zap.String("request_id", requestID))
+		httputil.WriteInternalError(w, r)
+		return
+	}
+
+	// Emit audit event (log all inspect requests for security)
+	actorID := middleware.GetUserID(r.Context())
+	event := audit.BuildEvent(apiKey.OrgID, actorID, audit.ActorTypeUser, audit.ActionAPIKeyIssue, audit.TargetTypeAPIKey, &apiKey.ID)
+	event = audit.BuildEventFromRequest(event, r)
+	event.Metadata = map[string]any{
+		"action":      "inspect",
+		"fingerprint": fingerprint,
+	}
+	_ = h.runtime.Audit.Emit(ctx, event)
+
+	// Build response (do NOT include the secret)
+	resp := InspectAPIKeyResponse{
+		KeyID:         apiKey.KeyID,
+		OrgID:         apiKey.OrgID.String(),
+		OrgSlug:       org.Slug,
+		PrincipalType: string(apiKey.PrincipalType),
+		PrincipalID:   apiKey.PrincipalID.String(),
+		Status:        apiKey.Status,
+		Scopes:        apiKey.Scopes,
+		CreatedAt:     apiKey.CreatedAt.Format(time.RFC3339),
+	}
+	if apiKey.ExpiresAt != nil {
+		expStr := apiKey.ExpiresAt.Format(time.RFC3339)
+		resp.ExpiresAt = &expStr
+	}
+	if apiKey.LastUsedAt != nil {
+		usedStr := apiKey.LastUsedAt.Format(time.RFC3339)
+		resp.LastUsedAt = &usedStr
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		h.logger.Error("failed to encode response", zap.Error(err))
+	}
 }
