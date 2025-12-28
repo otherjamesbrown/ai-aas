@@ -230,7 +230,7 @@ endpoints:
   loki: "https://loki.dev.otherjamesbrown.com"
   argocd: "https://argocd.{domain}"
 
-detailed_reference: "docs/technical/platform/ingress-best-practices.md"
+detailed_reference: "docs/platform/ingress-best-practices.md"
 ```
 
 ---

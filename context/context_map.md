@@ -322,7 +322,7 @@ hierarchy:
         links_to:
           - services/api-router-service/internal/api/public/openai.go (source)
           - services/api-router-service/internal/adapter/triton/ (source)
-          - docs/routing-policies.md (reference)
+          - docs/platform/routing-policies.md (reference)
 
     operational:
       docs/runbooks/:

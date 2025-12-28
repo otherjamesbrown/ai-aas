@@ -201,7 +201,7 @@ This document provides a map of all platform documentation to help the infra-ops
 | nginx-ingress | ingress-nginx | `gitops/clusters/<env>/apps/nginx-ingress.yaml` | **PRIMARY** - All external HTTP/HTTPS traffic |
 | istio | istio-system | `gitops/clusters/<env>/apps/istio.yaml` | Internal KServe/Knative routing only |
 
-**Important**: All service ingresses MUST use `ingressClassName: nginx`. See `docs/technical/platform/ingress-best-practices.md` for architecture details.
+**Important**: All service ingresses MUST use `ingressClassName: nginx`. See `docs/platform/ingress-best-practices.md` for architecture details.
 
 ## Verification Commands
 

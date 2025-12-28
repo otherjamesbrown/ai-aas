@@ -32,7 +32,7 @@ Backend endpoints:
 | Infrastructure definitions | `infra/terraform/environments/<env>/` |
 | GitHub workflows | `.github/workflows/*.yml` |
 | Kubernetes resources | Query cluster directly or reference Helm charts |
-| Branching strategy | `docs/development/branching-workflow.md` |
+| Branching strategy | `docs/platform/branching-workflow.md` |
 | Credentials/access | `docs/platform/environment-access.md` (paths only, not values) |
 
 ### 3. Verification Commands
@@ -93,10 +93,10 @@ When referencing other documentation:
 
 ```markdown
 <!-- GOOD: Relative path that can be validated -->
-See [Branching Workflow](../development/branching-workflow.md)
+See [Branching Workflow](branching-workflow.md)
 
 <!-- BAD: Absolute URL that may break -->
-See https://github.com/org/repo/docs/development/branching-workflow.md
+See https://github.com/org/repo/docs/platform/branching-workflow.md
 ```
 
 ## What NOT to Include

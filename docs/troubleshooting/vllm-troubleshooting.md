@@ -318,7 +318,7 @@ kubectl get prometheusrules -A | grep vllm
 
 ## Related Documentation
 
-- `docs/deployment-workflow.md` - Deployment procedures
-- `docs/rollback-workflow.md` - Rollback procedures
+- `docs/runbooks/deployment-workflow.md` - Deployment procedures
+- `docs/runbooks/rollback-workflow.md` - Rollback procedures
 - `specs/010-vllm-deployment/` - Feature specifications
 - `infra/helm/charts/vllm-deployment/README.md` - Helm chart documentation
