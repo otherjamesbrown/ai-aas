@@ -109,6 +109,30 @@ func (c *Client) CreateTarget(ctx context.Context, req CreateTargetRequest) (*Ta
 	return &target, nil
 }
 
+// ResolveTargetID resolves a target name or ID to a target ID
+// If the input looks like a UUID, it returns it as-is
+// Otherwise, it looks up the target by name
+func (c *Client) ResolveTargetID(ctx context.Context, nameOrID string) (string, error) {
+	// Check if it looks like a UUID (simple heuristic: contains dashes and is ~36 chars)
+	if len(nameOrID) == 36 && nameOrID[8] == '-' && nameOrID[13] == '-' {
+		return nameOrID, nil
+	}
+
+	// Look up by name
+	targets, err := c.ListTargets(ctx, ListTargetsOptions{})
+	if err != nil {
+		return "", fmt.Errorf("list targets: %w", err)
+	}
+
+	for _, t := range targets {
+		if t.Name == nameOrID {
+			return t.ID, nil
+		}
+	}
+
+	return "", fmt.Errorf("target not found: %s", nameOrID)
+}
+
 // GetTarget returns a target by ID
 func (c *Client) GetTarget(ctx context.Context, id string) (*Target, error) {
 	var target Target
@@ -157,26 +181,26 @@ func (c *Client) DeleteTarget(ctx context.Context, id string) error {
 	return nil
 }
 
-// StartTarget enables scheduled benchmarking for a target (sets status to active)
+// StartTarget starts benchmarking for a target via the Admin API
+// This calls the /start endpoint which registers the target with guidellm-runner
 func (c *Client) StartTarget(ctx context.Context, id string) (*Target, error) {
-	status := "active"
-	enabled := true
-	req := UpdateTargetRequest{
-		Status:          &status,
-		ScheduleEnabled: &enabled,
+	var target Target
+	path := fmt.Sprintf("/v1/benchmarks/targets/%s/start", url.PathEscape(id))
+	if err := c.api.Post(ctx, path, nil, &target); err != nil {
+		return nil, fmt.Errorf("start target: %w", err)
 	}
-	return c.UpdateTarget(ctx, id, req)
+	return &target, nil
 }
 
-// StopTarget disables scheduled benchmarking for a target (sets status to paused)
+// StopTarget stops benchmarking for a target via the Admin API
+// This calls the /stop endpoint which removes the target from guidellm-runner
 func (c *Client) StopTarget(ctx context.Context, id string) (*Target, error) {
-	status := "paused"
-	enabled := false
-	req := UpdateTargetRequest{
-		Status:          &status,
-		ScheduleEnabled: &enabled,
+	var target Target
+	path := fmt.Sprintf("/v1/benchmarks/targets/%s/stop", url.PathEscape(id))
+	if err := c.api.Post(ctx, path, nil, &target); err != nil {
+		return nil, fmt.Errorf("stop target: %w", err)
 	}
-	return c.UpdateTarget(ctx, id, req)
+	return &target, nil
 }
 
 // ============================================================================

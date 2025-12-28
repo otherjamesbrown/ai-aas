@@ -691,7 +691,13 @@ Examples:
 			apiClient := cfg.NewAPIClient(adminEndpoint)
 			bmClient := benchmark.NewClient(apiClient)
 
-			target, err := bmClient.StartTarget(ctx, targetRef)
+			// Resolve target name to ID if needed
+			targetID, err := bmClient.ResolveTargetID(ctx, targetRef)
+			if err != nil {
+				return fmt.Errorf("failed to resolve target: %w", err)
+			}
+
+			target, err := bmClient.StartTarget(ctx, targetID)
 			if err != nil {
 				return fmt.Errorf("failed to start target: %w", err)
 			}
@@ -738,7 +744,13 @@ Examples:
 			apiClient := cfg.NewAPIClient(adminEndpoint)
 			bmClient := benchmark.NewClient(apiClient)
 
-			target, err := bmClient.StopTarget(ctx, targetRef)
+			// Resolve target name to ID if needed
+			targetID, err := bmClient.ResolveTargetID(ctx, targetRef)
+			if err != nil {
+				return fmt.Errorf("failed to resolve target: %w", err)
+			}
+
+			target, err := bmClient.StopTarget(ctx, targetID)
 			if err != nil {
 				return fmt.Errorf("failed to stop target: %w", err)
 			}
