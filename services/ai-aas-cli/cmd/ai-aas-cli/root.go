@@ -172,6 +172,10 @@ Environment Variables:
 	usageCmd.GroupID = "access"
 	rootCmd.AddCommand(usageCmd)
 
+	bootstrapKeyCmd := admin.BootstrapKeyCommand()
+	bootstrapKeyCmd.GroupID = "access"
+	rootCmd.AddCommand(bootstrapKeyCmd)
+
 	// Platform Operations commands
 	bootstrapCmd := admin.BootstrapCommand()
 	bootstrapCmd.GroupID = "platform"
