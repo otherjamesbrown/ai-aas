@@ -31,6 +31,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httputil"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/audit"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/metrics"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/security"
@@ -84,12 +85,12 @@ func (h *Handler) InitiateRecovery(w http.ResponseWriter, r *http.Request) {
 
 	var req InitiateRecoveryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid request payload")
 		return
 	}
 
 	if req.Email == "" {
-		http.Error(w, "email is required", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "email is required")
 		return
 	}
 
@@ -101,7 +102,7 @@ func (h *Handler) InitiateRecovery(w http.ResponseWriter, r *http.Request) {
 			// Try as slug
 			org, err := h.runtime.Postgres.GetOrgBySlug(ctx, req.OrgID)
 			if err != nil {
-				http.Error(w, "organization not found", http.StatusNotFound)
+				httputil.WriteNotFound(w, r, "organization", "")
 				return
 			}
 			orgID = org.ID
@@ -109,7 +110,7 @@ func (h *Handler) InitiateRecovery(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// If no org_id provided, we need to find user first
 		// For now, return error - org_id should be provided
-		http.Error(w, "org_id is required", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "org_id is required")
 		return
 	}
 
@@ -140,7 +141,7 @@ func (h *Handler) InitiateRecovery(w http.ResponseWriter, r *http.Request) {
 	// Generate recovery token (32 bytes, base64url encoded)
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
-		http.Error(w, "failed to generate recovery token", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 	token := base64.RawURLEncoding.EncodeToString(tokenBytes)
@@ -148,7 +149,7 @@ func (h *Handler) InitiateRecovery(w http.ResponseWriter, r *http.Request) {
 	// Hash token for storage (similar to password hashing)
 	tokenHash, err := security.HashPassword(token)
 	if err != nil {
-		http.Error(w, "failed to hash recovery token", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -241,12 +242,12 @@ func (h *Handler) VerifyRecoveryToken(w http.ResponseWriter, r *http.Request) {
 
 	var req VerifyRecoveryTokenRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid request payload")
 		return
 	}
 
 	if req.Token == "" || req.Email == "" {
-		http.Error(w, "token and email are required", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "token and email are required")
 		return
 	}
 
@@ -257,13 +258,13 @@ func (h *Handler) VerifyRecoveryToken(w http.ResponseWriter, r *http.Request) {
 		if orgID, err = uuid.Parse(req.OrgID); err != nil {
 			org, err := h.runtime.Postgres.GetOrgBySlug(ctx, req.OrgID)
 			if err != nil {
-				http.Error(w, "organization not found", http.StatusNotFound)
+				httputil.WriteNotFound(w, r, "organization", "")
 				return
 			}
 			orgID = org.ID
 		}
 	} else {
-		http.Error(w, "org_id is required", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "org_id is required")
 		return
 	}
 
@@ -310,18 +311,18 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 
 	var req ResetPasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid request payload")
 		return
 	}
 
 	if req.Token == "" || req.NewPassword == "" {
-		http.Error(w, "token and newPassword are required", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "token and newPassword are required")
 		return
 	}
 
 	// Validate password strength
 	if len(req.NewPassword) < 8 {
-		http.Error(w, "password must be at least 8 characters", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "password must be at least 8 characters")
 		return
 	}
 
@@ -332,13 +333,13 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		if orgID, err = uuid.Parse(req.OrgID); err != nil {
 			org, err := h.runtime.Postgres.GetOrgBySlug(ctx, req.OrgID)
 			if err != nil {
-				http.Error(w, "organization not found", http.StatusNotFound)
+				httputil.WriteNotFound(w, r, "organization", "")
 				return
 			}
 			orgID = org.ID
 		}
 	} else {
-		http.Error(w, "org_id is required", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "org_id is required")
 		return
 	}
 
@@ -346,20 +347,20 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	user, err := h.runtime.Postgres.GetUserByEmail(ctx, orgID, req.Email)
 	if err != nil {
 		// Don't reveal if user exists
-		http.Error(w, "invalid or expired recovery token", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid or expired recovery token")
 		return
 	}
 
 	// Verify token in user's recovery_tokens array
 	if !h.verifyRecoveryTokenInUser(user, req.Token) {
-		http.Error(w, "invalid or expired recovery token", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid or expired recovery token")
 		return
 	}
 
 	// Hash new password
 	passwordHash, err := security.HashPassword(req.NewPassword)
 	if err != nil {
-		http.Error(w, "failed to hash password", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -372,10 +373,10 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if err == postgres.ErrOptimisticLock {
-			http.Error(w, "user was modified concurrently", http.StatusConflict)
+			httputil.WriteConflict(w, r, "user was modified concurrently")
 			return
 		}
-		http.Error(w, "failed to update password", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 

@@ -60,6 +60,7 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/audit"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/bootstrap"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/middleware"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httputil"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/metrics"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/oauth"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/security"
@@ -150,7 +151,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	logger.Debug("about to decode JSON payload")
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		logger.Error("failed to decode login request payload", zap.Error(err))
-		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid request payload")
 		return
 	}
 	logger.Info("login payload decoded successfully",
@@ -442,7 +443,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var payload refreshRequest
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid request payload")
 		return
 	}
 
@@ -486,7 +487,7 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var payload logoutRequest
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid request payload")
 		return
 	}
 
@@ -713,7 +714,7 @@ func (h *Handler) UserInfo(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from authenticated context (set by RequireAuth middleware)
 	userID := middleware.GetUserID(ctx)
 	if userID == uuid.Nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		httputil.WriteUnauthorized(w, r, "unauthorized")
 		return
 	}
 
@@ -731,10 +732,10 @@ func (h *Handler) UserInfo(w http.ResponseWriter, r *http.Request) {
 		orgID, err = h.runtime.Postgres.GetUserOrgIDByUserID(ctx, userID)
 		if err != nil {
 			if err == postgres.ErrNotFound {
-				http.Error(w, "user not found", http.StatusNotFound)
+				httputil.WriteNotFound(w, r, "user", "")
 				return
 			}
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			httputil.WriteInternalError(w, r)
 			return
 		}
 		user, err = h.runtime.Postgres.GetUserByID(ctx, orgID, userID)
@@ -742,10 +743,10 @@ func (h *Handler) UserInfo(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		if err == postgres.ErrNotFound {
-			http.Error(w, "user not found", http.StatusNotFound)
+			httputil.WriteNotFound(w, r, "user", "")
 			return
 		}
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -773,7 +774,7 @@ func (h *Handler) UserInfo(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(userInfo); err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 }

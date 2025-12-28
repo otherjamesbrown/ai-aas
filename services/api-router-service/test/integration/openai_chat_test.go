@@ -142,7 +142,7 @@ func TestOpenAIChatCompletions(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, "", "", 30*time.Second, 10*time.Second)
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, nil, "", "", 30*time.Second, 10*time.Second)
 
 	// Configure handler to use mock OpenAI backend URI
 	handler.SetBackendURI("mock-openai-backend-1", mockBackend.URL+"/v1/chat/completions")
@@ -260,7 +260,7 @@ func TestOpenAIChatCompletionsValidation(t *testing.T) {
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
 
-	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, "", "", 30*time.Second, 10*time.Second)
+	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, nil, "", "", 30*time.Second, 10*time.Second)
 
 	router := chi.NewRouter()
 	tracer := otel.Tracer("test")

@@ -36,6 +36,7 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/audit"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/bootstrap"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/middleware"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httputil"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/storage/postgres"
 )
 
@@ -120,13 +121,13 @@ func (h *Handler) CreateBootstrapKey(w http.ResponseWriter, r *http.Request) {
 	var req CreateBootstrapKeyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.Warn("invalid request payload", zap.Error(err))
-		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid request payload")
 		return
 	}
 
 	// Validate org ID
 	if req.OrgID == "" {
-		http.Error(w, "orgId is required", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "orgId is required")
 		return
 	}
 
@@ -139,11 +140,11 @@ func (h *Handler) CreateBootstrapKey(w http.ResponseWriter, r *http.Request) {
 		org, err := h.runtime.Postgres.GetOrgBySlug(ctx, req.OrgID)
 		if err != nil {
 			if err == postgres.ErrNotFound {
-				http.Error(w, "organization not found", http.StatusNotFound)
+				httputil.WriteNotFound(w, r, "organization", "")
 				return
 			}
 			h.logger.Error("failed to resolve organization", zap.Error(err), zap.String("orgId", req.OrgID))
-			http.Error(w, "failed to resolve organization", http.StatusInternalServerError)
+			httputil.WriteInternalError(w, r)
 			return
 		}
 		orgID = org.ID
@@ -153,11 +154,11 @@ func (h *Handler) CreateBootstrapKey(w http.ResponseWriter, r *http.Request) {
 		org, err := h.runtime.Postgres.GetOrg(ctx, orgID)
 		if err != nil {
 			if err == postgres.ErrNotFound {
-				http.Error(w, "organization not found", http.StatusNotFound)
+				httputil.WriteNotFound(w, r, "organization", "")
 				return
 			}
 			h.logger.Error("failed to get organization", zap.Error(err), zap.String("orgId", orgID.String()))
-			http.Error(w, "failed to get organization", http.StatusInternalServerError)
+			httputil.WriteInternalError(w, r)
 			return
 		}
 		orgName = org.Name
@@ -173,7 +174,7 @@ func (h *Handler) CreateBootstrapKey(w http.ResponseWriter, r *http.Request) {
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
 		h.logger.Error("failed to generate token", zap.Error(err))
-		http.Error(w, "failed to generate bootstrap key", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -199,7 +200,7 @@ func (h *Handler) CreateBootstrapKey(w http.ResponseWriter, r *http.Request) {
 	key, err := h.runtime.Postgres.CreateBootstrapKey(ctx, params)
 	if err != nil {
 		h.logger.Error("failed to create bootstrap key", zap.Error(err), zap.String("orgId", orgID.String()))
-		http.Error(w, "failed to create bootstrap key", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -244,11 +245,11 @@ func (h *Handler) ListBootstrapKeys(w http.ResponseWriter, r *http.Request) {
 			org, err := h.runtime.Postgres.GetOrgBySlug(ctx, orgIDParam)
 			if err != nil {
 				if err == postgres.ErrNotFound {
-					http.Error(w, "organization not found", http.StatusNotFound)
+					httputil.WriteNotFound(w, r, "organization", "")
 					return
 				}
 				h.logger.Error("failed to resolve organization", zap.Error(err), zap.String("orgId", orgIDParam))
-				http.Error(w, "failed to resolve organization", http.StatusInternalServerError)
+				httputil.WriteInternalError(w, r)
 				return
 			}
 			orgFilter = &org.ID
@@ -261,7 +262,7 @@ func (h *Handler) ListBootstrapKeys(w http.ResponseWriter, r *http.Request) {
 	keys, err := h.runtime.Postgres.ListBootstrapKeys(ctx, orgFilter)
 	if err != nil {
 		h.logger.Error("failed to list bootstrap keys", zap.Error(err))
-		http.Error(w, "failed to list bootstrap keys", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -310,24 +311,24 @@ func (h *Handler) RevokeBootstrapKey(w http.ResponseWriter, r *http.Request) {
 	key, err := h.runtime.Postgres.GetBootstrapKeyByKeyID(ctx, keyIDParam)
 	if err != nil {
 		if err == postgres.ErrNotFound {
-			http.Error(w, "bootstrap key not found", http.StatusNotFound)
+			httputil.WriteNotFound(w, r, "bootstrap key", keyIDParam)
 			return
 		}
 		h.logger.Error("failed to get bootstrap key", zap.Error(err), zap.String("keyId", keyIDParam))
-		http.Error(w, "failed to get bootstrap key", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
 	// Check if already revoked or redeemed
 	if key.Status != "active" {
-		http.Error(w, "bootstrap key cannot be revoked (already "+key.Status+")", http.StatusConflict)
+		httputil.WriteConflict(w, r, "bootstrap key cannot be revoked (already "+key.Status+")")
 		return
 	}
 
 	// Revoke the key
 	if err := h.runtime.Postgres.RevokeBootstrapKey(ctx, key.ID); err != nil {
 		h.logger.Error("failed to revoke bootstrap key", zap.Error(err), zap.String("keyId", keyIDParam))
-		http.Error(w, "failed to revoke bootstrap key", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -361,18 +362,18 @@ func (h *Handler) RedeemBootstrapKey(w http.ResponseWriter, r *http.Request) {
 	var req RedeemBootstrapKeyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.Warn("invalid request payload", zap.Error(err))
-		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid request payload")
 		return
 	}
 
 	if req.Token == "" {
-		http.Error(w, "token is required", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "token is required")
 		return
 	}
 
 	// Validate token format
 	if len(req.Token) < len(TokenPrefix) || req.Token[:len(TokenPrefix)] != TokenPrefix {
-		http.Error(w, "invalid bootstrap key format", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, r, "invalid bootstrap key format")
 		return
 	}
 
@@ -384,21 +385,21 @@ func (h *Handler) RedeemBootstrapKey(w http.ResponseWriter, r *http.Request) {
 	key, err := h.runtime.Postgres.GetBootstrapKeyByFingerprint(ctx, fingerprint)
 	if err != nil {
 		if err == postgres.ErrNotFound {
-			http.Error(w, "invalid or expired bootstrap key", http.StatusUnauthorized)
+			httputil.WriteUnauthorized(w, r, "invalid or expired bootstrap key")
 			return
 		}
 		h.logger.Error("failed to get bootstrap key", zap.Error(err))
-		http.Error(w, "failed to validate bootstrap key", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
 	// Check if key is valid
 	if key.Status != "active" {
-		http.Error(w, "bootstrap key is no longer valid ("+key.Status+")", http.StatusUnauthorized)
+		httputil.WriteUnauthorized(w, r, "bootstrap key is no longer valid ("+key.Status+")")
 		return
 	}
 	if time.Now().After(key.ExpiresAt) {
-		http.Error(w, "bootstrap key has expired", http.StatusUnauthorized)
+		httputil.WriteUnauthorized(w, r, "bootstrap key has expired")
 		return
 	}
 
@@ -406,7 +407,7 @@ func (h *Handler) RedeemBootstrapKey(w http.ResponseWriter, r *http.Request) {
 	org, err := h.runtime.Postgres.GetOrg(ctx, key.OrgID)
 	if err != nil {
 		h.logger.Error("failed to get organization", zap.Error(err), zap.String("orgId", key.OrgID.String()))
-		http.Error(w, "failed to get organization", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -414,7 +415,7 @@ func (h *Handler) RedeemBootstrapKey(w http.ResponseWriter, r *http.Request) {
 	tokenBytes := make([]byte, 32) // 256 bits of entropy
 	if _, err := rand.Read(tokenBytes); err != nil {
 		h.logger.Error("failed to generate API key token", zap.Error(err))
-		http.Error(w, "failed to generate API key", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
@@ -443,7 +444,7 @@ func (h *Handler) RedeemBootstrapKey(w http.ResponseWriter, r *http.Request) {
 	apiKey, err := h.runtime.Postgres.CreateAPIKey(ctx, apiKeyParams)
 	if err != nil {
 		h.logger.Error("failed to create API key", zap.Error(err), zap.String("orgId", key.OrgID.String()))
-		http.Error(w, "failed to create API key", http.StatusInternalServerError)
+		httputil.WriteInternalError(w, r)
 		return
 	}
 
