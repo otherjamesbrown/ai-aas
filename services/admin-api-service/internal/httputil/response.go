@@ -1,12 +1,16 @@
 // Package httputil provides HTTP response utilities for API handlers.
+//
+// This package wraps shared/go/httputil to maintain backward compatibility
+// with the legacy error response format used by admin-api-service.
 package httputil
 
 import (
-	"encoding/json"
 	"net/http"
+
+	sharedhttputil "github.com/ai-aas/shared-go/httputil"
 )
 
-// Error type constants
+// Error type constants (legacy - maintained for backward compatibility)
 const (
 	ErrorTypeValidation = "validation_error"
 	ErrorTypeNotFound   = "not_found"
@@ -14,18 +18,16 @@ const (
 	ErrorTypeInternal   = "internal_error"
 )
 
-// ValidationError represents a field-level validation error
-type ValidationError struct {
-	Field   string `json:"field"`
-	Message string `json:"message"`
-}
+// ValidationError represents a field-level validation error.
+// This is re-exported from shared/go/httputil for backward compatibility.
+type ValidationError = sharedhttputil.ValidationError
 
-// ErrorResponse represents an API error response
+// ErrorResponse represents an API error response (legacy format)
 type ErrorResponse struct {
 	Error ErrorDetail `json:"error"`
 }
 
-// ErrorDetail contains error details
+// ErrorDetail contains error details (legacy format)
 type ErrorDetail struct {
 	Type    string            `json:"type"`
 	Title   string            `json:"title"`
@@ -34,16 +36,14 @@ type ErrorDetail struct {
 	Errors  []ValidationError `json:"errors,omitempty"`
 }
 
-// WriteJSON writes a JSON response with the given status code
+// WriteJSON writes a JSON response with the given status code.
+// This delegates to shared/go/httputil.WriteJSON.
 func WriteJSON(w http.ResponseWriter, status int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if data != nil {
-		json.NewEncoder(w).Encode(data)
-	}
+	sharedhttputil.WriteJSON(w, status, data)
 }
 
-// WriteError writes an error response
+// WriteError writes an error response using the legacy format.
+// This maintains backward compatibility with existing callers.
 func WriteError(w http.ResponseWriter, r *http.Request, status int, errorType, title, detail string) {
 	resp := ErrorResponse{
 		Error: ErrorDetail{
@@ -56,7 +56,8 @@ func WriteError(w http.ResponseWriter, r *http.Request, status int, errorType, t
 	WriteJSON(w, status, resp)
 }
 
-// WriteValidationError writes a validation error response
+// WriteValidationError writes a validation error response using the legacy format.
+// This maintains backward compatibility with existing callers.
 func WriteValidationError(w http.ResponseWriter, r *http.Request, errors []ValidationError) {
 	resp := ErrorResponse{
 		Error: ErrorDetail{
@@ -70,19 +71,19 @@ func WriteValidationError(w http.ResponseWriter, r *http.Request, errors []Valid
 	WriteJSON(w, http.StatusBadRequest, resp)
 }
 
-// WriteInternalError writes a generic internal server error
+// WriteInternalError writes a generic internal server error using the legacy format.
 func WriteInternalError(w http.ResponseWriter, r *http.Request) {
 	WriteError(w, r, http.StatusInternalServerError, ErrorTypeInternal,
 		"Internal Server Error", "An unexpected error occurred")
 }
 
-// WriteNotFound writes a not found error
+// WriteNotFound writes a not found error using the legacy format.
 func WriteNotFound(w http.ResponseWriter, r *http.Request, resourceType, id string) {
 	WriteError(w, r, http.StatusNotFound, ErrorTypeNotFound,
 		resourceType+" Not Found", resourceType+" with ID '"+id+"' was not found")
 }
 
-// WriteConflict writes a conflict error
+// WriteConflict writes a conflict error using the legacy format.
 func WriteConflict(w http.ResponseWriter, r *http.Request, message string) {
 	WriteError(w, r, http.StatusConflict, ErrorTypeConflict,
 		"Conflict", message)

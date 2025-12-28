@@ -1,12 +1,10 @@
 // Package api provides centralized error handling for the API Router Service.
 //
 // Purpose:
-//   This package provides a centralized error catalog with consistent error codes,
-//   response formatting, and HTTP status code mapping across all API endpoints.
-//
-// Error Codes:
-//   Error codes match the OpenAPI specification and follow a consistent naming
-//   convention. Each error code maps to a specific HTTP status code.
+//   This package provides service-specific error handling utilities that work
+//   with the shared error codes from github.com/ai-aas/shared-go/errors.
+//   It provides ErrorBuilder for creating error responses with trace context,
+//   and helper functions for writing error responses to HTTP ResponseWriter.
 //
 package api
 
@@ -18,47 +16,50 @@ import (
 	"strings"
 
 	"go.opentelemetry.io/otel/trace"
+
+	sharedErrors "github.com/ai-aas/shared-go/errors"
 )
 
-// Error codes matching OpenAPI spec
+// Re-export shared error codes for backward compatibility.
+// This allows existing code to continue using api.ErrCodeXxx while migrating.
 const (
 	// Authentication errors (401)
-	ErrCodeUnauthorized     = "UNAUTHORIZED"
-	ErrCodeInvalidAPIKey   = "INVALID_API_KEY"
-	ErrCodeAuthInvalid     = "AUTH_INVALID"
+	ErrCodeUnauthorized  = sharedErrors.ErrCodeUnauthorized
+	ErrCodeInvalidAPIKey = sharedErrors.ErrCodeInvalidAPIKey
+	ErrCodeAuthInvalid   = sharedErrors.ErrCodeAuthInvalid
 
 	// Authorization errors (403)
-	ErrCodeForbidden     = "FORBIDDEN"
-	ErrCodeAccessDenied  = "ACCESS_DENIED" // Model access denied (Spec 022)
+	ErrCodeForbidden    = sharedErrors.ErrCodeForbidden
+	ErrCodeAccessDenied = sharedErrors.ErrCodeAccessDenied // Model access denied (Spec 022)
 
 	// Validation errors (400)
-	ErrCodeInvalidRequest = "INVALID_REQUEST"
-	ErrCodeMissingField   = "MISSING_FIELD"
-	ErrCodeValidationError = "VALIDATION_ERROR"
+	ErrCodeInvalidRequest  = sharedErrors.ErrCodeInvalidRequest
+	ErrCodeMissingField    = sharedErrors.ErrCodeMissingField
+	ErrCodeValidationError = sharedErrors.ErrCodeValidationError
 
 	// Rate limiting (429)
-	ErrCodeRateLimitExceeded = "RATE_LIMIT_EXCEEDED"
+	ErrCodeRateLimitExceeded = sharedErrors.ErrCodeRateLimitExceeded
 
 	// Budget/quota (402)
-	ErrCodeBudgetExceeded = "BUDGET_EXCEEDED"
-	ErrCodeQuotaExceeded  = "QUOTA_EXCEEDED"
+	ErrCodeBudgetExceeded = sharedErrors.ErrCodeBudgetExceeded
+	ErrCodeQuotaExceeded  = sharedErrors.ErrCodeQuotaExceeded
 
 	// Backend errors (502, 503, 504)
-	ErrCodeBackendUnavailable = "BACKEND_UNAVAILABLE"
-	ErrCodeBackendTimeout     = "BACKEND_TIMEOUT"
-	ErrCodeBackendError       = "BACKEND_ERROR"
+	ErrCodeBackendUnavailable = sharedErrors.ErrCodeBackendUnavailable
+	ErrCodeBackendTimeout     = sharedErrors.ErrCodeBackendTimeout
+	ErrCodeBackendError       = sharedErrors.ErrCodeBackendError
 
 	// Routing errors (500, 503)
-	ErrCodeNoBackendAvailable = "NO_BACKEND_AVAILABLE"
-	ErrCodeRoutingError       = "ROUTING_ERROR"
+	ErrCodeNoBackendAvailable = sharedErrors.ErrCodeNoBackendAvailable
+	ErrCodeRoutingError       = sharedErrors.ErrCodeRoutingError
 
 	// Not found (404)
-	ErrCodeNotFound        = "NOT_FOUND"
-	ErrCodeRequestNotFound = "REQUEST_NOT_FOUND"
+	ErrCodeNotFound        = sharedErrors.ErrCodeNotFound
+	ErrCodeRequestNotFound = sharedErrors.ErrCodeRequestNotFound
 
 	// Internal errors (500, 503)
-	ErrCodeInternalError      = "INTERNAL_ERROR"
-	ErrCodeServiceUnavailable = "SERVICE_UNAVAILABLE"
+	ErrCodeInternalError      = sharedErrors.ErrCodeInternalError
+	ErrCodeServiceUnavailable = sharedErrors.ErrCodeServiceUnavailable
 )
 
 // ErrorResponse represents a standard error response matching OpenAPI spec.
@@ -110,10 +111,10 @@ func (b *ErrorBuilder) BuildError(ctx context.Context, err error, code string) *
 // BuildLimitError creates a LimitErrorResponse with limit context.
 func (b *ErrorBuilder) BuildLimitError(ctx context.Context, err error, code string, retryAfter *int, limitContext map[string]interface{}) *LimitErrorResponse {
 	response := &LimitErrorResponse{
-		Error:        err.Error(),
-		Code:         code,
+		Error:             err.Error(),
+		Code:              code,
 		RetryAfterSeconds: retryAfter,
-		LimitContext: limitContext,
+		LimitContext:      limitContext,
 	}
 
 	// Add trace ID if available
@@ -128,55 +129,9 @@ func (b *ErrorBuilder) BuildLimitError(ctx context.Context, err error, code stri
 }
 
 // GetHTTPStatus maps an error code to an HTTP status code.
+// This function delegates to the shared errors package.
 func GetHTTPStatus(code string) int {
-	switch code {
-	// Authentication errors
-	case ErrCodeUnauthorized, ErrCodeInvalidAPIKey, ErrCodeAuthInvalid:
-		return http.StatusUnauthorized
-
-	// Authorization errors
-	case ErrCodeForbidden, ErrCodeAccessDenied:
-		return http.StatusForbidden
-
-	// Validation errors
-	case ErrCodeInvalidRequest, ErrCodeMissingField, ErrCodeValidationError:
-		return http.StatusBadRequest
-
-	// Rate limiting
-	case ErrCodeRateLimitExceeded:
-		return http.StatusTooManyRequests
-
-	// Budget/quota
-	case ErrCodeBudgetExceeded, ErrCodeQuotaExceeded:
-		return http.StatusPaymentRequired
-
-	// Backend errors
-	case ErrCodeBackendUnavailable:
-		return http.StatusServiceUnavailable
-	case ErrCodeBackendTimeout:
-		return http.StatusGatewayTimeout
-	case ErrCodeBackendError:
-		return http.StatusBadGateway
-
-	// Routing errors
-	case ErrCodeNoBackendAvailable:
-		return http.StatusServiceUnavailable
-	case ErrCodeRoutingError:
-		return http.StatusInternalServerError
-
-	// Not found
-	case ErrCodeNotFound, ErrCodeRequestNotFound:
-		return http.StatusNotFound
-
-	// Internal errors
-	case ErrCodeInternalError:
-		return http.StatusInternalServerError
-	case ErrCodeServiceUnavailable:
-		return http.StatusServiceUnavailable
-
-	default:
-		return http.StatusInternalServerError
-	}
+	return sharedErrors.GetHTTPStatus(code)
 }
 
 // MapError maps an internal error to an error code and HTTP status.
@@ -229,7 +184,7 @@ func WriteError(w http.ResponseWriter, r *http.Request, builder *ErrorBuilder, e
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	
+
 	// Encode JSON response
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		// Fallback to plain text if JSON encoding fails
@@ -323,4 +278,3 @@ func WrapError(err error, code string) error {
 		Message: err.Error(),
 	}
 }
-
