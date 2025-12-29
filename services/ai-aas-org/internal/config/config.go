@@ -16,6 +16,8 @@ type Config struct {
 	APIEndpoint string `yaml:"api_endpoint" mapstructure:"api_endpoint"`
 	// Inference endpoint for the OpenAI-compatible API (api-router)
 	InferenceEndpoint string `yaml:"inference_endpoint" mapstructure:"inference_endpoint"`
+	// Admin endpoint for benchmark and model management (admin-api-service)
+	AdminEndpoint string `yaml:"admin_endpoint" mapstructure:"admin_endpoint"`
 	// API key for authentication
 	APIKey string `yaml:"api_key" mapstructure:"api_key"`
 	// Organization ID
@@ -44,6 +46,7 @@ func Load() (*Config, error) {
 	// Set defaults
 	viper.SetDefault("api_endpoint", "")
 	viper.SetDefault("inference_endpoint", "")
+	viper.SetDefault("admin_endpoint", "")
 	viper.SetDefault("api_key", "")
 	viper.SetDefault("org_id", "")
 	viper.SetDefault("org_name", "")
@@ -130,6 +133,11 @@ func GetInferenceEndpoint() string {
 	return viper.GetString("inference_endpoint")
 }
 
+// GetAdminEndpoint returns the configured admin API endpoint.
+func GetAdminEndpoint() string {
+	return viper.GetString("admin_endpoint")
+}
+
 // Validate checks if the configuration is valid.
 func (c *Config) Validate() error {
 	if c.APIEndpoint == "" {
@@ -157,6 +165,8 @@ func Update(updates map[string]string) error {
 			cfg.APIEndpoint = value
 		case "inference_endpoint":
 			cfg.InferenceEndpoint = value
+		case "admin_endpoint":
+			cfg.AdminEndpoint = value
 		case "api_key":
 			cfg.APIKey = value
 		case "org_id":

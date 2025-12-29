@@ -60,7 +60,7 @@ func runBenchmarkScenarioList(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	client := newAPIClient()
+	client := newAdminAPIClient()
 	result, err := client.ListBenchmarkScenarios(ctx, 100, 0)
 	if err != nil {
 		return errors.NewOperationError("failed to list scenarios", err.Error())
@@ -127,7 +127,7 @@ func runBenchmarkScenarioShow(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	client := newAPIClient()
+	client := newAdminAPIClient()
 	scenario, err := client.GetBenchmarkScenario(ctx, scenarioName)
 	if err != nil {
 		return errors.NewOperationError("failed to get scenario", err.Error())

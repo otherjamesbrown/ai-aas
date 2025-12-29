@@ -52,6 +52,11 @@ func newAPIClient() *api.Client {
 	return api.NewClient(config.GetAPIEndpoint(), config.GetAPIKey())
 }
 
+// newAdminAPIClient creates a new API client for admin operations (benchmarks, etc).
+func newAdminAPIClient() *api.Client {
+	return api.NewClient(config.GetAdminEndpoint(), config.GetAPIKey())
+}
+
 // --- user list ---
 
 var userListCmd = &cobra.Command{
