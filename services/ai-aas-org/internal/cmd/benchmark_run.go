@@ -71,7 +71,7 @@ func runBenchmarkRunList(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	client := newAPIClient()
+	client := newAdminAPIClient()
 
 	opts := api.ListBenchmarkRunsOptions{
 		Status:       runListStatus,
@@ -173,7 +173,7 @@ func runBenchmarkRunShow(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	client := newAPIClient()
+	client := newAdminAPIClient()
 	run, err := client.GetBenchmarkRun(ctx, runID)
 	if err != nil {
 		return errors.NewOperationError("failed to get run", err.Error())
@@ -289,7 +289,7 @@ func runBenchmarkRunTrigger(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	client := newAPIClient()
+	client := newAdminAPIClient()
 
 	// Resolve target name to ID
 	targetID, err := client.ResolveBenchmarkTargetID(ctx, nameOrID)
