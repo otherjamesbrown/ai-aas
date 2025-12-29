@@ -190,3 +190,58 @@ func WriteCreated(w http.ResponseWriter, data interface{}) {
 func WriteNoContent(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// ProblemDetails represents an RFC 7807 Problem Details response.
+// Use this format for services that prefer the RFC 7807 standard.
+type ProblemDetails struct {
+	// Type is a URI reference that identifies the problem type (optional).
+	Type string `json:"type,omitempty"`
+	// Title is a short, human-readable summary of the problem type.
+	Title string `json:"title"`
+	// Status is the HTTP status code.
+	Status int `json:"status"`
+	// Detail is a human-readable explanation specific to this occurrence.
+	Detail string `json:"detail,omitempty"`
+	// Instance is a URI reference that identifies the specific occurrence (optional).
+	Instance string `json:"instance,omitempty"`
+}
+
+// WriteProblemDetails writes an RFC 7807 Problem Details response.
+// Uses Content-Type: application/problem+json as per the RFC.
+func WriteProblemDetails(w http.ResponseWriter, status int, title, detail string) {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(status)
+	resp := ProblemDetails{
+		Status: status,
+		Title:  title,
+		Detail: detail,
+	}
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Printf("httputil: failed to encode problem details response: %v", err)
+	}
+}
+
+// WriteProblemBadRequest writes a 400 Bad Request using RFC 7807 format.
+func WriteProblemBadRequest(w http.ResponseWriter, detail string) {
+	WriteProblemDetails(w, http.StatusBadRequest, http.StatusText(http.StatusBadRequest), detail)
+}
+
+// WriteProblemNotFound writes a 404 Not Found using RFC 7807 format.
+func WriteProblemNotFound(w http.ResponseWriter, detail string) {
+	WriteProblemDetails(w, http.StatusNotFound, http.StatusText(http.StatusNotFound), detail)
+}
+
+// WriteProblemInternalError writes a 500 Internal Server Error using RFC 7807 format.
+func WriteProblemInternalError(w http.ResponseWriter, detail string) {
+	WriteProblemDetails(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError), detail)
+}
+
+// WriteProblemUnauthorized writes a 401 Unauthorized using RFC 7807 format.
+func WriteProblemUnauthorized(w http.ResponseWriter, detail string) {
+	WriteProblemDetails(w, http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized), detail)
+}
+
+// WriteProblemForbidden writes a 403 Forbidden using RFC 7807 format.
+func WriteProblemForbidden(w http.ResponseWriter, detail string) {
+	WriteProblemDetails(w, http.StatusForbidden, http.StatusText(http.StatusForbidden), detail)
+}

@@ -80,7 +80,7 @@ func (a *Authenticator) Authenticate(r *http.Request) (*AuthenticatedContext, er
 
 	// Verify HMAC signature if provided
 	if sig := r.Header.Get("X-HMAC-Signature"); sig != "" {
-		if err := a.verifyHMAC(r, key, sig); err != nil {
+		if err := a.verifyHMAC(r, ctx, sig); err != nil {
 			return nil, fmt.Errorf("HMAC verification failed: %w", err)
 		}
 	}
@@ -158,6 +158,8 @@ func (a *Authenticator) validateAPIKey(key string) (*AuthenticatedContext, error
 		// Model access control (Spec 022)
 		ModelAccessMode string   `json:"modelAccessMode,omitempty"` // "restricted" or "auto_grant"
 		GrantedModels   []string `json:"grantedModels,omitempty"`   // Only populated for restricted mode
+		// HMAC secret for request signing verification
+		HMACSecret string `json:"hmacSecret,omitempty"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&validationResp); err != nil {
@@ -177,6 +179,7 @@ func (a *Authenticator) validateAPIKey(key string) (*AuthenticatedContext, error
 		Scopes:          validationResp.Scopes,
 		ModelAccessMode: validationResp.ModelAccessMode,
 		GrantedModels:   validationResp.GrantedModels,
+		HMACSecret:      validationResp.HMACSecret,
 	}
 
 	// Cache the result for 1 minute
@@ -216,7 +219,7 @@ func (a *Authenticator) validateAPIKeyStub(apiKey string) (*AuthenticatedContext
 
 // verifyHMAC verifies an HMAC signature of the request payload.
 // The request body should be buffered by BodyBufferMiddleware before calling this function.
-func (a *Authenticator) verifyHMAC(r *http.Request, apiKey, signature string) error {
+func (a *Authenticator) verifyHMAC(r *http.Request, authCtx *AuthenticatedContext, signature string) error {
 	// Get buffered body from context (set by BodyBufferMiddleware)
 	var body []byte
 	if bufferedBody := r.Context().Value("buffered_body"); bufferedBody != nil {
@@ -241,10 +244,11 @@ func (a *Authenticator) verifyHMAC(r *http.Request, apiKey, signature string) er
 		return fmt.Errorf("request body is empty")
 	}
 
-	// TODO: Get secret from API key (requires user-org-service integration)
-	// For now, use a stub secret. In production, this should fetch the secret
-	// associated with the API key from user-org-service.
-	secret := []byte("stub-secret") // Placeholder - replace with actual secret retrieval
+	// Get HMAC secret from authenticated context (returned by user-org-service validation)
+	if authCtx.HMACSecret == "" {
+		return fmt.Errorf("HMAC verification requested but no HMAC secret configured for this API key")
+	}
+	secret := []byte(authCtx.HMACSecret)
 
 	// Compute HMAC
 	mac := hmac.New(sha256.New, secret)

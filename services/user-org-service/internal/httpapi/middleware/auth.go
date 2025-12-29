@@ -41,12 +41,9 @@ package middleware
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/ory/fosite"
@@ -56,25 +53,6 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httputil"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/oauth"
 )
-
-// ContextKey is the type for context keys.
-type ContextKey string
-
-const (
-	// UserIDKey is the context key for authenticated user ID.
-	UserIDKey ContextKey = "auth.user_id"
-	// OrgIDKey is the context key for authenticated organization ID.
-	OrgIDKey ContextKey = "auth.org_id"
-	// SessionKey is the context key for the full OAuth session.
-	SessionKey ContextKey = "auth.session"
-)
-
-// AuthenticatedUser contains information about the authenticated user.
-type AuthenticatedUser struct {
-	UserID uuid.UUID
-	OrgID  uuid.UUID
-	Scopes []string
-}
 
 // RequireAuth creates middleware that validates Bearer tokens and extracts user context.
 // Supports both API key authentication and OAuth2/Fosite authentication.
@@ -172,7 +150,6 @@ func RequireAuth(rt *bootstrap.Runtime, logger *zap.Logger) func(http.Handler) h
 			}
 
 			// Validate token using Fosite's introspection
-			// IntrospectToken validates the token signature and returns session info
 			_, accessRequester, err := rt.Provider.IntrospectToken(ctx, token, fosite.AccessToken, &oauth.Session{})
 			if err != nil {
 				logger.Warn("RequireAuth: token validation failed",
@@ -184,7 +161,7 @@ func RequireAuth(rt *bootstrap.Runtime, logger *zap.Logger) func(http.Handler) h
 				return
 			}
 
-			// Check if token is active (accessRequester is nil if token is invalid)
+			// Check if token is active
 			if accessRequester == nil {
 				logger.Warn("RequireAuth: token is not active",
 					zap.String("path", r.URL.Path),
@@ -271,81 +248,6 @@ func RequireAuth(rt *bootstrap.Runtime, logger *zap.Logger) func(http.Handler) h
 	}
 }
 
-// GetUserID extracts the authenticated user ID from the request context.
-// Returns uuid.Nil if not authenticated (should not happen if RequireAuth middleware is used).
-func GetUserID(ctx context.Context) uuid.UUID {
-	userID, ok := ctx.Value(UserIDKey).(uuid.UUID)
-	if !ok {
-		return uuid.Nil
-	}
-	return userID
-}
-
-// GetOrgID extracts the authenticated organization ID from the request context.
-// Returns uuid.Nil if not authenticated or org ID not set.
-func GetOrgID(ctx context.Context) uuid.UUID {
-	orgID, ok := ctx.Value(OrgIDKey).(uuid.UUID)
-	if !ok {
-		return uuid.Nil
-	}
-	return orgID
-}
-
-// GetSession extracts the full OAuth session from the request context.
-// Returns nil if not authenticated.
-func GetSession(ctx context.Context) *oauth.Session {
-	session, ok := ctx.Value(SessionKey).(*oauth.Session)
-	if !ok {
-		return nil
-	}
-	return session
-}
-
-// GetAuthenticatedUser extracts all authenticated user information from context.
-func GetAuthenticatedUser(ctx context.Context) *AuthenticatedUser {
-	session := GetSession(ctx)
-	if session == nil {
-		return nil
-	}
-
-	scopes := make([]string, 0)
-	if session.GrantedScopes != nil {
-		scopes = session.GrantedScopes
-	}
-
-	return &AuthenticatedUser{
-		UserID: GetUserID(ctx),
-		OrgID:  GetOrgID(ctx),
-		Scopes: scopes,
-	}
-}
-
-// HasScope checks if the authenticated user has a specific scope.
-// Returns false if not authenticated or scope not found.
-func HasScope(ctx context.Context, scope string) bool {
-	session := GetSession(ctx)
-	if session == nil || session.GrantedScopes == nil {
-		return false
-	}
-	for _, s := range session.GrantedScopes {
-		if s == scope {
-			return true
-		}
-	}
-	return false
-}
-
-// HasAnyScope checks if the authenticated user has any of the specified scopes.
-// Returns false if not authenticated or no matching scope found.
-func HasAnyScope(ctx context.Context, scopes ...string) bool {
-	for _, scope := range scopes {
-		if HasScope(ctx, scope) {
-			return true
-		}
-	}
-	return false
-}
-
 // RequireAdminScope returns middleware that enforces admin scope requirements.
 // Checks if the authenticated user has any of the specified scopes.
 // The "admin" and "*" scopes grant access to all admin endpoints.
@@ -371,99 +273,4 @@ func RequireAdminScope(scopes ...string) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
-}
-
-// tryAPIKeyAuth attempts to authenticate using the API key from the api_keys table.
-// Returns (true, context) if authentication succeeds, (false, nil) otherwise.
-// Supports both user and service_account principal types.
-func tryAPIKeyAuth(ctx context.Context, rt *bootstrap.Runtime, token string, requestID string, logger *zap.Logger, path string) (bool, context.Context) {
-	if rt.Postgres == nil {
-		return false, nil
-	}
-
-	// Compute SHA-256 fingerprint of the API key
-	hash := sha256.Sum256([]byte(token))
-	fingerprint := base64.URLEncoding.EncodeToString(hash[:])
-	fingerprint = strings.TrimRight(fingerprint, "=")
-
-	logger.Debug("RequireAuth: trying API key authentication",
-		zap.String("path", path),
-		zap.String("request_id", requestID),
-		zap.String("fingerprint", fingerprint[:min(20, len(fingerprint))]+"..."))
-
-	// Look up API key in database by fingerprint
-	// Support both user and service_account principal types
-	var apiKeyID uuid.UUID
-	var orgID uuid.UUID
-	var principalID uuid.UUID
-	var principalType string
-	var status string
-	var expiresAt *time.Time
-	var scopes []string
-
-	err := rt.Postgres.Pool().QueryRow(ctx, `
-		SELECT api_key_id, org_id, principal_id, principal_type, status, expires_at, scopes
-		FROM api_keys
-		WHERE fingerprint = $1 AND principal_type IN ('user', 'service_account')
-	`, fingerprint).Scan(&apiKeyID, &orgID, &principalID, &principalType, &status, &expiresAt, &scopes)
-
-	if err != nil {
-		if err.Error() != "no rows in result set" {
-			logger.Debug("RequireAuth: API key lookup failed",
-				zap.Error(err),
-				zap.String("path", path),
-				zap.String("request_id", requestID))
-		}
-		return false, nil
-	}
-
-	// Check if API key is active
-	if status != "active" {
-		logger.Debug("RequireAuth: API key not active",
-			zap.String("path", path),
-			zap.String("request_id", requestID),
-			zap.String("status", status))
-		return false, nil
-	}
-
-	// Check if API key has expired
-	if expiresAt != nil && expiresAt.Before(time.Now()) {
-		logger.Debug("RequireAuth: API key expired",
-			zap.String("path", path),
-			zap.String("request_id", requestID),
-			zap.Time("expires_at", *expiresAt))
-		return false, nil
-	}
-
-	// Store authenticated context in request
-	// For service accounts, principalID is the service account ID
-	// For users, principalID is the user ID
-	ctx = context.WithValue(ctx, UserIDKey, principalID)
-	ctx = context.WithValue(ctx, OrgIDKey, orgID)
-
-	// Create a session for compatibility with existing code
-	session := &oauth.Session{
-		UserID:        principalID.String(),
-		OrgID:         orgID.String(),
-		GrantedScopes: scopes,
-	}
-	ctx = context.WithValue(ctx, SessionKey, session)
-
-	logger.Info("RequireAuth: API key authentication successful",
-		zap.String("path", path),
-		zap.String("request_id", requestID),
-		zap.String("principal_id", principalID.String()),
-		zap.String("principal_type", principalType),
-		zap.String("org_id", orgID.String()),
-		zap.String("api_key_id", apiKeyID.String()),
-		zap.Strings("scopes", scopes))
-
-	return true, ctx
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

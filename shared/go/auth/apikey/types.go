@@ -23,6 +23,10 @@ type AuthenticatedContext struct {
 
 	// GrantedModels is the list of model names accessible when mode is "restricted".
 	GrantedModels []string `json:"grantedModels,omitempty"`
+
+	// HMACSecret is the derived secret for request signing verification.
+	// This is only populated when HMAC verification is enabled.
+	HMACSecret string `json:"-"` // Omit from JSON serialization for security
 }
 
 // Principal types
@@ -151,6 +155,9 @@ type ValidateAPIKeyResponse struct {
 
 	// GrantedModels is the list of model names accessible when mode is "restricted".
 	GrantedModels []string `json:"grantedModels,omitempty"`
+
+	// HMACSecret is the derived secret for request signing verification.
+	HMACSecret string `json:"hmacSecret,omitempty"`
 }
 
 // ToAuthenticatedContext converts a successful validation response to an AuthenticatedContext.
@@ -167,5 +174,6 @@ func (r *ValidateAPIKeyResponse) ToAuthenticatedContext() *AuthenticatedContext 
 		Scopes:          r.Scopes,
 		ModelAccessMode: r.ModelAccessMode,
 		GrantedModels:   r.GrantedModels,
+		HMACSecret:      r.HMACSecret,
 	}
 }
