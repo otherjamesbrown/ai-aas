@@ -5,6 +5,7 @@ package suites
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -110,8 +111,19 @@ func findOrgBySlug(t *testing.T, slug string) string {
 const userOrgEndpoint = "https://user-org.dev.otherjamesbrown.com"
 
 // runCLIWithUserOrg runs a CLI command with user-org-endpoint configured
+// Uses ADMIN_API_KEY from environment if available to ensure cross-org access permissions
 func runCLIWithUserOrg(args ...string) CLIResult {
-	fullArgs := append([]string{"--profile", "dev-admin", "--user-org-endpoint", userOrgEndpoint}, args...)
+	fullArgs := []string{"--profile", "dev-admin", "--user-org-endpoint", userOrgEndpoint}
+
+	// For admin operations requiring cross-org access (apikey create --email, user operations),
+	// override the profile's API key with the master admin key from environment
+	// This ensures we have the necessary 'admin' scope
+	adminAPIKey := os.Getenv("ADMIN_API_KEY")
+	if adminAPIKey != "" {
+		fullArgs = append(fullArgs, "--api-key", adminAPIKey)
+	}
+
+	fullArgs = append(fullArgs, args...)
 	return runCLI(fullArgs...)
 }
 
