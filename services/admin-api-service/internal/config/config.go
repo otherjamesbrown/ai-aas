@@ -35,6 +35,9 @@ type Config struct {
 	TracingEnabled bool
 	OTLPEndpoint   string
 
+	// External services
+	UserOrgServiceURL string // URL of user-org-service for API key validation
+
 	// Kubernetes settings
 	Kubeconfig string // Path to kubeconfig file (empty = use in-cluster config)
 
@@ -61,6 +64,8 @@ func Load() (*Config, error) {
 		MetricsEnabled:    getEnvBool("METRICS_ENABLED", true),
 		TracingEnabled:    getEnvBool("TRACING_ENABLED", false),
 		OTLPEndpoint:      getEnv("OTLP_ENDPOINT", ""),
+		// External services
+		UserOrgServiceURL: getEnv("USER_ORG_SERVICE_URL", ""),
 		// Kubernetes settings
 		Kubeconfig: getEnv("KUBECONFIG", ""),
 		// Worker settings

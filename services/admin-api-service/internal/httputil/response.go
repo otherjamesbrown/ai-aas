@@ -15,6 +15,7 @@ const (
 	ErrorTypeValidation = "validation_error"
 	ErrorTypeNotFound   = "not_found"
 	ErrorTypeConflict   = "conflict"
+	ErrorTypeForbidden  = "forbidden"
 	ErrorTypeInternal   = "internal_error"
 )
 
@@ -87,4 +88,10 @@ func WriteNotFound(w http.ResponseWriter, r *http.Request, resourceType, id stri
 func WriteConflict(w http.ResponseWriter, r *http.Request, message string) {
 	WriteError(w, r, http.StatusConflict, ErrorTypeConflict,
 		"Conflict", message)
+}
+
+// WriteForbidden writes a forbidden error using the legacy format.
+func WriteForbidden(w http.ResponseWriter, r *http.Request, message string) {
+	WriteError(w, r, http.StatusForbidden, ErrorTypeForbidden,
+		"Forbidden", message)
 }

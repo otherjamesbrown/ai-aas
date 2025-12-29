@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/api/middleware"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/domain"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/httputil"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/service"
@@ -83,7 +84,14 @@ type SyncScenariosRequest struct {
 }
 
 // SyncScenarios handles POST /v1/benchmarks/scenarios/sync
+// This endpoint is master key only - org API keys cannot sync scenarios
 func (h *BenchmarkHandler) SyncScenarios(w http.ResponseWriter, r *http.Request) {
+	// Require master key for scenario sync (platform operation)
+	if !middleware.IsMasterKey(r.Context()) {
+		httputil.WriteForbidden(w, r, "Only master API key can sync scenarios")
+		return
+	}
+
 	var req SyncScenariosRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.WriteError(w, r, http.StatusBadRequest, httputil.ErrorTypeValidation,
@@ -123,11 +131,18 @@ func (h *BenchmarkHandler) SyncScenarios(w http.ResponseWriter, r *http.Request)
 
 // CreateTarget handles POST /v1/benchmarks/targets
 func (h *BenchmarkHandler) CreateTarget(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var create domain.BenchmarkTargetCreate
 	if err := json.NewDecoder(r.Body).Decode(&create); err != nil {
 		httputil.WriteError(w, r, http.StatusBadRequest, httputil.ErrorTypeValidation,
 			"Invalid Request Body", "Failed to parse JSON: "+err.Error())
 		return
+	}
+
+	// For org API keys, auto-set org_id from context (org keys cannot set arbitrary org_id)
+	if orgID := middleware.GetOrgID(ctx); orgID != nil {
+		create.OrgID = orgID
 	}
 
 	// Validate
@@ -137,7 +152,7 @@ func (h *BenchmarkHandler) CreateTarget(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	target, err := h.svc.CreateTarget(r.Context(), &create)
+	target, err := h.svc.CreateTarget(ctx, &create)
 	if err != nil {
 		if ce, ok := err.(*service.ConflictError); ok {
 			httputil.WriteConflict(w, r, ce.Message)
@@ -159,6 +174,8 @@ func (h *BenchmarkHandler) CreateTarget(w http.ResponseWriter, r *http.Request) 
 
 // ListTargets handles GET /v1/benchmarks/targets
 func (h *BenchmarkHandler) ListTargets(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	params := domain.BenchmarkTargetListParams{
 		Environment:  r.URL.Query().Get("environment"),
 		ModelName:    r.URL.Query().Get("model_name"),
@@ -168,8 +185,13 @@ func (h *BenchmarkHandler) ListTargets(w http.ResponseWriter, r *http.Request) {
 		Offset:       parseIntParam(r.URL.Query().Get("offset"), 0),
 	}
 
-	// Parse org_id if provided
-	if orgIDStr := r.URL.Query().Get("org_id"); orgIDStr != "" {
+	// For org API keys, always filter by the org_id from context
+	// Master keys can optionally filter by org_id via query param
+	if orgID := middleware.GetOrgID(ctx); orgID != nil {
+		// Org API key - must filter by their org
+		params.OrgID = orgID
+	} else if orgIDStr := r.URL.Query().Get("org_id"); orgIDStr != "" {
+		// Master key with explicit org_id filter
 		orgID, err := uuid.Parse(orgIDStr)
 		if err != nil {
 			httputil.WriteValidationError(w, r, []httputil.ValidationError{
@@ -188,7 +210,7 @@ func (h *BenchmarkHandler) ListTargets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := h.svc.ListTargets(r.Context(), params)
+	response, err := h.svc.ListTargets(ctx, params)
 	if err != nil {
 		h.logger.Error("failed to list targets", zap.Error(err))
 		httputil.WriteInternalError(w, r)
@@ -200,6 +222,8 @@ func (h *BenchmarkHandler) ListTargets(w http.ResponseWriter, r *http.Request) {
 
 // GetTarget handles GET /v1/benchmarks/targets/{id}
 func (h *BenchmarkHandler) GetTarget(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -209,7 +233,7 @@ func (h *BenchmarkHandler) GetTarget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	target, err := h.svc.GetTarget(r.Context(), id)
+	target, err := h.svc.GetTarget(ctx, id)
 	if err != nil {
 		h.logger.Error("failed to get target", zap.Error(err))
 		httputil.WriteInternalError(w, r)
@@ -221,11 +245,21 @@ func (h *BenchmarkHandler) GetTarget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Verify org ownership for org API keys
+	if orgID := middleware.GetOrgID(ctx); orgID != nil {
+		if !h.verifyTargetOwnership(target, orgID) {
+			httputil.WriteForbidden(w, r, "You do not have access to this target")
+			return
+		}
+	}
+
 	httputil.WriteJSON(w, http.StatusOK, target)
 }
 
 // UpdateTarget handles PATCH /v1/benchmarks/targets/{id}
 func (h *BenchmarkHandler) UpdateTarget(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -235,11 +269,34 @@ func (h *BenchmarkHandler) UpdateTarget(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Verify org ownership for org API keys before any update
+	if orgID := middleware.GetOrgID(ctx); orgID != nil {
+		existingTarget, err := h.svc.GetTarget(ctx, id)
+		if err != nil {
+			h.logger.Error("failed to get target for ownership check", zap.Error(err))
+			httputil.WriteInternalError(w, r)
+			return
+		}
+		if existingTarget == nil {
+			httputil.WriteNotFound(w, r, "Target", idStr)
+			return
+		}
+		if !h.verifyTargetOwnership(existingTarget, orgID) {
+			httputil.WriteForbidden(w, r, "You do not have access to this target")
+			return
+		}
+	}
+
 	var update domain.BenchmarkTargetUpdate
 	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
 		httputil.WriteError(w, r, http.StatusBadRequest, httputil.ErrorTypeValidation,
 			"Invalid Request Body", "Failed to parse JSON: "+err.Error())
 		return
+	}
+
+	// Org keys cannot change the org_id of a target
+	if !middleware.IsMasterKey(ctx) {
+		update.OrgID = nil // Strip any org_id from the update
 	}
 
 	// Validate
@@ -249,7 +306,7 @@ func (h *BenchmarkHandler) UpdateTarget(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	target, err := h.svc.UpdateTarget(r.Context(), id, &update)
+	target, err := h.svc.UpdateTarget(ctx, id, &update)
 	if err != nil {
 		if ve, ok := err.(*service.BenchmarkValidationError); ok {
 			httputil.WriteValidationError(w, r, []httputil.ValidationError{
@@ -272,6 +329,8 @@ func (h *BenchmarkHandler) UpdateTarget(w http.ResponseWriter, r *http.Request) 
 
 // DeleteTarget handles DELETE /v1/benchmarks/targets/{id}
 func (h *BenchmarkHandler) DeleteTarget(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -282,7 +341,7 @@ func (h *BenchmarkHandler) DeleteTarget(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Check if target exists
-	target, err := h.svc.GetTarget(r.Context(), id)
+	target, err := h.svc.GetTarget(ctx, id)
 	if err != nil {
 		h.logger.Error("failed to get target", zap.Error(err))
 		httputil.WriteInternalError(w, r)
@@ -294,7 +353,15 @@ func (h *BenchmarkHandler) DeleteTarget(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := h.svc.DeleteTarget(r.Context(), id); err != nil {
+	// Verify org ownership for org API keys
+	if orgID := middleware.GetOrgID(ctx); orgID != nil {
+		if !h.verifyTargetOwnership(target, orgID) {
+			httputil.WriteForbidden(w, r, "You do not have access to this target")
+			return
+		}
+	}
+
+	if err := h.svc.DeleteTarget(ctx, id); err != nil {
 		h.logger.Error("failed to delete target", zap.Error(err))
 		httputil.WriteInternalError(w, r)
 		return
@@ -305,6 +372,8 @@ func (h *BenchmarkHandler) DeleteTarget(w http.ResponseWriter, r *http.Request) 
 
 // StartTarget handles POST /v1/benchmarks/targets/{id}/start
 func (h *BenchmarkHandler) StartTarget(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -314,7 +383,25 @@ func (h *BenchmarkHandler) StartTarget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	target, err := h.svc.StartTarget(r.Context(), id)
+	// Verify org ownership for org API keys before starting
+	if orgID := middleware.GetOrgID(ctx); orgID != nil {
+		existingTarget, err := h.svc.GetTarget(ctx, id)
+		if err != nil {
+			h.logger.Error("failed to get target for ownership check", zap.Error(err))
+			httputil.WriteInternalError(w, r)
+			return
+		}
+		if existingTarget == nil {
+			httputil.WriteNotFound(w, r, "Target", idStr)
+			return
+		}
+		if !h.verifyTargetOwnership(existingTarget, orgID) {
+			httputil.WriteForbidden(w, r, "You do not have access to this target")
+			return
+		}
+	}
+
+	target, err := h.svc.StartTarget(ctx, id)
 	if err != nil {
 		h.logger.Error("failed to start target", zap.Error(err))
 		httputil.WriteError(w, r, http.StatusBadGateway, "runner_error",
@@ -332,6 +419,8 @@ func (h *BenchmarkHandler) StartTarget(w http.ResponseWriter, r *http.Request) {
 
 // StopTarget handles POST /v1/benchmarks/targets/{id}/stop
 func (h *BenchmarkHandler) StopTarget(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -341,7 +430,25 @@ func (h *BenchmarkHandler) StopTarget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	target, err := h.svc.StopTarget(r.Context(), id)
+	// Verify org ownership for org API keys before stopping
+	if orgID := middleware.GetOrgID(ctx); orgID != nil {
+		existingTarget, err := h.svc.GetTarget(ctx, id)
+		if err != nil {
+			h.logger.Error("failed to get target for ownership check", zap.Error(err))
+			httputil.WriteInternalError(w, r)
+			return
+		}
+		if existingTarget == nil {
+			httputil.WriteNotFound(w, r, "Target", idStr)
+			return
+		}
+		if !h.verifyTargetOwnership(existingTarget, orgID) {
+			httputil.WriteForbidden(w, r, "You do not have access to this target")
+			return
+		}
+	}
+
+	target, err := h.svc.StopTarget(ctx, id)
 	if err != nil {
 		h.logger.Error("failed to stop target", zap.Error(err))
 		httputil.WriteError(w, r, http.StatusBadGateway, "runner_error",
@@ -363,12 +470,19 @@ func (h *BenchmarkHandler) StopTarget(w http.ResponseWriter, r *http.Request) {
 
 // ListRuns handles GET /v1/benchmarks/runs
 func (h *BenchmarkHandler) ListRuns(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	params := domain.BenchmarkRunListParams{
 		ScenarioName: r.URL.Query().Get("scenario_name"),
 		Status:       r.URL.Query().Get("status"),
 		TriggeredBy:  r.URL.Query().Get("triggered_by"),
 		Limit:        parseIntParam(r.URL.Query().Get("limit"), 100),
 		Offset:       parseIntParam(r.URL.Query().Get("offset"), 0),
+	}
+
+	// For org API keys, always filter runs by the org's targets
+	if orgID := middleware.GetOrgID(ctx); orgID != nil {
+		params.OrgID = orgID
 	}
 
 	// Parse target_id if provided
@@ -411,7 +525,7 @@ func (h *BenchmarkHandler) ListRuns(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := h.svc.ListRuns(r.Context(), params)
+	response, err := h.svc.ListRuns(ctx, params)
 	if err != nil {
 		h.logger.Error("failed to list runs", zap.Error(err))
 		httputil.WriteInternalError(w, r)
@@ -423,6 +537,8 @@ func (h *BenchmarkHandler) ListRuns(w http.ResponseWriter, r *http.Request) {
 
 // GetRun handles GET /v1/benchmarks/runs/{id}
 func (h *BenchmarkHandler) GetRun(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -432,7 +548,7 @@ func (h *BenchmarkHandler) GetRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	run, err := h.svc.GetRun(r.Context(), id)
+	run, err := h.svc.GetRun(ctx, id)
 	if err != nil {
 		h.logger.Error("failed to get run", zap.Error(err))
 		httputil.WriteInternalError(w, r)
@@ -442,6 +558,20 @@ func (h *BenchmarkHandler) GetRun(w http.ResponseWriter, r *http.Request) {
 	if run == nil {
 		httputil.WriteNotFound(w, r, "Run", idStr)
 		return
+	}
+
+	// Verify org ownership for org API keys (via target)
+	if orgID := middleware.GetOrgID(ctx); orgID != nil {
+		target, err := h.svc.GetTarget(ctx, run.TargetID)
+		if err != nil {
+			h.logger.Error("failed to get target for ownership check", zap.Error(err))
+			httputil.WriteInternalError(w, r)
+			return
+		}
+		if target == nil || !h.verifyTargetOwnership(target, orgID) {
+			httputil.WriteForbidden(w, r, "You do not have access to this run")
+			return
+		}
 	}
 
 	httputil.WriteJSON(w, http.StatusOK, run)
@@ -454,6 +584,8 @@ type TriggerRunRequest struct {
 
 // TriggerRun handles POST /v1/benchmarks/targets/{id}/trigger
 func (h *BenchmarkHandler) TriggerRun(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -461,6 +593,24 @@ func (h *BenchmarkHandler) TriggerRun(w http.ResponseWriter, r *http.Request) {
 			{Field: "id", Message: "Invalid target ID format"},
 		})
 		return
+	}
+
+	// Verify org ownership for org API keys before triggering
+	if orgID := middleware.GetOrgID(ctx); orgID != nil {
+		existingTarget, err := h.svc.GetTarget(ctx, id)
+		if err != nil {
+			h.logger.Error("failed to get target for ownership check", zap.Error(err))
+			httputil.WriteInternalError(w, r)
+			return
+		}
+		if existingTarget == nil {
+			httputil.WriteNotFound(w, r, "Target", idStr)
+			return
+		}
+		if !h.verifyTargetOwnership(existingTarget, orgID) {
+			httputil.WriteForbidden(w, r, "You do not have access to this target")
+			return
+		}
 	}
 
 	// Parse optional request body
@@ -473,7 +623,7 @@ func (h *BenchmarkHandler) TriggerRun(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	run, err := h.svc.TriggerRun(r.Context(), id, req.TriggeredByUser)
+	run, err := h.svc.TriggerRun(ctx, id, req.TriggeredByUser)
 	if err != nil {
 		if ve, ok := err.(*service.BenchmarkValidationError); ok {
 			httputil.WriteError(w, r, http.StatusBadRequest, httputil.ErrorTypeValidation,
@@ -558,4 +708,16 @@ func isValidEnvironment(env string) bool {
 		}
 	}
 	return false
+}
+
+// verifyTargetOwnership checks if the target belongs to the given organization
+func (h *BenchmarkHandler) verifyTargetOwnership(target *domain.BenchmarkTarget, orgID *uuid.UUID) bool {
+	if target == nil || orgID == nil {
+		return false
+	}
+	// Target must have an org_id that matches the requester's org
+	if target.OrgID == nil {
+		return false
+	}
+	return *target.OrgID == *orgID
 }

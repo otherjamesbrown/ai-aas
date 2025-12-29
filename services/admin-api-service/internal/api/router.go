@@ -57,12 +57,21 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 	r.Get("/readyz", healthHandler.Readyz)
 	r.Handle("/metrics", handlers.MetricsHandler())
 
-	// API key validator using master admin key from config
-	validator := &masterKeyValidator{masterKey: cfg.MasterAdminAPIKey}
+	// API key validators
+	// Master-only validator for most routes (backwards compatibility)
+	masterValidator := &masterKeyValidator{masterKey: cfg.MasterAdminAPIKey}
+
+	// Multi-key validator for org-enabled routes (benchmarks)
+	// Supports both master key and org API keys via user-org-service
+	multiValidator := middleware.NewMasterAndOrgKeyValidator(
+		cfg.MasterAdminAPIKey,
+		cfg.UserOrgServiceURL,
+		logger,
+	)
 
 	// Protected API routes
 	r.Route("/v1", func(r chi.Router) {
-		r.Use(middleware.Auth(validator, logger))
+		r.Use(middleware.Auth(masterValidator, logger))
 		r.Use(middleware.RateLimit(rateLimiter))
 
 		// Model registry routes (Phase 3)
@@ -164,31 +173,36 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 		recipeHdlr := recipesHandler.NewHandler(recipeAdapter)
 		recipeHdlr.RegisterRoutes(r)
 
-		// Benchmark management routes (Phase 2 - Benchmark Management System)
-		r.Route("/benchmarks", func(r chi.Router) {
-			benchmarkRepo := repository.NewBenchmarkRepository(db)
-			benchmarkSvc := service.NewBenchmarkService(benchmarkRepo, logger)
-			benchmarkHandler := handlers.NewBenchmarkHandler(benchmarkSvc, logger)
+	})
 
-			// Scenario routes
-			r.Get("/scenarios", benchmarkHandler.ListScenarios)
-			r.Get("/scenarios/{name}", benchmarkHandler.GetScenario)
-			r.Post("/scenarios/sync", benchmarkHandler.SyncScenarios)
+	// Benchmark management routes (supports both master and org API keys)
+	// These routes are outside the master-only auth group to allow org API key access
+	r.Route("/v1/benchmarks", func(r chi.Router) {
+		r.Use(middleware.MultiAuth(multiValidator, logger))
+		r.Use(middleware.RateLimit(rateLimiter))
 
-			// Target routes
-			r.Post("/targets", benchmarkHandler.CreateTarget)
-			r.Get("/targets", benchmarkHandler.ListTargets)
-			r.Get("/targets/{id}", benchmarkHandler.GetTarget)
-			r.Patch("/targets/{id}", benchmarkHandler.UpdateTarget)
-			r.Delete("/targets/{id}", benchmarkHandler.DeleteTarget)
-			r.Post("/targets/{id}/start", benchmarkHandler.StartTarget)
-			r.Post("/targets/{id}/stop", benchmarkHandler.StopTarget)
-			r.Post("/targets/{id}/trigger", benchmarkHandler.TriggerRun)
+		benchmarkRepo := repository.NewBenchmarkRepository(db)
+		benchmarkSvc := service.NewBenchmarkService(benchmarkRepo, logger)
+		benchmarkHandler := handlers.NewBenchmarkHandler(benchmarkSvc, logger)
 
-			// Run routes
-			r.Get("/runs", benchmarkHandler.ListRuns)
-			r.Get("/runs/{id}", benchmarkHandler.GetRun)
-		})
+		// Scenario routes (read-only, available to all authenticated users)
+		r.Get("/scenarios", benchmarkHandler.ListScenarios)
+		r.Get("/scenarios/{name}", benchmarkHandler.GetScenario)
+		r.Post("/scenarios/sync", benchmarkHandler.SyncScenarios) // master only (enforced in handler)
+
+		// Target routes (org-scoped)
+		r.Post("/targets", benchmarkHandler.CreateTarget)
+		r.Get("/targets", benchmarkHandler.ListTargets)
+		r.Get("/targets/{id}", benchmarkHandler.GetTarget)
+		r.Patch("/targets/{id}", benchmarkHandler.UpdateTarget)
+		r.Delete("/targets/{id}", benchmarkHandler.DeleteTarget)
+		r.Post("/targets/{id}/start", benchmarkHandler.StartTarget)
+		r.Post("/targets/{id}/stop", benchmarkHandler.StopTarget)
+		r.Post("/targets/{id}/trigger", benchmarkHandler.TriggerRun)
+
+		// Run routes (org-scoped)
+		r.Get("/runs", benchmarkHandler.ListRuns)
+		r.Get("/runs/{id}", benchmarkHandler.GetRun)
 	})
 
 	return r
