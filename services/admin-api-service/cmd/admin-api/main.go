@@ -45,12 +45,14 @@ func main() {
 	router := api.NewRouter(cfg, db, logger)
 
 	// Create HTTP server
+	// IdleTimeout set to 120s to exceed Go's default client IdleConnTimeout (90s)
+	// This prevents stale connection pool issues when clients reuse connections after idle periods
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
 		Handler:      router,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// Start background worker if enabled

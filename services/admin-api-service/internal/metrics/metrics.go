@@ -50,6 +50,40 @@ var (
 			Help: "Total number of audit log write failures",
 		},
 	)
+
+	// HTTPConnectionsActive tracks active HTTP connections (set by middleware)
+	HTTPConnectionsActive = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "http_connections_active",
+			Help: "Number of active HTTP connections",
+		},
+	)
+
+	// HTTPConnectionsIdle tracks idle HTTP connections
+	HTTPConnectionsIdle = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "http_connections_idle",
+			Help: "Number of idle HTTP connections",
+		},
+	)
+
+	// HTTPConnectionErrors counts connection-related errors by type
+	HTTPConnectionErrors = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "http_connection_errors_total",
+			Help: "Total number of HTTP connection errors",
+		},
+		[]string{"error_type"}, // timeout, tls_handshake, reset, etc.
+	)
+
+	// HTTPRequestTimeouts counts requests that timed out
+	HTTPRequestTimeouts = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "http_request_timeouts_total",
+			Help: "Total number of HTTP request timeouts",
+		},
+		[]string{"timeout_type"}, // read, write, idle
+	)
 )
 
 func init() {
@@ -59,5 +93,9 @@ func init() {
 		DBQueryDuration,
 		DBConnectionsActive,
 		AuditLogFailures,
+		HTTPConnectionsActive,
+		HTTPConnectionsIdle,
+		HTTPConnectionErrors,
+		HTTPRequestTimeouts,
 	)
 }

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"time"
@@ -14,6 +15,10 @@ func Metrics() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
+
+			// Track active connections
+			metrics.HTTPConnectionsActive.Inc()
+			defer metrics.HTTPConnectionsActive.Dec()
 
 			// Wrap response writer to capture status
 			wrapped := &metricsResponseWriter{ResponseWriter: w, status: http.StatusOK}
@@ -35,6 +40,20 @@ func Metrics() func(http.Handler) http.Handler {
 				r.Method,
 				endpoint,
 			).Observe(duration)
+
+			// Check for timeout-related errors
+			if r.Context().Err() == context.DeadlineExceeded {
+				metrics.HTTPRequestTimeouts.WithLabelValues("context_deadline").Inc()
+			} else if r.Context().Err() == context.Canceled {
+				metrics.HTTPConnectionErrors.WithLabelValues("canceled").Inc()
+			}
+
+			// Track gateway timeouts specifically
+			if wrapped.status == http.StatusGatewayTimeout {
+				metrics.HTTPRequestTimeouts.WithLabelValues("gateway").Inc()
+			} else if wrapped.status == http.StatusRequestTimeout {
+				metrics.HTTPRequestTimeouts.WithLabelValues("request").Inc()
+			}
 		})
 	}
 }

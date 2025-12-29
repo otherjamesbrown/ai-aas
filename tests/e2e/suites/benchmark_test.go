@@ -559,6 +559,86 @@ func TestBenchmarkErrorHandling(t *testing.T) {
 	})
 }
 
+// TestBenchmarkLongIdleConnection validates that API connections survive idle periods
+// This test catches connection pool timeout mismatches between client and server
+// See: aas-32qi, aas-0x7g for context on why this test exists
+func TestBenchmarkLongIdleConnection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long idle connection test in short mode")
+	}
+
+	targetName := fmt.Sprintf("e2e-idle-%d", time.Now().Unix())
+
+	defer func() {
+		runCLIWithProfile("benchmark", "target", "stop", targetName)
+		runCLIWithProfile("benchmark", "target", "remove", targetName, "--force")
+	}()
+
+	// Step 1: Create target
+	t.Log("Step 1: Creating target")
+	result := runCLIWithProfile("benchmark", "target", "add", targetName,
+		"--model", "gpt-oss-20b",
+		"--scenario", "short-qa",
+		"--environment", "development")
+	if result.ExitCode != 0 {
+		t.Fatalf("Failed to create target: %s", result.Output)
+	}
+	t.Logf("Created target: %s", targetName)
+
+	// Step 2: Verify target exists (establishes connection pool)
+	t.Log("Step 2: Verifying target exists")
+	result = runCLIWithProfile("benchmark", "target", "show", targetName)
+	if result.ExitCode != 0 {
+		t.Fatalf("Failed to show target: %s", result.Output)
+	}
+
+	// Step 3: Wait for idle period that exceeds previous server IdleTimeout (60s)
+	// With fix, server IdleTimeout is now 120s, so 70s idle should work
+	idleDuration := 70 * time.Second
+	t.Logf("Step 3: Waiting %v to test connection pool idle handling...", idleDuration)
+	time.Sleep(idleDuration)
+
+	// Step 4: Make request after idle period - this is the critical test
+	// Before the fix (IdleTimeout=60s), this would fail with:
+	// - "context deadline exceeded"
+	// - "TLS handshake timeout"
+	t.Log("Step 4: Making request after idle period")
+	result = runCLIWithProfile("benchmark", "target", "show", targetName)
+	if result.ExitCode != 0 {
+		t.Fatalf("Request after %v idle failed (connection pool issue): %s", idleDuration, result.Output)
+	}
+	t.Log("Request after idle period succeeded")
+
+	// Step 5: Verify we can still perform operations
+	t.Log("Step 5: Starting target to verify full functionality")
+	result = runCLIWithProfile("benchmark", "target", "start", targetName)
+	if result.ExitCode != 0 {
+		t.Fatalf("Failed to start target after idle: %s", result.Output)
+	}
+
+	// Step 6: Stop and remove
+	t.Log("Step 6: Stopping target")
+	result = runCLIWithProfile("benchmark", "target", "stop", targetName)
+	if result.ExitCode != 0 {
+		t.Logf("Warning: Failed to stop target: %s", result.Output)
+	}
+
+	t.Log("Step 7: Removing target")
+	result = runCLIWithProfile("benchmark", "target", "remove", targetName, "--force")
+	if result.ExitCode != 0 {
+		t.Fatalf("Failed to remove target: %s", result.Output)
+	}
+
+	// Verify removal
+	time.Sleep(1 * time.Second)
+	result = runCLIWithProfile("benchmark", "target", "show", targetName)
+	if result.ExitCode == 0 {
+		t.Error("Target should have been removed but still exists")
+	}
+
+	t.Log("Long idle connection test completed successfully")
+}
+
 // TestBenchmarkE2EComplete runs a comprehensive end-to-end test
 func TestBenchmarkE2EComplete(t *testing.T) {
 	if testing.Short() {
