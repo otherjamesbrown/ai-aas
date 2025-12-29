@@ -1,9 +1,10 @@
 // Package config provides configuration loading and watching for routing policies.
 //
 // Purpose:
-//   This package implements configuration loading from Config Service with watch
-//   support for real-time routing policy updates. It provides graceful fallback
-//   to cached configuration when Config Service is unavailable.
+//
+//	This package implements configuration loading from Config Service with watch
+//	support for real-time routing policy updates. It provides graceful fallback
+//	to cached configuration when Config Service is unavailable.
 //
 // Dependencies:
 //   - internal/config/cache: BoltDB cache for configuration persistence
@@ -18,7 +19,6 @@
 // Requirements Reference:
 //   - specs/006-api-router-service/spec.md#FR-003 (Routing engine)
 //   - specs/006-api-router-service/spec.md#FR-009 (Configurable routing policies)
-//
 package config
 
 import (
@@ -55,19 +55,19 @@ const (
 
 // RoutingPolicy represents a routing policy configuration.
 type RoutingPolicy struct {
-	PolicyID          string
-	OrganizationID    string // "*" for global
-	Model             string // Full internal model path (e.g., "unsloth/gpt-oss-20b")
-	ExternalName      string // Name exposed in OpenAI API (e.g., "gpt-oss-20b")
-	Backends          []BackendWeight
-	FailoverThreshold int
-	DegradedBackends  []string
-	BackendType       string              // "openai" (default) | "triton" | "triton-grpc" - protocol for backend communication
-	Tokenizer         string              // tiktoken encoding name (e.g., cl100k_base, llama3) for token counting
-	TritonConfig      *TritonConfig       // Optional Triton-specific configuration
+	PolicyID           string
+	OrganizationID     string // "*" for global
+	Model              string // Full internal model path (e.g., "unsloth/gpt-oss-20b")
+	ExternalName       string // Name exposed in OpenAI API (e.g., "gpt-oss-20b")
+	Backends           []BackendWeight
+	FailoverThreshold  int
+	DegradedBackends   []string
+	BackendType        string              // "openai" (default) | "triton" | "triton-grpc" - protocol for backend communication
+	Tokenizer          string              // tiktoken encoding name (e.g., cl100k_base, llama3) for token counting
+	TritonConfig       *TritonConfig       // Optional Triton-specific configuration
 	PreprocessorConfig *PreprocessorConfig // Optional preprocessor service configuration
-	UpdatedAt         time.Time
-	Version           int64
+	UpdatedAt          time.Time
+	Version            int64
 }
 
 // TritonConfig holds Triton-specific backend configuration.
@@ -654,4 +654,3 @@ func (l *Loader) checkTritonBackendHealth(ctx context.Context, policy *RoutingPo
 		zap.String("endpoint", backendEndpoint),
 	)
 }
-

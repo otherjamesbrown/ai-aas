@@ -181,4 +181,3 @@ func Global() *Logger {
 	}
 	return globalLogger
 }
-

@@ -1,9 +1,10 @@
 // Package routing provides backend selection and request forwarding logic.
 //
 // Purpose:
-//   This package implements the routing engine that selects backends based on
-//   configured policies, health status, and organization-level rules. It also
-//   provides client wrappers for forwarding requests to backend services.
+//
+//	This package implements the routing engine that selects backends based on
+//	configured policies, health status, and organization-level rules. It also
+//	provides client wrappers for forwarding requests to backend services.
 //
 // Dependencies:
 //   - internal/config: Routing policy configuration
@@ -16,7 +17,6 @@
 //
 // Requirements Reference:
 //   - specs/006-api-router-service/spec.md#FR-003 (Routing engine)
-//
 package routing
 
 import (
@@ -29,16 +29,15 @@ import (
 	"time"
 
 	"go.uber.org/zap"
-
 )
 
 // BackendEndpoint represents a backend model service endpoint.
 type BackendEndpoint struct {
-	ID         string
-	URI        string
+	ID           string
+	URI          string
 	ModelVariant string
-	Timeout    time.Duration
-	HealthPath string // Health check path (default: "/health", triton: "/v2/health/ready")
+	Timeout      time.Duration
+	HealthPath   string // Health check path (default: "/health", triton: "/v2/health/ready")
 }
 
 // BackendClient wraps HTTP client for backend communication.
@@ -172,4 +171,3 @@ func (c *BackendClient) HealthCheck(ctx context.Context, backend *BackendEndpoin
 
 	return nil
 }
-

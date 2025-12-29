@@ -66,11 +66,11 @@ type Handler struct {
 
 // UserModelAccessResponse represents the user's model access configuration.
 type UserModelAccessResponse struct {
-	UserID          string            `json:"userId"`
-	OrgID           string            `json:"orgId"`
-	AccessMode      string            `json:"accessMode"`
-	GrantedModels   []ModelGrantDTO   `json:"grantedModels"`
-	AvailableModels []string          `json:"availableModels,omitempty"`
+	UserID          string          `json:"userId"`
+	OrgID           string          `json:"orgId"`
+	AccessMode      string          `json:"accessMode"`
+	GrantedModels   []ModelGrantDTO `json:"grantedModels"`
+	AvailableModels []string        `json:"availableModels,omitempty"`
 }
 
 // ModelGrantDTO represents a model grant in API responses.

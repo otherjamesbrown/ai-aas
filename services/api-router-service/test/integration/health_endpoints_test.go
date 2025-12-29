@@ -1,8 +1,9 @@
 // Package integration provides integration tests for the API Router Service.
 //
 // Purpose:
-//   These tests validate health and readiness endpoint functionality, including
-//   component-level health checks and build metadata.
+//
+//	These tests validate health and readiness endpoint functionality, including
+//	component-level health checks and build metadata.
 //
 // Key Responsibilities:
 //   - Test /v1/status/healthz endpoint (liveness check)
@@ -14,7 +15,6 @@
 // Note: These tests currently use inline handlers to define expected behavior.
 // Once T038 (status_handlers.go) is implemented, these tests should be updated
 // to use the actual handler implementations.
-//
 package integration
 
 import (
@@ -133,11 +133,11 @@ func TestReadyzEndpointAllHealthy(t *testing.T) {
 
 	// Set up status handlers
 	statusHandlers := public.NewStatusHandlers(public.StatusHandlersConfig{
-		RedisClient:    redisClient,
-		KafkaPublisher: publisher,
-		ConfigLoader:   loader,
+		RedisClient:     redisClient,
+		KafkaPublisher:  publisher,
+		ConfigLoader:    loader,
 		BackendRegistry: backendRegistry,
-		Logger:         logger,
+		Logger:          logger,
 		BuildMetadata: public.BuildMetadata{
 			Version:   "test-version",
 			Commit:    "test-commit",
@@ -240,11 +240,11 @@ func TestReadyzEndpointRedisDown(t *testing.T) {
 
 	// Set up status handlers
 	statusHandlers := public.NewStatusHandlers(public.StatusHandlersConfig{
-		RedisClient:    redisClient,
-		KafkaPublisher: publisher,
-		ConfigLoader:   loader,
+		RedisClient:     redisClient,
+		KafkaPublisher:  publisher,
+		ConfigLoader:    loader,
 		BackendRegistry: backendRegistry,
-		Logger:         logger,
+		Logger:          logger,
 		BuildMetadata: public.BuildMetadata{
 			Version:   "test-version",
 			Commit:    "test-commit",
@@ -335,11 +335,11 @@ func TestReadyzEndpointBackendRegistryEmpty(t *testing.T) {
 
 	// Set up status handlers
 	statusHandlers := public.NewStatusHandlers(public.StatusHandlersConfig{
-		RedisClient:    redisClient,
-		KafkaPublisher: publisher,
-		ConfigLoader:   loader,
+		RedisClient:     redisClient,
+		KafkaPublisher:  publisher,
+		ConfigLoader:    loader,
 		BackendRegistry: backendRegistry,
-		Logger:         logger,
+		Logger:          logger,
 		BuildMetadata: public.BuildMetadata{
 			Version:   "test-version",
 			Commit:    "test-commit",
@@ -436,4 +436,3 @@ func TestHealthzWithBuildMetadata(t *testing.T) {
 		t.Error("expected 'build' metadata in response")
 	}
 }
-

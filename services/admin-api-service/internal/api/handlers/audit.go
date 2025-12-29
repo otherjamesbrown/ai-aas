@@ -66,4 +66,3 @@ func (h *AuditHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	httputil.WriteJSON(w, http.StatusOK, response)
 }
-

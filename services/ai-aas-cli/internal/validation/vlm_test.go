@@ -6,7 +6,7 @@ import (
 
 func TestIsVLM(t *testing.T) {
 	tests := []struct {
-		name     string
+		name      string
 		modelName string
 		expected  bool
 	}{
@@ -34,21 +34,21 @@ func TestIsVLM(t *testing.T) {
 
 func TestGetTestImageBase64(t *testing.T) {
 	image := GetTestImageBase64()
-	
+
 	if len(image) == 0 {
 		t.Error("GetTestImageBase64() returned empty string")
 	}
-	
+
 	// Should be roughly 5100 bytes (base64 encoded 128x128 cat JPEG)
 	if len(image) < 5000 || len(image) > 5500 {
 		t.Errorf("GetTestImageBase64() length = %d, expected ~5100", len(image))
 	}
-	
+
 	// Should start with JPEG base64 signature
 	if len(image) < 10 {
 		t.Fatal("Image too short to check signature")
 	}
-	
+
 	// JPEG files start with 0xFF 0xD8, which in base64 is "/9j/"
 	if image[0:4] != "/9j/" {
 		t.Errorf("GetTestImageBase64() doesn't start with JPEG signature, got: %s", image[0:4])

@@ -20,10 +20,10 @@ const defaultGuideLLMRunnerURL = "http://guidellm-runner-development.development
 
 // BenchmarkService handles benchmark business logic
 type BenchmarkService struct {
-	repo             *repository.BenchmarkRepository
-	guidellmURL      string
-	httpClient       *http.Client
-	logger           *zap.Logger
+	repo        *repository.BenchmarkRepository
+	guidellmURL string
+	httpClient  *http.Client
+	logger      *zap.Logger
 }
 
 // BenchmarkServiceConfig holds configuration for the benchmark service

@@ -6,7 +6,6 @@
 //
 // Requirements Reference:
 //   - specs/009-admin-cli/plan.md#client/analytics/types
-//
 package analytics
 
 import "time"
@@ -19,7 +18,7 @@ type ExportUsageRequest struct {
 // UsageQueryParams represents parameters for usage queries.
 type UsageQueryParams struct {
 	OrgID       string
-	APIKeyID    string    // Optional - queries per-API-key usage if provided
+	APIKeyID    string // Optional - queries per-API-key usage if provided
 	Start       time.Time
 	End         time.Time
 	Granularity string // "hour" or "day"
@@ -59,4 +58,3 @@ type UsageDataResponse struct {
 	Totals      UsageTotals        `json:"totals"`
 	Freshness   DataFreshness      `json:"freshness"`
 }
-

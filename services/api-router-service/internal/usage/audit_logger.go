@@ -1,7 +1,8 @@
 // Package usage provides usage tracking and audit logging for API requests.
 //
 // Purpose:
-//   This package implements audit event emission for request denials and usage tracking.
+//
+//	This package implements audit event emission for request denials and usage tracking.
 //
 // Dependencies:
 //   - Kafka (optional, falls back to logger)
@@ -13,7 +14,6 @@
 //
 // Requirements Reference:
 //   - specs/006-api-router-service/spec.md#US-002 (Enforce budgets and safe usage)
-//
 package usage
 
 import (
@@ -63,7 +63,7 @@ func (a *AuditLogger) LogDenial(event AuditEvent) {
 		zap.String("limit_state", event.LimitState),
 		zap.Time("timestamp", event.Timestamp),
 	)
-	
+
 	// TODO: Emit to Kafka when available
 }
 
@@ -78,7 +78,6 @@ func (a *AuditLogger) LogAllowed(event AuditEvent) {
 		zap.String("action", event.Action),
 		zap.Time("timestamp", event.Timestamp),
 	)
-	
+
 	// TODO: Emit to Kafka when available
 }
-

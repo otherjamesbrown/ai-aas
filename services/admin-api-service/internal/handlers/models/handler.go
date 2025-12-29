@@ -13,9 +13,9 @@ import (
 
 // Error variables for handler error mapping
 var (
-	ErrModelNotFound   = errors.New("model not found")
-	ErrModelDeployed   = errors.New("model has active deployments")
-	ErrModelNameExists = errors.New("model name already exists")
+	ErrModelNotFound    = errors.New("model not found")
+	ErrModelDeployed    = errors.New("model has active deployments")
+	ErrModelNameExists  = errors.New("model name already exists")
 	ErrInvalidModelName = errors.New("invalid model name format")
 )
 
@@ -432,4 +432,3 @@ func writeError(w http.ResponseWriter, status int, message string, err error) {
 		"details": err.Error(),
 	})
 }
-

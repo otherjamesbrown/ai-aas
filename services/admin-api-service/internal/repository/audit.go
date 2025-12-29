@@ -170,4 +170,3 @@ func (r *AuditRepository) List(ctx context.Context, params domain.AuditLogListPa
 
 	return response, nil
 }
-

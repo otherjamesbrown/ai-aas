@@ -52,6 +52,7 @@ test-dev-ip:
 	 USER_ORG_SERVICE_URL=https://172.232.58.222 \
 	 API_ROUTER_SERVICE_URL=https://172.232.58.222 \
 	 ANALYTICS_SERVICE_URL=https://172.232.58.222 \
+	 ADMIN_API_SERVICE_URL=https://172.232.58.222 \
 	 go test -v ./suites/... -timeout 30m
 
 setup:

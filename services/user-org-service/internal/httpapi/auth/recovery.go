@@ -31,8 +31,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httputil"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/audit"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httputil"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/metrics"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/security"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/storage/postgres"

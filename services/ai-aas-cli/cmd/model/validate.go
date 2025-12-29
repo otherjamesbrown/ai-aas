@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/kubernetes"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/registry"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/validation"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 // NewValidateCommand creates the model validate command
@@ -146,13 +146,13 @@ Examples:
 
 // ModelValidationResult contains validation results for a single model
 type ModelValidationResult struct {
-	Model      string            `json:"model"`
-	Passed     bool              `json:"passed"`
-	Duration   time.Duration     `json:"duration"`
-	Registry   *CheckResult      `json:"registry,omitempty"`
-	Cache      *CheckResult      `json:"cache,omitempty"`
-	Deployment *CheckResult      `json:"deployment,omitempty"`
-	Endpoint   *CheckResult      `json:"endpoint,omitempty"`
+	Model      string        `json:"model"`
+	Passed     bool          `json:"passed"`
+	Duration   time.Duration `json:"duration"`
+	Registry   *CheckResult  `json:"registry,omitempty"`
+	Cache      *CheckResult  `json:"cache,omitempty"`
+	Deployment *CheckResult  `json:"deployment,omitempty"`
+	Endpoint   *CheckResult  `json:"endpoint,omitempty"`
 }
 
 // CheckResult contains the result of a single validation check

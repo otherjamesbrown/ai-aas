@@ -1,9 +1,9 @@
 // Package public provides middleware for rate limiting and budget enforcement.
 //
 // Purpose:
-//   This package implements chi middleware for rate limiting and budget checking
-//   that runs before request handlers.
 //
+//	This package implements chi middleware for rate limiting and budget checking
+//	that runs before request handlers.
 package public
 
 import (
@@ -246,12 +246,12 @@ func AuthContextMiddleware(authenticator *auth.Authenticator, logger *zap.Logger
 	// Public endpoints that don't require API key authentication
 	// Note: Some endpoints use JWT (Bearer token) auth instead of API key
 	publicEndpoints := map[string]bool{
-		"GET /v1/models":         true,
-		"POST /v1/auth/login":    true, // Password-based login
-		"GET /v1/auth/userinfo":  true, // User info endpoint (requires Bearer token, not API key)
-		"POST /v1/auth/token":    true, // Token exchange/refresh
-		"POST /v1/auth/logout":   true, // Logout endpoint
-		"GET /v1/auth/callback":  true, // OAuth callback
+		"GET /v1/models":        true,
+		"POST /v1/auth/login":   true, // Password-based login
+		"GET /v1/auth/userinfo": true, // User info endpoint (requires Bearer token, not API key)
+		"POST /v1/auth/token":   true, // Token exchange/refresh
+		"POST /v1/auth/logout":  true, // Logout endpoint
+		"GET /v1/auth/callback": true, // OAuth callback
 		// Feature flags endpoint (returns defaults, no auth required)
 		"GET /feature-flags": true,
 		// Impersonation status (returns 404 if no active session)
@@ -349,7 +349,7 @@ func writeRateLimitError(w http.ResponseWriter, r *http.Request, result *limiter
 // writeBudgetError writes a budget/quota error response using the error catalog.
 func writeBudgetError(w http.ResponseWriter, r *http.Request, status *limiter.BudgetStatus, logger *zap.Logger, errorBuilder *api.ErrorBuilder) {
 	errorCode := getBudgetErrorCode(status.QuotaType)
-	
+
 	limitContext := map[string]interface{}{
 		"current_usage": status.CurrentUsage,
 		"limit":         status.Limit,
@@ -586,4 +586,3 @@ func ModelAccessMiddleware(auditLogger *usage.AuditLogger, logger *zap.Logger, t
 		})
 	}
 }
-

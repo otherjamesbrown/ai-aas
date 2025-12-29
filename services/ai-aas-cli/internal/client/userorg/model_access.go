@@ -20,9 +20,9 @@ import (
 
 // ModelAccessResponse represents a user's model access configuration.
 type ModelAccessResponse struct {
-	UserID        string              `json:"userId"`
-	OrgID         string              `json:"orgId"`
-	AccessMode    string              `json:"accessMode"`
+	UserID        string               `json:"userId"`
+	OrgID         string               `json:"orgId"`
+	AccessMode    string               `json:"accessMode"`
 	GrantedModels []ModelGrantResponse `json:"grantedModels"`
 }
 

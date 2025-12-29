@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/client"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/registry"
+	"github.com/spf13/cobra"
 )
 
 // NewStatusCommand creates the model status command
@@ -221,4 +221,3 @@ func showAllModelsStatus(ctx context.Context, regClient *registry.Client, deploy
 	table.Render()
 	return nil
 }
-

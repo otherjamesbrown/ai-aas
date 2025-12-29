@@ -1,8 +1,8 @@
 // Package integration provides integration tests for the API Router Service.
 //
 // Purpose:
-//   These tests validate OpenAI-compatible chat completions endpoint functionality.
 //
+//	These tests validate OpenAI-compatible chat completions endpoint functionality.
 package integration
 
 import (

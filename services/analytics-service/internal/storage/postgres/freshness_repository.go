@@ -74,4 +74,3 @@ func (s *Store) GetFreshnessStatus(ctx context.Context, orgID uuid.UUID, modelID
 	ind.ModelID = modelIDPtr
 	return &ind, nil
 }
-

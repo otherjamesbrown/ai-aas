@@ -21,9 +21,10 @@ type Config struct {
 
 // APIURLs contains service API URLs
 type APIURLs struct {
-	UserOrgService  string
+	UserOrgService   string
 	APIRouterService string
 	AnalyticsService string
+	AdminAPIService  string
 }
 
 // Credentials contains test credentials
@@ -77,6 +78,7 @@ func LoadConfig() (*Config, error) {
 			UserOrgService:   getEnv("USER_ORG_SERVICE_URL", "http://localhost:8081"),
 			APIRouterService: getEnv("API_ROUTER_SERVICE_URL", "http://localhost:8082"),
 			AnalyticsService: getEnv("ANALYTICS_SERVICE_URL", "http://localhost:8083"),
+			AdminAPIService:  getEnv("ADMIN_API_SERVICE_URL", "http://localhost:8084"),
 		},
 		Credentials: Credentials{
 			AdminAPIKey:     getEnv("ADMIN_API_KEY", ""),

@@ -214,4 +214,3 @@ func (r *OrganizationRepository) Update(ctx context.Context, id uuid.UUID, updat
 
 	return &org, nil
 }
-

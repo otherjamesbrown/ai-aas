@@ -1,8 +1,9 @@
 // Package usage provides disk-based buffering for usage records.
 //
 // Purpose:
-//   This package implements persistent buffering for usage records when Kafka
-//   is unavailable, ensuring at-least-once delivery guarantees.
+//
+//	This package implements persistent buffering for usage records when Kafka
+//	is unavailable, ensuring at-least-once delivery guarantees.
 //
 // Key Responsibilities:
 //   - Persist usage records to disk when Kafka is unavailable
@@ -14,7 +15,6 @@
 //   - specs/006-api-router-service/spec.md#US-004 (Accurate, timely usage accounting)
 //   - specs/006-api-router-service/spec.md#NFR-006 (At-least-once delivery)
 //   - specs/006-api-router-service/spec.md#NFR-015 (24-hour buffer retention)
-//
 package usage
 
 import (
@@ -30,11 +30,11 @@ import (
 
 // BufferStore provides disk-based buffering for usage records.
 type BufferStore struct {
-	dir      string
-	logger   *zap.Logger
-	mu       sync.RWMutex
-	maxSize  int // Maximum number of records to buffer
-	maxAge   time.Duration // Maximum age of buffered records
+	dir     string
+	logger  *zap.Logger
+	mu      sync.RWMutex
+	maxSize int           // Maximum number of records to buffer
+	maxAge  time.Duration // Maximum age of buffered records
 }
 
 // BufferStoreConfig configures the buffer store.
@@ -57,8 +57,8 @@ func NewBufferStore(cfg BufferStoreConfig) (*BufferStore, error) {
 	}
 
 	return &BufferStore{
-		dir:    cfg.Dir,
-		logger: cfg.Logger.With(zap.String("component", "usage-buffer-store")),
+		dir:     cfg.Dir,
+		logger:  cfg.Logger.With(zap.String("component", "usage-buffer-store")),
 		maxSize: cfg.MaxSize,
 		maxAge:  cfg.MaxAge,
 	}, nil
@@ -269,4 +269,3 @@ func (s *BufferStore) Clear() error {
 	s.logger.Info("cleared all buffered records", zap.Int("removed", removed))
 	return nil
 }
-

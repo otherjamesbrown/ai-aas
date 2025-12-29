@@ -59,9 +59,9 @@ func TestNewRateLimiterWithConfig(t *testing.T) {
 
 func TestClassifyTraffic(t *testing.T) {
 	tests := []struct {
-		name           string
-		headers        map[string]string
-		expectedClass  TrafficClass
+		name          string
+		headers       map[string]string
+		expectedClass TrafficClass
 	}{
 		{
 			name: "X-Client-Type: operator",
@@ -234,10 +234,10 @@ func TestRateLimit_Middleware(t *testing.T) {
 	}))
 
 	tests := []struct {
-		name           string
-		headers        map[string]string
-		apiKeyID       string
-		expectAllowed  bool
+		name          string
+		headers       map[string]string
+		apiKeyID      string
+		expectAllowed bool
 	}{
 		{
 			name: "Data plane request with API key",
@@ -293,9 +293,9 @@ func TestRateLimit_429Response(t *testing.T) {
 	}))
 
 	tests := []struct {
-		name           string
-		headers        map[string]string
-		expectedClass  string
+		name          string
+		headers       map[string]string
+		expectedClass string
 	}{
 		{
 			name: "Data plane 429",

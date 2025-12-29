@@ -1,15 +1,15 @@
 // Package integration provides integration tests for the API Router Service.
 //
 // Purpose:
-//   These tests validate budget enforcement, quota management, and rate limiting
-//   functionality, including HTTP 402/429 responses and audit event emission.
+//
+//	These tests validate budget enforcement, quota management, and rate limiting
+//	functionality, including HTTP 402/429 responses and audit event emission.
 //
 // Key Responsibilities:
 //   - Test rate limit enforcement (429 responses)
 //   - Test budget/quota enforcement (402 responses)
 //   - Verify audit event emission for denials
 //   - Validate structured error responses match OpenAPI spec
-//
 package integration
 
 import (
@@ -36,11 +36,11 @@ import (
 
 // LimitErrorResponse represents a limit error response matching OpenAPI spec.
 type LimitErrorResponse struct {
-	Error              string                 `json:"error"`
-	Code               string                 `json:"code"`
-	TraceID            string                 `json:"trace_id,omitempty"`
-	RetryAfterSeconds  *int                   `json:"retry_after_seconds,omitempty"`
-	LimitContext       map[string]interface{} `json:"limit_context,omitempty"`
+	Error             string                 `json:"error"`
+	Code              string                 `json:"code"`
+	TraceID           string                 `json:"trace_id,omitempty"`
+	RetryAfterSeconds *int                   `json:"retry_after_seconds,omitempty"`
+	LimitContext      map[string]interface{} `json:"limit_context,omitempty"`
 }
 
 // TestRateLimitExceeded tests that rate limit enforcement returns HTTP 429.
@@ -56,12 +56,12 @@ func TestRateLimitExceeded(t *testing.T) {
 
 	loader := config.NewLoader("", false, cache, logger)
 	backendClient := routing.NewBackendClient(logger, 5*time.Second)
-	
+
 	testCfg := &config.Config{
 		BackendEndpoints: "",
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
-	
+
 	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, nil, "", "", 30*time.Second, 10*time.Second)
 
 	// Set up Redis for rate limiting (skip test if Redis unavailable)
@@ -175,18 +175,18 @@ func TestBudgetExceeded(t *testing.T) {
 
 	loader := config.NewLoader("", false, cache, logger)
 	backendClient := routing.NewBackendClient(logger, 5*time.Second)
-	
+
 	testCfg := &config.Config{
 		BackendEndpoints: "",
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
-	
+
 	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, nil, "", "", 30*time.Second, 10*time.Second)
 
 	// Initialize budget client
 	budgetClient := limiter.NewBudgetClient("", 2*time.Second, logger)
 	auditLogger := usage.NewAuditLogger(logger)
-	
+
 	router := chi.NewRouter()
 	tracer := otel.Tracer("test")
 	router.Use(public.BodyBufferMiddleware(64 * 1024))
@@ -262,18 +262,18 @@ func TestQuotaExceeded(t *testing.T) {
 
 	loader := config.NewLoader("", false, cache, logger)
 	backendClient := routing.NewBackendClient(logger, 5*time.Second)
-	
+
 	testCfg := &config.Config{
 		BackendEndpoints: "",
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
-	
+
 	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, nil, "", "", 30*time.Second, 10*time.Second)
 
 	// Initialize budget client
 	budgetClient := limiter.NewBudgetClient("", 2*time.Second, logger)
 	auditLogger := usage.NewAuditLogger(logger)
-	
+
 	router := chi.NewRouter()
 	tracer := otel.Tracer("test")
 	router.Use(public.BodyBufferMiddleware(64 * 1024))
@@ -352,12 +352,12 @@ func TestAuditEventEmitted(t *testing.T) {
 
 	loader := config.NewLoader("", false, cache, logger)
 	backendClient := routing.NewBackendClient(logger, 5*time.Second)
-	
+
 	testCfg := &config.Config{
 		BackendEndpoints: "",
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
-	
+
 	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, nil, "", "", 30*time.Second, 10*time.Second)
 
 	// Initialize budget client and rate limiter
@@ -372,10 +372,10 @@ func TestAuditEventEmitted(t *testing.T) {
 	}
 	defer func() { _ = redisClient.Close() }()
 	defer redisClient.FlushDB(ctx)
-	
+
 	rateLimiter := limiter.NewRateLimiter(redisClient, logger, 100, 200)
 	auditLogger := usage.NewAuditLogger(logger)
-	
+
 	router := chi.NewRouter()
 	tracer := otel.Tracer("test")
 	router.Use(public.BodyBufferMiddleware(64 * 1024))
@@ -438,12 +438,12 @@ func TestRateLimitPerOrganization(t *testing.T) {
 
 	loader := config.NewLoader("", false, cache, logger)
 	backendClient := routing.NewBackendClient(logger, 5*time.Second)
-	
+
 	testCfg := &config.Config{
 		BackendEndpoints: "",
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
-	
+
 	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, nil, "", "", 30*time.Second, 10*time.Second)
 
 	// Set up Redis for rate limiting (skip test if Redis unavailable)
@@ -531,12 +531,12 @@ func TestRateLimitPerKey(t *testing.T) {
 
 	loader := config.NewLoader("", false, cache, logger)
 	backendClient := routing.NewBackendClient(logger, 5*time.Second)
-	
+
 	testCfg := &config.Config{
 		BackendEndpoints: "",
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
-	
+
 	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, nil, "", "", 30*time.Second, 10*time.Second)
 
 	// Set up Redis for rate limiting (skip test if Redis unavailable)
@@ -610,4 +610,3 @@ func TestRateLimitPerKey(t *testing.T) {
 		t.Log("Key-2 also rate limited (may be expected if they share a limit or have low limit)")
 	}
 }
-

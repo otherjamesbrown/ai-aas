@@ -7,10 +7,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/huggingface"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/registry"
+	"github.com/spf13/cobra"
 )
 
 // NewAddCommand creates the model add command
@@ -59,9 +59,9 @@ Examples:
 
 			// Check model on HuggingFace
 			hfClient := huggingface.NewClient(huggingface.WithToken(cfg.HFToken))
-			
+
 			fmt.Printf("Checking model on HuggingFace Hub: %s\n", hfModelID)
-			
+
 			modelInfo, err := hfClient.GetModel(ctx, hfModelID)
 			if err != nil {
 				if err == huggingface.ErrModelNotFound {
@@ -141,9 +141,8 @@ Examples:
 	cmd.Flags().BoolVar(&acceptLicense, "accept-license", false, "accept gated model license (for CI/CD)")
 	cmd.Flags().IntVar(&gpuMemory, "gpu-memory", 0, "recommended GPU memory in GB")
 	cmd.Flags().IntVar(&cpuMemory, "cpu-memory", 0, "recommended CPU memory in GB")
-	
+
 	cmd.MarkFlagRequired("name")
 
 	return cmd
 }
-

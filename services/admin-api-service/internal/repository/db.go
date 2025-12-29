@@ -88,4 +88,3 @@ func (db *DB) Stats() *pgxpool.Stat {
 	}
 	return nil
 }
-

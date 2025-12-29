@@ -1,8 +1,9 @@
 // Package public provides public API handlers for the API Router Service.
 //
 // Purpose:
-//   This file implements health and readiness endpoint handlers with component-level
-//   health checks for operational visibility.
+//
+//	This file implements health and readiness endpoint handlers with component-level
+//	health checks for operational visibility.
 //
 // Key Responsibilities:
 //   - Health endpoint (/v1/status/healthz) - Basic liveness check
@@ -16,7 +17,6 @@
 // Requirements Reference:
 //   - specs/006-api-router-service/spec.md#US-005 (Operational visibility and reliability)
 //   - specs/006-api-router-service/spec.md#FR-010 (Health, readiness, and diagnostics endpoints)
-//
 package public
 
 import (
@@ -49,12 +49,12 @@ type ComponentHealth struct {
 
 // CircuitBreaker implements a simple circuit breaker pattern.
 type CircuitBreaker struct {
-	mu            sync.RWMutex
-	failures      int
-	lastFailure   time.Time
-	threshold     int           // Number of failures before opening
-	resetTimeout  time.Duration // Time to wait before half-open
-	isOpen        bool
+	mu           sync.RWMutex
+	failures     int
+	lastFailure  time.Time
+	threshold    int           // Number of failures before opening
+	resetTimeout time.Duration // Time to wait before half-open
+	isOpen       bool
 }
 
 // NewCircuitBreaker creates a new circuit breaker.
@@ -110,9 +110,9 @@ func (cb *CircuitBreaker) IsOpen() bool {
 
 // HealthCache caches health check results to avoid repeated checks.
 type HealthCache struct {
-	mu        sync.RWMutex
-	results   map[string]ComponentHealth
-	ttl       time.Duration
+	mu      sync.RWMutex
+	results map[string]ComponentHealth
+	ttl     time.Duration
 }
 
 // NewHealthCache creates a new health cache.
@@ -162,12 +162,12 @@ type StatusHandlers struct {
 	readyTimeout      time.Duration
 
 	// Circuit breakers for slow dependencies
-	etcdBreaker      *CircuitBreaker
-	userOrgBreaker   *CircuitBreaker
-	redisBreaker     *CircuitBreaker
+	etcdBreaker    *CircuitBreaker
+	userOrgBreaker *CircuitBreaker
+	redisBreaker   *CircuitBreaker
 
 	// Health check cache
-	healthCache      *HealthCache
+	healthCache *HealthCache
 }
 
 // StatusHandlersConfig configures the status handlers.
@@ -204,10 +204,10 @@ func NewStatusHandlers(cfg StatusHandlersConfig) *StatusHandlers {
 		httpClient: &http.Client{
 			Timeout: cfg.HealthTimeout,
 		},
-		buildMetadata:  cfg.BuildMetadata,
-		logger:         cfg.Logger,
-		healthTimeout:  cfg.HealthTimeout,
-		readyTimeout:   cfg.ReadyTimeout,
+		buildMetadata: cfg.BuildMetadata,
+		logger:        cfg.Logger,
+		healthTimeout: cfg.HealthTimeout,
+		readyTimeout:  cfg.ReadyTimeout,
 
 		// Circuit breakers: open after 3 failures, try again after 30s
 		etcdBreaker:    NewCircuitBreaker(3, 30*time.Second),
@@ -215,7 +215,7 @@ func NewStatusHandlers(cfg StatusHandlersConfig) *StatusHandlers {
 		redisBreaker:   NewCircuitBreaker(3, 30*time.Second),
 
 		// Cache health results for 5 seconds
-		healthCache:    NewHealthCache(5 * time.Second),
+		healthCache: NewHealthCache(5 * time.Second),
 	}
 }
 

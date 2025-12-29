@@ -23,11 +23,11 @@ type RenameModelRequest struct {
 
 // RenameModelResponse contains the result of a rename operation
 type RenameModelResponse struct {
-	OldName          string `json:"old_name"`
-	NewName          string `json:"new_name"`
-	CacheMigrated    bool   `json:"cache_migrated"`
-	CacheSizeBytes   int64  `json:"cache_size_bytes,omitempty"`
-	CacheFileCount   int    `json:"cache_file_count,omitempty"`
+	OldName        string `json:"old_name"`
+	NewName        string `json:"new_name"`
+	CacheMigrated  bool   `json:"cache_migrated"`
+	CacheSizeBytes int64  `json:"cache_size_bytes,omitempty"`
+	CacheFileCount int    `json:"cache_file_count,omitempty"`
 }
 
 // CredentialGetter retrieves credentials from storage

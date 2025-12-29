@@ -1,9 +1,9 @@
 // Package integration provides end-to-end integration tests for export reconciliation.
 //
 // Purpose:
-//   This package validates that export CSV totals reconcile with rollup aggregates
-//   within acceptable tolerance (1%), ensuring finance stakeholders receive accurate data.
 //
+//	This package validates that export CSV totals reconcile with rollup aggregates
+//	within acceptable tolerance (1%), ensuring finance stakeholders receive accurate data.
 package integration
 
 import (
@@ -262,18 +262,18 @@ func queryRollupTotals(ctx context.Context, pool *postgres.Store, orgID uuid.UUI
 
 // ExportJobResponse matches the API response structure
 type ExportJobResponse struct {
-	JobID       string          `json:"jobId"`
-	OrgID       string          `json:"orgId"`
-	Status      string          `json:"status"`
-	Granularity string          `json:"granularity"`
+	JobID       string            `json:"jobId"`
+	OrgID       string            `json:"orgId"`
+	Status      string            `json:"status"`
+	Granularity string            `json:"granularity"`
 	TimeRange   TimeRangeResponse `json:"timeRange"`
-	CreatedAt   string          `json:"createdAt"`
-	CompletedAt *string          `json:"completedAt,omitempty"`
-	OutputURI   *string          `json:"outputUri,omitempty"`
-	Checksum    *string          `json:"checksum,omitempty"`
-	RowCount    *int64          `json:"rowCount,omitempty"`
-	InitiatedBy string          `json:"initiatedBy"`
-	Error       *string         `json:"error,omitempty"`
+	CreatedAt   string            `json:"createdAt"`
+	CompletedAt *string           `json:"completedAt,omitempty"`
+	OutputURI   *string           `json:"outputUri,omitempty"`
+	Checksum    *string           `json:"checksum,omitempty"`
+	RowCount    *int64            `json:"rowCount,omitempty"`
+	InitiatedBy string            `json:"initiatedBy"`
+	Error       *string           `json:"error,omitempty"`
 }
 
 type TimeRangeResponse struct {
@@ -297,7 +297,7 @@ func TestExportJobCreation(t *testing.T) {
 
 	// Create export job directly via repository (testing the repository layer)
 	repo := exports.NewExportJobRepository(pool)
-	
+
 	jobID, err := repo.CreateExportJob(ctx, exports.CreateExportJobRequest{
 		OrgID:          orgID,
 		RequestedBy:    uuid.New(),
@@ -378,7 +378,7 @@ func TestCSVReconciliation(t *testing.T) {
 		Interval:   30 * time.Second,
 		Workers:    1,
 	})
-	
+
 	// Use reflection to replace the s3Delivery field with our mock
 	// This allows us to intercept UploadCSV calls for testing
 	rv := reflect.ValueOf(jobRunner).Elem()
@@ -491,7 +491,7 @@ func TestExportGranularities(t *testing.T) {
 				Interval:   30 * time.Second,
 				Workers:    1,
 			})
-			
+
 			// Use reflection to replace the s3Delivery field with our mock
 			rv := reflect.ValueOf(jobRunner).Elem()
 			rf := rv.FieldByName("s3Delivery")
@@ -518,4 +518,3 @@ func TestExportGranularities(t *testing.T) {
 		})
 	}
 }
-

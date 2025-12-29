@@ -170,15 +170,15 @@ func (s *Service) GetDeployment(ctx context.Context, modelName, environment stri
 // CreateDeploymentRequest contains data for creating a deployment
 type CreateDeploymentRequest struct {
 	ModelName    string
-	ModelID      string     // Full model path (e.g., "unsloth/gpt-oss-20b")
-	ExternalName string     // Name exposed in OpenAI-compatible APIs
+	ModelID      string // Full model path (e.g., "unsloth/gpt-oss-20b")
+	ExternalName string // Name exposed in OpenAI-compatible APIs
 	CacheID      *uuid.UUID
 	Environment  string
 	Namespace    string
 	GPUCount     int
 	MemoryGB     int
 	Replicas     int
-	ModelType    string     // Model type (text, vision-language, embedding, audio)
+	ModelType    string // Model type (text, vision-language, embedding, audio)
 }
 
 // CreateDeployment creates a new deployment record

@@ -40,9 +40,9 @@ var (
 
 // Re-export download types
 type (
-	DownloadOptions  = sharedHF.DownloadOptions
-	DownloadResult   = sharedHF.DownloadResult
-	DownloadedFile   = sharedHF.DownloadedFile
+	DownloadOptions = sharedHF.DownloadOptions
+	DownloadResult  = sharedHF.DownloadResult
+	DownloadedFile  = sharedHF.DownloadedFile
 )
 
 // Re-export functions

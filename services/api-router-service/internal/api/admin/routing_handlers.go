@@ -1,8 +1,9 @@
 // Package admin provides HTTP handlers for admin API endpoints.
 //
 // Purpose:
-//   This package implements admin endpoints for routing policy overrides,
-//   backend health management, and routing configuration.
+//
+//	This package implements admin endpoints for routing policy overrides,
+//	backend health management, and routing configuration.
 //
 // Key Responsibilities:
 //   - Expose routing override endpoints
@@ -13,7 +14,6 @@
 // Requirements Reference:
 //   - specs/006-api-router-service/spec.md#US-003 (Intelligent routing and fallback)
 //   - specs/006-api-router-service/spec.md#FR-009 (Configurable routing policies)
-//
 package admin
 
 import (
@@ -34,13 +34,13 @@ import (
 
 // Handler handles admin API requests.
 type Handler struct {
-	logger         *zap.Logger
-	configLoader   *config.Loader
-	healthMonitor  *routing.HealthMonitor
-	routingEngine  *routing.Engine
+	logger          *zap.Logger
+	configLoader    *config.Loader
+	healthMonitor   *routing.HealthMonitor
+	routingEngine   *routing.Engine
 	backendRegistry *config.BackendRegistry
-	tracer         trace.Tracer
-	errorBuilder   *api.ErrorBuilder
+	tracer          trace.Tracer
+	errorBuilder    *api.ErrorBuilder
 }
 
 // NewHandler creates a new admin API handler.
@@ -59,7 +59,7 @@ func NewHandler(
 		routingEngine:   routingEngine,
 		backendRegistry: backendRegistry,
 		tracer:          tracer,
-		errorBuilder:   api.NewErrorBuilder(tracer),
+		errorBuilder:    api.NewErrorBuilder(tracer),
 	}
 }
 
@@ -253,10 +253,10 @@ func (h *Handler) GetRoutingDecisions(w http.ResponseWriter, r *http.Request) {
 
 // UpdateRoutingPolicyRequest represents a request to update a routing policy.
 type UpdateRoutingPolicyRequest struct {
-	OrganizationID string                `json:"organization_id"`
-	Model          string                `json:"model"`
-	Backends       []config.BackendWeight `json:"backends"`
-	FailoverThreshold int                `json:"failover_threshold,omitempty"`
+	OrganizationID    string                 `json:"organization_id"`
+	Model             string                 `json:"model"`
+	Backends          []config.BackendWeight `json:"backends"`
+	FailoverThreshold int                    `json:"failover_threshold,omitempty"`
 }
 
 // UpdateRoutingPolicy updates a routing policy.
@@ -274,13 +274,13 @@ func (h *Handler) UpdateRoutingPolicy(w http.ResponseWriter, r *http.Request) {
 
 	// Create routing policy
 	policy := &config.RoutingPolicy{
-		PolicyID:         fmt.Sprintf("%s-%s", req.OrganizationID, req.Model),
-		OrganizationID:   req.OrganizationID,
-		Model:            req.Model,
-		Backends:         req.Backends,
+		PolicyID:          fmt.Sprintf("%s-%s", req.OrganizationID, req.Model),
+		OrganizationID:    req.OrganizationID,
+		Model:             req.Model,
+		Backends:          req.Backends,
 		FailoverThreshold: req.FailoverThreshold,
-		UpdatedAt:        time.Now(),
-		Version:          1,
+		UpdatedAt:         time.Now(),
+		Version:           1,
 	}
 
 	// Store policy in cache (and ideally in etcd)
@@ -294,10 +294,10 @@ func (h *Handler) UpdateRoutingPolicy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]interface{}{
-		"policy_id":      policy.PolicyID,
+		"policy_id":       policy.PolicyID,
 		"organization_id": policy.OrganizationID,
-		"model":          policy.Model,
-		"updated_at":     policy.UpdatedAt,
+		"model":           policy.Model,
+		"updated_at":      policy.UpdatedAt,
 	}
 
 	h.writeJSON(w, http.StatusOK, response)
@@ -325,14 +325,14 @@ func (h *Handler) GetRoutingPolicy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]interface{}{
-		"policy_id":         policy.PolicyID,
-		"organization_id":   policy.OrganizationID,
-		"model":            policy.Model,
-		"backends":         policy.Backends,
+		"policy_id":          policy.PolicyID,
+		"organization_id":    policy.OrganizationID,
+		"model":              policy.Model,
+		"backends":           policy.Backends,
 		"failover_threshold": policy.FailoverThreshold,
-		"degraded_backends": policy.DegradedBackends,
-		"updated_at":        policy.UpdatedAt,
-		"version":          policy.Version,
+		"degraded_backends":  policy.DegradedBackends,
+		"updated_at":         policy.UpdatedAt,
+		"version":            policy.Version,
 	}
 
 	h.writeJSON(w, http.StatusOK, response)
@@ -360,4 +360,3 @@ func (h *Handler) writeJSON(w http.ResponseWriter, statusCode int, v interface{}
 		h.logger.Error("failed to encode JSON response", zap.Error(err))
 	}
 }
-

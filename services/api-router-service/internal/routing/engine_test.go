@@ -63,12 +63,12 @@ func TestEngine_SelectBackend(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
 	tests := []struct {
-		name           string
-		policy         *config.RoutingPolicy
-		setupBackends  func() *config.BackendRegistry
-		wantErr        bool
-		errContains    string
-		wantBackendID  string
+		name             string
+		policy           *config.RoutingPolicy
+		setupBackends    func() *config.BackendRegistry
+		wantErr          bool
+		errContains      string
+		wantBackendID    string
 		wantDecisionType string
 	}{
 		{
@@ -484,12 +484,12 @@ func TestEngine_RouteToRegisteredModel(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
 	tests := []struct {
-		name           string
-		modelName      string
-		setupRegistry  func() *Registry
-		setupServer    func() *httptest.Server
-		wantErr        bool
-		errContains    string
+		name             string
+		modelName        string
+		setupRegistry    func() *Registry
+		setupServer      func() *httptest.Server
+		wantErr          bool
+		errContains      string
 		wantDecisionType string
 	}{
 		{
@@ -695,10 +695,10 @@ func TestEngine_GetAvailableBackends(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
 	tests := []struct {
-		name          string
-		policy        *config.RoutingPolicy
-		setupMonitor  func() *HealthMonitor
-		wantCount     int
+		name           string
+		policy         *config.RoutingPolicy
+		setupMonitor   func() *HealthMonitor
+		wantCount      int
 		wantBackendIDs []string
 	}{
 		{
@@ -709,7 +709,7 @@ func TestEngine_GetAvailableBackends(t *testing.T) {
 					{BackendID: "backend-2", Weight: 50},
 				},
 			},
-			wantCount: 2,
+			wantCount:      2,
 			wantBackendIDs: []string{"backend-1", "backend-2"},
 		},
 		{
@@ -721,7 +721,7 @@ func TestEngine_GetAvailableBackends(t *testing.T) {
 				},
 				DegradedBackends: []string{"backend-1"},
 			},
-			wantCount: 1,
+			wantCount:      1,
 			wantBackendIDs: []string{"backend-2"},
 		},
 		{
@@ -733,7 +733,7 @@ func TestEngine_GetAvailableBackends(t *testing.T) {
 				},
 				DegradedBackends: []string{"backend-1", "backend-2"},
 			},
-			wantCount: 2,
+			wantCount:      2,
 			wantBackendIDs: []string{"backend-1", "backend-2"},
 		},
 	}

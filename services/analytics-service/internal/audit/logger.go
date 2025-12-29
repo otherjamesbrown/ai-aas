@@ -1,8 +1,9 @@
 // Package audit provides audit logging for the analytics service.
 //
 // Purpose:
-//   This package integrates with shared/go/auth to provide structured audit logging
-//   for all authorization decisions made by the RBAC middleware.
+//
+//	This package integrates with shared/go/auth to provide structured audit logging
+//	for all authorization decisions made by the RBAC middleware.
 //
 // Dependencies:
 //   - github.com/ai-aas/shared-go/auth: Shared authorization audit events
@@ -50,4 +51,3 @@ func (l *Logger) record(event auth.AuditEvent) {
 		l.logger.Warn("authorization denied", fields...)
 	}
 }
-

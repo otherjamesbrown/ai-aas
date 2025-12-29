@@ -8,7 +8,6 @@
 // Requirements Reference:
 //   - specs/009-admin-cli/spec.md#US-002 (Day-2 Management)
 //   - specs/009-admin-cli/spec.md#FR-011 (batch operations)
-//
 package admin
 
 import (
@@ -25,17 +24,17 @@ import (
 
 // BatchOperation represents a single operation in a batch file.
 type BatchOperation struct {
-	Type      string                 `json:"type" yaml:"type"`           // "org_create", "org_update", "user_create", etc.
-	OrgID     string                 `json:"orgId,omitempty" yaml:"orgId,omitempty"`
-	UserID    string                 `json:"userId,omitempty" yaml:"userId,omitempty"`
-	Email     string                 `json:"email,omitempty" yaml:"email,omitempty"`
-	Data      map[string]interface{} `json:"data" yaml:"data"`          // Operation-specific data
-	Index     int                    `json:"-" yaml:"-"`                // Index in batch (internal)
+	Type   string                 `json:"type" yaml:"type"` // "org_create", "org_update", "user_create", etc.
+	OrgID  string                 `json:"orgId,omitempty" yaml:"orgId,omitempty"`
+	UserID string                 `json:"userId,omitempty" yaml:"userId,omitempty"`
+	Email  string                 `json:"email,omitempty" yaml:"email,omitempty"`
+	Data   map[string]interface{} `json:"data" yaml:"data"` // Operation-specific data
+	Index  int                    `json:"-" yaml:"-"`       // Index in batch (internal)
 }
 
 // BatchFile represents the structure of a batch operation file.
 type BatchFile struct {
-	Operations []BatchOperation `json:"operations" yaml:"operations"`
+	Operations []BatchOperation       `json:"operations" yaml:"operations"`
 	Metadata   map[string]interface{} `json:"metadata,omitempty" yaml:"metadata,omitempty"`
 }
 
@@ -62,13 +61,13 @@ type BatchSummary struct {
 
 // CheckpointFile represents a checkpoint for resuming batch operations.
 type CheckpointFile struct {
-	BatchFile  string                 `json:"batchFile"`
-	Processed  []int                  `json:"processed"` // Indices of successfully processed operations
-	Failed     []int                  `json:"failed"`    // Indices of failed operations
-	LastIndex  int                    `json:"lastIndex"` // Last processed index
-	CreatedAt  string                 `json:"createdAt"`
-	Results    []BatchResult           `json:"results"`
-	Metadata   map[string]interface{} `json:"metadata,omitempty"`
+	BatchFile string                 `json:"batchFile"`
+	Processed []int                  `json:"processed"` // Indices of successfully processed operations
+	Failed    []int                  `json:"failed"`    // Indices of failed operations
+	LastIndex int                    `json:"lastIndex"` // Last processed index
+	CreatedAt string                 `json:"createdAt"`
+	Results   []BatchResult          `json:"results"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // ParseBatchFile parses a batch operation file (JSON or YAML).
@@ -79,7 +78,7 @@ func ParseBatchFile(filePath string) (*BatchFile, error) {
 	}
 
 	var batch BatchFile
-	
+
 	// Try JSON first, then YAML
 	if err := json.Unmarshal(data, &batch); err != nil {
 		if err := yaml.Unmarshal(data, &batch); err != nil {
@@ -113,7 +112,7 @@ func LoadCheckpoint(checkpointPath string) (*CheckpointFile, error) {
 // SaveCheckpoint saves a checkpoint file for resuming batch operations.
 func SaveCheckpoint(checkpointPath string, checkpoint *CheckpointFile) error {
 	checkpoint.CreatedAt = time.Now().UTC().Format(time.RFC3339)
-	
+
 	data, err := json.MarshalIndent(checkpoint, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal checkpoint: %w", err)
@@ -137,23 +136,23 @@ func CreateCheckpointPath(batchFilePath string) string {
 // GenerateDiff generates a diff preview for batch operations.
 func GenerateDiff(operations []BatchOperation, existing map[int]interface{}) map[int]map[string]interface{} {
 	diffs := make(map[int]map[string]interface{})
-	
+
 	for _, op := range operations {
 		diff := make(map[string]interface{})
 		diff["type"] = op.Type
 		diff["operation"] = "create" // Default, can be "update" or "delete" based on type
-		
+
 		if existing != nil {
 			if existing[op.Index] != nil {
 				diff["operation"] = "update"
 				diff["existing"] = existing[op.Index]
 			}
 		}
-		
+
 		diff["proposed"] = op.Data
 		diffs[op.Index] = diff
 	}
-	
+
 	return diffs
 }
 
@@ -166,8 +165,8 @@ func ProcessBatch(
 ) (*BatchSummary, error) {
 	startTime := time.Now()
 	summary := &BatchSummary{
-		Total:    len(batch.Operations),
-		Results:  make([]BatchResult, 0, len(batch.Operations)),
+		Total:   len(batch.Operations),
+		Results: make([]BatchResult, 0, len(batch.Operations)),
 	}
 
 	// Determine starting index from checkpoint
@@ -183,7 +182,7 @@ func ProcessBatch(
 	// Process operations
 	for i := startIndex; i < len(batch.Operations); i++ {
 		op := batch.Operations[i]
-		
+
 		result := BatchResult{
 			Index:       op.Index,
 			Type:        op.Type,
@@ -196,7 +195,7 @@ func ProcessBatch(
 			result.Success = false
 			result.Error = err.Error()
 			summary.Failed++
-			
+
 			if !continueOnError {
 				// Stop processing on first error
 				return summary, fmt.Errorf("batch processing failed at index %d: %w", i, err)
@@ -218,20 +217,20 @@ func ProcessBatch(
 // PrintBatchPreview prints a dry-run preview of batch operations with diff output and summary counts.
 func PrintBatchPreview(operations []BatchOperation, existing map[int]interface{}, format string) error {
 	diffs := GenerateDiff(operations, existing)
-	
+
 	if format == "json" {
 		preview := map[string]interface{}{
 			"mode":       "dry-run",
 			"total":      len(operations),
 			"operations": diffs,
 			"summary": map[string]int{
-				"total":    len(operations),
-				"creates":  0, // Count by operation type
-				"updates":  0,
-				"deletes":  0,
+				"total":   len(operations),
+				"creates": 0, // Count by operation type
+				"updates": 0,
+				"deletes": 0,
 			},
 		}
-		
+
 		// Count operation types
 		for _, op := range operations {
 			if existing != nil && existing[op.Index] != nil {
@@ -244,19 +243,19 @@ func PrintBatchPreview(operations []BatchOperation, existing map[int]interface{}
 				}
 			}
 		}
-		
+
 		return output.PrintJSON(preview)
 	}
-	
+
 	// Table format
 	fmt.Println("BATCH OPERATION PREVIEW (DRY-RUN)")
 	fmt.Println("============================================================")
 	fmt.Printf("Total operations: %d\n", len(operations))
-	
+
 	creates := 0
 	updates := 0
 	deletes := 0
-	
+
 	for _, op := range operations {
 		if existing != nil && existing[op.Index] != nil {
 			updates++
@@ -268,18 +267,18 @@ func PrintBatchPreview(operations []BatchOperation, existing map[int]interface{}
 			}
 		}
 	}
-	
+
 	fmt.Printf("  Creates: %d\n", creates)
 	fmt.Printf("  Updates: %d\n", updates)
 	fmt.Printf("  Deletes: %d\n", deletes)
 	fmt.Println("\nOperations:")
-	
+
 	for i, op := range operations {
 		diff, exists := diffs[i]
 		if !exists {
 			continue
 		}
-		
+
 		operationType := diff["operation"].(string)
 		fmt.Printf("\n[%d] %s: %s\n", i, operationType, op.Type)
 		if op.OrgID != "" {
@@ -292,7 +291,7 @@ func PrintBatchPreview(operations []BatchOperation, existing map[int]interface{}
 			fmt.Printf("     Data: %+v\n", proposed)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -328,4 +327,3 @@ func ValidateBatchFile(batch *BatchFile) error {
 
 	return nil
 }
-

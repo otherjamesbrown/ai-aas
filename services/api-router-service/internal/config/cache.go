@@ -1,9 +1,10 @@
 // Package config provides BoltDB-based configuration caching.
 //
 // Purpose:
-//   This package implements persistent configuration caching using BoltDB.
-//   It provides fallback when Config Service is unavailable and enables
-//   fast local lookups of routing policies.
+//
+//	This package implements persistent configuration caching using BoltDB.
+//	It provides fallback when Config Service is unavailable and enables
+//	fast local lookups of routing policies.
 //
 // Dependencies:
 //   - go.etcd.io/bbolt: Embedded key-value database
@@ -13,7 +14,6 @@
 //   - Load policies on startup
 //   - Provide fast lookups by organization and model
 //   - Handle cache invalidation on updates
-//
 package config
 
 import (
@@ -209,4 +209,3 @@ func (c *Cache) GetPolicyByExternalName(organizationID, externalName string) (*R
 func cacheKey(organizationID, model string) string {
 	return fmt.Sprintf("%s:%s", organizationID, model)
 }
-

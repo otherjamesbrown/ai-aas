@@ -1,9 +1,10 @@
 // Package contracts provides contract generation from OpenAPI specifications.
 //
 // Purpose:
-//   This package defines workflows for generating Go types and validation code
-//   from OpenAPI specifications using oapi-codegen. It provides validation and
-//   code generation capabilities for the API Router Service contracts.
+//
+//	This package defines workflows for generating Go types and validation code
+//	from OpenAPI specifications using oapi-codegen. It provides validation and
+//	code generation capabilities for the API Router Service contracts.
 //
 // Dependencies:
 //   - oapi-codegen: For generating Go types from OpenAPI specs (install via: go install github.com/deepmap/oapi-codegen/v2/cmd/oapi-codegen@latest)
@@ -16,7 +17,6 @@
 //
 // Requirements Reference:
 //   - specs/006-api-router-service/spec.md#FR-002 (Request schema validation)
-//
 package contracts
 
 import (
@@ -185,4 +185,3 @@ func GetOpenAPISpecPath() string {
 	// Default fallback
 	return filepath.Join("specs", "006-api-router-service", "contracts", "api-router.openapi.yaml")
 }
-

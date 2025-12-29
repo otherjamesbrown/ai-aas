@@ -328,4 +328,3 @@ func (h *PolicyHandler) validateUpdate(update *domain.PolicyUpdate) []httputil.V
 
 	return errors
 }
-

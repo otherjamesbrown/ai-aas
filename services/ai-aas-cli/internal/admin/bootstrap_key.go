@@ -8,7 +8,6 @@
 //
 // Requirements Reference:
 //   - specs/033-org-admin-cli/spec.md (Org admin CLI onboarding)
-//
 package admin
 
 import (

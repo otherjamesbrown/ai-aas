@@ -43,8 +43,8 @@ type ModelInfo struct {
 
 // Validator runs validation checks on a model
 type Validator struct {
-	checks   []Check
-	timeout  time.Duration
+	checks  []Check
+	timeout time.Duration
 }
 
 // NewValidator creates a new validator with default checks
@@ -77,22 +77,22 @@ func (v *Validator) SetTimeout(timeout time.Duration) {
 
 // ValidationReport contains the full validation report
 type ValidationReport struct {
-	ModelID     string             `json:"model_id"`
-	Timestamp   time.Time          `json:"timestamp"`
-	Duration    time.Duration      `json:"duration"`
-	Passed      bool               `json:"passed"`
-	Results     []ValidationResult `json:"results"`
-	Summary     ValidationSummary  `json:"summary"`
+	ModelID   string             `json:"model_id"`
+	Timestamp time.Time          `json:"timestamp"`
+	Duration  time.Duration      `json:"duration"`
+	Passed    bool               `json:"passed"`
+	Results   []ValidationResult `json:"results"`
+	Summary   ValidationSummary  `json:"summary"`
 }
 
 // ValidationSummary summarizes validation results
 type ValidationSummary struct {
-	Total     int `json:"total"`
-	Passed    int `json:"passed"`
-	Failed    int `json:"failed"`
-	Warnings  int `json:"warnings"`
-	Skipped   int `json:"skipped"`
-	Critical  int `json:"critical"`
+	Total    int `json:"total"`
+	Passed   int `json:"passed"`
+	Failed   int `json:"failed"`
+	Warnings int `json:"warnings"`
+	Skipped  int `json:"skipped"`
+	Critical int `json:"critical"`
 }
 
 // Validate runs all validation checks
@@ -296,4 +296,3 @@ func checkModelSize(ctx context.Context, model *ModelInfo) *ValidationResult {
 	result.Duration = time.Since(start)
 	return result
 }
-

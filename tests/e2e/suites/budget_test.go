@@ -15,7 +15,7 @@ func TestBudgetLimitEnforcement(t *testing.T) {
 	defer ctx.Cleanup()
 
 	orgFixture := fixtures.NewOrganizationFixture(ctx.Client, ctx.Fixtures)
-	budgetFixture := fixtures.NewBudgetFixture(ctx.Client, ctx.Fixtures)
+	budgetFixture := fixtures.NewBudgetFixture(ctx.AdminClient, ctx.Fixtures) // Admin API
 
 	// Create organization
 	org, err := orgFixture.Create(ctx, "")
@@ -57,7 +57,7 @@ func TestBudgetExceededDenial(t *testing.T) {
 	defer ctx.Cleanup()
 
 	orgFixture := fixtures.NewOrganizationFixture(ctx.Client, ctx.Fixtures)
-	budgetFixture := fixtures.NewBudgetFixture(ctx.Client, ctx.Fixtures)
+	budgetFixture := fixtures.NewBudgetFixture(ctx.AdminClient, ctx.Fixtures) // Admin API
 	apiKeyFixture := fixtures.NewAPIKeyFixture(ctx.Client, ctx.Fixtures)
 
 	// Create organization
@@ -132,7 +132,7 @@ func TestBudgetResetAndRecovery(t *testing.T) {
 	defer ctx.Cleanup()
 
 	orgFixture := fixtures.NewOrganizationFixture(ctx.Client, ctx.Fixtures)
-	budgetFixture := fixtures.NewBudgetFixture(ctx.Client, ctx.Fixtures)
+	budgetFixture := fixtures.NewBudgetFixture(ctx.AdminClient, ctx.Fixtures) // Admin API
 
 	// Create organization
 	org, err := orgFixture.Create(ctx, "")
@@ -174,7 +174,7 @@ func TestBudgetUpdateLimit(t *testing.T) {
 	defer ctx.Cleanup()
 
 	orgFixture := fixtures.NewOrganizationFixture(ctx.Client, ctx.Fixtures)
-	budgetFixture := fixtures.NewBudgetFixture(ctx.Client, ctx.Fixtures)
+	budgetFixture := fixtures.NewBudgetFixture(ctx.AdminClient, ctx.Fixtures) // Admin API
 
 	// Create organization
 	org, err := orgFixture.Create(ctx, "")

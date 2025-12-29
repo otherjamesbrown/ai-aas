@@ -40,10 +40,10 @@ type Worker struct {
 	cfg        Config
 	logger     *zap.Logger
 
-	stopCh   chan struct{}
-	doneCh   chan struct{}
-	mu       sync.Mutex
-	running  bool
+	stopCh     chan struct{}
+	doneCh     chan struct{}
+	mu         sync.Mutex
+	running    bool
 	currentJob *uuid.UUID
 }
 
@@ -287,13 +287,13 @@ func (w *Worker) executeJob(ctx context.Context, job *Job) error {
 
 	// Create pull service configuration
 	pullCfg := PullConfig{
-		HFToken:      hfToken,
-		S3Endpoint:   s3Endpoint,
-		S3AccessKey:  s3AccessKey,
-		S3SecretKey:  s3SecretKey,
-		S3Bucket:     s3Bucket,
-		S3Region:     s3Region,
-		Concurrency:  3,
+		HFToken:     hfToken,
+		S3Endpoint:  s3Endpoint,
+		S3AccessKey: s3AccessKey,
+		S3SecretKey: s3SecretKey,
+		S3Bucket:    s3Bucket,
+		S3Region:    s3Region,
+		Concurrency: 3,
 	}
 
 	// Create the pull executor
@@ -304,11 +304,11 @@ func (w *Worker) executeJob(ctx context.Context, job *Job) error {
 
 	// Execute the pull with progress tracking
 	result, err := executor.Execute(ctx, ExecuteOptions{
-		JobID:     job.ID,
-		ModelName: job.ModelName,
-		HFModelID: job.HFModelID,
-		Revision:  job.Revision,
-		S3Prefix:  s3Prefix,
+		JobID:                  job.ID,
+		ModelName:              job.ModelName,
+		HFModelID:              job.HFModelID,
+		Revision:               job.Revision,
+		S3Prefix:               s3Prefix,
 		ProgressUpdateInterval: w.cfg.ProgressUpdateInterval,
 		CheckCancelled: func() bool {
 			return w.isJobCancelled(ctx, job.ID)

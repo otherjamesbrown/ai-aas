@@ -1,9 +1,9 @@
 // Package limiter provides unit tests for budget client functionality.
 //
 // Purpose:
-//   These tests validate the budget service client implementation,
-//   including stub mode and HTTP integration.
 //
+//	These tests validate the budget service client implementation,
+//	including stub mode and HTTP integration.
 package limiter
 
 import (
@@ -259,4 +259,3 @@ func TestBudgetClient_CheckBudgetWithKey_DefaultAllowed(t *testing.T) {
 		t.Error("expected budget to be allowed for normal API key")
 	}
 }
-

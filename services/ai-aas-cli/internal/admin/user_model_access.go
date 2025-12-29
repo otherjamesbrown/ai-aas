@@ -692,12 +692,12 @@ Examples:
 
 			if cfg.OutputFormat == "json" {
 				return output.PrintJSON(map[string]interface{}{
-					"totalUsers":   len(users),
-					"successful":   successCount,
-					"errors":       errorCount,
-					"mode":         flagMode,
-					"models":       flagModels,
-					"dryRun":       flagDryRun,
+					"totalUsers": len(users),
+					"successful": successCount,
+					"errors":     errorCount,
+					"mode":       flagMode,
+					"models":     flagModels,
+					"dryRun":     flagDryRun,
 				})
 			}
 

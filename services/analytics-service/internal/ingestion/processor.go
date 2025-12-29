@@ -1,10 +1,10 @@
 // Package ingestion provides event processing and persistence.
 //
 // Purpose:
-//   This package processes batches of events from RabbitMQ, deduplicates them,
-//   and persists them to TimescaleDB. It tracks ingestion batches and handles
-//   errors gracefully.
 //
+//	This package processes batches of events from RabbitMQ, deduplicates them,
+//	and persists them to TimescaleDB. It tracks ingestion batches and handles
+//	errors gracefully.
 package ingestion
 
 import (
@@ -173,4 +173,3 @@ func (p *Processor) convertEvent(e Event) (postgres.UsageEvent, error) {
 		Metadata:          metadata,
 	}, nil
 }
-

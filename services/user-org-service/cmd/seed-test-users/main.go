@@ -164,4 +164,3 @@ func seedUserWithRole(ctx context.Context, store *postgres.Store, orgID uuid.UUI
 	}
 	return user.ID, nil
 }
-

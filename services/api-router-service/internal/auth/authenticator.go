@@ -1,9 +1,10 @@
 // Package auth provides authentication and authorization for API requests.
 //
 // Purpose:
-//   This package implements API key authentication and optional HMAC signature
-//   verification for inference requests. It validates credentials and extracts
-//   organization context for downstream processing.
+//
+//	This package implements API key authentication and optional HMAC signature
+//	verification for inference requests. It validates credentials and extracts
+//	organization context for downstream processing.
 //
 // Dependencies:
 //   - user-org-service: For API key validation (can be stubbed initially)
@@ -16,7 +17,6 @@
 //
 // Requirements Reference:
 //   - specs/006-api-router-service/spec.md#FR-001 (Credential validation)
-//
 package auth
 
 import (
@@ -43,15 +43,15 @@ type AuthenticatedContext = apikey.AuthenticatedContext
 // Authenticator handles API key authentication.
 type Authenticator struct {
 	logger          *zap.Logger
-	userOrgURL      string        // URL to user-org-service for key validation
-	httpClient      *http.Client  // HTTP client for user-org-service requests
+	userOrgURL      string                       // URL to user-org-service for key validation
+	httpClient      *http.Client                 // HTTP client for user-org-service requests
 	validationCache map[string]*cachedValidation // Simple in-memory cache (key: fingerprint, value: validation result)
 }
 
 // cachedValidation stores a cached validation result with expiration.
 type cachedValidation struct {
-	result      *AuthenticatedContext
-	expiresAt   time.Time
+	result    *AuthenticatedContext
+	expiresAt time.Time
 }
 
 // NewAuthenticator creates a new authenticator.
@@ -147,14 +147,14 @@ func (a *Authenticator) validateAPIKey(key string) (*AuthenticatedContext, error
 	}
 
 	var validationResp struct {
-		Valid           bool     `json:"valid"`
-		APIKeyID        string   `json:"apiKeyId"`
-		OrganizationID  string   `json:"organizationId"`
-		PrincipalID     string   `json:"principalId"`
-		PrincipalType   string   `json:"principalType"`
-		Scopes          []string `json:"scopes"`
-		Status          string   `json:"status"`
-		Message         string   `json:"message"`
+		Valid          bool     `json:"valid"`
+		APIKeyID       string   `json:"apiKeyId"`
+		OrganizationID string   `json:"organizationId"`
+		PrincipalID    string   `json:"principalId"`
+		PrincipalType  string   `json:"principalType"`
+		Scopes         []string `json:"scopes"`
+		Status         string   `json:"status"`
+		Message        string   `json:"message"`
 		// Model access control (Spec 022)
 		ModelAccessMode string   `json:"modelAccessMode,omitempty"` // "restricted" or "auto_grant"
 		GrantedModels   []string `json:"grantedModels,omitempty"`   // Only populated for restricted mode
@@ -282,4 +282,3 @@ func (a *Authenticator) UpdateLastUsed(apiKeyID string) error {
 	// Stub: no-op
 	return nil
 }
-

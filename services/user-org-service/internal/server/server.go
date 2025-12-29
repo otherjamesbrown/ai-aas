@@ -54,7 +54,7 @@ func New(opts Options) *http.Server {
 			(len(origin) >= 17 && origin[:17] == "http://localhost:") ||
 			(len(origin) >= 18 && origin[:18] == "https://localhost:")
 	}
-	
+
 	// CORS middleware for local development - must be first to handle OPTIONS
 	router.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -68,7 +68,7 @@ func New(opts Options) *http.Server {
 					w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token, X-Correlation-ID, X-API-Key")
 					w.Header().Set("Access-Control-Allow-Credentials", "true")
 					w.Header().Set("Access-Control-Max-Age", "3600")
-					
+
 					opts.Logger.Debug("CORS preflight request handled",
 						zap.String("method", r.Method),
 						zap.String("path", r.URL.Path),
@@ -99,40 +99,40 @@ func New(opts Options) *http.Server {
 			w.Header().Set("Access-Control-Max-Age", "3600")
 		}
 	}
-	
+
 	// Set MethodNotAllowed handler to handle OPTIONS and add CORS to error responses
 	router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 		addCORSHeaders(w, r)
-		
+
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		
+
 		opts.Logger.Warn("method not allowed",
 			zap.String("method", r.Method),
 			zap.String("path", r.URL.Path),
 			zap.String("request_id", middleware.GetReqID(r.Context())))
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		_, _ = w.Write([]byte(`{"error":"method not allowed","method":"` + r.Method + `","path":"` + r.URL.Path + `"}`))
 	})
-	
+
 	// Set NotFound handler to add CORS headers and log missing routes
 	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		addCORSHeaders(w, r)
-		
+
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		
+
 		opts.Logger.Warn("route not found",
 			zap.String("method", r.Method),
 			zap.String("path", r.URL.Path),
 			zap.String("request_id", middleware.GetReqID(r.Context())))
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"error":"route not found","method":"` + r.Method + `","path":"` + r.URL.Path + `"}`))
@@ -155,7 +155,7 @@ func New(opts Options) *http.Server {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			requestID := middleware.GetReqID(r.Context())
-			
+
 			// Log incoming request (key headers only to avoid verbosity)
 			fields := []zap.Field{
 				zap.String("method", r.Method),
@@ -165,12 +165,12 @@ func New(opts Options) *http.Server {
 				zap.String("request_id", requestID),
 				zap.String("origin", r.Header.Get("Origin")),
 			}
-			
+
 			// Only log user agent if present
 			if ua := r.Header.Get("User-Agent"); ua != "" {
 				fields = append(fields, zap.String("user_agent", ua))
 			}
-			
+
 			// Log key headers for debugging
 			if auth := r.Header.Get("Authorization"); auth != "" {
 				fields = append(fields, zap.String("has_auth", "true"))
@@ -178,14 +178,14 @@ func New(opts Options) *http.Server {
 			if apiKey := r.Header.Get("X-API-Key"); apiKey != "" {
 				fields = append(fields, zap.String("has_api_key", "true"))
 			}
-			
+
 			opts.Logger.Info("incoming request", fields...)
-			
+
 			// Wrap response writer to capture status code
 			ww := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-			
+
 			next.ServeHTTP(ww, r)
-			
+
 			// Log response
 			duration := time.Since(start)
 			responseFields := []zap.Field{
@@ -195,12 +195,12 @@ func New(opts Options) *http.Server {
 				zap.Duration("duration_ms", duration),
 				zap.String("request_id", requestID),
 			}
-			
+
 			// Log CORS headers if present
 			if corsOrigin := w.Header().Get("Access-Control-Allow-Origin"); corsOrigin != "" {
 				responseFields = append(responseFields, zap.String("cors_origin", corsOrigin))
 			}
-			
+
 			opts.Logger.Info("request completed", responseFields...)
 		})
 	})
@@ -235,12 +235,12 @@ func New(opts Options) *http.Server {
 
 	// Prometheus metrics endpoint
 	router.Get("/metrics", promhttp.Handler().ServeHTTP)
-	
+
 	// Debug endpoint to list registered routes (development only)
 	router.Get("/debug/routes", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		routes := []map[string]string{}
-		
+
 		walkFunc := func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
 			routes = append(routes, map[string]string{
 				"method": method,
@@ -248,18 +248,18 @@ func New(opts Options) *http.Server {
 			})
 			return nil
 		}
-		
+
 		if err := chi.Walk(router, walkFunc); err != nil {
 			opts.Logger.Error("failed to walk routes", zap.Error(err))
 			httputil.WriteInternalError(w, r)
 			return
 		}
-		
+
 		response := map[string]interface{}{
 			"routes": routes,
 			"count":  len(routes),
 		}
-		
+
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(response)
 	})

@@ -27,9 +27,9 @@ type InferenceServiceConfig struct {
 	Name           string
 	Namespace      string
 	ModelName      string
-	StorageURI     string            // S3 path to model files (optional for HF models)
-	HFModelID      string            // HuggingFace model ID (e.g., "mistralai/Mistral-7B-Instruct-v0.3")
-	Runtime        string            // ClusterServingRuntime name (e.g., "vllm-runtime")
+	StorageURI     string // S3 path to model files (optional for HF models)
+	HFModelID      string // HuggingFace model ID (e.g., "mistralai/Mistral-7B-Instruct-v0.3")
+	Runtime        string // ClusterServingRuntime name (e.g., "vllm-runtime")
 	RuntimeVersion string
 	GPUCount       int
 	MemoryGB       int
@@ -338,11 +338,11 @@ func (c *Client) GetPodStatus(ctx context.Context, name, namespace string) ([]Po
 	var statuses []PodStatus
 	for _, pod := range pods.Items {
 		status := PodStatus{
-			Name:      pod.Name,
-			Phase:     string(pod.Status.Phase),
-			Ready:     isPodReady(&pod),
-			Restarts:  getPodRestarts(&pod),
-			Age:       time.Since(pod.CreationTimestamp.Time),
+			Name:     pod.Name,
+			Phase:    string(pod.Status.Phase),
+			Ready:    isPodReady(&pod),
+			Restarts: getPodRestarts(&pod),
+			Age:      time.Since(pod.CreationTimestamp.Time),
 		}
 		statuses = append(statuses, status)
 	}
@@ -467,4 +467,3 @@ func (c *Client) RestartInferenceService(ctx context.Context, name, namespace st
 
 	return nil
 }
-

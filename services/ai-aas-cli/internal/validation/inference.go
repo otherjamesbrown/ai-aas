@@ -73,7 +73,7 @@ type Message struct {
 
 // ContentPart represents a part of multimodal content
 type ContentPart struct {
-	Type     string    `json:"type"`      // "text" or "image_url"
+	Type     string    `json:"type"` // "text" or "image_url"
 	Text     string    `json:"text,omitempty"`
 	ImageURL *ImageURL `json:"image_url,omitempty"`
 }
@@ -377,4 +377,3 @@ func (v *InferenceValidator) RunAllChecks(ctx context.Context, endpoint, apiKey 
 
 	return results
 }
-

@@ -1,10 +1,10 @@
 // Package freshness provides Redis-backed caching for freshness indicators.
 //
 // Purpose:
-//   This package caches freshness status from the freshness_status table in Redis
-//   for fast lookups by the API. It syncs with the database periodically and
-//   provides TTL-based expiration.
 //
+//	This package caches freshness status from the freshness_status table in Redis
+//	for fast lookups by the API. It syncs with the database periodically and
+//	provides TTL-based expiration.
 package freshness
 
 import (
@@ -43,12 +43,12 @@ func NewCache(cfg Config) *Cache {
 
 // Indicator represents freshness status for an org/model.
 type Indicator struct {
-	OrgID        uuid.UUID `json:"org_id"`
+	OrgID        uuid.UUID  `json:"org_id"`
 	ModelID      *uuid.UUID `json:"model_id,omitempty"`
-	LastEventAt  time.Time `json:"last_event_at"`
-	LastRollupAt time.Time `json:"last_rollup_at"`
-	LagSeconds   int       `json:"lag_seconds"`
-	Status       string    `json:"status"`
+	LastEventAt  time.Time  `json:"last_event_at"`
+	LastRollupAt time.Time  `json:"last_rollup_at"`
+	LagSeconds   int        `json:"lag_seconds"`
+	Status       string     `json:"status"`
 }
 
 // Get retrieves freshness indicator from cache.
@@ -123,4 +123,3 @@ func (c *Cache) key(orgID uuid.UUID, modelID *uuid.UUID) string {
 type FreshnessRepository interface {
 	GetAllFreshnessStatus(ctx context.Context) ([]*Indicator, error)
 }
-

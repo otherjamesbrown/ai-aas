@@ -258,7 +258,7 @@ func testDeployModelWithRecipe(t *testing.T, modelName, environment, recipeName 
 
 	// Build CLI command
 	// Note: This assumes the AI-AAS CLI is available in PATH or built
-	cmd := exec.Command("ai-aas-cli", "model", "deploy", modelName,
+	cmd := exec.Command("ai-aas-cli", "model", "deploy", "create", modelName,
 		"-e", environment,
 		"--recipe", recipeName,
 		"--dry-run", // Use dry-run for testing without actual deployment
@@ -442,7 +442,7 @@ func testDeployModelWithRecipeAndOverrides(t *testing.T, modelName, environment,
 	t.Helper()
 
 	// Build CLI command with overrides
-	cmd := exec.Command("ai-aas-cli", "model", "deploy", modelName,
+	cmd := exec.Command("ai-aas-cli", "model", "deploy", "create", modelName,
 		"-e", environment,
 		"--recipe", recipeName,
 		"--gpu-count", "2", // Override GPU count from recipe

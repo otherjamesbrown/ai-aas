@@ -59,12 +59,12 @@ type OpenAICompletionRequest struct {
 
 // OpenAICompletionResponse represents an OpenAI text completions API response.
 type OpenAICompletionResponse struct {
-	ID      string                 `json:"id"`
-	Object  string                 `json:"object"`
-	Created int64                  `json:"created"`
-	Model   string                 `json:"model"`
+	ID      string                   `json:"id"`
+	Object  string                   `json:"object"`
+	Created int64                    `json:"created"`
+	Model   string                   `json:"model"`
 	Choices []OpenAICompletionChoice `json:"choices"`
-	Usage   OpenAIUsage             `json:"usage"`
+	Usage   OpenAIUsage              `json:"usage"`
 }
 
 // OpenAICompletionChoice represents a text completion choice in an OpenAI response.
@@ -1146,4 +1146,3 @@ func (h *Handler) preprocessRequest(
 
 	return &newReq, nil
 }
-

@@ -1,9 +1,9 @@
 // Package aggregation provides rollup workers for TimescaleDB continuous aggregates.
 //
 // Purpose:
-//   This package orchestrates periodic rollup jobs that aggregate usage_events into
-//   hourly and daily rollups, and updates freshness_status for monitoring.
 //
+//	This package orchestrates periodic rollup jobs that aggregate usage_events into
+//	hourly and daily rollups, and updates freshness_status for monitoring.
 package aggregation
 
 import (
@@ -49,12 +49,12 @@ var (
 
 // Worker orchestrates rollup jobs.
 type Worker struct {
-	store      *postgres.Store
-	logger     *zap.Logger
-	interval   time.Duration
-	workers    int
-	stopCh     chan struct{}
-	doneCh     chan struct{}
+	store    *postgres.Store
+	logger   *zap.Logger
+	interval time.Duration
+	workers  int
+	stopCh   chan struct{}
+	doneCh   chan struct{}
 }
 
 // Config holds worker configuration.
@@ -311,4 +311,3 @@ func (w *Worker) updateFreshnessStatus(ctx context.Context) error {
 
 	return nil
 }
-

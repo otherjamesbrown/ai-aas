@@ -30,11 +30,11 @@ type ErrorResponse struct {
 
 // ErrorDetail contains error details (legacy format)
 type ErrorDetail struct {
-	Type    string            `json:"type"`
-	Title   string            `json:"title"`
-	Detail  string            `json:"detail,omitempty"`
-	Status  int               `json:"status"`
-	Errors  []ValidationError `json:"errors,omitempty"`
+	Type   string            `json:"type"`
+	Title  string            `json:"title"`
+	Detail string            `json:"detail,omitempty"`
+	Status int               `json:"status"`
+	Errors []ValidationError `json:"errors,omitempty"`
 }
 
 // WriteJSON writes a JSON response with the given status code.

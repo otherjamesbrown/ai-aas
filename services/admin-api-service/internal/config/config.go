@@ -14,15 +14,15 @@ type Config struct {
 	Version string
 
 	// Database settings
-	DatabaseURL     string
-	DBMaxConns      int
-	DBMinConns      int
-	DBConnTimeout   time.Duration
-	DBIdleTimeout   time.Duration
+	DatabaseURL   string
+	DBMaxConns    int
+	DBMinConns    int
+	DBConnTimeout time.Duration
+	DBIdleTimeout time.Duration
 
 	// Authentication
 	APIKeyHashSalt    string
-	MasterAdminAPIKey string  // Master API key for admin access (required)
+	MasterAdminAPIKey string // Master API key for admin access (required)
 
 	// Rate limiting
 	RateLimitPerMin int
@@ -42,32 +42,32 @@ type Config struct {
 	Kubeconfig string // Path to kubeconfig file (empty = use in-cluster config)
 
 	// Worker settings
-	WorkerEnabled              bool
-	WorkerPollInterval         time.Duration
+	WorkerEnabled                bool
+	WorkerPollInterval           time.Duration
 	WorkerProgressUpdateInterval time.Duration
 }
 
 // Load reads configuration from environment variables
 func Load() (*Config, error) {
 	cfg := &Config{
-		Port:            getEnvInt("PORT", 8080),
-		Version:         getEnv("VERSION", "v1.0.0"),
-		DatabaseURL:     getEnv("DATABASE_URL", ""),
-		DBMaxConns:      getEnvInt("DB_MAX_CONNS", 50),
-		DBMinConns:      getEnvInt("DB_MIN_CONNS", 10),
-		DBConnTimeout:   getEnvDuration("DB_CONN_TIMEOUT", 5*time.Second),
-		DBIdleTimeout:   getEnvDuration("DB_IDLE_TIMEOUT", 5*time.Minute),
+		Port:              getEnvInt("PORT", 8080),
+		Version:           getEnv("VERSION", "v1.0.0"),
+		DatabaseURL:       getEnv("DATABASE_URL", ""),
+		DBMaxConns:        getEnvInt("DB_MAX_CONNS", 50),
+		DBMinConns:        getEnvInt("DB_MIN_CONNS", 10),
+		DBConnTimeout:     getEnvDuration("DB_CONN_TIMEOUT", 5*time.Second),
+		DBIdleTimeout:     getEnvDuration("DB_IDLE_TIMEOUT", 5*time.Minute),
 		APIKeyHashSalt:    getEnv("API_KEY_HASH_SALT", ""),
 		MasterAdminAPIKey: getEnv("MASTER_ADMIN_API_KEY", ""),
-		RateLimitPerMin: getEnvInt("RATE_LIMIT_PER_MIN", 100),
-		LogLevel:        getEnv("LOG_LEVEL", "info"),
-		MetricsEnabled:  getEnvBool("METRICS_ENABLED", true),
-		TracingEnabled:  getEnvBool("TRACING_ENABLED", false),
-		OTLPEndpoint:    getEnv("OTLP_ENDPOINT", ""),
+		RateLimitPerMin:   getEnvInt("RATE_LIMIT_PER_MIN", 100),
+		LogLevel:          getEnv("LOG_LEVEL", "info"),
+		MetricsEnabled:    getEnvBool("METRICS_ENABLED", true),
+		TracingEnabled:    getEnvBool("TRACING_ENABLED", false),
+		OTLPEndpoint:      getEnv("OTLP_ENDPOINT", ""),
 		// External services
 		UserOrgServiceURL: getEnv("USER_ORG_SERVICE_URL", ""),
 		// Kubernetes settings
-		Kubeconfig:      getEnv("KUBECONFIG", ""),
+		Kubeconfig: getEnv("KUBECONFIG", ""),
 		// Worker settings
 		WorkerEnabled:                getEnvBool("WORKER_ENABLED", true),
 		WorkerPollInterval:           getEnvDuration("WORKER_POLL_INTERVAL", 5*time.Second),
@@ -118,4 +118,3 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 	}
 	return defaultValue
 }
-

@@ -9,7 +9,6 @@
 // Dependencies:
 //   - net/http: HTTP client
 //   - internal/client: Retry logic with exponential backoff
-//
 package inference
 
 import (
@@ -64,7 +63,7 @@ type ChatMessage struct {
 
 // ContentPart represents a part of multimodal content
 type ContentPart struct {
-	Type     string    `json:"type"`      // "text" or "image_url"
+	Type     string    `json:"type"` // "text" or "image_url"
 	Text     string    `json:"text,omitempty"`
 	ImageURL *ImageURL `json:"image_url,omitempty"`
 }

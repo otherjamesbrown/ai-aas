@@ -29,13 +29,13 @@ func TestChatCompletionsHealthEndpoint(t *testing.T) {
 		nil, // config loader not needed for health endpoint
 		nil, // backend client not needed for health endpoint
 		backendRegistry,
-		nil, // routing engine not needed for health endpoint
-		nil, // routing metrics not needed for health endpoint
-		nil, // token metrics not needed for health endpoint
-		nil, // usage hook not needed for health endpoint
-		nil, // rate limiter not needed for health endpoint
-		"",  // admin API endpoint not needed for health endpoint
-		"",  // admin API key not needed for health endpoint
+		nil,            // routing engine not needed for health endpoint
+		nil,            // routing metrics not needed for health endpoint
+		nil,            // token metrics not needed for health endpoint
+		nil,            // usage hook not needed for health endpoint
+		nil,            // rate limiter not needed for health endpoint
+		"",             // admin API endpoint not needed for health endpoint
+		"",             // admin API key not needed for health endpoint
 		30*time.Second, // default timeout
 		10*time.Second, // models cache TTL
 	)
@@ -102,11 +102,11 @@ func TestChatCompletionsHealthNoAuthRequired(t *testing.T) {
 		backendRegistry,
 		nil,
 		nil,
-		nil, // token metrics not needed for health endpoint
-		nil, // usage hook not needed for health endpoint
-		nil, // rate limiter not needed for health endpoint
-		"",  // admin API endpoint not needed for health endpoint
-		"",  // admin API key not needed for health endpoint
+		nil,            // token metrics not needed for health endpoint
+		nil,            // usage hook not needed for health endpoint
+		nil,            // rate limiter not needed for health endpoint
+		"",             // admin API endpoint not needed for health endpoint
+		"",             // admin API key not needed for health endpoint
 		30*time.Second, // default timeout
 		10*time.Second, // models cache TTL
 	)

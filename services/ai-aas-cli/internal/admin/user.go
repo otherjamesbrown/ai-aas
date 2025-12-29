@@ -7,7 +7,6 @@
 //
 // Requirements Reference:
 //   - specs/009-admin-cli/spec.md#US-002 (Day-2 Management)
-//
 package admin
 
 import (
@@ -199,10 +198,10 @@ func runUserList(cmd *cobra.Command, args []string, flagOrgID, flagFormat string
 	// Audit logging
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
-		Type:        "user_list",
-		Command:     fmt.Sprintf("user list --org-id=%s", orgID),
-		Outcome:     "success",
-		Duration:    time.Since(startTime),
+		Type:     "user_list",
+		Command:  fmt.Sprintf("user list --org-id=%s", orgID),
+		Outcome:  "success",
+		Duration: time.Since(startTime),
 	})
 
 	// Format output
@@ -486,10 +485,10 @@ func runDirectUserCreate(cmd *cobra.Command, cfg *config.Config, userOrgClient *
 
 	// Create user directly
 	req := userorg.CreateUserRequest{
-		Email:           email,
-		DisplayName:     displayName,
-		Roles:           roles,
-		ForcePwdChange:  &forcePwdChange,
+		Email:          email,
+		DisplayName:    displayName,
+		Roles:          roles,
+		ForcePwdChange: &forcePwdChange,
 	}
 
 	createdUser, err := userOrgClient.CreateUser(cmd.Context(), orgID, req)
@@ -904,11 +903,11 @@ func runUserUpdate(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 	// Audit logging
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
-		Type:        "user_update",
-		Command:     fmt.Sprintf("user update --org-id=%s --user-id=%s", orgID, resolvedUserID),
+		Type:    "user_update",
+		Command: fmt.Sprintf("user update --org-id=%s --user-id=%s", orgID, resolvedUserID),
 		Parameters: map[string]interface{}{
-			"orgId":  orgID,
-			"userId": resolvedUserID,
+			"orgId":   orgID,
+			"userId":  resolvedUserID,
 			"request": req,
 		},
 		Outcome:  "success",
@@ -1177,8 +1176,8 @@ func runUserDelete(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 	// Audit logging
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
-		Type:        "user_delete",
-		Command:     fmt.Sprintf("user delete --org-id=%s --user-id=%s --confirm", orgID, resolvedUserID),
+		Type:    "user_delete",
+		Command: fmt.Sprintf("user delete --org-id=%s --user-id=%s --confirm", orgID, resolvedUserID),
 		Parameters: map[string]interface{}{
 			"orgId":  orgID,
 			"userId": resolvedUserID,
@@ -1201,4 +1200,3 @@ func runUserDelete(cmd *cobra.Command, args []string, flagOrgID, flagUserID, fla
 	}
 	return nil
 }
-

@@ -11,26 +11,26 @@ var ErrK8sUnavailable = errors.New("kubernetes client unavailable")
 
 // PodHealthResponse represents the response from GET /v1/pods/health
 type PodHealthResponse struct {
-	Pods    []PodHealth    `json:"pods"`
-	Summary HealthSummary  `json:"summary"`
+	Pods    []PodHealth   `json:"pods"`
+	Summary HealthSummary `json:"summary"`
 }
 
 // PodHealth represents the health information of a single pod
 type PodHealth struct {
-	Name               string              `json:"name"`
-	Namespace          string              `json:"namespace"`
-	ModelName          string              `json:"model_name"`
-	InferenceService   string              `json:"inferenceservice"`
-	Phase              string              `json:"phase"`
-	Ready              bool                `json:"ready"`
-	Node               string              `json:"node"`
-	RestartCount       int32               `json:"restart_count"`
-	LastRestartTime    *time.Time          `json:"last_restart_time,omitempty"`
-	LastTermination    *TerminationInfo    `json:"last_termination,omitempty"`
-	Containers         []ContainerHealth   `json:"containers"`
-	Conditions         []PodCondition      `json:"conditions"`
-	AgeSeconds         int64               `json:"age_seconds"`
-	CreatedAt          time.Time           `json:"created_at"`
+	Name             string            `json:"name"`
+	Namespace        string            `json:"namespace"`
+	ModelName        string            `json:"model_name"`
+	InferenceService string            `json:"inferenceservice"`
+	Phase            string            `json:"phase"`
+	Ready            bool              `json:"ready"`
+	Node             string            `json:"node"`
+	RestartCount     int32             `json:"restart_count"`
+	LastRestartTime  *time.Time        `json:"last_restart_time,omitempty"`
+	LastTermination  *TerminationInfo  `json:"last_termination,omitempty"`
+	Containers       []ContainerHealth `json:"containers"`
+	Conditions       []PodCondition    `json:"conditions"`
+	AgeSeconds       int64             `json:"age_seconds"`
+	CreatedAt        time.Time         `json:"created_at"`
 }
 
 // TerminationInfo represents information about the last container termination
@@ -44,11 +44,11 @@ type TerminationInfo struct {
 
 // ContainerHealth represents the health information of a container
 type ContainerHealth struct {
-	Name         string               `json:"name"`
-	State        string               `json:"state"`
-	Ready        bool                 `json:"ready"`
-	RestartCount int32                `json:"restart_count"`
-	Resources    ContainerResources   `json:"resources"`
+	Name         string             `json:"name"`
+	State        string             `json:"state"`
+	Ready        bool               `json:"ready"`
+	RestartCount int32              `json:"restart_count"`
+	Resources    ContainerResources `json:"resources"`
 }
 
 // ContainerResources represents resource requests and limits

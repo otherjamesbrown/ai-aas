@@ -13,10 +13,10 @@ import (
 
 // mockService implements the Service interface for testing
 type mockService struct {
-	models      []Model
-	credentials []Credential
+	models       []Model
+	credentials  []Credential
 	cacheEntries []CacheEntry
-	err         error
+	err          error
 }
 
 func (m *mockService) ListModels(opts ListModelsOptions) ([]Model, error) {

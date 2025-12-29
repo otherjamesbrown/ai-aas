@@ -109,4 +109,3 @@ func NewErrorResponse(err error) JSONResponse {
 		Error:   err.Error(),
 	}
 }
-

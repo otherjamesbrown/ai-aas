@@ -1,8 +1,9 @@
 // Package limiter provides budget and quota checking for API requests.
 //
 // Purpose:
-//   This package implements budget service client integration for checking
-//   organization budgets and quotas before processing requests.
+//
+//	This package implements budget service client integration for checking
+//	organization budgets and quotas before processing requests.
 //
 // Dependencies:
 //   - Budget service HTTP API (may be stubbed for development)
@@ -15,7 +16,6 @@
 //
 // Requirements Reference:
 //   - specs/006-api-router-service/spec.md#US-002 (Enforce budgets and safe usage)
-//
 package limiter
 
 import (
@@ -67,7 +67,7 @@ func (c *BudgetClient) CheckBudget(ctx context.Context, orgID string) (*BudgetSt
 	if c.endpoint == "" {
 		return c.checkBudgetStub(orgID)
 	}
-	
+
 	// Make HTTP request to budget service
 	return c.checkBudgetHTTP(ctx, orgID)
 }
@@ -79,11 +79,11 @@ func (c *BudgetClient) CheckBudget(ctx context.Context, orgID string) (*BudgetSt
 func (c *BudgetClient) checkBudgetStub(orgID string) (*BudgetStatus, error) {
 	// Stub implementation: check orgID for special test cases
 	// In real implementation, this would make HTTP request to budget service
-	
+
 	// For now, all organizations have budget available (except test cases)
 	// Test cases are handled via API key in authenticator, which we can't access here
 	// So we'll return allowed for all orgs in stub mode
-	
+
 	return &BudgetStatus{
 		Allowed:      true,
 		CurrentUsage: 0.0,
@@ -105,7 +105,7 @@ func (c *BudgetClient) CheckBudgetWithKey(ctx context.Context, orgID, apiKey str
 			Reason:       "Monthly budget exhausted",
 		}, nil
 	}
-	
+
 	if apiKey == "dev-exhausted-quota-key" {
 		return &BudgetStatus{
 			Allowed:      false,
@@ -115,7 +115,7 @@ func (c *BudgetClient) CheckBudgetWithKey(ctx context.Context, orgID, apiKey str
 			Reason:       "Daily quota exhausted",
 		}, nil
 	}
-	
+
 	// Default: budget available
 	return &BudgetStatus{
 		Allowed:      true,
@@ -137,12 +137,12 @@ type budgetServiceResponse struct {
 // checkBudgetHTTP makes HTTP request to budget service (not implemented yet).
 func (c *BudgetClient) checkBudgetHTTP(ctx context.Context, orgID string) (*BudgetStatus, error) {
 	url := fmt.Sprintf("%s/v1/budgets/%s/check", c.endpoint, orgID)
-	
+
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create budget check request: %w", err)
 	}
-	
+
 	resp, err := c.client.Do(req)
 	if err != nil {
 		c.logger.Warn("budget service unavailable, allowing request",
@@ -156,7 +156,7 @@ func (c *BudgetClient) checkBudgetHTTP(ctx context.Context, orgID string) (*Budg
 		}, nil
 	}
 	defer func() { _ = resp.Body.Close() }()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		c.logger.Warn("budget service returned error, allowing request",
 			zap.String("org_id", orgID),
@@ -168,12 +168,12 @@ func (c *BudgetClient) checkBudgetHTTP(ctx context.Context, orgID string) (*Budg
 			QuotaType: "budget",
 		}, nil
 	}
-	
+
 	var budgetResp budgetServiceResponse
 	if err := json.NewDecoder(resp.Body).Decode(&budgetResp); err != nil {
 		return nil, fmt.Errorf("decode budget response: %w", err)
 	}
-	
+
 	return &BudgetStatus{
 		Allowed:      budgetResp.Allowed,
 		CurrentUsage: budgetResp.CurrentUsage,
@@ -182,4 +182,3 @@ func (c *BudgetClient) checkBudgetHTTP(ctx context.Context, orgID string) (*Budg
 		Reason:       budgetResp.Reason,
 	}, nil
 }
-

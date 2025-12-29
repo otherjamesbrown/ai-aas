@@ -1,8 +1,9 @@
 // Package contract provides contract tests for the API Router Service.
 //
 // Purpose:
-//   These tests validate that request and response payloads conform to the
-//   OpenAPI specification defined in specs/006-api-router-service/contracts/api-router.openapi.yaml
+//
+//	These tests validate that request and response payloads conform to the
+//	OpenAPI specification defined in specs/006-api-router-service/contracts/api-router.openapi.yaml
 //
 // Key Responsibilities:
 //   - Validate InferenceRequest schema compliance
@@ -10,7 +11,6 @@
 //   - Validate ErrorResponse schema compliance
 //   - Ensure all required fields are present
 //   - Ensure field types match the spec
-//
 package contract
 
 import (
@@ -37,7 +37,7 @@ func getOpenAPISpecPath(t *testing.T) string {
 		if _, err := os.Stat(specsPath); err == nil {
 			return specsPath
 		}
-		
+
 		// Also check for go.work as a marker of workspace root
 		goWorkPath := filepath.Join(dir, "go.work")
 		if _, err := os.Stat(goWorkPath); err == nil {
@@ -47,7 +47,7 @@ func getOpenAPISpecPath(t *testing.T) string {
 				return specsPath
 			}
 		}
-		
+
 		parent := filepath.Dir(dir)
 		if parent == dir {
 			break // Reached root
@@ -93,7 +93,7 @@ func TestInferenceRequestContract(t *testing.T) {
 	validRequest := map[string]interface{}{
 		"request_id": "550e8400-e29b-41d4-a716-446655440000",
 		"model":      "gpt-4",
-		"payload":     "Hello, world!",
+		"payload":    "Hello, world!",
 	}
 
 	requestJSON, err := json.Marshal(validRequest)
@@ -110,10 +110,10 @@ func TestInferenceRequestContract(t *testing.T) {
 	fullRequest := map[string]interface{}{
 		"request_id":     "550e8400-e29b-41d4-a716-446655440001",
 		"model":          "gpt-4",
-		"payload":         "Hello, world!",
-		"parameters":      map[string]interface{}{"temperature": 0.7},
+		"payload":        "Hello, world!",
+		"parameters":     map[string]interface{}{"temperature": 0.7},
 		"content_type":   "text/plain",
-		"metadata":        map[string]string{"source": "test"},
+		"metadata":       map[string]string{"source": "test"},
 		"hmac_signature": "abc123",
 	}
 
@@ -134,7 +134,7 @@ func TestInferenceRequestContract(t *testing.T) {
 		{
 			name: "missing request_id",
 			request: map[string]interface{}{
-				"model":  "gpt-4",
+				"model":   "gpt-4",
 				"payload": "Hello",
 			},
 		},
@@ -157,15 +157,15 @@ func TestInferenceRequestContract(t *testing.T) {
 			request: map[string]interface{}{
 				"request_id": "not-a-uuid",
 				"model":      "gpt-4",
-				"payload":     "Hello",
+				"payload":    "Hello",
 			},
 		},
 		{
 			name: "invalid content_type",
 			request: map[string]interface{}{
-				"request_id":  "550e8400-e29b-41d4-a716-446655440004",
-				"model":       "gpt-4",
-				"payload":     "Hello",
+				"request_id":   "550e8400-e29b-41d4-a716-446655440004",
+				"model":        "gpt-4",
+				"payload":      "Hello",
 				"content_type": "invalid/type",
 			},
 		},
@@ -223,7 +223,7 @@ func TestInferenceResponseContract(t *testing.T) {
 		},
 		"usage": map[string]interface{}{
 			"tokens_input":  10,
-			"tokens_output":  20,
+			"tokens_output": 20,
 			"latency_ms":    150,
 			"cost_usd":      0.001,
 			"limit_state":   "WITHIN_LIMIT",
@@ -593,4 +593,3 @@ func TestInferenceEndpointContract(t *testing.T) {
 		t.Error("security requirements not defined for POST /v1/inference")
 	}
 }
-

@@ -13,9 +13,9 @@ import (
 
 // KServe naming validation errors
 var (
-	ErrNameEmpty            = errors.New("name cannot be empty")
-	ErrNameTooLong          = errors.New("name too long (max 253 characters)")
-	ErrInvalidKServeName    = errors.New("invalid kserve name format: must match [a-z]([-a-z0-9]*[a-z0-9])?")
+	ErrNameEmpty         = errors.New("name cannot be empty")
+	ErrNameTooLong       = errors.New("name too long (max 253 characters)")
+	ErrInvalidKServeName = errors.New("invalid kserve name format: must match [a-z]([-a-z0-9]*[a-z0-9])?")
 )
 
 // KServe naming regex: lowercase alphanumeric with hyphens, starting with letter

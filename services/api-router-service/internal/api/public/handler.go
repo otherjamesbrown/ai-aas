@@ -87,22 +87,22 @@ func NewHandler(
 ) *Handler {
 	tracer := otel.Tracer("api-router-service")
 	return &Handler{
-		logger:            logger,
-		authenticator:     authenticator,
-		configLoader:      configLoader,
-		backendClient:     backendClient,
-		backendRegistry:   backendRegistry,
-		routingEngine:     routingEngine,
-		routingMetrics:    routingMetrics,
-		tokenMetrics:      tokenMetrics,
-		usageHook:         usageHook,
-		rateLimiter:       rateLimiter,
-		tracer:            tracer,
-		errorBuilder:      api.NewErrorBuilder(tracer),
-		backendURIs:       make(map[string]string),
-		adminAPIEndpoint:  adminAPIEndpoint,
-		adminAPIKey:       adminAPIKey,
-		defaultTimeout:    defaultTimeout,
+		logger:              logger,
+		authenticator:       authenticator,
+		configLoader:        configLoader,
+		backendClient:       backendClient,
+		backendRegistry:     backendRegistry,
+		routingEngine:       routingEngine,
+		routingMetrics:      routingMetrics,
+		tokenMetrics:        tokenMetrics,
+		usageHook:           usageHook,
+		rateLimiter:         rateLimiter,
+		tracer:              tracer,
+		errorBuilder:        api.NewErrorBuilder(tracer),
+		backendURIs:         make(map[string]string),
+		adminAPIEndpoint:    adminAPIEndpoint,
+		adminAPIKey:         adminAPIKey,
+		defaultTimeout:      defaultTimeout,
 		tritonTranslators:   make(map[string]*triton.Translator),
 		grpcClients:         newGRPCClientManager(logger),
 		grpcTranslators:     newGRPCTranslatorManager(),
@@ -233,9 +233,9 @@ func (h *Handler) HandleChatCompletionsHealth(w http.ResponseWriter, r *http.Req
 
 	// Return a simple success response
 	response := map[string]interface{}{
-		"status":  "ok",
-		"service": "api-router-service",
-		"endpoint": "/v1/chat/completions",
+		"status":    "ok",
+		"service":   "api-router-service",
+		"endpoint":  "/v1/chat/completions",
 		"timestamp": time.Now().Unix(),
 	}
 

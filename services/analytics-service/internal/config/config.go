@@ -28,17 +28,17 @@ type Config struct {
 	KafkaConsumerGroup string   `envconfig:"KAFKA_CONSUMER_GROUP" default:"analytics-service"`
 
 	// Linode Object Storage (S3-compatible)
-	S3Endpoint  string `envconfig:"S3_ENDPOINT"` // Linode Object Storage endpoint (e.g., us-east-1.linodeobjects.com)
+	S3Endpoint  string `envconfig:"S3_ENDPOINT"`   // Linode Object Storage endpoint (e.g., us-east-1.linodeobjects.com)
 	S3AccessKey string `envconfig:"S3_ACCESS_KEY"` // Linode access key
 	S3SecretKey string `envconfig:"S3_SECRET_KEY"` // Linode secret key
 	S3Bucket    string `envconfig:"S3_BUCKET" default:"analytics-exports"`
 	S3Region    string `envconfig:"S3_REGION" default:"us-east-1"` // Linode region
 
 	// Observability
-	TelemetryEndpoint string            `envconfig:"OTEL_EXPORTER_OTLP_ENDPOINT"`
-	TelemetryProtocol string            `envconfig:"OTEL_EXPORTER_OTLP_PROTOCOL" default:"grpc"`
-	TelemetryInsecure bool              `envconfig:"OTEL_EXPORTER_OTLP_INSECURE" default:"true"`
-	LogLevel          string            `envconfig:"LOG_LEVEL" default:"info"`
+	TelemetryEndpoint string `envconfig:"OTEL_EXPORTER_OTLP_ENDPOINT"`
+	TelemetryProtocol string `envconfig:"OTEL_EXPORTER_OTLP_PROTOCOL" default:"grpc"`
+	TelemetryInsecure bool   `envconfig:"OTEL_EXPORTER_OTLP_INSECURE" default:"true"`
+	LogLevel          string `envconfig:"LOG_LEVEL" default:"info"`
 
 	// Ingestion
 	IngestionBatchSize    int           `envconfig:"INGESTION_BATCH_SIZE" default:"1000"`
@@ -53,9 +53,9 @@ type Config struct {
 	FreshnessCacheTTL time.Duration `envconfig:"FRESHNESS_CACHE_TTL" default:"5m"`
 
 	// Export Worker
-	ExportWorkerInterval   time.Duration `envconfig:"EXPORT_WORKER_INTERVAL" default:"30s"`
-	ExportWorkerConcurrency int          `envconfig:"EXPORT_WORKER_CONCURRENCY" default:"2"`
-	ExportSignedURLTTL     time.Duration `envconfig:"EXPORT_SIGNED_URL_TTL" default:"24h"`
+	ExportWorkerInterval    time.Duration `envconfig:"EXPORT_WORKER_INTERVAL" default:"30s"`
+	ExportWorkerConcurrency int           `envconfig:"EXPORT_WORKER_CONCURRENCY" default:"2"`
+	ExportSignedURLTTL      time.Duration `envconfig:"EXPORT_SIGNED_URL_TTL" default:"24h"`
 
 	// Security
 	EnableRBAC        bool   `envconfig:"ENABLE_RBAC" default:"true"`
@@ -105,4 +105,3 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
-

@@ -83,10 +83,10 @@ func run() error {
 
 	// Set up progress callbacks
 	opts := pull.PullOptions{
-		ModelName:  modelID, // Use model ID as name
-		HFModelID:  modelID,
-		Revision:   "main",
-		S3Prefix:   s3Key,
+		ModelName: modelID, // Use model ID as name
+		HFModelID: modelID,
+		Revision:  "main",
+		S3Prefix:  s3Key,
 		OnProgress: func(phase string, bytesCompleted, bytesTotal int64) {
 			if bytesTotal > 0 {
 				pct := float64(bytesCompleted) / float64(bytesTotal) * 100

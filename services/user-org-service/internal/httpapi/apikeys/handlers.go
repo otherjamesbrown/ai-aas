@@ -664,11 +664,11 @@ func (h *Handler) RotateAPIKey(w http.ResponseWriter, r *http.Request) {
 // IssueUserAPIKeyForMe handles POST /organizations/me/api-keys - Create API key for current user.
 func (h *Handler) IssueUserAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	
+
 	// Get org ID and user ID from authenticated context
 	orgID := middleware.GetOrgID(ctx)
 	userID := middleware.GetUserID(ctx)
-	
+
 	if orgID == uuid.Nil {
 		httputil.WriteUnauthorized(w, r, "organization not found in context")
 		return
@@ -677,7 +677,7 @@ func (h *Handler) IssueUserAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteUnauthorized(w, r, "user not found in context")
 		return
 	}
-	
+
 	// Verify user exists and belongs to org
 	user, err := h.runtime.Postgres.GetUserByID(ctx, orgID, userID)
 	if err != nil {
@@ -797,11 +797,11 @@ func (h *Handler) IssueUserAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 // ListAPIKeysForMe handles GET /organizations/me/api-keys - List API keys for current user.
 func (h *Handler) ListAPIKeysForMe(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	
+
 	// Get org ID and user ID from authenticated context
 	orgID := middleware.GetOrgID(ctx)
 	userID := middleware.GetUserID(ctx)
-	
+
 	if orgID == uuid.Nil {
 		httputil.WriteUnauthorized(w, r, "organization not found in context")
 		return
@@ -810,7 +810,7 @@ func (h *Handler) ListAPIKeysForMe(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteUnauthorized(w, r, "user not found in context")
 		return
 	}
-	
+
 	// List API keys for this user
 	apiKeys, err := h.runtime.Postgres.ListAPIKeysForPrincipal(ctx, orgID, postgres.PrincipalTypeUser, userID)
 	if err != nil {
@@ -818,7 +818,7 @@ func (h *Handler) ListAPIKeysForMe(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteInternalError(w, r)
 		return
 	}
-	
+
 	// Convert to response format (without secrets)
 	type APIKeyResponse struct {
 		KeyID       string   `json:"keyId"`
@@ -850,7 +850,7 @@ func (h *Handler) ListAPIKeysForMe(w http.ResponseWriter, r *http.Request) {
 			responses[i].LastUsedAt = &usedStr
 		}
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(responses); err != nil {
 		h.logger.Error("failed to encode response", zap.Error(err))
@@ -861,21 +861,21 @@ func (h *Handler) ListAPIKeysForMe(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	apiKeyIDParam := chi.URLParam(r, "apiKeyId")
-	
+
 	// Get org ID from authenticated context
 	orgID := middleware.GetOrgID(ctx)
 	if orgID == uuid.Nil {
 		httputil.WriteUnauthorized(w, r, "organization not found in context")
 		return
 	}
-	
+
 	// Parse API key ID
 	apiKeyID, err := uuid.Parse(apiKeyIDParam)
 	if err != nil {
 		httputil.WriteBadRequest(w, r, "invalid API key ID")
 		return
 	}
-	
+
 	// Get API key
 	apiKey, err := h.runtime.Postgres.GetAPIKeyByID(ctx, apiKeyID)
 	if err != nil {
@@ -887,13 +887,13 @@ func (h *Handler) GetAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteInternalError(w, r)
 		return
 	}
-	
+
 	// Verify key belongs to org
 	if apiKey.OrgID != orgID {
 		httputil.WriteNotFound(w, r, "API key", "")
 		return
 	}
-	
+
 	// Build response (without secret)
 	type APIKeyResponse struct {
 		KeyID       string   `json:"keyId"`
@@ -922,7 +922,7 @@ func (h *Handler) GetAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 		usedStr := apiKey.LastUsedAt.Format(time.RFC3339)
 		resp.LastUsedAt = &usedStr
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		h.logger.Error("failed to encode response", zap.Error(err))

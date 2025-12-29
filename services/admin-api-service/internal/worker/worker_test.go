@@ -45,8 +45,8 @@ func TestWorkerStartStop(t *testing.T) {
 func TestMockCredentialGetter(t *testing.T) {
 	mock := &mockCredentialGetter{
 		credentials: map[string]string{
-			"hf-token":   "hf_test_token",
-			"s3-access":  "test_access_key",
+			"hf-token":  "hf_test_token",
+			"s3-access": "test_access_key",
 		},
 	}
 

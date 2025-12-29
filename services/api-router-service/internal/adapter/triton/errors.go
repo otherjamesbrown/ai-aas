@@ -21,12 +21,12 @@ const (
 
 // OpenAI error types
 const (
-	OpenAIErrorTypeInvalidRequest    = "invalid_request_error"
-	OpenAIErrorTypeRateLimit         = "rate_limit_exceeded"
+	OpenAIErrorTypeInvalidRequest     = "invalid_request_error"
+	OpenAIErrorTypeRateLimit          = "rate_limit_exceeded"
 	OpenAIErrorTypeServiceUnavailable = "service_unavailable"
-	OpenAIErrorTypeTimeout           = "timeout"
-	OpenAIErrorTypeModelNotFound     = "model_not_found"
-	OpenAIErrorTypeInternal          = "internal_error"
+	OpenAIErrorTypeTimeout            = "timeout"
+	OpenAIErrorTypeModelNotFound      = "model_not_found"
+	OpenAIErrorTypeInternal           = "internal_error"
 )
 
 // tritonToOpenAIErrorMap maps Triton status codes to OpenAI error types and HTTP status codes
@@ -150,41 +150,41 @@ func IsRetryableError(httpStatus int) bool {
 
 // grpcCodeToTritonStatus maps gRPC status codes to Triton status strings.
 var grpcCodeToTritonStatus = map[codes.Code]string{
-	codes.Unavailable:       TritonStatusUnavailable,
-	codes.InvalidArgument:   TritonStatusInvalidArg,
-	codes.NotFound:          TritonStatusNotFound,
-	codes.ResourceExhausted: TritonStatusResourceExhausted,
-	codes.DeadlineExceeded:  TritonStatusDeadlineExceeded,
-	codes.Internal:          TritonStatusInternal,
-	codes.Unknown:           TritonStatusUnknown,
-	codes.Canceled:          TritonStatusUnavailable,
-	codes.Aborted:           TritonStatusInternal,
-	codes.OutOfRange:        TritonStatusInvalidArg,
-	codes.Unimplemented:     TritonStatusNotFound,
+	codes.Unavailable:        TritonStatusUnavailable,
+	codes.InvalidArgument:    TritonStatusInvalidArg,
+	codes.NotFound:           TritonStatusNotFound,
+	codes.ResourceExhausted:  TritonStatusResourceExhausted,
+	codes.DeadlineExceeded:   TritonStatusDeadlineExceeded,
+	codes.Internal:           TritonStatusInternal,
+	codes.Unknown:            TritonStatusUnknown,
+	codes.Canceled:           TritonStatusUnavailable,
+	codes.Aborted:            TritonStatusInternal,
+	codes.OutOfRange:         TritonStatusInvalidArg,
+	codes.Unimplemented:      TritonStatusNotFound,
 	codes.FailedPrecondition: TritonStatusInvalidArg,
-	codes.PermissionDenied:  TritonStatusInvalidArg,
-	codes.Unauthenticated:   TritonStatusInvalidArg,
+	codes.PermissionDenied:   TritonStatusInvalidArg,
+	codes.Unauthenticated:    TritonStatusInvalidArg,
 }
 
 // grpcCodeToHTTPStatus maps gRPC status codes to HTTP status codes.
 var grpcCodeToHTTPStatus = map[codes.Code]int{
 	codes.OK:                 http.StatusOK,
-	codes.Canceled:          http.StatusGatewayTimeout,
-	codes.Unknown:           http.StatusInternalServerError,
-	codes.InvalidArgument:   http.StatusBadRequest,
-	codes.DeadlineExceeded:  http.StatusGatewayTimeout,
-	codes.NotFound:          http.StatusNotFound,
-	codes.AlreadyExists:     http.StatusConflict,
-	codes.PermissionDenied:  http.StatusForbidden,
-	codes.ResourceExhausted: http.StatusTooManyRequests,
+	codes.Canceled:           http.StatusGatewayTimeout,
+	codes.Unknown:            http.StatusInternalServerError,
+	codes.InvalidArgument:    http.StatusBadRequest,
+	codes.DeadlineExceeded:   http.StatusGatewayTimeout,
+	codes.NotFound:           http.StatusNotFound,
+	codes.AlreadyExists:      http.StatusConflict,
+	codes.PermissionDenied:   http.StatusForbidden,
+	codes.ResourceExhausted:  http.StatusTooManyRequests,
 	codes.FailedPrecondition: http.StatusBadRequest,
-	codes.Aborted:           http.StatusConflict,
-	codes.OutOfRange:        http.StatusBadRequest,
-	codes.Unimplemented:     http.StatusNotImplemented,
-	codes.Internal:          http.StatusInternalServerError,
-	codes.Unavailable:       http.StatusServiceUnavailable,
-	codes.DataLoss:          http.StatusInternalServerError,
-	codes.Unauthenticated:   http.StatusUnauthorized,
+	codes.Aborted:            http.StatusConflict,
+	codes.OutOfRange:         http.StatusBadRequest,
+	codes.Unimplemented:      http.StatusNotImplemented,
+	codes.Internal:           http.StatusInternalServerError,
+	codes.Unavailable:        http.StatusServiceUnavailable,
+	codes.DataLoss:           http.StatusInternalServerError,
+	codes.Unauthenticated:    http.StatusUnauthorized,
 }
 
 // MapGRPCError maps a gRPC error to an OpenAI error response and HTTP status code.

@@ -52,20 +52,20 @@ func NewPodClient() (*PodClient, error) {
 
 // PodHealthInfo contains health information about a pod
 type PodHealthInfo struct {
-	Name               string
-	Namespace          string
-	ModelName          string
-	InferenceService   string
-	Phase              string
-	Ready              bool
-	Node               string
-	RestartCount       int32
-	LastRestartTime    *time.Time
-	LastTermination    *TerminationInfo
-	Containers         []ContainerInfo
-	Conditions         []ConditionInfo
-	AgeSeconds         int64
-	CreatedAt          time.Time
+	Name             string
+	Namespace        string
+	ModelName        string
+	InferenceService string
+	Phase            string
+	Ready            bool
+	Node             string
+	RestartCount     int32
+	LastRestartTime  *time.Time
+	LastTermination  *TerminationInfo
+	Containers       []ContainerInfo
+	Conditions       []ConditionInfo
+	AgeSeconds       int64
+	CreatedAt        time.Time
 }
 
 // TerminationInfo contains information about the last termination

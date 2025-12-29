@@ -65,7 +65,7 @@ func TestDeployCreateCommand_Flags(t *testing.T) {
 		name     string
 		required bool
 	}{
-		{"environment", true},      // -e flag is required
+		{"environment", true}, // -e flag is required
 		{"engine-config", false},
 		{"gpu-count", false},
 		{"memory", false},

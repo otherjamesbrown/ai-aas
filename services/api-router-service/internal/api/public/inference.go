@@ -1,13 +1,13 @@
 // Package public provides public API handlers for inference requests.
 //
 // Purpose:
-//   This package implements the public-facing API endpoints for the router service,
-//   including request validation, DTOs, and response formatting.
+//
+//	This package implements the public-facing API endpoints for the router service,
+//	including request validation, DTOs, and response formatting.
 //
 // Dependencies:
 //   - internal/auth: Authentication middleware
 //   - internal/routing: Backend routing logic
-//
 package public
 
 import (
@@ -21,13 +21,13 @@ import (
 
 // InferenceRequest represents an inbound inference request.
 type InferenceRequest struct {
-	RequestID      string                 `json:"request_id"`
-	Model          string                 `json:"model"`
-	Payload        string                 `json:"payload"`
-	Parameters     map[string]interface{} `json:"parameters,omitempty"`
-	ContentType    string                 `json:"content_type,omitempty"`
-	Metadata       map[string]string      `json:"metadata,omitempty"`
-	HMACSignature  string                 `json:"hmac_signature,omitempty"`
+	RequestID     string                 `json:"request_id"`
+	Model         string                 `json:"model"`
+	Payload       string                 `json:"payload"`
+	Parameters    map[string]interface{} `json:"parameters,omitempty"`
+	ContentType   string                 `json:"content_type,omitempty"`
+	Metadata      map[string]string      `json:"metadata,omitempty"`
+	HMACSignature string                 `json:"hmac_signature,omitempty"`
 }
 
 // Validate validates the inference request and returns an error if invalid.
@@ -78,9 +78,9 @@ type UsageSummary struct {
 
 // ErrorResponse represents an error response.
 type ErrorResponse struct {
-	Error    string `json:"error"`
-	Code     string `json:"code"`
-	TraceID  string `json:"trace_id,omitempty"`
+	Error   string `json:"error"`
+	Code    string `json:"code"`
+	TraceID string `json:"trace_id,omitempty"`
 }
 
 // NewErrorResponse creates a new error response.
@@ -107,4 +107,3 @@ type RoutingContext struct {
 	Model          string
 	ReceivedAt     time.Time
 }
-

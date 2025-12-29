@@ -13,7 +13,6 @@
 // Requirements Reference:
 //   - specs/009-admin-cli/spec.md#FR-008 (consume existing service APIs)
 //   - specs/009-admin-cli/plan.md#client/userorg
-//
 package userorg
 
 import (
@@ -241,10 +240,10 @@ func (c *Client) InviteUser(ctx context.Context, orgID string, req InviteUserReq
 		// If we can't get user yet, return partial response from invite
 		// This can happen if the user was just created and isn't immediately queryable
 		return &UserResponse{
-			UserID:  inviteResp.InviteID,
-			Email:   req.Email,
-			Status:  "invited",
-			OrgID:   orgID,
+			UserID: inviteResp.InviteID,
+			Email:  req.Email,
+			Status: "invited",
+			OrgID:  orgID,
 		}, nil
 	}
 

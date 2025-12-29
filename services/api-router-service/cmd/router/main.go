@@ -1,10 +1,11 @@
 // Command router is the main HTTP server for the API Router Service.
 //
 // Purpose:
-//   This binary provides the primary entrypoint for inference requests, routing them
-//   to appropriate model backends while enforcing authentication, budgets, quotas,
-//   and usage tracking. It initializes core dependencies (config, telemetry, Redis,
-//   Kafka) and serves HTTP requests with graceful shutdown handling.
+//
+//	This binary provides the primary entrypoint for inference requests, routing them
+//	to appropriate model backends while enforcing authentication, budgets, quotas,
+//	and usage tracking. It initializes core dependencies (config, telemetry, Redis,
+//	Kafka) and serves HTTP requests with graceful shutdown handling.
 //
 // Dependencies:
 //   - internal/config: Configuration loading and caching
@@ -27,11 +28,12 @@
 //   - specs/006-api-router-service/spec.md#NFR-004 (Service Availability)
 //
 // Router Architecture:
-//   The service uses a two-tier router architecture:
-//   - Main router: Base middleware + health/metrics endpoints (no auth)
-//   - Sub-router: Application middleware + authenticated routes
-//   This pattern is required because chi router enforces that ALL middleware
-//   must be registered before ANY routes. See router setup comments for details.
+//
+//	The service uses a two-tier router architecture:
+//	- Main router: Base middleware + health/metrics endpoints (no auth)
+//	- Sub-router: Application middleware + authenticated routes
+//	This pattern is required because chi router enforces that ALL middleware
+//	must be registered before ANY routes. See router setup comments for details.
 //
 // Debugging Notes:
 //   - Server starts on configured HTTP port (default 8080)
@@ -39,7 +41,6 @@
 //   - Graceful shutdown allows in-flight requests to complete (10s timeout)
 //   - Health endpoints (/v1/status/*) are accessible without authentication
 //   - All other routes require authentication via X-API-Key header
-//
 package main
 
 import (
@@ -135,7 +136,7 @@ func main() {
 		for _, backendID := range backendIDs {
 			policy := &config.RoutingPolicy{
 				PolicyID:       "*-" + backendID,
-				OrganizationID: "*", // Global policy
+				OrganizationID: "*",       // Global policy
 				Model:          backendID, // Model name matches backend ID
 				Backends: []config.BackendWeight{
 					{
@@ -315,7 +316,7 @@ func main() {
 	if kafkaPublisher != nil {
 		bufferStore, err = usage.NewBufferStore(usage.BufferStoreConfig{
 			Dir:     cfg.UsageBufferDir,
-			MaxSize: 10000, // Max 10k buffered records
+			MaxSize: 10000,          // Max 10k buffered records
 			MaxAge:  24 * time.Hour, // 24 hour retention
 			Logger:  logger,
 		})
@@ -389,7 +390,7 @@ func main() {
 
 	// Initialize routing engine
 	routingEngine := routing.NewEngine(healthMonitor, backendRegistry, cfg.DefaultBackendTimeout, logger)
-	
+
 	// Initialize routing metrics
 	routingMetrics, err := telemetry.NewRoutingMetrics(logger)
 	if err != nil {
@@ -475,16 +476,16 @@ func main() {
 
 	// Step 2: Authentication (requires buffered body for HMAC)
 	appRouter.Use(public.AuthContextMiddleware(authenticator, logger, tracer))
-	
+
 	// Step 3: Rate limiting (requires auth context)
 	if rateLimiter != nil {
 		appRouter.Use(public.RateLimitMiddleware(rateLimiter, auditLogger, logger, tracer))
 
 		// Token quota middleware (requires auth context and rate limiter)
 		tokenLimits := limiter.TokenQuotaLimits{
-			Hourly:  cfg.RateLimitTokensHourly,
-			Daily:   cfg.RateLimitTokensDaily,
-			Weekly:  cfg.RateLimitTokensWeekly,
+			Hourly: cfg.RateLimitTokensHourly,
+			Daily:  cfg.RateLimitTokensDaily,
+			Weekly: cfg.RateLimitTokensWeekly,
 		}
 		appRouter.Use(public.TokenQuotaMiddleware(rateLimiter, tokenLimits, auditLogger, logger, tracer))
 		logger.Info("token quota limits enabled",

@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/cli"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/engines"
@@ -17,6 +15,8 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/registry"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/storage"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 // NewDeployParentCommand creates the model deploy parent command

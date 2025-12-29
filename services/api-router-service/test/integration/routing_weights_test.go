@@ -1,16 +1,16 @@
 // Package integration provides integration tests for routing weight distribution.
 //
 // Purpose:
-//   These tests validate that the routing engine correctly distributes traffic
-//   according to configured backend weights, handles failover scenarios, and
-//   respects degraded backend states.
+//
+//	These tests validate that the routing engine correctly distributes traffic
+//	according to configured backend weights, handles failover scenarios, and
+//	respects degraded backend states.
 //
 // Key Responsibilities:
 //   - Test weighted routing distribution
 //   - Validate failover behavior
 //   - Verify degraded backend exclusion
 //   - Test routing decision logging
-//
 package integration
 
 import (
@@ -314,7 +314,7 @@ func TestDegradedBackendExclusion(t *testing.T) {
 				Weight:    50,
 			},
 		},
-		DegradedBackends: []string{"backend-degraded"},
+		DegradedBackends:  []string{"backend-degraded"},
 		FailoverThreshold: 3,
 		UpdatedAt:         time.Now(),
 		Version:           1,
@@ -385,4 +385,3 @@ func TestDegradedBackendExclusion(t *testing.T) {
 		t.Errorf("expected backend-healthy, got %s", backendID)
 	}
 }
-

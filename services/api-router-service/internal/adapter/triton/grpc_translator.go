@@ -35,19 +35,19 @@ func NewGRPCTranslator(tokenizerEncoding string) (*GRPCTranslator, error) {
 
 // OpenAIStreamChunk represents a streaming chunk in OpenAI format.
 type OpenAIStreamChunk struct {
-	ID      string                     `json:"id"`
-	Object  string                     `json:"object"`
-	Created int64                      `json:"created"`
-	Model   string                     `json:"model"`
-	Choices []StreamChunkChoice        `json:"choices"`
-	Usage   *UsageInfo                 `json:"usage,omitempty"` // Only on final chunk
+	ID      string              `json:"id"`
+	Object  string              `json:"object"`
+	Created int64               `json:"created"`
+	Model   string              `json:"model"`
+	Choices []StreamChunkChoice `json:"choices"`
+	Usage   *UsageInfo          `json:"usage,omitempty"` // Only on final chunk
 }
 
 // StreamChunkChoice represents a choice in a streaming chunk.
 type StreamChunkChoice struct {
-	Index        int           `json:"index"`
-	Delta        StreamDelta   `json:"delta"`
-	FinishReason *string       `json:"finish_reason"` // nil until final chunk
+	Index        int         `json:"index"`
+	Delta        StreamDelta `json:"delta"`
+	FinishReason *string     `json:"finish_reason"` // nil until final chunk
 }
 
 // StreamDelta represents the delta content in a streaming chunk.

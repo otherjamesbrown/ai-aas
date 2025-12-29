@@ -70,10 +70,10 @@ func TestCountTokens(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		text     string
-		wantMin  int // Minimum expected tokens (exact count varies by tokenizer)
-		wantMax  int // Maximum expected tokens
+		name    string
+		text    string
+		wantMin int // Minimum expected tokens (exact count varies by tokenizer)
+		wantMax int // Maximum expected tokens
 	}{
 		{
 			name:    "empty string",

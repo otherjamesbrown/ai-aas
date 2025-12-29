@@ -308,12 +308,12 @@ func TestCORS_AllowedHeaders(t *testing.T) {
 // Returns the HTTP handler (router) for direct testing
 func setupTestServer(t *testing.T, registerRoutes func(chi.Router)) http.Handler {
 	logger := zap.NewNop()
-	
+
 	srv := New(Options{
-		Port:        8081,
-		Logger:      logger,
-		ServiceName: "test-server",
-		Readiness:   func(ctx context.Context) error { return nil },
+		Port:           8081,
+		Logger:         logger,
+		ServiceName:    "test-server",
+		Readiness:      func(ctx context.Context) error { return nil },
 		RegisterRoutes: registerRoutes,
 	})
 

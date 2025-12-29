@@ -13,9 +13,9 @@ func TestNewWorker(t *testing.T) {
 	logger := zap.NewNop()
 
 	tests := []struct {
-		name     string
-		cfg      Config
-		wantNil  bool
+		name    string
+		cfg     Config
+		wantNil bool
 	}{
 		{
 			name: "creates worker with valid config",

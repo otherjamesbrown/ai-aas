@@ -7,7 +7,6 @@
 //
 // Requirements Reference:
 //   - specs/019-admin-cli-enhancements/spec.md#US-001 (Budget Management)
-//
 package admin
 
 import (
@@ -145,11 +144,11 @@ func runBudgetList(cmd *cobra.Command, args []string, flagOrgID, flagFormat stri
 			fmt.Printf("Warning: Could not retrieve budget status: %v\n", err)
 		}
 		budgetStatus = &userorg.BudgetStatusResponse{
-			OrgID:            org.OrgID,
-			BudgetLimitCents: 0,
+			OrgID:             org.OrgID,
+			BudgetLimitCents:  0,
 			CurrentUsageCents: 0,
 			RemainingCents:    0,
-			Status:           "unknown",
+			Status:            "unknown",
 		}
 	}
 

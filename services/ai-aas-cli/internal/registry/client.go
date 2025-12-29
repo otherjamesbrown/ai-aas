@@ -54,7 +54,7 @@ type ListOptions struct {
 func (c *Client) List(ctx context.Context, opts ListOptions) ([]Model, error) {
 	path := "/v1/models"
 	params := make([]string, 0)
-	
+
 	if opts.Cached {
 		params = append(params, "cached=true")
 	}
@@ -67,7 +67,7 @@ func (c *Client) List(ctx context.Context, opts ListOptions) ([]Model, error) {
 	if opts.Environment != "" {
 		params = append(params, "environment="+opts.Environment)
 	}
-	
+
 	if len(params) > 0 {
 		path += "?"
 		for i, p := range params {
@@ -130,10 +130,10 @@ func (c *Client) Remove(ctx context.Context, name string, force bool) error {
 
 // ModelStatus contains status information for a model
 type ModelStatus struct {
-	Name         string            `json:"name"`
-	Registry     StatusCheck       `json:"registry"`
-	Cache        StatusCheck       `json:"cache"`
-	Deployments  []DeploymentInfo  `json:"deployments,omitempty"`
+	Name        string           `json:"name"`
+	Registry    StatusCheck      `json:"registry"`
+	Cache       StatusCheck      `json:"cache"`
+	Deployments []DeploymentInfo `json:"deployments,omitempty"`
 }
 
 // StatusCheck represents a single status check result
@@ -342,4 +342,3 @@ func (c *Client) Rename(ctx context.Context, oldName string, req RenameRequest) 
 	}
 	return &response, nil
 }
-

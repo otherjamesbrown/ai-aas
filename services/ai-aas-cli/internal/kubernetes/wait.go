@@ -9,9 +9,9 @@ import (
 
 // WaitOptions configures wait behavior
 type WaitOptions struct {
-	Timeout       time.Duration
-	PollInterval  time.Duration
-	OnProgress    func(status *InferenceServiceStatus)
+	Timeout      time.Duration
+	PollInterval time.Duration
+	OnProgress   func(status *InferenceServiceStatus)
 }
 
 // DefaultWaitOptions returns default wait options
@@ -143,9 +143,9 @@ func (c *Client) CheckHealth(ctx context.Context, name, namespace string) (*Heal
 	}
 
 	health := &HealthStatus{
-		Healthy:   status.Ready,
-		URL:       status.URL,
-		Replicas:  status.Replicas,
+		Healthy:       status.Ready,
+		URL:           status.URL,
+		Replicas:      status.Replicas,
 		ReadyReplicas: status.ReadyReplicas,
 	}
 
@@ -189,4 +189,3 @@ type HealthStatus struct {
 	ReadyPods     int
 	TotalRestarts int
 }
-

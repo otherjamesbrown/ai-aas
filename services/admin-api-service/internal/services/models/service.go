@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -178,17 +179,17 @@ func (s *Service) GetModel(ctx context.Context, name string) (*Model, error) {
 
 // AddModelRequest contains the data for adding a model
 type AddModelRequest struct {
-	Name           string
-	ExternalName   string // Optional, derived from HFModelID if not set
-	HFModelID      string
-	RequiresAuth   bool
-	IsGated        bool
-	LicenseType    string
-	AcceptLicense  bool
-	AcceptedBy     string
-	GPUMemoryGB    int
-	CPUMemoryGB    int
-	ModelType      string
+	Name          string
+	ExternalName  string // Optional, derived from HFModelID if not set
+	HFModelID     string
+	RequiresAuth  bool
+	IsGated       bool
+	LicenseType   string
+	AcceptLicense bool
+	AcceptedBy    string
+	GPUMemoryGB   int
+	CPUMemoryGB   int
+	ModelType     string
 }
 
 // AddModel registers a new model
@@ -209,10 +210,16 @@ func (s *Service) AddModel(ctx context.Context, req AddModelRequest) (*Model, er
 
 	var gpuMemory, cpuMemory *int32
 	if req.GPUMemoryGB > 0 {
+		if req.GPUMemoryGB > math.MaxInt32 {
+			return nil, fmt.Errorf("GPUMemoryGB value %d exceeds maximum allowed value", req.GPUMemoryGB)
+		}
 		g := int32(req.GPUMemoryGB)
 		gpuMemory = &g
 	}
 	if req.CPUMemoryGB > 0 {
+		if req.CPUMemoryGB > math.MaxInt32 {
+			return nil, fmt.Errorf("CPUMemoryGB value %d exceeds maximum allowed value", req.CPUMemoryGB)
+		}
 		c := int32(req.CPUMemoryGB)
 		cpuMemory = &c
 	}
@@ -426,4 +433,3 @@ func (s *Service) updateModelType(ctx context.Context, modelID uuid.UUID, modelT
 	_, err := s.pool.Exec(ctx, query, modelID, modelType)
 	return err
 }
-

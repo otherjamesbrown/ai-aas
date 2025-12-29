@@ -1,8 +1,9 @@
 // Package usage provides usage record building and tracking.
 //
 // Purpose:
-//   This package implements usage record construction capturing routing metadata,
-//   token usage, costs, and decision context for billing and analytics.
+//
+//	This package implements usage record construction capturing routing metadata,
+//	token usage, costs, and decision context for billing and analytics.
 //
 // Key Responsibilities:
 //   - Build usage records from request/response context
@@ -13,7 +14,6 @@
 // Requirements Reference:
 //   - specs/006-api-router-service/spec.md#US-004 (Accurate, timely usage accounting)
 //   - specs/006-api-router-service/contracts/usage-record.schema.yaml
-//
 package usage
 
 import (
@@ -26,24 +26,24 @@ import (
 // UsageRecord represents a usage record for billing and analytics.
 // Matches the schema defined in usage-record.schema.yaml
 type UsageRecord struct {
-	RecordID       string                 `json:"record_id"`
-	RequestID      string                 `json:"request_id"`
-	OrganizationID string                 `json:"organization_id"`
-	APIKeyID       string                 `json:"api_key_id"`
-	Model          string                 `json:"model"`
-	BackendID      string                 `json:"backend_id"`
-	TokensInput    int                    `json:"tokens_input"`
-	TokensOutput   int                    `json:"tokens_output"`
-	LatencyMS      int                    `json:"latency_ms"`
-	CostUSD        float64                `json:"cost_usd"`
-	LimitState     string                 `json:"limit_state"`
-	DecisionReason string                 `json:"decision_reason"`
-	BudgetSnapshot *BudgetSnapshot        `json:"budget_snapshot,omitempty"`
-	RetryCount     int                    `json:"retry_count,omitempty"`
-	TraceID        string                 `json:"trace_id,omitempty"`
-	SpanID         string                 `json:"span_id,omitempty"`
-	Metadata       map[string]string      `json:"metadata,omitempty"`
-	Timestamp      time.Time              `json:"timestamp"`
+	RecordID       string            `json:"record_id"`
+	RequestID      string            `json:"request_id"`
+	OrganizationID string            `json:"organization_id"`
+	APIKeyID       string            `json:"api_key_id"`
+	Model          string            `json:"model"`
+	BackendID      string            `json:"backend_id"`
+	TokensInput    int               `json:"tokens_input"`
+	TokensOutput   int               `json:"tokens_output"`
+	LatencyMS      int               `json:"latency_ms"`
+	CostUSD        float64           `json:"cost_usd"`
+	LimitState     string            `json:"limit_state"`
+	DecisionReason string            `json:"decision_reason"`
+	BudgetSnapshot *BudgetSnapshot   `json:"budget_snapshot,omitempty"`
+	RetryCount     int               `json:"retry_count,omitempty"`
+	TraceID        string            `json:"trace_id,omitempty"`
+	SpanID         string            `json:"span_id,omitempty"`
+	Metadata       map[string]string `json:"metadata,omitempty"`
+	Timestamp      time.Time         `json:"timestamp"`
 }
 
 // BudgetSnapshot represents budget state at the time of the request.
@@ -205,8 +205,8 @@ func defaultCostCalculator(tokensInput, tokensOutput int, model string) float64 
 
 	switch model {
 	case "gpt-4o", "gpt-4":
-		inputRate = 0.005   // $0.005 per 1K input tokens
-		outputRate = 0.015  // $0.015 per 1K output tokens
+		inputRate = 0.005  // $0.005 per 1K input tokens
+		outputRate = 0.015 // $0.015 per 1K output tokens
 	case "gpt-3.5-turbo":
 		inputRate = 0.0005  // $0.0005 per 1K input tokens
 		outputRate = 0.0015 // $0.0015 per 1K output tokens
@@ -221,4 +221,3 @@ func defaultCostCalculator(tokensInput, tokensOutput int, model string) float64 
 
 	return inputCost + outputCost
 }
-

@@ -460,4 +460,3 @@ func nilIfEmpty(s string) *string {
 	}
 	return &s
 }
-

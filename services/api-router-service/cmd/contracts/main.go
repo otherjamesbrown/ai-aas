@@ -12,10 +12,10 @@ import (
 func main() {
 	var (
 		validateFlag = flag.Bool("validate", false, "Validate OpenAPI specification")
-		generateFlag  = flag.Bool("generate", false, "Generate Go types from OpenAPI specification")
-		specPath      = flag.String("spec", "", "Path to OpenAPI specification (default: auto-detect)")
-		outputPath    = flag.String("output", "", "Path to output file (default: pkg/contracts/generated.go)")
-		packageName   = flag.String("package", "contracts", "Package name for generated code")
+		generateFlag = flag.Bool("generate", false, "Generate Go types from OpenAPI specification")
+		specPath     = flag.String("spec", "", "Path to OpenAPI specification (default: auto-detect)")
+		outputPath   = flag.String("output", "", "Path to output file (default: pkg/contracts/generated.go)")
+		packageName  = flag.String("package", "contracts", "Package name for generated code")
 	)
 	flag.Parse()
 
@@ -60,4 +60,3 @@ func main() {
 		fmt.Printf("✓ Go types generated successfully\n")
 	}
 }
-

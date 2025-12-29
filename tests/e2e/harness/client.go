@@ -98,6 +98,86 @@ func (c *Client) DELETE(path string) (*Response, error) {
 	return c.Do("DELETE", path, nil)
 }
 
+// PATCH performs a PATCH request with JSON body
+func (c *Client) PATCH(path string, body interface{}) (*Response, error) {
+	var bodyBytes []byte
+	var err error
+
+	if body != nil {
+		bodyBytes, err = json.Marshal(body)
+		if err != nil {
+			return nil, fmt.Errorf("marshal request body: %w", err)
+		}
+	}
+
+	return c.Do("PATCH", path, bodyBytes)
+}
+
+// POSTStream performs a POST request and returns a streaming response
+func (c *Client) POSTStream(path string, body interface{}) (*StreamResponse, error) {
+	url := c.baseURL + path
+
+	var bodyBytes []byte
+	var err error
+	if body != nil {
+		bodyBytes, err = json.Marshal(body)
+		if err != nil {
+			return nil, fmt.Errorf("marshal request body: %w", err)
+		}
+	}
+
+	var bodyReader io.Reader
+	if bodyBytes != nil {
+		bodyReader = bytes.NewReader(bodyBytes)
+	}
+
+	req, err := http.NewRequest("POST", url, bodyReader)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+
+	// Handle Host header specially - set on request.Host, not as a header
+	for k, v := range c.headers {
+		if strings.ToLower(k) == "host" {
+			req.Host = v
+		} else {
+			req.Header.Set(k, v)
+		}
+	}
+
+	// Log request
+	maskedHeaders := maskSensitiveHeaders(c.headers)
+	c.logger.LogRequest("POST", url, maskedHeaders, maskSensitiveBody(bodyBytes))
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		c.logger.LogError(err, fmt.Sprintf("POST %s", url))
+		return nil, fmt.Errorf("execute request: %w", err)
+	}
+
+	return &StreamResponse{
+		StatusCode: resp.StatusCode,
+		Headers:    resp.Header,
+		Body:       resp.Body,
+	}, nil
+}
+
+// StreamResponse represents a streaming HTTP response
+type StreamResponse struct {
+	StatusCode int
+	Headers    http.Header
+	Body       io.ReadCloser
+}
+
+// Close closes the streaming response body
+func (r *StreamResponse) Close() error {
+	return r.Body.Close()
+}
+
 // Do performs an HTTP request
 func (c *Client) Do(method, path string, body []byte) (*Response, error) {
 	url := c.baseURL + path

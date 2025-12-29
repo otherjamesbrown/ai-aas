@@ -15,12 +15,12 @@ import (
 
 // S3Config holds S3 client configuration
 type S3Config struct {
-	Endpoint        string
-	AccessKey       string
-	SecretKey       string
-	Bucket          string
-	Region          string
-	ForcePathStyle  bool
+	Endpoint       string
+	AccessKey      string
+	SecretKey      string
+	Bucket         string
+	Region         string
+	ForcePathStyle bool
 }
 
 // S3Client provides S3 operations for model files

@@ -1,13 +1,13 @@
 // Package triton provides protocol translation between OpenAI and Triton V2 inference protocols.
 //
 // Purpose:
-//   This package implements bidirectional translation between the OpenAI Chat Completions API
-//   and the Triton Inference Server V2 Protocol, enabling the API Router to communicate with
-//   TensorRT-LLM models deployed on Triton while maintaining OpenAI API compatibility for clients.
+//
+//	This package implements bidirectional translation between the OpenAI Chat Completions API
+//	and the Triton Inference Server V2 Protocol, enabling the API Router to communicate with
+//	TensorRT-LLM models deployed on Triton while maintaining OpenAI API compatibility for clients.
 //
 // Requirements Reference:
 //   - specs/032-triton-api-support/spec.md#protocol-translation
-//
 package triton
 
 import (
@@ -26,10 +26,10 @@ type InferRequest struct {
 
 // InferInputTensor represents an input tensor in a Triton V2 request.
 type InferInputTensor struct {
-	Name       string        `json:"name"`
-	Shape      []int64       `json:"shape"`
-	Datatype   string        `json:"datatype"`
-	Data       []interface{} `json:"data,omitempty"`
+	Name       string                 `json:"name"`
+	Shape      []int64                `json:"shape"`
+	Datatype   string                 `json:"datatype"`
+	Data       []interface{}          `json:"data,omitempty"`
 	Parameters map[string]interface{} `json:"parameters,omitempty"`
 }
 
@@ -79,8 +79,8 @@ type OpenAIChatCompletionRequest struct {
 // - An array of content parts: [{"type": "text", "text": "..."}, {"type": "image_url", "image_url": {...}}]
 // Reasoning models may return content in Reasoning or ReasoningContent fields instead.
 type ChatMessage struct {
-	Role             string      `json:"role"`              // "system", "user", "assistant"
-	Content          interface{} `json:"content"`           // string OR []ContentPart
+	Role             string      `json:"role"`                        // "system", "user", "assistant"
+	Content          interface{} `json:"content"`                     // string OR []ContentPart
 	Reasoning        interface{} `json:"reasoning,omitempty"`         // Some models return reasoning instead of content
 	ReasoningContent interface{} `json:"reasoning_content,omitempty"` // Alternative reasoning field
 }
@@ -194,10 +194,10 @@ type OpenAIErrorResponse struct {
 
 // OpenAIError represents an OpenAI-style error.
 type OpenAIError struct {
-	Message      string `json:"message"`
-	Type         string `json:"type"`
-	Code         string `json:"code,omitempty"`
-	Param        string `json:"param,omitempty"`
+	Message       string `json:"message"`
+	Type          string `json:"type"`
+	Code          string `json:"code,omitempty"`
+	Param         string `json:"param,omitempty"`
 	TritonDetails string `json:"triton_details,omitempty"` // Preserve Triton error details for debugging
 }
 

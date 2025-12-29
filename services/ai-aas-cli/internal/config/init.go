@@ -443,4 +443,3 @@ func (w *InitWizard) detectS3Credentials() {
 		fmt.Println("✓ S3 credentials configured")
 	}
 }
-

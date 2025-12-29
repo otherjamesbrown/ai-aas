@@ -192,4 +192,3 @@ func (s *Spinner) StopWithMessage(message string) {
 	s.mu.Unlock()
 	s.done <- true
 }
-

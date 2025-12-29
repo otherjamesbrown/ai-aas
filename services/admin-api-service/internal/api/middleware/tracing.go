@@ -63,4 +63,3 @@ func (w *tracingResponseWriter) WriteHeader(status int) {
 	w.status = status
 	w.ResponseWriter.WriteHeader(status)
 }
-

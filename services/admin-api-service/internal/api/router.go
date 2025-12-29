@@ -9,17 +9,17 @@ import (
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/api/handlers"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/api/middleware"
+	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/config"
 	enginesHandler "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/handlers/engines"
 	modelsHandler "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/handlers/models"
 	podsHandler "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/handlers/pods"
 	recipesHandler "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/handlers/recipes"
-	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/config"
-	enginesSvc "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/services/engines"
-	modelsSvc "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/services/models"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/kubernetes"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/podk8s"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/repository"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/service"
+	enginesSvc "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/services/engines"
+	modelsSvc "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/services/models"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/storage"
 	"go.uber.org/zap"
 
@@ -241,4 +241,3 @@ func createS3ClientFactory() modelsSvc.S3ClientFactory {
 		})
 	}
 }
-

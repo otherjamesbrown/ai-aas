@@ -260,4 +260,3 @@ func (s *Service) GetAliasesForModel(ctx context.Context, modelName string) ([]A
 
 	return aliases, rows.Err()
 }
-

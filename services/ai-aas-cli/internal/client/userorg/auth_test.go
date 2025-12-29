@@ -33,4 +33,3 @@ func TestValidateToken(t *testing.T) {
 		t.Error("ValidateToken() should reject token too far in future")
 	}
 }
-

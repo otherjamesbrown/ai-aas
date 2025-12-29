@@ -1,9 +1,10 @@
 // Package integration provides integration tests for the API Router Service.
 //
 // Purpose:
-//   This file tests backend connectivity to catch NetworkPolicy misconfigurations
-//   early. NetworkPolicy issues can silently block inference traffic, causing
-//   mysterious timeouts that are hard to debug.
+//
+//	This file tests backend connectivity to catch NetworkPolicy misconfigurations
+//	early. NetworkPolicy issues can silently block inference traffic, causing
+//	mysterious timeouts that are hard to debug.
 //
 // Key Responsibilities:
 //   - Verify TCP connectivity to configured backends
@@ -13,7 +14,6 @@
 //
 // Issue: ai-aas-isti
 // Related: ai-aas-ua9s (NetworkPolicy blocking vLLM traffic)
-//
 package integration
 
 import (
@@ -44,11 +44,13 @@ import (
 //   - Dynamic backends from VLLM_BACKEND_URL (if set for E2E tests)
 //
 // Usage:
-//   go test -v ./test/integration -run TestBackendConnectivity
+//
+//	go test -v ./test/integration -run TestBackendConnectivity
 //
 // Environment Variables:
-//   BACKEND_ENDPOINTS - Static backend URIs (id1:uri1,id2:uri2)
-//   VLLM_BACKEND_URL  - Real vLLM backend for E2E tests (optional)
+//
+//	BACKEND_ENDPOINTS - Static backend URIs (id1:uri1,id2:uri2)
+//	VLLM_BACKEND_URL  - Real vLLM backend for E2E tests (optional)
 func TestBackendConnectivity(t *testing.T) {
 	// Load configuration to get backend endpoints
 	cfg, err := config.Load()
