@@ -319,6 +319,16 @@ func (h *Handler) HandleOpenAICompletions(w http.ResponseWriter, r *http.Request
 		zap.String("backend_model", backendID),
 	)
 
+	// Handle streaming requests (aas-9oyp)
+	if openAIReq.Stream {
+		h.logger.Debug("handling streaming text completion request",
+			zap.String("model", originalModel),
+			zap.String("backend_id", backendID),
+		)
+		h.forwardOpenAIStreamingRequest(ctx, w, r, backendEndpoint, openAIReq, authCtx, startTime, originalModel)
+		return
+	}
+
 	// Forward the OpenAI request to the backend
 	openAIRespInterface, routingDecision, err := h.forwardOpenAIRequest(ctx, backendEndpoint, openAIReq, "completion")
 	if err != nil {
@@ -1145,4 +1155,121 @@ func (h *Handler) preprocessRequest(
 	// TODO: Store input_ids in request context for gRPC translator to use
 
 	return &newReq, nil
+}
+
+// forwardOpenAIStreamingRequest proxies a streaming OpenAI request to the backend.
+// It forwards the SSE (Server-Sent Events) response directly to the client without parsing.
+// This is used for streaming text completions and chat completions from vLLM/OpenAI backends.
+func (h *Handler) forwardOpenAIStreamingRequest(
+	ctx context.Context,
+	w http.ResponseWriter,
+	r *http.Request,
+	backend *routing.BackendEndpoint,
+	req interface{},
+	authCtx *auth.AuthenticatedContext,
+	startTime time.Time,
+	originalModel string,
+) {
+	// Marshal the OpenAI request
+	reqBody, err := json.Marshal(req)
+	if err != nil {
+		h.writeError(w, r, fmt.Errorf("marshal OpenAI request: %w", err), api.ErrCodeBackendError)
+		return
+	}
+
+	// Create HTTP request to backend
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", backend.URI, bytes.NewReader(reqBody))
+	if err != nil {
+		h.writeError(w, r, fmt.Errorf("create request: %w", err), api.ErrCodeBackendError)
+		return
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "text/event-stream")
+
+	// Use shared HTTP client with context-based timeout
+	reqCtx, cancel := context.WithTimeout(ctx, backend.Timeout)
+	defer cancel()
+
+	// Send request to backend
+	resp, err := h.httpClient.Do(httpReq.WithContext(reqCtx))
+	if err != nil {
+		h.writeError(w, r, fmt.Errorf("backend request failed: %w", err), api.ErrCodeBackendError)
+		return
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// Check for errors
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		h.logger.Error("backend streaming request failed",
+			zap.Int("status", resp.StatusCode),
+			zap.String("body", string(body)),
+		)
+		h.writeError(w, r, fmt.Errorf("backend returned status %d: %s", resp.StatusCode, string(body)), api.ErrCodeBackendError)
+		return
+	}
+
+	// Verify the backend returned SSE format
+	contentType := resp.Header.Get("Content-Type")
+	if !bytes.Contains([]byte(contentType), []byte("text/event-stream")) {
+		h.logger.Error("backend did not return SSE stream",
+			zap.String("content_type", contentType),
+		)
+		h.writeError(w, r, fmt.Errorf("backend did not return streaming response"), api.ErrCodeBackendError)
+		return
+	}
+
+	// Create SSE writer
+	sseWriter, err := NewSSEWriter(w, h.logger)
+	if err != nil {
+		h.writeError(w, r, fmt.Errorf("streaming not supported"), api.ErrCodeBackendError)
+		return
+	}
+
+	// Start SSE stream
+	if err := sseWriter.Start(); err != nil {
+		h.logger.Error("failed to start SSE stream", zap.Error(err))
+		return
+	}
+
+	// Add routing headers
+	w.Header().Set("X-Routing-Backend", backend.ID)
+	w.Header().Set("X-Routing-Decision", "PRIMARY")
+
+	// Proxy the SSE stream from backend to client
+	// Read and forward each SSE chunk
+	buf := make([]byte, 4096)
+	for {
+		n, err := resp.Body.Read(buf)
+		if n > 0 {
+			// Write directly to response writer (SSE writer already set headers)
+			if _, writeErr := w.Write(buf[:n]); writeErr != nil {
+				h.logger.Error("failed to write SSE chunk to client",
+					zap.Error(writeErr),
+				)
+				return
+			}
+			// Flush to ensure immediate delivery
+			if flusher, ok := w.(http.Flusher); ok {
+				flusher.Flush()
+			}
+		}
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			h.logger.Error("error reading from backend stream",
+				zap.Error(err),
+			)
+			return
+		}
+	}
+
+	// Log completion
+	duration := time.Since(startTime)
+	h.logger.Info("streaming text completion completed",
+		zap.String("model", originalModel),
+		zap.String("backend_id", backend.ID),
+		zap.Duration("duration", duration),
+	)
 }

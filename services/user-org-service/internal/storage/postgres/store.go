@@ -859,6 +859,23 @@ func (s *Store) GetAPIKeyByID(ctx context.Context, apiKeyID uuid.UUID) (APIKey, 
 	return key, nil
 }
 
+// GetAPIKeyByKeyID retrieves an API key by its short key ID (e.g., "ak_abc123") within an organization.
+func (s *Store) GetAPIKeyByKeyID(ctx context.Context, orgID uuid.UUID, keyID string) (APIKey, error) {
+	row := s.pool.QueryRow(ctx, `
+		SELECT `+apiKeyColumns+`
+		FROM api_keys
+		WHERE org_id = $1 AND key_id = $2 AND deleted_at IS NULL
+	`, orgID, keyID)
+	key, err := scanAPIKey(row)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return APIKey{}, ErrNotFound
+		}
+		return APIKey{}, err
+	}
+	return key, nil
+}
+
 // GetAPIKeyByFingerprint retrieves an API key by its fingerprint within an organization.
 func (s *Store) GetAPIKeyByFingerprint(ctx context.Context, orgID uuid.UUID, fingerprint string) (APIKey, error) {
 	var out APIKey
