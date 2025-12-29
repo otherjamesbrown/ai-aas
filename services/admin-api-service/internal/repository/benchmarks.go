@@ -573,36 +573,43 @@ func (r *BenchmarkRepository) GetRunByID(ctx context.Context, id uuid.UUID) (*do
 // ListRuns retrieves runs with filtering and pagination
 func (r *BenchmarkRepository) ListRuns(ctx context.Context, params domain.BenchmarkRunListParams) (*domain.BenchmarkRunListResponse, error) {
 	// Build query
-	baseQuery := `FROM benchmark_runs WHERE 1=1`
+	baseQuery := `FROM benchmark_runs br WHERE 1=1`
 	args := []interface{}{}
 	argNum := 1
 
+	// Filter by org_id via target join
+	if params.OrgID != nil {
+		baseQuery += fmt.Sprintf(" AND br.target_id IN (SELECT id FROM benchmark_targets WHERE org_id = $%d)", argNum)
+		args = append(args, *params.OrgID)
+		argNum++
+	}
+
 	if params.TargetID != nil {
-		baseQuery += fmt.Sprintf(" AND target_id = $%d", argNum)
+		baseQuery += fmt.Sprintf(" AND br.target_id = $%d", argNum)
 		args = append(args, *params.TargetID)
 		argNum++
 	}
 
 	if params.ScenarioName != "" {
-		baseQuery += fmt.Sprintf(" AND scenario_name = $%d", argNum)
+		baseQuery += fmt.Sprintf(" AND br.scenario_name = $%d", argNum)
 		args = append(args, params.ScenarioName)
 		argNum++
 	}
 
 	if params.Status != "" {
-		baseQuery += fmt.Sprintf(" AND status = $%d", argNum)
+		baseQuery += fmt.Sprintf(" AND br.status = $%d", argNum)
 		args = append(args, params.Status)
 		argNum++
 	}
 
 	if params.TriggeredBy != "" {
-		baseQuery += fmt.Sprintf(" AND triggered_by = $%d", argNum)
+		baseQuery += fmt.Sprintf(" AND br.triggered_by = $%d", argNum)
 		args = append(args, params.TriggeredBy)
 		argNum++
 	}
 
 	if params.StartedAfter != nil {
-		baseQuery += fmt.Sprintf(" AND started_at >= $%d", argNum)
+		baseQuery += fmt.Sprintf(" AND br.started_at >= $%d", argNum)
 		args = append(args, *params.StartedAfter)
 		argNum++
 	}
@@ -621,10 +628,10 @@ func (r *BenchmarkRepository) ListRuns(ctx context.Context, params domain.Benchm
 	}
 
 	selectQuery := `
-		SELECT id, target_id, scenario_name, status, started_at, completed_at,
-			duration_seconds, results, error_message, triggered_by,
-			triggered_by_user, created_at
-	` + baseQuery + fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", argNum, argNum+1)
+		SELECT br.id, br.target_id, br.scenario_name, br.status, br.started_at, br.completed_at,
+			br.duration_seconds, br.results, br.error_message, br.triggered_by,
+			br.triggered_by_user, br.created_at
+	` + baseQuery + fmt.Sprintf(" ORDER BY br.created_at DESC LIMIT $%d OFFSET $%d", argNum, argNum+1)
 
 	args = append(args, limit, params.Offset)
 

@@ -178,6 +178,7 @@ type BenchmarkResults struct {
 // BenchmarkRunListParams represents query parameters for listing runs
 type BenchmarkRunListParams struct {
 	TargetID     *uuid.UUID
+	OrgID        *uuid.UUID // Filter runs by targets belonging to this org
 	ScenarioName string
 	Status       string
 	TriggeredBy  string
