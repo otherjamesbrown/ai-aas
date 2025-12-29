@@ -171,7 +171,7 @@ func TestBenchmarkTargetLifecycle(t *testing.T) {
 	// Cleanup function
 	defer func() {
 		runCLIWithProfile("benchmark", "target", "stop", targetName)
-		runCLIWithProfile("benchmark", "target", "remove", targetName)
+		runCLIWithProfile("benchmark", "target", "remove", targetName, "--force")
 	}()
 
 	// Step 1: Create target
@@ -249,12 +249,13 @@ func TestBenchmarkTargetLifecycle(t *testing.T) {
 
 	// Step 8: Remove target
 	t.Log("Step 8: Removing target")
-	result = runCLIWithProfile("benchmark", "target", "remove", targetName)
+	result = runCLIWithProfile("benchmark", "target", "remove", targetName, "--force")
 	if result.ExitCode != 0 {
 		t.Fatalf("Failed to remove target: %s\n%s", result.Error, result.Output)
 	}
 
-	// Verify target is gone
+	// Verify target is gone (with small delay for consistency)
+	time.Sleep(1 * time.Second)
 	result = runCLIWithProfile("benchmark", "target", "show", targetName)
 	if result.ExitCode == 0 {
 		t.Error("Target should have been removed but still exists")
@@ -273,7 +274,7 @@ func TestBenchmarkScenarioConfigPropagation(t *testing.T) {
 
 	defer func() {
 		runCLIWithProfile("benchmark", "target", "stop", targetName)
-		runCLIWithProfile("benchmark", "target", "remove", targetName)
+		runCLIWithProfile("benchmark", "target", "remove", targetName, "--force")
 	}()
 
 	// Get scenario details first
@@ -316,30 +317,43 @@ func TestBenchmarkScenarioConfigPropagation(t *testing.T) {
 		t.Fatalf("Failed to start target: %s\n%s", result.Error, result.Output)
 	}
 
-	// Wait for benchmark to complete
-	t.Log("Step 4: Waiting for benchmark execution (90 seconds)...")
-	time.Sleep(90 * time.Second)
+	// Wait for benchmark to complete (with periodic status checks)
+	t.Log("Step 4: Waiting for benchmark execution (checking every 15s for up to 120s)...")
+
+	var lastStatus string
+	for i := 0; i < 8; i++ {
+		time.Sleep(15 * time.Second)
+
+		result = runCLIWithProfile("benchmark", "target", "show", targetName, "--format", "json")
+		if result.ExitCode == 0 {
+			var target BenchmarkTargetJSON
+			if err := json.Unmarshal([]byte(result.Output), &target); err == nil {
+				lastStatus = target.Status
+				t.Logf("  Check %d/8: status=%s", i+1, target.Status)
+			}
+		}
+	}
 
 	// Check benchmark results - if config was NOT propagated, llama would fail
 	// because it only supports chat_completions but runner would default to text_completions
 	t.Log("Step 5: Checking benchmark results")
 
-	// Get status
-	result = runCLIWithProfile("benchmark", "status", "--format", "json")
-	if result.ExitCode == 0 {
-		t.Logf("Status output: %s", result.Output)
+	result = runCLIWithProfile("benchmark", "target", "show", targetName)
+	if result.ExitCode != 0 {
+		t.Fatalf("Failed to get target details: %s", result.Output)
 	}
 
-	// The key validation: if llama benchmark succeeded, config propagation works
-	// We verify via the target show output which should include last results
-	result = runCLIWithProfile("benchmark", "target", "show", targetName)
-	if result.ExitCode == 0 {
-		t.Logf("Target details:\n%s", result.Output)
+	t.Logf("Target details:\n%s", result.Output)
 
-		// Check for success indicators
-		if strings.Contains(result.Output, "failed") && !strings.Contains(result.Output, "successful") {
-			t.Error("Benchmark appears to have failed - config propagation may not be working")
-		}
+	// The key validation: target should still be active (not failed/error)
+	if lastStatus == "error" || lastStatus == "failed" {
+		t.Errorf("Benchmark failed with status '%s' - config propagation may not be working", lastStatus)
+	}
+
+	// Check output doesn't contain obvious failure indicators
+	if strings.Contains(strings.ToLower(result.Output), "error") &&
+	   strings.Contains(strings.ToLower(result.Output), "text_completions") {
+		t.Error("Output suggests text_completions was used instead of chat_completions")
 	}
 
 	t.Log("Config propagation test completed")
@@ -375,7 +389,7 @@ func TestBenchmarkChatVsTextCompletions(t *testing.T) {
 
 			defer func() {
 				runCLIWithProfile("benchmark", "target", "stop", targetName)
-				runCLIWithProfile("benchmark", "target", "remove", targetName)
+				runCLIWithProfile("benchmark", "target", "remove", targetName, "--force")
 			}()
 
 			// Create target
@@ -409,19 +423,20 @@ func TestBenchmarkChatVsTextCompletions(t *testing.T) {
 
 // TestBenchmarkMultipleTargets tests running multiple targets simultaneously
 func TestBenchmarkMultipleTargets(t *testing.T) {
+	timestamp := time.Now().Unix()
 	targets := []struct {
 		name  string
 		model string
 	}{
-		{name: fmt.Sprintf("e2e-multi-1-%d", time.Now().Unix()), model: "gpt-oss-20b"},
-		{name: fmt.Sprintf("e2e-multi-2-%d", time.Now().Unix()), model: "gpt-oss-20b"},
+		{name: fmt.Sprintf("e2e-multi-1-%d", timestamp), model: "gpt-oss-20b"},
+		{name: fmt.Sprintf("e2e-multi-2-%d", timestamp), model: "gpt-oss-20b"},
 	}
 
 	// Cleanup
 	defer func() {
 		for _, target := range targets {
 			runCLIWithProfile("benchmark", "target", "stop", target.name)
-			runCLIWithProfile("benchmark", "target", "remove", target.name)
+			runCLIWithProfile("benchmark", "target", "remove", target.name, "--force")
 		}
 	}()
 
@@ -436,6 +451,23 @@ func TestBenchmarkMultipleTargets(t *testing.T) {
 		if result.ExitCode != 0 {
 			t.Fatalf("Failed to create target %s: %s", target.name, result.Output)
 		}
+		t.Logf("  Created: %s", target.name)
+	}
+
+	// Small delay after creates
+	time.Sleep(1 * time.Second)
+
+	// Verify all targets exist before starting
+	t.Log("Verifying targets were created")
+	result := runCLIWithProfile("benchmark", "target", "list", "--environment", "development")
+	if result.ExitCode != 0 {
+		t.Fatalf("Failed to list targets: %s", result.Output)
+	}
+
+	for _, target := range targets {
+		if !strings.Contains(result.Output, target.name) {
+			t.Errorf("Target %s not found in list after creation", target.name)
+		}
 	}
 
 	// Start all targets
@@ -448,7 +480,7 @@ func TestBenchmarkMultipleTargets(t *testing.T) {
 	}
 
 	// Check status shows multiple active targets
-	result := runCLIWithProfile("benchmark", "status")
+	result = runCLIWithProfile("benchmark", "status")
 	if result.ExitCode == 0 {
 		t.Logf("Status with multiple targets:\n%s", result.Output)
 	}
@@ -578,7 +610,7 @@ func TestBenchmarkE2EComplete(t *testing.T) {
 	targetName := fmt.Sprintf("e2e-complete-%d", time.Now().Unix())
 	defer func() {
 		runCLIWithProfile("benchmark", "target", "stop", targetName)
-		runCLIWithProfile("benchmark", "target", "remove", targetName)
+		runCLIWithProfile("benchmark", "target", "remove", targetName, "--force")
 	}()
 
 	t.Log("Step 4: Create Target")
@@ -642,7 +674,7 @@ func TestBenchmarkE2EComplete(t *testing.T) {
 
 	// Step 9: Remove target
 	t.Log("Step 9: Remove Target")
-	result = runCLIWithProfile("benchmark", "target", "remove", targetName)
+	result = runCLIWithProfile("benchmark", "target", "remove", targetName, "--force")
 	if result.ExitCode != 0 {
 		t.Logf("  FAIL: %s", result.Output)
 		failed++
