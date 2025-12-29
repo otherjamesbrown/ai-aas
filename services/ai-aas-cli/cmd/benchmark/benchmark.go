@@ -5,10 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/benchmark"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
@@ -235,16 +238,75 @@ Examples:
 }
 
 func newScenarioSyncCommand() *cobra.Command {
+	var (
+		scenariosDir  string
+		deleteOrphans bool
+	)
+
 	cmd := &cobra.Command{
 		Use:   "sync",
-		Short: "Sync scenarios from config repository",
-		Long: `Trigger a sync of benchmark scenarios from the config repository.
+		Short: "Sync scenarios from a local directory",
+		Long: `Sync benchmark scenarios from a local directory to the Admin API.
 
-This will update the available scenarios based on the latest configuration.
+Reads all YAML files from the specified directory and syncs them to the
+benchmark scenarios database. Each YAML file should define a single scenario.
 
 Examples:
-  ai-aas-cli benchmark scenario sync`,
+  # Sync scenarios from ai-aas-config
+  ai-aas-cli benchmark scenario sync --dir ~/ai-aas-config/benchmark-scenarios
+
+  # Sync and remove scenarios not in the directory
+  ai-aas-cli benchmark scenario sync --dir ./scenarios --delete-orphans`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if scenariosDir == "" {
+				return fmt.Errorf("--dir flag is required: specify the directory containing scenario YAML files")
+			}
+
+			// Expand ~ in path
+			if strings.HasPrefix(scenariosDir, "~/") {
+				home, err := os.UserHomeDir()
+				if err != nil {
+					return fmt.Errorf("failed to get home directory: %w", err)
+				}
+				scenariosDir = filepath.Join(home, scenariosDir[2:])
+			}
+
+			// Check directory exists
+			info, err := os.Stat(scenariosDir)
+			if err != nil {
+				return fmt.Errorf("scenarios directory not found: %s", scenariosDir)
+			}
+			if !info.IsDir() {
+				return fmt.Errorf("not a directory: %s", scenariosDir)
+			}
+
+			// Load all YAML files
+			files, err := filepath.Glob(filepath.Join(scenariosDir, "*.yaml"))
+			if err != nil {
+				return fmt.Errorf("failed to list YAML files: %w", err)
+			}
+
+			// Also check for .yml extension
+			ymlFiles, _ := filepath.Glob(filepath.Join(scenariosDir, "*.yml"))
+			files = append(files, ymlFiles...)
+
+			if len(files) == 0 {
+				return fmt.Errorf("no YAML files found in %s", scenariosDir)
+			}
+
+			fmt.Printf("Loading %d scenario file(s) from %s\n", len(files), scenariosDir)
+
+			// Parse each file
+			var scenarios []benchmark.ScenarioUpsert
+			for _, file := range files {
+				scenario, err := loadScenarioFile(file)
+				if err != nil {
+					return fmt.Errorf("failed to load %s: %w", filepath.Base(file), err)
+				}
+				scenarios = append(scenarios, *scenario)
+				fmt.Printf("  Loaded: %s\n", scenario.Name)
+			}
+
 			profileName, _ := cmd.Flags().GetString("profile")
 			cfg, _, err := config.GetEffectiveConfig(profileName)
 			if err != nil {
@@ -262,20 +324,84 @@ Examples:
 			apiClient := cfg.NewAPIClient(adminEndpoint)
 			bmClient := benchmark.NewClient(apiClient)
 
-			fmt.Println("Syncing scenarios from config repository...")
+			fmt.Println("\nSyncing scenarios to Admin API...")
 
-			if err := bmClient.SyncScenarios(ctx); err != nil {
+			resp, err := bmClient.SyncScenarios(ctx, scenarios, deleteOrphans)
+			if err != nil {
 				return fmt.Errorf("failed to sync scenarios: %w", err)
 			}
 
-			fmt.Println("Scenarios synced successfully.")
+			fmt.Println("\nSync complete:")
+			if len(resp.Created) > 0 {
+				fmt.Printf("  Created: %s\n", strings.Join(resp.Created, ", "))
+			}
+			if len(resp.Updated) > 0 {
+				fmt.Printf("  Updated: %s\n", strings.Join(resp.Updated, ", "))
+			}
+			if len(resp.Deleted) > 0 {
+				fmt.Printf("  Deleted: %s\n", strings.Join(resp.Deleted, ", "))
+			}
+			if len(resp.Created) == 0 && len(resp.Updated) == 0 && len(resp.Deleted) == 0 {
+				fmt.Println("  No changes")
+			}
+
 			fmt.Println("\nRun 'ai-aas-cli benchmark scenario list' to see available scenarios.")
 
 			return nil
 		},
 	}
 
+	cmd.Flags().StringVarP(&scenariosDir, "dir", "d", "", "directory containing scenario YAML files (required)")
+	cmd.Flags().BoolVar(&deleteOrphans, "delete-orphans", false, "delete scenarios not present in the directory")
+	cmd.MarkFlagRequired("dir")
+
 	return cmd
+}
+
+// scenarioYAML represents the YAML structure of a scenario file
+type scenarioYAML struct {
+	Name        string                 `yaml:"name"`
+	Description string                 `yaml:"description"`
+	Version     string                 `yaml:"version"`
+	Data        map[string]interface{} `yaml:"data"`
+	Defaults    map[string]interface{} `yaml:"defaults"`
+	Metrics     map[string]interface{} `yaml:"metrics"`
+}
+
+// loadScenarioFile loads a scenario from a YAML file
+func loadScenarioFile(path string) (*benchmark.ScenarioUpsert, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read file: %w", err)
+	}
+
+	var raw scenarioYAML
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("parse YAML: %w", err)
+	}
+
+	if raw.Name == "" {
+		return nil, fmt.Errorf("scenario must have a name")
+	}
+
+	// Build config from the YAML sections
+	config := make(map[string]interface{})
+	if raw.Data != nil {
+		config["data"] = raw.Data
+	}
+	if raw.Defaults != nil {
+		config["defaults"] = raw.Defaults
+	}
+	if raw.Metrics != nil {
+		config["metrics"] = raw.Metrics
+	}
+
+	return &benchmark.ScenarioUpsert{
+		Name:        raw.Name,
+		Description: raw.Description,
+		Version:     raw.Version,
+		Config:      config,
+	}, nil
 }
 
 // ============================================================================
