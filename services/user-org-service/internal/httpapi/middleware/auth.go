@@ -252,21 +252,54 @@ func RequireAuth(rt *bootstrap.Runtime, logger *zap.Logger) func(http.Handler) h
 // Checks if the authenticated user has any of the specified scopes.
 // The "admin" and "*" scopes grant access to all admin endpoints.
 // Returns 403 Forbidden if the user lacks all required scopes.
-func RequireAdminScope(scopes ...string) func(http.Handler) http.Handler {
+func RequireAdminScope(logger *zap.Logger, scopes ...string) func(http.Handler) http.Handler {
 	// Always accept "admin" and "*" as universal admin scopes
 	acceptedScopes := append([]string{"admin", "*"}, scopes...)
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
+			session := GetSession(ctx)
+
+			// Extract user scopes for logging
+			userScopes := []string{}
+			if session != nil {
+				userScopes = session.GrantedScopes
+			}
+
+			// Log the scope check
+			if logger != nil {
+				logger.Debug("RequireAdminScope: checking scopes",
+					zap.Strings("required_scopes", acceptedScopes),
+					zap.Strings("user_scopes", userScopes),
+					zap.String("path", r.URL.Path),
+				)
+			}
 
 			// Check if user has any of the required scopes
 			if !HasAnyScope(ctx, acceptedScopes...) {
+				// Log the failure
+				if logger != nil {
+					logger.Warn("RequireAdminScope: access denied - insufficient scopes",
+						zap.Strings("required_scopes", acceptedScopes),
+						zap.Strings("user_scopes", userScopes),
+						zap.String("path", r.URL.Path),
+					)
+				}
+
 				// Build a user-friendly scope requirement message
 				scopeList := strings.Join(scopes, ", ")
 				message := fmt.Sprintf("insufficient scopes: requires one of [%s, admin, *]", scopeList)
 				httputil.WriteForbidden(w, r, message)
 				return
+			}
+
+			// Log success
+			if logger != nil {
+				logger.Debug("RequireAdminScope: access granted",
+					zap.Strings("matched_scopes", acceptedScopes),
+					zap.String("path", r.URL.Path),
+				)
 			}
 
 			// User has required scope, proceed to handler

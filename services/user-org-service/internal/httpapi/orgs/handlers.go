@@ -70,16 +70,16 @@ func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger *zap.Logger
 		logger:  logger,
 	}
 	// Register org routes directly (no subrouter) to avoid conflicts with users routes
-	router.With(middleware.RequireAdminScope("org:admin")).Post("/v1/orgs", handler.CreateOrg)
-	router.With(middleware.RequireAdminScope("org:read", "org:admin")).Get("/v1/orgs", handler.ListOrgs)
-	router.With(middleware.RequireAdminScope("org:read", "org:admin")).Get("/v1/orgs/{orgId}", handler.GetOrg)
-	router.With(middleware.RequireAdminScope("org:write", "org:admin")).Patch("/v1/orgs/{orgId}", handler.UpdateOrg)
-	router.With(middleware.RequireAdminScope("org:admin")).Delete("/v1/orgs/{orgId}", handler.DeleteOrg)
+	router.With(middleware.RequireAdminScope(logger, "org:admin")).Post("/v1/orgs", handler.CreateOrg)
+	router.With(middleware.RequireAdminScope(logger, "org:read", "org:admin")).Get("/v1/orgs", handler.ListOrgs)
+	router.With(middleware.RequireAdminScope(logger, "org:read", "org:admin")).Get("/v1/orgs/{orgId}", handler.GetOrg)
+	router.With(middleware.RequireAdminScope(logger, "org:write", "org:admin")).Patch("/v1/orgs/{orgId}", handler.UpdateOrg)
+	router.With(middleware.RequireAdminScope(logger, "org:admin")).Delete("/v1/orgs/{orgId}", handler.DeleteOrg)
 
 	// Frontend-friendly convenience routes (no /v1 prefix)
 	// These resolve org from authenticated context
-	router.With(middleware.RequireAdminScope("org:read", "org:admin")).Get("/organizations/me", handler.GetOrgForMe)
-	router.With(middleware.RequireAdminScope("org:write", "org:admin")).Patch("/organizations/me", handler.UpdateOrgForMe)
+	router.With(middleware.RequireAdminScope(logger, "org:read", "org:admin")).Get("/organizations/me", handler.GetOrgForMe)
+	router.With(middleware.RequireAdminScope(logger, "org:write", "org:admin")).Patch("/organizations/me", handler.UpdateOrgForMe)
 }
 
 // Handler serves organization management endpoints.
