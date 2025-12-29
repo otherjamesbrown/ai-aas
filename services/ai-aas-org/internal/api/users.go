@@ -10,27 +10,41 @@ import (
 
 // User represents a user in the organization.
 type User struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	Name      string    `json:"name"`
-	Role      string    `json:"role"`
-	Status    string    `json:"status"`
-	OrgID     string    `json:"org_id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID          string       `json:"userId"`
+	Email       string       `json:"email"`
+	Name        string       `json:"displayName"`
+	Status      string       `json:"status"`
+	OrgID       string       `json:"orgId"`
+	MFAEnrolled bool         `json:"mfaEnrolled"`
+	Metadata    UserMetadata `json:"metadata"`
+	CreatedAt   time.Time    `json:"createdAt"`
+	UpdatedAt   time.Time    `json:"updatedAt"`
+}
+
+// UserMetadata contains additional user information.
+type UserMetadata struct {
+	CreatedVia         string   `json:"created_via"`
+	PasswordMustChange bool     `json:"password_must_change"`
+	Roles              []string `json:"roles"`
 }
 
 // CreateUserRequest is the request to create a new user.
 type CreateUserRequest struct {
 	Email string `json:"email"`
-	Name  string `json:"name"`
+	Name  string `json:"displayName"`
 	Role  string `json:"role,omitempty"`
 }
 
 // CreateUserResponse is the response from creating a user.
+// API returns user fields directly plus temporaryPassword
 type CreateUserResponse struct {
-	User         User   `json:"user"`
-	TemporaryKey string `json:"temporary_key,omitempty"`
+	User              User   `json:"-"` // Populated from response fields
+	ID                string `json:"userId"`
+	Email             string `json:"email"`
+	DisplayName       string `json:"displayName"`
+	Status            string `json:"status"`
+	TemporaryPassword string `json:"temporaryPassword,omitempty"`
+	CreatedAt         string `json:"createdAt"`
 }
 
 // ListUsersResponse is the response from listing users.
@@ -55,11 +69,15 @@ func (c *Client) ListUsers(ctx context.Context, orgID string, page, pageSize int
 		path += "?" + params.Encode()
 	}
 
-	var result ListUsersResponse
-	if err := c.doRequest(ctx, http.MethodGet, path, nil, &result); err != nil {
+	// API returns raw array of users, not a wrapper object
+	var users []User
+	if err := c.doRequest(ctx, http.MethodGet, path, nil, &users); err != nil {
 		return nil, err
 	}
-	return &result, nil
+	return &ListUsersResponse{
+		Users:      users,
+		TotalCount: len(users),
+	}, nil
 }
 
 // GetUser gets a user by ID.
@@ -91,6 +109,13 @@ func (c *Client) CreateUser(ctx context.Context, orgID string, req *CreateUserRe
 	var result CreateUserResponse
 	if err := c.doRequest(ctx, http.MethodPost, path, req, &result); err != nil {
 		return nil, err
+	}
+	// Populate User field from flat response
+	result.User = User{
+		ID:     result.ID,
+		Email:  result.Email,
+		Name:   result.DisplayName,
+		Status: result.Status,
 	}
 	return &result, nil
 }

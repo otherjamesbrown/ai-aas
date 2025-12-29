@@ -25,15 +25,21 @@ type APIKey struct {
 
 // CreateAPIKeyRequest is the request to create an API key.
 type CreateAPIKeyRequest struct {
-	Name      string `json:"name"`
-	UserID    string `json:"user_id"`
-	ExpiresIn string `json:"expires_in,omitempty"` // e.g., "30d", "90d", "never"
+	Name      string `json:"notes,omitempty"`          // API uses 'notes' for description
+	UserID    string `json:"-"`                        // Used in URL path, not body
+	ExpiresIn string `json:"expiresInDays,omitempty"`  // e.g., "30", "90"
+	Scopes    string `json:"scopes,omitempty"`         // Comma-separated scopes
 }
 
 // CreateAPIKeyResponse is the response from creating an API key.
 type CreateAPIKeyResponse struct {
-	APIKey   APIKey `json:"api_key"`
-	RawKey   string `json:"raw_key"` // Only returned once at creation
+	// Flat response fields from API
+	KeyID       string `json:"keyId"`
+	Token       string `json:"token"`       // Only returned once at creation
+	Fingerprint string `json:"fingerprint"`
+	Status      string `json:"status"`
+	// Populated for backwards compatibility
+	RawKey string `json:"-"` // Populated from Token
 }
 
 // ListAPIKeysResponse is the response from listing API keys.
@@ -75,14 +81,17 @@ func (c *Client) GetAPIKey(ctx context.Context, orgID, keyID string) (*APIKey, e
 	return &result, nil
 }
 
-// CreateAPIKey creates a new API key.
+// CreateAPIKey creates a new API key for a user.
 func (c *Client) CreateAPIKey(ctx context.Context, orgID string, req *CreateAPIKeyRequest) (*CreateAPIKeyResponse, error) {
-	path := fmt.Sprintf("/v1/orgs/%s/api-keys", url.PathEscape(orgID))
+	// API requires user-specific endpoint
+	path := fmt.Sprintf("/v1/orgs/%s/users/%s/api-keys", url.PathEscape(orgID), url.PathEscape(req.UserID))
 
 	var result CreateAPIKeyResponse
 	if err := c.doRequest(ctx, http.MethodPost, path, req, &result); err != nil {
 		return nil, err
 	}
+	// Populate backwards-compatible field
+	result.RawKey = result.Token
 	return &result, nil
 }
 
