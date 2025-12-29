@@ -29,20 +29,16 @@ Show the count of organizations to be deleted before asking.
 
 ### Step 3: Delete Organizations
 
-If user confirms, delete each organization:
+If user confirms, delete each organization using parallel execution:
 
 ```bash
-# Get list of E2E org IDs
-E2E_ORGS=$(ai-aas-cli org list --format json 2>/dev/null | jq -r '.[] | select(.slug | startswith("e2e-")) | .id')
-
-# Delete each one
-for org_id in $E2E_ORGS; do
-  echo "Deleting org: $org_id"
-  ai-aas-cli org delete "$org_id" --force
-done
+# Delete E2E orgs in parallel (10 concurrent deletions)
+ai-aas-cli org list --format json 2>/dev/null | \
+  jq -r '.[] | select(.slug | startswith("e2e-")) | .id' | \
+  xargs -P 10 -I {} sh -c 'echo "Deleting org: {}"; ai-aas-cli org delete "{}" --force'
 ```
 
-**Important:** Run deletions in batches of 10-20 to avoid rate limiting. Use parallel execution where possible.
+**Note:** Uses `xargs -P 10` for parallel execution to speed up cleanup.
 
 ### Step 4: Verify Cleanup
 

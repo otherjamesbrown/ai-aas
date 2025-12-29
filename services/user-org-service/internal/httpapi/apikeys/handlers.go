@@ -102,6 +102,18 @@ type Handler struct {
 	logger  *zap.Logger
 }
 
+// findAPIKey looks up an API key by either UUID or KeyID (e.g., "ak_abc123").
+// This centralizes the lookup logic used by multiple handlers.
+func (h *Handler) findAPIKey(ctx context.Context, orgID uuid.UUID, keyIdentifier string) (postgres.APIKey, error) {
+	apiKeyUUID, err := uuid.Parse(keyIdentifier)
+	if err != nil {
+		// Not a UUID - assume it's a KeyID
+		return h.runtime.Postgres.GetAPIKeyByKeyID(ctx, orgID, keyIdentifier)
+	}
+	// It's a UUID
+	return h.runtime.Postgres.GetAPIKeyByID(ctx, apiKeyUUID)
+}
+
 // TokenPrefix is the prefix for all AI-AAS API tokens.
 const TokenPrefix = "ai-aas_"
 
@@ -303,36 +315,17 @@ func (h *Handler) RevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 		orgID = org.ID
 	}
 
-	// Try to parse API key ID as UUID first, then fall back to KeyID lookup
-	var apiKey postgres.APIKey
-	apiKeyID, err := uuid.Parse(apiKeyIDParam)
+	// Look up API key by UUID or KeyID
+	apiKey, err := h.findAPIKey(ctx, orgID, apiKeyIDParam)
 	if err != nil {
-		// Not a UUID - try looking up by KeyID (e.g., "ak_abc123")
-		apiKey, err = h.runtime.Postgres.GetAPIKeyByKeyID(ctx, orgID, apiKeyIDParam)
-		if err != nil {
-			if err == postgres.ErrNotFound {
-				httputil.WriteNotFound(w, r, "API key", "")
-				return
-			}
-			h.logger.Error("failed to get API key by KeyID", zap.Error(err), zap.String("keyId", apiKeyIDParam))
-			httputil.WriteInternalError(w, r)
+		if err == postgres.ErrNotFound {
+			httputil.WriteNotFound(w, r, "API key", "")
 			return
 		}
-	} else {
-		// UUID format - look up by ID
-		apiKey, err = h.runtime.Postgres.GetAPIKeyByID(ctx, apiKeyID)
-		if err != nil {
-			if err == postgres.ErrNotFound {
-				httputil.WriteNotFound(w, r, "API key", "")
-				return
-			}
-			h.logger.Error("failed to get API key", zap.Error(err), zap.String("apiKeyId", apiKeyID.String()))
-			httputil.WriteInternalError(w, r)
-			return
-		}
+		h.logger.Error("failed to get API key", zap.Error(err), zap.String("keyIdentifier", apiKeyIDParam))
+		httputil.WriteInternalError(w, r)
+		return
 	}
-
-	// At this point, apiKey is populated (either by UUID or KeyID lookup)
 
 	// Verify key belongs to org
 	if apiKey.OrgID != orgID {
@@ -359,7 +352,7 @@ func (h *Handler) RevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteConflict(w, r, "API key was modified concurrently")
 			return
 		}
-		h.logger.Error("failed to revoke API key", zap.Error(err), zap.String("apiKeyId", apiKeyID.String()))
+		h.logger.Error("failed to revoke API key", zap.Error(err), zap.String("keyIdentifier", apiKeyIDParam))
 		httputil.WriteInternalError(w, r)
 		return
 	}
@@ -881,33 +874,16 @@ func (h *Handler) GetAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Try to parse API key ID as UUID first, then fall back to KeyID lookup
-	var apiKey postgres.APIKey
-	apiKeyID, err := uuid.Parse(apiKeyIDParam)
+	// Look up API key by UUID or KeyID
+	apiKey, err := h.findAPIKey(ctx, orgID, apiKeyIDParam)
 	if err != nil {
-		// Not a UUID - try looking up by KeyID (e.g., "ak_abc123")
-		apiKey, err = h.runtime.Postgres.GetAPIKeyByKeyID(ctx, orgID, apiKeyIDParam)
-		if err != nil {
-			if err == postgres.ErrNotFound {
-				httputil.WriteNotFound(w, r, "API key", "")
-				return
-			}
-			h.logger.Error("failed to get API key by KeyID", zap.Error(err), zap.String("keyId", apiKeyIDParam))
-			httputil.WriteInternalError(w, r)
+		if err == postgres.ErrNotFound {
+			httputil.WriteNotFound(w, r, "API key", "")
 			return
 		}
-	} else {
-		// UUID format - look up by ID
-		apiKey, err = h.runtime.Postgres.GetAPIKeyByID(ctx, apiKeyID)
-		if err != nil {
-			if err == postgres.ErrNotFound {
-				httputil.WriteNotFound(w, r, "API key", "")
-				return
-			}
-			h.logger.Error("failed to get API key", zap.Error(err), zap.String("apiKeyId", apiKeyID.String()))
-			httputil.WriteInternalError(w, r)
-			return
-		}
+		h.logger.Error("failed to get API key", zap.Error(err), zap.String("keyIdentifier", apiKeyIDParam))
+		httputil.WriteInternalError(w, r)
+		return
 	}
 
 	// Verify key belongs to org

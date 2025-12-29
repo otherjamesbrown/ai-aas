@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"time"
@@ -1209,13 +1210,14 @@ func (h *Handler) forwardOpenAIStreamingRequest(
 		return
 	}
 
-	// Verify the backend returned SSE format
+	// Verify the backend returned SSE format using proper media type parsing
 	contentType := resp.Header.Get("Content-Type")
-	if !bytes.Contains([]byte(contentType), []byte("text/event-stream")) {
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil || mediaType != "text/event-stream" {
 		h.logger.Error("backend did not return SSE stream",
 			zap.String("content_type", contentType),
 		)
-		h.writeError(w, r, fmt.Errorf("backend did not return streaming response"), api.ErrCodeBackendError)
+		h.writeError(w, r, fmt.Errorf("backend did not return streaming response, content-type: %s", contentType), api.ErrCodeBackendError)
 		return
 	}
 
@@ -1226,15 +1228,15 @@ func (h *Handler) forwardOpenAIStreamingRequest(
 		return
 	}
 
+	// Add routing headers before starting SSE stream (headers must be set before WriteHeader)
+	w.Header().Set("X-Routing-Backend", backend.ID)
+	w.Header().Set("X-Routing-Decision", "PRIMARY")
+
 	// Start SSE stream
 	if err := sseWriter.Start(); err != nil {
 		h.logger.Error("failed to start SSE stream", zap.Error(err))
 		return
 	}
-
-	// Add routing headers
-	w.Header().Set("X-Routing-Backend", backend.ID)
-	w.Header().Set("X-Routing-Decision", "PRIMARY")
 
 	// Proxy the SSE stream from backend to client
 	// Read and forward each SSE chunk
