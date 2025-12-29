@@ -382,23 +382,36 @@ func (s *BenchmarkService) TriggerRun(ctx context.Context, targetID uuid.UUID, t
 		return nil, fmt.Errorf("failed to create run: %w", err)
 	}
 
-	// Trigger on guidellm-runner
-	if err := s.triggerRunOnRunner(ctx, target, run); err != nil {
-		s.logger.Error("failed to trigger run on runner",
-			zap.String("target_id", targetID.String()),
-			zap.String("run_id", run.ID.String()),
-			zap.Error(err))
+	// Update status to running immediately
+	statusRunning := "running"
+	now := time.Now()
+	s.repo.UpdateRun(ctx, run.ID, &domain.BenchmarkRunUpdate{
+		Status:    &statusRunning,
+		StartedAt: &now,
+	})
 
-		// Update run status to failed
-		statusFailed := "failed"
-		errMsg := err.Error()
-		s.repo.UpdateRun(ctx, run.ID, &domain.BenchmarkRunUpdate{
-			Status:       &statusFailed,
-			ErrorMessage: &errMsg,
-		})
+	// Trigger on guidellm-runner asynchronously (benchmarks can take minutes)
+	// Use a background context so the benchmark completes even if the HTTP request times out
+	go func() {
+		bgCtx := context.Background()
+		targetCopy := *target
+		runCopy := *run
 
-		return nil, fmt.Errorf("failed to trigger run on runner: %w", err)
-	}
+		if err := s.triggerRunOnRunner(bgCtx, &targetCopy, &runCopy); err != nil {
+			s.logger.Error("failed to trigger run on runner",
+				zap.String("target_id", targetID.String()),
+				zap.String("run_id", runCopy.ID.String()),
+				zap.Error(err))
+
+			// Update run status to failed
+			statusFailed := "failed"
+			errMsg := err.Error()
+			s.repo.UpdateRun(bgCtx, runCopy.ID, &domain.BenchmarkRunUpdate{
+				Status:       &statusFailed,
+				ErrorMessage: &errMsg,
+			})
+		}
+	}()
 
 	s.logger.Info("benchmark run triggered",
 		zap.String("target_id", targetID.String()),
