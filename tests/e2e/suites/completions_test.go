@@ -4,6 +4,7 @@ package suites
 
 import (
 	"encoding/json"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -240,9 +241,16 @@ func TestTextCompletionsStreaming(t *testing.T) {
 		t.Logf("Streaming request failed: %v", err)
 		t.Skip("Backend may be unavailable")
 	}
+	defer resp.Close()
+
+	// Read the streaming body
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("Failed to read streaming response: %v", err)
+	}
 
 	if resp.StatusCode != 200 {
-		t.Logf("Streaming returned status %d: %s", resp.StatusCode, string(resp.Body))
+		t.Logf("Streaming returned status %d: %s", resp.StatusCode, string(bodyBytes))
 		if resp.StatusCode == 503 {
 			t.Skip("Backend service unavailable")
 		}
@@ -250,13 +258,13 @@ func TestTextCompletionsStreaming(t *testing.T) {
 	}
 
 	// Step 6: Validate SSE response format
-	if !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
+	if !strings.HasPrefix(resp.Headers.Get("Content-Type"), "text/event-stream") {
 		t.Errorf("Expected Content-Type to start with 'text/event-stream', got '%s'",
-			resp.Header.Get("Content-Type"))
+			resp.Headers.Get("Content-Type"))
 	}
 
 	// Parse SSE chunks
-	body := string(resp.Body)
+	body := string(bodyBytes)
 	chunks := strings.Split(body, "\n\n")
 
 	var totalText string
