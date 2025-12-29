@@ -1060,22 +1060,22 @@ They can then use ai-aas-org to manage their organization.
 
 Examples:
   # Bootstrap a new organization
-  ai-aas-cli org bootstrap --name "ACME Corp" --slug acme --admin-email admin@acme.com
+  ai-aas-cli org bootstrap --org-name "ACME Corp" --org-slug acme --admin-email admin@acme.com
 
   # With custom admin display name
-  ai-aas-cli org bootstrap --name "ACME Corp" --slug acme \
+  ai-aas-cli org bootstrap --org-name "ACME Corp" --org-slug acme \
     --admin-email admin@acme.com --admin-name "ACME Admin"
 
   # Save to a profile for easy access
-  ai-aas-cli org bootstrap --name "ACME Corp" --slug acme \
+  ai-aas-cli org bootstrap --org-name "ACME Corp" --org-slug acme \
     --admin-email admin@acme.com --profile acme-admin
 
 Next Steps:
   After bootstrap, the org admin can use ai-aas-org:
     export AI_AAS_ORG_API_KEY="<api-key>"
     ai-aas-org user list
-    ai-aas-org user create --email user@acme.com
-    ai-aas-org apikey create --user-id <user>
+    ai-aas-org user create --user-email user@acme.com --display-name "User Name"
+    ai-aas-org apikey create --user-id <user-id> --key-name "API Key"
     ai-aas-org benchmark run --model <model>
 
 See Also:
@@ -1088,8 +1088,8 @@ See Also:
 		},
 	}
 
-	cmd.Flags().StringVar(&flagName, "name", "", "Organization name (required)")
-	cmd.Flags().StringVar(&flagSlug, "slug", "", "Organization slug (required)")
+	cmd.Flags().StringVar(&flagName, "org-name", "", "Organization name (required)")
+	cmd.Flags().StringVar(&flagSlug, "org-slug", "", "Organization slug (required)")
 	cmd.Flags().StringVar(&flagAdminEmail, "admin-email", "", "Admin user email (required)")
 	cmd.Flags().StringVar(&flagAdminDisplayName, "admin-name", "", "Admin user display name (default: 'Org Admin')")
 	cmd.Flags().StringVar(&flagFormat, "format", "table", "Output format: table, json, csv")

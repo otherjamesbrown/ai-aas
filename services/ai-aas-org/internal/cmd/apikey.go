@@ -140,8 +140,8 @@ The key will only be displayed once after creation. Make sure to copy it
 and share it securely with the user.
 
 Examples:
-  ai-aas-org apikey create --user user@example.com --name "Production Key"
-  ai-aas-org apikey create --user user@example.com --name "Dev Key" --expires 30d
+  ai-aas-org apikey create --user-id <user-id> --key-name "Production Key"
+  ai-aas-org apikey create --user-id <user-id> --key-name "Dev Key" --expires 30d
   ai-aas-org apikey create --guided`,
 	RunE: runAPIKeyCreate,
 }
@@ -149,8 +149,8 @@ Examples:
 func init() {
 	apikeyCmd.AddCommand(apikeyCreateCmd)
 
-	apikeyCreateCmd.Flags().StringVar(&apikeyCreateUser, "user", "", "user email or ID")
-	apikeyCreateCmd.Flags().StringVar(&apikeyCreateName, "name", "", "key name/description")
+	apikeyCreateCmd.Flags().StringVar(&apikeyCreateUser, "user-id", "", "user ID (use 'ai-aas-org user list' to find)")
+	apikeyCreateCmd.Flags().StringVar(&apikeyCreateName, "key-name", "", "key name/description")
 	apikeyCreateCmd.Flags().StringVar(&apikeyCreateExpires, "expires", "", "expiration (e.g., 30d, 90d, 1y, never)")
 }
 
@@ -236,6 +236,10 @@ func runAPIKeyCreate(cmd *cobra.Command, args []string) error {
 	output.KeyValue("Name", name)
 	output.KeyValue("Status", result.Status)
 	output.KeyValue("Expires", "Never") // TODO: Parse from response when supported
+
+	fmt.Println()
+	fmt.Println("To use this key:")
+	fmt.Printf("  export AI_AAS_API_KEY=\"%s\"\n", result.Token)
 
 	return nil
 }

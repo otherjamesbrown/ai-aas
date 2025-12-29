@@ -98,7 +98,7 @@ func runUserList(cmd *cobra.Command, args []string) error {
 	}
 
 	// Build table
-	headers := []string{"EMAIL", "NAME", "ROLES", "STATUS", "CREATED"}
+	headers := []string{"USER_ID", "EMAIL", "NAME", "ROLES", "STATUS", "CREATED"}
 	var rows [][]string
 	for _, u := range result.Users {
 		roles := strings.Join(u.Metadata.Roles, ", ")
@@ -106,6 +106,7 @@ func runUserList(cmd *cobra.Command, args []string) error {
 			roles = "-"
 		}
 		rows = append(rows, []string{
+			u.ID,
 			u.Email,
 			u.Name,
 			roles,
@@ -132,11 +133,11 @@ var userCreateCmd = &cobra.Command{
 	Short: "Create a new user in your organization",
 	Long: `Create a new user in your organization.
 
-The user will be created with the specified email and name.
+The user will be created with the specified email and display name.
 By default, users are created with the 'user' role.
 
 Examples:
-  ai-aas-org user create --email user@example.com --name "John Doe"
+  ai-aas-org user create --user-email user@example.com --display-name "John Doe"
   ai-aas-org user create --guided`,
 	RunE: runUserCreate,
 }
@@ -144,8 +145,8 @@ Examples:
 func init() {
 	userCmd.AddCommand(userCreateCmd)
 
-	userCreateCmd.Flags().StringVarP(&userCreateEmail, "email", "e", "", "user email address")
-	userCreateCmd.Flags().StringVarP(&userCreateName, "name", "n", "", "user display name")
+	userCreateCmd.Flags().StringVarP(&userCreateEmail, "user-email", "e", "", "user email address")
+	userCreateCmd.Flags().StringVarP(&userCreateName, "display-name", "n", "", "user display name")
 	userCreateCmd.Flags().StringVarP(&userCreateRole, "role", "r", "user", "user role (user, admin)")
 }
 
