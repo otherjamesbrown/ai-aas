@@ -35,9 +35,9 @@ func TestAuthorizationDenial(t *testing.T) {
 	limitedClient.SetHeader("Authorization", "Bearer "+apiKey.Key)
 	limitedClient.SetHeader("X-API-Key", apiKey.Key)
 
-	// If using IP address, set Host header
+	// If using IP address, set Host header for user-org-service
 	if isIPAddress(ctx.Config.APIURLs.UserOrgService) {
-		limitedClient.SetHeader("Host", "api.dev.otherjamesbrown.com")
+		limitedClient.SetHeader("Host", "user-org.dev.otherjamesbrown.com")
 	}
 
 	// Attempt a restricted action (creating an organization)
