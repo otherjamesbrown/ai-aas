@@ -23,26 +23,59 @@ Most users should use 'ai-aas-org init --key <bootstrap-key>' instead.
 Example:
   ai-aas-org configure --api-endpoint https://api.ai-aas.example.com --api-key <key>
 
+  # Configure inference endpoint for model listing
+  ai-aas-org configure --inference-endpoint https://inference.ai-aas.example.com
+
+  # Configure admin endpoint for benchmarks
+  ai-aas-org configure --admin-endpoint https://admin.ai-aas.example.com
+
 Or run interactively:
   ai-aas-org configure --guided`,
 	RunE: runConfigure,
 }
 
 var (
-	configAPIEndpoint string
-	configAPIKey      string
-	configOrgID       string
+	configAPIEndpoint       string
+	configInferenceEndpoint string
+	configAdminEndpoint     string
+	configAPIKey            string
+	configOrgID             string
 )
 
 func init() {
 	rootCmd.AddCommand(configureCmd)
 
-	configureCmd.Flags().StringVar(&configAPIEndpoint, "api-endpoint", "", "API endpoint URL")
+	configureCmd.Flags().StringVar(&configAPIEndpoint, "api-endpoint", "", "API endpoint URL (user-org-service)")
+	configureCmd.Flags().StringVar(&configInferenceEndpoint, "inference-endpoint", "", "Inference API endpoint URL (for model listing)")
+	configureCmd.Flags().StringVar(&configAdminEndpoint, "admin-endpoint", "", "Admin API endpoint URL (for benchmarks)")
 	configureCmd.Flags().StringVar(&configAPIKey, "api-key", "", "API key for authentication")
 	configureCmd.Flags().StringVar(&configOrgID, "org-id", "", "Organization ID")
 }
 
 func runConfigure(cmd *cobra.Command, args []string) error {
+	// If only specific endpoints are provided, update just those fields
+	if configAPIEndpoint == "" && configAPIKey == "" {
+		updates := make(map[string]string)
+		if configInferenceEndpoint != "" {
+			updates["inference_endpoint"] = configInferenceEndpoint
+		}
+		if configAdminEndpoint != "" {
+			updates["admin_endpoint"] = configAdminEndpoint
+		}
+		if len(updates) > 0 {
+			if err := config.Update(updates); err != nil {
+				return errors.NewOperationError(
+					"failed to update configuration",
+					fmt.Sprintf("Error: %v", err),
+				)
+			}
+			for key, value := range updates {
+				output.SuccessMsg("%s configured: %s", key, value)
+			}
+			return nil
+		}
+	}
+
 	var cfg config.Config
 	var err error
 
@@ -62,9 +95,11 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 		}
 
 		cfg = config.Config{
-			APIEndpoint: configAPIEndpoint,
-			APIKey:      configAPIKey,
-			OrgID:       configOrgID,
+			APIEndpoint:       configAPIEndpoint,
+			InferenceEndpoint: configInferenceEndpoint,
+			AdminEndpoint:     configAdminEndpoint,
+			APIKey:            configAPIKey,
+			OrgID:             configOrgID,
 		}
 	}
 
@@ -90,11 +125,25 @@ func runConfigureGuided() (config.Config, error) {
 	fmt.Println()
 
 	// API Endpoint
-	endpoint, err := prompt.Input("API Endpoint", "https://api.ai-aas.example.com")
+	endpoint, err := prompt.Input("API Endpoint (user-org-service)", "https://api.ai-aas.example.com")
 	if err != nil {
 		return cfg, errors.NewOperationError("failed to read input", err.Error())
 	}
 	cfg.APIEndpoint = endpoint
+
+	// Inference Endpoint
+	inferenceEndpoint, err := prompt.Input("Inference Endpoint (for model listing)", "https://inference.ai-aas.example.com")
+	if err != nil {
+		return cfg, errors.NewOperationError("failed to read input", err.Error())
+	}
+	cfg.InferenceEndpoint = inferenceEndpoint
+
+	// Admin Endpoint
+	adminEndpoint, err := prompt.Input("Admin Endpoint (for benchmarks)", "https://admin.ai-aas.example.com")
+	if err != nil {
+		return cfg, errors.NewOperationError("failed to read input", err.Error())
+	}
+	cfg.AdminEndpoint = adminEndpoint
 
 	// API Key
 	apiKey, err := prompt.Password("API Key")

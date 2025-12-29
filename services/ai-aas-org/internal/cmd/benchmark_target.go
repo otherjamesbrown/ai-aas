@@ -71,7 +71,7 @@ func runBenchmarkTargetList(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	client := newAPIClient()
+	client := newAdminAPIClient()
 	result, err := client.ListBenchmarkTargets(ctx, api.ListBenchmarkTargetsOptions{
 		Environment: targetListEnvironment,
 		Status:      targetListStatus,
@@ -178,7 +178,7 @@ func runBenchmarkTargetAdd(cmd *cobra.Command, args []string) error {
 		req.ScheduleEnabled = &targetAddSchedule
 	}
 
-	client := newAPIClient()
+	client := newAdminAPIClient()
 	target, err := client.CreateBenchmarkTarget(ctx, req)
 	if err != nil {
 		return errors.NewOperationError("failed to create target", err.Error())
@@ -230,7 +230,7 @@ func runBenchmarkTargetShow(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	client := newAPIClient()
+	client := newAdminAPIClient()
 
 	// Resolve name to ID
 	targetID, err := client.ResolveBenchmarkTargetID(ctx, nameOrID)
@@ -304,7 +304,7 @@ func runBenchmarkTargetStart(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	client := newAPIClient()
+	client := newAdminAPIClient()
 
 	// Resolve name to ID
 	targetID, err := client.ResolveBenchmarkTargetID(ctx, nameOrID)
@@ -354,7 +354,7 @@ func runBenchmarkTargetStop(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	client := newAPIClient()
+	client := newAdminAPIClient()
 
 	// Resolve name to ID
 	targetID, err := client.ResolveBenchmarkTargetID(ctx, nameOrID)
@@ -410,7 +410,7 @@ func runBenchmarkTargetRemove(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	client := newAPIClient()
+	client := newAdminAPIClient()
 
 	// Resolve name to ID
 	targetID, err := client.ResolveBenchmarkTargetID(ctx, nameOrID)

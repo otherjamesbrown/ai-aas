@@ -2,7 +2,11 @@ package cmd
 
 import (
 	"context"
+	"crypto/tls"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -49,45 +53,125 @@ func init() {
 	modelCmd.AddCommand(modelListCmd)
 }
 
+// OpenAIModelsResponse represents the response from /v1/models
+type OpenAIModelsResponse struct {
+	Object string        `json:"object"`
+	Data   []OpenAIModel `json:"data"`
+}
+
+// OpenAIModel represents a model in the OpenAI API response
+type OpenAIModel struct {
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	Created int64  `json:"created"`
+	OwnedBy string `json:"owned_by"`
+}
+
 func runModelList(cmd *cobra.Command, args []string) error {
 	if err := requireConfig(); err != nil {
 		return err
 	}
 
+	// Get inference endpoint
+	inferenceEndpoint := config.GetInferenceEndpoint()
+	if inferenceEndpoint == "" {
+		return errors.NewOperationError(
+			"inference endpoint not configured",
+			"Run 'ai-aas-org configure --inference-endpoint <url>' to set the inference API endpoint.",
+		)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	client := newAPIClient()
-	result, err := client.ListModels(ctx, config.GetOrgID())
+	modelsURL := inferenceEndpoint + "/v1/models"
+
+	// Create HTTP client with TLS skip option for development
+	httpClient := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	// Allow insecure TLS for development environments
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	if transport.TLSClientConfig == nil {
+		transport.TLSClientConfig = &tls.Config{}
+	}
+	transport.TLSClientConfig.InsecureSkipVerify = true
+	httpClient.Transport = transport
+
+	// Create request
+	req, err := http.NewRequestWithContext(ctx, "GET", modelsURL, nil)
 	if err != nil {
-		return errors.NewOperationError("failed to list models", err.Error())
+		return errors.NewOperationError("failed to create request", err.Error())
+	}
+
+	// Set auth headers
+	apiKey := config.GetAPIKey()
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		req.Header.Set("X-API-Key", apiKey)
+	}
+
+	// Execute request
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return errors.NewOperationError("failed to query models", err.Error())
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return errors.NewOperationError(
+			fmt.Sprintf("authentication failed (status %d)", resp.StatusCode),
+			"Check your API key is valid and has permission to list models.",
+		)
+	}
+
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return errors.NewOperationError(
+			fmt.Sprintf("API error (status %d)", resp.StatusCode),
+			string(body),
+		)
+	}
+
+	// Parse response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return errors.NewOperationError("failed to read response", err.Error())
+	}
+
+	var modelsResp OpenAIModelsResponse
+	if err := json.Unmarshal(body, &modelsResp); err != nil {
+		return errors.NewOperationError("failed to parse response", err.Error())
 	}
 
 	if IsJSONOutput() {
-		return output.PrintJSON(result.Models)
+		return output.PrintJSON(modelsResp.Data)
 	}
 
-	if len(result.Models) == 0 {
-		output.InfoMsg("No models available to your organization.")
+	if len(modelsResp.Data) == 0 {
+		output.InfoMsg("No models available.")
 		fmt.Println()
-		fmt.Println("Contact your platform administrator to enable models for your organization.")
+		fmt.Println("This may indicate no models are deployed or accessible to your organization.")
 		return nil
 	}
 
-	headers := []string{"NAME", "PROVIDER", "STATUS", "CONTEXT SIZE"}
+	headers := []string{"MODEL ID", "OWNER", "STATUS"}
 	var rows [][]string
-	for _, m := range result.Models {
-		contextSize := fmt.Sprintf("%dk", m.ContextSize/1000)
+	for _, m := range modelsResp.Data {
+		owner := m.OwnedBy
+		if owner == "" {
+			owner = "platform"
+		}
 		rows = append(rows, []string{
-			m.Name,
-			m.Provider,
-			output.StatusBadge(m.Status),
-			contextSize,
+			m.ID,
+			owner,
+			output.StatusBadge("available"),
 		})
 	}
 
 	output.PrintTable(headers, rows)
-	fmt.Printf("\nTotal: %d models\n", len(result.Models))
+	fmt.Printf("\nTotal: %d models\n", len(modelsResp.Data))
 	return nil
 }
 

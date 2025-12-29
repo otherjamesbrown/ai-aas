@@ -47,12 +47,18 @@ func (c *Client) GetScenario(ctx context.Context, name string) (*Scenario, error
 	return &scenario, nil
 }
 
-// SyncScenarios triggers a sync of scenarios from the config repository
-func (c *Client) SyncScenarios(ctx context.Context) error {
-	if err := c.api.Post(ctx, "/v1/benchmarks/scenarios/sync", nil, nil); err != nil {
-		return fmt.Errorf("sync scenarios: %w", err)
+// SyncScenarios syncs scenarios to the Admin API
+func (c *Client) SyncScenarios(ctx context.Context, scenarios []ScenarioUpsert, deleteOrphans bool) (*SyncScenariosResponse, error) {
+	req := SyncScenariosRequest{
+		Scenarios:     scenarios,
+		DeleteOrphans: deleteOrphans,
 	}
-	return nil
+
+	var resp SyncScenariosResponse
+	if err := c.api.Post(ctx, "/v1/benchmarks/scenarios/sync", req, &resp); err != nil {
+		return nil, fmt.Errorf("sync scenarios: %w", err)
+	}
+	return &resp, nil
 }
 
 // ============================================================================

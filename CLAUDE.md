@@ -105,6 +105,30 @@ ai-aas-cli model deploy create llama-7b -e development
 # kubectl apply -f deployment.yaml  # Only for infrastructure changes via GitOps
 ```
 
+### Building CLI Binaries
+
+To rebuild both CLI binaries (ai-aas-cli and ai-aas-org):
+
+```bash
+# Build only (binaries stay in source directories)
+./scripts/build-clis.sh
+
+# Build and install to ~/.local/bin
+./scripts/build-clis.sh --install
+
+# After installing, refresh shell cache
+hash -r
+```
+
+**Binary locations:**
+- Source: `services/ai-aas-cli/ai-aas-cli`, `services/ai-aas-org/ai-aas-org`
+- Installed: `~/.local/bin/ai-aas-cli`, `~/.local/bin/ai-aas-org`
+
+**When to rebuild:**
+- After pulling new changes that modify CLI code
+- After switching branches/worktrees
+- If CLI commands are missing or behaving unexpectedly
+
 ## Core Principles
 
 In addition to the principles outlined in the main guide, always adhere to:

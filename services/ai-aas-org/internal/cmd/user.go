@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -51,6 +52,11 @@ func newAPIClient() *api.Client {
 	return api.NewClient(config.GetAPIEndpoint(), config.GetAPIKey())
 }
 
+// newAdminAPIClient creates a new API client for admin operations (benchmarks, etc).
+func newAdminAPIClient() *api.Client {
+	return api.NewClient(config.GetAdminEndpoint(), config.GetAPIKey())
+}
+
 // --- user list ---
 
 var userListCmd = &cobra.Command{
@@ -97,13 +103,18 @@ func runUserList(cmd *cobra.Command, args []string) error {
 	}
 
 	// Build table
-	headers := []string{"EMAIL", "NAME", "ROLE", "STATUS", "CREATED"}
+	headers := []string{"USER_ID", "EMAIL", "NAME", "ROLES", "STATUS", "CREATED"}
 	var rows [][]string
 	for _, u := range result.Users {
+		roles := strings.Join(u.Metadata.Roles, ", ")
+		if roles == "" {
+			roles = "-"
+		}
 		rows = append(rows, []string{
+			u.ID,
 			u.Email,
 			u.Name,
-			u.Role,
+			roles,
 			output.StatusBadge(u.Status),
 			u.CreatedAt.Format("2006-01-02"),
 		})
@@ -127,11 +138,11 @@ var userCreateCmd = &cobra.Command{
 	Short: "Create a new user in your organization",
 	Long: `Create a new user in your organization.
 
-The user will be created with the specified email and name.
+The user will be created with the specified email and display name.
 By default, users are created with the 'user' role.
 
 Examples:
-  ai-aas-org user create --email user@example.com --name "John Doe"
+  ai-aas-org user create --user-email user@example.com --display-name "John Doe"
   ai-aas-org user create --guided`,
 	RunE: runUserCreate,
 }
@@ -139,8 +150,8 @@ Examples:
 func init() {
 	userCmd.AddCommand(userCreateCmd)
 
-	userCreateCmd.Flags().StringVarP(&userCreateEmail, "email", "e", "", "user email address")
-	userCreateCmd.Flags().StringVarP(&userCreateName, "name", "n", "", "user display name")
+	userCreateCmd.Flags().StringVarP(&userCreateEmail, "user-email", "e", "", "user email address")
+	userCreateCmd.Flags().StringVarP(&userCreateName, "display-name", "n", "", "user display name")
 	userCreateCmd.Flags().StringVarP(&userCreateRole, "role", "r", "user", "user role (user, admin)")
 }
 
@@ -210,15 +221,14 @@ func runUserCreate(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	output.KeyValue("Email", result.User.Email)
 	output.KeyValue("Name", result.User.Name)
-	output.KeyValue("Role", result.User.Role)
 	output.KeyValue("User ID", result.User.ID)
 
-	if result.TemporaryKey != "" {
+	if result.TemporaryPassword != "" {
 		fmt.Println()
-		output.Header("Temporary API Key")
-		fmt.Println(result.TemporaryKey)
+		output.Header("Temporary Password")
+		fmt.Println(result.TemporaryPassword)
 		fmt.Println()
-		output.WarningMsg("Share this key with the user securely. It will only be shown once.")
+		output.WarningMsg("Share this password with the user securely. It will only be shown once.")
 	}
 
 	fmt.Println()
@@ -283,7 +293,11 @@ func runUserShow(cmd *cobra.Command, args []string) error {
 	output.KeyValue("Email", user.Email)
 	output.KeyValue("Name", user.Name)
 	output.KeyValue("User ID", user.ID)
-	output.KeyValue("Role", user.Role)
+	userRoles := strings.Join(user.Metadata.Roles, ", ")
+	if userRoles == "" {
+		userRoles = "-"
+	}
+	output.KeyValue("Roles", userRoles)
 	output.KeyValue("Status", output.StatusBadge(user.Status))
 	output.KeyValue("Created", user.CreatedAt.Format("2006-01-02 15:04:05"))
 	output.KeyValue("Updated", user.UpdatedAt.Format("2006-01-02 15:04:05"))

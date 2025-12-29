@@ -62,6 +62,7 @@ Workflow:
 	cmd.AddCommand(orgUpdateCommand())
 	cmd.AddCommand(orgDeleteCommand())
 	cmd.AddCommand(orgUseCommand())
+	cmd.AddCommand(orgBootstrapCommand())
 
 	return cmd
 }
@@ -1028,6 +1029,282 @@ func runOrgUse(cmd *cobra.Command, args []string, flagClear bool) error {
 	fmt.Println("\nYou can now use commands without --org-id:")
 	fmt.Println("  ai-aas-cli user list")
 	fmt.Println("  ai-aas-cli apikey create --user-id <user-id>")
+
+	return nil
+}
+
+func orgBootstrapCommand() *cobra.Command {
+	var flagName string
+	var flagSlug string
+	var flagAdminEmail string
+	var flagAdminDisplayName string
+	var flagFormat string
+	var flagVerbose bool
+	var flagQuiet bool
+	var flagUserOrgEndpoint string
+	var flagAPIKey string
+	var flagProfile string
+
+	cmd := &cobra.Command{
+		Use:   "bootstrap",
+		Short: "Create organization with admin user and API key",
+		Long: `Bootstrap a new organization in a single command.
+
+This command combines three operations into one:
+  1. Create the organization
+  2. Create an admin user with the specified email
+  3. Create an API key for that user
+
+The API key is displayed once and should be securely shared with the org admin.
+They can then use ai-aas-org to manage their organization.
+
+Examples:
+  # Bootstrap a new organization
+  ai-aas-cli org bootstrap --org-name "ACME Corp" --org-slug acme --admin-email admin@acme.com
+
+  # With custom admin display name
+  ai-aas-cli org bootstrap --org-name "ACME Corp" --org-slug acme \
+    --admin-email admin@acme.com --admin-name "ACME Admin"
+
+  # Save to a profile for easy access
+  ai-aas-cli org bootstrap --org-name "ACME Corp" --org-slug acme \
+    --admin-email admin@acme.com --profile acme-admin
+
+Next Steps:
+  After bootstrap, the org admin can use ai-aas-org:
+    export AI_AAS_ORG_API_KEY="<api-key>"
+    ai-aas-org user list
+    ai-aas-org user create --user-email user@acme.com --display-name "User Name"
+    ai-aas-org apikey create --user-id <user-id> --key-name "API Key"
+    ai-aas-org benchmark run --model <model>
+
+See Also:
+  ai-aas-cli org create    Create organization only
+  ai-aas-cli user create   Create user only
+  ai-aas-cli apikey create Create API key only`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runOrgBootstrap(cmd, args, flagName, flagSlug, flagAdminEmail, flagAdminDisplayName,
+				flagFormat, flagVerbose, flagQuiet, flagUserOrgEndpoint, flagAPIKey, flagProfile)
+		},
+	}
+
+	cmd.Flags().StringVar(&flagName, "org-name", "", "Organization name (required)")
+	cmd.Flags().StringVar(&flagSlug, "org-slug", "", "Organization slug (required)")
+	cmd.Flags().StringVar(&flagAdminEmail, "admin-email", "", "Admin user email (required)")
+	cmd.Flags().StringVar(&flagAdminDisplayName, "admin-name", "", "Admin user display name (default: 'Org Admin')")
+	cmd.Flags().StringVar(&flagFormat, "format", "table", "Output format: table, json, csv")
+	cmd.Flags().BoolVar(&flagVerbose, "verbose", false, "Enable verbose output")
+	cmd.Flags().BoolVar(&flagQuiet, "quiet", false, "Suppress non-error output")
+	cmd.Flags().StringVar(&flagUserOrgEndpoint, "user-org-endpoint", "", "User-org-service endpoint (overrides config)")
+	cmd.Flags().StringVar(&flagAPIKey, "api-key", "", "API key for authentication (overrides config)")
+	cmd.Flags().StringVar(&flagProfile, "profile", "", "Save org_id, user_id, and api_key to named profile")
+
+	return cmd
+}
+
+func runOrgBootstrap(cmd *cobra.Command, args []string, flagName, flagSlug, flagAdminEmail, flagAdminDisplayName string,
+	flagFormat string, flagVerbose, flagQuiet bool, flagUserOrgEndpoint, flagAPIKey string, flagProfile string) error {
+	startTime := time.Now()
+
+	// Load configuration
+	cfg, _, err := config.GetEffectiveConfig(flagProfile)
+	if err != nil {
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to load configuration: %v", err),
+			"Check your configuration file or environment variables.",
+		)
+	}
+
+	// Apply flag overrides
+	if flagUserOrgEndpoint != "" {
+		cfg.UserOrgEndpoint = flagUserOrgEndpoint
+	}
+	if flagAPIKey != "" {
+		cfg.APIKey = flagAPIKey
+	}
+	if flagFormat != "" {
+		cfg.OutputFormat = flagFormat
+	}
+	if flagVerbose {
+		cfg.Verbose = true
+	}
+	if flagQuiet {
+		cfg.Quiet = true
+	}
+
+	// Validate configuration
+	if cfg.UserOrgEndpoint == "" {
+		return errors.NewValidationError(
+			"user-org-service endpoint is required",
+			"Set via --user-org-endpoint flag or ADMIN_CLI_USER_ORG_ENDPOINT environment variable",
+		)
+	}
+
+	// Validate required fields
+	if flagName == "" {
+		return errors.NewValidationError("--name is required", "Provide organization name with --name flag")
+	}
+	if flagSlug == "" {
+		return errors.NewValidationError("--slug is required", "Provide organization slug with --slug flag")
+	}
+	if flagAdminEmail == "" {
+		return errors.NewValidationError("--admin-email is required", "Provide admin email with --admin-email flag")
+	}
+
+	// Set default admin display name
+	adminDisplayName := flagAdminDisplayName
+	if adminDisplayName == "" {
+		adminDisplayName = "Org Admin"
+	}
+
+	// Create HTTP client
+	httpClient, err := createHTTPClient(cfg)
+	if err != nil {
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to create HTTP client: %v", err),
+			"Verify the CA certificate file path is correct and the file is readable.",
+		)
+	}
+
+	// Health check
+	checker := createHealthCheckerWithHTTPClient(httpClient)
+	requiredServices := map[string]string{
+		"user-org-service": cfg.UserOrgEndpoint,
+	}
+	if _, err := checker.CheckRequired(cmd.Context(), requiredServices); err != nil {
+		return errors.NewServiceUnavailableError("user-org-service", cfg.UserOrgEndpoint)
+	}
+
+	userOrgClient := createUserOrgClientWithHTTPClient(cfg, httpClient)
+
+	// Step 1: Create organization
+	orgReq := userorg.CreateOrgRequest{
+		Name: flagName,
+		Slug: flagSlug,
+	}
+	org, err := userOrgClient.CreateOrg(cmd.Context(), orgReq)
+	if err != nil {
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to create organization: %v", err),
+			"Verify your API key is valid and you have permission to create organizations.",
+		)
+	}
+
+	if !cfg.Quiet {
+		fmt.Printf("✓ Organization created\n")
+		fmt.Printf("  Org ID: %s\n", org.OrgID)
+		fmt.Printf("  Name:   %s\n", org.Name)
+		fmt.Printf("  Slug:   %s\n", org.Slug)
+		fmt.Println()
+	}
+
+	// Step 2: Create admin user
+	forcePwdChange := false
+	userReq := userorg.CreateUserRequest{
+		Email:          flagAdminEmail,
+		DisplayName:    adminDisplayName,
+		Roles:          []string{"admin"},
+		ForcePwdChange: &forcePwdChange,
+	}
+	user, err := userOrgClient.CreateUser(cmd.Context(), org.Slug, userReq)
+	if err != nil {
+		// Rollback: try to delete the org
+		_ = userOrgClient.DeleteOrg(cmd.Context(), org.OrgID)
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to create admin user: %v", err),
+			"Organization was created but user creation failed. The organization has been cleaned up.",
+		)
+	}
+
+	if !cfg.Quiet {
+		fmt.Printf("✓ Admin user created\n")
+		fmt.Printf("  User ID: %s\n", user.UserID)
+		fmt.Printf("  Email:   %s\n", user.Email)
+		fmt.Printf("  Roles:   admin\n")
+		fmt.Println()
+	}
+
+	// Step 3: Create API key for admin user with org:admin scope
+	apiKeyReq := userorg.IssueAPIKeyRequest{
+		Scopes: []string{"org:admin"},
+		Notes:  "Bootstrap admin key - created by ai-aas-cli org bootstrap",
+	}
+	apiKey, err := userOrgClient.IssueUserAPIKey(cmd.Context(), org.Slug, user.UserID, apiKeyReq)
+	if err != nil {
+		// Don't rollback - org and user were created successfully
+		return errors.NewOperationError(
+			fmt.Sprintf("failed to create API key: %v", err),
+			"Organization and user were created successfully but API key creation failed. Use 'ai-aas-cli apikey create' to create a key manually.",
+		)
+	}
+
+	if !cfg.Quiet {
+		fmt.Printf("✓ API key created\n")
+		fmt.Printf("  Key ID: %s\n", apiKey.KeyID)
+		fmt.Println()
+		fmt.Println("╔══════════════════════════════════════════════════════════════════════════════╗")
+		fmt.Println("║  API KEY (save this - shown once!)                                           ║")
+		fmt.Println("╠══════════════════════════════════════════════════════════════════════════════╣")
+		fmt.Printf("║  %s\n", apiKey.Token)
+		fmt.Println("╚══════════════════════════════════════════════════════════════════════════════╝")
+		fmt.Println()
+		fmt.Println("Next steps:")
+		fmt.Println("  export AI_AAS_ORG_API_KEY=\"" + apiKey.Token + "\"")
+		fmt.Println("  ai-aas-org user list")
+		fmt.Println("  ai-aas-org user create --email user@example.com")
+	}
+
+	// Save to profile if --profile flag is set
+	if flagProfile != "" {
+		if err := config.UpdateProfile(flagProfile, func(p *config.Profile) {
+			p.OrgID = org.Slug
+			p.UserID = user.UserID
+			p.APIKey = apiKey.Token
+		}); err != nil {
+			if !cfg.Quiet {
+				fmt.Printf("\nWarning: failed to update profile '%s': %v\n", flagProfile, err)
+			}
+		} else if !cfg.Quiet {
+			fmt.Printf("\nSaved to profile '%s'\n", flagProfile)
+		}
+	}
+
+	// Audit logging
+	auditLogger := audit.NewLogger(nil)
+	_ = auditLogger.LogOperation(audit.Operation{
+		Type:    "org_bootstrap",
+		Command: fmt.Sprintf("org bootstrap --name=%s --slug=%s --admin-email=%s", flagName, flagSlug, flagAdminEmail),
+		Parameters: map[string]interface{}{
+			"name":       flagName,
+			"slug":       flagSlug,
+			"orgId":      org.OrgID,
+			"adminEmail": flagAdminEmail,
+			"userId":     user.UserID,
+			"keyId":      apiKey.KeyID,
+		},
+		Outcome:  "success",
+		Duration: time.Since(startTime),
+	})
+
+	// JSON output
+	if cfg.OutputFormat == "json" {
+		return output.PrintJSON(map[string]interface{}{
+			"org": map[string]string{
+				"orgId":  org.OrgID,
+				"name":   org.Name,
+				"slug":   org.Slug,
+				"status": org.Status,
+			},
+			"user": map[string]string{
+				"userId": user.UserID,
+				"email":  user.Email,
+			},
+			"apiKey": map[string]string{
+				"keyId": apiKey.KeyID,
+				"token": apiKey.Token,
+			},
+		})
+	}
 
 	return nil
 }

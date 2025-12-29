@@ -382,23 +382,36 @@ func (s *BenchmarkService) TriggerRun(ctx context.Context, targetID uuid.UUID, t
 		return nil, fmt.Errorf("failed to create run: %w", err)
 	}
 
-	// Trigger on guidellm-runner
-	if err := s.triggerRunOnRunner(ctx, target, run); err != nil {
-		s.logger.Error("failed to trigger run on runner",
-			zap.String("target_id", targetID.String()),
-			zap.String("run_id", run.ID.String()),
-			zap.Error(err))
+	// Update status to running immediately
+	statusRunning := "running"
+	now := time.Now()
+	s.repo.UpdateRun(ctx, run.ID, &domain.BenchmarkRunUpdate{
+		Status:    &statusRunning,
+		StartedAt: &now,
+	})
 
-		// Update run status to failed
-		statusFailed := "failed"
-		errMsg := err.Error()
-		s.repo.UpdateRun(ctx, run.ID, &domain.BenchmarkRunUpdate{
-			Status:       &statusFailed,
-			ErrorMessage: &errMsg,
-		})
+	// Trigger on guidellm-runner asynchronously (benchmarks can take minutes)
+	// Use a background context so the benchmark completes even if the HTTP request times out
+	go func() {
+		bgCtx := context.Background()
+		targetCopy := *target
+		runCopy := *run
 
-		return nil, fmt.Errorf("failed to trigger run on runner: %w", err)
-	}
+		if err := s.triggerRunOnRunner(bgCtx, &targetCopy, &runCopy); err != nil {
+			s.logger.Error("failed to trigger run on runner",
+				zap.String("target_id", targetID.String()),
+				zap.String("run_id", runCopy.ID.String()),
+				zap.Error(err))
+
+			// Update run status to failed
+			statusFailed := "failed"
+			errMsg := err.Error()
+			s.repo.UpdateRun(bgCtx, runCopy.ID, &domain.BenchmarkRunUpdate{
+				Status:       &statusFailed,
+				ErrorMessage: &errMsg,
+			})
+		}
+	}()
 
 	s.logger.Info("benchmark run triggered",
 		zap.String("target_id", targetID.String()),
@@ -541,7 +554,107 @@ func (s *BenchmarkService) stopTargetOnRunner(ctx context.Context, target *domai
 	return nil
 }
 
+// registerTargetOnRunner creates/updates a target on the guidellm-runner
+// This ensures the target exists before triggering a run
+func (s *BenchmarkService) registerTargetOnRunner(ctx context.Context, target *domain.BenchmarkTarget) error {
+	// Determine endpoint URL - use target's override or default to API router
+	endpointURL := "https://api.dev.otherjamesbrown.com"
+	if target.EndpointURL != nil && *target.EndpointURL != "" {
+		endpointURL = *target.EndpointURL
+	}
+
+	reqBody := runnerTargetRequest{
+		Name:        target.Name,
+		URL:         endpointURL,
+		Model:       target.ModelName,
+		Environment: target.Environment,
+	}
+
+	// Look up scenario to get benchmark configuration
+	if target.ScenarioName != "" {
+		scenario, err := s.repo.GetScenarioByName(ctx, target.ScenarioName)
+		if err != nil {
+			s.logger.Warn("failed to get scenario for target",
+				zap.String("target", target.Name),
+				zap.String("scenario", target.ScenarioName),
+				zap.Error(err))
+		} else if scenario != nil && scenario.Config != nil {
+			// Extract defaults from scenario config
+			if defaults, ok := scenario.Config["defaults"].(map[string]interface{}); ok {
+				if profile, ok := defaults["profile"].(string); ok {
+					reqBody.Profile = profile
+				}
+				if rate, ok := defaults["rate"].(float64); ok {
+					rateInt := int(rate)
+					reqBody.Rate = &rateInt
+				}
+				if maxSeconds, ok := defaults["max_seconds"].(float64); ok {
+					maxSecondsInt := int(maxSeconds)
+					reqBody.MaxSeconds = &maxSecondsInt
+				}
+				if requestType, ok := defaults["request_type"].(string); ok {
+					reqBody.RequestType = requestType
+				}
+			}
+		}
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/api/targets", s.guidellmURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to register target: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Ignore "already exists" errors (400) - that's fine for trigger
+	if resp.StatusCode >= 400 && resp.StatusCode != http.StatusBadRequest {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("runner returned error: %s (status %d)", string(bodyBytes), resp.StatusCode)
+	}
+
+	return nil
+}
+
+// runnerTriggerResponse represents the response from the runner's trigger endpoint
+type runnerTriggerResponse struct {
+	Name    string                 `json:"name"`
+	RunID   string                 `json:"run_id"`
+	Status  string                 `json:"status"`
+	Results *runnerParsedResults   `json:"results,omitempty"`
+	Error   string                 `json:"error,omitempty"`
+}
+
+// runnerParsedResults represents the results from guidellm-runner
+type runnerParsedResults struct {
+	TotalRequests      int       `json:"TotalRequests"`
+	SuccessfulRequests int       `json:"SuccessfulRequests"`
+	FailedRequests     int       `json:"FailedRequests"`
+	PromptTokens       int       `json:"PromptTokens"`
+	OutputTokens       int       `json:"OutputTokens"`
+	OutputTokensPerSec float64   `json:"OutputTokensPerSec"`
+	RequestsPerSec     float64   `json:"RequestsPerSec"`
+	TTFTValues         []float64 `json:"TTFTValues"`
+	ITLValues          []float64 `json:"ITLValues"`
+	E2EValues          []float64 `json:"E2EValues"`
+}
+
 func (s *BenchmarkService) triggerRunOnRunner(ctx context.Context, target *domain.BenchmarkTarget, run *domain.BenchmarkRun) error {
+	// First, register the target on the runner (in case it doesn't exist)
+	if err := s.registerTargetOnRunner(ctx, target); err != nil {
+		return fmt.Errorf("failed to register target on runner: %w", err)
+	}
+
 	reqBody := runnerTriggerRequest{
 		RunID:           run.ID.String(),
 		ConfigOverrides: target.ConfigOverrides,
@@ -559,18 +672,194 @@ func (s *BenchmarkService) triggerRunOnRunner(ctx context.Context, target *domai
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := s.httpClient.Do(req)
+	// Use a dedicated client with longer timeout for benchmark triggers
+	// Benchmarks can take several minutes to complete
+	longRunningClient := &http.Client{
+		Timeout: 15 * time.Minute,
+	}
+	resp, err := longRunningClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to trigger run: %w", err)
 	}
 	defer resp.Body.Close()
 
+	bodyBytes, _ := io.ReadAll(resp.Body)
+
 	if resp.StatusCode >= 400 {
-		bodyBytes, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("runner returned error: %s (status %d)", string(bodyBytes), resp.StatusCode)
 	}
 
+	// Parse the response
+	var triggerResp runnerTriggerResponse
+	if err := json.Unmarshal(bodyBytes, &triggerResp); err != nil {
+		s.logger.Warn("failed to parse trigger response", zap.Error(err))
+		return nil // Don't fail the request, just log it
+	}
+
+	// Update the run with results
+	now := time.Now()
+	if triggerResp.Status == "completed" && triggerResp.Results != nil {
+		results := s.convertRunnerResults(triggerResp.Results)
+		statusCompleted := "completed"
+		update := &domain.BenchmarkRunUpdate{
+			Status:      &statusCompleted,
+			StartedAt:   &run.CreatedAt,
+			CompletedAt: &now,
+			Results:     results,
+		}
+
+		// Calculate duration
+		duration := int(now.Sub(run.CreatedAt).Seconds())
+		update.DurationSeconds = &duration
+
+		if _, err := s.repo.UpdateRun(ctx, run.ID, update); err != nil {
+			s.logger.Warn("failed to update run with results",
+				zap.String("run_id", run.ID.String()),
+				zap.Error(err))
+		}
+
+		// Also update the target's last run info
+		lastRunStatus := "completed"
+		s.repo.UpdateTarget(ctx, target.ID, &domain.BenchmarkTargetUpdate{
+			LastRunAt:     &now,
+			LastRunStatus: &lastRunStatus,
+		})
+	} else if triggerResp.Status == "failed" {
+		statusFailed := "failed"
+		errMsg := triggerResp.Error
+		s.repo.UpdateRun(ctx, run.ID, &domain.BenchmarkRunUpdate{
+			Status:       &statusFailed,
+			ErrorMessage: &errMsg,
+			CompletedAt:  &now,
+		})
+
+		lastRunStatus := "failed"
+		s.repo.UpdateTarget(ctx, target.ID, &domain.BenchmarkTargetUpdate{
+			LastRunAt:     &now,
+			LastRunStatus: &lastRunStatus,
+		})
+	}
+
 	return nil
+}
+
+// convertRunnerResults converts runner's parsed results to domain BenchmarkResults
+func (s *BenchmarkService) convertRunnerResults(r *runnerParsedResults) *domain.BenchmarkResults {
+	results := &domain.BenchmarkResults{
+		RequestsTotal:     r.TotalRequests,
+		RequestsPerSecond: r.RequestsPerSec,
+		TokensPerSecond:   r.OutputTokensPerSec,
+		ErrorCount:        r.FailedRequests,
+		TotalInputTokens:  r.PromptTokens,
+		TotalOutputTokens: r.OutputTokens,
+	}
+
+	// Calculate error rate
+	if r.TotalRequests > 0 {
+		results.ErrorRate = float64(r.FailedRequests) / float64(r.TotalRequests)
+	}
+
+	// Calculate TTFT percentiles (convert from seconds to milliseconds)
+	if len(r.TTFTValues) > 0 {
+		results.TTFTP50 = percentile(r.TTFTValues, 50) * 1000
+		results.TTFTP90 = percentile(r.TTFTValues, 90) * 1000
+		results.TTFTP99 = percentile(r.TTFTValues, 99) * 1000
+		results.TTFTAvg = average(r.TTFTValues) * 1000
+	}
+
+	// Calculate ITL percentiles
+	if len(r.ITLValues) > 0 {
+		results.ITLP50 = percentile(r.ITLValues, 50) * 1000
+		results.ITLP90 = percentile(r.ITLValues, 90) * 1000
+		results.ITLP99 = percentile(r.ITLValues, 99) * 1000
+		results.ITLAvg = average(r.ITLValues) * 1000
+	}
+
+	// Calculate E2E latency percentiles
+	if len(r.E2EValues) > 0 {
+		results.LatencyP50 = percentile(r.E2EValues, 50) * 1000
+		results.LatencyP90 = percentile(r.E2EValues, 90) * 1000
+		results.LatencyP95 = percentile(r.E2EValues, 95) * 1000
+		results.LatencyP99 = percentile(r.E2EValues, 99) * 1000
+		results.LatencyAvg = average(r.E2EValues) * 1000
+		results.LatencyMin = min(r.E2EValues) * 1000
+		results.LatencyMax = max(r.E2EValues) * 1000
+	}
+
+	return results
+}
+
+// Helper functions for statistics
+
+// percentile calculates the pth percentile of a sorted slice
+func percentile(values []float64, p float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+
+	// Make a copy and sort
+	sorted := make([]float64, len(values))
+	copy(sorted, values)
+	sortFloat64s(sorted)
+
+	// Calculate index
+	idx := (p / 100) * float64(len(sorted)-1)
+	lower := int(idx)
+	upper := lower + 1
+
+	if upper >= len(sorted) {
+		return sorted[len(sorted)-1]
+	}
+
+	// Linear interpolation
+	weight := idx - float64(lower)
+	return sorted[lower]*(1-weight) + sorted[upper]*weight
+}
+
+func average(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, v := range values {
+		sum += v
+	}
+	return sum / float64(len(values))
+}
+
+func min(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	m := values[0]
+	for _, v := range values[1:] {
+		if v < m {
+			m = v
+		}
+	}
+	return m
+}
+
+func max(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	m := values[0]
+	for _, v := range values[1:] {
+		if v > m {
+			m = v
+		}
+	}
+	return m
+}
+
+// sortFloat64s sorts a slice of float64s in place
+func sortFloat64s(a []float64) {
+	for i := 1; i < len(a); i++ {
+		for j := i; j > 0 && a[j] < a[j-1]; j-- {
+			a[j], a[j-1] = a[j-1], a[j]
+		}
+	}
 }
 
 // BenchmarkValidationError represents a validation error in the benchmark service layer

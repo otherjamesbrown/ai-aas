@@ -140,8 +140,8 @@ The key will only be displayed once after creation. Make sure to copy it
 and share it securely with the user.
 
 Examples:
-  ai-aas-org apikey create --user user@example.com --name "Production Key"
-  ai-aas-org apikey create --user user@example.com --name "Dev Key" --expires 30d
+  ai-aas-org apikey create --user-id <user-id> --key-name "Production Key"
+  ai-aas-org apikey create --user-id <user-id> --key-name "Dev Key" --expires 30d
   ai-aas-org apikey create --guided`,
 	RunE: runAPIKeyCreate,
 }
@@ -149,8 +149,8 @@ Examples:
 func init() {
 	apikeyCmd.AddCommand(apikeyCreateCmd)
 
-	apikeyCreateCmd.Flags().StringVar(&apikeyCreateUser, "user", "", "user email or ID")
-	apikeyCreateCmd.Flags().StringVar(&apikeyCreateName, "name", "", "key name/description")
+	apikeyCreateCmd.Flags().StringVar(&apikeyCreateUser, "user-id", "", "user ID (use 'ai-aas-org user list' to find)")
+	apikeyCreateCmd.Flags().StringVar(&apikeyCreateName, "key-name", "", "key name/description")
 	apikeyCreateCmd.Flags().StringVar(&apikeyCreateExpires, "expires", "", "expiration (e.g., 30d, 90d, 1y, never)")
 }
 
@@ -227,19 +227,19 @@ func runAPIKeyCreate(cmd *cobra.Command, args []string) error {
 	output.SuccessMsg("API key created successfully!")
 	fmt.Println()
 
-	output.Box("API Key", result.RawKey)
+	output.Box("API Key", result.Token)
 	fmt.Println()
 	output.WarningMsg("This key will only be shown once. Copy it now and share it securely.")
 	fmt.Println()
 
-	output.KeyValue("Key ID", result.APIKey.ID)
-	output.KeyValue("Name", result.APIKey.Name)
-	output.KeyValue("User", result.APIKey.UserEmail)
-	if result.APIKey.ExpiresAt != nil {
-		output.KeyValue("Expires", result.APIKey.ExpiresAt.Format("2006-01-02"))
-	} else {
-		output.KeyValue("Expires", "Never")
-	}
+	output.KeyValue("Key ID", result.KeyID)
+	output.KeyValue("Name", name)
+	output.KeyValue("Status", result.Status)
+	output.KeyValue("Expires", "Never") // TODO: Parse from response when supported
+
+	fmt.Println()
+	fmt.Println("To use this key:")
+	fmt.Printf("  export AI_AAS_API_KEY=\"%s\"\n", result.Token)
 
 	return nil
 }
@@ -383,13 +383,13 @@ func runAPIKeyRotate(cmd *cobra.Command, args []string) error {
 	output.SuccessMsg("API key rotated successfully!")
 	fmt.Println()
 
-	output.Box("New API Key", result.NewAPIKey.RawKey)
+	output.Box("New API Key", result.NewAPIKey.Token)
 	fmt.Println()
 	output.WarningMsg("This key will only be shown once. Copy it now and share it securely.")
 	fmt.Println()
 
 	output.KeyValue("Old Key ID", result.OldKeyID)
-	output.KeyValue("New Key ID", result.NewAPIKey.APIKey.ID)
+	output.KeyValue("New Key ID", result.NewAPIKey.KeyID)
 
 	return nil
 }

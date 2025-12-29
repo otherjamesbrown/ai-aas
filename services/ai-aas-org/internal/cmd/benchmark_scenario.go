@@ -60,7 +60,7 @@ func runBenchmarkScenarioList(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	client := newAPIClient()
+	client := newAdminAPIClient()
 	result, err := client.ListBenchmarkScenarios(ctx, 100, 0)
 	if err != nil {
 		return errors.NewOperationError("failed to list scenarios", err.Error())
@@ -77,23 +77,80 @@ func runBenchmarkScenarioList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	headers := []string{"NAME", "VERSION", "DESCRIPTION"}
+	headers := []string{"NAME", "PROFILE", "RATE", "DURATION", "TOKENS", "DESCRIPTION"}
 	var rows [][]string
 	for _, s := range result.Scenarios {
-		desc := s.Description
-		if len(desc) > 60 {
-			desc = desc[:57] + "..."
+		// Extract useful info from config
+		profile := "-"
+		rate := "-"
+		duration := "-"
+		tokens := "-"
+
+		if defaults, ok := s.Config["defaults"].(map[string]interface{}); ok {
+			if p, ok := defaults["profile"].(string); ok {
+				profile = p
+			}
+			if r, ok := defaults["rate"].(float64); ok {
+				rate = fmt.Sprintf("%.0f/s", r)
+			}
+			if maxSec, ok := defaults["max_seconds"].(float64); ok {
+				if maxSec >= 60 {
+					duration = fmt.Sprintf("%.0fm", maxSec/60)
+				} else {
+					duration = fmt.Sprintf("%.0fs", maxSec)
+				}
+			}
 		}
+
+		if data, ok := s.Config["data"].(map[string]interface{}); ok {
+			promptTok := 0.0
+			outputTok := 0.0
+			if p, ok := data["prompt_tokens"].(float64); ok {
+				promptTok = p
+			}
+			if o, ok := data["output_tokens"].(float64); ok {
+				outputTok = o
+			}
+			if promptTok > 0 || outputTok > 0 {
+				tokens = fmt.Sprintf("%.0f→%.0f", promptTok, outputTok)
+			}
+		}
+
+		// Truncate description - take first line only
+		desc := s.Description
+		if idx := indexAny(desc, "\n\r"); idx > 0 {
+			desc = desc[:idx]
+		}
+		if len(desc) > 45 {
+			desc = desc[:42] + "..."
+		}
+
 		rows = append(rows, []string{
 			s.Name,
-			s.Version,
+			profile,
+			rate,
+			duration,
+			tokens,
 			desc,
 		})
 	}
 
 	output.PrintTable(headers, rows)
 	fmt.Printf("\nTotal: %d scenarios\n", len(result.Scenarios))
+	fmt.Println("\nUse 'ai-aas-org benchmark scenario show <name>' for full details.")
 	return nil
+}
+
+// indexAny returns the index of the first occurrence of any char in chars, or -1
+func indexAny(s string, chars string) int {
+	for i, c := range s {
+		for _, ch := range chars {
+			if c == ch {
+				return i
+			}
+		}
+	}
+	return -1
 }
 
 // --- benchmark scenario show ---
@@ -127,7 +184,7 @@ func runBenchmarkScenarioShow(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	client := newAPIClient()
+	client := newAdminAPIClient()
 	scenario, err := client.GetBenchmarkScenario(ctx, scenarioName)
 	if err != nil {
 		return errors.NewOperationError("failed to get scenario", err.Error())
