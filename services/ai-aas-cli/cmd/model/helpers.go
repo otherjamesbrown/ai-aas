@@ -1,7 +1,10 @@
 // Package model provides CLI commands for model management.
 package model
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // formatBytes formats a byte count as a human-readable string
 func formatBytes(bytes int64) string {
@@ -15,4 +18,23 @@ func formatBytes(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// sanitizeModelName converts a model name to KServe-compatible format.
+// KServe requires lowercase alphanumeric with hyphens, no periods or underscores.
+// This function:
+//   - Converts to lowercase
+//   - Replaces underscores with hyphens
+//   - Replaces periods with hyphens (for version numbers like v0.3)
+//   - Removes consecutive hyphens
+//   - Trims leading/trailing hyphens
+func sanitizeModelName(name string) string {
+	name = strings.ToLower(name)
+	name = strings.ReplaceAll(name, "_", "-")
+	name = strings.ReplaceAll(name, ".", "-")
+	// Remove consecutive hyphens
+	for strings.Contains(name, "--") {
+		name = strings.ReplaceAll(name, "--", "-")
+	}
+	return strings.Trim(name, "-")
 }

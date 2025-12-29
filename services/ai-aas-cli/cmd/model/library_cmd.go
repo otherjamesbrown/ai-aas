@@ -82,6 +82,23 @@ Use Cases:
 	return cmd
 }
 
+// getCachedRevision retrieves the HF revision for a cached model
+func getCachedRevision(ctx context.Context, regClient *registry.Client, modelName string) (string, error) {
+	cacheEntries, err := regClient.GetCache(ctx, modelName)
+	if err != nil {
+		return "", fmt.Errorf("get cache: %w", err)
+	}
+
+	// Find most recent ready cache entry
+	for _, entry := range cacheEntries {
+		if entry.Status == "ready" && entry.HFRevision != "" {
+			return entry.HFRevision, nil
+		}
+	}
+
+	return "", fmt.Errorf("model not cached or no ready cache entry. Run: ai-aas-cli model cache pull %s", modelName)
+}
+
 // newLibraryListCommand creates the library list subcommand
 func newLibraryListCommand() *cobra.Command {
 	var environment string
@@ -194,15 +211,21 @@ See Also:
 				cached := "No"
 				cachedColor := muted
 				isCached := false
-				s3Client, err := getS3Client(ctx)
-				if err == nil {
-					// Note: manifest filename is .manifest.json (with leading dot)
-					manifestPath := fmt.Sprintf("models/%s/main/.manifest.json", m.Name)
-					exists, _ := s3Client.Exists(ctx, manifestPath)
-					if exists {
-						cached = "Yes"
-						cachedColor = success
-						isCached = true
+
+				// Try to get cached revision
+				revision, revErr := getCachedRevision(ctx, regClient, m.Name)
+				if revErr == nil && revision != "" {
+					// Model is cached with a valid revision
+					s3Client, err := getS3Client(ctx)
+					if err == nil {
+						// Note: manifest filename is .manifest.json (with leading dot)
+						manifestPath := fmt.Sprintf("models/%s/%s/.manifest.json", m.Name, revision)
+						exists, _ := s3Client.Exists(ctx, manifestPath)
+						if exists {
+							cached = "Yes"
+							cachedColor = success
+							isCached = true
+						}
 					}
 				}
 
@@ -393,7 +416,15 @@ See Also:
 					continue
 				}
 
-				storageURI := fmt.Sprintf("s3://%s/models/%s/main/", s3Bucket, modelName)
+				// Get cached revision instead of hardcoding "main"
+				revision, err := getCachedRevision(ctx, regClient, modelName)
+				if err != nil {
+					fmt.Printf("  ERROR: %v\n", err)
+					failed = append(failed, modelName)
+					continue
+				}
+
+				storageURI := fmt.Sprintf("s3://%s/models/%s/%s/", s3Bucket, modelName, revision)
 				isvcName := fmt.Sprintf("%s-%s", modelName, environment)
 
 				existing, err := k8sClient.GetInferenceService(ctx, isvcName, environment)
@@ -639,6 +670,25 @@ See Also:
 			disableIsvc := fmt.Sprintf("%s-%s", disableModel, environment)
 			enableIsvc := fmt.Sprintf("%s-%s", enableModel, environment)
 
+			// Create API client and registry client early so we can get cached revisions
+			apiClient, apiErr := getAPIClient(cfg)
+			var regClient *registry.Client
+			if apiErr != nil {
+				return fmt.Errorf("get API client: %w", apiErr)
+			}
+			regClient = registry.NewClient(apiClient)
+
+			// Get cached revisions for both models
+			enableRevision, err := getCachedRevision(ctx, regClient, enableModel)
+			if err != nil {
+				return fmt.Errorf("get cached revision for %s: %w", enableModel, err)
+			}
+
+			disableRevision, err := getCachedRevision(ctx, regClient, disableModel)
+			if err != nil {
+				return fmt.Errorf("get cached revision for %s: %w", disableModel, err)
+			}
+
 			disableStatus, err := k8sClient.GetInferenceService(ctx, disableIsvc, environment)
 			if err != nil {
 				return fmt.Errorf("model %s is not deployed in %s", disableModel, environment)
@@ -669,12 +719,7 @@ See Also:
 				return fmt.Errorf("disable %s: %w", disableModel, err)
 			}
 
-			apiClient, apiErr := getAPIClient(cfg)
-			var regClient *registry.Client
-			if apiErr != nil {
-				fmt.Printf("  Warning: could not get API client to record history: %v\n", apiErr)
-			} else if apiClient != nil {
-				regClient = registry.NewClient(apiClient)
+			if regClient != nil {
 				if err := regClient.RecordState(ctx, disableModel, registry.RecordStateRequest{
 					Environment: environment,
 					Action:      "swapped_out",
@@ -696,7 +741,7 @@ See Also:
 			// Step 2: Enable
 			fmt.Printf("Step 2: Enabling %s...\n", enableModel)
 
-			storageURI := fmt.Sprintf("s3://%s/models/%s/main/", s3Bucket, enableModel)
+			storageURI := fmt.Sprintf("s3://%s/models/%s/%s/", s3Bucket, enableModel, enableRevision)
 
 			isvcCfg := kubernetes.InferenceServiceConfig{
 				Name:        enableIsvc,
@@ -721,7 +766,7 @@ See Also:
 				rollbackCfg := isvcCfg
 				rollbackCfg.Name = disableIsvc
 				rollbackCfg.ModelName = disableModel
-				rollbackCfg.StorageURI = fmt.Sprintf("s3://%s/models/%s/main/", s3Bucket, disableModel)
+				rollbackCfg.StorageURI = fmt.Sprintf("s3://%s/models/%s/%s/", s3Bucket, disableModel, disableRevision)
 				rollbackCfg.Labels["ai-aas.io/model"] = disableModel
 
 				if rollbackErr := k8sClient.CreateInferenceService(ctx, rollbackCfg); rollbackErr != nil {
