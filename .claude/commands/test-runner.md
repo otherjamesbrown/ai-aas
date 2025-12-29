@@ -10,16 +10,16 @@ Interactive guide to run tests across the AI-AAS platform. Choose your test scop
 
 Use AskUserQuestion with header "Test Category":
 
-| Option | Description |
-|--------|-------------|
-| Unit Tests (Recommended) | Fast, isolated tests - no dependencies |
-| E2E / Smoke Tests | Full workflow tests against running services |
-| Integration Tests | Multi-component tests with external dependencies |
-| CLI Smoke Tests | CLI tool validation against environments |
-| Web Portal Tests | Frontend unit and E2E tests |
-| Performance / Benchmarks | Latency and throughput measurements |
-| Infrastructure Tests | Terraform and Kubernetes validation |
-| All Local Tests | Run all tests that don't require a cluster |
+| Option | Description | Duration |
+|--------|-------------|----------|
+| Unit Tests (Recommended) | Fast, isolated tests - no dependencies | 1-5 min |
+| E2E / Smoke Tests | Full workflow tests against running services | 2-45 min |
+| Integration Tests | Multi-component tests with external dependencies | 5-15 min |
+| CLI Smoke Tests | CLI tool validation against environments | 2-5 min/env |
+| Web Portal Tests | Frontend unit and E2E tests | 1-10 min |
+| Performance / Benchmarks | Latency and throughput measurements | 1-5 min |
+| Infrastructure Tests | Terraform and Kubernetes validation | 5-30 min |
+| All Local Tests | Run all tests that don't require a cluster | 5-10 min |
 
 ### Step 2: Ask Service Scope (for Unit/Integration tests)
 
@@ -46,9 +46,102 @@ If user chose E2E, Integration, or CLI tests, ask with header "Environment":
 | Staging Cluster | Run against staging environment |
 | Both Dev + Staging | Run against both remote environments |
 
-### Step 4: Execute the appropriate command
+### Step 4: Create Test Run Bead
 
-**IMPORTANT**: After getting answers, run the appropriate command from the table below.
+**CRITICAL: Before running tests, create a parent bead to track the test run.**
+
+```bash
+# Get current git commit
+COMMIT=$(git rev-parse --short HEAD)
+
+# Create parent bead with labels
+bd create --title="Test Run: <category> (<environment>) @ $COMMIT" \
+  --type=task \
+  --priority=3 \
+  --label=test-run \
+  --description="Test run tracking bead
+
+**Category**: <category>
+**Environment**: <environment>
+**Commit**: $COMMIT
+**Started**: $(date -Iseconds)
+
+## Test Results
+| Test | Status | Duration |
+|------|--------|----------|
+| (running...) | | |
+"
+```
+
+Store the parent bead ID (e.g., `aas-xxxx`) for updating during the run.
+
+### Step 5: Execute Tests and Track Results
+
+**IMPORTANT**: Run the appropriate command and parse output to track each test.
+
+For each test result:
+1. **Parse test output** for test name, pass/fail, duration
+2. **Update parent bead description** with results table
+3. **For failures**, create child bead:
+
+```bash
+# Create failure bead
+bd create --title="FAIL: <TestName>" \
+  --type=bug \
+  --priority=<P1 for smoke/critical, P2 for others> \
+  --label=test-failure \
+  --description="Test failure from test run aas-<parent>
+
+**Test**: <TestName>
+**Category**: <category>
+**Environment**: <environment>
+**Commit**: $COMMIT
+
+## Error Output
+\`\`\`
+<error message>
+\`\`\`
+
+## Suggested Investigation
+- Check logs: <relevant log query>
+- Related code: <file:line if available>
+"
+
+# Link failure to parent (parent blocks failure)
+bd dep add <failure-bead> <parent-bead>
+```
+
+### Step 6: Finalize Test Run Bead
+
+After all tests complete:
+
+1. **Update parent bead** with final summary:
+   - Total tests, passed, failed, skipped
+   - Total duration
+   - List of failure bead IDs (if any)
+
+2. **Close or leave open**:
+   - **All passed**: Close the parent bead with reason "All X tests passed in Xs"
+   - **Any failures**: Leave open, update status to show "X failures - see blocked issues"
+
+```bash
+# If all passed
+bd close <parent-bead> --reason="All <N> tests passed in <duration>"
+
+# If failures, update description with summary (don't close)
+# The "Blocks:" field will automatically show linked failure beads
+```
+
+### Priority Inference for Failures
+
+| Test Category | Priority | Rationale |
+|--------------|----------|-----------|
+| Smoke Tests | P1 | Critical path, blocks deployment |
+| E2E Critical Path | P1 | Core functionality broken |
+| Unit Tests | P2 | Isolated failures |
+| Integration Tests | P2 | Cross-service issues |
+| Performance Tests | P3 | Non-blocking regressions |
+| Infrastructure Tests | P1 | Deployment blockers |
 
 ---
 
@@ -300,27 +393,38 @@ See `tests/e2e/SETUP.md` for:
 
 ---
 
-## Step 5: Present Results
+## Step 7: Present Results
 
 After running tests, present results in this format:
 
 ### Test Results Summary
 
-| Category | Tests | Passed | Failed | Duration |
-|----------|-------|--------|--------|----------|
-| [Category] | X | X | X | Xs |
+| Metric | Value |
+|--------|-------|
+| **Test Run Bead** | aas-xxxx |
+| **Category** | [Category] |
+| **Environment** | [Environment] |
+| **Commit** | [short hash] |
+| **Duration** | Xs |
+
+| Status | Count |
+|--------|-------|
+| Passed | X |
+| Failed | X |
+| Skipped | X |
+| **Total** | X |
 
 ### Failed Tests (if any)
 
-List each failed test with:
-- Test name
-- Error message
-- Suggested fix or investigation steps
+| Test | Failure Bead | Error Summary |
+|------|--------------|---------------|
+| TestFoo | aas-yyyy | Connection refused |
+| TestBar | aas-zzzz | Assertion failed |
 
 ### Next Steps
 
-- If all passed: "All tests passed. Ready for [next action]."
-- If failures: Suggest creating a bead issue for persistent failures
+- **All passed**: "All tests passed. Test run bead aas-xxxx closed."
+- **Failures**: "X failures tracked. See `bd show aas-xxxx` for blocked issues. Run `bd list --label test-failure --status open` to see all open test failures."
 
 ---
 
@@ -343,8 +447,21 @@ cat tests/e2e/SETUP.md           # Initial setup
 cat tests/e2e/TROUBLESHOOTING.md # Common issues
 ```
 
-### Check for Existing Issues
+### Check for Existing Test Failures
 ```bash
-bd list --status open --label test-failure
-bd list --status open | grep -i test
+bd list --status open --label test-failure    # Open test failures
+bd list --label test-run                       # Recent test runs
+bd show <bead-id>                              # See blocked failures
 ```
+
+---
+
+## Closing Failure Beads
+
+When fixing a test failure, close the bead with reference to the fix:
+
+```bash
+bd close <failure-bead> --reason="Fixed in commit abc1234: <description>"
+```
+
+This maintains an audit trail from failure → fix.
