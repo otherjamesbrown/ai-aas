@@ -280,6 +280,15 @@ func (h *Handler) HandleOpenAICompletions(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Debug: Log the raw parsed request (aas-tv7d)
+	h.logger.Debug("parsed completion request",
+		zap.String("model", openAIReq.Model),
+		zap.String("prompt", openAIReq.Prompt),
+		zap.Bool("stream", openAIReq.Stream),
+		zap.Int("max_tokens", openAIReq.MaxTokens),
+		zap.Float64("temperature", openAIReq.Temperature),
+	)
+
 	// Validate request
 	if openAIReq.Model == "" {
 		h.writeError(w, r, fmt.Errorf("model is required"), api.ErrCodeValidationError)
@@ -318,6 +327,12 @@ func (h *Handler) HandleOpenAICompletions(w http.ResponseWriter, r *http.Request
 	h.logger.Debug("rewriting model name for backend",
 		zap.String("original_model", originalModel),
 		zap.String("backend_model", backendID),
+	)
+
+	// Debug logging for stream field (aas-tv7d)
+	h.logger.Debug("parsed request stream field",
+		zap.Bool("stream", openAIReq.Stream),
+		zap.String("model", originalModel),
 	)
 
 	// Handle streaming requests (aas-9oyp)
