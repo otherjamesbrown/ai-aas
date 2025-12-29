@@ -26,4 +26,3 @@ func TestNewCheckerDefault(t *testing.T) {
 
 // Note: Full integration tests for CheckService would require a running service
 // These are covered in integration tests (Phase 3)
-

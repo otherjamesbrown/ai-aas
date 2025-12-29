@@ -23,12 +23,12 @@ const (
 type Config struct {
 	// Primary Admin API endpoint - this is the main API endpoint for all CLI operations
 	// Set via config file key 'api_endpoint' or environment variable 'AI_AAS_API_ENDPOINT'
-	APIEndpoint string `mapstructure:"api_endpoint" json:"api_endpoint"`
-	APIKey      string `mapstructure:"api_key" json:"api_key"`
-	Environment string `mapstructure:"environment" json:"environment"`
-	HFToken     string `mapstructure:"hf_token" json:"hf_token,omitempty"`
-	Verbose     bool   `mapstructure:"verbose" json:"verbose"`
-	Quiet       bool   `mapstructure:"quiet" json:"quiet"`
+	APIEndpoint  string `mapstructure:"api_endpoint" json:"api_endpoint"`
+	APIKey       string `mapstructure:"api_key" json:"api_key"`
+	Environment  string `mapstructure:"environment" json:"environment"`
+	HFToken      string `mapstructure:"hf_token" json:"hf_token,omitempty"`
+	Verbose      bool   `mapstructure:"verbose" json:"verbose"`
+	Quiet        bool   `mapstructure:"quiet" json:"quiet"`
 	OutputFormat string `mapstructure:"output_format" json:"output_format"`
 
 	// Default organization (set with 'ai-aas-cli org use <org-id>')
@@ -42,11 +42,11 @@ type Config struct {
 	// AdminAPIEndpoint is deprecated - use APIEndpoint instead. Kept for backward compatibility only.
 	// If set, this overrides APIEndpoint for admin operations.
 	// Set via config file key 'admin_api_endpoint' or environment variable 'AI_AAS_ADMIN_API_ENDPOINT'
-	AdminAPIEndpoint  string `mapstructure:"admin_api_endpoint" json:"admin_api_endpoint,omitempty"`
+	AdminAPIEndpoint string `mapstructure:"admin_api_endpoint" json:"admin_api_endpoint,omitempty"`
 
 	// TLS Configuration
-	CACertFile     string `mapstructure:"ca_cert_file" json:"ca_cert_file,omitempty"`
-	TLSInsecure    bool   `mapstructure:"tls_insecure" json:"tls_insecure,omitempty"`
+	CACertFile  string `mapstructure:"ca_cert_file" json:"ca_cert_file,omitempty"`
+	TLSInsecure bool   `mapstructure:"tls_insecure" json:"tls_insecure,omitempty"`
 
 	// Retry Settings
 	MaxRetries int `mapstructure:"max_retries" json:"max_retries,omitempty"`
@@ -244,13 +244,13 @@ func GetString(key string) string {
 // Set sets a config value
 func Set(key string, value interface{}) error {
 	viper.Set(key, value)
-	
+
 	// Persist to file
 	configPath, err := GetConfigPath()
 	if err != nil {
 		return err
 	}
-	
+
 	return viper.WriteConfigAs(configPath)
 }
 
@@ -380,4 +380,3 @@ func (c *Config) NewAPIClient(endpoint string) *api.Client {
 
 	return api.NewClient(endpoint, c.APIKey, opts...)
 }
-

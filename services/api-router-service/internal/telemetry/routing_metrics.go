@@ -1,8 +1,9 @@
 // Package telemetry provides routing-specific metrics and alerting.
 //
 // Purpose:
-//   This package implements metrics collection and alerting for routing decisions,
-//   backend health, and failover events. It provides observability for the routing engine.
+//
+//	This package implements metrics collection and alerting for routing decisions,
+//	backend health, and failover events. It provides observability for the routing engine.
 //
 // Key Responsibilities:
 //   - Track routing decision metrics
@@ -14,7 +15,6 @@
 //   - specs/006-api-router-service/spec.md#US-003 (Intelligent routing and fallback)
 //   - specs/006-api-router-service/spec.md#NFR-010 (RED metrics)
 //   - specs/006-api-router-service/spec.md#NFR-012 (Alerting thresholds)
-//
 package telemetry
 
 import (
@@ -326,4 +326,3 @@ func (m *RoutingMetrics) RecordBackendError(
 		zap.String("error_message", errorMessage),
 	)
 }
-

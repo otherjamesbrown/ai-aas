@@ -6,7 +6,6 @@
 //
 // Requirements Reference:
 //   - specs/009-admin-cli/plan.md#client/userorg/types
-//
 package userorg
 
 // BootstrapRequest represents a bootstrap operation request.
@@ -132,7 +131,7 @@ type APIKeyResponse struct {
 	Status      string                 `json:"status"`
 	Scopes      []string               `json:"scopes,omitempty"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt   string                 `json:"issuedAt"`        // API returns issuedAt not createdAt
+	CreatedAt   string                 `json:"issuedAt"` // API returns issuedAt not createdAt
 	ExpiresAt   string                 `json:"expiresAt,omitempty"`
 }
 
@@ -174,13 +173,13 @@ type BootstrapKeyRequest struct {
 
 // BootstrapKeyResponse represents a bootstrap key in API responses.
 type BootstrapKeyResponse struct {
-	KeyID     string `json:"keyId"`
-	OrgID     string `json:"orgId"`
-	OrgName   string `json:"orgName,omitempty"`
-	Status    string `json:"status"` // active, revoked, expired, redeemed
-	Notes     string `json:"notes,omitempty"`
-	CreatedAt string `json:"createdAt"`
-	ExpiresAt string `json:"expiresAt"`
+	KeyID      string `json:"keyId"`
+	OrgID      string `json:"orgId"`
+	OrgName    string `json:"orgName,omitempty"`
+	Status     string `json:"status"` // active, revoked, expired, redeemed
+	Notes      string `json:"notes,omitempty"`
+	CreatedAt  string `json:"createdAt"`
+	ExpiresAt  string `json:"expiresAt"`
 	RedeemedAt string `json:"redeemedAt,omitempty"`
 	RedeemedBy string `json:"redeemedBy,omitempty"`
 }
@@ -211,10 +210,9 @@ type InspectAPIKeyResponse struct {
 	OrgSlug       string   `json:"orgSlug"`
 	PrincipalType string   `json:"principalType"` // "user" or "service_account"
 	PrincipalID   string   `json:"principalId"`
-	Status        string   `json:"status"`       // "active", "revoked", "expired"
+	Status        string   `json:"status"` // "active", "revoked", "expired"
 	Scopes        []string `json:"scopes"`
 	CreatedAt     string   `json:"createdAt"`
 	ExpiresAt     string   `json:"expiresAt,omitempty"`
 	LastUsedAt    string   `json:"lastUsedAt,omitempty"`
 }
-

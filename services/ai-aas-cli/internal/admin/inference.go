@@ -4,7 +4,6 @@
 //
 //	Inference commands: get-models, send-request for testing and interacting
 //	with the AI inference API. Supports structured output and timing metrics.
-//
 package admin
 
 import (

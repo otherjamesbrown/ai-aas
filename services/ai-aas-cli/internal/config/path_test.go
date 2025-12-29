@@ -9,10 +9,10 @@ import (
 
 func TestDetectShell(t *testing.T) {
 	shell := detectShell()
-	
+
 	// Should return a non-empty string
 	assert.NotEmpty(t, shell)
-	
+
 	// On some systems, we might get the full path or another shell
 	// So just verify we got something
 	assert.True(t, len(shell) > 0, "shell detection should return a value")
@@ -20,7 +20,7 @@ func TestDetectShell(t *testing.T) {
 
 func TestGeneratePathInstruction(t *testing.T) {
 	binaryDir := "/usr/local/bin"
-	
+
 	tests := []struct {
 		shell    string
 		contains string
@@ -43,10 +43,10 @@ func TestGeneratePathInstruction(t *testing.T) {
 
 func TestCheckPath(t *testing.T) {
 	info := CheckPath()
-	
+
 	// Should return valid info
 	assert.NotEmpty(t, info.Shell)
-	
+
 	// If not in path, should have instructions
 	if !info.InPath {
 		assert.NotEmpty(t, info.Instruction)
@@ -92,11 +92,10 @@ func TestIsInPath(t *testing.T) {
 
 func TestGetBinaryDir(t *testing.T) {
 	dir, err := GetBinaryDir()
-	
+
 	// Should succeed on any platform
 	if runtime.GOOS != "windows" {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, dir)
 	}
 }
-

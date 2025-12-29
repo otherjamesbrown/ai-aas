@@ -11,7 +11,6 @@
 //   - specs/009-admin-cli/spec.md#FR-003 (confirmation prompts)
 //   - specs/009-admin-cli/spec.md#FR-008 (service health checks)
 //   - specs/009-admin-cli/spec.md#FR-010 (audit logging)
-//
 package admin
 
 import (
@@ -231,15 +230,15 @@ func runBootstrap(cmd *cobra.Command, args []string, flagEmail, flagPassword, fl
 	// Audit logging
 	auditLogger := audit.NewLogger(nil)
 	if err := auditLogger.LogOperation(audit.Operation{
-		Type:        "bootstrap",
+		Type:         "bootstrap",
 		UserIdentity: "cli-user", // TODO: Get from config/auth
-		Command:     cmd.CommandPath(),
+		Command:      cmd.CommandPath(),
 		Parameters: map[string]interface{}{
-			"endpoint": cfg.UserOrgEndpoint,
+			"endpoint":       cfg.UserOrgEndpoint,
 			"existing_admin": existingAdmin,
 		},
-		Outcome:   "success",
-		Duration:  duration,
+		Outcome:    "success",
+		Duration:   duration,
 		BreakGlass: existingAdmin,
 	}); err != nil {
 		// Log error but don't fail operation
@@ -256,14 +255,13 @@ func runBootstrap(cmd *cobra.Command, args []string, flagEmail, flagPassword, fl
 
 	if cfg.OutputFormat == "json" {
 		return output.PrintJSON(map[string]interface{}{
-			"success":   true,
-			"admin_id":  adminID,
-			"api_key":   apiKey,
-			"duration":  duration.String(),
-			"endpoint":  cfg.UserOrgEndpoint,
+			"success":  true,
+			"admin_id": adminID,
+			"api_key":  apiKey,
+			"duration": duration.String(),
+			"endpoint": cfg.UserOrgEndpoint,
 		})
 	}
 
 	return nil
 }
-

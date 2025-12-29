@@ -1,9 +1,10 @@
 // Package telemetry provides Prometheus metrics exporters for comprehensive observability.
 //
 // Purpose:
-//   This package implements Prometheus metrics for per-backend tracking, usage record
-//   export, and buffer store monitoring. These metrics complement the OpenTelemetry
-//   metrics in routing_metrics.go and are exported via the /metrics endpoint.
+//
+//	This package implements Prometheus metrics for per-backend tracking, usage record
+//	export, and buffer store monitoring. These metrics complement the OpenTelemetry
+//	metrics in routing_metrics.go and are exported via the /metrics endpoint.
 //
 // Key Responsibilities:
 //   - Track per-backend request metrics (count, errors, latency) with org/model labels
@@ -15,7 +16,6 @@
 //   - specs/006-api-router-service/spec.md#US-005 (Operational visibility and reliability)
 //   - specs/006-api-router-service/spec.md#NFR-010 (RED metrics)
 //   - specs/006-api-router-service/spec.md#NFR-011 (Trace spans)
-//
 package telemetry
 
 import (
@@ -163,4 +163,3 @@ func RecordBufferStoreRetry(organizationID string, success bool) {
 func SetBufferStoreAge(organizationID string, age time.Duration) {
 	BufferStoreAge.WithLabelValues(organizationID).Set(age.Seconds())
 }
-

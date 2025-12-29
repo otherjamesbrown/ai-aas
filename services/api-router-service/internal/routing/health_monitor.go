@@ -1,8 +1,9 @@
 // Package routing provides backend health monitoring and status tracking.
 //
 // Purpose:
-//   This package implements a health probe scheduler that periodically checks
-//   backend health status and tracks degradation metrics for intelligent routing.
+//
+//	This package implements a health probe scheduler that periodically checks
+//	backend health status and tracks degradation metrics for intelligent routing.
 //
 // Key Responsibilities:
 //   - Schedule periodic health checks for registered backends
@@ -13,7 +14,6 @@
 // Requirements Reference:
 //   - specs/006-api-router-service/spec.md#US-003 (Intelligent routing and fallback)
 //   - specs/006-api-router-service/spec.md#FR-003 (Routing engine)
-//
 package routing
 
 import (
@@ -40,22 +40,22 @@ const (
 
 // BackendHealth represents the health state of a backend.
 type BackendHealth struct {
-	BackendID      string
-	Status         HealthStatus
-	LastCheck      time.Time
+	BackendID         string
+	Status            HealthStatus
+	LastCheck         time.Time
 	ConsecutiveErrors int
-	LastError      error
-	Latency        time.Duration
-	mu             sync.RWMutex
+	LastError         error
+	Latency           time.Duration
+	mu                sync.RWMutex
 }
 
 // HealthMonitor manages health checks for multiple backends.
 type HealthMonitor struct {
-	client       *BackendClient
-	logger       *zap.Logger
-	backends     map[string]*BackendHealth
-	endpoints    map[string]*BackendEndpoint // Store endpoints for health checks
-	mu           sync.RWMutex
+	client        *BackendClient
+	logger        *zap.Logger
+	backends      map[string]*BackendHealth
+	endpoints     map[string]*BackendEndpoint // Store endpoints for health checks
+	mu            sync.RWMutex
 	checkInterval time.Duration
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -88,12 +88,12 @@ func (m *HealthMonitor) RegisterBackend(backendID string, endpoint *BackendEndpo
 			ConsecutiveErrors: 0,
 		}
 	}
-	
+
 	// Store endpoint for health checks
 	if endpoint != nil {
 		m.endpoints[backendID] = endpoint
 	}
-	
+
 	m.logger.Info("registered backend for health monitoring",
 		zap.String("backend_id", backendID),
 	)
@@ -259,7 +259,7 @@ func (m *HealthMonitor) GetHealth(backendID string) (*BackendHealth, bool) {
 		LastCheck:         health.LastCheck,
 		ConsecutiveErrors: health.ConsecutiveErrors,
 		LastError:         health.LastError,
-		Latency:          health.Latency,
+		Latency:           health.Latency,
 	}, true
 }
 
@@ -325,4 +325,3 @@ func (m *HealthMonitor) CheckBackendNow(backendID string, endpoint *BackendEndpo
 
 	return err
 }
-

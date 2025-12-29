@@ -37,8 +37,8 @@ func ApplyDefaults(v *viper.Viper) {
 	// Users can override these with environment variables or config file
 	v.SetDefault("api-endpoints.user-org-service", "https://user-org."+baseDomain)
 	v.SetDefault("api-endpoints.analytics-service", "https://analytics."+baseDomain)
-	v.SetDefault("api-endpoints.config-service", "localhost:2379")                    // etcd gRPC endpoint (requires port-forward)
-	v.SetDefault("api-endpoints.inference-service", "https://api."+baseDomain)        // API Router for inference
+	v.SetDefault("api-endpoints.config-service", "localhost:2379")             // etcd gRPC endpoint (requires port-forward)
+	v.SetDefault("api-endpoints.inference-service", "https://api."+baseDomain) // API Router for inference
 
 	// TLS Configuration
 	v.SetDefault("tls.ca-cert-file", "") // Empty by default, use system certs
@@ -54,16 +54,15 @@ func ApplyDefaults(v *viper.Viper) {
 
 	// Retry Settings
 	v.SetDefault("retry.max-attempts", 3)
-	v.SetDefault("retry.timeout", 30) // seconds
+	v.SetDefault("retry.timeout", 30)      // seconds
 	v.SetDefault("retry.initial-delay", 1) // seconds
-	v.SetDefault("retry.max-delay", 4) // seconds
+	v.SetDefault("retry.max-delay", 4)     // seconds
 
 	// Timeouts
 	v.SetDefault("timeouts.health-check", 5) // seconds
-	v.SetDefault("timeouts.operation", 300) // seconds (5 minutes)
+	v.SetDefault("timeouts.operation", 300)  // seconds (5 minutes)
 
 	// Progress Indicators
 	v.SetDefault("progress.enabled", true)
 	v.SetDefault("progress.min-duration", 30) // Show progress for operations >30s
 }
-

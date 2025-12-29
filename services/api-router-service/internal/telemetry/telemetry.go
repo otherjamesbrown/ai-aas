@@ -1,9 +1,10 @@
 // Package telemetry provides OpenTelemetry and structured logging initialization.
 //
 // Purpose:
-//   This package wires together OpenTelemetry tracing and structured logging
-//   using the shared observability library and zap logger. It provides a unified
-//   interface for telemetry initialization and shutdown.
+//
+//	This package wires together OpenTelemetry tracing and structured logging
+//	using the shared observability library and zap logger. It provides a unified
+//	interface for telemetry initialization and shutdown.
 //
 // Dependencies:
 //   - github.com/ai-aas/shared-go/observability: OpenTelemetry setup
@@ -19,7 +20,6 @@
 // Requirements Reference:
 //   - specs/006-api-router-service/spec.md#NFR-010 (RED metrics)
 //   - specs/006-api-router-service/spec.md#NFR-011 (Trace spans)
-//
 package telemetry
 
 import (

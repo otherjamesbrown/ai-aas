@@ -274,18 +274,18 @@ type DeliveryRequest struct {
 }
 
 type ExportJobResponse struct {
-	JobID       string          `json:"jobId"`
-	OrgID       string          `json:"orgId"`
-	Status      string          `json:"status"`
-	Granularity string          `json:"granularity"`
+	JobID       string            `json:"jobId"`
+	OrgID       string            `json:"orgId"`
+	Status      string            `json:"status"`
+	Granularity string            `json:"granularity"`
 	TimeRange   TimeRangeResponse `json:"timeRange"`
-	CreatedAt   string          `json:"createdAt"`
-	CompletedAt *string          `json:"completedAt,omitempty"`
-	OutputURI   *string         `json:"outputUri,omitempty"`
-	Checksum    *string         `json:"checksum,omitempty"`
-	RowCount    *int64          `json:"rowCount,omitempty"`
-	InitiatedBy string          `json:"initiatedBy"`
-	Error       *string         `json:"error,omitempty"`
+	CreatedAt   string            `json:"createdAt"`
+	CompletedAt *string           `json:"completedAt,omitempty"`
+	OutputURI   *string           `json:"outputUri,omitempty"`
+	Checksum    *string           `json:"checksum,omitempty"`
+	RowCount    *int64            `json:"rowCount,omitempty"`
+	InitiatedBy string            `json:"initiatedBy"`
+	Error       *string           `json:"error,omitempty"`
 }
 
 type TimeRangeResponse struct {
@@ -353,4 +353,3 @@ func (h *ExportsHandler) respondError(w http.ResponseWriter, status int, message
 	}
 	httputil.WriteProblemDetails(w, status, http.StatusText(status), message)
 }
-

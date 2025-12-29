@@ -1,8 +1,9 @@
 // Package usage provides Kafka publisher for usage records.
 //
 // Purpose:
-//   This package implements Kafka publishing for usage records with at-least-once
-//   delivery guarantees, buffering, and retry logic.
+//
+//	This package implements Kafka publishing for usage records with at-least-once
+//	delivery guarantees, buffering, and retry logic.
 //
 // Key Responsibilities:
 //   - Publish usage records to Kafka topic
@@ -13,7 +14,6 @@
 // Requirements Reference:
 //   - specs/006-api-router-service/spec.md#US-004 (Accurate, timely usage accounting)
 //   - specs/006-api-router-service/spec.md#NFR-006 (At-least-once delivery)
-//
 package usage
 
 import (
@@ -225,4 +225,3 @@ func (p *Publisher) Health(ctx context.Context) error {
 	// In production, you might want to use kafka.Conn for health checks
 	return nil
 }
-

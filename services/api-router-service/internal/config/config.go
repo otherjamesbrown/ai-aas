@@ -11,11 +11,11 @@ import (
 
 // Config represents the runtime configuration for the API Router Service.
 type Config struct {
-	ServiceName   string `envconfig:"SERVICE_NAME" default:"api-router-service"`
-	HTTPPort      int    `envconfig:"HTTP_PORT" default:"8080"`
-	AdminPort     int    `envconfig:"ADMIN_PORT" default:"8443"`
-	Environment   string `envconfig:"ENVIRONMENT" default:"development"`
-	LogLevel      string `envconfig:"LOG_LEVEL" default:"info"`
+	ServiceName string `envconfig:"SERVICE_NAME" default:"api-router-service"`
+	HTTPPort    int    `envconfig:"HTTP_PORT" default:"8080"`
+	AdminPort   int    `envconfig:"ADMIN_PORT" default:"8443"`
+	Environment string `envconfig:"ENVIRONMENT" default:"development"`
+	LogLevel    string `envconfig:"LOG_LEVEL" default:"info"`
 
 	// Telemetry
 	TelemetryEndpoint string `envconfig:"OTEL_EXPORTER_OTLP_ENDPOINT" default:"localhost:4317"`
@@ -48,20 +48,20 @@ type Config struct {
 	BackendEndpoints string `envconfig:"BACKEND_ENDPOINTS" default:"mock-backend-1:http://localhost:8001/v1/completions,mock-backend-2:http://localhost:8002/v1/completions"`
 
 	// Rate Limiting
-	RateLimitRedisAddr string `envconfig:"RATE_LIMIT_REDIS_ADDR" default:"localhost:6379"`
+	RateLimitRedisAddr  string `envconfig:"RATE_LIMIT_REDIS_ADDR" default:"localhost:6379"`
 	RateLimitDefaultRPS int    `envconfig:"RATE_LIMIT_DEFAULT_RPS" default:"100"`
 	RateLimitBurstSize  int    `envconfig:"RATE_LIMIT_BURST_SIZE" default:"200"`
 	// Token-based rate limits (set to 0 to disable)
-	RateLimitTokensHourly  int `envconfig:"RATE_LIMIT_TOKENS_HOURLY" default:"100000"`
-	RateLimitTokensDaily   int `envconfig:"RATE_LIMIT_TOKENS_DAILY" default:"1000000"`
-	RateLimitTokensWeekly  int `envconfig:"RATE_LIMIT_TOKENS_WEEKLY" default:"5000000"`
+	RateLimitTokensHourly int `envconfig:"RATE_LIMIT_TOKENS_HOURLY" default:"100000"`
+	RateLimitTokensDaily  int `envconfig:"RATE_LIMIT_TOKENS_DAILY" default:"1000000"`
+	RateLimitTokensWeekly int `envconfig:"RATE_LIMIT_TOKENS_WEEKLY" default:"5000000"`
 
 	// Budget Service
 	BudgetServiceEndpoint string        `envconfig:"BUDGET_SERVICE_ENDPOINT" default:""`
 	BudgetServiceTimeout  time.Duration `envconfig:"BUDGET_SERVICE_TIMEOUT" default:"2s"`
 
 	// User-Org Service (for API key validation)
-	UserOrgServiceURL string        `envconfig:"USER_ORG_SERVICE_URL" default:"http://localhost:8081"`
+	UserOrgServiceURL     string        `envconfig:"USER_ORG_SERVICE_URL" default:"http://localhost:8081"`
 	UserOrgServiceTimeout time.Duration `envconfig:"USER_ORG_SERVICE_TIMEOUT" default:"2s"`
 
 	// Audit/Kafka
@@ -80,22 +80,22 @@ type Config struct {
 	ModelsCacheTTL time.Duration `envconfig:"MODELS_CACHE_TTL" default:"10s"`
 
 	// CORS Configuration
-	CORSEnabled        bool   `envconfig:"CORS_ENABLED" default:"true"`
-	CORSAllowedOrigins string `envconfig:"CORS_ALLOWED_ORIGINS" default:"http://localhost:5173,https://localhost:5173"`
-	CORSAllowedMethods string `envconfig:"CORS_ALLOWED_METHODS" default:"GET,POST,PUT,PATCH,DELETE,OPTIONS"`
-	CORSAllowedHeaders string `envconfig:"CORS_ALLOWED_HEADERS" default:"Authorization,Content-Type,X-API-Key,X-Correlation-ID,X-CSRF-Token,X-Requested-With"`
-	CORSExposedHeaders string `envconfig:"CORS_EXPOSED_HEADERS" default:"X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Reset,X-Correlation-ID"`
-	CORSMaxAge         int    `envconfig:"CORS_MAX_AGE" default:"3600"`
-	CORSAllowCredentials bool `envconfig:"CORS_ALLOW_CREDENTIALS" default:"true"`
+	CORSEnabled          bool   `envconfig:"CORS_ENABLED" default:"true"`
+	CORSAllowedOrigins   string `envconfig:"CORS_ALLOWED_ORIGINS" default:"http://localhost:5173,https://localhost:5173"`
+	CORSAllowedMethods   string `envconfig:"CORS_ALLOWED_METHODS" default:"GET,POST,PUT,PATCH,DELETE,OPTIONS"`
+	CORSAllowedHeaders   string `envconfig:"CORS_ALLOWED_HEADERS" default:"Authorization,Content-Type,X-API-Key,X-Correlation-ID,X-CSRF-Token,X-Requested-With"`
+	CORSExposedHeaders   string `envconfig:"CORS_EXPOSED_HEADERS" default:"X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Reset,X-Correlation-ID"`
+	CORSMaxAge           int    `envconfig:"CORS_MAX_AGE" default:"3600"`
+	CORSAllowCredentials bool   `envconfig:"CORS_ALLOW_CREDENTIALS" default:"true"`
 }
 
 // BackendEndpointConfig represents a configured backend endpoint.
 type BackendEndpointConfig struct {
-	ID          string
-	URI         string
+	ID           string
+	URI          string
 	ModelVariant string
-	Timeout     time.Duration
-	HealthPath  string // Health check path (default: "/health", triton: "/v2/health/ready")
+	Timeout      time.Duration
+	HealthPath   string // Health check path (default: "/health", triton: "/v2/health/ready")
 }
 
 // GetHealthPath returns the appropriate health check path for this backend.
@@ -142,10 +142,10 @@ func NewBackendRegistry(cfg *Config) *BackendRegistry {
 			backendURI := strings.TrimSpace(parts[1])
 
 			registry.backends[backendID] = &BackendEndpointConfig{
-				ID:          backendID,
-				URI:         backendURI,
+				ID:           backendID,
+				URI:          backendURI,
 				ModelVariant: "", // Will be set from routing policy
-				Timeout:     cfg.DefaultBackendTimeout,
+				Timeout:      cfg.DefaultBackendTimeout,
 			}
 		}
 	}
@@ -201,4 +201,3 @@ func MustLoad() *Config {
 	}
 	return cfg
 }
-

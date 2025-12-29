@@ -85,8 +85,8 @@ func NewConsumer(cfg Config) (*Consumer, error) {
 		Brokers:        cfg.Brokers,
 		Topic:          cfg.Topic,
 		GroupID:        cfg.GroupID,
-		MinBytes:       1,       // Fetch at least 1 byte
-		MaxBytes:       10e6,    // 10MB max per fetch
+		MinBytes:       1,    // Fetch at least 1 byte
+		MaxBytes:       10e6, // 10MB max per fetch
 		CommitInterval: 1 * time.Second,
 		StartOffset:    kafka.FirstOffset,
 		MaxWait:        500 * time.Millisecond, // Max wait time for batch
@@ -311,11 +311,11 @@ func (c *Consumer) processBatch(ctx context.Context, events []Event, messages []
 // (see services/api-router-service/internal/usage/record.go).
 type Event struct {
 	// Core identification
-	RecordID       string    `json:"record_id"`        // Maps to UsageRecord.RecordID
-	RequestID      string    `json:"request_id"`       // Maps to UsageRecord.RequestID
-	OrganizationID string    `json:"organization_id"`  // Maps to UsageRecord.OrganizationID
-	APIKeyID       string    `json:"api_key_id"`       // Maps to UsageRecord.APIKeyID
-	Timestamp      time.Time `json:"timestamp"`        // Maps to UsageRecord.Timestamp
+	RecordID       string    `json:"record_id"`       // Maps to UsageRecord.RecordID
+	RequestID      string    `json:"request_id"`      // Maps to UsageRecord.RequestID
+	OrganizationID string    `json:"organization_id"` // Maps to UsageRecord.OrganizationID
+	APIKeyID       string    `json:"api_key_id"`      // Maps to UsageRecord.APIKeyID
+	Timestamp      time.Time `json:"timestamp"`       // Maps to UsageRecord.Timestamp
 
 	// Model and backend
 	Model     string `json:"model"`      // Maps to UsageRecord.Model (user-facing model name)

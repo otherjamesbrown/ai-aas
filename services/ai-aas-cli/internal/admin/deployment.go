@@ -200,4 +200,3 @@ func modelToStatusMap(model *deploymentregistry.Model) map[string]interface{} {
 		"updated_at":  model.UpdatedAt,
 	}
 }
-

@@ -1,16 +1,16 @@
 // Package config provides configuration loading with Admin API sync support.
 //
 // Purpose:
-//   This file implements policy synchronization from the Admin API Service.
-//   When etcd is not configured, the API Router can fetch routing policies
-//   directly from the Admin API's /v1/routing/policies/sync endpoint.
+//
+//	This file implements policy synchronization from the Admin API Service.
+//	When etcd is not configured, the API Router can fetch routing policies
+//	directly from the Admin API's /v1/routing/policies/sync endpoint.
 //
 // Key Responsibilities:
 //   - Fetch routing policies from Admin API
 //   - Convert Admin API policies to internal RoutingPolicy format
 //   - Periodic background sync
 //   - Cache fetched policies in BoltDB
-//
 package config
 
 import (

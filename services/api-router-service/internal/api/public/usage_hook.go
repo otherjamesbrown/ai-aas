@@ -1,8 +1,9 @@
 // Package public provides usage emission hooks for the inference flow.
 //
 // Purpose:
-//   This package implements hooks for emitting usage records during the inference
-//   request flow, with retry logic and buffering for reliability.
+//
+//	This package implements hooks for emitting usage records during the inference
+//	request flow, with retry logic and buffering for reliability.
 //
 // Key Responsibilities:
 //   - Emit usage records after successful inference
@@ -12,7 +13,6 @@
 //
 // Requirements Reference:
 //   - specs/006-api-router-service/spec.md#US-004 (Accurate, timely usage accounting)
-//
 package public
 
 import (
@@ -236,4 +236,3 @@ func (h *UsageHook) LoadBufferedRecords() ([]*usage.UsageRecord, error) {
 	}
 	return h.bufferStore.Load()
 }
-

@@ -1,8 +1,9 @@
 // Package public provides audit lookup endpoints for usage records.
 //
 // Purpose:
-//   This package implements audit endpoints for querying usage records by request ID,
-//   providing visibility into request history for finance and compliance teams.
+//
+//	This package implements audit endpoints for querying usage records by request ID,
+//	providing visibility into request history for finance and compliance teams.
 //
 // Key Responsibilities:
 //   - Provide audit lookup endpoint
@@ -12,7 +13,6 @@
 // Requirements Reference:
 //   - specs/006-api-router-service/spec.md#US-004 (Accurate, timely usage accounting)
 //   - specs/006-api-router-service/spec.md#FR-014 (Audit trail APIs)
-//
 package public
 
 import (
@@ -111,24 +111,24 @@ func (h *AuditHandler) GetRequestAudit(w http.ResponseWriter, r *http.Request) {
 
 // AuditResponse represents an audit response.
 type AuditResponse struct {
-	RequestID       string                 `json:"request_id"`
-	RecordID        string                 `json:"record_id"`
-	OrganizationID  string                 `json:"organization_id"`
-	APIKeyID        string                 `json:"api_key_id"`
-	Model           string                 `json:"model"`
-	BackendID       string                 `json:"backend_id"`
-	TokensInput     int                    `json:"tokens_input"`
-	TokensOutput    int                    `json:"tokens_output"`
-	LatencyMS       int                    `json:"latency_ms"`
-	CostUSD         float64                `json:"cost_usd"`
-	LimitState      string                 `json:"limit_state"`
-	DecisionReason  string                 `json:"decision_reason"`
-	BudgetSnapshot  *BudgetSnapshotResponse `json:"budget_snapshot,omitempty"`
-	RetryCount      int                    `json:"retry_count,omitempty"`
-	TraceID         string                 `json:"trace_id,omitempty"`
-	SpanID          string                 `json:"span_id,omitempty"`
-	Metadata        map[string]string     `json:"metadata,omitempty"`
-	Timestamp       time.Time              `json:"timestamp"`
+	RequestID      string                  `json:"request_id"`
+	RecordID       string                  `json:"record_id"`
+	OrganizationID string                  `json:"organization_id"`
+	APIKeyID       string                  `json:"api_key_id"`
+	Model          string                  `json:"model"`
+	BackendID      string                  `json:"backend_id"`
+	TokensInput    int                     `json:"tokens_input"`
+	TokensOutput   int                     `json:"tokens_output"`
+	LatencyMS      int                     `json:"latency_ms"`
+	CostUSD        float64                 `json:"cost_usd"`
+	LimitState     string                  `json:"limit_state"`
+	DecisionReason string                  `json:"decision_reason"`
+	BudgetSnapshot *BudgetSnapshotResponse `json:"budget_snapshot,omitempty"`
+	RetryCount     int                     `json:"retry_count,omitempty"`
+	TraceID        string                  `json:"trace_id,omitempty"`
+	SpanID         string                  `json:"span_id,omitempty"`
+	Metadata       map[string]string       `json:"metadata,omitempty"`
+	Timestamp      time.Time               `json:"timestamp"`
 }
 
 // BudgetSnapshotResponse represents budget snapshot in audit response.
@@ -162,4 +162,3 @@ func (h *AuditHandler) writeJSON(w http.ResponseWriter, statusCode int, v interf
 		h.logger.Error("failed to encode JSON response", zap.Error(err))
 	}
 }
-

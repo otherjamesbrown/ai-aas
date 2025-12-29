@@ -1,12 +1,14 @@
 // Package perf provides performance benchmarks for the analytics service.
 //
 // Purpose:
-//   This package benchmarks critical performance paths including rollup queries,
-//   CSV generation, and freshness cache operations to establish baselines and
-//   detect regressions.
+//
+//	This package benchmarks critical performance paths including rollup queries,
+//	CSV generation, and freshness cache operations to establish baselines and
+//	detect regressions.
 //
 // Usage:
-//   go test -bench=. -benchmem ./tests/analytics/perf/...
+//
+//	go test -bench=. -benchmem ./tests/analytics/perf/...
 //
 // Performance Thresholds:
 //   - Rollup queries: < 100ms for 7-day range (P95)
@@ -22,8 +24,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redis/go-redis/v9"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/otherjamesbrown/ai-aas/services/analytics-service/internal/freshness"
 	"github.com/otherjamesbrown/ai-aas/services/analytics-service/internal/storage/postgres"
@@ -296,4 +298,3 @@ func TestPerformanceThresholds(t *testing.T) {
 
 	t.Logf("Rollup query completed in %v (threshold: %v)", duration, threshold)
 }
-

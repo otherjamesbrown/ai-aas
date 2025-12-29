@@ -46,4 +46,3 @@ func (db *DB) StartMetricsUpdater(ctx context.Context) {
 		}
 	}()
 }
-

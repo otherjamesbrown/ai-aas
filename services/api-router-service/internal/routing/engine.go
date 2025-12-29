@@ -1,9 +1,10 @@
 // Package routing provides intelligent routing engine with weighted selection and failover.
 //
 // Purpose:
-//   This package implements the core routing engine that selects backends based on
-//   configured weights, health status, and failover policies. It provides intelligent
-//   traffic distribution and automatic failover capabilities.
+//
+//	This package implements the core routing engine that selects backends based on
+//	configured weights, health status, and failover policies. It provides intelligent
+//	traffic distribution and automatic failover capabilities.
 //
 // Key Responsibilities:
 //   - Weighted backend selection
@@ -14,7 +15,6 @@
 // Requirements Reference:
 //   - specs/006-api-router-service/spec.md#US-003 (Intelligent routing and fallback)
 //   - specs/006-api-router-service/spec.md#FR-003 (Routing engine)
-//
 package routing
 
 import (
@@ -32,22 +32,22 @@ import (
 
 // RoutingDecision represents a routing decision made by the engine.
 type RoutingDecision struct {
-	BackendID      string
-	DecisionType   string // "PRIMARY", "FAILOVER", "WEIGHTED"
-	Reason         string
-	Timestamp      time.Time
-	AttemptNumber  int
+	BackendID     string
+	DecisionType  string // "PRIMARY", "FAILOVER", "WEIGHTED"
+	Reason        string
+	Timestamp     time.Time
+	AttemptNumber int
 }
 
 // Engine provides intelligent routing with weighted selection and failover.
 type Engine struct {
-	healthMonitor      *HealthMonitor
-	backendRegistry    *config.BackendRegistry
-	modelRegistry      *Registry // Model registry for vLLM deployments
-	defaultTimeout     time.Duration
-	logger             *zap.Logger
-	decisions          []RoutingDecision // For metrics/debugging
-	mu                 sync.RWMutex
+	healthMonitor   *HealthMonitor
+	backendRegistry *config.BackendRegistry
+	modelRegistry   *Registry // Model registry for vLLM deployments
+	defaultTimeout  time.Duration
+	logger          *zap.Logger
+	decisions       []RoutingDecision // For metrics/debugging
+	mu              sync.RWMutex
 }
 
 // NewEngine creates a new routing engine.
@@ -343,10 +343,10 @@ func (e *Engine) buildBackendEndpoint(backendID, model string) (*BackendEndpoint
 	}
 
 	return &BackendEndpoint{
-		ID:          backendCfg.ID,
-		URI:         backendCfg.URI,
+		ID:           backendCfg.ID,
+		URI:          backendCfg.URI,
 		ModelVariant: model,
-		Timeout:     backendCfg.Timeout,
+		Timeout:      backendCfg.Timeout,
 	}, nil
 }
 
@@ -395,4 +395,3 @@ func randomInt64(max int64) (int64, error) {
 	val := binary.BigEndian.Uint64(buf[:])
 	return int64(val % uint64(max)), nil
 }
-

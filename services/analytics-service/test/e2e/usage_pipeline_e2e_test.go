@@ -1,19 +1,19 @@
 // Package e2e provides end-to-end integration tests for the token usage pipeline.
 //
 // Purpose:
-//   This package validates the complete usage tracking pipeline from ingestion to query:
-//   1. UsageRecord published to Kafka (simulating api-router)
-//   2. analytics-service Kafka consumer ingests the record
-//   3. Record is stored in TimescaleDB usage_events table
-//   4. Rollup workers aggregate data into hourly/daily rollups
-//   5. Data can be queried via REST API
+//
+//	This package validates the complete usage tracking pipeline from ingestion to query:
+//	1. UsageRecord published to Kafka (simulating api-router)
+//	2. analytics-service Kafka consumer ingests the record
+//	3. Record is stored in TimescaleDB usage_events table
+//	4. Rollup workers aggregate data into hourly/daily rollups
+//	5. Data can be queried via REST API
 //
 // Test Strategy:
 //   - Use testcontainers for Kafka and TimescaleDB
 //   - Run real analytics-service components (consumer, rollup workers, API)
 //   - Verify end-to-end data flow with realistic scenarios
 //   - Ensure idempotency and deduplication work correctly
-//
 package e2e
 
 import (
@@ -164,33 +164,33 @@ type UsageRecord struct {
 
 // APIKeyUsageSeriesResponse matches the API response structure.
 type APIKeyUsageSeriesResponse struct {
-	OrgID       string               `json:"orgId"`
-	APIKeyID    string               `json:"apiKeyId"`
-	Granularity string               `json:"granularity"`
-	Series      []UsageDataPoint     `json:"series"`
-	Totals      UsageTotalsResponse  `json:"totals"`
-	Freshness   FreshnessIndicator   `json:"freshness"`
+	OrgID       string              `json:"orgId"`
+	APIKeyID    string              `json:"apiKeyId"`
+	Granularity string              `json:"granularity"`
+	Series      []UsageDataPoint    `json:"series"`
+	Totals      UsageTotalsResponse `json:"totals"`
+	Freshness   FreshnessIndicator  `json:"freshness"`
 }
 
 type UsageDataPoint struct {
-	Timestamp     string  `json:"timestamp"`
-	Invocations   int64   `json:"invocations"`
-	InputTokens   int64   `json:"inputTokens"`
-	OutputTokens  int64   `json:"outputTokens"`
-	TotalTokens   int64   `json:"totalTokens"`
+	Timestamp      string  `json:"timestamp"`
+	Invocations    int64   `json:"invocations"`
+	InputTokens    int64   `json:"inputTokens"`
+	OutputTokens   int64   `json:"outputTokens"`
+	TotalTokens    int64   `json:"totalTokens"`
 	AverageCostUSD float64 `json:"averageCostUsd"`
-	ErrorCount    int64   `json:"errorCount"`
+	ErrorCount     int64   `json:"errorCount"`
 }
 
 type UsageTotalsResponse struct {
-	Invocations       int64   `json:"invocations"`
-	InputTokens       int64   `json:"inputTokens"`
-	OutputTokens      int64   `json:"outputTokens"`
-	TotalTokens       int64   `json:"totalTokens"`
-	TotalCostUSD      float64 `json:"totalCostUsd"`
-	AverageCostUSD    float64 `json:"averageCostUsd"`
-	AverageLatencyMS  float64 `json:"averageLatencyMs"`
-	ErrorCount        int64   `json:"errorCount"`
+	Invocations      int64   `json:"invocations"`
+	InputTokens      int64   `json:"inputTokens"`
+	OutputTokens     int64   `json:"outputTokens"`
+	TotalTokens      int64   `json:"totalTokens"`
+	TotalCostUSD     float64 `json:"totalCostUsd"`
+	AverageCostUSD   float64 `json:"averageCostUsd"`
+	AverageLatencyMS float64 `json:"averageLatencyMs"`
+	ErrorCount       int64   `json:"errorCount"`
 }
 
 type FreshnessIndicator struct {

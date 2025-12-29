@@ -1,16 +1,16 @@
 // Package public provides public API handlers for the API Router Service.
 //
 // Purpose:
-//   This file implements the platform health endpoint that provides a comprehensive
-//   view of the entire platform's health status, including all dependent services
-//   and functional tests.
+//
+//	This file implements the platform health endpoint that provides a comprehensive
+//	view of the entire platform's health status, including all dependent services
+//	and functional tests.
 //
 // Key Responsibilities:
 //   - Platform health endpoint (/v1/platform/health) - Aggregated platform status
 //   - Service connectivity checks (api-router, user-org-service, analytics)
 //   - Infrastructure health (database, redis, etcd)
 //   - Functional tests (authentication, inference)
-//
 package public
 
 import (
@@ -25,19 +25,19 @@ import (
 
 // PlatformHealthResponse represents the comprehensive platform health response.
 type PlatformHealthResponse struct {
-	Status          string                     `json:"status"`
-	Services        map[string]ServiceHealth   `json:"services"`
-	Infrastructure  map[string]string          `json:"infrastructure"`
-	FunctionalTests map[string]FunctionalTest  `json:"functional_tests"`
-	Build           *BuildMetadata             `json:"build,omitempty"`
-	Timestamp       string                     `json:"timestamp"`
+	Status          string                    `json:"status"`
+	Services        map[string]ServiceHealth  `json:"services"`
+	Infrastructure  map[string]string         `json:"infrastructure"`
+	FunctionalTests map[string]FunctionalTest `json:"functional_tests"`
+	Build           *BuildMetadata            `json:"build,omitempty"`
+	Timestamp       string                    `json:"timestamp"`
 }
 
 // ServiceHealth represents the health status of a service.
 type ServiceHealth struct {
-	Status      string `json:"status"`
-	ResponseMs  int64  `json:"response_ms,omitempty"`
-	Message     string `json:"message,omitempty"`
+	Status     string `json:"status"`
+	ResponseMs int64  `json:"response_ms,omitempty"`
+	Message    string `json:"message,omitempty"`
 }
 
 // FunctionalTest represents a functional test result.

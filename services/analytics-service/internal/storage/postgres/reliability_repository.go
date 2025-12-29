@@ -82,4 +82,3 @@ func (s *Store) GetReliabilitySeries(ctx context.Context, orgID uuid.UUID, start
 
 	return points, rows.Err()
 }
-

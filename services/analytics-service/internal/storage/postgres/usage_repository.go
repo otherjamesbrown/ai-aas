@@ -247,4 +247,3 @@ func (s *Store) GetUsageTotalsForAPIKey(ctx context.Context, orgID, apiKeyID uui
 
 	return totals, nil
 }
-

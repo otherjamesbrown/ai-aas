@@ -31,15 +31,15 @@ type Model struct {
 
 // AddModelRequest represents a request to add a new model
 type AddModelRequest struct {
-	HFModelID      string `json:"hf_model_id"`
-	Name           string `json:"name"`
-	ExternalName   string `json:"external_name,omitempty"` // Optional, derived from HFModelID if not set
-	RequiresAuth   bool   `json:"requires_auth"`
-	LicenseType    string `json:"license_type,omitempty"`
-	AcceptLicense  bool   `json:"accept_license"`
-	GPUMemoryGB    int    `json:"gpu_memory_gb,omitempty"`
-	CPUMemoryGB    int    `json:"cpu_memory_gb,omitempty"`
-	ModelType      string `json:"model_type,omitempty"`
+	HFModelID     string `json:"hf_model_id"`
+	Name          string `json:"name"`
+	ExternalName  string `json:"external_name,omitempty"` // Optional, derived from HFModelID if not set
+	RequiresAuth  bool   `json:"requires_auth"`
+	LicenseType   string `json:"license_type,omitempty"`
+	AcceptLicense bool   `json:"accept_license"`
+	GPUMemoryGB   int    `json:"gpu_memory_gb,omitempty"`
+	CPUMemoryGB   int    `json:"cpu_memory_gb,omitempty"`
+	ModelType     string `json:"model_type,omitempty"`
 }
 
 // ListModelsOptions represents query options for listing models
@@ -86,11 +86,11 @@ type PullJob struct {
 
 // VerifyResult represents the result of cache verification
 type VerifyResult struct {
-	Valid         bool     `json:"valid"`
-	FilesChecked  int      `json:"files_checked"`
-	FilesMissing  []string `json:"files_missing,omitempty"`
-	FilesCorrupt  []string `json:"files_corrupt,omitempty"`
-	ChecksumMatch bool     `json:"checksum_match"`
+	Valid         bool      `json:"valid"`
+	FilesChecked  int       `json:"files_checked"`
+	FilesMissing  []string  `json:"files_missing,omitempty"`
+	FilesCorrupt  []string  `json:"files_corrupt,omitempty"`
+	ChecksumMatch bool      `json:"checksum_match"`
 	VerifiedAt    time.Time `json:"verified_at"`
 }
 
@@ -268,4 +268,3 @@ type RenameModelResponse struct {
 	CacheSizeBytes int64  `json:"cache_size_bytes,omitempty"`
 	CacheFileCount int    `json:"cache_file_count,omitempty"`
 }
-

@@ -250,8 +250,8 @@ func TestTritonGRPCModelNameStreaming(t *testing.T) {
 				Weight:    100,
 			},
 		},
-		BackendType:  "triton",
-		Tokenizer:    "cl100k_base",
+		BackendType: "triton",
+		Tokenizer:   "cl100k_base",
 		TritonConfig: &config.TritonConfig{
 			Protocol: "grpc",
 			GRPCPort: 8001,
@@ -376,8 +376,8 @@ func TestTritonGRPCErrorMessageHandling(t *testing.T) {
 				Weight:    100,
 			},
 		},
-		BackendType:  "triton",
-		Tokenizer:    "cl100k_base",
+		BackendType: "triton",
+		Tokenizer:   "cl100k_base",
 		TritonConfig: &config.TritonConfig{
 			Protocol: "grpc",
 			GRPCPort: 8001,
@@ -496,8 +496,8 @@ func TestTritonGRPCInputTensorCount(t *testing.T) {
 				Weight:    100,
 			},
 		},
-		BackendType:  "triton",
-		Tokenizer:    "cl100k_base",
+		BackendType: "triton",
+		Tokenizer:   "cl100k_base",
 		TritonConfig: &config.TritonConfig{
 			Protocol: "grpc",
 			GRPCPort: 8001,

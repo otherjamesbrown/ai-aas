@@ -9,7 +9,6 @@
 //   - specs/009-admin-cli/spec.md#US-002 (Day-2 Management)
 //   - specs/009-admin-cli/spec.md#FR-002 (batch operations)
 //   - specs/009-admin-cli/spec.md#FR-006 (structured output)
-//
 package admin
 
 import (
@@ -180,10 +179,10 @@ func runOrgList(cmd *cobra.Command, args []string, flagFormat string, flagVerbos
 	// Audit logging
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
-		Type:        "org_list",
-		Command:     "org list",
-		Outcome:     "success",
-		Duration:    time.Since(startTime),
+		Type:     "org_list",
+		Command:  "org list",
+		Outcome:  "success",
+		Duration: time.Since(startTime),
 	})
 
 	// Format output
@@ -437,8 +436,8 @@ func runOrgCreate(cmd *cobra.Command, args []string, flagName, flagSlug, flagBil
 	// Audit logging
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
-		Type:        "org_create",
-		Command:     fmt.Sprintf("org create --name=%s --slug=%s", flagName, flagSlug),
+		Type:    "org_create",
+		Command: fmt.Sprintf("org create --name=%s --slug=%s", flagName, flagSlug),
 		Parameters: map[string]interface{}{
 			"name":  flagName,
 			"slug":  flagSlug,
@@ -689,10 +688,10 @@ func runOrgUpdate(cmd *cobra.Command, args []string, flagOrgID, flagFile, flagDi
 	// Audit logging
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
-		Type:        "org_update",
-		Command:     fmt.Sprintf("org update --org-id=%s", flagOrgID),
+		Type:    "org_update",
+		Command: fmt.Sprintf("org update --org-id=%s", flagOrgID),
 		Parameters: map[string]interface{}{
-			"orgId": flagOrgID,
+			"orgId":   flagOrgID,
 			"request": req,
 		},
 		Outcome:  "success",
@@ -889,8 +888,8 @@ func runOrgDelete(cmd *cobra.Command, args []string, flagOrgID string, flagConfi
 	// Audit logging
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
-		Type:        "org_delete",
-		Command:     fmt.Sprintf("org delete --org-id=%s --confirm", flagOrgID),
+		Type:    "org_delete",
+		Command: fmt.Sprintf("org delete --org-id=%s --confirm", flagOrgID),
 		Parameters: map[string]interface{}{
 			"orgId": flagOrgID,
 		},
@@ -1040,4 +1039,3 @@ func valueOrNotSet(s string) string {
 	}
 	return s
 }
-

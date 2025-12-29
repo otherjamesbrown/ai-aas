@@ -8,10 +8,10 @@ import (
 
 // Error variables for handler error mapping
 var (
-	ErrRecipeNotFound   = errors.New("recipe not found")
-	ErrRecipeNameExists = errors.New("recipe name already exists")
+	ErrRecipeNotFound    = errors.New("recipe not found")
+	ErrRecipeNameExists  = errors.New("recipe name already exists")
 	ErrInvalidRecipeName = errors.New("invalid recipe name format")
-	ErrRecipeInUse      = errors.New("recipe is in use by deployments")
+	ErrRecipeInUse       = errors.New("recipe is in use by deployments")
 )
 
 // Service defines the interface for recipe management operations
@@ -55,9 +55,9 @@ type CreateRecipeRequest struct {
 
 // UpdateRecipeRequest represents a request to update an existing recipe
 type UpdateRecipeRequest struct {
-	DisplayName *string                 `json:"displayName,omitempty"`
-	Description *string                 `json:"description,omitempty"`
-	Spec        map[string]interface{}  `json:"spec,omitempty"`
+	DisplayName *string                `json:"displayName,omitempty"`
+	Description *string                `json:"description,omitempty"`
+	Spec        map[string]interface{} `json:"spec,omitempty"`
 }
 
 // ValidateRecipeRequest represents a request to validate a recipe

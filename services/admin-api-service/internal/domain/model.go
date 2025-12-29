@@ -102,4 +102,3 @@ func IsValidEnvironment(env string) bool {
 	}
 	return false
 }
-

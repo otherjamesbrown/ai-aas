@@ -11,7 +11,6 @@
 // Requirements Reference:
 //   - specs/009-admin-cli/spec.md#NFR-011 (token validation with clear error messages)
 //   - specs/009-admin-cli/spec.md#Edge-Cases (time synchronization)
-//
 package userorg
 
 import (
@@ -41,4 +40,3 @@ func ValidateToken(expiresAt time.Time) error {
 
 	return nil
 }
-

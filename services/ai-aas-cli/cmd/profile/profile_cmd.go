@@ -139,15 +139,15 @@ Examples:
 
 func newCreateFullCmd() *cobra.Command {
 	var (
-		environment      string
-		orgName          string
-		orgSlug          string
-		email            string
-		displayName      string
-		userOrgEndpoint  string
-		apiKey           string
-		insecureSkipTLS  bool
-		setActive        bool
+		environment     string
+		orgName         string
+		orgSlug         string
+		email           string
+		displayName     string
+		userOrgEndpoint string
+		apiKey          string
+		insecureSkipTLS bool
+		setActive       bool
 	)
 
 	cmd := &cobra.Command{

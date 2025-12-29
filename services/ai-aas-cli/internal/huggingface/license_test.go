@@ -281,4 +281,3 @@ func TestRequiresAuth(t *testing.T) {
 		})
 	}
 }
-

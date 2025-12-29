@@ -132,4 +132,3 @@ func (cb *CircuitBreaker) Reset() {
 	cb.failures = 0
 	cb.successesInHalf = 0
 }
-

@@ -8,7 +8,6 @@
 // Requirements Reference:
 //   - specs/009-admin-cli/spec.md#NFR-014 (clear, actionable error messages)
 //   - specs/009-admin-cli/spec.md#NFR-023 (error handling consistency)
-//
 package errors
 
 import (
@@ -106,4 +105,3 @@ func NewUsageError(message string) *CLIError {
 		ExitCode:   2, // NFR-019: 2 = usage error
 	}
 }
-

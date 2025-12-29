@@ -132,4 +132,3 @@ func (c *Client) GetServerVersion(ctx context.Context) (string, error) {
 	}
 	return version.GitVersion, nil
 }
-

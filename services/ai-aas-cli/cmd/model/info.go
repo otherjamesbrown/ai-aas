@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/huggingface"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/registry"
+	"github.com/spf13/cobra"
 )
 
 // NewInfoCommand creates the model info command
@@ -61,7 +61,7 @@ Examples:
 			// Display model information
 			fmt.Printf("Model: %s\n", model.Name)
 			fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-			
+
 			// Registry info
 			fmt.Printf("\n📋 Registry\n")
 			fmt.Printf("   ID:            %s\n", model.ID)
@@ -108,7 +108,7 @@ Examples:
 				fmt.Printf("   Status:        Not cached\n")
 			} else {
 				fmt.Printf("   Status:        %s\n", model.CacheStatus)
-				
+
 				// Get cache details
 				cacheEntries, err := regClient.GetCache(ctx, name)
 				if err == nil && len(cacheEntries) > 0 {
@@ -142,4 +142,3 @@ Examples:
 
 	return cmd
 }
-

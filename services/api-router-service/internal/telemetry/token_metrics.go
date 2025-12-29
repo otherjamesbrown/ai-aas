@@ -1,8 +1,9 @@
 // Package telemetry provides token usage metrics for observability dashboards.
 //
 // Purpose:
-//   This package implements metrics collection for token usage across requests,
-//   enabling cost tracking and usage analytics in Grafana dashboards.
+//
+//	This package implements metrics collection for token usage across requests,
+//	enabling cost tracking and usage analytics in Grafana dashboards.
 //
 // Key Responsibilities:
 //   - Track total tokens processed (counter)
@@ -13,7 +14,6 @@
 //   - ai-aas-rio0: Token Metrics Instrumentation (P1)
 //   - Supports Cost Efficiency Dashboard (ai-aas-6eq7)
 //   - Supports Org Usage Dashboard (ai-aas-s0pj)
-//
 package telemetry
 
 import (

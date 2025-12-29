@@ -6,21 +6,21 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/pod"
+	"github.com/spf13/cobra"
 )
 
 // NewHealthCommand creates the pod health command
 func NewHealthCommand() *cobra.Command {
 	var (
-		namespace      string
-		modelName      string
-		environment    string
-		unhealthyOnly  bool
-		details        bool
-		outputFormat   string
+		namespace     string
+		modelName     string
+		environment   string
+		unhealthyOnly bool
+		details       bool
+		outputFormat  string
 	)
 
 	cmd := &cobra.Command{

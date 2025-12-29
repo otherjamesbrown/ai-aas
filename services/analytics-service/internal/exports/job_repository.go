@@ -286,4 +286,3 @@ func (r *ExportJobRepository) GetPendingJobs(ctx context.Context, limit int) ([]
 
 	return jobs, rows.Err()
 }
-

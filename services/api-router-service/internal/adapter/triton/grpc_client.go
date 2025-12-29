@@ -50,12 +50,12 @@ func DefaultGRPCClientConfig(endpoint string) *GRPCClientConfig {
 // TritonGRPCClient wraps a gRPC connection to a Triton Inference Server.
 // It provides methods for streaming inference and health checks.
 type TritonGRPCClient struct {
-	conn    *grpc.ClientConn
-	client  pb.GRPCInferenceServiceClient
-	logger  *zap.Logger
-	config  *GRPCClientConfig
-	mu      sync.RWMutex
-	closed  bool
+	conn   *grpc.ClientConn
+	client pb.GRPCInferenceServiceClient
+	logger *zap.Logger
+	config *GRPCClientConfig
+	mu     sync.RWMutex
+	closed bool
 }
 
 // NewTritonGRPCClient creates a new gRPC client connected to the specified Triton endpoint.

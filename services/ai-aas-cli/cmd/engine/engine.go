@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/engines"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
+	"github.com/spf13/cobra"
 )
 
 // NewEngineCommand creates the engine parent command

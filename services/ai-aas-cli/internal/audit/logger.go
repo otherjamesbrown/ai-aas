@@ -14,7 +14,6 @@
 //   - specs/009-admin-cli/spec.md#FR-010 (audit logging for privileged operations)
 //   - specs/009-admin-cli/spec.md#NFR-010 (audit logs capture all privileged operations)
 //   - specs/009-admin-cli/spec.md#NFR-028 (audit logs include operation duration)
-//
 package audit
 
 import (
@@ -53,7 +52,7 @@ func NewLogger(w *os.File) *Logger {
 // LogEntry represents an audit log entry.
 type LogEntry struct {
 	Timestamp    string                 `json:"timestamp"`
-	Level        string                 `json:"level"`       // info, warn, error
+	Level        string                 `json:"level"` // info, warn, error
 	Operation    string                 `json:"operation"`
 	UserIdentity string                 `json:"user_identity,omitempty"`
 	Command      string                 `json:"command"`
@@ -99,11 +98,11 @@ func determineLogLevel(op Operation) string {
 
 	// Destructive operations get warning level even on success
 	destructiveOps := map[string]bool{
-		"user_delete":   true,
-		"org_delete":    true,
-		"apikey_delete": true,
-		"apikey_rotate": true,
-		"bootstrap":     true,
+		"user_delete":         true,
+		"org_delete":          true,
+		"apikey_delete":       true,
+		"apikey_rotate":       true,
+		"bootstrap":           true,
 		"credential_rotation": true,
 	}
 
@@ -116,14 +115,14 @@ func determineLogLevel(op Operation) string {
 
 // Operation represents a privileged operation to be logged.
 type Operation struct {
-	Type        string                 // bootstrap, credential_rotation, org_delete, etc.
-	UserIdentity string                // User ID or token identity
-	Command     string                 // Full command executed
-	Parameters  map[string]interface{} // Command parameters (will be masked)
-	Outcome     string                 // success, failure
-	Duration    time.Duration          // Operation duration
-	BreakGlass  bool                   // True for break-glass operations
-	Error       error                  // Error if operation failed
+	Type         string                 // bootstrap, credential_rotation, org_delete, etc.
+	UserIdentity string                 // User ID or token identity
+	Command      string                 // Full command executed
+	Parameters   map[string]interface{} // Command parameters (will be masked)
+	Outcome      string                 // success, failure
+	Duration     time.Duration          // Operation duration
+	BreakGlass   bool                   // True for break-glass operations
+	Error        error                  // Error if operation failed
 }
 
 // maskParameters masks sensitive values in parameters.
@@ -159,4 +158,3 @@ func (l *Logger) maskParameters(params map[string]interface{}) map[string]interf
 
 	return masked
 }
-

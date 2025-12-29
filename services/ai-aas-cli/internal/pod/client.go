@@ -22,20 +22,20 @@ func NewClient(apiClient *api.Client) *Client {
 
 // PodHealth represents health information for a single pod
 type PodHealth struct {
-	Name              string             `json:"name"`
-	Namespace         string             `json:"namespace"`
-	ModelName         string             `json:"model_name"`
-	InferenceService  string             `json:"inferenceservice"`
-	Phase             string             `json:"phase"`
-	Ready             bool               `json:"ready"`
-	Node              string             `json:"node"`
-	RestartCount      int32              `json:"restart_count"`
-	LastRestartTime   *time.Time         `json:"last_restart_time,omitempty"`
-	LastTermination   *TerminationInfo   `json:"last_termination,omitempty"`
-	Containers        []ContainerHealth  `json:"containers"`
-	Conditions        []PodCondition     `json:"conditions"`
-	AgeSeconds        int64              `json:"age_seconds"`
-	CreatedAt         time.Time          `json:"created_at"`
+	Name             string            `json:"name"`
+	Namespace        string            `json:"namespace"`
+	ModelName        string            `json:"model_name"`
+	InferenceService string            `json:"inferenceservice"`
+	Phase            string            `json:"phase"`
+	Ready            bool              `json:"ready"`
+	Node             string            `json:"node"`
+	RestartCount     int32             `json:"restart_count"`
+	LastRestartTime  *time.Time        `json:"last_restart_time,omitempty"`
+	LastTermination  *TerminationInfo  `json:"last_termination,omitempty"`
+	Containers       []ContainerHealth `json:"containers"`
+	Conditions       []PodCondition    `json:"conditions"`
+	AgeSeconds       int64             `json:"age_seconds"`
+	CreatedAt        time.Time         `json:"created_at"`
 }
 
 // TerminationInfo contains details about the last container termination

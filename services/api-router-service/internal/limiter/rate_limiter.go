@@ -1,8 +1,9 @@
 // Package limiter provides rate limiting and budget enforcement for API requests.
 //
 // Purpose:
-//   This package implements Redis-backed token bucket rate limiting and budget
-//   checking to enforce fair usage and prevent over-spending.
+//
+//	This package implements Redis-backed token bucket rate limiting and budget
+//	checking to enforce fair usage and prevent over-spending.
 //
 // Dependencies:
 //   - github.com/redis/go-redis/v9: Redis client for token bucket storage
@@ -15,7 +16,6 @@
 //
 // Requirements Reference:
 //   - specs/006-api-router-service/spec.md#US-002 (Enforce budgets and safe usage)
-//
 package limiter
 
 import (
@@ -29,8 +29,8 @@ import (
 
 // RateLimiter implements token bucket rate limiting using Redis.
 type RateLimiter struct {
-	client    *redis.Client
-	logger    *zap.Logger
+	client     *redis.Client
+	logger     *zap.Logger
 	defaultRPS int
 	burstSize  int
 }
@@ -50,10 +50,10 @@ func NewRateLimiter(client *redis.Client, logger *zap.Logger, defaultRPS, burstS
 
 // CheckResult represents the result of a rate limit check.
 type CheckResult struct {
-	Allowed      bool
-	RetryAfter   time.Duration
-	Remaining    int
-	Limit        int
+	Allowed    bool
+	RetryAfter time.Duration
+	Remaining  int
+	Limit      int
 }
 
 // CheckOrganization checks if a request from an organization is allowed.
@@ -85,10 +85,10 @@ func (r *RateLimiter) check(ctx context.Context, key string, rps, burst int) (*C
 	now := time.Now()
 	// Use Unix timestamp with fractional seconds for precision (millisecond precision)
 	nowUnixFloat := float64(now.UnixNano()) / float64(time.Second)
-	
+
 	// Calculate refill interval (seconds per token)
 	refillInterval := float64(1) / float64(rps)
-	
+
 	// Use Redis Lua script for atomic token bucket operation
 	script := `
 		local key = KEYS[1]
@@ -121,7 +121,7 @@ func (r *RateLimiter) check(ctx context.Context, key string, rps, burst int) (*C
 			return {0, tokens, burst, time_until_next} -- allowed=0, remaining, limit, retry_after
 		end
 	`
-	
+
 	result, err := r.client.Eval(ctx, script, []string{key}, nowUnixFloat, refillInterval, burst).Result()
 	if err != nil {
 		if err == redis.Nil {
@@ -130,35 +130,35 @@ func (r *RateLimiter) check(ctx context.Context, key string, rps, burst int) (*C
 			r.client.HSet(ctx, key, "tokens", tokens, "last_refill", nowUnixFloat)
 			r.client.Expire(ctx, key, time.Hour)
 			return &CheckResult{
-				Allowed:    true,
-				Remaining:  tokens,
-				Limit:      burst,
+				Allowed:   true,
+				Remaining: tokens,
+				Limit:     burst,
 			}, nil
 		}
 		return nil, fmt.Errorf("rate limit check failed: %w", err)
 	}
-	
+
 	// Parse result from Lua script
 	results, ok := result.([]interface{})
 	if !ok || len(results) < 3 {
 		return nil, fmt.Errorf("unexpected rate limit result format")
 	}
-	
+
 	allowed := results[0].(int64) == 1
 	remaining := int(results[1].(int64))
 	limit := int(results[2].(int64))
-	
+
 	checkResult := &CheckResult{
 		Allowed:   allowed,
 		Remaining: remaining,
 		Limit:     limit,
 	}
-	
+
 	// If denied, calculate retry after
 	if !allowed {
 		refillInterval := float64(1) / float64(rps)
 		var retryAfterSeconds float64
-		
+
 		if len(results) >= 4 {
 			switch v := results[3].(type) {
 			case float64:
@@ -175,15 +175,15 @@ func (r *RateLimiter) check(ctx context.Context, key string, rps, burst int) (*C
 			r.logger.Warn("retry_after not returned from Redis Lua script, using default")
 			retryAfterSeconds = refillInterval
 		}
-		
+
 		// Ensure retry_after is at least one refill_interval (safeguard against 0 or negative values)
 		if retryAfterSeconds <= 0 {
 			retryAfterSeconds = refillInterval
 		}
-		
+
 		checkResult.RetryAfter = time.Duration(retryAfterSeconds * float64(time.Second))
 	}
-	
+
 	return checkResult, nil
 }
 
@@ -194,19 +194,19 @@ func (r *RateLimiter) Reset(ctx context.Context, key string) error {
 
 // TokenQuotaLimits represents token usage limits for different time periods.
 type TokenQuotaLimits struct {
-	Hourly  int
-	Daily   int
-	Weekly  int
+	Hourly int
+	Daily  int
+	Weekly int
 }
 
 // TokenQuotaStatus represents the current token usage status.
 type TokenQuotaStatus struct {
-	Allowed       bool
-	Exceeded      bool
-	Period        string // "hour", "day", or "week"
-	CurrentUsage  int
-	Limit         int
-	ResetAt       time.Time
+	Allowed      bool
+	Exceeded     bool
+	Period       string // "hour", "day", or "week"
+	CurrentUsage int
+	Limit        int
+	ResetAt      time.Time
 }
 
 // CheckTokenQuota checks if an organization is within their token quota limits.
@@ -336,4 +336,3 @@ func tokenKey(orgID, period string, t time.Time) string {
 	}
 	return fmt.Sprintf("ratelimit:tokens:%s:%s:%d", orgID, period, bucket)
 }
-

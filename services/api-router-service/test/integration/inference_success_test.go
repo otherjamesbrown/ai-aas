@@ -1,15 +1,15 @@
 // Package integration provides integration tests for the API Router Service.
 //
 // Purpose:
-//   These tests validate end-to-end inference routing functionality, including
-//   authentication, request forwarding, and response handling.
+//
+//	These tests validate end-to-end inference routing functionality, including
+//	authentication, request forwarding, and response handling.
 //
 // Key Responsibilities:
 //   - Test happy-path inference request flow
 //   - Validate authentication and authorization
 //   - Verify backend routing and response handling
 //   - Test error scenarios
-//
 package integration
 
 import (
@@ -111,13 +111,13 @@ func TestInferenceSuccess(t *testing.T) {
 	}
 
 	backendClient := routing.NewBackendClient(logger, 5*time.Second)
-	
+
 	// Create a minimal config for backend registry
 	testCfg := &config.Config{
 		BackendEndpoints: "", // Empty, we'll use SetBackendURI for testing
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
-	
+
 	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, nil, "", "", 30*time.Second, 10*time.Second)
 
 	// Configure handler to use mock backend URI
@@ -208,13 +208,13 @@ func TestInferenceAuthFailure(t *testing.T) {
 
 	loader := config.NewLoader("", false, cache, logger)
 	backendClient := routing.NewBackendClient(logger, 5*time.Second)
-	
+
 	// Create a minimal config for backend registry
 	testCfg := &config.Config{
 		BackendEndpoints: "",
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
-	
+
 	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, nil, "", "", 30*time.Second, 10*time.Second)
 
 	router := chi.NewRouter()
@@ -255,13 +255,13 @@ func TestInferenceValidationError(t *testing.T) {
 
 	loader := config.NewLoader("", false, cache, logger)
 	backendClient := routing.NewBackendClient(logger, 5*time.Second)
-	
+
 	// Create a minimal config for backend registry
 	testCfg := &config.Config{
 		BackendEndpoints: "",
 	}
 	backendRegistry := config.NewBackendRegistry(testCfg)
-	
+
 	handler := public.NewHandler(logger, authenticator, loader, backendClient, backendRegistry, nil, nil, nil, nil, nil, "", "", 30*time.Second, 10*time.Second)
 
 	router := chi.NewRouter()
@@ -314,4 +314,3 @@ func TestInferenceValidationError(t *testing.T) {
 		})
 	}
 }
-

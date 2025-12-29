@@ -17,7 +17,7 @@ func TestCredentialsCommand(t *testing.T) {
 
 func TestCredentialsRotateCommand(t *testing.T) {
 	cmd := CredentialsCommand()
-	
+
 	// Find rotate command by name instead of index
 	rotateCmd, _, err := cmd.Find([]string{"rotate"})
 	require.NoError(t, err, "rotate command should exist")
@@ -34,7 +34,7 @@ func TestCredentialsRotateCommand(t *testing.T) {
 
 func TestCredentialsBreakGlassCommand(t *testing.T) {
 	cmd := CredentialsCommand()
-	
+
 	// Find break-glass command by name instead of index
 	breakGlassCmd, _, err := cmd.Find([]string{"break-glass"})
 	require.NoError(t, err, "break-glass command should exist")

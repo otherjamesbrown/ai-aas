@@ -10,10 +10,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/registry"
+	"github.com/spf13/cobra"
 )
 
 // NewListCommand creates the model list command
@@ -105,7 +105,7 @@ Examples:
 				if m.CacheStatus == "ready" {
 					cached = "Yes"
 				}
-				
+
 				deployed := "No"
 				if m.DeploymentStatus != "" && m.DeploymentStatus != "none" {
 					deployed = "Yes"
@@ -154,8 +154,8 @@ func truncate(s string, maxLen int) string {
 
 // OpenAIModelsResponse represents the response from /v1/models
 type OpenAIModelsResponse struct {
-	Object string          `json:"object"`
-	Data   []OpenAIModel   `json:"data"`
+	Object string        `json:"object"`
+	Data   []OpenAIModel `json:"data"`
 }
 
 // OpenAIModel represents a model in the OpenAI API response
@@ -275,4 +275,3 @@ func listLiveModels(cmd *cobra.Command, format string) error {
 
 	return nil
 }
-

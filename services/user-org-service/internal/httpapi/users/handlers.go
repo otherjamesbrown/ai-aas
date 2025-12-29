@@ -61,10 +61,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 
-	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httputil"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/audit"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/bootstrap"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/middleware"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httputil"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/security"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/storage/postgres"
 )
@@ -860,9 +860,9 @@ func generateInviteToken() (string, error) {
 func generateSecurePassword() (string, error) {
 	// Character sets for password generation
 	const (
-		lowercase = "abcdefghijkmnopqrstuvwxyz"  // Excluding l for readability
-		uppercase = "ABCDEFGHJKLMNPQRSTUVWXYZ"   // Excluding I, O for readability
-		digits    = "23456789"                   // Excluding 0, 1 for readability
+		lowercase = "abcdefghijkmnopqrstuvwxyz" // Excluding l for readability
+		uppercase = "ABCDEFGHJKLMNPQRSTUVWXYZ"  // Excluding I, O for readability
+		digits    = "23456789"                  // Excluding 0, 1 for readability
 		special   = "!@#$%^&*"
 	)
 	allChars := lowercase + uppercase + digits + special

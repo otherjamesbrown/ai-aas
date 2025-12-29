@@ -41,4 +41,3 @@ func (s *AuditService) Log(ctx context.Context, create *domain.AuditLogCreate) {
 func (s *AuditService) List(ctx context.Context, params domain.AuditLogListParams) (*domain.AuditLogListResponse, error) {
 	return s.repo.List(ctx, params)
 }
-

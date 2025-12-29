@@ -1,8 +1,9 @@
 // Package integration provides integration tests for API key validation.
 //
 // Purpose:
-//   These tests validate the API key validation flow between API Router Service
-//   and User-Org-Service, including caching, error handling, and fallback behavior.
+//
+//	These tests validate the API key validation flow between API Router Service
+//	and User-Org-Service, including caching, error handling, and fallback behavior.
 //
 // Key Responsibilities:
 //   - Test valid API key validation
@@ -10,7 +11,6 @@
 //   - Test service unavailable fallback
 //   - Validate caching behavior
 //   - Test error handling and response codes
-//
 package integration
 
 import (
@@ -468,4 +468,3 @@ func TestAPIKeyValidationTimeout(t *testing.T) {
 		}
 	}
 }
-

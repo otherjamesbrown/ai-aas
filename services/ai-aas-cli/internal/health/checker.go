@@ -13,7 +13,6 @@
 // Requirements Reference:
 //   - specs/009-admin-cli/spec.md#FR-008 (health checks for service dependencies)
 //   - specs/009-admin-cli/spec.md#NFR-007 (fail fast when services unavailable)
-//
 package health
 
 import (
@@ -153,4 +152,3 @@ func (c *Checker) CheckRequired(ctx context.Context, requiredServices map[string
 
 	return results, nil
 }
-

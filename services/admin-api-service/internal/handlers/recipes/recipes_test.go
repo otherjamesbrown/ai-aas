@@ -279,7 +279,7 @@ func TestRecipeHandler_GetRecipe_Success(t *testing.T) {
 				Spec: map[string]interface{}{
 					"resources": map[string]interface{}{
 						"gpu": map[string]interface{}{
-							"count": 1,
+							"count":  1,
 							"vendor": "nvidia",
 						},
 					},

@@ -31,9 +31,13 @@ run:
 run-dev:
 	LOG_FORMAT=console LOG_LEVEL=DEBUG PYTHONPATH=./src python -m preprocessor.main
 
-# Run tests
+# Run tests (uses venv if available, falls back to system pytest)
 test:
-	pytest tests/ -v
+	@if [ -f .venv/bin/pytest ]; then \
+		PYTHONPATH=./src .venv/bin/pytest tests/ -v; \
+	else \
+		PYTHONPATH=./src pytest tests/ -v; \
+	fi
 
 # Lint code
 lint:

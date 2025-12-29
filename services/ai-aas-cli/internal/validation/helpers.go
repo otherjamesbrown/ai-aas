@@ -18,7 +18,7 @@ func fileExists(dir, filename string) bool {
 // validateJSONFile validates that a file contains valid JSON
 func validateJSONFile(dir, filename string) (bool, error) {
 	path := filepath.Join(dir, filename)
-	
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -38,7 +38,7 @@ func validateJSONFile(dir, filename string) (bool, error) {
 // getDirSize calculates the total size of files in a directory
 func getDirSize(dir string) (int64, error) {
 	var size int64
-	
+
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -63,7 +63,7 @@ func getDirSize(dir string) (int64, error) {
 // listFiles lists all files in a directory
 func listFiles(dir string) ([]string, error) {
 	var files []string
-	
+
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -88,7 +88,7 @@ func listFiles(dir string) ([]string, error) {
 // readJSONField reads a specific field from a JSON file
 func readJSONField(dir, filename, field string) (interface{}, error) {
 	path := filepath.Join(dir, filename)
-	
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -104,17 +104,17 @@ func readJSONField(dir, filename, field string) (interface{}, error) {
 
 // ModelConfig represents the model's config.json structure
 type ModelConfig struct {
-	ModelType        string `json:"model_type"`
-	NumHiddenLayers  int    `json:"num_hidden_layers"`
-	HiddenSize       int    `json:"hidden_size"`
-	VocabSize        int    `json:"vocab_size"`
-	MaxPositionEmbeddings int `json:"max_position_embeddings"`
+	ModelType             string `json:"model_type"`
+	NumHiddenLayers       int    `json:"num_hidden_layers"`
+	HiddenSize            int    `json:"hidden_size"`
+	VocabSize             int    `json:"vocab_size"`
+	MaxPositionEmbeddings int    `json:"max_position_embeddings"`
 }
 
 // readModelConfig reads and parses config.json
 func readModelConfig(dir string) (*ModelConfig, error) {
 	path := filepath.Join(dir, "config.json")
-	
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -168,16 +168,15 @@ func formatInt(i int64) string {
 	if i == 0 {
 		return "0"
 	}
-	
+
 	var buf [20]byte
 	pos := len(buf)
-	
+
 	for i > 0 {
 		pos--
 		buf[pos] = '0' + byte(i%10)
 		i /= 10
 	}
-	
+
 	return string(buf[pos:])
 }
-

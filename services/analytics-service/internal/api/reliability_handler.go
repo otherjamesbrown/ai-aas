@@ -109,17 +109,17 @@ func (h *ReliabilityHandler) GetOrgReliability(w http.ResponseWriter, r *http.Re
 
 // ReliabilitySeriesResponse matches the OpenAPI schema.
 type ReliabilitySeriesResponse struct {
-	OrgID       string                `json:"orgId"`
-	Granularity string                `json:"granularity"`
+	OrgID       string                 `json:"orgId"`
+	Granularity string                 `json:"granularity"`
 	Series      []ReliabilityPointResp `json:"series"`
 }
 
 // ReliabilityPointResp matches the OpenAPI schema.
 type ReliabilityPointResp struct {
-	BucketStart string              `json:"bucketStart"`
-	ModelID     *string              `json:"modelId,omitempty"`
-	ErrorRate   float64              `json:"errorRate"`
-	LatencyMs   LatencyPercentiles   `json:"latencyMs"`
+	BucketStart string             `json:"bucketStart"`
+	ModelID     *string            `json:"modelId,omitempty"`
+	ErrorRate   float64            `json:"errorRate"`
+	LatencyMs   LatencyPercentiles `json:"latencyMs"`
 }
 
 // LatencyPercentiles represents latency percentiles.
@@ -162,4 +162,3 @@ func (h *ReliabilityHandler) respondError(w http.ResponseWriter, status int, mes
 	h.logger.Warn(message, zap.Error(err), zap.Int("status", status))
 	httputil.WriteProblemDetails(w, status, http.StatusText(status), message)
 }
-

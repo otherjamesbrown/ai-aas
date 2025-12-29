@@ -124,11 +124,11 @@ func (s *ModelRegistryService) createDefaultRoutingPolicy(ctx context.Context, m
 		},
 		FailoverThreshold: 3,
 		Metadata: map[string]interface{}{
-			"auto_created":  true,
-			"model_id":      model.ModelID.String(),
-			"endpoint":      endpoint,
-			"namespace":     stringOrEmpty(model.DeploymentNamespace),
-			"environment":   stringOrEmpty(model.DeploymentEnvironment),
+			"auto_created":   true,
+			"model_id":       model.ModelID.String(),
+			"endpoint":       endpoint,
+			"namespace":      stringOrEmpty(model.DeploymentNamespace),
+			"environment":    stringOrEmpty(model.DeploymentEnvironment),
 			"created_reason": "auto-created on model registration",
 		},
 	}
@@ -280,4 +280,3 @@ func stringOrEmpty(s *string) string {
 	}
 	return *s
 }
-

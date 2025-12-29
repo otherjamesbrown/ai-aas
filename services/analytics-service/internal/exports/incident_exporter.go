@@ -1,9 +1,9 @@
 // Package exports provides CSV export functionality for analytics data.
 //
 // Purpose:
-//   This package generates CSV exports of usage events for incident analysis,
-//   allowing engineers to quickly share scoped datasets during incidents.
 //
+//	This package generates CSV exports of usage events for incident analysis,
+//	allowing engineers to quickly share scoped datasets during incidents.
 package exports
 
 import (
@@ -35,11 +35,11 @@ func NewIncidentExporter(store *postgres.Store, logger *zap.Logger) *IncidentExp
 
 // ExportRequest specifies the parameters for an incident export.
 type ExportRequest struct {
-	OrgID    uuid.UUID
-	ModelID  *uuid.UUID
-	Start    time.Time
-	End      time.Time
-	MaxRows  int // Limit rows to prevent huge exports (default: 10000)
+	OrgID   uuid.UUID
+	ModelID *uuid.UUID
+	Start   time.Time
+	End     time.Time
+	MaxRows int // Limit rows to prevent huge exports (default: 10000)
 }
 
 // Export generates a CSV export of usage events for the specified time range.
@@ -199,4 +199,3 @@ func formatString(s *string) string {
 	}
 	return *s
 }
-

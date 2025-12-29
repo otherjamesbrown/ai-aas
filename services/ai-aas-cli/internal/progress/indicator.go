@@ -14,7 +14,6 @@
 //   - specs/009-admin-cli/spec.md#FR-004 (progress indicators for long-running operations)
 //   - specs/009-admin-cli/spec.md#NFR-021 (progress indicators suitable for CI logs)
 //   - specs/009-admin-cli/spec.md#NFR-027 (progress events for monitoring systems)
-//
 package progress
 
 import (
@@ -126,4 +125,3 @@ func (p *Indicator) Complete(op string, total int, elapsed time.Duration) error 
 func (p *Indicator) ShouldShow(elapsed time.Duration) bool {
 	return p.enabled && elapsed > p.minDuration
 }
-

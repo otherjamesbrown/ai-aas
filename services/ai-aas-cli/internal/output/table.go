@@ -157,4 +157,3 @@ func formatFloat64(f float64) string {
 	}
 	return fmt.Sprintf("%.1f", f)
 }
-

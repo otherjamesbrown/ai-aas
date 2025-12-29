@@ -183,4 +183,3 @@ func (h *OrganizationHandler) validateUpdate(update *domain.OrganizationUpdate) 
 
 	return errors
 }
-

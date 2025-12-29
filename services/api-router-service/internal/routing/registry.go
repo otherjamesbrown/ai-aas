@@ -1,9 +1,10 @@
 // Package routing provides model registry integration for dynamic routing.
 //
 // Purpose:
-//   This module integrates with the model_registry_entries table to enable
-//   dynamic routing to vLLM deployments based on model name and environment.
-//   It supports Redis caching for performance and automatic invalidation.
+//
+//	This module integrates with the model_registry_entries table to enable
+//	dynamic routing to vLLM deployments based on model name and environment.
+//	It supports Redis caching for performance and automatic invalidation.
 //
 // Key Responsibilities:
 //   - Query model registry for deployment endpoints
@@ -14,7 +15,6 @@
 // Requirements Reference:
 //   - specs/010-vllm-deployment/spec.md#US-002 (Register models for routing)
 //   - specs/010-vllm-deployment/tasks.md#T-S010-P04-036 (API Router integration)
-//
 package routing
 
 import (
@@ -24,8 +24,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	_ "github.com/lib/pq" // PostgreSQL driver
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
@@ -52,12 +52,12 @@ type Registry struct {
 
 // RegistryConfig configures the model registry.
 type RegistryConfig struct {
-	DatabaseURL string
-	RedisAddr   string
+	DatabaseURL   string
+	RedisAddr     string
 	RedisPassword string
-	RedisDB     int
-	CacheTTL    time.Duration
-	Environment string
+	RedisDB       int
+	CacheTTL      time.Duration
+	Environment   string
 }
 
 // NewRegistry creates a new model registry with database and Redis connections.

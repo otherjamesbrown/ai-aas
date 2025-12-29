@@ -6,11 +6,11 @@ import (
 
 func TestExtractHostPort(t *testing.T) {
 	tests := []struct {
-		name        string
-		uri         string
-		wantHost    string
-		wantPort    string
-		wantErr     bool
+		name     string
+		uri      string
+		wantHost string
+		wantPort string
+		wantErr  bool
 	}{
 		{
 			name:     "http with explicit port and path",

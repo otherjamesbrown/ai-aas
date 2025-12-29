@@ -10,13 +10,13 @@ import (
 
 	_ "github.com/lib/pq"
 
+	"github.com/docker/go-connections/nat"
 	"github.com/google/uuid"
 	"github.com/ory/fosite"
 	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/require"
 	testcontainers "github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/docker/go-connections/nat"
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/security"

@@ -235,4 +235,3 @@ func NewHTTPClient(insecureSkipVerify bool) *http.Client {
 
 	return client
 }
-

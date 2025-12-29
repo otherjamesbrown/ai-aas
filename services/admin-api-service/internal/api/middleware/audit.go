@@ -154,4 +154,3 @@ func extractResourceID(path string) string {
 	}
 	return ""
 }
-

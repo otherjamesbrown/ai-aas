@@ -10,7 +10,6 @@
 //   - specs/009-admin-cli/spec.md#FR-001 (bootstrap with dry-run)
 //   - specs/009-admin-cli/spec.md#FR-003 (confirmation prompts)
 //   - specs/009-admin-cli/spec.md#FR-010 (audit logging)
-//
 package admin
 
 import (
@@ -129,11 +128,11 @@ func runCredentialsRotate(cmd *cobra.Command, args []string, flagOrgID, flagAPIK
 
 		if cfg.OutputFormat == "json" {
 			return output.PrintJSON(map[string]interface{}{
-				"mode":        "dry-run",
-				"operation":   "rotate-api-key",
-				"org_id":      flagOrgID,
-				"api_key_id":  flagAPIKeyID,
-				"endpoint":    cfg.UserOrgEndpoint,
+				"mode":       "dry-run",
+				"operation":  "rotate-api-key",
+				"org_id":     flagOrgID,
+				"api_key_id": flagAPIKeyID,
+				"endpoint":   cfg.UserOrgEndpoint,
 			})
 		}
 
@@ -156,16 +155,16 @@ func runCredentialsRotate(cmd *cobra.Command, args []string, flagOrgID, flagAPIK
 	// Audit logging
 	auditLogger := audit.NewLogger(nil)
 	if err := auditLogger.LogOperation(audit.Operation{
-		Type:        "credential_rotation",
+		Type:         "credential_rotation",
 		UserIdentity: "cli-user", // TODO: Get from config/auth
-		Command:     cmd.CommandPath(),
+		Command:      cmd.CommandPath(),
 		Parameters: map[string]interface{}{
 			"org_id":     flagOrgID,
 			"api_key_id": flagAPIKeyID,
 			"endpoint":   cfg.UserOrgEndpoint,
 		},
-		Outcome:   "success",
-		Duration:  duration,
+		Outcome:    "success",
+		Duration:   duration,
 		BreakGlass: false,
 	}); err != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to write audit log: %v\n", err)
@@ -280,11 +279,11 @@ func runBreakGlass(cmd *cobra.Command, args []string, flagRecoveryToken, flagEma
 
 		if cfg.OutputFormat == "json" {
 			return output.PrintJSON(map[string]interface{}{
-				"mode":         "dry-run",
-				"operation":    "break-glass",
-				"email":        flagEmail,
-				"endpoint":     cfg.UserOrgEndpoint,
-				"warning":      "This is a privileged recovery operation",
+				"mode":      "dry-run",
+				"operation": "break-glass",
+				"email":     flagEmail,
+				"endpoint":  cfg.UserOrgEndpoint,
+				"warning":   "This is a privileged recovery operation",
 			})
 		}
 
@@ -315,9 +314,9 @@ func runBreakGlass(cmd *cobra.Command, args []string, flagRecoveryToken, flagEma
 	// Audit logging (mark as break-glass)
 	auditLogger := audit.NewLogger(nil)
 	if err := auditLogger.LogOperation(audit.Operation{
-		Type:        "break_glass_recovery",
+		Type:         "break_glass_recovery",
 		UserIdentity: "recovery-token",
-		Command:     cmd.CommandPath(),
+		Command:      cmd.CommandPath(),
 		Parameters: map[string]interface{}{
 			"email":    flagEmail,
 			"endpoint": cfg.UserOrgEndpoint,
@@ -339,10 +338,10 @@ func runBreakGlass(cmd *cobra.Command, args []string, flagRecoveryToken, flagEma
 
 	if cfg.OutputFormat == "json" {
 		return output.PrintJSON(map[string]interface{}{
-			"success":   true,
-			"admin_id":  resp.AdminID,
-			"api_key":   resp.APIKey,
-			"duration":  duration.String(),
+			"success":     true,
+			"admin_id":    resp.AdminID,
+			"api_key":     resp.APIKey,
+			"duration":    duration.String(),
 			"break_glass": true,
 		})
 	}

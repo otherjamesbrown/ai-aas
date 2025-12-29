@@ -6,7 +6,6 @@
 //
 // Requirements Reference:
 //   - specs/009-admin-cli/spec.md#US-003 (Exports)
-//
 package admin
 
 import (
@@ -50,4 +49,3 @@ func exportMembershipsCommand() *cobra.Command {
 		},
 	}
 }
-

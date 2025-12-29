@@ -7,7 +7,6 @@
 //
 // Requirements Reference:
 //   - specs/019-admin-cli-enhancements/spec.md#US-003 (Usage Queries)
-//
 package admin
 
 import (

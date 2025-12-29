@@ -19,11 +19,11 @@ import (
 
 // S3Delivery handles CSV uploads to Linode Object Storage (S3-compatible) and signed URL generation.
 type S3Delivery struct {
-	client     *s3.Client
-	bucket     string
-	region     string
+	client       *s3.Client
+	bucket       string
+	region       string
 	signedURLTTL time.Duration
-	logger     *zap.Logger
+	logger       *zap.Logger
 }
 
 // NewS3Delivery creates a new Linode Object Storage delivery adapter.
@@ -49,11 +49,11 @@ func NewS3Delivery(endpoint, accessKey, secretKey, bucket, region string, signed
 	})
 
 	return &S3Delivery{
-		client:      client,
-		bucket:      bucket,
-		region:      region,
+		client:       client,
+		bucket:       bucket,
+		region:       region,
 		signedURLTTL: signedURLTTL,
-		logger:      logger,
+		logger:       logger,
 	}, nil
 }
 
@@ -103,7 +103,7 @@ func (s *S3Delivery) UploadCSV(ctx context.Context, orgID, jobID uuid.UUID, csvD
 // GenerateSignedURL generates a presigned GET URL for downloading an object from Linode Object Storage.
 func (s *S3Delivery) GenerateSignedURL(ctx context.Context, key string) (string, error) {
 	presigner := s3.NewPresignClient(s.client)
-	
+
 	getRequest, err := presigner.PresignGetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
@@ -116,4 +116,3 @@ func (s *S3Delivery) GenerateSignedURL(ctx context.Context, key string) (string,
 
 	return getRequest.URL, nil
 }
-

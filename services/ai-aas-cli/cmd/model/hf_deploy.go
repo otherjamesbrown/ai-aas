@@ -9,27 +9,27 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/huggingface"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/kubernetes"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/registry"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 // NewHFDeployCommand creates the hf-deploy command
 func NewHFDeployCommand() *cobra.Command {
 	var (
-		name           string
-		environment    string
-		gpuCount       int
-		memoryGB       int
-		minReplicas    int
-		maxReplicas    int
-		acceptLicense  bool
-		skipCache      bool
-		wait           bool
-		timeout        time.Duration
+		name          string
+		environment   string
+		gpuCount      int
+		memoryGB      int
+		minReplicas   int
+		maxReplicas   int
+		acceptLicense bool
+		skipCache     bool
+		wait          bool
+		timeout       time.Duration
 	)
 
 	cmd := &cobra.Command{

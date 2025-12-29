@@ -278,21 +278,21 @@ func (h *UsageHandler) GetOrgUsage(w http.ResponseWriter, r *http.Request) {
 
 // UsageSeriesResponse matches the OpenAPI schema.
 type UsageSeriesResponse struct {
-	OrgID       string                `json:"orgId"`
-	Granularity string                `json:"granularity"`
-	Series      []UsagePointResponse  `json:"series"`
-	Totals      UsageTotalsResponse   `json:"totals"`
-	Freshness   FreshnessIndicator    `json:"freshness"`
+	OrgID       string               `json:"orgId"`
+	Granularity string               `json:"granularity"`
+	Series      []UsagePointResponse `json:"series"`
+	Totals      UsageTotalsResponse  `json:"totals"`
+	Freshness   FreshnessIndicator   `json:"freshness"`
 }
 
 // APIKeyUsageSeriesResponse matches the OpenAPI schema for API key usage.
 type APIKeyUsageSeriesResponse struct {
-	OrgID       string                `json:"orgId"`
-	APIKeyID    string                `json:"apiKeyId"`
-	Granularity string                `json:"granularity"`
-	Series      []UsagePointResponse  `json:"series"`
-	Totals      UsageTotalsResponse   `json:"totals"`
-	Freshness   FreshnessIndicator    `json:"freshness"`
+	OrgID       string               `json:"orgId"`
+	APIKeyID    string               `json:"apiKeyId"`
+	Granularity string               `json:"granularity"`
+	Series      []UsagePointResponse `json:"series"`
+	Totals      UsageTotalsResponse  `json:"totals"`
+	Freshness   FreshnessIndicator   `json:"freshness"`
 }
 
 // UsagePointResponse matches the OpenAPI schema.
@@ -315,10 +315,10 @@ type UsageTotalsResponse struct {
 
 // FreshnessIndicator represents freshness status.
 type FreshnessIndicator struct {
-	Status        string    `json:"status"`
-	LagSeconds    int       `json:"lagSeconds"`
-	LastEventAt   time.Time `json:"lastEventAt"`
-	LastRollupAt  time.Time `json:"lastRollupAt"`
+	Status       string    `json:"status"`
+	LagSeconds   int       `json:"lagSeconds"`
+	LastEventAt  time.Time `json:"lastEventAt"`
+	LastRollupAt time.Time `json:"lastRollupAt"`
 }
 
 func convertPoints(points []postgres.UsagePoint) []UsagePointResponse {
@@ -352,4 +352,3 @@ func (h *UsageHandler) respondError(w http.ResponseWriter, status int, message s
 	h.logger.Warn(message, zap.Error(err), zap.Int("status", status))
 	httputil.WriteProblemDetails(w, status, http.StatusText(status), message)
 }
-

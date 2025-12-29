@@ -7,10 +7,10 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
+	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 // NewListCommand creates the list command for recipes

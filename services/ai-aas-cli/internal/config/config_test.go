@@ -11,7 +11,7 @@ import (
 
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
-	
+
 	assert.Equal(t, "http://localhost:8080", cfg.APIEndpoint)
 	assert.Equal(t, "development", cfg.Environment)
 	assert.False(t, cfg.Verbose)
@@ -152,7 +152,7 @@ func TestIsConfigured(t *testing.T) {
 func TestSaveAndLoad(t *testing.T) {
 	// Create temp directory for test config
 	tmpDir := t.TempDir()
-	
+
 	// Override home directory for test
 	origHome := os.Getenv("HOME")
 	os.Setenv("HOME", tmpDir)
@@ -191,7 +191,7 @@ func TestSaveAndLoad(t *testing.T) {
 func TestGetConfigPath(t *testing.T) {
 	path, err := GetConfigPath()
 	require.NoError(t, err)
-	
+
 	// Should end with config file name
 	assert.Contains(t, path, ConfigFileName)
 	assert.Contains(t, path, ConfigFileType)
@@ -200,7 +200,7 @@ func TestGetConfigPath(t *testing.T) {
 func TestExists(t *testing.T) {
 	// Create temp directory
 	tmpDir := t.TempDir()
-	
+
 	// Override home for test
 	origHome := os.Getenv("HOME")
 	os.Setenv("HOME", tmpDir)
@@ -217,4 +217,3 @@ func TestExists(t *testing.T) {
 	// Should exist now
 	assert.True(t, Exists())
 }
-

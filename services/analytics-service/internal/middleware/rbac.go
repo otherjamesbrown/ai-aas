@@ -1,8 +1,9 @@
 // Package middleware provides HTTP middleware for the analytics service.
 //
 // Purpose:
-//   This package provides RBAC middleware that integrates with shared/go/auth
-//   to enforce role-based access control on analytics API endpoints.
+//
+//	This package provides RBAC middleware that integrates with shared/go/auth
+//	to enforce role-based access control on analytics API endpoints.
 //
 // Dependencies:
 //   - github.com/ai-aas/shared-go/auth: Shared authorization middleware
@@ -121,18 +122,17 @@ func RBAC(cfg RBACConfig) func(http.Handler) http.Handler {
 			// Normalize path before passing to middleware
 			// Create a new request with normalized path for policy matching
 			normalizedPath := normalizePath(r.URL.Path)
-			
+
 			// The auth middleware uses r.Method + ":" + r.URL.Path
 			// We need to temporarily modify the path for policy lookup
 			originalPath := r.URL.Path
 			r.URL.Path = normalizedPath
-			
+
 			// Call the base middleware
 			baseMiddleware(next).ServeHTTP(w, r)
-			
+
 			// Restore original path (though it's probably not needed after ServeHTTP)
 			r.URL.Path = originalPath
 		})
 	}
 }
-

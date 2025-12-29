@@ -1,8 +1,9 @@
 // Package telemetry provides Prometheus metrics for limit denials.
 //
 // Purpose:
-//   This package implements Prometheus metrics for tracking rate limit,
-//   budget, and quota denials.
+//
+//	This package implements Prometheus metrics for tracking rate limit,
+//	budget, and quota denials.
 //
 // Dependencies:
 //   - github.com/prometheus/client_golang: Prometheus metrics
@@ -14,7 +15,6 @@
 //
 // Requirements Reference:
 //   - specs/006-api-router-service/spec.md#US-002 (Enforce budgets and safe usage)
-//
 package telemetry
 
 import (
@@ -79,4 +79,3 @@ func RecordQuotaDenial(quotaType string) {
 func RecordModelAccessDenial(model, orgID string) {
 	ModelAccessDenialsTotal.WithLabelValues(model, orgID).Inc()
 }
-

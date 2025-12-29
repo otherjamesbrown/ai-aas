@@ -56,15 +56,15 @@ type AuditLogListResponse struct {
 
 // Audit actions
 const (
-	ActionModelCreate     = "model.create"
-	ActionModelUpdate     = "model.update"
-	ActionModelDelete     = "model.delete"
-	ActionOrgCreate       = "organization.create"
-	ActionOrgUpdate       = "organization.update"
-	ActionPolicyCreate    = "routing_policy.create"
-	ActionPolicyUpdate    = "routing_policy.update"
-	ActionPolicyDelete    = "routing_policy.delete"
-	ActionPolicyActivate  = "routing_policy.activate"
+	ActionModelCreate      = "model.create"
+	ActionModelUpdate      = "model.update"
+	ActionModelDelete      = "model.delete"
+	ActionOrgCreate        = "organization.create"
+	ActionOrgUpdate        = "organization.update"
+	ActionPolicyCreate     = "routing_policy.create"
+	ActionPolicyUpdate     = "routing_policy.update"
+	ActionPolicyDelete     = "routing_policy.delete"
+	ActionPolicyActivate   = "routing_policy.activate"
 	ActionPolicyDeactivate = "routing_policy.deactivate"
 )
 
@@ -80,4 +80,3 @@ const (
 	ResourceTypeOrganization = "organization"
 	ResourceTypePolicy       = "routing_policy"
 )
-

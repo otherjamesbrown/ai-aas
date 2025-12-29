@@ -1,9 +1,10 @@
 // Command analytics-service is the main HTTP server for the Analytics Service.
 //
 // Purpose:
-//   This binary provides the primary entrypoint for analytics ingestion, aggregation,
-//   and querying. It initializes core dependencies (Postgres, Redis, RabbitMQ, S3)
-//   and serves HTTP requests with graceful shutdown handling.
+//
+//	This binary provides the primary entrypoint for analytics ingestion, aggregation,
+//	and querying. It initializes core dependencies (Postgres, Redis, RabbitMQ, S3)
+//	and serves HTTP requests with graceful shutdown handling.
 //
 // Dependencies:
 //   - internal/config: Configuration loading and validation
@@ -30,7 +31,6 @@
 //   - Server starts on configured HTTP port (default 8084)
 //   - Readiness probe checks Postgres, Redis, and RabbitMQ connectivity
 //   - Graceful shutdown allows in-flight requests to complete (10s timeout)
-//
 package main
 
 import (
@@ -275,4 +275,3 @@ func main() {
 		logger.Info("shutdown complete")
 	}
 }
-

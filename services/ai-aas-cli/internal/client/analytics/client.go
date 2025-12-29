@@ -13,7 +13,6 @@
 // Requirements Reference:
 //   - specs/009-admin-cli/spec.md#FR-008 (consume existing service APIs)
 //   - specs/009-admin-cli/plan.md#client/analytics
-//
 package analytics
 
 import (
@@ -97,4 +96,3 @@ func (c *Client) QueryUsage(ctx context.Context, params UsageQueryParams) (*Usag
 
 	return &response, nil
 }
-

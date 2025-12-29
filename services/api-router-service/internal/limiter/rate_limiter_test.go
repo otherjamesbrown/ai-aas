@@ -1,9 +1,9 @@
 // Package limiter provides unit tests for rate limiting functionality.
 //
 // Purpose:
-//   These tests validate the token bucket rate limiting implementation,
-//   including per-organization and per-API-key rate limiting.
 //
+//	These tests validate the token bucket rate limiting implementation,
+//	including per-organization and per-API-key rate limiting.
 package limiter
 
 import (
@@ -425,9 +425,9 @@ func TestRateLimiter_CheckTokenQuota(t *testing.T) {
 	orgID := "test-org-quota"
 
 	limits := TokenQuotaLimits{
-		Hourly:  1000,
-		Daily:   10000,
-		Weekly:  50000,
+		Hourly: 1000,
+		Daily:  10000,
+		Weekly: 50000,
 	}
 
 	// Should be allowed initially
@@ -502,9 +502,9 @@ func TestRateLimiter_TokenQuotaIsolation(t *testing.T) {
 	org2 := "test-org-quota-2"
 
 	limits := TokenQuotaLimits{
-		Hourly:  1000,
-		Daily:   10000,
-		Weekly:  50000,
+		Hourly: 1000,
+		Daily:  10000,
+		Weekly: 50000,
 	}
 
 	// Exhaust org1's hourly quota
@@ -547,9 +547,9 @@ func TestRateLimiter_TokenQuotaDisabled(t *testing.T) {
 
 	// All limits set to 0 (disabled)
 	limits := TokenQuotaLimits{
-		Hourly:  0,
-		Daily:   0,
-		Weekly:  0,
+		Hourly: 0,
+		Daily:  0,
+		Weekly: 0,
 	}
 
 	// Record lots of tokens
@@ -566,4 +566,3 @@ func TestRateLimiter_TokenQuotaDisabled(t *testing.T) {
 		t.Error("expected quota check to allow request when limits are 0 (disabled)")
 	}
 }
-

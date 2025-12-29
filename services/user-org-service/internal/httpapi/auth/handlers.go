@@ -118,9 +118,9 @@ type APIKeyValidator interface {
 // Handler serves authentication endpoints backed by Fosité.
 type Handler struct {
 	runtime     *bootstrap.Runtime
-	idpRegistry *IdPRegistry     // IdP registry for OIDC federation (optional, nil if not configured)
+	idpRegistry *IdPRegistry // IdP registry for OIDC federation (optional, nil if not configured)
 	logger      *zap.Logger
-	store       APIKeyValidator  // Optional: for testing. If nil, uses runtime.Postgres
+	store       APIKeyValidator // Optional: for testing. If nil, uses runtime.Postgres
 }
 
 type loginRequest struct {
@@ -618,7 +618,7 @@ func cloneRequestWithForm(r *http.Request, form url.Values) *http.Request {
 	// but we need the cloned request to complete authentication regardless
 	// Use the original URL directly to preserve scheme, host, path, and query
 	body := form.Encode()
-	
+
 	// Build full URL string preserving scheme and host
 	// r.URL might be relative, so we need to construct the full URL
 	var fullURL string
@@ -638,7 +638,7 @@ func cloneRequestWithForm(r *http.Request, form url.Values) *http.Request {
 		}
 		fullURL = fmt.Sprintf("%s://%s%s", scheme, host, r.URL.RequestURI())
 	}
-	
+
 	// Use context.Background() instead of r.Context() to prevent cancellation
 	// when the original request context is canceled (e.g., Playwright closing connection)
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, fullURL, strings.NewReader(body))
@@ -662,7 +662,7 @@ func cloneRequestWithForm(r *http.Request, form url.Values) *http.Request {
 		}
 		req.Host = r.Host
 	}
-	
+
 	// Preserve important headers from original request
 	if req.Header == nil {
 		req.Header = make(http.Header)
@@ -673,17 +673,17 @@ func cloneRequestWithForm(r *http.Request, form url.Values) *http.Request {
 	}
 	// Override Content-Type for form data
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	
+
 	// Set content length
 	req.ContentLength = int64(len(body))
-	
+
 	// Preserve RemoteAddr and other connection info (for logging/debugging)
 	req.RemoteAddr = r.RemoteAddr
-	
+
 	// Don't set Form/PostForm directly - let Fosite parse from body
 	// This ensures compatibility with Fosite's internal parsing logic
 	// Fosite will call ParseForm() internally, which reads from req.Body
-	
+
 	return req
 }
 
@@ -772,12 +772,12 @@ func (h *Handler) UserInfo(w http.ResponseWriter, r *http.Request) {
 
 	// Build userinfo response in OIDC format
 	userInfo := map[string]interface{}{
-		"sub":            user.ID.String(),
-		"id":             user.ID.String(),
-		"email":          user.Email,
-		"name":           user.DisplayName,
+		"sub":             user.ID.String(),
+		"id":              user.ID.String(),
+		"email":           user.Email,
+		"name":            user.DisplayName,
 		"organization_id": orgIDStr,
-		"scopes":         []string{"openid", "profile", "email"},
+		"scopes":          []string{"openid", "profile", "email"},
 	}
 
 	// Add roles if available (TODO: implement role system)

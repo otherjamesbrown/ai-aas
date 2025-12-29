@@ -1,9 +1,9 @@
 // Package telemetry provides unit tests for token metrics functionality.
 //
 // Purpose:
-//   These tests validate the token usage metrics collection,
-//   including counter and histogram metrics for tokens processed.
 //
+//	These tests validate the token usage metrics collection,
+//	including counter and histogram metrics for tokens processed.
 package telemetry
 
 import (

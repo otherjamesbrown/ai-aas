@@ -94,4 +94,3 @@ type ConflictError struct {
 func (e *ConflictError) Error() string {
 	return e.Message
 }
-

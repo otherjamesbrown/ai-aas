@@ -107,9 +107,8 @@ func TestInferenceResult_String(t *testing.T) {
 
 func TestNewInferenceValidator(t *testing.T) {
 	validator := NewInferenceValidator()
-	
+
 	require.NotNil(t, validator)
 	assert.Equal(t, DefaultInferenceTimeout, validator.Timeout)
 	assert.NotNil(t, validator.Client)
 }
-

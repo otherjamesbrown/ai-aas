@@ -7,7 +7,6 @@
 //
 // Requirements Reference:
 //   - specs/009-admin-cli/spec.md#US-002 (Day-2 Management)
-//
 package admin
 
 import (
@@ -190,10 +189,10 @@ func runAPIKeyList(cmd *cobra.Command, args []string, flagOrgID, flagFormat stri
 	// Audit logging
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
-		Type:        "apikey_list",
-		Command:     fmt.Sprintf("apikey list --org-id=%s", orgID),
-		Outcome:     "success",
-		Duration:    time.Since(startTime),
+		Type:     "apikey_list",
+		Command:  fmt.Sprintf("apikey list --org-id=%s", orgID),
+		Outcome:  "success",
+		Duration: time.Since(startTime),
 	})
 
 	// Format output
@@ -446,14 +445,14 @@ func runAPIKeyCreate(cmd *cobra.Command, args []string, flagOrgID, flagUserID, f
 	// Audit logging (mask token)
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
-		Type:        "apikey_create",
-		Command:     fmt.Sprintf("apikey create --org-id=%s --user-id=%s", orgID, resolvedUserID),
+		Type:    "apikey_create",
+		Command: fmt.Sprintf("apikey create --org-id=%s --user-id=%s", orgID, resolvedUserID),
 		Parameters: map[string]interface{}{
-			"orgId":   orgID,
-			"userId":  resolvedUserID,
-			"email":   emailToResolve,
-			"keyId":   apiKey.KeyID,
-			"token":   apiKey.Token, // Will be masked by audit logger
+			"orgId":  orgID,
+			"userId": resolvedUserID,
+			"email":  emailToResolve,
+			"keyId":  apiKey.KeyID,
+			"token":  apiKey.Token, // Will be masked by audit logger
 		},
 		Outcome:  "success",
 		Duration: time.Since(startTime),
@@ -668,8 +667,8 @@ func runAPIKeyDelete(cmd *cobra.Command, args []string, flagOrgID, flagAPIKeyID 
 	// Audit logging
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
-		Type:        "apikey_delete",
-		Command:     fmt.Sprintf("apikey delete --org-id=%s --api-key-id=%s --confirm", orgID, flagAPIKeyID),
+		Type:    "apikey_delete",
+		Command: fmt.Sprintf("apikey delete --org-id=%s --api-key-id=%s --confirm", orgID, flagAPIKeyID),
 		Parameters: map[string]interface{}{
 			"orgId":    orgID,
 			"apiKeyId": flagAPIKeyID,
@@ -681,9 +680,9 @@ func runAPIKeyDelete(cmd *cobra.Command, args []string, flagOrgID, flagAPIKeyID 
 	// Format output
 	if cfg.OutputFormat == "json" {
 		return output.PrintJSON(map[string]interface{}{
-			"success": true,
+			"success":  true,
 			"apiKeyId": flagAPIKeyID,
-			"message": "API key deleted successfully",
+			"message":  "API key deleted successfully",
 		})
 	} else {
 		if !cfg.Quiet {
@@ -867,5 +866,3 @@ func runAPIKeyInspect(cmd *cobra.Command, args []string, key, flagFormat string,
 	}
 	return nil
 }
-
-

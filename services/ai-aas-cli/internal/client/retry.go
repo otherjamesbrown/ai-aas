@@ -13,7 +13,6 @@
 // Requirements Reference:
 //   - specs/009-admin-cli/spec.md#FR-009 (retry logic with exponential backoff)
 //   - specs/009-admin-cli/spec.md#NFR-006 (retry handles transient failures: max 3 attempts, 1s/2s/4s delays)
-//
 package client
 
 import (
@@ -126,4 +125,3 @@ func min(a, b int64) int64 {
 	}
 	return b
 }
-

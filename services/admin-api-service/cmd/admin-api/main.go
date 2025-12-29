@@ -126,4 +126,3 @@ type credentialGetterAdapter struct {
 func (a *credentialGetterAdapter) GetCredential(ctx context.Context, credType string) (string, error) {
 	return a.svc.GetCredential(ctx, credType)
 }
-

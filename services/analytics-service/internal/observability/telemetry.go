@@ -1,9 +1,10 @@
 // Package observability provides OpenTelemetry and structured logging initialization.
 //
 // Purpose:
-//   This package wires together OpenTelemetry tracing and structured logging
-//   using the shared observability library and zap logger. It provides a unified
-//   interface for telemetry initialization and shutdown.
+//
+//	This package wires together OpenTelemetry tracing and structured logging
+//	using the shared observability library and zap logger. It provides a unified
+//	interface for telemetry initialization and shutdown.
 //
 // Dependencies:
 //   - github.com/ai-aas/shared-go/observability: OpenTelemetry setup
@@ -14,7 +15,6 @@
 //   - Configure zap logger with structured output
 //   - Provide shutdown hooks for graceful teardown
 //   - Handle telemetry failures gracefully
-//
 package observability
 
 import (
@@ -115,4 +115,3 @@ func (o *Observability) Shutdown(ctx context.Context) error {
 
 	return firstErr
 }
-

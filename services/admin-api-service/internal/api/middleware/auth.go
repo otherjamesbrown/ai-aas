@@ -84,4 +84,3 @@ func writeUnauthorized(w http.ResponseWriter, message string) {
 	w.WriteHeader(http.StatusUnauthorized)
 	w.Write([]byte(`{"type":"https://docs.otherjamesbrown.com/errors/unauthorized","title":"Unauthorized","status":401,"detail":"` + message + `"}`))
 }
-

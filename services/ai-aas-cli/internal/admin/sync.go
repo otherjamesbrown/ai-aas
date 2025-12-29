@@ -6,7 +6,6 @@
 //
 // Requirements Reference:
 //   - specs/009-admin-cli/spec.md#US-002 (Sync Operations)
-//
 package admin
 
 import (
@@ -134,9 +133,9 @@ func runSyncTrigger(cmd *cobra.Command, args []string, flagOrgID, flagFormat str
 	// NOTE: This is a placeholder implementation for Phase 4
 	// Full implementation will be completed when analytics-service sync endpoints are available
 	// For now, we'll simulate a sync operation
-	
+
 	jobID := fmt.Sprintf("sync-%s-%d", flagOrgID, time.Now().Unix())
-	
+
 	if !cfg.Quiet {
 		fmt.Printf("Triggering sync operation for organization: %s\n", flagOrgID)
 		fmt.Printf("Job ID: %s\n", jobID)
@@ -150,8 +149,8 @@ func runSyncTrigger(cmd *cobra.Command, args []string, flagOrgID, flagFormat str
 	// Audit logging
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
-		Type:        "sync_trigger",
-		Command:     fmt.Sprintf("sync trigger --org-id=%s", flagOrgID),
+		Type:    "sync_trigger",
+		Command: fmt.Sprintf("sync trigger --org-id=%s", flagOrgID),
 		Parameters: map[string]interface{}{
 			"orgId": flagOrgID,
 			"jobId": jobID,
@@ -293,8 +292,8 @@ func runSyncStatus(cmd *cobra.Command, args []string, flagOrgID, flagJobID, flag
 	// Audit logging
 	auditLogger := audit.NewLogger(nil)
 	_ = auditLogger.LogOperation(audit.Operation{
-		Type:        "sync_status",
-		Command:     fmt.Sprintf("sync status --org-id=%s --job-id=%s", flagOrgID, flagJobID),
+		Type:    "sync_status",
+		Command: fmt.Sprintf("sync status --org-id=%s --job-id=%s", flagOrgID, flagJobID),
 		Parameters: map[string]interface{}{
 			"orgId": flagOrgID,
 			"jobId": flagJobID,
@@ -332,7 +331,7 @@ func monitorSyncProgress(ctx context.Context, orgID, jobID string, cfg *config.C
 			return ctx.Err()
 		case <-ticker.C:
 			elapsed = time.Since(startTime)
-			
+
 			// NOTE: This is a placeholder - actual status check will query analytics-service
 			// For now, simulate progress
 			if elapsed > 30*time.Second {
@@ -357,5 +356,3 @@ func monitorSyncProgress(ctx context.Context, orgID, jobID string, cfg *config.C
 		}
 	}
 }
-
-

@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/registry"
+	"github.com/spf13/cobra"
 )
 
 // NewRemoveCommand creates the model remove command
@@ -70,7 +70,7 @@ Examples:
 			}
 
 			fmt.Printf("✅ Model %s removed from registry\n", name)
-			
+
 			if model.CacheStatus == "ready" {
 				fmt.Printf("\n💡 Note: Cached files still exist. To delete cache:\n")
 				fmt.Printf("   ai-aas-cli model cache delete %s\n", name)
@@ -84,4 +84,3 @@ Examples:
 
 	return cmd
 }
-

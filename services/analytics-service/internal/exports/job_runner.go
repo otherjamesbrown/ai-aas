@@ -325,4 +325,3 @@ func (r *JobRunner) generateCSV(ctx context.Context, job ExportJob) ([]byte, int
 
 	return buf.Bytes(), rowCount, nil
 }
-

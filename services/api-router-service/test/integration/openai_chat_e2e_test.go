@@ -9,7 +9,6 @@
 //
 // Run these tests with: go test -v ./test/integration -run E2E
 // Requires: VLLM_BACKEND_URL environment variable
-//
 package integration
 
 import (
@@ -55,8 +54,9 @@ func floatPtr(v float64) *float64 { return &v }
 // - Model must be loaded and ready
 //
 // Usage:
-//   export VLLM_BACKEND_URL=http://localhost:8000
-//   go test -v ./test/integration -run TestOpenAIChatCompletions_E2E
+//
+//	export VLLM_BACKEND_URL=http://localhost:8000
+//	go test -v ./test/integration -run TestOpenAIChatCompletions_E2E
 func TestOpenAIChatCompletions_E2E(t *testing.T) {
 	// Check if real backend URL is provided
 	vllmURL := os.Getenv("VLLM_BACKEND_URL")
@@ -145,7 +145,7 @@ func TestOpenAIChatCompletions_E2E(t *testing.T) {
 				Content: "In one word, can you provide me the capital of France?",
 			},
 		},
-		MaxTokens:   intPtr(10),   // Limit tokens to encourage concise answer
+		MaxTokens:   intPtr(10),    // Limit tokens to encourage concise answer
 		Temperature: floatPtr(0.1), // Low temperature for deterministic answer
 	}
 

@@ -1,8 +1,9 @@
 // Package routing provides routing policy cache with Config Service watch updates.
 //
 // Purpose:
-//   This package provides a routing-focused interface to the configuration loader,
-//   caching routing policies and handling watch updates for real-time policy changes.
+//
+//	This package provides a routing-focused interface to the configuration loader,
+//	caching routing policies and handling watch updates for real-time policy changes.
 //
 // Key Responsibilities:
 //   - Cache routing policies for fast lookups
@@ -13,7 +14,6 @@
 // Requirements Reference:
 //   - specs/006-api-router-service/spec.md#US-003 (Intelligent routing and fallback)
 //   - specs/006-api-router-service/spec.md#FR-009 (Configurable routing policies)
-//
 package routing
 
 import (
@@ -148,4 +148,3 @@ func (c *PolicyCache) HandlePolicyUpdate(policy *config.RoutingPolicy) {
 func (c *PolicyCache) HandlePolicyDelete(organizationID, model string) {
 	c.InvalidatePolicy(organizationID, model)
 }
-

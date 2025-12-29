@@ -1,11 +1,11 @@
 // Package api provides centralized error handling for the API Router Service.
 //
 // Purpose:
-//   This package provides service-specific error handling utilities that work
-//   with the shared error codes from github.com/ai-aas/shared-go/errors.
-//   It provides ErrorBuilder for creating error responses with trace context,
-//   and helper functions for writing error responses to HTTP ResponseWriter.
 //
+//	This package provides service-specific error handling utilities that work
+//	with the shared error codes from github.com/ai-aas/shared-go/errors.
+//	It provides ErrorBuilder for creating error responses with trace context,
+//	and helper functions for writing error responses to HTTP ResponseWriter.
 package api
 
 import (

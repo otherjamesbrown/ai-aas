@@ -1,15 +1,15 @@
 // Package contract provides contract tests for usage record schema validation.
 //
 // Purpose:
-//   These tests validate that usage records conform to the JSON schema defined in
-//   specs/006-api-router-service/contracts/usage-record.schema.yaml
+//
+//	These tests validate that usage records conform to the JSON schema defined in
+//	specs/006-api-router-service/contracts/usage-record.schema.yaml
 //
 // Key Responsibilities:
 //   - Validate UsageRecord schema compliance
 //   - Ensure all required fields are present
 //   - Ensure field types and formats match the spec
 //   - Validate enum values
-//
 package contract
 
 import (
@@ -94,19 +94,19 @@ func TestUsageRecordContract(t *testing.T) {
 	apiKeyID := uuid.New()
 
 	validRecord := map[string]interface{}{
-		"record_id":      recordID.String(),
-		"request_id":     requestID.String(),
+		"record_id":       recordID.String(),
+		"request_id":      requestID.String(),
 		"organization_id": orgID.String(),
-		"api_key_id":     apiKeyID.String(),
-		"model":          "gpt-4o",
-		"backend_id":     "backend-1",
-		"tokens_input":   100,
-		"tokens_output":  200,
-		"latency_ms":     150,
-		"cost_usd":       0.001,
-		"limit_state":    "WITHIN_LIMIT",
+		"api_key_id":      apiKeyID.String(),
+		"model":           "gpt-4o",
+		"backend_id":      "backend-1",
+		"tokens_input":    100,
+		"tokens_output":   200,
+		"latency_ms":      150,
+		"cost_usd":        0.001,
+		"limit_state":     "WITHIN_LIMIT",
 		"decision_reason": "PRIMARY",
-		"timestamp":      time.Now().UTC().Format(time.RFC3339),
+		"timestamp":       time.Now().UTC().Format(time.RFC3339),
 	}
 
 	recordJSON, err := json.Marshal(validRecord)
@@ -145,21 +145,21 @@ func TestUsageRecordWithOptionalFields(t *testing.T) {
 	apiKeyID := uuid.New()
 
 	fullRecord := map[string]interface{}{
-		"record_id":      recordID.String(),
-		"request_id":     requestID.String(),
+		"record_id":       recordID.String(),
+		"request_id":      requestID.String(),
 		"organization_id": orgID.String(),
-		"api_key_id":     apiKeyID.String(),
-		"model":          "gpt-4o",
-		"backend_id":     "backend-1",
-		"tokens_input":   100,
-		"tokens_output":  200,
-		"latency_ms":     150,
-		"cost_usd":       0.001,
-		"limit_state":    "WITHIN_LIMIT",
+		"api_key_id":      apiKeyID.String(),
+		"model":           "gpt-4o",
+		"backend_id":      "backend-1",
+		"tokens_input":    100,
+		"tokens_output":   200,
+		"latency_ms":      150,
+		"cost_usd":        0.001,
+		"limit_state":     "WITHIN_LIMIT",
 		"decision_reason": "PRIMARY",
 		"budget_snapshot": map[string]interface{}{
-			"period":            "MONTHLY",
-			"tokens_remaining":  10000,
+			"period":             "MONTHLY",
+			"tokens_remaining":   10000,
 			"currency_remaining": 50.0,
 		},
 		"retry_count": 0,
@@ -242,18 +242,18 @@ func TestUsageRecordMissingRequiredFields(t *testing.T) {
 		{
 			name: "missing organization_id",
 			record: map[string]interface{}{
-				"record_id":      uuid.New().String(),
-				"request_id":     uuid.New().String(),
-				"api_key_id":     uuid.New().String(),
-				"model":          "gpt-4o",
-				"backend_id":     "backend-1",
-				"tokens_input":   100,
-				"tokens_output":  200,
-				"latency_ms":     150,
-				"cost_usd":       0.001,
-				"limit_state":    "WITHIN_LIMIT",
+				"record_id":       uuid.New().String(),
+				"request_id":      uuid.New().String(),
+				"api_key_id":      uuid.New().String(),
+				"model":           "gpt-4o",
+				"backend_id":      "backend-1",
+				"tokens_input":    100,
+				"tokens_output":   200,
+				"latency_ms":      150,
+				"cost_usd":        0.001,
+				"limit_state":     "WITHIN_LIMIT",
 				"decision_reason": "PRIMARY",
-				"timestamp":      time.Now().UTC().Format(time.RFC3339),
+				"timestamp":       time.Now().UTC().Format(time.RFC3339),
 			},
 		},
 		{
@@ -315,7 +315,7 @@ func TestUsageRecordEnumValues(t *testing.T) {
 		"model":           "gpt-4o",
 		"backend_id":      "backend-1",
 		"tokens_input":    100,
-		"tokens_output":  200,
+		"tokens_output":   200,
 		"latency_ms":      150,
 		"cost_usd":        0.001,
 		"timestamp":       time.Now().UTC().Format(time.RFC3339),
@@ -423,7 +423,7 @@ func TestUsageRecordFieldTypes(t *testing.T) {
 		"model":           "gpt-4o",
 		"backend_id":      "backend-1",
 		"tokens_input":    100,
-		"tokens_output":  200,
+		"tokens_output":   200,
 		"latency_ms":      150,
 		"cost_usd":        0.001,
 		"limit_state":     "WITHIN_LIMIT",
@@ -432,40 +432,40 @@ func TestUsageRecordFieldTypes(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name   string
-		field  string
-		value  interface{}
+		name       string
+		field      string
+		value      interface{}
 		shouldPass bool
 	}{
 		{
-			name:        "tokens_input as string (invalid)",
-			field:       "tokens_input",
-			value:       "100",
-			shouldPass:  false,
+			name:       "tokens_input as string (invalid)",
+			field:      "tokens_input",
+			value:      "100",
+			shouldPass: false,
 		},
 		{
-			name:        "tokens_input as negative (invalid)",
-			field:       "tokens_input",
-			value:       -1,
-			shouldPass:  false,
+			name:       "tokens_input as negative (invalid)",
+			field:      "tokens_input",
+			value:      -1,
+			shouldPass: false,
 		},
 		{
-			name:        "cost_usd as string (invalid)",
-			field:       "cost_usd",
-			value:       "0.001",
-			shouldPass:  false,
+			name:       "cost_usd as string (invalid)",
+			field:      "cost_usd",
+			value:      "0.001",
+			shouldPass: false,
 		},
 		{
-			name:        "cost_usd as negative (invalid)",
-			field:       "cost_usd",
-			value:       -0.001,
-			shouldPass:  false,
+			name:       "cost_usd as negative (invalid)",
+			field:      "cost_usd",
+			value:      -0.001,
+			shouldPass: false,
 		},
 		{
-			name:        "latency_ms as string (invalid)",
-			field:       "latency_ms",
-			value:       "150",
-			shouldPass:  false,
+			name:       "latency_ms as string (invalid)",
+			field:      "latency_ms",
+			value:      "150",
+			shouldPass: false,
 		},
 	}
 
@@ -505,4 +505,3 @@ func TestUsageRecordFieldTypes(t *testing.T) {
 		})
 	}
 }
-
