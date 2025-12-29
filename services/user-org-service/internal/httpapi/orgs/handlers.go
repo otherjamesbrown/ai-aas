@@ -42,12 +42,14 @@ package orgs
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"go.uber.org/zap"
 
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/audit"
@@ -188,6 +190,12 @@ func (h *Handler) CreateOrg(w http.ResponseWriter, r *http.Request) {
 
 	org, err := h.runtime.Postgres.CreateOrg(ctx, params)
 	if err != nil {
+		// Check for unique constraint violation (race condition with concurrent create)
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" { // 23505 is unique_violation
+			httputil.WriteConflict(w, r, "organization with this slug already exists")
+			return
+		}
 		h.logger.Error("failed to create organization", zap.Error(err), zap.String("slug", slug))
 		httputil.WriteInternalError(w, r)
 		return
