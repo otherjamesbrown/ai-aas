@@ -1201,11 +1201,26 @@ func (h *Handler) forwardOpenAIStreamingRequest(
 
 	// Check for errors
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		requestID := r.Header.Get("X-Request-ID")
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			h.logger.Error("backend streaming request failed and could not read body",
+				zap.Int("status", resp.StatusCode),
+				zap.String("request_id", requestID),
+				zap.String("backend_id", backend.ID),
+				zap.Error(readErr),
+			)
+			telemetry.RecordBackendError(backend.ID, authCtx.OrganizationID, originalModel, "read_error")
+			h.writeError(w, r, fmt.Errorf("backend returned status %d and could not read body: %w", resp.StatusCode, readErr), api.ErrCodeBackendError)
+			return
+		}
 		h.logger.Error("backend streaming request failed",
 			zap.Int("status", resp.StatusCode),
+			zap.String("request_id", requestID),
+			zap.String("backend_id", backend.ID),
 			zap.String("body", string(body)),
 		)
+		telemetry.RecordBackendError(backend.ID, authCtx.OrganizationID, originalModel, "backend_error")
 		h.writeError(w, r, fmt.Errorf("backend returned status %d: %s", resp.StatusCode, string(body)), api.ErrCodeBackendError)
 		return
 	}

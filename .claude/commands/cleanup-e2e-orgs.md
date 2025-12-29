@@ -35,7 +35,7 @@ If user confirms, delete each organization using parallel execution:
 # Delete E2E orgs in parallel (10 concurrent deletions)
 ai-aas-cli org list --format json 2>/dev/null | \
   jq -r '.[] | select(.slug | startswith("e2e-")) | .id' | \
-  xargs -P 10 -I {} sh -c 'echo "Deleting org: {}"; ai-aas-cli org delete "{}" --force'
+  xargs -P 10 -I {} sh -c 'echo "Deleting org: {}"; if ai-aas-cli org delete "{}" --force; then echo "SUCCESS: {}"; else echo "FAILURE: {}" >&2; fi'
 ```
 
 **Note:** Uses `xargs -P 10` for parallel execution to speed up cleanup.
