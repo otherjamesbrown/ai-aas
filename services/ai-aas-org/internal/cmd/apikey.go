@@ -26,7 +26,8 @@ Each user can have multiple API keys with different names and expiration dates.
 
 Examples:
   ai-aas-org apikey list
-  ai-aas-org apikey create --user user@example.com --name "Production Key"
+  ai-aas-org apikey create --user-id <user-id> --key-name "Production Key"
+  ai-aas-org apikey create --email user@example.com --key-name "Production Key"
   ai-aas-org apikey delete key_abc123`,
 }
 
@@ -93,7 +94,8 @@ func runAPIKeyList(cmd *cobra.Command, args []string) error {
 		output.InfoMsg("No API keys found.")
 		fmt.Println()
 		fmt.Println("Create an API key with:")
-		fmt.Println("  ai-aas-org apikey create --user <email> --name <key-name>")
+		fmt.Println("  ai-aas-org apikey create --user-id <user-id> --key-name <key-name>")
+		fmt.Println("  ai-aas-org apikey create --email <email> --key-name <key-name>")
 		return nil
 	}
 
@@ -127,6 +129,7 @@ func runAPIKeyList(cmd *cobra.Command, args []string) error {
 
 var (
 	apikeyCreateUser    string
+	apikeyCreateEmail   string
 	apikeyCreateName    string
 	apikeyCreateExpires string
 )
@@ -139,8 +142,11 @@ var apikeyCreateCmd = &cobra.Command{
 The key will only be displayed once after creation. Make sure to copy it
 and share it securely with the user.
 
+You can identify the user by either --user-id or --email.
+
 Examples:
   ai-aas-org apikey create --user-id <user-id> --key-name "Production Key"
+  ai-aas-org apikey create --email user@example.com --key-name "Production Key"
   ai-aas-org apikey create --user-id <user-id> --key-name "Dev Key" --expires 30d
   ai-aas-org apikey create --guided`,
 	RunE: runAPIKeyCreate,
@@ -150,6 +156,7 @@ func init() {
 	apikeyCmd.AddCommand(apikeyCreateCmd)
 
 	apikeyCreateCmd.Flags().StringVar(&apikeyCreateUser, "user-id", "", "user ID (use 'ai-aas-org user list' to find)")
+	apikeyCreateCmd.Flags().StringVar(&apikeyCreateEmail, "email", "", "user email (alternative to --user-id)")
 	apikeyCreateCmd.Flags().StringVar(&apikeyCreateName, "key-name", "", "key name/description")
 	apikeyCreateCmd.Flags().StringVar(&apikeyCreateExpires, "expires", "", "expiration (e.g., 30d, 90d, 1y, never)")
 }
@@ -159,17 +166,18 @@ func runAPIKeyCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	user := apikeyCreateUser
+	userID := apikeyCreateUser
+	email := apikeyCreateEmail
 	name := apikeyCreateName
 	expires := apikeyCreateExpires
 
 	// Guided mode
-	if IsGuidedMode() || (user == "" && name == "") {
+	if IsGuidedMode() || (userID == "" && email == "" && name == "") {
 		output.Header("Create API Key")
 		fmt.Println()
 
 		var err error
-		user, err = prompt.InputRequired("User email")
+		email, err = prompt.InputRequired("User email")
 		if err != nil {
 			return errors.NewOperationError("failed to read input", err.Error())
 		}
@@ -192,9 +200,9 @@ func runAPIKeyCreate(cmd *cobra.Command, args []string) error {
 		fmt.Println()
 	}
 
-	// Validate
-	if user == "" {
-		return errors.NewUsageError("--user-id is required")
+	// Validate - need either user-id or email
+	if userID == "" && email == "" {
+		return errors.NewUsageError("either --user-id or --email is required")
 	}
 	if name == "" {
 		return errors.NewUsageError("--key-name is required")
@@ -205,15 +213,19 @@ func runAPIKeyCreate(cmd *cobra.Command, args []string) error {
 
 	client := newAPIClient()
 
-	// Resolve user ID
-	userID, err := resolveUserID(ctx, client, user)
-	if err != nil {
-		return err
+	// Resolve user ID from email if needed
+	resolvedUserID := userID
+	if resolvedUserID == "" && email != "" {
+		var err error
+		resolvedUserID, err = resolveUserID(ctx, client, email)
+		if err != nil {
+			return err
+		}
 	}
 
 	result, err := client.CreateAPIKey(ctx, config.GetOrgID(), &api.CreateAPIKeyRequest{
 		Name:      name,
-		UserID:    userID,
+		UserID:    resolvedUserID,
 		ExpiresIn: expires,
 	})
 	if err != nil {
