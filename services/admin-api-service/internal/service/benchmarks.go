@@ -672,7 +672,12 @@ func (s *BenchmarkService) triggerRunOnRunner(ctx context.Context, target *domai
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := s.httpClient.Do(req)
+	// Use a dedicated client with longer timeout for benchmark triggers
+	// Benchmarks can take several minutes to complete
+	longRunningClient := &http.Client{
+		Timeout: 15 * time.Minute,
+	}
+	resp, err := longRunningClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to trigger run: %w", err)
 	}
