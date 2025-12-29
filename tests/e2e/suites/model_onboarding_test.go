@@ -191,7 +191,7 @@ func testRegistryAdd(t *testing.T, ctx *harness.Context, modelID, modelName stri
 func testRegistryList(t *testing.T, ctx *harness.Context, expectedModelName string) {
 	t.Helper()
 
-	cmd := exec.Command("ai-aas-cli", "model", "registry", "list", "--output", "json")
+	cmd := exec.Command("ai-aas-cli", "model", "registry", "list", "--format", "json")
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
@@ -209,7 +209,7 @@ func testRegistryList(t *testing.T, ctx *harness.Context, expectedModelName stri
 func testRegistryShow(t *testing.T, ctx *harness.Context, modelName string) {
 	t.Helper()
 
-	cmd := exec.Command("ai-aas-cli", "model", "registry", "show", modelName, "--output", "json")
+	cmd := exec.Command("ai-aas-cli", "model", "registry", "show", modelName, "--format", "json")
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
@@ -274,7 +274,7 @@ func testCachePull(t *testing.T, ctx *harness.Context, modelName string) {
 func testCacheStatus(t *testing.T, ctx *harness.Context, modelName string) {
 	t.Helper()
 
-	cmd := exec.Command("ai-aas-cli", "model", "cache", "status", modelName, "--output", "json")
+	cmd := exec.Command("ai-aas-cli", "model", "cache", "status", modelName, "--format", "json")
 	output, err := cmd.CombinedOutput()
 	outputStr := string(output)
 

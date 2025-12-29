@@ -6,24 +6,49 @@ Interactive guide to run tests across the AI-AAS platform. Choose your test scop
 
 **CRITICAL: Use `AskUserQuestion` tool to guide the user through test selection.**
 
-### Step 1: Ask Test Category
+### Step 1: Ask What to Run
 
-Use AskUserQuestion with header "Test Category":
+Use AskUserQuestion with header "Test":
 
 | Option | Description | Duration |
 |--------|-------------|----------|
-| Unit Tests (Recommended) | Fast, isolated tests - no dependencies | 1-5 min |
-| E2E / Smoke Tests | Full workflow tests against running services | 2-45 min |
-| Integration Tests | Multi-component tests with external dependencies | 5-15 min |
-| CLI Smoke Tests | CLI tool validation against environments | 2-5 min/env |
-| Web Portal Tests | Frontend unit and E2E tests | 1-10 min |
-| Performance / Benchmarks | Latency and throughput measurements | 1-5 min |
-| Infrastructure Tests | Terraform and Kubernetes validation | 5-30 min |
-| All Local Tests | Run all tests that don't require a cluster | 5-10 min |
+| Unit tests (local) | Fast, isolated tests - all services, no dependencies | 1-5 min |
+| E2E smoke (develop) | Quick smoke tests against development cluster | 2-5 min |
+| E2E full (develop) | Complete E2E suite against development cluster | 10-30 min |
+| Other | Integration, CLI, web, infra, or custom tests | varies |
 
-### Step 2: Ask Service Scope (for Unit/Integration tests)
+### Step 2: Handle Selection
 
-If user chose Unit Tests or Integration Tests, ask with header "Service":
+**For "Unit tests (local)"**: Run immediately:
+```bash
+cd /home/dev/worktrees/test-updates && make test SERVICE=all
+```
+
+**For "E2E smoke (develop)"**: Run immediately:
+```bash
+cd /home/dev/worktrees/test-updates/tests/e2e && make test-dev-ip TEST_PATTERN=TestSmoke
+```
+
+**For "E2E full (develop)"**: Run immediately:
+```bash
+cd /home/dev/worktrees/test-updates/tests/e2e && make test-dev-ip
+```
+
+**For "Other"**: Ask a follow-up question with header "Test Type":
+
+| Option | Description |
+|--------|-------------|
+| Integration Tests | Multi-component tests with external dependencies |
+| CLI Smoke Tests | CLI tool validation against environments |
+| Web Portal Tests | Frontend unit and E2E tests |
+| Performance / Benchmarks | Latency and throughput measurements |
+| Infrastructure Tests | Terraform and Kubernetes validation |
+| All Local Tests | Run all tests that don't require a cluster |
+| Custom (specify) | User will describe what they want |
+
+Then if needed, ask for service scope or environment (see reference tables below).
+
+### Reference: Service Scope (for targeted tests)
 
 | Option | Description |
 |--------|-------------|
@@ -35,20 +60,18 @@ If user chose Unit Tests or Integration Tests, ask with header "Service":
 | ai-model-operator | Kubernetes operator |
 | Shared Libraries | shared/go and shared/ts |
 
-### Step 3: Ask Environment (for E2E/Integration/CLI tests)
-
-If user chose E2E, Integration, or CLI tests, ask with header "Environment":
+### Reference: Environment (for E2E/Integration/CLI tests)
 
 | Option | Description |
 |--------|-------------|
-| Local (Recommended) | Run against localhost services |
+| Local | Run against localhost services |
 | Development Cluster | Run against dev.otherjamesbrown.com |
 | Staging Cluster | Run against staging environment |
 | Both Dev + Staging | Run against both remote environments |
 
-### Step 4: Create Test Run Bead
+### Step 3: Create Test Run Bead (Optional)
 
-**CRITICAL: Before running tests, create a parent bead to track the test run.**
+**For quick tests, skip this step. For longer runs or CI, create a tracking bead:**
 
 ```bash
 # Get current git commit
@@ -75,7 +98,7 @@ bd create --title="Test Run: <category> (<environment>) @ $COMMIT" \
 
 Store the parent bead ID (e.g., `aas-xxxx`) for updating during the run.
 
-### Step 5: Execute Tests and Track Results
+### Step 4: Execute Tests and Track Results
 
 **IMPORTANT**: Run the appropriate command and parse output to track each test.
 
@@ -111,7 +134,7 @@ bd create --title="FAIL: <TestName>" \
 bd dep add <failure-bead> <parent-bead>
 ```
 
-### Step 6: Finalize Test Run Bead
+### Step 5: Finalize Test Run Bead
 
 After all tests complete:
 
@@ -393,7 +416,7 @@ See `tests/e2e/SETUP.md` for:
 
 ---
 
-## Step 7: Present Results
+## Step 6: Present Results
 
 After running tests, present results in this format:
 

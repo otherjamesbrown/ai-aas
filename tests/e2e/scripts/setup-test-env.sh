@@ -65,6 +65,13 @@ else
     echo -e "${GREEN}✓ ANALYTICS_SERVICE_URL already set${NC}"
 fi
 
+if [ -z "${ADMIN_API_SERVICE_URL:-}" ]; then
+    export ADMIN_API_SERVICE_URL="https://172.232.58.222"
+    echo -e "${GREEN}✓ Set ADMIN_API_SERVICE_URL=$ADMIN_API_SERVICE_URL${NC}"
+else
+    echo -e "${GREEN}✓ ADMIN_API_SERVICE_URL already set${NC}"
+fi
+
 # Step 3: Bootstrap admin key
 echo ""
 echo -e "${YELLOW}Step 3: Setting up admin API key...${NC}"
@@ -106,6 +113,7 @@ echo "Environment configured:"
 echo "  USER_ORG_SERVICE_URL=$USER_ORG_SERVICE_URL"
 echo "  API_ROUTER_SERVICE_URL=$API_ROUTER_SERVICE_URL"
 echo "  ANALYTICS_SERVICE_URL=$ANALYTICS_SERVICE_URL"
+echo "  ADMIN_API_SERVICE_URL=$ADMIN_API_SERVICE_URL"
 echo "  ADMIN_API_KEY=${ADMIN_API_KEY:0:20}... (hidden)"
 echo ""
 echo "To run tests:"

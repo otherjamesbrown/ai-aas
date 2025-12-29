@@ -16,8 +16,8 @@ func TestEngineList(t *testing.T) {
 	ctx := setupEngineTestContext(t)
 	defer ctx.Cleanup()
 
-	// GET /v1/engines - List all engines
-	resp, err := ctx.Client.GET("/v1/engines")
+	// GET /v1/engines - List all engines (Admin API)
+	resp, err := ctx.AdminClient.GET("/v1/engines")
 	if err != nil {
 		t.Fatalf("Failed to list engines: %v", err)
 	}
@@ -84,8 +84,8 @@ func TestEngineDetails(t *testing.T) {
 	ctx := setupEngineTestContext(t)
 	defer ctx.Cleanup()
 
-	// GET /v1/engines/vllm - Get vLLM engine details
-	resp, err := ctx.Client.GET("/v1/engines/vllm")
+	// GET /v1/engines/vllm - Get vLLM engine details (Admin API)
+	resp, err := ctx.AdminClient.GET("/v1/engines/vllm")
 	if err != nil {
 		t.Fatalf("Failed to get engine details: %v", err)
 	}
@@ -128,8 +128,8 @@ func TestEngineVersionList(t *testing.T) {
 	ctx := setupEngineTestContext(t)
 	defer ctx.Cleanup()
 
-	// GET /v1/engines/vllm/versions - List vLLM versions
-	resp, err := ctx.Client.GET("/v1/engines/vllm/versions")
+	// GET /v1/engines/vllm/versions - List vLLM versions (Admin API)
+	resp, err := ctx.AdminClient.GET("/v1/engines/vllm/versions")
 	if err != nil {
 		t.Fatalf("Failed to list engine versions: %v", err)
 	}
@@ -200,7 +200,7 @@ func TestEngineVersionManagement(t *testing.T) {
 		"release_notes":   "E2E test version",
 	}
 
-	resp, err := ctx.Client.POST("/v1/engines/vllm/versions", addReq)
+	resp, err := ctx.AdminClient.POST("/v1/engines/vllm/versions", addReq)
 	if err != nil {
 		t.Logf("Failed to add version (may not have permission): %v", err)
 		// This is acceptable - not all test environments allow version management
@@ -230,9 +230,9 @@ func TestEngineVersionManagement(t *testing.T) {
 
 	t.Logf("Added version: %s (image: %s)", addedVersion.Version, addedVersion.ContainerImage)
 
-	// POST /v1/engines/vllm/versions/{version}/set-default - Set as default
+	// POST /v1/engines/vllm/versions/{version}/set-default - Set as default (Admin API)
 	setDefaultPath := fmt.Sprintf("/v1/engines/vllm/versions/%s/set-default", testVersion)
-	resp, err = ctx.Client.POST(setDefaultPath, nil)
+	resp, err = ctx.AdminClient.POST(setDefaultPath, nil)
 	if err != nil {
 		t.Logf("Failed to set default version: %v", err)
 	} else if resp.StatusCode == 200 {
@@ -241,7 +241,7 @@ func TestEngineVersionManagement(t *testing.T) {
 
 	// Clean up: Delete the test version (if API supports it)
 	deletePath := fmt.Sprintf("/v1/engines/vllm/versions/%s", testVersion)
-	_, _ = ctx.Client.DELETE(deletePath)
+	_, _ = ctx.AdminClient.DELETE(deletePath)
 
 	t.Logf("Engine version management test passed")
 }
@@ -251,8 +251,8 @@ func TestEngineConfigList(t *testing.T) {
 	ctx := setupEngineTestContext(t)
 	defer ctx.Cleanup()
 
-	// GET /v1/engine-configs - List all configs
-	resp, err := ctx.Client.GET("/v1/engine-configs")
+	// GET /v1/engine-configs - List all configs (Admin API)
+	resp, err := ctx.AdminClient.GET("/v1/engine-configs")
 	if err != nil {
 		t.Fatalf("Failed to list engine configs: %v", err)
 	}
@@ -335,7 +335,7 @@ func TestEngineConfigOperations(t *testing.T) {
 		},
 	}
 
-	resp, err := ctx.Client.POST("/v1/engine-configs", createReq)
+	resp, err := ctx.AdminClient.POST("/v1/engine-configs", createReq)
 	if err != nil {
 		t.Logf("Failed to create config (may not have permission): %v", err)
 		return
@@ -368,8 +368,8 @@ func TestEngineConfigOperations(t *testing.T) {
 	t.Logf("Created config: name=%s, gpu=%d, memory=%dGB",
 		createdConfig.Name, createdConfig.GPUCount, createdConfig.MemoryGB)
 
-	// GET /v1/engine-configs/{name} - Get config details
-	getResp, err := ctx.Client.GET("/v1/engine-configs/" + configName)
+	// GET /v1/engine-configs/{name} - Get config details (Admin API)
+	getResp, err := ctx.AdminClient.GET("/v1/engine-configs/" + configName)
 	if err != nil {
 		t.Fatalf("Failed to get config: %v", err)
 	}
@@ -406,8 +406,8 @@ func TestEngineConfigOperations(t *testing.T) {
 
 	t.Logf("Config retrieval verified: name=%s matches created config", retrievedConfig.Name)
 
-	// Clean up: Delete the test config
-	deleteResp, err := ctx.Client.DELETE("/v1/engine-configs/" + configName)
+	// Clean up: Delete the test config (Admin API)
+	deleteResp, err := ctx.AdminClient.DELETE("/v1/engine-configs/" + configName)
 	if err != nil {
 		t.Logf("Failed to delete config: %v", err)
 	} else if deleteResp.StatusCode == 200 || deleteResp.StatusCode == 204 {
@@ -425,8 +425,8 @@ func TestEngineConfigInDeployment(t *testing.T) {
 	// This test verifies that a config can be referenced in deployment operations
 	// We won't actually deploy, just verify the config exists and is retrievable
 
-	// List available configs
-	resp, err := ctx.Client.GET("/v1/engine-configs")
+	// List available configs (Admin API)
+	resp, err := ctx.AdminClient.GET("/v1/engine-configs")
 	if err != nil {
 		t.Fatalf("Failed to list configs: %v", err)
 	}
@@ -472,15 +472,13 @@ func setupEngineTestContext(t *testing.T) *harness.Context {
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Create standard context - UserOrgService is actually the admin-api-service
-	// which hosts both user/org APIs and engine management APIs
+	// Create standard context with both user-org-service and admin-api-service clients
 	ctx, err := harness.NewContext(config)
 	if err != nil {
 		t.Fatalf("Failed to create test context: %v", err)
 	}
 
-	// The default client already points to UserOrgService (admin-api-service)
-	// and has the admin API key configured, so no override needed
+	// Engine APIs use ctx.AdminClient which points to admin-api-service
 
 	return ctx
 }

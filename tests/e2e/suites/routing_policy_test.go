@@ -51,7 +51,7 @@ func TestRoutingPolicyLifecycle(t *testing.T) {
 		},
 	}
 
-	createResp, err := ctx.Client.POST("/v1/routing/policies", policyReq)
+	createResp, err := ctx.AdminClient.POST("/v1/routing/policies", policyReq)
 	if err != nil {
 		t.Fatalf("Failed to create policy: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestRoutingPolicyLifecycle(t *testing.T) {
 		},
 	}
 
-	validateResp, err := ctx.Client.POST("/v1/routing/policies/validate", validateReq)
+	validateResp, err := ctx.AdminClient.POST("/v1/routing/policies/validate", validateReq)
 	if err != nil {
 		t.Fatalf("Failed to validate policy: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestRoutingPolicyLifecycle(t *testing.T) {
 	// Step 4: List policies and verify our policy appears
 	t.Log("Step 4: List Policies")
 
-	listResp, err := ctx.Client.GET("/v1/routing/policies?organization_id=" + org.ID)
+	listResp, err := ctx.AdminClient.GET("/v1/routing/policies?organization_id=" + org.ID)
 	if err != nil {
 		t.Fatalf("Failed to list policies: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestRoutingPolicyLifecycle(t *testing.T) {
 	// Step 5: Get policy details
 	t.Log("Step 5: Get Policy Details")
 
-	getResp, err := ctx.Client.GET("/v1/routing/policies/" + createdPolicy.PolicyID)
+	getResp, err := ctx.AdminClient.GET("/v1/routing/policies/" + createdPolicy.PolicyID)
 	if err != nil {
 		t.Fatalf("Failed to get policy: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestRoutingPolicyLifecycle(t *testing.T) {
 	// Step 6: Activate policy
 	t.Log("Step 6: Activate Policy")
 
-	activateResp, err := ctx.Client.POST("/v1/routing/policies/"+createdPolicy.PolicyID+"/activate", nil)
+	activateResp, err := ctx.AdminClient.POST("/v1/routing/policies/"+createdPolicy.PolicyID+"/activate", nil)
 	if err != nil {
 		t.Fatalf("Failed to activate policy: %v", err)
 	}
@@ -225,8 +225,8 @@ func TestRoutingPolicyLifecycle(t *testing.T) {
 	t.Logf("  PASS: Policy activated")
 	t.Logf("        Message: %s", activateResult.Message)
 
-	// Verify activation by getting policy again
-	getResp2, err := ctx.Client.GET("/v1/routing/policies/" + createdPolicy.PolicyID)
+	// Verify activation by getting policy again (Admin API)
+	getResp2, err := ctx.AdminClient.GET("/v1/routing/policies/" + createdPolicy.PolicyID)
 	if err != nil {
 		t.Fatalf("Failed to get policy after activation: %v", err)
 	}
@@ -245,7 +245,7 @@ func TestRoutingPolicyLifecycle(t *testing.T) {
 	// Step 7: Deactivate policy
 	t.Log("Step 7: Deactivate Policy")
 
-	deactivateResp, err := ctx.Client.POST("/v1/routing/policies/"+createdPolicy.PolicyID+"/deactivate", nil)
+	deactivateResp, err := ctx.AdminClient.POST("/v1/routing/policies/"+createdPolicy.PolicyID+"/deactivate", nil)
 	if err != nil {
 		t.Fatalf("Failed to deactivate policy: %v", err)
 	}
@@ -268,7 +268,7 @@ func TestRoutingPolicyLifecycle(t *testing.T) {
 	// Step 8: Delete policy
 	t.Log("Step 8: Delete Policy")
 
-	deleteResp, err := ctx.Client.DELETE("/v1/routing/policies/" + createdPolicy.PolicyID)
+	deleteResp, err := ctx.AdminClient.DELETE("/v1/routing/policies/" + createdPolicy.PolicyID)
 	if err != nil {
 		t.Fatalf("Failed to delete policy: %v", err)
 	}
@@ -279,8 +279,8 @@ func TestRoutingPolicyLifecycle(t *testing.T) {
 
 	t.Logf("  PASS: Policy deleted")
 
-	// Verify deletion by trying to get the policy
-	getResp3, err := ctx.Client.GET("/v1/routing/policies/" + createdPolicy.PolicyID)
+	// Verify deletion by trying to get the policy (Admin API)
+	getResp3, err := ctx.AdminClient.GET("/v1/routing/policies/" + createdPolicy.PolicyID)
 	if err == nil && getResp3.StatusCode == 200 {
 		t.Fatal("Policy still exists after deletion")
 	}
@@ -323,7 +323,7 @@ func TestRoutingPolicyValidation(t *testing.T) {
 		},
 	}
 
-	createResp, err := ctx.Client.POST("/v1/routing/policies", validPolicy)
+	createResp, err := ctx.AdminClient.POST("/v1/routing/policies", validPolicy)
 	if err != nil {
 		t.Fatalf("Failed to create valid policy: %v", err)
 	}
@@ -357,7 +357,7 @@ func TestRoutingPolicyValidation(t *testing.T) {
 		},
 	}
 
-	createResp2, err := ctx.Client.POST("/v1/routing/policies", invalidPolicy)
+	createResp2, err := ctx.AdminClient.POST("/v1/routing/policies", invalidPolicy)
 	if err != nil {
 		t.Fatalf("Failed to call create endpoint: %v", err)
 	}
@@ -385,7 +385,7 @@ func TestRoutingPolicyValidation(t *testing.T) {
 		},
 	}
 
-	createResp3, err := ctx.Client.POST("/v1/routing/policies", missingModelPolicy)
+	createResp3, err := ctx.AdminClient.POST("/v1/routing/policies", missingModelPolicy)
 	if err != nil {
 		t.Fatalf("Failed to call create endpoint: %v", err)
 	}
@@ -413,7 +413,7 @@ func TestRoutingPolicyValidation(t *testing.T) {
 		},
 	}
 
-	createResp4, err := ctx.Client.POST("/v1/routing/policies", invalidBackendType)
+	createResp4, err := ctx.AdminClient.POST("/v1/routing/policies", invalidBackendType)
 	if err != nil {
 		t.Fatalf("Failed to call create endpoint: %v", err)
 	}
@@ -442,7 +442,7 @@ func TestRoutingPolicyValidation(t *testing.T) {
 		},
 	}
 
-	createResp5, err := ctx.Client.POST("/v1/routing/policies", tritonPolicy)
+	createResp5, err := ctx.AdminClient.POST("/v1/routing/policies", tritonPolicy)
 	if err != nil {
 		t.Fatalf("Failed to create triton policy: %v", err)
 	}
@@ -453,9 +453,9 @@ func TestRoutingPolicyValidation(t *testing.T) {
 
 	t.Logf("  PASS: Triton policy with tokenizer created")
 
-	// Cleanup - delete the created policies
+	// Cleanup - delete the created policies (Admin API)
 	if validPolicyResult.PolicyID != "" {
-		ctx.Client.DELETE("/v1/routing/policies/" + validPolicyResult.PolicyID)
+		ctx.AdminClient.DELETE("/v1/routing/policies/" + validPolicyResult.PolicyID)
 	}
 
 	t.Log("")
@@ -493,7 +493,7 @@ func TestRoutingPolicyUpdate(t *testing.T) {
 		"failover_threshold": 3,
 	}
 
-	createResp, err := ctx.Client.POST("/v1/routing/policies", initialPolicy)
+	createResp, err := ctx.AdminClient.POST("/v1/routing/policies", initialPolicy)
 	if err != nil {
 		t.Fatalf("Failed to create policy: %v", err)
 	}
@@ -516,7 +516,7 @@ func TestRoutingPolicyUpdate(t *testing.T) {
 
 	t.Logf("  PASS: Policy created: %s (version %d)", createdPolicy.PolicyID, createdPolicy.Version)
 
-	// Step 3: Update policy backends
+	// Step 3: Update policy backends (Admin API)
 	t.Log("Step 3: Update Policy Backends")
 
 	updateReq := map[string]interface{}{
@@ -526,7 +526,7 @@ func TestRoutingPolicyUpdate(t *testing.T) {
 		},
 	}
 
-	updateResp, err := ctx.Client.PATCH("/v1/routing/policies/"+createdPolicy.PolicyID, updateReq)
+	updateResp, err := ctx.AdminClient.PATCH("/v1/routing/policies/"+createdPolicy.PolicyID, updateReq)
 	if err != nil {
 		t.Fatalf("Failed to update policy: %v", err)
 	}
@@ -559,7 +559,7 @@ func TestRoutingPolicyUpdate(t *testing.T) {
 		"failover_threshold": 5,
 	}
 
-	updateResp2, err := ctx.Client.PATCH("/v1/routing/policies/"+createdPolicy.PolicyID, failoverUpdate)
+	updateResp2, err := ctx.AdminClient.PATCH("/v1/routing/policies/"+createdPolicy.PolicyID, failoverUpdate)
 	if err != nil {
 		t.Fatalf("Failed to update failover threshold: %v", err)
 	}
@@ -579,8 +579,8 @@ func TestRoutingPolicyUpdate(t *testing.T) {
 
 	t.Logf("  PASS: Failover threshold updated to %d", updatedPolicy2.FailoverThreshold)
 
-	// Cleanup
-	ctx.Client.DELETE("/v1/routing/policies/" + createdPolicy.PolicyID)
+	// Cleanup (Admin API)
+	ctx.AdminClient.DELETE("/v1/routing/policies/" + createdPolicy.PolicyID)
 
 	t.Log("")
 	t.Log("=== Routing Policy Update Test Complete ===")

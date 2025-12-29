@@ -17,7 +17,8 @@ type Context struct {
 	RunID       string
 	Environment string
 	Config      *Config
-	Client      *Client
+	Client      *Client      // User-org-service client (orgs, users, api-keys)
+	AdminClient *Client      // Admin API client (engines, budgets, bootstrap-keys)
 	Fixtures    *FixtureManager
 	Artifacts   *ArtifactCollector
 	WorkerID    string
@@ -40,16 +41,28 @@ func NewContext(config *Config) (*Context, error) {
 		workerID = "worker-0"
 	}
 
+	// Create user-org-service client
 	client := NewClient(config.APIURLs.UserOrgService, config.Timeouts.RequestTimeout)
 	if config.Credentials.AdminAPIKey != "" {
 		client.SetHeader("Authorization", "Bearer "+config.Credentials.AdminAPIKey)
 		client.SetHeader("X-API-Key", config.Credentials.AdminAPIKey)
 	}
-	
+
 	// If using IP address, set Host header for ingress routing
-	// Check if URL is an IP address (contains only digits and dots)
 	if isIPAddress(config.APIURLs.UserOrgService) {
-		client.SetHeader("Host", "api.dev.otherjamesbrown.com")
+		client.SetHeader("Host", "user-org.dev.otherjamesbrown.com")
+	}
+
+	// Create admin-api-service client
+	adminClient := NewClient(config.APIURLs.AdminAPIService, config.Timeouts.RequestTimeout)
+	if config.Credentials.AdminAPIKey != "" {
+		adminClient.SetHeader("Authorization", "Bearer "+config.Credentials.AdminAPIKey)
+		adminClient.SetHeader("X-API-Key", config.Credentials.AdminAPIKey)
+	}
+
+	// If using IP address, set Host header for ingress routing
+	if isIPAddress(config.APIURLs.AdminAPIService) {
+		adminClient.SetHeader("Host", "admin-api.dev.otherjamesbrown.com")
 	}
 
 	ctx := &Context{
@@ -57,6 +70,7 @@ func NewContext(config *Config) (*Context, error) {
 		Environment: config.Environment,
 		Config:      config,
 		Client:      client,
+		AdminClient: adminClient,
 		Fixtures:    NewFixtureManager(runID, workerID),
 		Artifacts:   NewArtifactCollector(config.Artifacts.OutputDir, runID),
 		WorkerID:    workerID,

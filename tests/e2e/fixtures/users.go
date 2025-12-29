@@ -87,7 +87,8 @@ func (uf *UserFixture) Invite(orgID string, email string) (*InviteResponse, erro
 		return nil, fmt.Errorf("invite user: %w", err)
 	}
 
-	if resp.StatusCode != 201 && resp.StatusCode != 200 {
+	// Accept 200, 201, or 202 (Accepted) as success
+	if resp.StatusCode != 200 && resp.StatusCode != 201 && resp.StatusCode != 202 {
 		return nil, fmt.Errorf("invite user failed: status %d, body: %s", resp.StatusCode, resp.String())
 	}
 
@@ -134,8 +135,10 @@ func (uf *UserFixture) Delete(id string) error {
 
 // InviteResponse represents an invitation response
 type InviteResponse struct {
-	InviteID string    `json:"invite_id"`
-	Email    string    `json:"email"`
-	ExpiresAt time.Time `json:"expires_at"`
+	InviteID  string    `json:"inviteId"`     // API returns camelCase
+	Email     string    `json:"email"`
+	Status    string    `json:"status"`       // pending, accepted, expired
+	ExpiresAt time.Time `json:"expiresAt"`
+	OrgID     string    `json:"orgId,omitempty"`
 }
 
