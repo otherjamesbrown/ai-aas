@@ -46,9 +46,11 @@ if [ "$INSTALL" = true ]; then
 fi
 
 # Build ai-aas-cli
+# NOTE: main.go is at service root, not in cmd/
 log_info "Building ai-aas-cli..."
 cd "$REPO_ROOT/services/ai-aas-cli"
-go build -o ai-aas-cli ./cmd/ai-aas-cli
+rm -f ai-aas-cli
+go build -o ai-aas-cli .
 chmod +x ai-aas-cli
 log_info "Built: $REPO_ROOT/services/ai-aas-cli/ai-aas-cli"
 
@@ -58,8 +60,10 @@ if [ "$INSTALL" = true ]; then
 fi
 
 # Build ai-aas-org
+# NOTE: main.go is at cmd/ai-aas-org/main.go
 log_info "Building ai-aas-org..."
 cd "$REPO_ROOT/services/ai-aas-org"
+rm -f ai-aas-org
 go build -o ai-aas-org ./cmd/ai-aas-org
 chmod +x ai-aas-org
 log_info "Built: $REPO_ROOT/services/ai-aas-org/ai-aas-org"
