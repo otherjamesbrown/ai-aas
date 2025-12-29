@@ -194,10 +194,10 @@ func runAPIKeyCreate(cmd *cobra.Command, args []string) error {
 
 	// Validate
 	if user == "" {
-		return errors.NewUsageError("--user is required")
+		return errors.NewUsageError("--user-id is required")
 	}
 	if name == "" {
-		return errors.NewUsageError("--name is required")
+		return errors.NewUsageError("--key-name is required")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

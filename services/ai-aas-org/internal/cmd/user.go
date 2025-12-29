@@ -194,10 +194,10 @@ func runUserCreate(cmd *cobra.Command, args []string) error {
 
 	// Validate
 	if email == "" {
-		return errors.NewUsageError("--email is required")
+		return errors.NewUsageError("--user-email is required")
 	}
 	if name == "" {
-		return errors.NewUsageError("--name is required")
+		return errors.NewUsageError("--display-name is required")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
