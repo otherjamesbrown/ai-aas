@@ -28,6 +28,10 @@ secrets:
 migrations:
   enabled: true
 
+# Higher rate limit for development/testing
+config:
+  rateLimitPerMin: "500"
+
 userOrgService:
   endpoint: "http://user-org-service-development-user-org-service.user-org-service.svc.cluster.local:8081"
 
