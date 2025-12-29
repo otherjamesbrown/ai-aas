@@ -1224,8 +1224,11 @@ func runOrgBootstrap(cmd *cobra.Command, args []string, flagName, flagSlug, flag
 		fmt.Println()
 	}
 
-	// Step 3: Create API key for admin user
-	apiKeyReq := userorg.IssueAPIKeyRequest{}
+	// Step 3: Create API key for admin user with org:admin scope
+	apiKeyReq := userorg.IssueAPIKeyRequest{
+		Scopes: []string{"org:admin"},
+		Notes:  "Bootstrap admin key - created by ai-aas-cli org bootstrap",
+	}
 	apiKey, err := userOrgClient.IssueUserAPIKey(cmd.Context(), org.Slug, user.UserID, apiKeyReq)
 	if err != nil {
 		// Don't rollback - org and user were created successfully
