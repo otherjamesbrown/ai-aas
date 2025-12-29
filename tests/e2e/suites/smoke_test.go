@@ -426,6 +426,9 @@ func TestSmokeEndToEnd(t *testing.T) {
 	// --- Organization Creation ---
 	t.Log("Step 3: Create Organization")
 	orgFixture := fixtures.NewOrganizationFixture(ctx.Client, ctx.Fixtures)
+	saFixture := fixtures.NewServiceAccountFixture(ctx.Client, ctx.Fixtures)
+	apiKeyFixture := fixtures.NewAPIKeyFixture(ctx.Client, ctx.Fixtures)
+
 	org, err := orgFixture.Create(ctx, "")
 	if err != nil {
 		t.Logf("  FAIL: Organization creation failed: %v", err)
@@ -433,6 +436,23 @@ func TestSmokeEndToEnd(t *testing.T) {
 	} else {
 		t.Logf("  PASS: Organization created: %s", org.ID)
 		passed++
+	}
+
+	// Create service account and API key for inference (fresh quota)
+	var inferenceAPIKey string
+	if org != nil {
+		sa, err := saFixture.Create(ctx, org.ID, "")
+		if err != nil {
+			t.Logf("  Warning: Failed to create service account: %v", err)
+		} else {
+			apiKey, err := apiKeyFixture.Create(ctx, org.ID, sa.ID, "", []string{"inference:read", "inference:write"})
+			if err != nil {
+				t.Logf("  Warning: Failed to create API key: %v", err)
+			} else {
+				inferenceAPIKey = apiKey.Key
+				t.Logf("  PASS: Created API key for inference: %s", apiKey.ID)
+			}
+		}
 	}
 
 	// --- User-Org Service Health ---
@@ -453,15 +473,14 @@ func TestSmokeEndToEnd(t *testing.T) {
 		passed++
 	}
 
-	// --- Inference Request (using admin key) ---
+	// --- Inference Request (using fresh org API key) ---
 	t.Log("Step 5: Inference Request")
-	adminKey := ctx.Config.Credentials.AdminAPIKey
-	if adminKey == "" {
-		t.Log("  SKIP: No admin API key configured")
+	if inferenceAPIKey == "" {
+		t.Log("  SKIP: No API key available (org creation may have failed)")
 		skipped++
 	} else {
-		routerClient.SetHeader("Authorization", "Bearer "+adminKey)
-		routerClient.SetHeader("X-API-Key", adminKey)
+		routerClient.SetHeader("Authorization", "Bearer "+inferenceAPIKey)
+		routerClient.SetHeader("X-API-Key", inferenceAPIKey)
 
 		// Get models first
 		modelsResp, _ := routerClient.GET("/v1/models")
