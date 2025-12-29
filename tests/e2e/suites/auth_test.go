@@ -15,45 +15,38 @@ func TestAuthorizationDenial(t *testing.T) {
 	defer ctx.Cleanup()
 
 	orgFixture := fixtures.NewOrganizationFixture(ctx.Client, ctx.Fixtures)
-	userFixture := fixtures.NewUserFixture(ctx.Client, ctx.Fixtures)
 	apiKeyFixture := fixtures.NewAPIKeyFixture(ctx.Client, ctx.Fixtures)
 
-	// Create organization
+	// Create organization using admin credentials
 	org, err := orgFixture.Create(ctx, "")
 	if err != nil {
 		t.Fatalf("Failed to create organization: %v", err)
 	}
 
-	// Invite a user (this creates a user invitation)
-	invite, err := userFixture.Invite(org.ID, "test-user@example.com")
-	if err != nil {
-		t.Fatalf("Failed to invite user: %v", err)
-	}
-
-	// Create an API key with limited scopes (read-only)
-	// Note: API key creation may require a service account, but we'll test with basic scopes
+	// Create an API key with limited scopes (inference:read only)
+	// This key should NOT have permission to create organizations
 	apiKey, err := apiKeyFixture.CreateWithServiceAccount(ctx, org.ID, "test-limited-key", []string{"inference:read"})
 	if err != nil {
-		t.Fatalf("Failed to create API key: %v", err)
+		t.Fatalf("Failed to create API key with limited scope: %v", err)
 	}
 
 	// Create a new client with the limited-scope API key
 	limitedClient := harness.NewClient(ctx.Config.APIURLs.UserOrgService, ctx.Config.Timeouts.RequestTimeout)
 	limitedClient.SetHeader("Authorization", "Bearer "+apiKey.Key)
 	limitedClient.SetHeader("X-API-Key", apiKey.Key)
-	
+
 	// If using IP address, set Host header
 	if isIPAddress(ctx.Config.APIURLs.UserOrgService) {
 		limitedClient.SetHeader("Host", "api.dev.otherjamesbrown.com")
 	}
 
-	// Attempt a restricted action (e.g., creating another organization)
-	// This should fail with 403 Forbidden
+	// Attempt a restricted action (creating an organization)
+	// This should fail with 403 Forbidden because the API key only has inference:read scope
 	restrictedOrgFixture := fixtures.NewOrganizationFixture(limitedClient, ctx.Fixtures)
 	_, err = restrictedOrgFixture.Create(ctx, "")
-	
+
 	if err == nil {
-		t.Fatal("Expected authorization denial for restricted action, but request succeeded")
+		t.Fatal("Expected authorization denial for creating organization with inference:read scope, but request succeeded")
 	}
 
 	// Verify the error indicates authorization failure
@@ -63,7 +56,7 @@ func TestAuthorizationDenial(t *testing.T) {
 		t.Logf("Warning: Error message doesn't clearly indicate authorization failure: %s", errMsg)
 	}
 
-	t.Logf("Authorization denial test passed: org=%s, invite=%s, api_key=%s", org.ID, invite.InviteID, apiKey.ID)
+	t.Logf("Authorization denial test passed: org=%s, api_key=%s, error=%s", org.ID, apiKey.ID, errMsg)
 }
 
 // TestRoleBasedAccess tests that different roles have appropriate access levels
