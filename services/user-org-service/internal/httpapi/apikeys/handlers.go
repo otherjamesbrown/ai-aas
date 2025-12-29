@@ -102,6 +102,18 @@ type Handler struct {
 	logger  *zap.Logger
 }
 
+// findAPIKey looks up an API key by either UUID or KeyID (e.g., "ak_abc123").
+// This centralizes the lookup logic used by multiple handlers.
+func (h *Handler) findAPIKey(ctx context.Context, orgID uuid.UUID, keyIdentifier string) (postgres.APIKey, error) {
+	apiKeyUUID, err := uuid.Parse(keyIdentifier)
+	if err != nil {
+		// Not a UUID - assume it's a KeyID
+		return h.runtime.Postgres.GetAPIKeyByKeyID(ctx, orgID, keyIdentifier)
+	}
+	// It's a UUID
+	return h.runtime.Postgres.GetAPIKeyByID(ctx, apiKeyUUID)
+}
+
 // TokenPrefix is the prefix for all AI-AAS API tokens.
 const TokenPrefix = "ai-aas_"
 
@@ -303,21 +315,14 @@ func (h *Handler) RevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 		orgID = org.ID
 	}
 
-	// Parse API key ID
-	apiKeyID, err := uuid.Parse(apiKeyIDParam)
-	if err != nil {
-		httputil.WriteBadRequest(w, r, "invalid API key ID")
-		return
-	}
-
-	// Get existing key to obtain version for optimistic locking
-	apiKey, err := h.runtime.Postgres.GetAPIKeyByID(ctx, apiKeyID)
+	// Look up API key by UUID or KeyID
+	apiKey, err := h.findAPIKey(ctx, orgID, apiKeyIDParam)
 	if err != nil {
 		if err == postgres.ErrNotFound {
 			httputil.WriteNotFound(w, r, "API key", "")
 			return
 		}
-		h.logger.Error("failed to get API key", zap.Error(err), zap.String("apiKeyId", apiKeyID.String()))
+		h.logger.Error("failed to get API key", zap.Error(err), zap.String("keyIdentifier", apiKeyIDParam))
 		httputil.WriteInternalError(w, r)
 		return
 	}
@@ -347,7 +352,7 @@ func (h *Handler) RevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteConflict(w, r, "API key was modified concurrently")
 			return
 		}
-		h.logger.Error("failed to revoke API key", zap.Error(err), zap.String("apiKeyId", apiKeyID.String()))
+		h.logger.Error("failed to revoke API key", zap.Error(err), zap.String("keyIdentifier", apiKeyIDParam))
 		httputil.WriteInternalError(w, r)
 		return
 	}
@@ -869,21 +874,14 @@ func (h *Handler) GetAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse API key ID
-	apiKeyID, err := uuid.Parse(apiKeyIDParam)
-	if err != nil {
-		httputil.WriteBadRequest(w, r, "invalid API key ID")
-		return
-	}
-
-	// Get API key
-	apiKey, err := h.runtime.Postgres.GetAPIKeyByID(ctx, apiKeyID)
+	// Look up API key by UUID or KeyID
+	apiKey, err := h.findAPIKey(ctx, orgID, apiKeyIDParam)
 	if err != nil {
 		if err == postgres.ErrNotFound {
 			httputil.WriteNotFound(w, r, "API key", "")
 			return
 		}
-		h.logger.Error("failed to get API key", zap.Error(err), zap.String("apiKeyId", apiKeyID.String()))
+		h.logger.Error("failed to get API key", zap.Error(err), zap.String("keyIdentifier", apiKeyIDParam))
 		httputil.WriteInternalError(w, r)
 		return
 	}

@@ -6,7 +6,64 @@ Interactive guide to run tests across the AI-AAS platform. Choose your test scop
 
 **CRITICAL: Use `AskUserQuestion` tool to guide the user through test selection.**
 
-### Step 1: Ask What to Run
+### Step 1: Ask What to Do
+
+Use AskUserQuestion with header "Action":
+
+| Option | Description |
+|--------|-------------|
+| Run tests | Execute unit, E2E, integration, or other tests |
+| View open failures | Show test runs with unresolved failures |
+
+---
+
+### If "View open failures" Selected
+
+Show all test run beads that have open child beads (unresolved failures):
+
+```bash
+# Get test run beads with open child issues
+bd list --label test-run 2>/dev/null
+```
+
+Then for each test run bead, check if it has open blocked issues:
+```bash
+bd show <test-run-bead-id> 2>/dev/null
+```
+
+**Present results in this format:**
+
+#### Open Test Failures by Test Run
+
+| Test Run | Date | Commit | Open Failures |
+|----------|------|--------|---------------|
+| aas-xxxx | 2025-12-29 | abc1234 | 3 |
+| aas-yyyy | 2025-12-28 | def5678 | 1 |
+
+**Failure Details:**
+
+For each test run with failures, list the child beads:
+
+**aas-xxxx** (E2E full @ abc1234):
+| Failure Bead | Test Name | Priority |
+|--------------|-----------|----------|
+| aas-aaaa | TestAuthorizationDenial | P1 |
+| aas-bbbb | TestStreamingCompletion | P2 |
+
+**Quick Actions:**
+- `bd show <bead-id>` - View failure details
+- `bd close <bead-id> --reason="Fixed in commit..."` - Close resolved failure
+- `/test-runner` - Run tests to verify fixes
+
+**Also show standalone test failures** (not linked to a test run):
+```bash
+bd list --status open --label test-failure 2>/dev/null
+bd list --status open --label e2e-failure 2>/dev/null
+```
+
+---
+
+### If "Run tests" Selected
 
 Use AskUserQuestion with header "Test":
 
