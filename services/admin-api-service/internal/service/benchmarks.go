@@ -541,6 +541,78 @@ func (s *BenchmarkService) stopTargetOnRunner(ctx context.Context, target *domai
 	return nil
 }
 
+// registerTargetOnRunner creates/updates a target on the guidellm-runner
+// This ensures the target exists before triggering a run
+func (s *BenchmarkService) registerTargetOnRunner(ctx context.Context, target *domain.BenchmarkTarget) error {
+	// Determine endpoint URL - use target's override or default to API router
+	endpointURL := "https://api.dev.otherjamesbrown.com"
+	if target.EndpointURL != nil && *target.EndpointURL != "" {
+		endpointURL = *target.EndpointURL
+	}
+
+	reqBody := runnerTargetRequest{
+		Name:        target.Name,
+		URL:         endpointURL,
+		Model:       target.ModelName,
+		Environment: target.Environment,
+	}
+
+	// Look up scenario to get benchmark configuration
+	if target.ScenarioName != "" {
+		scenario, err := s.repo.GetScenarioByName(ctx, target.ScenarioName)
+		if err != nil {
+			s.logger.Warn("failed to get scenario for target",
+				zap.String("target", target.Name),
+				zap.String("scenario", target.ScenarioName),
+				zap.Error(err))
+		} else if scenario != nil && scenario.Config != nil {
+			// Extract defaults from scenario config
+			if defaults, ok := scenario.Config["defaults"].(map[string]interface{}); ok {
+				if profile, ok := defaults["profile"].(string); ok {
+					reqBody.Profile = profile
+				}
+				if rate, ok := defaults["rate"].(float64); ok {
+					rateInt := int(rate)
+					reqBody.Rate = &rateInt
+				}
+				if maxSeconds, ok := defaults["max_seconds"].(float64); ok {
+					maxSecondsInt := int(maxSeconds)
+					reqBody.MaxSeconds = &maxSecondsInt
+				}
+				if requestType, ok := defaults["request_type"].(string); ok {
+					reqBody.RequestType = requestType
+				}
+			}
+		}
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/api/targets", s.guidellmURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to register target: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Ignore "already exists" errors (400) - that's fine for trigger
+	if resp.StatusCode >= 400 && resp.StatusCode != http.StatusBadRequest {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("runner returned error: %s (status %d)", string(bodyBytes), resp.StatusCode)
+	}
+
+	return nil
+}
+
 // runnerTriggerResponse represents the response from the runner's trigger endpoint
 type runnerTriggerResponse struct {
 	Name    string                 `json:"name"`
@@ -565,6 +637,11 @@ type runnerParsedResults struct {
 }
 
 func (s *BenchmarkService) triggerRunOnRunner(ctx context.Context, target *domain.BenchmarkTarget, run *domain.BenchmarkRun) error {
+	// First, register the target on the runner (in case it doesn't exist)
+	if err := s.registerTargetOnRunner(ctx, target); err != nil {
+		return fmt.Errorf("failed to register target on runner: %w", err)
+	}
+
 	reqBody := runnerTriggerRequest{
 		RunID:           run.ID.String(),
 		ConfigOverrides: target.ConfigOverrides,
