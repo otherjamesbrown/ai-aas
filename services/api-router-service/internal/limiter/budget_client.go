@@ -95,6 +95,21 @@ func (c *BudgetClient) checkBudgetStub(orgID string) (*BudgetStatus, error) {
 // CheckBudgetWithKey checks budget using API key (for test scenarios).
 // This allows us to simulate budget exhaustion based on API key.
 func (c *BudgetClient) CheckBudgetWithKey(ctx context.Context, orgID, apiKey string) (*BudgetStatus, error) {
+	// If no endpoint configured, use stub implementation with API key awareness
+	if c.endpoint == "" {
+		return c.checkBudgetStubWithKey(orgID, apiKey)
+	}
+
+	// Make HTTP request to budget service
+	// TODO: Add API key to request headers when budget service supports it
+	return c.checkBudgetHTTP(ctx, orgID)
+}
+
+// checkBudgetStubWithKey provides a stub implementation that checks API keys for test scenarios.
+// Accepts special API keys to simulate budget exhaustion:
+// - "dev-exhausted-budget-key" -> budget exceeded
+// - "dev-exhausted-quota-key" -> quota exceeded
+func (c *BudgetClient) checkBudgetStubWithKey(orgID, apiKey string) (*BudgetStatus, error) {
 	// Check for test API keys that simulate budget/quota exhaustion
 	if apiKey == "dev-exhausted-budget-key" {
 		return &BudgetStatus{
