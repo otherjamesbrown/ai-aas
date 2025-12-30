@@ -643,6 +643,84 @@ chmod +x scripts/infra/verify-environment.sh
 
 ## Post-Bootstrap Configuration
 
+### Create Linode Managed Database (Manual Step)
+
+**Note**: Database creation is currently a manual step not managed by Terraform.
+
+#### Step 1: Create Database via Linode Console or API
+
+**Option A: Linode Cloud Console**
+1. Navigate to: https://cloud.linode.com/databases
+2. Click "Create Database Cluster"
+3. Configure:
+   - Engine: PostgreSQL 15
+   - Region: Same as LKE cluster (e.g., `ap-south` for Singapore)
+   - Plan: `Shared CPU 1 GB` (development) or `Dedicated 4 GB` (staging/production)
+   - Cluster size: 1 (development) or 3 (production with HA)
+   - Label: `ai-aas-<environment>-postgres`
+
+**Option B: Linode CLI**
+```bash
+linode-cli databases create \
+  --label ai-aas-staging-postgres \
+  --region ap-south \
+  --type g6-nanode-1 \
+  --engine postgresql/15.4 \
+  --cluster_size 1 \
+  --allow_list '["0.0.0.0/0"]'
+```
+
+#### Step 2: Get Connection String
+
+Wait for database status to become `active` (5-10 minutes):
+
+```bash
+# Check database status
+linode-cli databases list
+
+# Get connection details
+linode-cli databases view <database-id> --json | jq -r '
+  "postgresql://\(.username):\(.password)@\(.host):\(.port)/\(.dbname)?sslmode=require"
+'
+```
+
+**Note**: For security, restrict `allow_list` to cluster egress IPs after testing.
+
+#### Step 3: Create Database Secret
+
+```bash
+# Create secret with connection string
+kubectl create secret generic database-credentials \
+  --namespace=admin-api-service \
+  --from-literal=DATABASE_URL="postgresql://linpostgres:<password>@<host>:5432/defaultdb?sslmode=require" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+# Copy to other service namespaces
+kubectl get secret database-credentials -n admin-api-service -o yaml | \
+  sed 's/namespace: admin-api-service/namespace: user-org-service/' | \
+  kubectl apply -f -
+
+kubectl get secret database-credentials -n admin-api-service -o yaml | \
+  sed 's/namespace: admin-api-service/namespace: analytics-service/' | \
+  kubectl apply -f -
+```
+
+#### Step 4: Run Database Migrations
+
+```bash
+# Run migrations for each service
+kubectl exec -it -n admin-api-service deploy/admin-api-service -- \
+  /app/migrate up
+
+kubectl exec -it -n user-org-service deploy/user-org-service -- \
+  /app/migrate up
+```
+
+**Troubleshooting**:
+- Connection refused: Check `allow_list` includes cluster egress IPs
+- SSL required: Ensure connection string has `sslmode=require`
+- Database not found: Wait for provisioning to complete
+
 ### Configure DNS
 
 1. **Get LoadBalancer IP**:

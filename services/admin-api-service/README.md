@@ -126,6 +126,16 @@ Rate limit responses include:
 - `X-RateLimit-Class` header indicating which traffic class was limited
 - `Retry-After` header with seconds to wait
 
+### Current Rate Limit Configuration
+
+| Environment | Data Plane | Control Plane | Notes |
+|-------------|------------|---------------|-------|
+| Development | 1000/min | 5000/min | Increased to handle operator reconcile loops |
+| Staging | 1000/min | 5000/min | Matches development |
+| Production | 500/min | 2500/min | Lower for safety |
+
+**Note**: Rate limits were increased from 100/min to 1000/min (development) to accommodate the API Router's `/v1/models` calls and operator status updates. The API Router now caches `/v1/models` responses (see `MODELS_CACHE_TTL`) to reduce Admin API load.
+
 ## Configuration
 
 See `config.example.env` for all configuration options.
