@@ -1,0 +1,284 @@
+name: Model Failure Mode Tests
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly on Monday at 6 AM UTC
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'development'
+        type: choice
+        options:
+          - development
+      test_filter:
+        description: 'Specific test to run (empty for all)'
+        required: false
+        type: string
+
+env:
+  GO_VERSION: '1.24.x'
+  TEST_TIMEOUT: '30m'
+
+jobs:
+  # Fast validation job - runs on every trigger
+  lint:
+    name: Validate Test Configs and Go Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Validate test config YAML
+        run: |
+          echo "Validating failure mode test configs..."
+          for f in tests/failure-modes/configs/*.yaml; do
+            echo "Checking: $f"
+            yq eval '.' "$f" > /dev/null || exit 1
+          done
+          echo "✓ All test configs are valid YAML"
+
+      - name: Verify required labels in test configs
+        run: |
+          echo "Verifying required labels in test configs..."
+          for f in tests/failure-modes/configs/*.yaml; do
+            if ! yq eval '.metadata.labels["test-type"]' "$f" | grep -q "failure-mode"; then
+              echo "ERROR: $f missing label test-type=failure-mode"
+              exit 1
+            fi
+          done
+          echo "✓ All test configs have required labels"
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-integration-${{ hashFiles('tests/go/integration/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-integration-
+            ${{ runner.os }}-go-
+
+      - name: Compile integration tests
+        run: |
+          echo "Verifying integration tests compile..."
+          cd tests/go/integration
+          go mod download
+          go build -tags=integration ./...
+          echo "✓ Integration tests compile successfully"
+
+      - name: Compile CLI binary
+        run: |
+          echo "Verifying CLI compiles..."
+          cd services/ai-aas-cli
+          go build -o ai-aas-cli .
+          echo "✓ CLI compiles successfully"
+
+  # Integration tests - requires cluster access
+  integration:
+    name: Integration Tests (${{ github.event.inputs.environment || 'development' }})
+    needs: lint
+    runs-on: ubuntu-latest
+    # Only run on manual trigger or scheduled runs
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    timeout-minutes: 45
+    environment: ${{ github.event.inputs.environment || 'development' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-integration-${{ hashFiles('tests/go/integration/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-integration-
+            ${{ runner.os }}-go-
+
+      - name: Install dependencies
+        run: |
+          cd tests/go/integration
+          go mod download
+          go mod verify
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.DEV_KUBECONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Verify cluster access
+        run: |
+          kubectl cluster-info
+          kubectl get namespace development || echo "Warning: development namespace not found"
+
+      - name: Build CLI
+        run: |
+          cd services/ai-aas-cli
+          go build -o ai-aas-cli .
+          chmod +x ai-aas-cli
+          # Make CLI available in PATH
+          sudo mv ai-aas-cli /usr/local/bin/
+
+      - name: Verify CLI installation
+        run: |
+          which ai-aas-cli
+          ai-aas-cli --version || echo "CLI installed (no --version flag yet)"
+
+      - name: Configure CLI
+        run: |
+          ai-aas-cli config set api-endpoint ${{ secrets.DEV_API_ENDPOINT }}
+          ai-aas-cli config set api-key ${{ secrets.DEV_ADMIN_API_KEY }}
+        if: env.DEV_API_ENDPOINT != '' && env.DEV_ADMIN_API_KEY != ''
+        env:
+          DEV_API_ENDPOINT: ${{ secrets.DEV_API_ENDPOINT }}
+          DEV_ADMIN_API_KEY: ${{ secrets.DEV_ADMIN_API_KEY }}
+
+      - name: Run integration tests (Go)
+        run: |
+          cd tests/go/integration
+          TEST_FILTER="${{ github.event.inputs.test_filter }}"
+          if [ -n "$TEST_FILTER" ]; then
+            echo "Running filtered tests: $TEST_FILTER"
+            go test -v -tags=integration ./... -run "$TEST_FILTER" -timeout ${{ env.TEST_TIMEOUT }}
+          else
+            echo "Running all integration tests"
+            go test -v -tags=integration ./... -timeout ${{ env.TEST_TIMEOUT }}
+          fi
+        timeout-minutes: 35
+
+      - name: Upload Go test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results-go-${{ github.run_id }}
+          path: tests/go/integration/*.log
+          retention-days: 30
+          if-no-files-found: ignore
+
+  # Shell script-based harness tests
+  harness:
+    name: Failure Mode Harness (${{ github.event.inputs.environment || 'development' }})
+    needs: lint
+    runs-on: ubuntu-latest
+    # Only run on manual trigger or scheduled runs
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    timeout-minutes: 45
+    environment: ${{ github.event.inputs.environment || 'development' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.DEV_KUBECONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Verify cluster access
+        run: |
+          kubectl cluster-info
+          kubectl get namespace development || echo "Warning: development namespace not found"
+
+      - name: Build and install CLI
+        run: |
+          cd services/ai-aas-cli
+          go build -o ai-aas-cli .
+          sudo mv ai-aas-cli /usr/local/bin/
+          ai-aas-cli --version || echo "CLI installed"
+
+      - name: Configure CLI
+        run: |
+          ai-aas-cli config set api-endpoint ${{ secrets.DEV_API_ENDPOINT }}
+          ai-aas-cli config set api-key ${{ secrets.DEV_ADMIN_API_KEY }}
+        if: env.DEV_API_ENDPOINT != '' && env.DEV_ADMIN_API_KEY != ''
+        env:
+          DEV_API_ENDPOINT: ${{ secrets.DEV_API_ENDPOINT }}
+          DEV_ADMIN_API_KEY: ${{ secrets.DEV_ADMIN_API_KEY }}
+
+      - name: Run failure mode test harness
+        run: |
+          TEST_FILTER="${{ github.event.inputs.test_filter }}"
+          if [ -n "$TEST_FILTER" ]; then
+            echo "Running test: $TEST_FILTER"
+            ./scripts/test-failure-modes.sh --test "$TEST_FILTER" --verbose
+          else
+            echo "Running all failure mode tests"
+            ./scripts/test-failure-modes.sh --verbose
+          fi
+        timeout-minutes: 35
+
+      - name: Upload harness test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-mode-harness-results-${{ github.run_id }}
+          path: test-results/failure-modes/
+          retention-days: 30
+
+      - name: Post test summary
+        if: always()
+        run: |
+          echo '## Failure Mode Test Harness Results' >> $GITHUB_STEP_SUMMARY
+          echo '' >> $GITHUB_STEP_SUMMARY
+          SUMMARY_FILE=$(find test-results/failure-modes -name "summary.txt" | head -n 1)
+          if [ -f "$SUMMARY_FILE" ]; then
+            cat "$SUMMARY_FILE" >> $GITHUB_STEP_SUMMARY
+          else
+            echo 'No summary file found' >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # Summary job that reports overall status
+  summary:
+    name: Test Summary
+    needs: [lint, integration, harness]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Check job results
+        run: |
+          echo "## Failure Mode Tests Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Integration Tests | ${{ needs.integration.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Harness | ${{ needs.harness.result }} |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Fail if any tests failed
+        if: needs.lint.result == 'failure' || needs.integration.result == 'failure' || needs.harness.result == 'failure'
+        run: |
+          echo "::error::One or more test jobs failed"
+          exit 1

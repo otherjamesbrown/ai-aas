@@ -20,6 +20,12 @@ The following workflows are service-specific and are triggered on changes within
 
 These workflows are largely redundant with the main `ci.yml` workflow and will be removed in the future.
 
+## Testing Workflows
+
+*   `e2e.yml`: Runs end-to-end tests against live environments.
+*   `nightly-e2e.yml`: Scheduled nightly end-to-end tests across development and staging environments.
+*   `failure-mode-tests.yml`: Validates model deployment failure modes and CLI observability output. Runs weekly on schedule and on-demand. Includes both Go integration tests and shell-based test harness.
+
 ## Other Workflows
 
 *   `api-router-validation.yml`: Validates the API router configuration.
