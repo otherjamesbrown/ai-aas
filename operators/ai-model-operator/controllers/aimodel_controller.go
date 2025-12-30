@@ -1553,6 +1553,79 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 	return nil
 }
 
+// getPodSchedulingStatus extracts scheduling status from the first pod owned by the InferenceService
+func (r *AIModelReconciler) getPodSchedulingStatus(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) (*aimodelv1alpha1.SchedulingStatus, error) {
+	log := log.FromContext(ctx)
+
+	// List pods in the namespace with label selector for the InferenceService
+	isvcName := sanitizeInferenceServiceName(aiModel.Name)
+	podList := &corev1.PodList{}
+	labelSelector := client.MatchingLabels{
+		"serving.kserve.io/inferenceservice": isvcName,
+	}
+
+	if err := r.List(ctx, podList, client.InNamespace(aiModel.Namespace), labelSelector); err != nil {
+		return nil, fmt.Errorf("failed to list pods for InferenceService: %w", err)
+	}
+
+	// If no pods found, return nil (no scheduling status yet)
+	if len(podList.Items) == 0 {
+		return nil, nil
+	}
+
+	// Check the first pod (typically there's one pod per InferenceService in Serverless mode)
+	pod := &podList.Items[0]
+
+	schedulingStatus := &aimodelv1alpha1.SchedulingStatus{}
+
+	// Check if pod is scheduled to a node
+	if pod.Spec.NodeName != "" {
+		schedulingStatus.Scheduled = true
+		schedulingStatus.NodeName = pod.Spec.NodeName
+		return schedulingStatus, nil
+	}
+
+	// Pod is not scheduled - check conditions for scheduling failure
+	for _, cond := range pod.Status.Conditions {
+		if cond.Type == corev1.PodScheduled && cond.Status == corev1.ConditionFalse {
+			schedulingStatus.Scheduled = false
+			schedulingStatus.BlockedReason = cond.Reason
+			schedulingStatus.BlockedMessage = r.parseSchedulingMessage(cond.Message)
+			log.V(1).Info("Pod scheduling blocked",
+				"pod", pod.Name,
+				"reason", cond.Reason,
+				"message", schedulingStatus.BlockedMessage)
+			return schedulingStatus, nil
+		}
+	}
+
+	// Pod exists but scheduling status is unclear (probably pending)
+	return nil, nil
+}
+
+// parseSchedulingMessage converts Kubernetes scheduling messages to human-readable form
+func (r *AIModelReconciler) parseSchedulingMessage(msg string) string {
+	// Example K8s messages:
+	// "0/6 nodes are available: 2 Insufficient cpu, 4 Insufficient memory."
+	// "0/3 nodes are available: 3 node(s) didn't match Pod's node affinity/selector."
+
+	// Common patterns to make more readable
+	replacements := map[string]string{
+		"Insufficient cpu":             "Insufficient CPU",
+		"Insufficient memory":          "Insufficient Memory",
+		"Insufficient nvidia.com/gpu":  "Insufficient GPU",
+		"node(s) didn't match":         "nodes don't match",
+		"Pod's node affinity/selector": "pod's node selector",
+	}
+
+	result := msg
+	for old, new := range replacements {
+		result = strings.ReplaceAll(result, old, new)
+	}
+
+	return result
+}
+
 // updateStatusFromInferenceService updates the AIModel status based on the InferenceService status
 func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) error {
 	log := log.FromContext(ctx)
@@ -1591,6 +1664,20 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 	latestAIModel.Status.InferenceServiceName = isvcName
 	latestAIModel.Status.InferenceEndpoint = status.URL
 	latestAIModel.Status.ReadyReplicas = status.ReadyReplicas
+
+	// Get pod scheduling status to provide visibility into scheduling issues
+	schedulingStatus, err := r.getPodSchedulingStatus(ctx, aiModel)
+	if err != nil {
+		// Log error but don't fail - scheduling status is informational
+		log.Error(err, "Failed to get pod scheduling status", "name", aiModel.Name)
+	} else {
+		latestAIModel.Status.SchedulingStatus = schedulingStatus
+
+		// If pod is not scheduled, update the message to make it visible
+		if schedulingStatus != nil && !schedulingStatus.Scheduled && schedulingStatus.BlockedMessage != "" {
+			latestAIModel.Status.Message = fmt.Sprintf("Waiting for scheduling: %s", schedulingStatus.BlockedMessage)
+		}
+	}
 
 	// Determine granular phase based on InferenceService and Pod state
 	newPhase, phaseMessage := r.determineGranularPhase(ctx, aiModel, isvc)
@@ -1741,6 +1828,7 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 			freshAIModel.Status.ReadyReplicas = latestAIModel.Status.ReadyReplicas
 			freshAIModel.Status.Phase = latestAIModel.Status.Phase
 			freshAIModel.Status.Message = latestAIModel.Status.Message
+			freshAIModel.Status.SchedulingStatus = latestAIModel.Status.SchedulingStatus
 			freshAIModel.Status.RetryCount = latestAIModel.Status.RetryCount
 			freshAIModel.Status.LastRetryTime = latestAIModel.Status.LastRetryTime
 			freshAIModel.Status.NextRetryTime = latestAIModel.Status.NextRetryTime
