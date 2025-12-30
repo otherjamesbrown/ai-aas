@@ -1,6 +1,7 @@
 package harness
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 )
 
 // Context holds test execution context
@@ -19,6 +21,7 @@ type Context struct {
 	Config      *Config
 	Client      *Client      // User-org-service client (orgs, users, api-keys)
 	AdminClient *Client      // Admin API client (engines, budgets, bootstrap-keys)
+	RedisClient *redis.Client // Redis client for cleanup operations
 	Fixtures    *FixtureManager
 	Artifacts   *ArtifactCollector
 	WorkerID    string
@@ -65,15 +68,35 @@ func NewContext(config *Config) (*Context, error) {
 		adminClient.SetHeader("Host", "admin-api.dev.otherjamesbrown.com")
 	}
 
+	// Create Redis client for cleanup operations
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: config.Redis.Addr,
+		DB:   config.Redis.DB,
+	})
+
+	// Test Redis connection (non-blocking - log if unavailable but don't fail)
+	testCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := redisClient.Ping(testCtx).Err(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Redis not available at %s (token cleanup will be skipped): %v\n", config.Redis.Addr, err)
+	}
+
 	ctx := &Context{
 		RunID:       runID,
 		Environment: config.Environment,
 		Config:      config,
 		Client:      client,
 		AdminClient: adminClient,
+		RedisClient: redisClient,
 		Fixtures:    NewFixtureManager(runID, workerID),
 		Artifacts:   NewArtifactCollector(config.Artifacts.OutputDir, runID),
 		WorkerID:    workerID,
+	}
+
+	// Clean up Redis token counters before tests start
+	if err := ctx.CleanupRedisTokenCounters(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to cleanup Redis token counters: %v\n", err)
+		// Don't fail - tests can still run, they just might hit quota limits
 	}
 
 	return ctx, nil
@@ -90,6 +113,35 @@ func (c *Context) GenerateResourceName(prefix string) string {
 	return fmt.Sprintf("%s-%s-%s-%s", c.Namespace(), prefix, timestamp, uuid.New().String()[:8])
 }
 
+// CleanupRedisTokenCounters removes all rate limit token counters from Redis
+// This ensures tests start with fresh quota state
+func (c *Context) CleanupRedisTokenCounters() error {
+	if c.RedisClient == nil {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Find all token counter keys
+	keys, err := c.RedisClient.Keys(ctx, "ratelimit:tokens:*").Result()
+	if err != nil {
+		return fmt.Errorf("failed to list token keys: %w", err)
+	}
+
+	if len(keys) == 0 {
+		return nil // No keys to delete
+	}
+
+	// Delete all token counter keys
+	if err := c.RedisClient.Del(ctx, keys...).Err(); err != nil {
+		return fmt.Errorf("failed to delete %d token keys: %w", len(keys), err)
+	}
+
+	fmt.Fprintf(os.Stderr, "Cleaned up %d Redis token counter keys\n", len(keys))
+	return nil
+}
+
 // Cleanup performs cleanup operations
 func (c *Context) Cleanup() error {
 	if !c.Config.Cleanup.Enabled {
@@ -104,6 +156,13 @@ func (c *Context) Cleanup() error {
 	// Cleanup fixtures
 	if err := c.Fixtures.Cleanup(); err != nil {
 		return fmt.Errorf("cleanup fixtures: %w", err)
+	}
+
+	// Close Redis connection
+	if c.RedisClient != nil {
+		if err := c.RedisClient.Close(); err != nil {
+			return fmt.Errorf("close redis client: %w", err)
+		}
 	}
 
 	return nil

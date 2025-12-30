@@ -17,6 +17,7 @@ type Config struct {
 	Parallel    Parallel
 	Cleanup     Cleanup
 	Artifacts   Artifacts
+	Redis       Redis
 }
 
 // APIURLs contains service API URLs
@@ -68,6 +69,12 @@ type Artifacts struct {
 	IncludeResponseBody bool
 }
 
+// Redis contains Redis configuration for test setup/cleanup
+type Redis struct {
+	Addr string
+	DB   int
+}
+
 // LoadConfig loads configuration from environment variables
 func LoadConfig() (*Config, error) {
 	env := getEnv("TEST_ENV", "local")
@@ -108,6 +115,10 @@ func LoadConfig() (*Config, error) {
 			OutputDir:          getEnv("ARTIFACTS_DIR", "./artifacts"),
 			IncludeRequestBody: getBoolEnv("INCLUDE_REQUEST_BODIES", true),
 			IncludeResponseBody: getBoolEnv("INCLUDE_RESPONSE_BODIES", true),
+		},
+		Redis: Redis{
+			Addr: getEnv("REDIS_ADDR", "localhost:6379"),
+			DB:   getIntEnv("REDIS_DB", 0),
 		},
 	}
 
