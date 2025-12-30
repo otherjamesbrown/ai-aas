@@ -22,6 +22,7 @@ This document defines the schema for use case files in the `usecases/` directory
 | `UC-AUD-` | Audit logs |
 | `UC-USG-` | Usage/billing |
 | `UC-ORG-` | Organization management |
+| `UC-OPS-` | Platform operations |
 
 ### ID Format
 

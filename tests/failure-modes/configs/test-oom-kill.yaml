@@ -1,0 +1,40 @@
+# Test Config: Out-of-Memory Kill
+#
+# Purpose: Tests detection and reporting of OOM kills during model loading.
+#          The model is too large to fit in the allocated memory.
+#
+# Expected Behavior:
+#   - Phase: Initializing or Failed
+#   - Message: Should contain "OOMKilled", "out of memory", or similar
+#
+# This config attempts to load a 70B parameter model with only 8Gi of memory,
+# which will cause the container to be OOM killed during model loading.
+
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: test-oom-kill
+  namespace: development
+  labels:
+    test-type: failure-mode
+    failure-category: initialization
+spec:
+  modelName: test-oom-kill
+  modelID: meta-llama/Llama-2-70b-hf  # 70B model - very large
+  enabled: false  # Disabled by default to prevent accidental deployment
+  runtime: vllm
+  trustRemoteCode: true
+  resources:
+    requests:
+      cpu: "2"
+      memory: "8Gi"  # Way too small for a 70B model
+      nvidia.com/gpu: "1"
+    limits:
+      cpu: "2"
+      memory: "8Gi"  # OOM kill will occur
+      nvidia.com/gpu: "1"
+  tolerations:
+    - key: gpu-workload
+      operator: Equal
+      value: "true"
+      effect: NoSchedule

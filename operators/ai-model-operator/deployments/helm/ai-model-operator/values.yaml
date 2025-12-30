@@ -16,3 +16,12 @@ resources:
 
 # Environment variables for the operator
 env: []
+
+# Webhook configuration
+webhook:
+  enabled: true
+  port: 9443
+  # failurePolicy determines what happens if the webhook is unreachable
+  # Fail: reject the request if webhook is down (recommended for production)
+  # Ignore: allow the request if webhook is down (useful during development)
+  failurePolicy: Fail

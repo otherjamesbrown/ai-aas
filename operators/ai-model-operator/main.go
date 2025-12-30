@@ -27,6 +27,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -37,6 +38,7 @@ import (
 	"github.com/ai-aas/ai-model-operator/controllers"
 	"github.com/ai-aas/ai-model-operator/internal/adminapi"
 	"github.com/ai-aas/ai-model-operator/internal/recipe"
+	"github.com/ai-aas/ai-model-operator/internal/webhook"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -62,6 +64,8 @@ func main() {
 	var maxRetryDelay time.Duration
 	var downloaderImage string
 	var defaultRuntime string
+	var webhookPort int
+	var enableWebhook bool
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -79,6 +83,10 @@ func main() {
 	flag.StringVar(&downloaderImage, "downloader-image", "python:3.11-slim", "Container image for model downloader job")
 	flag.StringVar(&defaultRuntime, "default-runtime", "vllm", "Default runtime to use when not specified in AIModel (vllm, tgi, triton, or custom image)")
 
+	// Webhook configuration flags
+	flag.IntVar(&webhookPort, "webhook-port", 9443, "Port for webhook server")
+	flag.BoolVar(&enableWebhook, "enable-webhook", true, "Enable validating webhook for AIModel resources")
+
 	opts := zap.Options{
 		Development: true,
 	}
@@ -88,15 +96,13 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
+		Scheme: scheme,
 		Metrics: metricsserver.Options{
 			BindAddress: metricsAddr,
 		},
-		HealthProbeBindAddress: probeAddr,
-		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       leaderElectionID,
-		// LeaderElectionReleaseOnCancel defines if the leader should step down when the manager stops. defaults to false.
-		// Set to true in this example so that power-down of a controller doesn't delay the next controller start.
+		HealthProbeBindAddress:        probeAddr,
+		LeaderElection:                enableLeaderElection,
+		LeaderElectionID:              leaderElectionID,
 		LeaderElectionReleaseOnCancel: true,
 	})
 	if err != nil {
@@ -121,18 +127,31 @@ func main() {
 	recipeResolver := recipe.NewResolver(mgr.GetClient())
 	recipeValidator := recipe.NewValidator()
 
+	// Create Kubernetes clientset for pod log reading (progress tracking)
+	cfg := ctrl.GetConfigOrDie()
+	clientset, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		setupLog.Error(err, "unable to create Kubernetes clientset for log reading")
+		os.Exit(1)
+	}
+
 	if err = (&controllers.AIModelReconciler{
-		Client:             mgr.GetClient(),
-		Scheme:             mgr.GetScheme(),
-		Recorder:           mgr.GetEventRecorderFor("ai-model-operator"),
-		MaxDownloadRetries: int32(maxDownloadRetries),
-		InitialRetryDelay:  initialRetryDelay,
-		MaxRetryDelay:      maxRetryDelay,
-		DownloaderImage:    downloaderImage,
-		DefaultRuntime:     defaultRuntime,
-		AdminAPIClient:     adminAPIClient,
-		RecipeResolver:     recipeResolver,
-		RecipeValidator:    recipeValidator,
+		Client:                      mgr.GetClient(),
+		Scheme:                      mgr.GetScheme(),
+		Recorder:                    mgr.GetEventRecorderFor("ai-model-operator"),
+		Clientset:                   clientset,
+		Config:                      cfg,
+		MaxDownloadRetries:          int32(maxDownloadRetries),
+		InitialRetryDelay:           initialRetryDelay,
+		MaxRetryDelay:               maxRetryDelay,
+		MaxDeploymentRetries:        10,
+		InitialDeploymentRetryDelay: 30 * time.Second,
+		MaxDeploymentRetryDelay:     10 * time.Minute,
+		DownloaderImage:             downloaderImage,
+		DefaultRuntime:              defaultRuntime,
+		AdminAPIClient:              adminAPIClient,
+		RecipeResolver:              recipeResolver,
+		RecipeValidator:             recipeValidator,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AIModel")
 		os.Exit(1)
@@ -144,6 +163,22 @@ func main() {
 		"maxRetryDelay", maxRetryDelay,
 		"downloaderImage", downloaderImage,
 		"defaultRuntime", defaultRuntime)
+
+	// Register validating webhook if enabled
+	if enableWebhook {
+		if err = ctrl.NewWebhookManagedBy(mgr).
+			For(&aimodelv1alpha1.AIModel{}).
+			WithValidator(&webhook.AIModelValidator{
+				Client: mgr.GetClient(),
+			}).
+			Complete(); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "AIModel")
+			os.Exit(1)
+		}
+		setupLog.Info("AIModel validating webhook registered", "port", webhookPort)
+	} else {
+		setupLog.Info("AIModel validating webhook disabled")
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err = mgr.AddHealthzCheck("healthz", healthz.Ping);

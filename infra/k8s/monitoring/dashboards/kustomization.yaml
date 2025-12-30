@@ -92,3 +92,10 @@ configMapGenerator:
     options:
       labels:
         grafana_dashboard: "1"
+
+  - name: grafana-dashboard-model-deployment
+    files:
+      - model-deployment.json
+    options:
+      labels:
+        grafana_dashboard: "1"

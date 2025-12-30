@@ -1,0 +1,37 @@
+# Test Config: Missing GPU Toleration
+#
+# Purpose: Tests detection and reporting of pod scheduling failures due to
+#          missing toleration for GPU nodes (which are tainted).
+#
+# Expected Behavior:
+#   - Phase: Scheduling
+#   - Message: Should contain "untolerated taint" or mention "gpu-workload"
+#
+# GPU nodes have a taint "gpu-workload=true:NoSchedule" that requires
+# a matching toleration. This config intentionally omits that toleration.
+
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: test-missing-toleration
+  namespace: development
+  labels:
+    test-type: failure-mode
+    failure-category: scheduling
+spec:
+  modelName: test-missing-toleration
+  modelID: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+  enabled: false  # Disabled by default to prevent accidental deployment
+  runtime: vllm
+  trustRemoteCode: true  # Load directly from HuggingFace
+  resources:
+    requests:
+      cpu: "2"
+      memory: "8Gi"
+      nvidia.com/gpu: "1"
+    limits:
+      cpu: "2"
+      memory: "8Gi"
+      nvidia.com/gpu: "1"
+  # Missing tolerations array - pod cannot schedule on GPU nodes
+  tolerations: []

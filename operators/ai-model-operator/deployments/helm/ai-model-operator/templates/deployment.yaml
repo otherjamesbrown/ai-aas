@@ -27,12 +27,28 @@ spec:
         {{- if .Values.downloaderImage }}
         - --downloader-image={{ .Values.downloaderImage }}
         {{- end }}
+        {{- if .Values.webhook.enabled }}
+        - --enable-webhook=true
+        - --webhook-port={{ .Values.webhook.port }}
+        {{- else }}
+        - --enable-webhook=false
+        {{- end }}
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         name: manager
         {{- if .Values.env }}
         env:
           {{- toYaml .Values.env | nindent 10 }}
+        {{- end }}
+        {{- if .Values.webhook.enabled }}
+        ports:
+        - containerPort: {{ .Values.webhook.port }}
+          name: webhook-server
+          protocol: TCP
+        volumeMounts:
+        - mountPath: /tmp/k8s-webhook-server/serving-certs
+          name: cert
+          readOnly: true
         {{- end }}
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
@@ -48,4 +64,11 @@ spec:
             port: 8081
           initialDelaySeconds: 5
           periodSeconds: 10
+      {{- if .Values.webhook.enabled }}
+      volumes:
+      - name: cert
+        secret:
+          defaultMode: 420
+          secretName: {{ include "ai-model-operator.fullname" . }}-webhook-server-cert
+      {{- end }}
       terminationGracePeriodSeconds: 10

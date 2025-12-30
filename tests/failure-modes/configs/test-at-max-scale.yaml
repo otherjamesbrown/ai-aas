@@ -1,0 +1,40 @@
+# Test Config: Node Pool at Maximum Scale
+#
+# Purpose: Tests detection and reporting when all nodes in the GPU pool
+#          are at capacity and the pool is at its maximum size (cannot scale up).
+#
+# Expected Behavior:
+#   - Phase: Scheduling
+#   - Message: Should indicate resource exhaustion or inability to schedule
+#
+# This simulates the scenario where the cluster autoscaler cannot add more
+# nodes because the node pool has reached its maximum configured size.
+
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: test-at-max-scale
+  namespace: development
+  labels:
+    test-type: failure-mode
+    failure-category: scheduling
+spec:
+  modelName: test-at-max-scale
+  modelID: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+  enabled: false  # Disabled by default to prevent accidental deployment
+  runtime: vllm
+  trustRemoteCode: true  # Load directly from HuggingFace
+  resources:
+    requests:
+      cpu: "16"  # High resource request to exhaust pool
+      memory: "64Gi"
+      nvidia.com/gpu: "2"
+    limits:
+      cpu: "16"
+      memory: "64Gi"
+      nvidia.com/gpu: "2"
+  tolerations:
+    - key: gpu-workload
+      operator: Equal
+      value: "true"
+      effect: NoSchedule

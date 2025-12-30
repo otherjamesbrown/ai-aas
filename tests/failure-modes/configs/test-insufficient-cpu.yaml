@@ -1,0 +1,35 @@
+# Test Config: Insufficient CPU
+#
+# Purpose: Tests detection and reporting of pod scheduling failures due to
+#          insufficient CPU resources on any available node.
+#
+# Expected Behavior:
+#   - Phase: Scheduling
+#   - Message: Should contain "Insufficient cpu" or similar scheduling error
+#
+# This model requests 64 CPUs, which exceeds what any single node can provide
+# in a typical development cluster.
+
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: test-insufficient-cpu
+  namespace: development
+  labels:
+    test-type: failure-mode
+    failure-category: scheduling
+spec:
+  modelName: test-insufficient-cpu
+  modelID: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+  enabled: false  # Disabled by default to prevent accidental deployment
+  runtime: vllm
+  trustRemoteCode: true  # Load directly from HuggingFace
+  resources:
+    requests:
+      cpu: "64"  # Impossible - no node has 64 CPUs
+      memory: "8Gi"
+      nvidia.com/gpu: "1"
+    limits:
+      cpu: "64"
+      memory: "8Gi"
+      nvidia.com/gpu: "1"

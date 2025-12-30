@@ -1,0 +1,28 @@
+{{- if .Values.webhook.enabled }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "ai-model-operator.fullname" . }}-serving-cert
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ai-model-operator.labels" . | nindent 4 }}
+spec:
+  dnsNames:
+  - {{ include "ai-model-operator.fullname" . }}-webhook-service.{{ .Release.Namespace }}.svc
+  - {{ include "ai-model-operator.fullname" . }}-webhook-service.{{ .Release.Namespace }}.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    name: {{ include "ai-model-operator.fullname" . }}-selfsigned-issuer
+  secretName: {{ include "ai-model-operator.fullname" . }}-webhook-server-cert
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ include "ai-model-operator.fullname" . }}-selfsigned-issuer
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ai-model-operator.labels" . | nindent 4 }}
+spec:
+  selfSigned: {}
+{{- end }}

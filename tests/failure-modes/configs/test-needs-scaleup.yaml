@@ -1,0 +1,44 @@
+# Test Config: Needs Cluster Autoscaler Scale-up
+#
+# Purpose: Tests detection and reporting when a pod requires the cluster
+#          autoscaler to add new nodes (all existing nodes are full).
+#
+# Expected Behavior:
+#   - Phase: Scheduling
+#   - Message: Should indicate waiting for autoscaler or node provisioning
+#
+# NOTE: This test may take longer to show failure, as the autoscaler
+# needs time to detect the need and provision nodes. Configure with
+# resources that require a new node to be added.
+
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: test-needs-scaleup
+  namespace: development
+  labels:
+    test-type: failure-mode
+    failure-category: scheduling
+spec:
+  modelName: test-needs-scaleup
+  modelID: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+  enabled: false  # Disabled by default to prevent accidental deployment
+  runtime: vllm
+  trustRemoteCode: true  # Load directly from HuggingFace
+  resources:
+    requests:
+      cpu: "8"  # Large enough to likely require a new node
+      memory: "32Gi"
+      nvidia.com/gpu: "1"
+    limits:
+      cpu: "8"
+      memory: "32Gi"
+      nvidia.com/gpu: "1"
+  tolerations:
+    - key: gpu-workload
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+  # Node selector that might force autoscaler action
+  nodeSelector:
+    node.kubernetes.io/instance-type: g5.xlarge
