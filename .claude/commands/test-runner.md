@@ -696,3 +696,22 @@ bd close <failure-bead> --reason="Fixed in commit abc1234: <description>"
 ```
 
 This maintains an audit trail from failure → fix.
+
+---
+
+## Related Agents
+
+When test issues require more than a simple run:
+
+| Issue | Agent |
+|-------|-------|
+| E2E test failing, needs investigation | `test-developer` |
+| Contract test mismatch (CLI vs API) | `test-developer` |
+| New test fixture or harness needed | `test-developer` |
+| Test environment/cluster issues | `infra-ops-manager` |
+| API bug found during testing | `go-services-developer` |
+| CLI bug found during testing | `cli-developer` |
+
+**Context files:**
+- `context/test-developer/agents.md` - Test patterns and infrastructure
+- `context/e2e-testing/agents.md` - E2E test specifics

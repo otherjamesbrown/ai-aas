@@ -346,6 +346,7 @@ After fixing an issue, you MUST answer these questions:
 | **go-services-developer** | REST API services (admin-api, api-router, analytics, user-org) | Application code bugs, new endpoints, Go code changes |
 | **cli-developer** | ai-aas-cli command-line tool | CLI code bugs, new commands |
 | **operator-developer** | Kubernetes operators (ai-model-operator) | Operator Go code, reconciliation logic, CRD changes |
+| **test-developer** | E2E tests, contract tests, test infrastructure | E2E test failures, test environment issues, new integration tests |
 
 ## What You Do NOT Handle
 

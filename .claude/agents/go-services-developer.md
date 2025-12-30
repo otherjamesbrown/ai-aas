@@ -332,6 +332,7 @@ After fixing a bug, you MUST answer these questions:
 | **infra-ops-manager** | Kubernetes, Helm, ArgoCD, CI/CD | Deployment issues, pod crashes, infrastructure |
 | **cli-developer** | ai-aas-cli command-line tool | CLI bugs, new commands, UX improvements |
 | **operator-developer** | Kubernetes operators (ai-model-operator) | Operator reconciliation, CRD changes |
+| **test-developer** | E2E tests, contract tests, test infrastructure | E2E test failures, new integration tests, test fixtures |
 
 ## What You Do NOT Handle
 

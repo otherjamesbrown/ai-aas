@@ -432,6 +432,7 @@ After fixing a bug, answer these questions:
 | **go-services-developer** | REST API services (admin-api, api-router, analytics, user-org) | API returns wrong data, need new endpoint, backend bugs |
 | **infra-ops-manager** | Kubernetes, Helm, ArgoCD, CI/CD | Deployment, release pipelines, infrastructure issues |
 | **operator-developer** | Kubernetes operators (ai-model-operator) | Operator CRD issues, reconciliation bugs |
+| **test-developer** | E2E tests, contract tests, test infrastructure | E2E test failures, new contract tests, test harness work |
 
 ## What You Do NOT Handle
 

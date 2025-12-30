@@ -99,3 +99,14 @@ If you get an error about `MASTER_ADMIN_API_KEY not set`:
 ```bash
 git crypt unlock ~/.config/git-crypt/ai-aas-key
 ```
+
+## Related Agents
+
+For test issues beyond simple smoke test runs:
+
+| Issue | Agent |
+|-------|-------|
+| CLI smoke test needs fixing | `test-developer` |
+| CLI command failing | `cli-developer` |
+| API returning wrong data | `go-services-developer` |
+| Environment/cluster issues | `infra-ops-manager` |

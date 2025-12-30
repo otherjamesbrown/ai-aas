@@ -252,7 +252,7 @@ bd create "Fix: <specific fix description>" --type=bug --priority=<priority>
 bd dep add <fix-bead-id> <original-bead-id>
 
 # Assign to appropriate agent
-bd label add <fix-bead-id> go-services-developer  # or cli-developer, infra-ops-manager, etc.
+bd label add <fix-bead-id> go-services-developer  # or cli-developer, infra-ops-manager, test-developer, etc.
 
 # Add context to fix bead
 bd comments add <fix-bead-id> "## Fix Context

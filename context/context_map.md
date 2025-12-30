@@ -120,6 +120,7 @@ maintenance:
 | `context/infra-ops-manager/agents.md` | 143 | ✅ OPTIMIZED | Links to runbooks |
 | `context/web-portal-developer/agents.md` | 149 | ✅ OPTIMIZED | YAML patterns |
 | `context/debugger/agents.md` | 120 | ✅ NEW | Read-only investigation agent |
+| `context/test-developer/agents.md` | 200 | ✅ NEW | E2E, contract, integration tests |
 | `context/e2e-testing/agents.md` | 180 | ✅ NEW | E2E test harness, fixtures, tiers |
 | `context/compliance-reviewer-agent.md` | 280 | ✅ NEW | Drift detection, read-only auditor |
 
@@ -246,11 +247,18 @@ hierarchy:
       context/debugger/agents.md:
         type: rules
         purpose: Bug investigation (read-only)
-        read_when: User asks "why did this happen?" or bug is complex
+        read_when: User asks "why did this happen?" or bug investigation needed
+        inherits: context/agents.md
+
+      context/test-developer/agents.md:
+        type: rules
+        purpose: E2E, contract, and integration test patterns
+        read_when: Working on tests/e2e/, tests/usecases/, tests/integration/
         inherits: context/agents.md
         links_to:
-          - docs/runbooks/ai-debugging-workflow.md (operational)
-          - context/CONTEXT_EFFECTIVENESS_LOG.md (tracking)
+          - tests/e2e/ (source)
+          - tests/usecases/ (source)
+          - context/e2e-testing/agents.md (reference)
 
       context/e2e-testing/agents.md:
         type: rules
