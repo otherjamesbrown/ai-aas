@@ -1,0 +1,40 @@
+# Test Config: Invalid HuggingFace Model ID
+#
+# Purpose: Tests detection and reporting of model download failures due to
+#          non-existent HuggingFace model repository.
+#
+# Expected Behavior:
+#   - Phase: Downloading or Failed
+#   - Message: Should contain "not found", "404", or HuggingFace error
+#
+# This model uses a HuggingFace model ID that does not exist, causing
+# the download to fail when trustRemoteCode is enabled.
+
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: test-invalid-hf-model
+  namespace: development
+  labels:
+    test-type: failure-mode
+    failure-category: download
+spec:
+  modelName: test-invalid-hf-model
+  modelID: invalid-org/this-model-does-not-exist-12345
+  enabled: false  # Disabled by default to prevent accidental deployment
+  runtime: vllm
+  trustRemoteCode: true  # Load from HuggingFace (will fail - model doesn't exist)
+  resources:
+    requests:
+      cpu: "2"
+      memory: "8Gi"
+      nvidia.com/gpu: "1"
+    limits:
+      cpu: "2"
+      memory: "8Gi"
+      nvidia.com/gpu: "1"
+  tolerations:
+    - key: gpu-workload
+      operator: Equal
+      value: "true"
+      effect: NoSchedule

@@ -1,0 +1,39 @@
+# Test Config: Invalid Recipe Reference
+#
+# Purpose: Tests detection and reporting when an AIModel references a
+#          ModelRecipe that does not exist.
+#
+# Expected Behavior:
+#   - Phase: Validating or Failed
+#   - Message: Should contain "recipe not found" or "not found" with recipe name
+#
+# This config references a ModelRecipe that does not exist, causing
+# validation to fail during the Validating phase.
+
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: test-invalid-recipe
+  namespace: development
+  labels:
+    test-type: failure-mode
+    failure-category: validation
+spec:
+  modelName: test-invalid-recipe
+  modelID: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+  enabled: false  # Disabled by default to prevent accidental deployment
+  runtime: vllm
+  trustRemoteCode: true
+  # Reference to a recipe that does not exist
+  recipeRef:
+    name: nonexistent-recipe-12345
+    namespace: ai-model-system
+  resources:
+    requests:
+      cpu: "2"
+      memory: "8Gi"
+      nvidia.com/gpu: "1"
+    limits:
+      cpu: "2"
+      memory: "8Gi"
+      nvidia.com/gpu: "1"

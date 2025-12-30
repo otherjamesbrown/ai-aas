@@ -1,0 +1,42 @@
+# Test Config: Invalid S3 Path
+#
+# Purpose: Tests detection and reporting of model download failures due to
+#          non-existent S3 path (404 error from S3).
+#
+# Expected Behavior:
+#   - Phase: Downloading or Failed
+#   - Message: Should contain "not found", "404", or S3 error
+#
+# This model points to an S3 path that does not exist, causing the
+# model-downloader init container to fail.
+
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: test-invalid-s3-path
+  namespace: development
+  labels:
+    test-type: failure-mode
+    failure-category: download
+spec:
+  modelName: test-invalid-s3-path
+  modelID: invalid/nonexistent-model
+  enabled: false  # Disabled by default to prevent accidental deployment
+  runtime: vllm
+  s3Bucket: ai-aas-models-dev
+  s3Key: models/this/path/does/not/exist/model.tar.gz  # Non-existent path
+  trustRemoteCode: false  # Force S3 download
+  resources:
+    requests:
+      cpu: "2"
+      memory: "8Gi"
+      nvidia.com/gpu: "1"
+    limits:
+      cpu: "2"
+      memory: "8Gi"
+      nvidia.com/gpu: "1"
+  tolerations:
+    - key: gpu-workload
+      operator: Equal
+      value: "true"
+      effect: NoSchedule

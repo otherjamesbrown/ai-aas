@@ -1,0 +1,45 @@
+# Test Config: Crash Loop Backoff
+#
+# Purpose: Tests detection and reporting of containers that crash immediately
+#          on startup due to invalid runtime arguments.
+#
+# Expected Behavior:
+#   - Phase: Initializing or Failed
+#   - Message: Should contain "CrashLoopBackOff", "error", or invalid argument message
+#
+# This config uses invalid vLLM arguments that cause the container to crash
+# immediately on startup, entering a CrashLoopBackOff state.
+
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: test-crash-loop
+  namespace: development
+  labels:
+    test-type: failure-mode
+    failure-category: initialization
+spec:
+  modelName: test-crash-loop
+  modelID: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+  enabled: false  # Disabled by default to prevent accidental deployment
+  runtime: vllm
+  trustRemoteCode: true
+  resources:
+    requests:
+      cpu: "2"
+      memory: "8Gi"
+      nvidia.com/gpu: "1"
+    limits:
+      cpu: "2"
+      memory: "8Gi"
+      nvidia.com/gpu: "1"
+  tolerations:
+    - key: gpu-workload
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+  # Invalid runtime args that will cause vLLM to crash
+  runtimeArgs:
+    - "--invalid-flag-that-does-not-exist"
+    - "--max-model-len=-1"  # Invalid negative value
+    - "--tensor-parallel-size=999"  # Invalid value

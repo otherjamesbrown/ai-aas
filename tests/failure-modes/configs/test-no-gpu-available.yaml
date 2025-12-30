@@ -1,0 +1,40 @@
+# Test Config: No GPU Available
+#
+# Purpose: Tests detection and reporting of pod scheduling failures due to
+#          insufficient GPU resources (requesting more GPUs than available).
+#
+# Expected Behavior:
+#   - Phase: Scheduling
+#   - Message: Should contain "Insufficient nvidia.com/gpu" or similar
+#
+# This model requests 4 GPUs, which likely exceeds the number of GPUs
+# available on any single node in a typical development cluster.
+
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: test-no-gpu-available
+  namespace: development
+  labels:
+    test-type: failure-mode
+    failure-category: scheduling
+spec:
+  modelName: test-no-gpu-available
+  modelID: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+  enabled: false  # Disabled by default to prevent accidental deployment
+  runtime: vllm
+  trustRemoteCode: true  # Load directly from HuggingFace
+  resources:
+    requests:
+      cpu: "2"
+      memory: "16Gi"
+      nvidia.com/gpu: "4"  # Exceeds available GPUs per node
+    limits:
+      cpu: "2"
+      memory: "16Gi"
+      nvidia.com/gpu: "4"
+  tolerations:
+    - key: gpu-workload
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
