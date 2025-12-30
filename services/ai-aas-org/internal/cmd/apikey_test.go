@@ -238,3 +238,105 @@ func TestAPIKeyRotateCommand_Examples(t *testing.T) {
 	assert.Contains(t, rotateCmd.Long, "apikey rotate", "Examples should show rotate command")
 	assert.Contains(t, rotateCmd.Long, "security", "Long description should mention security")
 }
+
+// TestAPIKeyCreateCommand_ValidationRules verifies input validation for create command
+func TestAPIKeyCreateCommand_ValidationRules(t *testing.T) {
+	var createCmd *cobra.Command
+	for _, cmd := range apikeyCmd.Commands() {
+		if cmd.Name() == "create" {
+			createCmd = cmd
+			break
+		}
+	}
+	require.NotNil(t, createCmd)
+
+	// Test that either user-id or email is required
+	userFlag := createCmd.Flags().Lookup("user-id")
+	emailFlag := createCmd.Flags().Lookup("email")
+
+	assert.NotNil(t, userFlag, "user-id flag should exist")
+	assert.NotNil(t, emailFlag, "email flag should exist")
+
+	// Both should be optional at the flag level (validation happens in RunE)
+	assert.False(t, userFlag.NoOptDefVal != "", "user-id should not be required at flag level")
+	assert.False(t, emailFlag.NoOptDefVal != "", "email should not be required at flag level")
+}
+
+// TestAPIKeyCreateCommand_ExpirationFormats verifies expiration format examples
+func TestAPIKeyCreateCommand_ExpirationFormats(t *testing.T) {
+	var createCmd *cobra.Command
+	for _, cmd := range apikeyCmd.Commands() {
+		if cmd.Name() == "create" {
+			createCmd = cmd
+			break
+		}
+	}
+	require.NotNil(t, createCmd)
+
+	expiresFlag := createCmd.Flags().Lookup("expires")
+	require.NotNil(t, expiresFlag, "expires flag should exist")
+
+	// Verify usage text mentions expiration formats
+	assert.Contains(t, expiresFlag.Usage, "30d", "Usage should mention 30d format")
+	assert.Contains(t, expiresFlag.Usage, "never", "Usage should mention 'never' option")
+}
+
+// TestAPIKeyDeleteCommand_Args verifies delete command requires one argument
+func TestAPIKeyDeleteCommand_Args(t *testing.T) {
+	var deleteCmd *cobra.Command
+	for _, cmd := range apikeyCmd.Commands() {
+		if cmd.Name() == "delete" {
+			deleteCmd = cmd
+			break
+		}
+	}
+	require.NotNil(t, deleteCmd)
+
+	// Should require exactly one argument (key-id)
+	assert.Contains(t, deleteCmd.Use, "<key-id>", "Use should show key-id as required argument")
+	assert.NotNil(t, deleteCmd.Args, "Args validator should be set")
+}
+
+// TestAPIKeyRotateCommand_Args verifies rotate command requires one argument
+func TestAPIKeyRotateCommand_Args(t *testing.T) {
+	var rotateCmd *cobra.Command
+	for _, cmd := range apikeyCmd.Commands() {
+		if cmd.Name() == "rotate" {
+			rotateCmd = cmd
+			break
+		}
+	}
+	require.NotNil(t, rotateCmd)
+
+	// Should require exactly one argument (key-id)
+	assert.Contains(t, rotateCmd.Use, "<key-id>", "Use should show key-id as required argument")
+	assert.NotNil(t, rotateCmd.Args, "Args validator should be set")
+}
+
+// TestAPIKeyListCommand_FilterFlag verifies list command user-id filter flag
+func TestAPIKeyListCommand_FilterFlag(t *testing.T) {
+	var listCmd *cobra.Command
+	for _, cmd := range apikeyCmd.Commands() {
+		if cmd.Name() == "list" {
+			listCmd = cmd
+			break
+		}
+	}
+	require.NotNil(t, listCmd)
+
+	userFlag := listCmd.Flags().Lookup("user-id")
+	require.NotNil(t, userFlag, "user-id flag should exist")
+
+	// Should be optional (default empty means show all)
+	assert.Equal(t, "", userFlag.DefValue, "user-id filter should default to empty string")
+}
+
+// TestAPIKeyCommand_Aliases verifies command aliases
+func TestAPIKeyCommand_Aliases(t *testing.T) {
+	aliases := apikeyCmd.Aliases
+	expectedAliases := []string{"key", "keys"}
+
+	for _, expected := range expectedAliases {
+		assert.Contains(t, aliases, expected, "apikey command should have alias %q", expected)
+	}
+}

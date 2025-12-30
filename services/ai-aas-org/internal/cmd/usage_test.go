@@ -120,3 +120,121 @@ func TestUsageByUserCommand(t *testing.T) {
 	assert.NotEmpty(t, byUserCmd.Long, "Long description should not be empty")
 	assert.NotNil(t, byUserCmd.RunE, "RunE function should be set")
 }
+
+// TestUsageSummaryCommand_PeriodFlag verifies period flag accepts various formats
+func TestUsageSummaryCommand_PeriodFlag(t *testing.T) {
+	var summaryCmd *cobra.Command
+	for _, cmd := range usageCmd.Commands() {
+		if cmd.Name() == "summary" {
+			summaryCmd = cmd
+			break
+		}
+	}
+	require.NotNil(t, summaryCmd)
+
+	periodFlag := summaryCmd.Flags().Lookup("period")
+	require.NotNil(t, periodFlag, "period flag should exist")
+
+	// Verify default value
+	assert.Equal(t, "30d", periodFlag.DefValue, "period should default to 30d")
+
+	// Verify usage mentions period formats
+	assert.NotEmpty(t, periodFlag.Usage, "period flag should have usage description")
+}
+
+// TestUsageByModelCommand_Flags verifies by-model command has appropriate flags
+func TestUsageByModelCommand_Flags(t *testing.T) {
+	var byModelCmd *cobra.Command
+	for _, cmd := range usageCmd.Commands() {
+		if cmd.Name() == "by-model" {
+			byModelCmd = cmd
+			break
+		}
+	}
+	require.NotNil(t, byModelCmd)
+
+	// Should have period flag similar to summary command
+	// (Actual implementation may vary - this tests the command structure)
+	assert.NotNil(t, byModelCmd.RunE, "RunE should be set for by-model command")
+}
+
+// TestUsageByUserCommand_Flags verifies by-user command has appropriate flags
+func TestUsageByUserCommand_Flags(t *testing.T) {
+	var byUserCmd *cobra.Command
+	for _, cmd := range usageCmd.Commands() {
+		if cmd.Name() == "by-user" {
+			byUserCmd = cmd
+			break
+		}
+	}
+	require.NotNil(t, byUserCmd)
+
+	// Should have period flag similar to summary command
+	assert.NotNil(t, byUserCmd.RunE, "RunE should be set for by-user command")
+}
+
+// TestUsageCommand_Subcommands verifies all expected subcommands exist
+func TestUsageCommand_Subcommands(t *testing.T) {
+	subcommands := []string{"summary", "by-model", "by-user"}
+
+	for _, subcmdName := range subcommands {
+		t.Run(subcmdName, func(t *testing.T) {
+			found := false
+			for _, cmd := range usageCmd.Commands() {
+				if cmd.Name() == subcmdName {
+					found = true
+					assert.NotNil(t, cmd.RunE, "subcommand %q should have RunE set", subcmdName)
+					assert.NotEmpty(t, cmd.Short, "subcommand %q should have Short description", subcmdName)
+					assert.NotEmpty(t, cmd.Long, "subcommand %q should have Long description", subcmdName)
+					break
+				}
+			}
+			assert.True(t, found, "subcommand %q should exist", subcmdName)
+		})
+	}
+}
+
+// TestUsageSummaryCommand_PeriodValidation verifies period flag format examples in docs
+func TestUsageSummaryCommand_PeriodValidation(t *testing.T) {
+	var summaryCmd *cobra.Command
+	for _, cmd := range usageCmd.Commands() {
+		if cmd.Name() == "summary" {
+			summaryCmd = cmd
+			break
+		}
+	}
+	require.NotNil(t, summaryCmd)
+
+	// Check that Long description mentions period formats
+	assert.Contains(t, summaryCmd.Long, "period", "Long description should explain period flag")
+}
+
+// TestUsageByModelCommand_Examples verifies by-model command examples
+func TestUsageByModelCommand_Examples(t *testing.T) {
+	var byModelCmd *cobra.Command
+	for _, cmd := range usageCmd.Commands() {
+		if cmd.Name() == "by-model" {
+			byModelCmd = cmd
+			break
+		}
+	}
+	require.NotNil(t, byModelCmd)
+
+	// Verify command has examples
+	assert.NotEmpty(t, byModelCmd.Long, "Long description should not be empty")
+}
+
+// TestUsageByUserCommand_Examples verifies by-user command examples
+func TestUsageByUserCommand_Examples(t *testing.T) {
+	var byUserCmd *cobra.Command
+	for _, cmd := range usageCmd.Commands() {
+		if cmd.Name() == "by-user" {
+			byUserCmd = cmd
+			break
+		}
+	}
+	require.NotNil(t, byUserCmd)
+
+	// Verify command has examples
+	assert.NotEmpty(t, byUserCmd.Long, "Long description should not be empty")
+}

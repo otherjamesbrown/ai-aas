@@ -140,6 +140,14 @@ api_endpoints:
       - "POST   /routing/policies/{id}/activate"
 
   user-org-service:  # /v1 prefix
+    users:
+      - "GET    /orgs/{orgId}/users"
+      - "POST   /orgs/{orgId}/users"
+      - "GET    /orgs/{orgId}/users/{userId}"
+      - "GET    /orgs/{orgId}/users/by-email/{email}"
+      - "PATCH  /orgs/{orgId}/users/{userId}"
+      - "DELETE /orgs/{orgId}/users/{userId}"
+      - "PUT    /orgs/{orgId}/users/{userId}/roles"
     api_keys:
       - "POST   /orgs/{orgId}/api-keys"
       - "GET    /orgs/{orgId}/api-keys"

@@ -105,14 +105,22 @@ func (a *Authenticator) validateAPIKey(key string) (*AuthenticatedContext, error
 
 	if ok {
 		if time.Now().Before(cached.expiresAt) {
-			a.logger.Debug("API key validation cache hit", zap.String("fingerprint", fingerprint[:8]))
+			a.logger.Debug("API key validation cache hit",
+				zap.String("fingerprint", fingerprint[:min(8, len(fingerprint))]),
+				zap.String("operation", "cache_hit"))
 			return cached.result, nil
 		}
 		// Cache expired, remove it
 		a.cacheMutex.Lock()
 		delete(a.validationCache, fingerprint)
 		a.cacheMutex.Unlock()
-		a.logger.Debug("API key validation cache expired", zap.String("fingerprint", fingerprint[:8]))
+		a.logger.Debug("API key validation cache expired",
+			zap.String("fingerprint", fingerprint[:min(8, len(fingerprint))]),
+			zap.String("operation", "cache_expired"))
+	} else {
+		a.logger.Debug("API key validation cache miss",
+			zap.String("fingerprint", fingerprint[:min(8, len(fingerprint))]),
+			zap.String("operation", "cache_miss"))
 	}
 
 	// Fallback to stub for dev/test keys (for local development)
@@ -305,7 +313,13 @@ func (a *Authenticator) InvalidateCache(fingerprint string) {
 
 	if _, exists := a.validationCache[fingerprint]; exists {
 		delete(a.validationCache, fingerprint)
-		a.logger.Info("invalidated API key cache entry", zap.String("fingerprint", fingerprint[:8]))
+		a.logger.Info("invalidated API key cache entry",
+			zap.String("fingerprint", fingerprint[:min(8, len(fingerprint))]),
+			zap.String("operation", "invalidate"))
+	} else {
+		a.logger.Debug("cache invalidation request for non-cached key",
+			zap.String("fingerprint", fingerprint[:min(8, len(fingerprint))]),
+			zap.String("operation", "invalidate_miss"))
 	}
 }
 
@@ -347,7 +361,10 @@ func (a *Authenticator) StartCacheInvalidationSubscriber(ctx context.Context, re
 			}
 			// Message payload is the fingerprint to invalidate
 			fingerprint := msg.Payload
-			a.logger.Debug("received cache invalidation event", zap.String("fingerprint", fingerprint[:min(8, len(fingerprint))]))
+			a.logger.Info("received cache invalidation event",
+				zap.String("fingerprint", fingerprint[:min(8, len(fingerprint))]),
+				zap.String("operation", "cache_invalidation_received"),
+				zap.String("channel", channel))
 			a.InvalidateCache(fingerprint)
 		}
 	}

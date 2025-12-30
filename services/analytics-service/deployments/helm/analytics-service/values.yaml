@@ -184,6 +184,7 @@ s3:
   accessKey: ""
   secretKey: ""
   bucket: analytics-exports
+  region: us-east-1
   endpointSecretName: ""
   accessKeySecretName: ""
   secretKeySecretName: ""

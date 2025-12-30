@@ -19,6 +19,7 @@
 //   - CreateUser: POST /v1/orgs/{orgId}/users - Create user directly
 //   - ListUsers: GET /v1/orgs/{orgId}/users - List users in organization
 //   - GetUser: GET /v1/orgs/{orgId}/users/{userId} - Retrieve user details
+//   - GetUserByEmail: GET /v1/orgs/{orgId}/users/by-email/{email} - Retrieve user by email
 //   - UpdateUser: PATCH /v1/orgs/{orgId}/users/{userId} - Update user profile/status
 //   - DeleteUser: DELETE /v1/orgs/{orgId}/users/{userId} - Soft delete user
 //   - UpdateUserRoles: PUT /v1/orgs/{orgId}/users/{userId}/roles - Update role assignments
@@ -85,6 +86,7 @@ func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger *zap.Logger
 	router.With(middleware.RequireAdminScope(logger, "user:manage", "org:admin")).Post("/v1/orgs/{orgId}/invites", handler.InviteUser)
 	router.With(middleware.RequireAdminScope(logger, "user:manage", "org:admin")).Post("/v1/orgs/{orgId}/users", handler.CreateUser) // Direct user creation
 	router.With(middleware.RequireAdminScope(logger, "org:read", "org:admin")).Get("/v1/orgs/{orgId}/users", handler.ListUsers)
+	router.With(middleware.RequireAdminScope(logger, "org:read", "org:admin")).Get("/v1/orgs/{orgId}/users/by-email/{email}", handler.GetUserByEmail)
 	router.With(middleware.RequireAdminScope(logger, "org:read", "org:admin")).Get("/v1/orgs/{orgId}/users/{userId}", handler.GetUser)
 	router.With(middleware.RequireAdminScope(logger, "user:manage", "org:admin")).Patch("/v1/orgs/{orgId}/users/{userId}", handler.UpdateUser)
 	router.With(middleware.RequireAdminScope(logger, "user:manage", "org:admin")).Delete("/v1/orgs/{orgId}/users/{userId}", handler.DeleteUser)
@@ -523,6 +525,43 @@ func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.logger.Error("failed to get user", zap.Error(err), zap.String("userId", userIDParam))
+		httputil.WriteInternalError(w, r)
+		return
+	}
+
+	resp := toUserResponse(user)
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		h.logger.Error("failed to encode response", zap.Error(err))
+	}
+}
+
+// GetUserByEmail handles GET /v1/orgs/{orgId}/users/by-email/{email} - Retrieve user by email.
+func (h *Handler) GetUserByEmail(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgIDParam := chi.URLParam(r, "orgId")
+	emailParam := chi.URLParam(r, "email")
+
+	orgID, err := h.resolveOrgID(ctx, orgIDParam)
+	if err != nil {
+		httputil.WriteNotFound(w, r, "organization", "")
+		return
+	}
+
+	// Normalize email (lowercase, trim whitespace)
+	email := strings.ToLower(strings.TrimSpace(emailParam))
+	if email == "" {
+		httputil.WriteBadRequest(w, r, "email is required")
+		return
+	}
+
+	user, err := h.runtime.Postgres.GetUserByEmail(ctx, orgID, email)
+	if err != nil {
+		if err == postgres.ErrNotFound {
+			httputil.WriteNotFound(w, r, "user", "")
+			return
+		}
+		h.logger.Error("failed to get user by email", zap.Error(err), zap.String("email", email))
 		httputil.WriteInternalError(w, r)
 		return
 	}

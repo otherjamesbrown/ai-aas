@@ -108,10 +108,31 @@ func (h *Handler) findAPIKey(ctx context.Context, orgID uuid.UUID, keyIdentifier
 	apiKeyUUID, err := uuid.Parse(keyIdentifier)
 	if err != nil {
 		// Not a UUID - assume it's a KeyID
-		return h.runtime.Postgres.GetAPIKeyByKeyID(ctx, orgID, keyIdentifier)
+		h.logger.Debug("finding API key by KeyID",
+			zap.String("keyIdentifier", keyIdentifier),
+			zap.String("orgID", orgID.String()),
+			zap.String("operation", "find_by_key_id"))
+		key, err := h.runtime.Postgres.GetAPIKeyByKeyID(ctx, orgID, keyIdentifier)
+		if err != nil {
+			h.logger.Debug("API key lookup by KeyID failed",
+				zap.String("keyIdentifier", keyIdentifier),
+				zap.String("orgID", orgID.String()),
+				zap.Error(err))
+		}
+		return key, err
 	}
 	// It's a UUID
-	return h.runtime.Postgres.GetAPIKeyByID(ctx, apiKeyUUID)
+	h.logger.Debug("finding API key by UUID",
+		zap.String("keyIdentifier", keyIdentifier),
+		zap.String("apiKeyUUID", apiKeyUUID.String()),
+		zap.String("operation", "find_by_uuid"))
+	key, err := h.runtime.Postgres.GetAPIKeyByID(ctx, apiKeyUUID)
+	if err != nil {
+		h.logger.Debug("API key lookup by UUID failed",
+			zap.String("apiKeyUUID", apiKeyUUID.String()),
+			zap.Error(err))
+	}
+	return key, err
 }
 
 // TokenPrefix is the prefix for all AI-AAS API tokens.
@@ -316,9 +337,16 @@ func (h *Handler) RevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Look up API key by UUID or KeyID
+	h.logger.Info("API key revocation request",
+		zap.String("orgID", orgID.String()),
+		zap.String("keyIdentifier", apiKeyIDParam),
+		zap.String("operation", "revoke_api_key"))
 	apiKey, err := h.findAPIKey(ctx, orgID, apiKeyIDParam)
 	if err != nil {
 		if err == postgres.ErrNotFound {
+			h.logger.Warn("API key not found for revocation",
+				zap.String("orgID", orgID.String()),
+				zap.String("keyIdentifier", apiKeyIDParam))
 			httputil.WriteNotFound(w, r, "API key", "")
 			return
 		}

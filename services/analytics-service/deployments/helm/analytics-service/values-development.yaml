@@ -144,13 +144,16 @@ rabbitmq:
   stream: ""
   consumer: ""
 
-# S3 configuration (disabled for development)
+# S3 configuration - enabled for analytics exports
+# Uses Linode Object Storage bucket 'ai-aas' in fr-par-1 region
+# Credentials stored in analytics-service-s3 secret (created imperatively)
 s3:
-  enabled: false
-  endpoint: ""
-  accessKey: ""
-  secretKey: ""
-  bucket: analytics-exports
+  enabled: true
+  endpointSecretName: analytics-service-s3
+  accessKeySecretName: analytics-service-s3
+  secretKeySecretName: analytics-service-s3
+  bucket: ai-aas
+  region: fr-par-1
 
 # Node scheduling - prefer CPU nodes (avoid GPU nodes)
 # GPU nodes have taint nvidia.com/gpu=true:NoSchedule

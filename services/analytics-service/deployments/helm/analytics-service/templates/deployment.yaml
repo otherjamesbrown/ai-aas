@@ -185,6 +185,10 @@ spec:
             {{- end }}
             - name: S3_BUCKET
               value: {{ .Values.s3.bucket | quote }}
+            {{- if .Values.s3.region }}
+            - name: S3_REGION
+              value: {{ .Values.s3.region | quote }}
+            {{- end }}
             {{- end }}
             # Telemetry
             {{- if .Values.otel.enabled }}
