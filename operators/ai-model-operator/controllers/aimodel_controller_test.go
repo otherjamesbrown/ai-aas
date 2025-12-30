@@ -226,8 +226,8 @@ func TestAIModelReconciler_CreatesInferenceService(t *testing.T) {
 		t.Fatalf("reconcile: (%v)", err)
 	}
 
-	// Should requeue for InferenceService readiness
-	if !res.Requeue {
+	// Should requeue for InferenceService readiness (either Requeue or RequeueAfter)
+	if !res.Requeue && res.RequeueAfter == 0 {
 		t.Error("expected requeue for InferenceService creation/readiness")
 	}
 
@@ -1263,7 +1263,7 @@ func TestAIModelReconciler_ConcurrentInferenceServiceUpdates(t *testing.T) {
 		t.Fatalf("first reconcile failed: %v", err)
 	}
 
-	if !res.Requeue {
+	if !res.Requeue && res.RequeueAfter == 0 {
 		t.Error("expected requeue after updating InferenceService")
 	}
 
@@ -1297,8 +1297,8 @@ func TestAIModelReconciler_ConcurrentInferenceServiceUpdates(t *testing.T) {
 		t.Fatalf("second reconcile failed: %v", err)
 	}
 
-	// Should still requeue to monitor status
-	if !res2.Requeue {
+	// Should still requeue to monitor status (either Requeue or RequeueAfter)
+	if !res2.Requeue && res2.RequeueAfter == 0 {
 		t.Error("expected requeue to monitor InferenceService status")
 	}
 
@@ -1505,8 +1505,8 @@ func TestAIModelReconciler_SkipsUpdateWhenSpecUnchanged(t *testing.T) {
 	// Debug: Log what the controller built
 	t.Logf("Initial resource version: %s", initialResourceVersion)
 
-	// Should still requeue to monitor status
-	if !res.Requeue {
+	// Should still requeue to monitor status (either Requeue or RequeueAfter)
+	if !res.Requeue && res.RequeueAfter == 0 {
 		t.Error("expected requeue to monitor InferenceService status")
 	}
 
@@ -1546,7 +1546,7 @@ func TestAIModelReconciler_SkipsUpdateWhenSpecUnchanged(t *testing.T) {
 		t.Fatalf("second reconcile: %v", err)
 	}
 
-	if !res2.Requeue {
+	if !res2.Requeue && res2.RequeueAfter == 0 {
 		t.Error("expected requeue to monitor InferenceService status")
 	}
 
