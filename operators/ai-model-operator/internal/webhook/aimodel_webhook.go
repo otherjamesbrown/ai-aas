@@ -19,11 +19,11 @@ package webhook
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -32,26 +32,31 @@ import (
 
 // AIModelValidator validates AIModel resources
 type AIModelValidator struct {
-	Client  client.Client
-	decoder admission.Decoder
+	Client client.Client
 }
 
-// Handle processes admission requests for AIModel resources
-func (v *AIModelValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
-	aimodel := &aimodelv1alpha1.AIModel{}
-	if err := v.decoder.Decode(req, aimodel); err != nil {
-		return admission.Errored(http.StatusBadRequest, err)
+// ValidateCreate validates the AIModel on creation
+func (v *AIModelValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	aimodel, ok := obj.(*aimodelv1alpha1.AIModel)
+	if !ok {
+		return nil, fmt.Errorf("expected AIModel but got %T", obj)
 	}
+	return v.validate(ctx, aimodel)
+}
 
-	warnings, err := v.validate(ctx, aimodel)
-	if err != nil {
-		return admission.Denied(err.Error())
+// ValidateUpdate validates the AIModel on update
+func (v *AIModelValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
+	newAIModel, ok := newObj.(*aimodelv1alpha1.AIModel)
+	if !ok {
+		return nil, fmt.Errorf("expected AIModel but got %T", newObj)
 	}
+	return v.validate(ctx, newAIModel)
+}
 
-	if len(warnings) > 0 {
-		return admission.Allowed("").WithWarnings(warnings...)
-	}
-	return admission.Allowed("")
+// ValidateDelete validates the AIModel on deletion
+func (v *AIModelValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	// No validation needed for deletion
+	return nil, nil
 }
 
 // validate performs validation checks on the AIModel
@@ -197,10 +202,4 @@ func formatTaint(taint corev1.Taint) string {
 		return fmt.Sprintf("%s:%s", taint.Key, taint.Effect)
 	}
 	return fmt.Sprintf("%s=%s:%s", taint.Key, taint.Value, taint.Effect)
-}
-
-// InjectDecoder injects the decoder into the validator
-func (v *AIModelValidator) InjectDecoder(d admission.Decoder) error {
-	v.decoder = d
-	return nil
 }

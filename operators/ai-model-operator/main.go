@@ -94,36 +94,16 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	// Configure webhook server port if enabled
-	var webhookServerOptions ctrl.Options
-	if enableWebhook {
-		webhookServerOptions = ctrl.Options{
-			Scheme: scheme,
-			Metrics: metricsserver.Options{
-				BindAddress: metricsAddr,
-			},
-			WebhookServer: ctrl.NewWebhookServer(ctrl.WebhookServerOptions{
-				Port: webhookPort,
-			}),
-			HealthProbeBindAddress:        probeAddr,
-			LeaderElection:                enableLeaderElection,
-			LeaderElectionID:              leaderElectionID,
-			LeaderElectionReleaseOnCancel: true,
-		}
-	} else {
-		webhookServerOptions = ctrl.Options{
-			Scheme: scheme,
-			Metrics: metricsserver.Options{
-				BindAddress: metricsAddr,
-			},
-			HealthProbeBindAddress:        probeAddr,
-			LeaderElection:                enableLeaderElection,
-			LeaderElectionID:              leaderElectionID,
-			LeaderElectionReleaseOnCancel: true,
-		}
-	}
-
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), webhookServerOptions)
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		Scheme: scheme,
+		Metrics: metricsserver.Options{
+			BindAddress: metricsAddr,
+		},
+		HealthProbeBindAddress:        probeAddr,
+		LeaderElection:                enableLeaderElection,
+		LeaderElectionID:              leaderElectionID,
+		LeaderElectionReleaseOnCancel: true,
+	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
