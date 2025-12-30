@@ -1117,6 +1117,248 @@ func (h *Handler) handleTritonNonStreamingGRPC(
 	}
 }
 
+// handleTritonCompletion handles text completion requests for Triton backends.
+// It translates OpenAI text completion requests to Triton V2 protocol and responses back.
+// Non-streaming requests are handled via HTTP, while streaming requires gRPC.
+func (h *Handler) handleTritonCompletion(
+	ctx context.Context,
+	w http.ResponseWriter,
+	r *http.Request,
+	policy *config.RoutingPolicy,
+	req *OpenAICompletionRequest,
+	authCtx *auth.AuthenticatedContext,
+	startTime time.Time,
+) {
+	ctx, span := h.tracer.Start(ctx, "triton.completions")
+	defer span.End()
+
+	// Validate tokenizer is configured
+	if policy.Tokenizer == "" {
+		h.writeError(w, r, fmt.Errorf("tokenizer encoding is required for Triton backends"), api.ErrCodeValidationError)
+		return
+	}
+
+	// Get or create translator for this tokenizer encoding
+	translator, err := h.getOrCreateTranslator(policy.Tokenizer)
+	if err != nil {
+		h.logger.Error("failed to create triton translator",
+			zap.String("tokenizer", policy.Tokenizer),
+			zap.Error(err),
+		)
+		h.writeError(w, r, fmt.Errorf("internal configuration error"), api.ErrCodeBackendError)
+		return
+	}
+
+	// Convert local request type to triton request type
+	tritonReqType := &triton.OpenAICompletionRequest{
+		Model:  req.Model,
+		Prompt: req.Prompt,
+		Stream: req.Stream,
+	}
+	if req.MaxTokens > 0 {
+		tritonReqType.MaxTokens = &req.MaxTokens
+	}
+	if req.Temperature > 0 {
+		tritonReqType.Temperature = &req.Temperature
+	}
+
+	// Translate OpenAI text completion request to Triton format
+	translateReqStart := time.Now()
+	tritonReq, err := translator.TranslateOpenAICompletionToTriton(tritonReqType)
+	translateReqDuration := time.Since(translateReqStart)
+	if err != nil {
+		h.logger.Error("failed to translate text completion request to triton format",
+			zap.Error(err),
+		)
+		h.writeError(w, r, fmt.Errorf("request translation failed: %w", err), api.ErrCodeValidationError)
+		return
+	}
+
+	// Build Triton backend endpoint
+	backendID := policy.Backends[0].BackendID
+	tritonEndpoint := h.buildTritonEndpoint(backendID, policy.Model)
+
+	h.logger.Debug("forwarding text completion to triton backend",
+		zap.String("backend_id", backendID),
+		zap.String("endpoint", tritonEndpoint),
+		zap.String("model", policy.Model),
+		zap.String("backend_type", policy.BackendType),
+	)
+
+	// Serialize Triton request
+	tritonReqBody, err := translator.SerializeTritonRequest(tritonReq)
+	if err != nil {
+		h.writeError(w, r, fmt.Errorf("request serialization failed: %w", err), api.ErrCodeBackendError)
+		return
+	}
+
+	// Create HTTP request to Triton
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", tritonEndpoint, bytes.NewReader(tritonReqBody))
+	if err != nil {
+		h.writeError(w, r, fmt.Errorf("failed to create request: %w", err), api.ErrCodeBackendError)
+		return
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	// Get timeout from backend config
+	backend := h.buildBackendEndpoint(backendID, policy.Model)
+	reqCtx, cancel := context.WithTimeout(ctx, backend.Timeout)
+	defer cancel()
+
+	// Send request to Triton
+	resp, err := h.httpClient.Do(httpReq.WithContext(reqCtx))
+	if err != nil {
+		h.logger.Error("triton request failed",
+			zap.String("backend_id", backendID),
+			zap.Error(err),
+		)
+		h.writeError(w, r, fmt.Errorf("backend request failed: %w", err), api.ErrCodeBackendError)
+		return
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// Read response body
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		h.writeError(w, r, fmt.Errorf("failed to read response: %w", err), api.ErrCodeBackendError)
+		return
+	}
+
+	// Handle Triton errors
+	if resp.StatusCode != http.StatusOK {
+		openAIErr, httpStatus := triton.MapHTTPStatusToTritonError(resp.StatusCode, string(respBody))
+		h.logger.Error("triton backend returned error",
+			zap.Int("status", resp.StatusCode),
+			zap.String("body", string(respBody)),
+			zap.String("backend_id", backendID),
+		)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(httpStatus)
+		_ = json.NewEncoder(w).Encode(triton.OpenAIErrorResponse{Error: *openAIErr})
+		return
+	}
+
+	// Parse Triton response
+	tritonResp, err := translator.ParseTritonResponse(respBody)
+	if err != nil {
+		h.logger.Error("failed to parse triton response",
+			zap.Error(err),
+			zap.String("body", string(respBody)),
+		)
+		h.writeError(w, r, fmt.Errorf("failed to parse backend response: %w", err), api.ErrCodeBackendError)
+		return
+	}
+
+	// Translate Triton response back to OpenAI text completion format
+	translateRespStart := time.Now()
+	tritonOpenAIResp, err := translator.TranslateTritonToOpenAICompletion(tritonResp, tritonReqType)
+	translateRespDuration := time.Since(translateRespStart)
+	if err != nil {
+		h.logger.Error("failed to translate triton response to openai completion format",
+			zap.Error(err),
+		)
+		h.writeError(w, r, fmt.Errorf("response translation failed: %w", err), api.ErrCodeBackendError)
+		return
+	}
+
+	// Convert triton response type back to local response type
+	openAIResp := OpenAICompletionResponse{
+		ID:      tritonOpenAIResp.ID,
+		Object:  tritonOpenAIResp.Object,
+		Created: tritonOpenAIResp.Created,
+		Model:   tritonOpenAIResp.Model,
+		Usage:   tritonOpenAIResp.Usage,
+	}
+	for _, choice := range tritonOpenAIResp.Choices {
+		openAIResp.Choices = append(openAIResp.Choices, OpenAICompletionChoice{
+			Text:         choice.Text,
+			Index:        choice.Index,
+			FinishReason: choice.FinishReason,
+		})
+	}
+
+	// Create routing decision for metrics
+	routingDecision := &routing.RoutingDecision{
+		BackendID:     backendID,
+		DecisionType:  "PRIMARY",
+		Reason:        "Triton backend routing (text completion)",
+		Timestamp:     time.Now(),
+		AttemptNumber: 1,
+	}
+
+	// Add routing headers
+	w.Header().Set("X-Routing-Backend", routingDecision.BackendID)
+	w.Header().Set("X-Routing-Decision", routingDecision.DecisionType)
+	w.Header().Set("X-Backend-Type", policy.BackendType)
+
+	// Emit usage record
+	if h.usageHook != nil {
+		_ = h.usageHook.EmitUsage(
+			ctx,
+			authCtx,
+			openAIResp.ID,
+			req.Model,
+			routingDecision.BackendID,
+			routingDecision.DecisionType,
+			openAIResp.Usage.PromptTokens,
+			openAIResp.Usage.CompletionTokens,
+			int(time.Since(startTime).Milliseconds()),
+			"WITHIN_LIMIT",
+			span.SpanContext(),
+			0,
+		)
+	}
+
+	// Record token metrics
+	if h.tokenMetrics != nil {
+		h.tokenMetrics.RecordTokens(
+			ctx,
+			authCtx.OrganizationID,
+			req.Model,
+			"completion",
+			openAIResp.Usage.PromptTokens,
+			openAIResp.Usage.CompletionTokens,
+		)
+	}
+
+	// Record token usage for quota tracking
+	if h.rateLimiter != nil {
+		totalTokens := openAIResp.Usage.PromptTokens + openAIResp.Usage.CompletionTokens
+		if err := h.rateLimiter.RecordTokenUsage(ctx, authCtx.OrganizationID, totalTokens); err != nil {
+			h.logger.Warn("failed to record token usage",
+				zap.String("org_id", authCtx.OrganizationID),
+				zap.Int("tokens", totalTokens),
+				zap.Error(err),
+			)
+		}
+	}
+
+	// Record per-backend Prometheus metrics
+	requestLatency := time.Since(startTime)
+	telemetry.RecordBackendRequest(
+		routingDecision.BackendID,
+		authCtx.OrganizationID,
+		req.Model,
+		true, // success
+		requestLatency,
+	)
+
+	h.logger.Info("triton text completion request completed",
+		zap.String("backend_id", backendID),
+		zap.String("backend_type", policy.BackendType),
+		zap.Int("prompt_tokens", openAIResp.Usage.PromptTokens),
+		zap.Int("completion_tokens", openAIResp.Usage.CompletionTokens),
+		zap.Duration("latency", requestLatency),
+		zap.Duration("translation_request_ms", translateReqDuration),
+		zap.Duration("translation_response_ms", translateRespDuration),
+	)
+
+	// Write response
+	if err := h.writeJSON(w, http.StatusOK, openAIResp); err != nil {
+		h.logger.Error("failed to write triton completion response", zap.Error(err))
+	}
+}
+
 // preprocessRequest applies model-specific chat template preprocessing.
 // It calls the preprocessor service to format the prompt according to the model's
 // chat template (e.g., Llama-3 format, Harmony format, etc.).
