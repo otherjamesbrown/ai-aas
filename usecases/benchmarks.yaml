@@ -1,0 +1,308 @@
+feature: Benchmarks
+description: |
+  Benchmark testing allows organization admins to validate model performance
+  before production deployment. Users can create test targets, trigger runs,
+  and analyze results to ensure models meet performance requirements.
+
+  The benchmark system supports multiple scenarios (throughput, latency,
+  accuracy) and provides detailed metrics for comparison across runs.
+
+dependencies:
+  - usecases/authentication.yaml
+  - usecases/apikeys.yaml
+  - usecases/models.yaml
+
+usecases:
+  - id: UC-BM-001
+    title: Create Benchmark Target
+    interface: cli
+    status: active
+    bead: null  # To be populated by jb-3.1b-usecases
+
+    description: |
+      An organization admin wants to create a benchmark target configuration
+      that defines which model to test and with what parameters. This is the
+      first step before running any benchmark tests.
+
+      The target persists and can be reused for multiple benchmark runs,
+      allowing consistent performance comparisons over time. Targets store
+      the model reference, scenario type, and optional configuration parameters.
+
+    actor: Organization Admin
+
+    preconditions:
+      - User has valid org admin API key
+      - User has access to the specified model
+      - Specified benchmark scenario exists in the system
+
+    depends_on:
+      - UC-AUTH-001
+      - UC-KEY-001
+      - UC-MDL-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Create target with required fields
+        given: User is authenticated with org admin API key
+        when: User runs `ai-aas-org benchmark target add --model llama-7b --scenario standard`
+        then:
+          - Benchmark target is created in the system
+          - Target ID is returned and displayed
+          - Target appears in `ai-aas-org benchmark target list` output
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Reject unauthorized model
+        given: User specifies a model they don't have access to
+        when: User runs `ai-aas-org benchmark target add --model restricted-model --scenario standard`
+        then:
+          - Command fails with exit code 4 (auth error)
+          - Error message explains lack of model access
+          - Error includes suggestion to check model permissions
+          - No target is created
+
+      - id: AC-03
+        criterion: Reject invalid scenario
+        given: User specifies a non-existent scenario
+        when: User runs `ai-aas-org benchmark target add --model llama-7b --scenario nonexistent`
+        then:
+          - Command fails with exit code 5 (not found)
+          - Error message lists available scenarios
+          - No target is created
+
+      - id: AC-04
+        criterion: Create target with optional parameters
+        given: User is authenticated with org admin API key
+        when: User runs `ai-aas-org benchmark target add --model llama-7b --scenario throughput --concurrency 10 --duration 60s`
+        then:
+          - Benchmark target is created with custom parameters
+          - Parameters are displayed in target details
+          - Target can be used for benchmark runs
+
+    in_scope:
+      - Creating target with model, scenario, and optional parameters
+      - Validating user has access to specified model
+      - Validating scenario exists in the system
+      - Persisting target configuration to database
+      - Returning target ID on success
+      - Displaying error messages with suggestions
+
+    out_of_scope:
+      - Starting benchmark execution (UC-BM-002)
+      - Modifying existing targets (UC-BM-003)
+      - Deleting targets (UC-BM-004)
+      - Creating new scenarios (admin-only operation via ai-aas-cli)
+      - Real-time progress streaming
+
+    must_not:
+      - Auto-start benchmark after target creation
+      - Modify any existing targets
+      - Expose internal system metrics or endpoints
+      - Change model configurations
+      - Store credentials in target configuration
+
+  - id: UC-BM-002
+    title: Trigger Benchmark Run
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      After creating a benchmark target, the admin wants to trigger a test run.
+      The run executes asynchronously and the user receives a run ID to track
+      progress and retrieve results later.
+
+      Benchmark runs are queued and executed by the benchmark service. Each run
+      produces metrics that can be compared against previous runs or baselines.
+
+    actor: Organization Admin
+
+    preconditions:
+      - User has valid org admin API key
+      - Benchmark target exists and is accessible
+      - Model referenced by target is available and healthy
+
+    depends_on:
+      - UC-BM-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Trigger run on valid target
+        given: User has created benchmark target "target-123"
+        when: User runs `ai-aas-org benchmark run trigger --target target-123`
+        then:
+          - Benchmark run is queued for execution
+          - Run ID is returned and displayed
+          - Run status is "pending" or "running"
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Reject run on non-existent target
+        given: User specifies a target that doesn't exist
+        when: User runs `ai-aas-org benchmark run trigger --target nonexistent-target`
+        then:
+          - Command fails with exit code 5 (not found)
+          - Error message indicates target not found
+          - No run is created
+
+      - id: AC-03
+        criterion: Reject run when model unavailable
+        given: Benchmark target exists but referenced model is offline
+        when: User runs `ai-aas-org benchmark run trigger --target target-123`
+        then:
+          - Command fails with exit code 3 (service error)
+          - Error message indicates model unavailable
+          - Error includes suggestion to check model status
+
+    in_scope:
+      - Validating target exists and is accessible
+      - Checking model availability before run
+      - Queuing benchmark run for execution
+      - Returning run ID for tracking
+      - Displaying initial run status
+
+    out_of_scope:
+      - Waiting for run completion (UC-BM-005)
+      - Streaming real-time progress
+      - Canceling running benchmarks (UC-BM-006)
+      - Comparing results across runs (UC-BM-007)
+
+    must_not:
+      - Block until run completes (must be async)
+      - Modify the target configuration
+      - Start multiple runs for same target simultaneously without flag
+      - Expose internal queue details
+
+  - id: UC-BM-003
+    title: View Benchmark Results
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      After a benchmark run completes, the admin wants to view detailed results
+      including performance metrics, latency distributions, and any errors
+      encountered during the test.
+
+      Results include throughput (requests/second), latency percentiles (p50,
+      p90, p99), error rates, and resource utilization metrics.
+
+    actor: Organization Admin
+
+    preconditions:
+      - User has valid org admin API key
+      - Benchmark run exists and has completed
+
+    depends_on:
+      - UC-BM-002
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: View completed run results
+        given: Benchmark run "run-456" has completed successfully
+        when: User runs `ai-aas-org benchmark run show run-456`
+        then:
+          - Run status is displayed as "completed"
+          - Throughput metric is shown (requests/second)
+          - Latency percentiles are shown (p50, p90, p99)
+          - Error rate is shown (percentage)
+          - Duration is shown
+
+      - id: AC-02
+        criterion: View pending run status
+        given: Benchmark run "run-456" is still running
+        when: User runs `ai-aas-org benchmark run show run-456`
+        then:
+          - Run status is displayed as "running" or "pending"
+          - Progress indicator shown if available
+          - Start time is displayed
+          - Message indicates results pending
+
+      - id: AC-03
+        criterion: View failed run details
+        given: Benchmark run "run-456" failed during execution
+        when: User runs `ai-aas-org benchmark run show run-456`
+        then:
+          - Run status is displayed as "failed"
+          - Error message explains failure reason
+          - Partial results shown if available
+          - Suggestion for troubleshooting included
+
+      - id: AC-04
+        criterion: Export results as JSON
+        given: Benchmark run "run-456" has completed
+        when: User runs `ai-aas-org benchmark run show run-456 --json`
+        then:
+          - Results are output as valid JSON
+          - JSON includes all metrics
+          - Exit code is 0
+
+    in_scope:
+      - Displaying run status and metadata
+      - Showing performance metrics (throughput, latency, errors)
+      - Showing error details for failed runs
+      - JSON output format for scripting
+      - Partial results for in-progress runs
+
+    out_of_scope:
+      - Comparing results between runs (UC-BM-007)
+      - Exporting to external systems
+      - Generating PDF reports
+      - Historical trend analysis
+
+    must_not:
+      - Modify run data
+      - Expose internal implementation details
+      - Show results from other organizations
+
+  - id: UC-BM-004
+    title: List Benchmark Targets
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      The admin wants to see all benchmark targets they have created to
+      understand what tests are configured and select one for running.
+
+    actor: Organization Admin
+
+    preconditions:
+      - User has valid org admin API key
+
+    depends_on:
+      - UC-AUTH-001
+      - UC-KEY-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: List all targets
+        given: User has created multiple benchmark targets
+        when: User runs `ai-aas-org benchmark target list`
+        then:
+          - All targets for the organization are listed
+          - Each target shows ID, model, scenario, and created date
+          - Output is formatted as a table
+
+      - id: AC-02
+        criterion: List targets with no results
+        given: User has not created any benchmark targets
+        when: User runs `ai-aas-org benchmark target list`
+        then:
+          - Message indicates no targets found
+          - Suggestion to create a target is shown
+          - Exit code is 0
+
+    in_scope:
+      - Listing all targets for the organization
+      - Displaying target metadata
+      - Table and JSON output formats
+
+    out_of_scope:
+      - Filtering by model or scenario
+      - Pagination for large lists
+      - Showing run history per target
+
+    must_not:
+      - Show targets from other organizations
+      - Modify any targets

@@ -121,6 +121,14 @@ maintenance:
 | `context/web-portal-developer/agents.md` | 149 | ✅ OPTIMIZED | YAML patterns |
 | `context/debugger/agents.md` | 120 | ✅ NEW | Read-only investigation agent |
 | `context/e2e-testing/agents.md` | 180 | ✅ NEW | E2E test harness, fixtures, tiers |
+| `context/compliance-reviewer-agent.md` | 280 | ✅ NEW | Drift detection, read-only auditor |
+
+### Level 2: Use Cases
+
+| File | Lines | Status | Notes |
+|------|-------|--------|-------|
+| `usecases/SCHEMA.md` | 180 | ✅ NEW | Use case YAML schema |
+| `usecases/benchmarks.yaml` | 200 | ✅ NEW | Example UC file (4 UCs, 13 ACs) |
 
 ### Level 2: Templates
 
@@ -254,6 +262,31 @@ hierarchy:
           - tests/e2e/fixtures/ (source)
           - tests/e2e/suites/ (source)
           - tests/e2e/README.md (reference)
+
+      context/compliance-reviewer-agent.md:
+        type: rules
+        purpose: Compliance reviewer agent specification
+        read_when: Detecting drift from use cases/architecture
+        inherits: context/agents.md
+        links_to:
+          - usecases/SCHEMA.md (reference)
+          - ARCHITECTURE.md (reference)
+          - .claude/commands/review-compliance.md (skill)
+
+    usecases:
+      usecases/SCHEMA.md:
+        type: reference
+        purpose: Use case YAML schema and examples
+        read_when: Creating or reviewing use cases
+        final: true
+
+      usecases/*.yaml:
+        type: source
+        purpose: Use case definitions with acceptance criteria
+        read_when: Implementing features, writing tests
+        links_to:
+          - tests/usecases/ (tests)
+          - specs/*/spec.md (requirements)
 
     templates:
       context/templates/beads.md:

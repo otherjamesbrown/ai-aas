@@ -1,0 +1,164 @@
+feature: Models
+description: |
+  Model management allows organization admins to view AI models available
+  to their organization. Models are configured by the platform administrator
+  and made accessible to organizations based on their plan and permissions.
+
+  Organization admins can list available models and view detailed information
+  about each model including provider, status, and context window size.
+
+dependencies:
+  - usecases/authentication.yaml
+
+usecases:
+  - id: UC-MDL-001
+    title: List Available Models
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      An organization admin wants to see all AI models available to their
+      organization. This helps users understand which models they can use
+      for their applications and API integrations.
+
+      The list shows essential information including model name, provider,
+      status (online/offline), and context window size.
+
+    actor: Organization Admin
+
+    preconditions:
+      - User has valid org admin API key
+      - User is authenticated with the CLI
+
+    depends_on:
+      - UC-AUTH-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: List all available models
+        given: User is authenticated with org admin API key
+        when: User runs `ai-aas-org model list`
+        then:
+          - All models available to the organization are listed
+          - Each model shows name, provider, status, and context window
+          - Output is formatted as a table
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: List models with JSON output
+        given: User is authenticated with org admin API key
+        when: User runs `ai-aas-org model list --json`
+        then:
+          - Output is valid JSON array
+          - Each model object includes name, provider, status, context_window
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Handle no models available
+        given: Organization has no models assigned
+        when: User runs `ai-aas-org model list`
+        then:
+          - Message indicates no models are available
+          - Suggestion to contact administrator is shown
+          - Exit code is 0
+
+    in_scope:
+      - Listing all models available to the organization
+      - Displaying model metadata (name, provider, status, context window)
+      - Table and JSON output formats
+      - Handling empty results gracefully
+
+    out_of_scope:
+      - Filtering models by provider or status
+      - Pagination for large model lists
+      - Showing model usage statistics
+      - Requesting access to new models
+
+    must_not:
+      - Show models not assigned to the organization
+      - Expose internal model IDs or endpoints
+      - Modify model access permissions
+      - Show pricing or cost information
+
+  - id: UC-MDL-002
+    title: Show Model Details
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      An organization admin wants to view detailed information about a
+      specific model. This helps users understand model capabilities,
+      constraints, and configuration before using it in their applications.
+
+      Details include provider information, status, context window size,
+      and any organization-specific configuration.
+
+    actor: Organization Admin
+
+    preconditions:
+      - User has valid org admin API key
+      - User is authenticated with the CLI
+      - Specified model is available to the organization
+
+    depends_on:
+      - UC-AUTH-001
+      - UC-MDL-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Show details for valid model
+        given: User is authenticated and model "gpt-4" is available
+        when: User runs `ai-aas-org model show gpt-4`
+        then:
+          - Model name is displayed
+          - Provider is displayed
+          - Status is displayed (online/offline)
+          - Context window size is displayed
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Show details with JSON output
+        given: User is authenticated and model "gpt-4" is available
+        when: User runs `ai-aas-org model show gpt-4 --json`
+        then:
+          - Output is valid JSON object
+          - JSON includes all model properties
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Reject request for non-existent model
+        given: User specifies a model that doesn't exist
+        when: User runs `ai-aas-org model show nonexistent-model`
+        then:
+          - Command fails with exit code 5 (not found)
+          - Error message indicates model not found
+          - Suggestion to run model list is shown
+
+      - id: AC-04
+        criterion: Reject request for unauthorized model
+        given: User specifies a model they don't have access to
+        when: User runs `ai-aas-org model show restricted-model`
+        then:
+          - Command fails with exit code 4 (auth error)
+          - Error message indicates lack of access
+          - No model details are shown
+
+    in_scope:
+      - Displaying detailed model information
+      - Validating user has access to the model
+      - Table and JSON output formats
+      - Helpful error messages with suggestions
+
+    out_of_scope:
+      - Modifying model configuration
+      - Showing model usage history
+      - Showing model pricing
+      - Testing model connectivity
+
+    must_not:
+      - Show internal model endpoints or URLs
+      - Expose authentication credentials
+      - Show details for unauthorized models
+      - Modify model state or configuration

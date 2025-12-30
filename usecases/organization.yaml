@@ -1,0 +1,86 @@
+feature: Organization
+description: |
+  Organization management allows admins to view information about their
+  organization including plan details, usage limits, and resource counts.
+
+  Organization settings are managed by the platform administrator. This
+  feature provides read-only access to organization information for
+  self-service monitoring and planning.
+
+dependencies:
+  - usecases/authentication.yaml
+
+usecases:
+  - id: UC-ORG-001
+    title: Show Organization Details
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      An organization admin wants to view detailed information about their
+      organization. This helps understand current plan, limits, and resource
+      counts for capacity planning and compliance reporting.
+
+      The information includes organization name and ID, current plan,
+      usage limits, and counts of users, API keys, and available models.
+
+    actor: Organization Admin
+
+    preconditions:
+      - User has valid org admin API key
+      - User is authenticated with the CLI
+
+    depends_on:
+      - UC-AUTH-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Show organization details
+        given: User is authenticated with org admin API key
+        when: User runs `ai-aas-org org show`
+        then:
+          - Organization name is displayed
+          - Organization ID is displayed
+          - Current plan is displayed
+          - Usage limits are displayed
+          - Resource counts are displayed (users, API keys, models)
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Show organization details with JSON output
+        given: User is authenticated with org admin API key
+        when: User runs `ai-aas-org org show --json`
+        then:
+          - Output is valid JSON object
+          - JSON includes organization ID, name, plan
+          - JSON includes limits and resource counts
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Handle authentication failure
+        given: User API key is invalid or expired
+        when: User runs `ai-aas-org org show`
+        then:
+          - Command fails with exit code 4 (auth error)
+          - Error message indicates authentication failure
+          - Suggestion to check API key is shown
+
+    in_scope:
+      - Displaying organization name and ID
+      - Displaying current plan
+      - Displaying usage limits
+      - Displaying resource counts (users, API keys, models)
+      - Table and JSON output formats
+
+    out_of_scope:
+      - Modifying organization settings
+      - Viewing billing details or invoices
+      - Managing organization members
+      - Changing organization plan
+
+    must_not:
+      - Show details of other organizations
+      - Expose internal organization IDs
+      - Modify organization configuration
+      - Show sensitive billing information

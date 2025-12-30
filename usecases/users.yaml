@@ -1,0 +1,538 @@
+feature: User Management
+description: |
+  User management allows organization administrators to create, view, and
+  manage users within their organization. Users are members who can access
+  AI models through API keys.
+
+  This feature includes managing user lifecycle (create, delete) as well as
+  controlling which AI models each user can access. Model access can be
+  granted or revoked on a per-user basis.
+
+dependencies:
+  - usecases/authentication.yaml
+
+usecases:
+  - id: UC-USR-001
+    title: List Organization Users
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      An organization administrator wants to see all users in their
+      organization to understand who has access and their current status.
+      This provides an overview of the organization's user base.
+
+    actor: Organization Admin
+
+    preconditions:
+      - CLI is configured with valid credentials (UC-AUTH-001 or UC-AUTH-002)
+      - User has organization admin permissions
+
+    depends_on:
+      - UC-AUTH-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: List all users in organization
+        given: Organization has multiple users
+        when: User runs `ai-aas-org user list`
+        then:
+          - All users in the organization are listed
+          - Each user shows email, name, role, and status
+          - Output is formatted as a table
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: List users with JSON output
+        given: Organization has multiple users
+        when: User runs `ai-aas-org user list --json`
+        then:
+          - Users are output as valid JSON array
+          - Each user object includes id, email, name, role, status
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Empty organization displays helpful message
+        given: Organization has no users (only the admin)
+        when: User runs `ai-aas-org user list`
+        then:
+          - Message indicates no users found
+          - Suggestion to create a user is shown
+          - Exit code is 0
+
+    in_scope:
+      - Listing all users in the organization
+      - Displaying user metadata (email, name, role, status)
+      - Table and JSON output formats
+      - Handling empty user list gracefully
+
+    out_of_scope:
+      - Filtering users by role or status
+      - Pagination for large organizations
+      - Showing user API keys (use apikey list)
+      - Showing user model access (use user models list)
+
+    must_not:
+      - Show users from other organizations
+      - Expose user API keys or credentials
+      - Modify any user data
+
+  - id: UC-USR-002
+    title: Create User
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      An organization administrator wants to create a new user who will be
+      able to access AI models through the platform. The new user needs an
+      email address and display name at minimum.
+
+      By default, new users are created with the 'user' role. Admins can
+      specify a different role if needed.
+
+    actor: Organization Admin
+
+    preconditions:
+      - CLI is configured with valid credentials
+      - User has organization admin permissions
+      - Target email is not already registered in the organization
+
+    depends_on:
+      - UC-AUTH-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Create user with required fields
+        given: Admin is authenticated and email is not in use
+        when: User runs `ai-aas-org user create --user-email user@example.com --display-name "John Doe"`
+        then:
+          - User is created in the organization
+          - User ID is returned and displayed
+          - User appears in `ai-aas-org user list`
+          - Default role is 'user'
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Create user with admin role
+        given: Admin is authenticated
+        when: User runs `ai-aas-org user create --user-email admin@example.com --display-name "Jane Admin" --role admin`
+        then:
+          - User is created with admin role
+          - Role is displayed in output
+          - User can perform admin operations
+
+      - id: AC-03
+        criterion: Reject duplicate email
+        given: Email is already registered in the organization
+        when: User runs `ai-aas-org user create --user-email existing@example.com --display-name "Duplicate"`
+        then:
+          - Command fails with exit code 6 (conflict)
+          - Error message indicates email already exists
+          - No user is created
+          - Suggestion to use a different email
+
+      - id: AC-04
+        criterion: Interactive guided user creation
+        given: Admin wants to create user interactively
+        when: User runs `ai-aas-org user create --guided`
+        then:
+          - User is prompted for email
+          - User is prompted for display name
+          - User is optionally prompted for role
+          - User is created after all prompts
+
+    in_scope:
+      - Creating user with email and display name
+      - Setting user role (user or admin)
+      - Interactive guided mode
+      - Validating email uniqueness
+      - Returning user ID on success
+
+    out_of_scope:
+      - Creating API keys for the user (UC-KEY-002)
+      - Setting model access (UC-USR-005)
+      - Sending invitation emails
+      - Bulk user creation
+
+    must_not:
+      - Create user without email validation
+      - Create duplicate users with same email
+      - Auto-create API keys for new users
+      - Set passwords (authentication is key-based)
+
+  - id: UC-USR-003
+    title: Show User Details
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      An organization administrator wants to view detailed information about
+      a specific user, including their profile, role, status, and when they
+      were created. Users can be identified by email or user ID.
+
+    actor: Organization Admin
+
+    preconditions:
+      - CLI is configured with valid credentials
+      - User has organization admin permissions
+      - Target user exists in the organization
+
+    depends_on:
+      - UC-AUTH-001
+      - UC-USR-002
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Show user by email
+        given: User "user@example.com" exists in the organization
+        when: User runs `ai-aas-org user show user@example.com`
+        then:
+          - User details are displayed
+          - Shows id, email, display name, role, status
+          - Shows created date
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Show user by ID
+        given: User with ID "usr_abc123" exists
+        when: User runs `ai-aas-org user show usr_abc123`
+        then:
+          - User details are displayed
+          - Same information as when using email
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: User not found
+        given: No user with the specified identifier exists
+        when: User runs `ai-aas-org user show nonexistent@example.com`
+        then:
+          - Command fails with exit code 5 (not found)
+          - Error message indicates user not found
+          - Suggestion to check email/ID or list users
+
+      - id: AC-04
+        criterion: Show user details as JSON
+        given: User exists in the organization
+        when: User runs `ai-aas-org user show user@example.com --json`
+        then:
+          - User details are output as valid JSON
+          - JSON includes all user fields
+          - Exit code is 0
+
+    in_scope:
+      - Displaying user profile information
+      - Looking up by email or user ID
+      - Table and JSON output formats
+      - Showing creation/modification dates
+
+    out_of_scope:
+      - Showing user's API keys (use apikey list --user)
+      - Showing user's model access (use user models list)
+      - Modifying user information
+      - User activity history
+
+    must_not:
+      - Show users from other organizations
+      - Expose sensitive credentials
+      - Modify user data
+
+  - id: UC-USR-004
+    title: Delete User
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      An organization administrator wants to remove a user from the
+      organization. This action revokes all of the user's API keys and
+      removes their access to the platform. This operation cannot be undone.
+
+    actor: Organization Admin
+
+    preconditions:
+      - CLI is configured with valid credentials
+      - User has organization admin permissions
+      - Target user exists in the organization
+
+    depends_on:
+      - UC-AUTH-001
+      - UC-USR-002
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Delete user with confirmation
+        given: User "user@example.com" exists in the organization
+        when: User runs `ai-aas-org user delete user@example.com` and confirms
+        then:
+          - Confirmation prompt is shown
+          - User is deleted after confirmation
+          - All user's API keys are revoked
+          - User no longer appears in user list
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Delete user with --force flag
+        given: User "user@example.com" exists in the organization
+        when: User runs `ai-aas-org user delete user@example.com --force`
+        then:
+          - No confirmation prompt is shown
+          - User is deleted immediately
+          - All user's API keys are revoked
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Delete non-existent user
+        given: No user with the specified identifier exists
+        when: User runs `ai-aas-org user delete nonexistent@example.com --force`
+        then:
+          - Command fails with exit code 5 (not found)
+          - Error message indicates user not found
+          - No changes are made
+
+      - id: AC-04
+        criterion: Cancel deletion at confirmation
+        given: User "user@example.com" exists
+        when: User runs `ai-aas-org user delete user@example.com` and declines
+        then:
+          - User is NOT deleted
+          - Message confirms cancellation
+          - Exit code is 0
+
+    in_scope:
+      - Deleting user by email or ID
+      - Confirmation prompt before deletion
+      - Force flag to skip confirmation
+      - Revoking all user's API keys on deletion
+      - Handling non-existent users
+
+    out_of_scope:
+      - Soft delete / disable user
+      - User data export before deletion
+      - Bulk user deletion
+      - Transferring user resources
+
+    must_not:
+      - Delete user without confirmation (unless --force)
+      - Delete users from other organizations
+      - Leave orphaned API keys after deletion
+      - Allow recovery after deletion
+
+  - id: UC-USR-005
+    title: List User Model Access
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      An organization administrator wants to see which AI models a specific
+      user has access to. This helps verify that users have appropriate
+      permissions for their role and workload.
+
+    actor: Organization Admin
+
+    preconditions:
+      - CLI is configured with valid credentials
+      - User has organization admin permissions
+      - Target user exists in the organization
+
+    depends_on:
+      - UC-AUTH-001
+      - UC-USR-002
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: List models for user with access
+        given: User "user@example.com" has access to multiple models
+        when: User runs `ai-aas-org user models list --user user@example.com`
+        then:
+          - All accessible models are listed
+          - Each model shows ID and name
+          - Output is formatted as a table
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: List models for user with no access
+        given: User "restricted@example.com" has no model access
+        when: User runs `ai-aas-org user models list --user restricted@example.com`
+        then:
+          - Message indicates no model access
+          - Suggestion to grant model access is shown
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: List models with JSON output
+        given: User has access to models
+        when: User runs `ai-aas-org user models list --user user@example.com --json`
+        then:
+          - Models are output as valid JSON array
+          - Exit code is 0
+
+    in_scope:
+      - Listing models a user can access
+      - Looking up user by email or ID
+      - Table and JSON output formats
+      - Handling users with no access
+
+    out_of_scope:
+      - Listing all available models
+      - Modifying model access
+      - Showing model usage statistics
+      - Model capability details
+
+    must_not:
+      - Show models from other organizations
+      - Modify model access
+      - Expose model endpoint URLs
+
+  - id: UC-USR-006
+    title: Grant User Model Access
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      An organization administrator wants to grant a user access to a
+      specific AI model. This allows fine-grained control over which
+      users can use which models, useful for cost management and
+      access control.
+
+    actor: Organization Admin
+
+    preconditions:
+      - CLI is configured with valid credentials
+      - User has organization admin permissions
+      - Target user exists in the organization
+      - Model is available to the organization
+
+    depends_on:
+      - UC-AUTH-001
+      - UC-USR-002
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Grant access to specific model
+        given: User "user@example.com" exists and model "gpt-4" is available
+        when: User runs `ai-aas-org user models add --user user@example.com --model gpt-4`
+        then:
+          - User is granted access to the model
+          - Success message confirms access granted
+          - Model appears in user's model list
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Grant access to all models
+        given: User "user@example.com" exists and organization has multiple models
+        when: User runs `ai-aas-org user models add --user user@example.com --all`
+        then:
+          - User is granted access to all available models
+          - Success message lists models granted
+          - All models appear in user's model list
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Grant access to model user already has
+        given: User "user@example.com" already has access to "gpt-4"
+        when: User runs `ai-aas-org user models add --user user@example.com --model gpt-4`
+        then:
+          - Operation succeeds (idempotent)
+          - Message indicates user already has access
+          - Exit code is 0
+
+      - id: AC-04
+        criterion: Grant access to unavailable model
+        given: Model "restricted-model" is not available to the organization
+        when: User runs `ai-aas-org user models add --user user@example.com --model restricted-model`
+        then:
+          - Command fails with exit code 5 (not found)
+          - Error message indicates model not available
+          - No access is granted
+
+    in_scope:
+      - Granting access to specific model
+      - Granting access to all available models
+      - Validating model availability
+      - Idempotent grant operations
+
+    out_of_scope:
+      - Creating new models
+      - Setting usage quotas per model
+      - Time-limited access grants
+      - Bulk user grants
+
+    must_not:
+      - Grant access to models not available to organization
+      - Grant access to non-existent users
+      - Revoke existing access
+
+  - id: UC-USR-007
+    title: Revoke User Model Access
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      An organization administrator wants to revoke a user's access to a
+      specific AI model. This is useful for access control, cost management,
+      or when a user no longer needs access to certain models.
+
+    actor: Organization Admin
+
+    preconditions:
+      - CLI is configured with valid credentials
+      - User has organization admin permissions
+      - Target user exists in the organization
+      - User currently has access to the specified model
+
+    depends_on:
+      - UC-AUTH-001
+      - UC-USR-002
+      - UC-USR-006
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Revoke access to specific model
+        given: User "user@example.com" has access to model "gpt-4"
+        when: User runs `ai-aas-org user models remove --user user@example.com --model gpt-4`
+        then:
+          - User's access to the model is revoked
+          - Success message confirms access removed
+          - Model no longer appears in user's model list
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Revoke access to model user doesn't have
+        given: User "user@example.com" does not have access to "gpt-4"
+        when: User runs `ai-aas-org user models remove --user user@example.com --model gpt-4`
+        then:
+          - Operation succeeds (idempotent)
+          - Message indicates user did not have access
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Revoke access for non-existent user
+        given: No user "nonexistent@example.com" exists
+        when: User runs `ai-aas-org user models remove --user nonexistent@example.com --model gpt-4`
+        then:
+          - Command fails with exit code 5 (not found)
+          - Error message indicates user not found
+          - No changes are made
+
+    in_scope:
+      - Revoking access to specific model
+      - Validating user exists
+      - Idempotent revoke operations
+      - Immediate effect on user permissions
+
+    out_of_scope:
+      - Revoking all model access at once
+      - Temporary access suspension
+      - Access revocation with grace period
+      - Notifying user of revocation
+
+    must_not:
+      - Revoke access for users in other organizations
+      - Delete the model itself
+      - Affect other users' access

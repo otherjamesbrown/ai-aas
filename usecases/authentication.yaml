@@ -1,0 +1,181 @@
+feature: Authentication
+description: |
+  Authentication enables organization administrators to configure their CLI
+  with valid credentials. The primary path is using a bootstrap key provided
+  by the platform administrator, which exchanges for permanent API credentials.
+
+  Advanced users can manually configure credentials if they already have
+  API keys from another source.
+
+dependencies: []
+
+usecases:
+  - id: UC-AUTH-001
+    title: Initialize CLI with Bootstrap Key
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      A new organization administrator has received a one-time bootstrap key
+      from their platform administrator. They want to use this key to set up
+      their CLI with valid credentials so they can begin managing their
+      organization.
+
+      The bootstrap key is single-use and expires after 7 days. Once redeemed,
+      permanent API credentials are saved to the config file and the CLI is
+      ready for use.
+
+    actor: Organization Admin
+
+    preconditions:
+      - User has received a valid bootstrap key from platform administrator
+      - Bootstrap key has not been previously used
+      - Bootstrap key has not expired (valid for 7 days)
+      - Network access to the API endpoint is available
+
+    depends_on: []
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Initialize with valid bootstrap key
+        given: User has a valid, unused bootstrap key
+        when: User runs `ai-aas-org init --key bsk_abc123xyz`
+        then:
+          - Bootstrap key is exchanged for permanent API credentials
+          - Credentials are saved to ~/.ai-aas-org.yaml
+          - Success message is displayed with organization name
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Reject already-used bootstrap key
+        given: User has a bootstrap key that was already redeemed
+        when: User runs `ai-aas-org init --key bsk_already_used`
+        then:
+          - Command fails with exit code 4 (auth error)
+          - Error message indicates key has already been used
+          - No credentials are saved
+          - Suggestion to contact platform administrator for new key
+
+      - id: AC-03
+        criterion: Reject expired bootstrap key
+        given: User has a bootstrap key that expired more than 7 days ago
+        when: User runs `ai-aas-org init --key bsk_expired`
+        then:
+          - Command fails with exit code 4 (auth error)
+          - Error message indicates key has expired
+          - No credentials are saved
+          - Suggestion to request a new bootstrap key
+
+      - id: AC-04
+        criterion: Overwrite existing config with --force flag
+        given: User has existing credentials in ~/.ai-aas-org.yaml
+        when: User runs `ai-aas-org init --key bsk_new_key --force`
+        then:
+          - Existing credentials are overwritten
+          - New credentials are saved to config file
+          - Success message is displayed
+          - Exit code is 0
+
+    in_scope:
+      - Exchanging bootstrap key for permanent credentials
+      - Saving credentials to config file
+      - Validating bootstrap key status (used, expired)
+      - Overwriting existing config with --force flag
+      - Displaying success/error messages
+
+    out_of_scope:
+      - Creating bootstrap keys (platform admin operation)
+      - Managing multiple credential profiles
+      - Revoking bootstrap keys
+      - Configuring multiple endpoints
+
+    must_not:
+      - Store the bootstrap key itself (only store derived credentials)
+      - Allow initialization without a bootstrap key
+      - Silently overwrite existing credentials without --force
+      - Expose internal API implementation details
+
+  - id: UC-AUTH-002
+    title: Configure CLI Manually
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      An advanced user already has API credentials (from another source or
+      migration) and wants to configure the CLI manually without using a
+      bootstrap key. This is also useful for setting up additional endpoints
+      like inference or admin APIs.
+
+      This command is for advanced users who understand the credential
+      structure. Most users should use `ai-aas-org init` instead.
+
+    actor: Organization Admin
+
+    preconditions:
+      - User has valid API credentials from another source
+      - User knows the API endpoint URL
+
+    depends_on: []
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Configure with API endpoint and key
+        given: User has API credentials from another source
+        when: User runs `ai-aas-org configure --api-endpoint https://api.example.com --api-key sk_abc123`
+        then:
+          - Credentials are saved to ~/.ai-aas-org.yaml
+          - Configuration is validated against the endpoint
+          - Success message is displayed
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Configure inference endpoint separately
+        given: User has existing basic configuration
+        when: User runs `ai-aas-org configure --inference-endpoint https://inference.example.com`
+        then:
+          - Inference endpoint is added to config
+          - Existing credentials are preserved
+          - Success message confirms update
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Interactive guided configuration
+        given: User wants to configure interactively
+        when: User runs `ai-aas-org configure --guided`
+        then:
+          - User is prompted for API endpoint
+          - User is prompted for API key
+          - User is optionally prompted for additional endpoints
+          - Configuration is saved after all prompts
+          - Exit code is 0
+
+      - id: AC-04
+        criterion: Reject invalid API endpoint
+        given: User provides an unreachable endpoint
+        when: User runs `ai-aas-org configure --api-endpoint https://invalid.example.com --api-key sk_abc123`
+        then:
+          - Command fails with exit code 3 (connection error)
+          - Error message indicates endpoint is unreachable
+          - No credentials are saved
+          - Suggestion to verify endpoint URL
+
+    in_scope:
+      - Manually setting API endpoint and credentials
+      - Configuring inference and admin endpoints separately
+      - Interactive guided mode for configuration
+      - Validating endpoint connectivity
+      - Preserving existing config when adding endpoints
+
+    out_of_scope:
+      - Bootstrap key exchange (UC-AUTH-001)
+      - Creating new API keys
+      - Managing organization settings
+      - Configuring rate limits or quotas
+
+    must_not:
+      - Accept configuration without validation
+      - Overwrite existing endpoints without explicit flag
+      - Store credentials in plaintext logs
+      - Expose API keys in error messages

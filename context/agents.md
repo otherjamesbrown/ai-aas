@@ -150,8 +150,28 @@ After fixing a context gap bug:
 | `infra-ops-manager` | infra/, gitops/, .github/, Helm charts | Developer agents (app code) |
 | `web-portal-developer` | web/ | go-services-developer (API issues) |
 | `debugger` | Bug investigation (read-only) | Domain agents (fixes), context-maintainer (gaps) |
+| `compliance-reviewer` | Drift detection (read-only) | Domain agents (fixes) |
 
 **If file is outside your domain:** Create handoff bead, don't modify.
+
+### Compliance Reviewer Agent
+
+The `compliance-reviewer` is a specialized **read-only auditor** that:
+
+- **Detects use case drift** - Code violating scope boundaries or missing AC coverage
+- **Detects architecture drift** - Violations of API-first, GitOps principles
+- **Produces recommendations** - Actionable handoffs for worker agents
+- **Creates tracking beads** - For significant issues
+
+**Invoke via**: `/review-compliance` or automatically after implementation (Stop hook)
+
+**Specification**: `context/compliance-reviewer-agent.md`
+
+**Key Rules for compliance-reviewer**:
+- NEVER modify files - only analyze and report
+- ALWAYS include file:line references for issues
+- ALWAYS produce actionable recommendations
+- Create beads for tracking (with user confirmation)
 
 ### Spawn Triggers
 
@@ -169,6 +189,9 @@ Create handoff bead and spawn agent when:
 | User asks "why did this happen?" | `debugger` |
 | Bug is complex, recurring, or >30 min unresolved | `debugger` |
 | Need root cause analysis before fix | `debugger` |
+| Implementation complete, need compliance check | `compliance-reviewer` |
+| Before PR merge, verify no drift | `compliance-reviewer` |
+| Periodic architecture/UC audit | `compliance-reviewer` |
 
 ---
 
@@ -305,3 +328,6 @@ go test -cover ./path/to/package/...
 | Debugging | `docs/runbooks/ai-debugging-workflow.md` |
 | Deployment | `docs/runbooks/deploy-to-environments.md` |
 | All runbooks | `docs/runbooks/` (18 available) |
+| Use case schema | `usecases/SCHEMA.md` |
+| Use case workflow | `CLAUDE.md#use-case-driven-development` |
+| Compliance reviewer | `context/compliance-reviewer-agent.md` |
