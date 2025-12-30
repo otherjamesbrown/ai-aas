@@ -50,12 +50,19 @@ func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger *zap.Logger
 		runtime: rt,
 		logger:  logger,
 	}
+	// Legacy detailed routes
 	router.Get("/v1/orgs/{orgId}/users/{userId}/model-access", handler.GetUserModelAccess)
 	router.Put("/v1/orgs/{orgId}/users/{userId}/model-access/mode", handler.SetUserAccessMode)
 	router.Get("/v1/orgs/{orgId}/users/{userId}/model-access/grants", handler.ListUserModelGrants)
 	router.Post("/v1/orgs/{orgId}/users/{userId}/model-access/grants", handler.GrantModelAccess)
 	router.Post("/v1/orgs/{orgId}/users/{userId}/model-access/grants/all-current", handler.GrantAllCurrentModels)
 	router.Delete("/v1/orgs/{orgId}/users/{userId}/model-access/grants/{modelName}", handler.RevokeModelAccess)
+
+	// Simpler routes for CLI (UC-USR-005, UC-USR-006, UC-USR-007)
+	router.Get("/v1/orgs/{orgId}/users/{userId}/models", handler.ListUserModelsSimple)
+	router.Post("/v1/orgs/{orgId}/users/{userId}/models", handler.GrantModelAccessSimple)
+	router.Post("/v1/orgs/{orgId}/users/{userId}/models/all", handler.GrantAllModelsSimple)
+	router.Delete("/v1/orgs/{orgId}/users/{userId}/models/{modelId}", handler.RevokeModelAccessSimple)
 }
 
 // Handler serves model access management endpoints.
@@ -582,4 +589,256 @@ func toModelGrantDTO(g postgres.UserModelGrant) ModelGrantDTO {
 		dto.ExpiresAt = &s
 	}
 	return dto
+}
+
+// ---------------------------------------------------------------------------
+// Simple API routes for CLI compatibility
+// ---------------------------------------------------------------------------
+
+// UserModelAccessSimple represents a user's access to a model (simple format for CLI).
+type UserModelAccessSimple struct {
+	UserID    string `json:"user_id"`
+	ModelID   string `json:"model_id"`
+	ModelName string `json:"model_name"`
+	GrantedAt string `json:"granted_at"`
+	GrantedBy string `json:"granted_by,omitempty"`
+}
+
+// GrantModelRequestSimple represents the request body for granting model access (simple format).
+type GrantModelRequestSimple struct {
+	ModelID string `json:"model_id"`
+}
+
+// ListUserModelsSimple handles GET /v1/orgs/{orgId}/users/{userId}/models
+// Returns a simple array of models (for CLI compatibility).
+func (h *Handler) ListUserModelsSimple(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgIDParam := chi.URLParam(r, "orgId")
+	userIDParam := chi.URLParam(r, "userId")
+
+	orgID, err := h.resolveOrgID(ctx, orgIDParam)
+	if err != nil {
+		h.writeError(w, http.StatusNotFound, "not_found", "Organization Not Found", "organization not found")
+		return
+	}
+
+	if err := h.requireOrgAccess(ctx, orgID); err != nil {
+		h.writeError(w, http.StatusForbidden, "forbidden", "Access Denied", "you do not have access to this organization")
+		return
+	}
+
+	targetUserID, err := h.resolveUserID(ctx, orgID, userIDParam)
+	if err != nil {
+		h.writeError(w, http.StatusNotFound, "not_found", "User Not Found", "user not found in organization")
+		return
+	}
+
+	grants, err := h.runtime.Postgres.ListModelGrants(ctx, orgID, targetUserID)
+	if err != nil {
+		h.logger.Error("failed to list model grants", zap.Error(err))
+		h.writeError(w, http.StatusInternalServerError, "internal_error", "Internal Error", "failed to retrieve model access")
+		return
+	}
+
+	// Convert to simple format
+	models := make([]UserModelAccessSimple, 0, len(grants))
+	for _, g := range grants {
+		model := UserModelAccessSimple{
+			UserID:    targetUserID.String(),
+			ModelID:   g.ModelName, // Use model_name as model_id for now
+			ModelName: g.ModelName,
+			GrantedAt: g.GrantedAt.Format(time.RFC3339),
+		}
+		if g.GrantedBy != nil {
+			model.GrantedBy = g.GrantedBy.String()
+		}
+		models = append(models, model)
+	}
+
+	// Return wrapped response for CLI
+	resp := map[string]interface{}{
+		"models": models,
+	}
+	h.writeJSON(w, http.StatusOK, resp)
+}
+
+// GrantModelAccessSimple handles POST /v1/orgs/{orgId}/users/{userId}/models
+// Grants access to a specific model (simple format for CLI).
+func (h *Handler) GrantModelAccessSimple(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgIDParam := chi.URLParam(r, "orgId")
+	userIDParam := chi.URLParam(r, "userId")
+
+	orgID, err := h.resolveOrgID(ctx, orgIDParam)
+	if err != nil {
+		h.writeError(w, http.StatusNotFound, "not_found", "Organization Not Found", "organization not found")
+		return
+	}
+
+	// Require admin privileges for granting model access
+	if err := h.requireOrgAdmin(ctx, orgID); err != nil {
+		h.writeError(w, http.StatusForbidden, "forbidden", "Access Denied", "admin privileges required to grant model access")
+		return
+	}
+
+	targetUserID, err := h.resolveUserID(ctx, orgID, userIDParam)
+	if err != nil {
+		h.writeError(w, http.StatusNotFound, "not_found", "User Not Found", "user not found in organization")
+		return
+	}
+
+	var req GrantModelRequestSimple
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, http.StatusBadRequest, "bad_request", "Invalid Request", "invalid request payload")
+		return
+	}
+
+	if req.ModelID == "" {
+		h.writeError(w, http.StatusBadRequest, "bad_request", "Invalid Request", "model_id is required")
+		return
+	}
+
+	// Get the actor (admin granting access)
+	actorID := middleware.GetUserID(ctx)
+
+	params := postgres.CreateModelGrantParams{
+		OrgID:     orgID,
+		UserID:    targetUserID,
+		ModelName: req.ModelID, // Use model_id as model_name
+		GrantedBy: &actorID,
+		ExpiresAt: nil,
+	}
+
+	grant, err := h.runtime.Postgres.CreateModelGrant(ctx, params)
+	if err != nil {
+		if err == postgres.ErrConflict {
+			h.writeError(w, http.StatusConflict, "conflict", "Grant Already Exists", "user already has access to this model")
+			return
+		}
+		h.logger.Error("failed to create model grant", zap.Error(err))
+		h.writeError(w, http.StatusInternalServerError, "internal_error", "Internal Error", "failed to create grant")
+		return
+	}
+
+	h.logger.Info("model access granted (simple API)",
+		zap.String("org_id", orgID.String()),
+		zap.String("user_id", targetUserID.String()),
+		zap.String("model_name", req.ModelID),
+		zap.String("grant_id", grant.ID.String()),
+		zap.String("actor_id", actorID.String()),
+	)
+
+	// Return the grant in simple format
+	model := UserModelAccessSimple{
+		UserID:    targetUserID.String(),
+		ModelID:   grant.ModelName,
+		ModelName: grant.ModelName,
+		GrantedAt: grant.GrantedAt.Format(time.RFC3339),
+	}
+	if grant.GrantedBy != nil {
+		model.GrantedBy = grant.GrantedBy.String()
+	}
+
+	h.writeJSON(w, http.StatusCreated, model)
+}
+
+// GrantAllModelsSimple handles POST /v1/orgs/{orgId}/users/{userId}/models/all
+// Grants access to all available models (simple format for CLI).
+func (h *Handler) GrantAllModelsSimple(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgIDParam := chi.URLParam(r, "orgId")
+	userIDParam := chi.URLParam(r, "userId")
+
+	orgID, err := h.resolveOrgID(ctx, orgIDParam)
+	if err != nil {
+		h.writeError(w, http.StatusNotFound, "not_found", "Organization Not Found", "organization not found")
+		return
+	}
+
+	// Require admin privileges for bulk granting model access
+	if err := h.requireOrgAdmin(ctx, orgID); err != nil {
+		h.writeError(w, http.StatusForbidden, "forbidden", "Access Denied", "admin privileges required to grant model access")
+		return
+	}
+
+	targetUserID, err := h.resolveUserID(ctx, orgID, userIDParam)
+	if err != nil {
+		h.writeError(w, http.StatusNotFound, "not_found", "User Not Found", "user not found in organization")
+		return
+	}
+
+	actorID := middleware.GetUserID(ctx)
+
+	// For "all" mode, we need to fetch available models
+	// This is a placeholder - in production, this should fetch from routing policies or model registry
+	// For now, we'll just set the access mode to "auto_grant"
+	_, err = h.runtime.Postgres.SetUserAccessMode(ctx, orgID, targetUserID, "auto_grant")
+	if err != nil {
+		h.logger.Error("failed to set user access mode to auto_grant", zap.Error(err))
+		h.writeError(w, http.StatusInternalServerError, "internal_error", "Internal Error", "failed to grant all models access")
+		return
+	}
+
+	h.logger.Info("all models access granted (simple API)",
+		zap.String("org_id", orgID.String()),
+		zap.String("user_id", targetUserID.String()),
+		zap.String("actor_id", actorID.String()),
+	)
+
+	// Return success response
+	resp := map[string]interface{}{
+		"message":     "User granted access to all models",
+		"access_mode": "auto_grant",
+	}
+
+	h.writeJSON(w, http.StatusOK, resp)
+}
+
+// RevokeModelAccessSimple handles DELETE /v1/orgs/{orgId}/users/{userId}/models/{modelId}
+// Revokes access to a specific model (simple format for CLI).
+func (h *Handler) RevokeModelAccessSimple(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgIDParam := chi.URLParam(r, "orgId")
+	userIDParam := chi.URLParam(r, "userId")
+	modelID := chi.URLParam(r, "modelId")
+
+	orgID, err := h.resolveOrgID(ctx, orgIDParam)
+	if err != nil {
+		h.writeError(w, http.StatusNotFound, "not_found", "Organization Not Found", "organization not found")
+		return
+	}
+
+	// Require admin privileges for revoking model access
+	if err := h.requireOrgAdmin(ctx, orgID); err != nil {
+		h.writeError(w, http.StatusForbidden, "forbidden", "Access Denied", "admin privileges required to revoke model access")
+		return
+	}
+
+	targetUserID, err := h.resolveUserID(ctx, orgID, userIDParam)
+	if err != nil {
+		h.writeError(w, http.StatusNotFound, "not_found", "User Not Found", "user not found in organization")
+		return
+	}
+
+	actorID := middleware.GetUserID(ctx)
+
+	err = h.runtime.Postgres.DeleteModelGrant(ctx, orgID, targetUserID, modelID)
+	if err != nil {
+		if err == postgres.ErrNotFound {
+			h.writeError(w, http.StatusNotFound, "not_found", "Grant Not Found", "user does not have a grant for this model")
+			return
+		}
+		h.logger.Error("failed to revoke model grant", zap.Error(err))
+		h.writeError(w, http.StatusInternalServerError, "internal_error", "Internal Error", "failed to revoke grant")
+		return
+	}
+
+	h.logger.Info("model access revoked (simple API)",
+		zap.String("org_id", orgID.String()),
+		zap.String("user_id", targetUserID.String()),
+		zap.String("model_id", modelID),
+		zap.String("actor_id", actorID.String()),
+	)
+
+	w.WriteHeader(http.StatusNoContent)
 }
