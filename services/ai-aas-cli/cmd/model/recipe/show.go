@@ -60,7 +60,7 @@ func runShow(cmd *cobra.Command, args []string) error {
 	// Get the recipe from the API
 	ctx := context.Background()
 	var recipe Recipe
-	err = apiClient.Request(ctx, "GET", fmt.Sprintf("/api/v1/recipes/%s", recipeName), nil, &recipe)
+	err = apiClient.Request(ctx, "GET", fmt.Sprintf("/v1/recipes/%s", recipeName), nil, &recipe)
 	if err != nil {
 		return err
 	}
