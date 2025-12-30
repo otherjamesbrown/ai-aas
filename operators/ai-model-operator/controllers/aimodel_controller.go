@@ -624,9 +624,13 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	// Requeue if not ready yet
 	if aiModel.Status.Phase != aimodelv1alpha1.AIModelPhaseReady {
-		log.Info("InferenceService not ready yet, requeuing", "name", aiModel.Name, "phase", aiModel.Status.Phase)
+		requeueAfter := r.getRequeueAfter(aiModel.Status.Phase)
+		log.Info("InferenceService not ready yet, requeuing",
+			"name", aiModel.Name,
+			"phase", aiModel.Status.Phase,
+			"requeueAfter", requeueAfter)
 		reconcileTotal.WithLabelValues("success").Inc()
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{RequeueAfter: requeueAfter}, nil
 	}
 
 	reconcileTotal.WithLabelValues("success").Inc()
@@ -967,6 +971,31 @@ func (r *AIModelReconciler) calculateDeploymentRetryBackoff(retryCount int32) ti
 		return max
 	}
 	return backoff
+}
+
+// getRequeueAfter returns the appropriate requeue interval based on the current phase.
+// Active deployment phases (Validating, Scheduling, Downloading, Initializing, Deploying)
+// are checked frequently to reduce status lag, while stable phases (Ready) are checked
+// less frequently to reduce reconciliation overhead.
+func (r *AIModelReconciler) getRequeueAfter(phase aimodelv1alpha1.AIModelPhase) time.Duration {
+	switch phase {
+	case aimodelv1alpha1.AIModelPhaseValidating,
+		aimodelv1alpha1.AIModelPhaseScheduling,
+		aimodelv1alpha1.AIModelPhaseDownloading,
+		aimodelv1alpha1.AIModelPhaseInitializing,
+		aimodelv1alpha1.AIModelPhaseDeploying:
+		// Check frequently during active deployment phases
+		return 10 * time.Second
+	case aimodelv1alpha1.AIModelPhaseReady:
+		// Check less frequently when stable
+		return 5 * time.Minute
+	case aimodelv1alpha1.AIModelPhaseFailed:
+		// Retry failures moderately
+		return 30 * time.Second
+	default:
+		// Default for other phases (Pending, Disabled, RetryPending)
+		return 30 * time.Second
+	}
 }
 
 func (r *AIModelReconciler) checkS3ArtifactExists(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) (bool, error) {
@@ -1563,6 +1592,21 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 	latestAIModel.Status.InferenceEndpoint = status.URL
 	latestAIModel.Status.ReadyReplicas = status.ReadyReplicas
 
+	// Determine granular phase based on InferenceService and Pod state
+	newPhase, phaseMessage := r.determineGranularPhase(ctx, aiModel, isvc)
+	phaseChanged := updatePhase(latestAIModel, newPhase, phaseMessage)
+
+	if phaseChanged {
+		log.Info("AIModel phase transition",
+			"name", aiModel.Name,
+			"phase", newPhase,
+			"message", phaseMessage)
+
+		// Emit Kubernetes Event on phase transitions
+		r.Recorder.Event(latestAIModel, corev1.EventTypeNormal, "PhaseTransition",
+			fmt.Sprintf("Phase changed to %s: %s", newPhase, phaseMessage))
+	}
+
 	// Update phase based on InferenceService status
 	if status.Ready {
 		wasNotReady := latestAIModel.Status.Phase != aimodelv1alpha1.AIModelPhaseReady
@@ -2058,6 +2102,160 @@ func setDeployingPhaseWithTimestamp(aiModel *aimodelv1alpha1.AIModel) bool {
 	return true // Phase changed
 }
 
+// updatePhase transitions the AIModel to a new phase and updates phase metadata.
+// Returns true if the phase changed, false if already in that phase.
+func updatePhase(aiModel *aimodelv1alpha1.AIModel, newPhase aimodelv1alpha1.AIModelPhase, message string) bool {
+	if aiModel.Status.Phase == newPhase {
+		// Already in this phase - only update message if provided
+		if message != "" {
+			aiModel.Status.Message = message
+		}
+		// Update duration if PhaseStartTime is set
+		if aiModel.Status.PhaseStartTime != nil {
+			duration := time.Since(aiModel.Status.PhaseStartTime.Time)
+			aiModel.Status.PhaseDuration = duration.Truncate(time.Second).String()
+		}
+		return false
+	}
+
+	// Phase transition - record start time
+	now := metav1.Now()
+	aiModel.Status.Phase = newPhase
+	aiModel.Status.PhaseStartTime = &now
+	aiModel.Status.PhaseDuration = "0s"
+	if message != "" {
+		aiModel.Status.Message = message
+	}
+
+	// Clear progress when transitioning phases
+	aiModel.Status.Progress = nil
+
+	return true
+}
+
+// determineGranularPhase determines the current deployment phase based on InferenceService and Pod state.
+// This provides fine-grained visibility into deployment progress beyond the legacy "Deploying" phase.
+func (r *AIModelReconciler) determineGranularPhase(
+	ctx context.Context,
+	aiModel *aimodelv1alpha1.AIModel,
+	isvc *unstructured.Unstructured,
+) (aimodelv1alpha1.AIModelPhase, string) {
+	log := log.FromContext(ctx)
+
+	// Terminal states take precedence
+	if !aiModel.Spec.Enabled {
+		return aimodelv1alpha1.AIModelPhaseDisabled, "Model deployment is disabled"
+	}
+
+	// If no InferenceService exists yet, we're in validation phase
+	if isvc == nil {
+		return aimodelv1alpha1.AIModelPhaseValidating, "Validating spec and resolving recipe"
+	}
+
+	// Extract InferenceService status
+	status, err := kserve.GetStatus(isvc)
+	if err != nil {
+		log.Error(err, "Failed to extract InferenceService status for phase determination")
+		return aimodelv1alpha1.AIModelPhaseDeploying, "Unable to determine detailed phase"
+	}
+
+	// If InferenceService is ready, we're done
+	if status.Ready {
+		return aimodelv1alpha1.AIModelPhaseReady, fmt.Sprintf("Model is ready at %s", status.URL)
+	}
+
+	// Not ready - need to look at pod state to determine sub-phase
+	// Get the predictor pod for this InferenceService
+	isvcName := sanitizeInferenceServiceName(aiModel.Name)
+	podList := &corev1.PodList{}
+	if err := r.List(ctx, podList, client.InNamespace(aiModel.Namespace), client.MatchingLabels{
+		"serving.kserve.io/inferenceservice": isvcName,
+	}); err != nil {
+		log.Error(err, "Failed to list pods for InferenceService")
+		return aimodelv1alpha1.AIModelPhaseDeploying, "Checking deployment status"
+	}
+
+	// If no pods exist yet, we're scheduling
+	if len(podList.Items) == 0 {
+		return aimodelv1alpha1.AIModelPhaseScheduling, "Waiting for pod to be created"
+	}
+
+	// Get the most recent pod (in case of multiple pods during rollout)
+	pod := &podList.Items[0]
+	for i := range podList.Items {
+		if podList.Items[i].CreationTimestamp.After(pod.CreationTimestamp.Time) {
+			pod = &podList.Items[i]
+		}
+	}
+
+	// Check if pod is scheduled
+	if pod.Spec.NodeName == "" {
+		// Pod exists but not scheduled to a node yet
+		reason := "Waiting for node scheduling"
+		for _, cond := range pod.Status.Conditions {
+			if cond.Type == corev1.PodScheduled && cond.Status == corev1.ConditionFalse {
+				reason = fmt.Sprintf("Scheduling blocked: %s", cond.Reason)
+				if cond.Message != "" {
+					reason = fmt.Sprintf("%s - %s", reason, cond.Message)
+				}
+				break
+			}
+		}
+		return aimodelv1alpha1.AIModelPhaseScheduling, reason
+	}
+
+	// Pod is scheduled - check init container status
+	for _, cs := range pod.Status.InitContainerStatuses {
+		if cs.Name == "storage-initializer" {
+			if cs.State.Running != nil {
+				// Init container is running - downloading model
+				msg := "Downloading model artifacts"
+				// TODO: Extract download progress from init container logs
+				return aimodelv1alpha1.AIModelPhaseDownloading, msg
+			}
+			if cs.State.Waiting != nil {
+				// Init container waiting to start
+				return aimodelv1alpha1.AIModelPhaseDownloading, fmt.Sprintf("Preparing to download: %s", cs.State.Waiting.Reason)
+			}
+			// Init container has terminated - check if successful
+			if cs.State.Terminated != nil && cs.State.Terminated.ExitCode != 0 {
+				// Download failed
+				return aimodelv1alpha1.AIModelPhaseFailed, fmt.Sprintf("Download failed: %s", cs.State.Terminated.Reason)
+			}
+		}
+	}
+
+	// Init container completed - check main container status
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.Name == "kserve-container" {
+			if cs.State.Running != nil && !cs.Ready {
+				// Container running but not ready - model is initializing
+				msg := "Loading model into memory"
+				// Check for image pull issues
+				if cs.State.Waiting != nil && strings.Contains(cs.State.Waiting.Reason, "Image") {
+					msg = fmt.Sprintf("Pulling container image: %s", cs.State.Waiting.Message)
+				}
+				return aimodelv1alpha1.AIModelPhaseInitializing, msg
+			}
+			if cs.Ready {
+				// Container ready but InferenceService not ready yet (rare - usually means endpoint not yet exposed)
+				return aimodelv1alpha1.AIModelPhaseInitializing, "Finalizing endpoint registration"
+			}
+			if cs.State.Waiting != nil {
+				// Container waiting to start
+				return aimodelv1alpha1.AIModelPhaseInitializing, fmt.Sprintf("Starting container: %s", cs.State.Waiting.Reason)
+			}
+			if cs.State.Terminated != nil && cs.State.Terminated.ExitCode != 0 {
+				// Container crashed
+				return aimodelv1alpha1.AIModelPhaseFailed, fmt.Sprintf("Container crashed: %s", cs.State.Terminated.Reason)
+			}
+		}
+	}
+
+	// Fallback - still deploying but can't determine exact phase
+	return aimodelv1alpha1.AIModelPhaseDeploying, "Deployment in progress"
+}
+
 // checkDeploymentTimeout checks if the deployment has exceeded the timeout.
 // Returns true if timeout exceeded, false otherwise.
 func (r *AIModelReconciler) checkDeploymentTimeout(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) (bool, error) {
@@ -2091,9 +2289,15 @@ func (r *AIModelReconciler) checkDeploymentTimeout(ctx context.Context, aiModel 
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *AIModelReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// Create a watch on unstructured InferenceService resources
+	// When InferenceService status changes (e.g., becomes Ready), trigger AIModel reconciliation
+	isvcObj := &unstructured.Unstructured{}
+	isvcObj.SetGroupVersionKind(kserve.InferenceServiceGVK)
+
 	return ctrl.NewControllerManagedBy(mgr).For(&aimodelv1alpha1.AIModel{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
 		Owns(&batchv1.Job{}).
+		Owns(isvcObj).
 		Complete(r)
 }

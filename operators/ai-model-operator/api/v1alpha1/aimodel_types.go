@@ -224,9 +224,16 @@ type AIModelPhase string
 const (
 	// AIModelPhasePending indicates the AIModel is waiting to be processed.
 	AIModelPhasePending AIModelPhase = "Pending"
+	// AIModelPhaseValidating indicates the spec is being validated and recipe is being resolved.
+	AIModelPhaseValidating AIModelPhase = "Validating"
+	// AIModelPhaseScheduling indicates the pod is waiting to be scheduled on a node.
+	AIModelPhaseScheduling AIModelPhase = "Scheduling"
 	// AIModelPhaseDownloading indicates model artifacts are being downloaded.
 	AIModelPhaseDownloading AIModelPhase = "Downloading"
+	// AIModelPhaseInitializing indicates the main container is starting and loading the model.
+	AIModelPhaseInitializing AIModelPhase = "Initializing"
 	// AIModelPhaseDeploying indicates the InferenceService is being created/updated.
+	// DEPRECATED: Use more granular phases (Validating, Scheduling, Downloading, Initializing) instead.
 	AIModelPhaseDeploying AIModelPhase = "Deploying"
 	// AIModelPhaseReady indicates the model is ready to serve inference requests.
 	AIModelPhaseReady AIModelPhase = "Ready"
@@ -238,6 +245,45 @@ const (
 	AIModelPhaseRetryPending AIModelPhase = "RetryPending"
 )
 
+// PhaseProgress tracks progress within a specific phase.
+type PhaseProgress struct {
+	// Percentage indicates overall progress (0-100).
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=100
+	// +optional
+	Percentage int `json:"percentage,omitempty"`
+
+	// Downloaded indicates bytes downloaded (e.g., "2.1GB / 8.5GB").
+	// Only applicable during Downloading phase.
+	// +optional
+	Downloaded string `json:"downloaded,omitempty"`
+
+	// ETA indicates estimated time to completion (e.g., "5m30s").
+	// +optional
+	ETA string `json:"eta,omitempty"`
+}
+
+// SchedulingStatus provides information about pod scheduling
+type SchedulingStatus struct {
+	// Scheduled indicates whether the pod has been scheduled to a node
+	Scheduled bool `json:"scheduled"`
+
+	// BlockedReason is the reason why scheduling is blocked (e.g., "Unschedulable", "InsufficientCPU")
+	// Only set when Scheduled is false
+	// +optional
+	BlockedReason string `json:"blockedReason,omitempty"`
+
+	// BlockedMessage is a human-readable message explaining why scheduling is blocked
+	// Only set when Scheduled is false
+	// +optional
+	BlockedMessage string `json:"blockedMessage,omitempty"`
+
+	// NodeName is the name of the node where the pod is scheduled
+	// Only set when Scheduled is true
+	// +optional
+	NodeName string `json:"nodeName,omitempty"`
+}
+
 // AIModelStatus defines the observed state of AIModel
 type AIModelStatus struct {
 	// INSERT CUSTOM FIELDS - observed state of cluster
@@ -248,6 +294,18 @@ type AIModelStatus struct {
 
 	// Phase indicates the current phase of the AIModel deployment.
 	Phase AIModelPhase `json:"phase,omitempty"`
+
+	// PhaseStartTime is when the current phase started.
+	// +optional
+	PhaseStartTime *metav1.Time `json:"phaseStartTime,omitempty"`
+
+	// PhaseDuration is the human-readable duration in the current phase (e.g., "5m30s").
+	// +optional
+	PhaseDuration string `json:"phaseDuration,omitempty"`
+
+	// Progress tracks progress within the current phase.
+	// +optional
+	Progress *PhaseProgress `json:"progress,omitempty"`
 
 	// InferenceServiceName is the name of the associated KServe InferenceService.
 	InferenceServiceName string `json:"inferenceServiceName,omitempty"`
@@ -263,15 +321,21 @@ type AIModelStatus struct {
 	ReadyReplicas int32 `json:"readyReplicas,omitempty"`
 
 	// DownloadProgress indicates the progress of model artifact download (0-100).
+	// DEPRECATED: Use Progress.Percentage instead.
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=100
 	DownloadProgress int32 `json:"downloadProgress,omitempty"`
 
 	// LastTransitionTime is the last time the Phase transitioned.
+	// DEPRECATED: Use PhaseStartTime instead.
 	LastTransitionTime *metav1.Time `json:"lastTransitionTime,omitempty"`
 
 	// Message provides additional information about the current phase.
 	Message string `json:"message,omitempty"`
+
+	// SchedulingStatus provides information about pod scheduling status
+	// +optional
+	SchedulingStatus *SchedulingStatus `json:"schedulingStatus,omitempty"`
 
 	// RetryCount tracks the number of download retry attempts.
 	RetryCount int32 `json:"retryCount,omitempty"`

@@ -1312,9 +1312,10 @@ spec:
                             operator:
                               description: |-
                                 Operator represents a key's relationship to the value.
-                                Valid operators are Exists and Equal. Defaults to Equal.
+                                Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
                                 Exists is equivalent to wildcard for value, so that a pod can
                                 tolerate all taints of a particular category.
+                                Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                               type: string
                             tolerationSeconds:
                               description: |-
@@ -1637,9 +1638,10 @@ spec:
                     operator:
                       description: |-
                         Operator represents a key's relationship to the value.
-                        Valid operators are Exists and Equal. Defaults to Equal.
+                        Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
                         Exists is equivalent to wildcard for value, so that a pod can
                         tolerate all taints of a particular category.
+                        Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                       type: string
                     tolerationSeconds:
                       description: |-
@@ -1745,8 +1747,9 @@ spec:
                 format: date-time
                 type: string
               downloadProgress:
-                description: DownloadProgress indicates the progress of model artifact
-                  download (0-100).
+                description: |-
+                  DownloadProgress indicates the progress of model artifact download (0-100).
+                  DEPRECATED: Use Progress.Percentage instead.
                 format: int32
                 maximum: 100
                 minimum: 0
@@ -1769,7 +1772,9 @@ spec:
                 format: date-time
                 type: string
               lastTransitionTime:
-                description: LastTransitionTime is the last time the Phase transitioned.
+                description: |-
+                  LastTransitionTime is the last time the Phase transitioned.
+                  DEPRECATED: Use PhaseStartTime instead.
                 format: date-time
                 type: string
               message:
@@ -1789,6 +1794,32 @@ spec:
               phase:
                 description: Phase indicates the current phase of the AIModel deployment.
                 type: string
+              phaseDuration:
+                description: PhaseDuration is the human-readable duration in the current
+                  phase (e.g., "5m30s").
+                type: string
+              phaseStartTime:
+                description: PhaseStartTime is when the current phase started.
+                format: date-time
+                type: string
+              progress:
+                description: Progress tracks progress within the current phase.
+                properties:
+                  downloaded:
+                    description: |-
+                      Downloaded indicates bytes downloaded (e.g., "2.1GB / 8.5GB").
+                      Only applicable during Downloading phase.
+                    type: string
+                  eta:
+                    description: ETA indicates estimated time to completion (e.g.,
+                      "5m30s").
+                    type: string
+                  percentage:
+                    description: Percentage indicates overall progress (0-100).
+                    maximum: 100
+                    minimum: 0
+                    type: integer
+                type: object
               readyReplicas:
                 description: ReadyReplicas is the number of replicas that are ready
                   to serve requests.
@@ -1798,6 +1829,32 @@ spec:
                 description: RetryCount tracks the number of download retry attempts.
                 format: int32
                 type: integer
+              schedulingStatus:
+                description: SchedulingStatus provides information about pod scheduling
+                  status
+                properties:
+                  blockedMessage:
+                    description: |-
+                      BlockedMessage is a human-readable message explaining why scheduling is blocked
+                      Only set when Scheduled is false
+                    type: string
+                  blockedReason:
+                    description: |-
+                      BlockedReason is the reason why scheduling is blocked (e.g., "Unschedulable", "InsufficientCPU")
+                      Only set when Scheduled is false
+                    type: string
+                  nodeName:
+                    description: |-
+                      NodeName is the name of the node where the pod is scheduled
+                      Only set when Scheduled is true
+                    type: string
+                  scheduled:
+                    description: Scheduled indicates whether the pod has been scheduled
+                      to a node
+                    type: boolean
+                required:
+                - scheduled
+                type: object
               vllmDeploymentName:
                 description: 'DEPRECATED: Use InferenceServiceName instead.'
                 type: string

@@ -108,6 +108,15 @@ rules:
   - get
   - list
   - watch
+# Node permissions - needed for webhook validation of tolerations
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
 - apiGroups:
   - serving.kserve.io
   resources:

@@ -37,6 +37,7 @@ import (
 	"github.com/ai-aas/ai-model-operator/controllers"
 	"github.com/ai-aas/ai-model-operator/internal/adminapi"
 	"github.com/ai-aas/ai-model-operator/internal/recipe"
+	"github.com/ai-aas/ai-model-operator/internal/webhook"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -62,6 +63,8 @@ func main() {
 	var maxRetryDelay time.Duration
 	var downloaderImage string
 	var defaultRuntime string
+	var webhookPort int
+	var enableWebhook bool
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -79,6 +82,10 @@ func main() {
 	flag.StringVar(&downloaderImage, "downloader-image", "python:3.11-slim", "Container image for model downloader job")
 	flag.StringVar(&defaultRuntime, "default-runtime", "vllm", "Default runtime to use when not specified in AIModel (vllm, tgi, triton, or custom image)")
 
+	// Webhook configuration flags
+	flag.IntVar(&webhookPort, "webhook-port", 9443, "Port for webhook server")
+	flag.BoolVar(&enableWebhook, "enable-webhook", true, "Enable validating webhook for AIModel resources")
+
 	opts := zap.Options{
 		Development: true,
 	}
@@ -87,18 +94,36 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		Metrics: metricsserver.Options{
-			BindAddress: metricsAddr,
-		},
-		HealthProbeBindAddress: probeAddr,
-		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       leaderElectionID,
-		// LeaderElectionReleaseOnCancel defines if the leader should step down when the manager stops. defaults to false.
-		// Set to true in this example so that power-down of a controller doesn't delay the next controller start.
-		LeaderElectionReleaseOnCancel: true,
-	})
+	// Configure webhook server port if enabled
+	var webhookServerOptions ctrl.Options
+	if enableWebhook {
+		webhookServerOptions = ctrl.Options{
+			Scheme: scheme,
+			Metrics: metricsserver.Options{
+				BindAddress: metricsAddr,
+			},
+			WebhookServer: ctrl.NewWebhookServer(ctrl.WebhookServerOptions{
+				Port: webhookPort,
+			}),
+			HealthProbeBindAddress:        probeAddr,
+			LeaderElection:                enableLeaderElection,
+			LeaderElectionID:              leaderElectionID,
+			LeaderElectionReleaseOnCancel: true,
+		}
+	} else {
+		webhookServerOptions = ctrl.Options{
+			Scheme: scheme,
+			Metrics: metricsserver.Options{
+				BindAddress: metricsAddr,
+			},
+			HealthProbeBindAddress:        probeAddr,
+			LeaderElection:                enableLeaderElection,
+			LeaderElectionID:              leaderElectionID,
+			LeaderElectionReleaseOnCancel: true,
+		}
+	}
+
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), webhookServerOptions)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
@@ -144,6 +169,22 @@ func main() {
 		"maxRetryDelay", maxRetryDelay,
 		"downloaderImage", downloaderImage,
 		"defaultRuntime", defaultRuntime)
+
+	// Register validating webhook if enabled
+	if enableWebhook {
+		if err = ctrl.NewWebhookManagedBy(mgr).
+			For(&aimodelv1alpha1.AIModel{}).
+			WithValidator(&webhook.AIModelValidator{
+				Client: mgr.GetClient(),
+			}).
+			Complete(); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "AIModel")
+			os.Exit(1)
+		}
+		setupLog.Info("AIModel validating webhook registered", "port", webhookPort)
+	} else {
+		setupLog.Info("AIModel validating webhook disabled")
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err = mgr.AddHealthzCheck("healthz", healthz.Ping);
