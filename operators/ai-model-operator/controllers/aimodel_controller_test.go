@@ -1917,3 +1917,151 @@ func TestAIModelReconciler_GetRequeueAfter(t *testing.T) {
 		})
 	}
 }
+
+func TestParseDownloadProgress(t *testing.T) {
+	tests := []struct {
+		name     string
+		logs     string
+		expected *aimodelv1alpha1.PhaseProgress
+	}{
+		{
+			name:     "Empty logs",
+			logs:     "",
+			expected: nil,
+		},
+		{
+			name:     "No progress information",
+			logs:     "Starting download...\nConnecting to server...",
+			expected: nil,
+		},
+		{
+			name: "Percentage only",
+			logs: "Downloading: 45% complete",
+			expected: &aimodelv1alpha1.PhaseProgress{
+				Percentage: 45,
+			},
+		},
+		{
+			name: "Percentage with bytes (GB notation)",
+			logs: "model.safetensors: 45%|████▌     | 2.25G/5.0G [00:30<00:45, 61.2MB/s]",
+			expected: &aimodelv1alpha1.PhaseProgress{
+				Percentage: 45,
+				Downloaded: "2.25G / 5.0G",
+				ETA:        "00:45", // Parsed from [00:30<00:45]
+			},
+		},
+		{
+			name: "Percentage with bytes (parentheses)",
+			logs: "Downloading: 60% (1.2GB/2.4GB) complete",
+			expected: &aimodelv1alpha1.PhaseProgress{
+				Percentage: 60,
+				Downloaded: "1.2GB / 2.4GB",
+			},
+		},
+		{
+			name: "Percentage with bytes (no space)",
+			logs: "Progress: 75% (3.75GB/5.0GB)",
+			expected: &aimodelv1alpha1.PhaseProgress{
+				Percentage: 75,
+				Downloaded: "3.75GB / 5.0GB",
+			},
+		},
+		{
+			name: "Percentage with ETA",
+			logs: "Downloading: 30% ETA: 5m30s",
+			expected: &aimodelv1alpha1.PhaseProgress{
+				Percentage: 30,
+				ETA:        "5m30s",
+			},
+		},
+		{
+			name: "HuggingFace Hub CLI format",
+			logs: "model.safetensors: 50%|█████     | 2.5G/5.0G [01:00<01:00, 42.3MB/s]",
+			expected: &aimodelv1alpha1.PhaseProgress{
+				Percentage: 50,
+				Downloaded: "2.5G / 5.0G",
+				ETA:        "01:00", // Parsed from [01:00<01:00]
+			},
+		},
+		{
+			name: "tqdm progress bar format",
+			logs: "Fetching 15 files: 60%|████████  | 9/15 [02:30<01:40]",
+			expected: &aimodelv1alpha1.PhaseProgress{
+				Percentage: 60,
+				Downloaded: "9 / 15",  // Parses file count as bytes
+				ETA:        "01:40",   // Parsed from [02:30<01:40]
+			},
+		},
+		{
+			name: "Raw bytes format",
+			logs: "download: s3://bucket/model.bin (1073741824/2147483648)",
+			expected: &aimodelv1alpha1.PhaseProgress{
+				Downloaded: "1073741824 / 2147483648",
+			},
+		},
+		{
+			name: "Multiple log lines with progress",
+			logs: `Starting download...
+Downloading model artifacts
+Progress: 25%
+Downloaded: 1.25GB/5.0GB
+ETA: 10m0s
+Still downloading...
+Progress: 35% complete`,
+			expected: &aimodelv1alpha1.PhaseProgress{
+				Percentage: 25, // Parses first match (not last)
+				Downloaded: "1.25GB / 5.0GB",
+				ETA:        "10m0s",
+			},
+		},
+		{
+			name: "Edge case: 0%",
+			logs: "Progress: 0%",
+			expected: &aimodelv1alpha1.PhaseProgress{
+				Percentage: 0,
+			},
+		},
+		{
+			name: "Edge case: 100%",
+			logs: "Progress: 100%",
+			expected: &aimodelv1alpha1.PhaseProgress{
+				Percentage: 100,
+			},
+		},
+		{
+			name: "Invalid percentage over 100",
+			logs: "Progress: 150%",
+			expected: nil, // Should not parse invalid percentages
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseDownloadProgress(tt.logs)
+
+			if tt.expected == nil {
+				if got != nil {
+					t.Errorf("parseDownloadProgress() = %+v, want nil", got)
+				}
+				return
+			}
+
+			if got == nil {
+				t.Errorf("parseDownloadProgress() = nil, want %+v", tt.expected)
+				return
+			}
+
+			if got.Percentage != tt.expected.Percentage {
+				t.Errorf("parseDownloadProgress().Percentage = %d, want %d", got.Percentage, tt.expected.Percentage)
+			}
+
+			if got.Downloaded != tt.expected.Downloaded {
+				t.Errorf("parseDownloadProgress().Downloaded = %q, want %q", got.Downloaded, tt.expected.Downloaded)
+			}
+
+			if got.ETA != tt.expected.ETA {
+				t.Errorf("parseDownloadProgress().ETA = %q, want %q", got.ETA, tt.expected.ETA)
+			}
+		})
+	}
+}
