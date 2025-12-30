@@ -13,11 +13,16 @@ import (
 	"go.uber.org/zap"
 )
 
+// CSVDeliverer defines the interface for uploading CSV files to object storage.
+type CSVDeliverer interface {
+	UploadCSV(ctx context.Context, orgID, jobID uuid.UUID, csvData []byte) (signedURL, checksum string, err error)
+}
+
 // JobRunner processes export jobs and generates CSVs from rollup tables.
 type JobRunner struct {
 	repo       *ExportJobRepository
 	pool       *pgxpool.Pool
-	s3Delivery *S3Delivery
+	s3Delivery CSVDeliverer
 	logger     *zap.Logger
 	interval   time.Duration
 	workers    int
@@ -28,7 +33,7 @@ type JobRunner struct {
 // RunnerConfig holds job runner configuration.
 type RunnerConfig struct {
 	Pool       *pgxpool.Pool
-	S3Delivery *S3Delivery
+	S3Delivery CSVDeliverer
 	Logger     *zap.Logger
 	Interval   time.Duration
 	Workers    int

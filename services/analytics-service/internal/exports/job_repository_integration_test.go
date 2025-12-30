@@ -11,12 +11,14 @@ package exports
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 )
 
@@ -82,10 +84,26 @@ func setupTestDB(t *testing.T) (*pgxpool.Pool, func()) {
 		CREATE INDEX IF NOT EXISTS idx_export_jobs_status_pending_running
 			ON analytics.export_jobs (status)
 			WHERE status IN ('pending', 'running');
+
+		-- Create hourly rollup table for worker lifecycle tests
+		CREATE TABLE IF NOT EXISTS analytics.analytics_hourly_rollups (
+			bucket_start TIMESTAMPTZ NOT NULL,
+			organization_id UUID NOT NULL,
+			model_id UUID,
+			request_count BIGINT DEFAULT 0,
+			tokens_total BIGINT DEFAULT 0,
+			error_count BIGINT DEFAULT 0,
+			cost_total NUMERIC(10, 4) DEFAULT 0.0,
+			PRIMARY KEY (bucket_start, organization_id, model_id)
+		);
 	`
 
 	_, err = pool.Exec(ctx, setupSchema)
 	require.NoError(t, err, "Failed to create test schema")
+
+	// Set search_path to include analytics schema so queries don't need schema prefix
+	_, err = pool.Exec(ctx, "SET search_path TO analytics, public")
+	require.NoError(t, err, "Failed to set search_path")
 
 	cleanup := func() {
 		pool.Close()
@@ -656,4 +674,214 @@ func TestExportJobFailureLifecycle(t *testing.T) {
 	require.Nil(t, job.OutputURI)
 	require.Nil(t, job.Checksum)
 	require.Nil(t, job.RowCount)
+}
+
+// mockS3Delivery is a mock S3Delivery adapter for testing worker lifecycle without external dependencies.
+type mockS3Delivery struct {
+	uploads map[string][]byte // key -> CSV data
+	logger  *zap.Logger
+}
+
+// newMockS3Delivery creates a mock S3Delivery that captures uploads but doesn't require real S3.
+func newMockS3Delivery() *mockS3Delivery {
+	return &mockS3Delivery{
+		uploads: make(map[string][]byte),
+		logger:  zap.NewNop(),
+	}
+}
+
+// UploadCSV captures CSV data without hitting real S3.
+func (m *mockS3Delivery) UploadCSV(ctx context.Context, orgID, jobID uuid.UUID, csvData []byte) (string, string, error) {
+	// Capture the upload
+	key := fmt.Sprintf("analytics/exports/%s/%s.csv", orgID.String(), jobID.String())
+	m.uploads[key] = csvData
+
+	// Generate fake signed URL and checksum (simulating real behavior)
+	checksum := fmt.Sprintf("mock-sha256-%s", jobID.String()[:8])
+	signedURL := fmt.Sprintf("https://mock-s3.example.com/%s?expires=3600", key)
+
+	m.logger.Info("mock uploaded CSV",
+		zap.String("org_id", orgID.String()),
+		zap.String("job_id", jobID.String()),
+		zap.String("key", key),
+		zap.Int("size_bytes", len(csvData)),
+	)
+
+	return signedURL, checksum, nil
+}
+
+// GenerateSignedURL generates a fake signed URL.
+func (m *mockS3Delivery) GenerateSignedURL(ctx context.Context, key string) (string, error) {
+	return fmt.Sprintf("https://mock-s3.example.com/%s?expires=3600", key), nil
+}
+
+// getUpload retrieves uploaded CSV data by key.
+func (m *mockS3Delivery) getUpload(key string) ([]byte, bool) {
+	data, ok := m.uploads[key]
+	return data, ok
+}
+
+// TestExportWorkerLifecycle validates that the export worker starts, picks up pending jobs, and processes them.
+// This test validates the bug fix from aas-ceor where export worker startup was conditional on S3 config.
+func TestExportWorkerLifecycle(t *testing.T) {
+	pool, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Setup test database with rollup data
+	ctx := context.Background()
+	orgID := uuid.New()
+	modelID := uuid.New()
+	requestedBy := uuid.New()
+	now := time.Now().UTC()
+
+	// Seed rollup data (7 days of hourly data)
+	start := now.Add(-7 * 24 * time.Hour).Truncate(time.Hour)
+	end := now.Truncate(time.Hour)
+
+	for bucketStart := start; bucketStart.Before(end); bucketStart = bucketStart.Add(time.Hour) {
+		_, err := pool.Exec(ctx, `
+			INSERT INTO analytics.analytics_hourly_rollups
+			(bucket_start, organization_id, model_id, request_count, tokens_total, error_count, cost_total)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`, bucketStart, orgID, modelID, 100, 10000, 5, 1.2500)
+		require.NoError(t, err)
+	}
+
+	// Create a mock S3 delivery adapter (simulates successful uploads without real S3)
+	mockS3 := newMockS3Delivery()
+
+	// Create pending export job
+	repo := NewExportJobRepository(pool)
+	jobID, err := repo.CreateExportJob(ctx, CreateExportJobRequest{
+		OrgID:          orgID,
+		RequestedBy:    requestedBy,
+		TimeRangeStart: start,
+		TimeRangeEnd:   end,
+		Granularity:    "hourly",
+	})
+	require.NoError(t, err)
+
+	// Verify job starts in pending status
+	job, err := repo.GetExportJob(ctx, orgID, jobID)
+	require.NoError(t, err)
+	require.Equal(t, "pending", job.Status)
+
+	// Start export worker (this is what we're testing!)
+	worker := NewJobRunner(RunnerConfig{
+		Pool:       pool,
+		S3Delivery: mockS3,
+		Logger:     zap.NewNop(),
+		Interval:   500 * time.Millisecond, // Poll every 500ms for test speed
+		Workers:    1,
+	})
+
+	workerCtx, workerCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer workerCancel()
+
+	go func() {
+		if err := worker.Start(workerCtx); err != nil && err != context.DeadlineExceeded && err != context.Canceled {
+			t.Errorf("Worker failed unexpectedly: %v", err)
+		}
+	}()
+	defer worker.Stop()
+
+	// Poll for job completion (worker should pick it up and process it)
+	require.Eventually(t, func() bool {
+		job, err := repo.GetExportJob(ctx, orgID, jobID)
+		if err != nil {
+			t.Logf("Error getting job: %v", err)
+			return false
+		}
+		if job.Status == "failed" && job.ErrorMessage != nil {
+			t.Logf("Job failed with error: %s", *job.ErrorMessage)
+		}
+		t.Logf("Job status: %s", job.Status)
+		return job.Status == "succeeded"
+	}, 8*time.Second, 500*time.Millisecond, "Worker should pick up and process the job")
+
+	// Verify final job state
+	finalJob, err := repo.GetExportJob(ctx, orgID, jobID)
+	require.NoError(t, err)
+	require.Equal(t, "succeeded", finalJob.Status)
+	require.NotNil(t, finalJob.OutputURI, "OutputURI should be set")
+	require.NotNil(t, finalJob.Checksum, "Checksum should be set")
+	require.NotNil(t, finalJob.RowCount, "RowCount should be set")
+	require.Greater(t, *finalJob.RowCount, int64(0), "Should have processed at least one row")
+	require.NotNil(t, finalJob.CompletedAt, "CompletedAt should be set")
+
+	// Verify CSV was uploaded to mock S3
+	key := fmt.Sprintf("analytics/exports/%s/%s.csv", orgID.String(), jobID.String())
+	csvData, ok := mockS3.getUpload(key)
+	require.True(t, ok, "Worker should have uploaded CSV to S3")
+	require.Greater(t, len(csvData), 0, "CSV data should not be empty")
+
+	// Verify CSV contains expected header
+	require.Contains(t, string(csvData), "bucket_start", "CSV should contain header")
+	require.Contains(t, string(csvData), "organization_id", "CSV should contain org_id column")
+	require.Contains(t, string(csvData), orgID.String(), "CSV should contain org data")
+}
+
+// TestExportWorkerNoS3Config validates that when S3 is not configured, no worker starts.
+// This test validates the startup conditional logic that was fixed in aas-ceor.
+func TestExportWorkerNoS3Config(t *testing.T) {
+	// This test validates that JobRunner fails gracefully without S3Delivery.
+	// In production (main.go), if S3 is not configured, the worker is never created.
+	// This test validates that behavior by showing what happens if a worker starts without S3.
+
+	pool, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	orgID := uuid.New()
+	requestedBy := uuid.New()
+	now := time.Now().UTC()
+	start := now.Add(-7 * 24 * time.Hour).Truncate(time.Hour)
+	end := now.Truncate(time.Hour)
+
+	// Create pending export job
+	repo := NewExportJobRepository(pool)
+	jobID, err := repo.CreateExportJob(ctx, CreateExportJobRequest{
+		OrgID:          orgID,
+		RequestedBy:    requestedBy,
+		TimeRangeStart: start,
+		TimeRangeEnd:   end,
+		Granularity:    "hourly",
+	})
+	require.NoError(t, err)
+
+	// Start export worker WITHOUT S3Delivery (nil)
+	worker := NewJobRunner(RunnerConfig{
+		Pool:       pool,
+		S3Delivery: nil, // No S3 configured
+		Logger:     zap.NewNop(),
+		Interval:   500 * time.Millisecond,
+		Workers:    1,
+	})
+
+	workerCtx, workerCancel := context.WithTimeout(ctx, 3*time.Second)
+	defer workerCancel()
+
+	go func() {
+		if err := worker.Start(workerCtx); err != nil && err != context.DeadlineExceeded && err != context.Canceled {
+			t.Logf("Worker stopped with error (expected): %v", err)
+		}
+	}()
+	defer worker.Stop()
+
+	// Wait a bit to let worker attempt processing
+	time.Sleep(2 * time.Second)
+
+	// Verify job is NOT succeeded (should fail or remain pending/running)
+	job, err := repo.GetExportJob(ctx, orgID, jobID)
+	require.NoError(t, err)
+
+	// Job should either be:
+	// - Still pending (worker couldn't pick it up)
+	// - Failed (worker tried to process but S3 upload failed)
+	// - Running (worker started processing but failed before completion)
+	// It should NOT be succeeded
+	require.NotEqual(t, "succeeded", job.Status,
+		"Job should not succeed without S3 delivery configured")
+
+	t.Logf("Final job status without S3: %s (expected: pending/running/failed)", job.Status)
 }

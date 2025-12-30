@@ -4,7 +4,9 @@ package exports
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"time"
@@ -66,6 +68,12 @@ func (s *S3Delivery) UploadCSV(ctx context.Context, orgID, jobID uuid.UUID, csvD
 	// Generate object key: analytics/exports/{org_id}/{job_id}.csv
 	key := fmt.Sprintf("analytics/exports/%s/%s.csv", orgID.String(), jobID.String())
 
+	// Calculate MD5 for Content-MD5 header
+	// Using ContentMD5 prevents the SDK from computing SHA256, which fixes
+	// XAmzContentSHA256Mismatch errors with Linode Object Storage
+	md5Hash := md5.Sum(csvData)
+	contentMD5 := base64.StdEncoding.EncodeToString(md5Hash[:])
+
 	// Upload to Linode Object Storage
 	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:        aws.String(s.bucket),
@@ -73,6 +81,7 @@ func (s *S3Delivery) UploadCSV(ctx context.Context, orgID, jobID uuid.UUID, csvD
 		Body:          bytes.NewReader(csvData),
 		ContentType:   aws.String("text/csv"),
 		ContentLength: aws.Int64(int64(len(csvData))),
+		ContentMD5:    aws.String(contentMD5), // Fix for Linode Object Storage
 		Metadata: map[string]string{
 			"checksum": checksum,
 			"org-id":   orgID.String(),
