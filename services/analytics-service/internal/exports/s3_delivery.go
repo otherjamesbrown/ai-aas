@@ -4,14 +4,13 @@ package exports
 import (
 	"bytes"
 	"context"
-	"crypto/md5"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -61,33 +60,30 @@ func NewS3Delivery(endpoint, accessKey, secretKey, bucket, region string, signed
 
 // UploadCSV uploads CSV data to S3 and returns the signed URL and checksum.
 func (s *S3Delivery) UploadCSV(ctx context.Context, orgID, jobID uuid.UUID, csvData []byte) (string, string, error) {
-	// Calculate SHA-256 checksum
+	// Calculate SHA-256 checksum for our records
 	hash := sha256.Sum256(csvData)
 	checksum := hex.EncodeToString(hash[:])
 
 	// Generate object key: analytics/exports/{org_id}/{job_id}.csv
 	key := fmt.Sprintf("analytics/exports/%s/%s.csv", orgID.String(), jobID.String())
 
-	// Calculate MD5 for Content-MD5 header
-	// Using ContentMD5 prevents the SDK from computing SHA256, which fixes
-	// XAmzContentSHA256Mismatch errors with Linode Object Storage
-	md5Hash := md5.Sum(csvData)
-	contentMD5 := base64.StdEncoding.EncodeToString(md5Hash[:])
-
 	// Upload to Linode Object Storage
+	// Use UNSIGNED-PAYLOAD to avoid XAmzContentSHA256Mismatch errors
+	// Linode Object Storage doesn't properly handle the x-amz-content-sha256 header
 	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:        aws.String(s.bucket),
 		Key:           aws.String(key),
 		Body:          bytes.NewReader(csvData),
 		ContentType:   aws.String("text/csv"),
 		ContentLength: aws.Int64(int64(len(csvData))),
-		ContentMD5:    aws.String(contentMD5), // Fix for Linode Object Storage
 		Metadata: map[string]string{
 			"checksum": checksum,
 			"org-id":   orgID.String(),
 			"job-id":   jobID.String(),
 		},
-	})
+	}, s3.WithAPIOptions(
+		v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware,
+	))
 	if err != nil {
 		return "", "", fmt.Errorf("upload CSV to Linode Object Storage: %w", err)
 	}
