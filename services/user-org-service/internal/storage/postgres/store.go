@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -1537,4 +1538,145 @@ func (s *Store) RedeemBootstrapKey(ctx context.Context, id uuid.UUID, redeemedBy
 	}
 
 	return nil
+}
+
+// ListAuditLogs retrieves audit logs with optional filters.
+func (s *Store) ListAuditLogs(ctx context.Context, filters AuditLogFilters) ([]AuditLog, int, error) {
+	if filters.Limit <= 0 {
+		filters.Limit = 25 // Default limit
+	}
+	if filters.Limit > 100 {
+		filters.Limit = 100 // Max limit
+	}
+
+	// Build WHERE clauses dynamically
+	var whereClauses []string
+	var args []any
+	argNum := 1
+
+	whereClauses = append(whereClauses, fmt.Sprintf("org_id = $%d", argNum))
+	args = append(args, filters.OrgID)
+	argNum++
+
+	if filters.Action != nil && *filters.Action != "" {
+		whereClauses = append(whereClauses, fmt.Sprintf("action = $%d", argNum))
+		args = append(args, *filters.Action)
+		argNum++
+	}
+
+	if filters.ResourceType != nil && *filters.ResourceType != "" {
+		whereClauses = append(whereClauses, fmt.Sprintf("target_type = $%d", argNum))
+		args = append(args, *filters.ResourceType)
+		argNum++
+	}
+
+	if filters.ActorID != nil && *filters.ActorID != "" {
+		// Support both UUID and email lookups
+		actorUUID, err := uuid.Parse(*filters.ActorID)
+		if err == nil {
+			// It's a valid UUID
+			whereClauses = append(whereClauses, fmt.Sprintf("actor_id = $%d", argNum))
+			args = append(args, actorUUID)
+		} else {
+			// Assume it's an email
+			whereClauses = append(whereClauses, fmt.Sprintf("actor_email = $%d", argNum))
+			args = append(args, *filters.ActorID)
+		}
+		argNum++
+	}
+
+	if filters.StartDate != nil {
+		whereClauses = append(whereClauses, fmt.Sprintf("created_at >= $%d", argNum))
+		args = append(args, *filters.StartDate)
+		argNum++
+	}
+
+	if filters.EndDate != nil {
+		whereClauses = append(whereClauses, fmt.Sprintf("created_at <= $%d", argNum))
+		args = append(args, *filters.EndDate)
+		argNum++
+	}
+
+	whereClause := strings.Join(whereClauses, " AND ")
+
+	// Get total count
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM audit_logs WHERE %s", whereClause)
+	var totalCount int
+	if err := s.pool.QueryRow(ctx, countQuery, args...).Scan(&totalCount); err != nil {
+		return nil, 0, fmt.Errorf("count audit logs: %w", err)
+	}
+
+	// Get paginated results
+	query := fmt.Sprintf(`
+		SELECT
+			event_id, org_id, actor_id, actor_type, actor_email,
+			target_id, target_type, action, resource, policy_id,
+			ip_address, user_agent, metadata, hash, signature,
+			delivered_at, created_at
+		FROM audit_logs
+		WHERE %s
+		ORDER BY created_at DESC
+		LIMIT $%d OFFSET $%d
+	`, whereClause, argNum, argNum+1)
+
+	args = append(args, filters.Limit, filters.Offset)
+
+	rows, err := s.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("query audit logs: %w", err)
+	}
+	defer rows.Close()
+
+	var logs []AuditLog
+	for rows.Next() {
+		log, err := scanAuditLog(rows)
+		if err != nil {
+			return nil, 0, fmt.Errorf("scan audit log: %w", err)
+		}
+		logs = append(logs, log)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate audit logs: %w", err)
+	}
+
+	return logs, totalCount, nil
+}
+
+// scanAuditLog scans a row into an AuditLog struct.
+func scanAuditLog(row pgx.Row) (AuditLog, error) {
+	var log AuditLog
+	var metadataJSON []byte
+
+	err := row.Scan(
+		&log.EventID,
+		&log.OrgID,
+		&log.ActorID,
+		&log.ActorType,
+		&log.ActorEmail,
+		&log.TargetID,
+		&log.TargetType,
+		&log.Action,
+		&log.Resource,
+		&log.PolicyID,
+		&log.IPAddress,
+		&log.UserAgent,
+		&metadataJSON,
+		&log.Hash,
+		&log.Signature,
+		&log.DeliveredAt,
+		&log.CreatedAt,
+	)
+	if err != nil {
+		return log, err
+	}
+
+	// Parse metadata JSON
+	if metadataJSON != nil {
+		if err := json.Unmarshal(metadataJSON, &log.Metadata); err != nil {
+			return log, fmt.Errorf("unmarshal metadata: %w", err)
+		}
+	}
+
+	return log, nil
 }

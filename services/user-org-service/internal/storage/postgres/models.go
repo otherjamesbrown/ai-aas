@@ -294,3 +294,36 @@ type CreateBootstrapKeyParams struct {
 	Notes       string
 	ExpiresAt   time.Time
 }
+
+// AuditLog represents an audit event stored in the database.
+type AuditLog struct {
+	EventID     uuid.UUID
+	OrgID       uuid.UUID
+	ActorID     uuid.UUID
+	ActorType   string
+	ActorEmail  string
+	TargetID    *uuid.UUID
+	TargetType  *string
+	Action      string
+	Resource    *string
+	PolicyID    *uuid.UUID
+	IPAddress   *string
+	UserAgent   *string
+	Metadata    map[string]any
+	Hash        string
+	Signature   string
+	DeliveredAt *time.Time
+	CreatedAt   time.Time
+}
+
+// AuditLogFilters contains filters for querying audit logs.
+type AuditLogFilters struct {
+	OrgID        uuid.UUID
+	Action       *string
+	ResourceType *string
+	ActorID      *string
+	StartDate    *time.Time
+	EndDate      *time.Time
+	Limit        int
+	Offset       int
+}
