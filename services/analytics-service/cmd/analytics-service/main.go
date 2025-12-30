@@ -55,6 +55,23 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/analytics-service/internal/storage/postgres"
 )
 
+// testS3Connection verifies S3 bucket accessibility by performing a HEAD request.
+func testS3Connection(ctx context.Context, s3Delivery *exports.S3Delivery, bucket string) error {
+	if s3Delivery == nil {
+		return fmt.Errorf("S3 delivery adapter is nil")
+	}
+
+	// Test by generating a signed URL for a test key
+	// This verifies credentials and bucket access without uploading data
+	testKey := "analytics/exports/.healthcheck"
+	_, err := s3Delivery.GenerateSignedURL(ctx, testKey)
+	if err != nil {
+		return fmt.Errorf("failed to generate test signed URL: %w", err)
+	}
+
+	return nil
+}
+
 func main() {
 	ctx := context.Background()
 
@@ -140,7 +157,30 @@ func main() {
 
 	// Initialize Linode Object Storage delivery adapter (if configured)
 	var s3Delivery *exports.S3Delivery
-	if cfg.S3Endpoint != "" && cfg.S3AccessKey != "" && cfg.S3SecretKey != "" {
+
+	// Check if S3 is partially configured (fail fast if misconfigured)
+	s3ConfigCount := 0
+	if cfg.S3Endpoint != "" {
+		s3ConfigCount++
+	}
+	if cfg.S3AccessKey != "" {
+		s3ConfigCount++
+	}
+	if cfg.S3SecretKey != "" {
+		s3ConfigCount++
+	}
+
+	if s3ConfigCount > 0 && s3ConfigCount < 3 {
+		// Partial configuration detected - fail fast
+		logger.Fatal("S3 partially configured - all credentials required",
+			zap.Bool("has_endpoint", cfg.S3Endpoint != ""),
+			zap.Bool("has_access_key", cfg.S3AccessKey != ""),
+			zap.Bool("has_secret_key", cfg.S3SecretKey != ""),
+			zap.String("required_env_vars", "S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY"),
+		)
+	}
+
+	if s3ConfigCount == 3 {
 		s3Delivery, err = exports.NewS3Delivery(
 			cfg.S3Endpoint,
 			cfg.S3AccessKey,
@@ -153,12 +193,30 @@ func main() {
 		if err != nil {
 			logger.Fatal("failed to initialize S3 delivery adapter", zap.Error(err))
 		}
-		logger.Info("initialized Linode Object Storage delivery adapter",
+
+		// Log S3 configuration
+		logger.Info("S3 export enabled",
 			zap.String("endpoint", cfg.S3Endpoint),
 			zap.String("bucket", cfg.S3Bucket),
+			zap.String("region", cfg.S3Region),
 		)
+
+		// Test S3 connection
+		testCtx, testCancel := context.WithTimeout(ctx, 5*time.Second)
+		defer testCancel()
+		if err := testS3Connection(testCtx, s3Delivery, cfg.S3Bucket); err != nil {
+			logger.Fatal("S3 connection test failed",
+				zap.Error(err),
+				zap.String("endpoint", cfg.S3Endpoint),
+				zap.String("bucket", cfg.S3Bucket),
+			)
+		}
+		logger.Info("S3 connection test successful")
 	} else {
-		logger.Warn("S3 delivery adapter not configured - export jobs will fail without S3 credentials")
+		logger.Warn("S3 export disabled - export jobs will not be processed",
+			zap.String("reason", "S3_ENDPOINT, S3_ACCESS_KEY, and S3_SECRET_KEY not configured"),
+			zap.String("impact", "Export job API will accept requests, but jobs will remain pending"),
+		)
 	}
 
 	// Register exports API routes
