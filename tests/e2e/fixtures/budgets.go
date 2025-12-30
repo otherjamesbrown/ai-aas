@@ -67,6 +67,8 @@ func (bf *BudgetFixture) Create(ctx *harness.Context, orgID string, limit float6
 	bf.fm.Register("budget", budget.ID, map[string]string{
 		"organization_id": orgID,
 		"test_run_id": ctx.RunID,
+	}, func() error {
+		return bf.Delete(budget.ID)
 	})
 
 	return &budget, nil

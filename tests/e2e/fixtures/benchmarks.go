@@ -195,7 +195,11 @@ func (f *BenchmarkFixture) CreateTarget(ctx *harness.Context, name, modelName, s
 	}
 
 	// Register for cleanup
-	f.fixtures.Register("benchmark_target", target.ID, nil)
+	f.fixtures.Register("benchmark_target", target.ID, map[string]string{
+		"name": target.Name,
+	}, func() error {
+		return f.DeleteTarget(target.ID)
+	})
 
 	return &target, nil
 }

@@ -66,6 +66,8 @@ func (akf *APIKeyFixture) Create(ctx *harness.Context, orgID string, serviceAcco
 		"organization_id":    orgID,
 		"service_account_id": serviceAccountID,
 		"test_run_id":        ctx.RunID,
+	}, func() error {
+		return akf.DeleteWithOrgID(orgID, apiKey.ID)
 	})
 
 	return &apiKey, nil
@@ -137,8 +139,17 @@ func (akf *APIKeyFixture) Get(id string) (*APIKey, error) {
 }
 
 // Delete deletes an API key
+// Note: This requires orgID which isn't stored in the fixture. Use DeleteWithOrgID instead.
+// This method is kept for backwards compatibility but will fail if called.
 func (akf *APIKeyFixture) Delete(id string) error {
-	resp, err := akf.client.DELETE(fmt.Sprintf("/v1/api-keys/%s", id))
+	// This method can't work because we need orgID to call the correct endpoint.
+	// The actual DELETE endpoint is /v1/orgs/{orgId}/api-keys/{apiKeyId}
+	return fmt.Errorf("Delete(id) is deprecated - use DeleteWithOrgID(orgID, keyID) instead")
+}
+
+// DeleteWithOrgID deletes an API key given the org ID and key ID
+func (akf *APIKeyFixture) DeleteWithOrgID(orgID, keyID string) error {
+	resp, err := akf.client.DELETE(fmt.Sprintf("/v1/orgs/%s/api-keys/%s", orgID, keyID))
 	if err != nil {
 		return fmt.Errorf("delete API key: %w", err)
 	}

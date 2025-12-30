@@ -71,6 +71,8 @@ func (uf *UserFixture) Create(ctx *harness.Context, orgID string, email string, 
 		"email": user.Email,
 		"organization_id": orgID,
 		"test_run_id": ctx.RunID,
+	}, func() error {
+		return uf.Delete(orgID, user.ID)
 	})
 
 	return &user, nil

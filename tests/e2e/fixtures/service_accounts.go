@@ -61,6 +61,8 @@ func (saf *ServiceAccountFixture) Create(ctx *harness.Context, orgID string, nam
 		"name":            sa.Name,
 		"organization_id": orgID,
 		"test_run_id":     ctx.RunID,
+	}, func() error {
+		return saf.Delete(orgID, sa.ID)
 	})
 
 	return &sa, nil

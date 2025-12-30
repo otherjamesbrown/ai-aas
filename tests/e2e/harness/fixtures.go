@@ -20,6 +20,7 @@ type Fixture struct {
 	ID        string
 	CreatedAt time.Time
 	Metadata  map[string]string
+	CleanupFn func() error
 }
 
 // NewFixtureManager creates a new fixture manager
@@ -32,7 +33,7 @@ func NewFixtureManager(runID, workerID string) *FixtureManager {
 }
 
 // Register registers a fixture for cleanup
-func (fm *FixtureManager) Register(fixtureType, id string, metadata map[string]string) {
+func (fm *FixtureManager) Register(fixtureType, id string, metadata map[string]string, cleanupFn func() error) {
 	fm.mu.Lock()
 	defer fm.mu.Unlock()
 
@@ -41,6 +42,7 @@ func (fm *FixtureManager) Register(fixtureType, id string, metadata map[string]s
 		ID:        id,
 		CreatedAt: time.Now(),
 		Metadata:  metadata,
+		CleanupFn: cleanupFn,
 	})
 }
 
@@ -75,9 +77,9 @@ func (fm *FixtureManager) Cleanup() error {
 
 // cleanupFixture performs cleanup for a single fixture
 func (fm *FixtureManager) cleanupFixture(fixture Fixture) error {
-	// Implementation will be added in fixture-specific files
-	// This is a placeholder that will be extended
-	// Actual cleanup is handled by fixture-specific Delete methods
+	if fixture.CleanupFn != nil {
+		return fixture.CleanupFn()
+	}
 	return nil
 }
 

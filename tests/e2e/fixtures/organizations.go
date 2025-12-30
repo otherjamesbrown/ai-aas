@@ -68,6 +68,8 @@ func (of *OrganizationFixture) Create(ctx *harness.Context, name string) (*Organ
 	of.fm.Register("organization", org.ID, map[string]string{
 		"name": org.Name,
 		"test_run_id": ctx.RunID,
+	}, func() error {
+		return of.Delete(org.ID)
 	})
 
 	return &org, nil
