@@ -157,6 +157,9 @@ adminApi:
 rateLimit:
   defaultRPS: 100
   burstSize: 200
+  tokensDaily: 0  # 0 disables quota enforcement in development
+  tokensHourly: 0
+  tokensWeekly: 0
 
 # Budget service (optional for dev)
 budget:
