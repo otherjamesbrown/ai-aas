@@ -244,10 +244,20 @@ func runAPIKeyCreate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Parse expiration string to *int (number of days)
+	var expiresInDays *int
+	if expires != "" && expires != "never" {
+		days, err := parseExpiresToDays(expires)
+		if err != nil {
+			return errors.NewUsageError("invalid expiration format: " + err.Error())
+		}
+		expiresInDays = &days
+	}
+
 	result, err := client.CreateAPIKey(ctx, config.GetOrgID(), &api.CreateAPIKeyRequest{
-		Name:      name,
-		UserID:    resolvedUserID,
-		ExpiresIn: expires,
+		Name:          name,
+		UserID:        resolvedUserID,
+		ExpiresInDays: expiresInDays,
 	})
 	if err != nil {
 		return wrapAPIError(err, "failed to create API key")
@@ -268,13 +278,42 @@ func runAPIKeyCreate(cmd *cobra.Command, args []string) error {
 	output.KeyValue("Key ID", result.KeyID)
 	output.KeyValue("Name", name)
 	output.KeyValue("Status", result.Status)
-	output.KeyValue("Expires", "Never") // TODO: Parse from response when supported
+	if result.ExpiresAt != nil && *result.ExpiresAt != "" {
+		output.KeyValue("Expires", *result.ExpiresAt)
+	} else {
+		output.KeyValue("Expires", "Never")
+	}
 
 	fmt.Println()
 	fmt.Println("To use this key:")
 	fmt.Printf("  export AI_AAS_API_KEY=\"%s\"\n", result.Token)
 
 	return nil
+}
+
+// parseExpiresToDays converts expiration strings like "30d", "90d", "1y" to number of days.
+func parseExpiresToDays(expires string) (int, error) {
+	if expires == "" || expires == "never" {
+		return 0, fmt.Errorf("no expiration set")
+	}
+
+	// Handle common formats: 30d, 90d, 365d, 1y
+	switch expires {
+	case "30d":
+		return 30, nil
+	case "90d":
+		return 90, nil
+	case "365d", "1y":
+		return 365, nil
+	default:
+		// Try to parse as raw number (assume days)
+		var days int
+		_, err := fmt.Sscanf(expires, "%d", &days)
+		if err != nil {
+			return 0, fmt.Errorf("expected format: 30d, 90d, 1y, or number of days")
+		}
+		return days, nil
+	}
 }
 
 // --- apikey delete ---

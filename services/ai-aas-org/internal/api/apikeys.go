@@ -63,19 +63,20 @@ func (k *APIKey) ToDisplay() APIKeyDisplay {
 
 // CreateAPIKeyRequest is the request to create an API key.
 type CreateAPIKeyRequest struct {
-	Name      string `json:"notes,omitempty"`          // API uses 'notes' for description
-	UserID    string `json:"-"`                        // Used in URL path, not body
-	ExpiresIn string `json:"expiresInDays,omitempty"`  // e.g., "30", "90"
-	Scopes    string `json:"scopes,omitempty"`         // Comma-separated scopes
+	Name          string   `json:"notes,omitempty"`          // API uses 'notes' for description
+	UserID        string   `json:"-"`                        // Used in URL path, not body
+	ExpiresInDays *int     `json:"expiresInDays,omitempty"`  // Number of days until expiration
+	Scopes        []string `json:"scopes,omitempty"`         // Array of scopes
 }
 
 // CreateAPIKeyResponse is the response from creating an API key.
 type CreateAPIKeyResponse struct {
 	// Flat response fields from API
-	KeyID       string `json:"keyId"`
-	Token       string `json:"token"`       // Only returned once at creation
-	Fingerprint string `json:"fingerprint"`
-	Status      string `json:"status"`
+	KeyID       string  `json:"keyId"`
+	Token       string  `json:"token"`       // Only returned once at creation
+	Fingerprint string  `json:"fingerprint"`
+	Status      string  `json:"status"`
+	ExpiresAt   *string `json:"expiresAt,omitempty"`
 	// Populated for backwards compatibility
 	RawKey string `json:"-"` // Populated from Token
 }
