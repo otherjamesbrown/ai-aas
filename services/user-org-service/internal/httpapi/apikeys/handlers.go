@@ -369,6 +369,11 @@ func (h *Handler) RevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 
 	// Revoke key in database
 	revokedAt := time.Now().UTC()
+	h.logger.Info("revoking API key in database",
+		zap.String("apiKeyID", apiKey.ID.String()),
+		zap.String("keyID", apiKey.KeyID),
+		zap.String("fingerprint", apiKey.Fingerprint[:min(8, len(apiKey.Fingerprint))]),
+		zap.String("operation", "database_revoke"))
 	_, err = h.runtime.Postgres.RevokeAPIKey(ctx, postgres.RevokeAPIKeyParams{
 		ID:        apiKey.ID,
 		Version:   apiKey.Version,
@@ -380,7 +385,7 @@ func (h *Handler) RevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteConflict(w, r, "API key was modified concurrently")
 			return
 		}
-		h.logger.Error("failed to revoke API key", zap.Error(err), zap.String("keyIdentifier", apiKeyIDParam))
+		h.logger.Error("failed to revoke API key", zap.Error(err), zap.String("apiKeyID", apiKey.ID.String()))
 		httputil.WriteInternalError(w, r)
 		return
 	}
@@ -393,6 +398,11 @@ func (h *Handler) RevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 		if apiKey.ExpiresAt != nil && apiKey.ExpiresAt.After(time.Now()) {
 			ttl = time.Until(*apiKey.ExpiresAt)
 		}
+		h.logger.Info("propagating API key revocation to Redis",
+			zap.String("fingerprint", apiKey.Fingerprint[:min(8, len(apiKey.Fingerprint))]),
+			zap.String("revocationKey", revocationKey),
+			zap.Duration("ttl", ttl),
+			zap.String("operation", "redis_revocation"))
 		if err := h.runtime.Redis.Set(ctx, revocationKey, "1", ttl).Err(); err != nil {
 			h.logger.Warn("failed to propagate revocation to Redis", zap.Error(err), zap.String("fingerprint", apiKey.Fingerprint))
 			// Non-fatal: continue even if Redis propagation fails
@@ -400,12 +410,21 @@ func (h *Handler) RevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 
 		// Publish cache invalidation event to notify api-router-service instances
 		const invalidationChannel = "apikey:invalidate"
+		h.logger.Info("publishing cache invalidation event",
+			zap.String("fingerprint", apiKey.Fingerprint[:min(8, len(apiKey.Fingerprint))]),
+			zap.String("channel", invalidationChannel),
+			zap.String("operation", "publish_invalidation"))
 		if err := h.runtime.Redis.Publish(ctx, invalidationChannel, apiKey.Fingerprint).Err(); err != nil {
 			h.logger.Warn("failed to publish cache invalidation event", zap.Error(err), zap.String("fingerprint", apiKey.Fingerprint))
 			// Non-fatal: continue even if publish fails
 		} else {
-			h.logger.Debug("published API key cache invalidation event", zap.String("fingerprint", apiKey.Fingerprint[:8]))
+			h.logger.Info("successfully published API key cache invalidation event",
+				zap.String("fingerprint", apiKey.Fingerprint[:min(8, len(apiKey.Fingerprint))]),
+				zap.String("channel", invalidationChannel))
 		}
+	} else {
+		h.logger.Warn("Redis not configured, skipping cache invalidation",
+			zap.String("fingerprint", apiKey.Fingerprint[:min(8, len(apiKey.Fingerprint))]))
 	}
 
 	// Emit audit event
@@ -1089,6 +1108,11 @@ func (h *Handler) RevokeAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 
 	// Revoke key in database
 	revokedAt := time.Now().UTC()
+	h.logger.Info("revoking API key in database",
+		zap.String("apiKeyID", apiKey.ID.String()),
+		zap.String("keyID", apiKey.KeyID),
+		zap.String("fingerprint", apiKey.Fingerprint[:min(8, len(apiKey.Fingerprint))]),
+		zap.String("operation", "database_revoke"))
 	_, err = h.runtime.Postgres.RevokeAPIKey(ctx, postgres.RevokeAPIKeyParams{
 		ID:        apiKey.ID,
 		Version:   apiKey.Version,
@@ -1100,7 +1124,7 @@ func (h *Handler) RevokeAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteConflict(w, r, "API key was modified concurrently")
 			return
 		}
-		h.logger.Error("failed to revoke API key", zap.Error(err), zap.String("keyIdentifier", apiKeyIDParam))
+		h.logger.Error("failed to revoke API key", zap.Error(err), zap.String("apiKeyID", apiKey.ID.String()))
 		httputil.WriteInternalError(w, r)
 		return
 	}
@@ -1113,6 +1137,11 @@ func (h *Handler) RevokeAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 		if apiKey.ExpiresAt != nil && apiKey.ExpiresAt.After(time.Now()) {
 			ttl = time.Until(*apiKey.ExpiresAt)
 		}
+		h.logger.Info("propagating API key revocation to Redis",
+			zap.String("fingerprint", apiKey.Fingerprint[:min(8, len(apiKey.Fingerprint))]),
+			zap.String("revocationKey", revocationKey),
+			zap.Duration("ttl", ttl),
+			zap.String("operation", "redis_revocation"))
 		if err := h.runtime.Redis.Set(ctx, revocationKey, "1", ttl).Err(); err != nil {
 			h.logger.Warn("failed to propagate revocation to Redis", zap.Error(err), zap.String("fingerprint", apiKey.Fingerprint))
 			// Non-fatal: continue even if Redis propagation fails
@@ -1120,12 +1149,21 @@ func (h *Handler) RevokeAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 
 		// Publish cache invalidation event to notify api-router-service instances
 		const invalidationChannel = "apikey:invalidate"
+		h.logger.Info("publishing cache invalidation event",
+			zap.String("fingerprint", apiKey.Fingerprint[:min(8, len(apiKey.Fingerprint))]),
+			zap.String("channel", invalidationChannel),
+			zap.String("operation", "publish_invalidation"))
 		if err := h.runtime.Redis.Publish(ctx, invalidationChannel, apiKey.Fingerprint).Err(); err != nil {
 			h.logger.Warn("failed to publish cache invalidation event", zap.Error(err), zap.String("fingerprint", apiKey.Fingerprint))
 			// Non-fatal: continue even if publish fails
 		} else {
-			h.logger.Debug("published API key cache invalidation event", zap.String("fingerprint", apiKey.Fingerprint[:8]))
+			h.logger.Info("successfully published API key cache invalidation event",
+				zap.String("fingerprint", apiKey.Fingerprint[:min(8, len(apiKey.Fingerprint))]),
+				zap.String("channel", invalidationChannel))
 		}
+	} else {
+		h.logger.Warn("Redis not configured, skipping cache invalidation",
+			zap.String("fingerprint", apiKey.Fingerprint[:min(8, len(apiKey.Fingerprint))]))
 	}
 
 	// Emit audit event
@@ -1260,4 +1298,12 @@ func (h *Handler) InspectAPIKey(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		h.logger.Error("failed to encode response", zap.Error(err))
 	}
+}
+
+// min returns the minimum of two integers (helper for fingerprint logging).
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

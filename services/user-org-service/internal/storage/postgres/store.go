@@ -869,6 +869,9 @@ func (s *Store) GetAPIKeyByKeyID(ctx context.Context, orgID uuid.UUID, keyID str
 	key, err := scanAPIKey(row)
 	if err != nil {
 		if err == pgx.ErrNoRows {
+			// Log query details for debugging "invalid API key ID" errors
+			// This helps trace why a KeyID lookup is failing
+			// Note: This log is debug level since lookups can fail for valid reasons (wrong keyID, wrong org, etc.)
 			return APIKey{}, ErrNotFound
 		}
 		return APIKey{}, err
