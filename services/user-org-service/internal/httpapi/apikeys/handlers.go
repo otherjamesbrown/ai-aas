@@ -77,6 +77,7 @@ func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger *zap.Logger
 	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Post("/v1/orgs/{orgId}/service-accounts/{serviceAccountId}/api-keys", handler.IssueAPIKey)
 	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Post("/v1/orgs/{orgId}/users/{userId}/api-keys", handler.IssueUserAPIKey)
 	router.With(middleware.RequireAdminScope(logger, "org:read", "org:admin")).Get("/v1/orgs/{orgId}/api-keys", handler.ListAPIKeys)
+	router.With(middleware.RequireAdminScope(logger, "org:read", "org:admin")).Get("/v1/orgs/{orgId}/users/{userId}/api-keys", handler.ListUserAPIKeys)
 	router.With(middleware.RequireAdminScope(logger, "org:read", "org:admin")).Get("/v1/orgs/{orgId}/api-keys/{apiKeyId}", handler.GetAPIKey)
 	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Patch("/v1/orgs/{orgId}/api-keys/{apiKeyId}", handler.UpdateAPIKey)
 	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Post("/v1/orgs/{orgId}/api-keys/{apiKeyId}/rotate", handler.RotateAPIKey)
@@ -685,6 +686,101 @@ func (h *Handler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
 			Status:        key.Status,
 			Scopes:        key.Scopes,
 			IssuedAt:      key.IssuedAt.Format(time.RFC3339),
+		}
+		if key.ExpiresAt != nil {
+			expStr := key.ExpiresAt.Format(time.RFC3339)
+			responses[i].ExpiresAt = &expStr
+		}
+		if key.LastUsedAt != nil {
+			usedStr := key.LastUsedAt.Format(time.RFC3339)
+			responses[i].LastUsedAt = &usedStr
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(responses); err != nil {
+		h.logger.Error("failed to encode response", zap.Error(err))
+	}
+}
+
+// ListUserAPIKeys handles GET /v1/orgs/{orgId}/users/{userId}/api-keys - List API keys for a specific user.
+func (h *Handler) ListUserAPIKeys(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgIDParam := chi.URLParam(r, "orgId")
+	userIDParam := chi.URLParam(r, "userId")
+
+	// Parse org ID (UUID or slug)
+	var orgID uuid.UUID
+	var err error
+	if orgID, err = uuid.Parse(orgIDParam); err != nil {
+		// Try as slug
+		org, err := h.runtime.Postgres.GetOrgBySlug(ctx, orgIDParam)
+		if err != nil {
+			if err == postgres.ErrNotFound {
+				httputil.WriteNotFound(w, r, "organization", "")
+				return
+			}
+			h.logger.Error("failed to resolve organization", zap.Error(err), zap.String("orgId", orgIDParam))
+			httputil.WriteInternalError(w, r)
+			return
+		}
+		orgID = org.ID
+	}
+
+	// Parse user ID
+	userID, err := uuid.Parse(userIDParam)
+	if err != nil {
+		httputil.WriteBadRequest(w, r, "invalid user ID")
+		return
+	}
+
+	// Verify user exists and belongs to org
+	user, err := h.runtime.Postgres.GetUserByID(ctx, orgID, userID)
+	if err != nil {
+		if err == postgres.ErrNotFound {
+			httputil.WriteNotFound(w, r, "user", "")
+			return
+		}
+		h.logger.Error("failed to get user", zap.Error(err), zap.String("userId", userID.String()))
+		httputil.WriteInternalError(w, r)
+		return
+	}
+
+	// Verify user belongs to org
+	if user.OrgID != orgID {
+		httputil.WriteNotFound(w, r, "user", "")
+		return
+	}
+
+	// List API keys for this user
+	apiKeys, err := h.runtime.Postgres.ListAPIKeysForPrincipal(ctx, orgID, postgres.PrincipalTypeUser, userID)
+	if err != nil {
+		h.logger.Error("failed to list API keys for user", zap.Error(err), zap.String("orgId", orgID.String()), zap.String("userId", userID.String()))
+		httputil.WriteInternalError(w, r)
+		return
+	}
+
+	// Convert to response format (without secrets)
+	type APIKeyResponse struct {
+		KeyID       string   `json:"keyId"`
+		Notes       string   `json:"notes,omitempty"`
+		Fingerprint string   `json:"fingerprint"`
+		Status      string   `json:"status"`
+		Scopes      []string `json:"scopes"`
+		IssuedAt    string   `json:"issuedAt"`
+		ExpiresAt   *string  `json:"expiresAt,omitempty"`
+		LastUsedAt  *string  `json:"lastUsedAt,omitempty"`
+	}
+
+	responses := make([]APIKeyResponse, len(apiKeys))
+	for i, key := range apiKeys {
+		responses[i] = APIKeyResponse{
+			KeyID:       key.KeyID,
+			Notes:       key.Notes,
+			Fingerprint: key.Fingerprint,
+			Status:      key.Status,
+			Scopes:      key.Scopes,
+			IssuedAt:    key.IssuedAt.Format(time.RFC3339),
 		}
 		if key.ExpiresAt != nil {
 			expStr := key.ExpiresAt.Format(time.RFC3339)

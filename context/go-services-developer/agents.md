@@ -156,6 +156,7 @@ api_endpoints:
     api_keys:
       - "POST   /orgs/{orgId}/api-keys"
       - "GET    /orgs/{orgId}/api-keys → []APIKey (raw array)"
+      - "GET    /orgs/{orgId}/users/{userId}/api-keys → []APIKey (raw array)"
       - "PATCH  /orgs/{orgId}/api-keys/{id}"
       - "POST   /orgs/{orgId}/api-keys/{id}/rotate"
       - "DELETE /orgs/{orgId}/api-keys/{id}"
@@ -411,3 +412,4 @@ Before completing work:
 - [ ] DEPLOYMENT.md updated if changed env/ports/health
 - [ ] Module path matches import paths
 - [ ] Shared module has replace directive in go.mod
+- [ ] After `git push`, verify CI workflow triggered with `./scripts/ci/verify-workflow-triggered.sh`
