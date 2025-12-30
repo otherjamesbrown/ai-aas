@@ -52,7 +52,7 @@ Examples:
 
   # Deploy with custom name and resources
   ai-aas-cli model hf-deploy https://huggingface.co/meta-llama/Llama-3-8B \
-    --name llama-3-8b --gpu-count 1 --memory 24 --accept-license
+    --model-name llama-3-8b --gpu-count 1 --memory 24 --accept-license
 
   # Deploy without caching (slower startup, no S3 needed)
   ai-aas-cli model hf-deploy unsloth/gpt-oss-20b --skip-cache
@@ -317,7 +317,7 @@ See Also:
 		},
 	}
 
-	cmd.Flags().StringVar(&name, "name", "", "Model name (derived from URL if not specified)")
+	cmd.Flags().StringVar(&name, "model-name", "", "Model name (derived from URL if not specified)")
 	cmd.Flags().StringVarP(&environment, "environment", "e", "development", "Target environment")
 	cmd.Flags().IntVar(&gpuCount, "gpu-count", 1, "Number of GPUs")
 	cmd.Flags().IntVar(&memoryGB, "memory", 24, "Memory in GB")

@@ -77,7 +77,7 @@ func runBenchmarkScenarioList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	headers := []string{"NAME", "PROFILE", "RATE", "DURATION", "TOKENS", "DESCRIPTION"}
+	headers := []string{"Name", "Profile", "Rate", "Duration", "Tokens", "Description"}
 	var rows [][]string
 	for _, s := range result.Scenarios {
 		// Extract useful info from config

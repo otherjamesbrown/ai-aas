@@ -27,7 +27,7 @@ manage their access.
 
 Examples:
   ai-aas-org user list
-  ai-aas-org user create --email user@example.com --display-name "John Doe"
+  ai-aas-org user create --user-email user@example.com --user-display-name "John Doe"
   ai-aas-org user show user@example.com
   ai-aas-org user delete user@example.com`,
 }
@@ -103,7 +103,7 @@ func runUserList(cmd *cobra.Command, args []string) error {
 	}
 
 	// Build table
-	headers := []string{"USER_ID", "EMAIL", "NAME", "ROLES", "STATUS", "CREATED"}
+	headers := []string{"User ID", "Email", "Name", "Roles", "Status", "Created"}
 	var rows [][]string
 	for _, u := range result.Users {
 		roles := strings.Join(u.Metadata.Roles, ", ")
@@ -142,7 +142,7 @@ The user will be created with the specified email and display name.
 By default, users are created with the 'user' role.
 
 Examples:
-  ai-aas-org user create --email user@example.com --display-name "John Doe"
+  ai-aas-org user create --user-email user@example.com --user-display-name "John Doe"
   ai-aas-org user create --guided`,
 	RunE: runUserCreate,
 }
@@ -150,8 +150,8 @@ Examples:
 func init() {
 	userCmd.AddCommand(userCreateCmd)
 
-	userCreateCmd.Flags().StringVarP(&userCreateEmail, "email", "e", "", "user email address")
-	userCreateCmd.Flags().StringVarP(&userCreateName, "display-name", "n", "", "user display name")
+	userCreateCmd.Flags().StringVarP(&userCreateEmail, "user-email", "e", "", "user email address")
+	userCreateCmd.Flags().StringVarP(&userCreateName, "user-display-name", "n", "", "user display name")
 	userCreateCmd.Flags().StringVarP(&userCreateRole, "role", "r", "user", "user role (user, admin)")
 }
 
@@ -194,10 +194,10 @@ func runUserCreate(cmd *cobra.Command, args []string) error {
 
 	// Validate
 	if email == "" {
-		return errors.NewUsageError("--email is required")
+		return errors.NewUsageError("--user-email is required")
 	}
 	if name == "" {
-		return errors.NewUsageError("--display-name is required")
+		return errors.NewUsageError("--user-display-name is required")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

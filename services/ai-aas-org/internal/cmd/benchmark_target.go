@@ -94,7 +94,7 @@ func runBenchmarkTargetList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	headers := []string{"NAME", "MODEL", "SCENARIO", "ENV", "STATUS", "LAST RUN"}
+	headers := []string{"Name", "Model", "Scenario", "Env", "Status", "Last Run"}
 	var rows [][]string
 	for _, t := range result.Targets {
 		lastRun := "-"

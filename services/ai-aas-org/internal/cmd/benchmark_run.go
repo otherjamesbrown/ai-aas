@@ -105,7 +105,7 @@ func runBenchmarkRunList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	headers := []string{"ID", "SCENARIO", "STATUS", "STARTED", "DURATION", "THROUGHPUT"}
+	headers := []string{"ID", "Scenario", "Status", "Started", "Duration", "Throughput"}
 	var rows [][]string
 	for _, r := range result.Runs {
 		started := "-"

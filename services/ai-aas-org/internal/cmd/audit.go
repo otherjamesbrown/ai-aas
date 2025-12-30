@@ -103,7 +103,7 @@ func runAuditList(cmd *cobra.Command, args []string) error {
 	output.Header("Audit Log")
 	fmt.Println()
 
-	headers := []string{"TIME", "ACTION", "RESOURCE", "ACTOR", "STATUS"}
+	headers := []string{"Time", "Action", "Resource", "Actor", "Status"}
 	var rows [][]string
 	for _, e := range result.Events {
 		resource := e.ResourceType

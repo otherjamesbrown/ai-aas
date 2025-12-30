@@ -166,7 +166,7 @@ func showAllModelsStatus(ctx context.Context, regClient *registry.Client, deploy
 	}
 
 	table := output.NewTableWriter()
-	table.SetHeader([]string{"MODEL", "REGISTRY", "CACHE", "DEPLOY", "STATUS", "DURATION"})
+	table.SetHeader([]string{"MODEL", "REGISTRY", "CACHED", "DEPLOYED", "STATUS", "DURATION"})
 
 	for _, m := range models {
 		regIcon := "✅"

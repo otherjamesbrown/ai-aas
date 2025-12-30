@@ -141,7 +141,7 @@ func runUsageByModel(cmd *cobra.Command, args []string) error {
 	output.Header(fmt.Sprintf("Usage by Model (%s)", usageByModelPeriod))
 	fmt.Println()
 
-	headers := []string{"MODEL", "REQUESTS", "TOKENS", "COST"}
+	headers := []string{"Model", "Requests", "Tokens", "Cost"}
 	var rows [][]string
 	for _, m := range models {
 		cost := "-"
@@ -207,7 +207,7 @@ func runUsageByUser(cmd *cobra.Command, args []string) error {
 	output.Header(fmt.Sprintf("Usage by User (%s)", usageByUserPeriod))
 	fmt.Println()
 
-	headers := []string{"USER", "REQUESTS", "TOKENS", "COST"}
+	headers := []string{"User", "Requests", "Tokens", "Cost"}
 	var rows [][]string
 	for _, u := range users {
 		cost := "-"

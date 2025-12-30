@@ -66,7 +66,7 @@ func TestRegistryAddCommand_Flags(t *testing.T) {
 		expectedType string
 		required     bool
 	}{
-		{"name", "string", false},
+		{"model-name", "string", false},
 		{"requires-auth", "bool", false},
 		{"license", "string", false},
 		{"accept-license", "bool", false},

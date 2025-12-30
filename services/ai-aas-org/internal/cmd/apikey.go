@@ -44,19 +44,19 @@ var apikeyListCmd = &cobra.Command{
 	Short: "List API keys",
 	Long: `List API keys in your organization.
 
-Without --user, lists all API keys in the organization.
-With --user, lists only keys for that user.
+Without --user-id, lists all API keys in the organization.
+With --user-id, lists only keys for that user.
 
 Examples:
   ai-aas-org apikey list
-  ai-aas-org apikey list --user user@example.com`,
+  ai-aas-org apikey list --user-id usr_abc123`,
 	RunE: runAPIKeyList,
 }
 
 func init() {
 	apikeyCmd.AddCommand(apikeyListCmd)
 
-	apikeyListCmd.Flags().StringVar(&apikeyListUser, "user", "", "filter by user email or ID")
+	apikeyListCmd.Flags().StringVar(&apikeyListUser, "user-id", "", "filter by user ID")
 }
 
 func runAPIKeyList(cmd *cobra.Command, args []string) error {
@@ -99,7 +99,7 @@ func runAPIKeyList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	headers := []string{"PREFIX", "NAME", "USER", "STATUS", "LAST USED", "EXPIRES"}
+	headers := []string{"Prefix", "Name", "User", "Status", "Last Used", "Expires"}
 	var rows [][]string
 	for _, k := range result.APIKeys {
 		lastUsed := "Never"
