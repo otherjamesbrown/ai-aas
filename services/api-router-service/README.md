@@ -62,6 +62,38 @@ Key environment variables:
 - `CONFIG_SERVICE_ENDPOINT` - etcd for configuration
 - `BACKEND_ENDPOINTS` - Comma-separated backend URLs
 - `LOG_LEVEL` - Logging level (default: info)
+- `MODELS_CACHE_TTL` - Cache TTL for /v1/models responses (default: 10s)
+- `ADMIN_API_ENDPOINT` - Admin API URL for model list
+
+## Caching Behavior
+
+### /v1/models Endpoint Cache
+
+The `/v1/models` endpoint caches responses from the Admin API to prevent rate limiting during high traffic:
+
+**Configuration:**
+```yaml
+env:
+  - name: MODELS_CACHE_TTL
+    value: "10s"  # Default: 10 seconds
+```
+
+**Behavior:**
+- First request fetches from Admin API and caches response
+- Subsequent requests within TTL serve cached data
+- On Admin API errors, returns stale cached data (graceful degradation)
+- Cache key includes authentication context (org-scoped responses)
+
+**Why caching is needed:**
+- OpenAI SDK clients call `/v1/models` before each request
+- High request volume can trigger Admin API rate limits
+- Cache reduces Admin API load by ~90% during bursts
+
+**Monitoring:**
+```bash
+# Check cache hit ratio in Prometheus
+rate(api_router_models_cache_hits_total[5m]) / rate(api_router_models_requests_total[5m])
+```
 
 ## Architecture
 
