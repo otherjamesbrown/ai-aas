@@ -96,7 +96,8 @@ func (a *Authenticator) Authenticate(r *http.Request) (*AuthenticatedContext, er
 // Falls back to stub validation for dev/test keys if user-org-service is unavailable.
 func (a *Authenticator) validateAPIKey(key string) (*AuthenticatedContext, error) {
 	// Check cache first (compute fingerprint for cache key)
-	fingerprint := apikey.ComputeFingerprintHex(key)
+	// Use base64url encoding to match user-org-service's fingerprint format
+	fingerprint := apikey.ComputeFingerprintBase64URL(key)
 
 	a.cacheMutex.RLock()
 	cached, ok := a.validationCache[fingerprint]
