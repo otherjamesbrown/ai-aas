@@ -13,8 +13,9 @@ import (
 )
 
 var (
-	filenamePattern = regexp.MustCompile(`^[0-9]{12}_[a-z0-9_]+\.(up|down)\.sql$`)
-	versionPattern  = regexp.MustCompile(`^([0-9]{12})_([a-z0-9_]+)\.(up|down)\.sql$`)
+	// Pattern for single-file goose migrations: YYYYMMDDHHMM_description.sql
+	filenamePattern = regexp.MustCompile(`^[0-9]{11,12}_[a-z0-9_]+\.sql$`)
+	versionPattern  = regexp.MustCompile(`^([0-9]{11,12})_([a-z0-9_]+)\.sql$`)
 )
 
 type classificationConfig struct {
@@ -31,8 +32,11 @@ type classificationConfig struct {
 
 // RunNamingLint returns a slice of human-readable issues if lint violations are detected.
 func RunNamingLint(basePath string) ([]string, error) {
-	components := []string{"operational", "analytics"}
+	components := []string{"operational", "analytics", "jobs"}
 	var issues []string
+
+	// Track versions across all components to detect collisions
+	globalVersions := map[string][]string{} // version -> list of components using it
 
 	for _, component := range components {
 		dir := filepath.Join(basePath, component)
@@ -46,7 +50,7 @@ func RunNamingLint(basePath string) ([]string, error) {
 		}
 
 		sort.Strings(files)
-		seenVersions := map[string]map[string]bool{}
+		seenVersions := map[string]bool{}
 
 		err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
@@ -61,7 +65,7 @@ func RunNamingLint(basePath string) ([]string, error) {
 
 			name := d.Name()
 			if !filenamePattern.MatchString(name) {
-				issues = append(issues, fmt.Sprintf("%s: filename must match <YYYYMMDDHHMM>_<slug>.up|down.sql", filepath.Join(component, name)))
+				issues = append(issues, fmt.Sprintf("%s: filename must match YYYYMMDDHHMM_<slug>.sql", filepath.Join(component, name)))
 				return nil
 			}
 
@@ -71,24 +75,37 @@ func RunNamingLint(basePath string) ([]string, error) {
 			}
 
 			version := matches[1]
-			direction := matches[3]
-			if seenVersions[version] == nil {
-				seenVersions[version] = map[string]bool{}
+			if seenVersions[version] {
+				issues = append(issues, fmt.Sprintf("duplicate migration version %s in %s", version, component))
+				return nil
 			}
-			if seenVersions[version][direction] {
-				issues = append(issues, fmt.Sprintf("duplicate %s migration for version %s in %s", direction, version, component))
-			}
-			seenVersions[version][direction] = true
+			seenVersions[version] = true
+			// Track this version globally
+			globalVersions[version] = append(globalVersions[version], component)
 			return nil
 		})
 		if err != nil {
 			return nil, err
 		}
+	}
 
-		for version, dirs := range seenVersions {
-			if !(dirs["up"] && dirs["down"]) {
-				issues = append(issues, fmt.Sprintf("missing up/down pair for version %s in %s", version, component))
+	// Check for version collisions across components
+	for version, components := range globalVersions {
+		if len(components) > 1 {
+			sort.Strings(components) // Ensure consistent error message ordering
+			files := []string{}
+			for _, component := range components {
+				// Find the actual filename for better error message
+				dir := filepath.Join(basePath, component)
+				matches, _ := filepath.Glob(filepath.Join(dir, version+"_*.sql"))
+				if len(matches) > 0 {
+					files = append(files, matches[0])
+				}
 			}
+			issues = append(issues, fmt.Sprintf("migration version collision: version %s used in multiple components: %s\nConflicting files:\n  - %s\n\nMigration versions must be unique across all components to avoid goose_db_version conflicts.",
+				version,
+				strings.Join(components, ", "),
+				strings.Join(files, "\n  - ")))
 		}
 	}
 

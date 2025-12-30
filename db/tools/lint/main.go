@@ -8,7 +8,7 @@ import (
 
 func main() {
 	var basePath string
-	flag.StringVar(&basePath, "path", "db/migrations", "Base path containing migration directories")
+	flag.StringVar(&basePath, "path", "../../migrations", "Base path containing migration directories")
 	flag.Parse()
 
 	issues, err := RunNamingLint(basePath)
