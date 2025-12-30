@@ -18,12 +18,12 @@ func runOrgCLIWithProfile(profile string, args ...string) CLIResult {
 
 // UserJSON represents user data from JSON output
 type UserJSON struct {
-	ID          string `json:"id"`
+	ID          string `json:"userId"`
 	Email       string `json:"email"`
-	DisplayName string `json:"display_name"`
+	DisplayName string `json:"displayName"`
 	Role        string `json:"role"`
 	Status      string `json:"status"`
-	CreatedAt   string `json:"created_at"`
+	CreatedAt   string `json:"createdAt"`
 }
 
 // ModelAccessJSON represents model access data from JSON output
@@ -257,11 +257,11 @@ func TestUC_USR_003_ShowUserDetails(t *testing.T) {
 	t.Run("AC-01: Show user by email", func(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
-		// Given: User "user@example.com" exists in the organization
-		testEmail := "show-test-user@example.com"
+		// Given: User exists in the organization
+		testUser := createTestUser(t, "show-test", "user")
 
 		// When: User runs `ai-aas-org user show <email>`
-		result := runOrgCLI("user", "show", testEmail)
+		result := runOrgCLI("user", "show", testUser.Email)
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -289,11 +289,11 @@ func TestUC_USR_003_ShowUserDetails(t *testing.T) {
 	t.Run("AC-02: Show user by ID", func(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
-		// Given: User with ID "usr_abc123" exists
-		testUserID := "usr_abc123" // Would be dynamically obtained in real test
+		// Given: User exists
+		testUser := createTestUser(t, "show-by-id", "user")
 
 		// When: User runs `ai-aas-org user show <id>`
-		result := runOrgCLI("user", "show", testUserID)
+		result := runOrgCLI("user", "show", testUser.UserID)
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -336,10 +336,10 @@ func TestUC_USR_003_ShowUserDetails(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
 		// Given: User exists in the organization
-		testEmail := "json-test-user@example.com"
+		testUser := createTestUser(t, "json-test", "user")
 
 		// When: User runs `ai-aas-org user show <email> --json`
-		result := runOrgCLI("user", "show", testEmail, "--json")
+		result := runOrgCLI("user", "show", testUser.Email, "--json")
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -464,11 +464,11 @@ func TestUC_USR_005_ListUserModelAccess(t *testing.T) {
 	t.Run("AC-01: List models for user with access", func(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
-		// Given: User "user@example.com" has access to multiple models
-		testEmail := "model-access-user@example.com"
+		// Given: User has access to multiple models
+		testUser := createTestUser(t, "model-access", "user")
 
 		// When: User runs `ai-aas-org user models list --user <email>`
-		result := runOrgCLI("user", "models", "list", "--user", testEmail)
+		result := runOrgCLI("user", "models", "list", "--user", testUser.Email)
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -488,11 +488,11 @@ func TestUC_USR_005_ListUserModelAccess(t *testing.T) {
 	t.Run("AC-02: List models for user with no access", func(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
-		// Given: User "restricted@example.com" has no model access
-		restrictedEmail := "restricted-user@example.com"
+		// Given: User has no model access
+		testUser := createTestUser(t, "restricted", "user")
 
 		// When: User runs `ai-aas-org user models list --user <email>`
-		result := runOrgCLI("user", "models", "list", "--user", restrictedEmail)
+		result := runOrgCLI("user", "models", "list", "--user", testUser.Email)
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -513,10 +513,10 @@ func TestUC_USR_005_ListUserModelAccess(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
 		// Given: User has access to models
-		testEmail := "model-json-user@example.com"
+		testUser := createTestUser(t, "model-json", "user")
 
 		// When: User runs `ai-aas-org user models list --user <email> --json`
-		result := runOrgCLI("user", "models", "list", "--user", testEmail, "--json")
+		result := runOrgCLI("user", "models", "list", "--user", testUser.Email, "--json")
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -547,13 +547,13 @@ func TestUC_USR_006_GrantUserModelAccess(t *testing.T) {
 	t.Run("AC-01: Grant access to specific model", func(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
-		// Given: User "user@example.com" exists and model "gpt-4" is available
-		testEmail := "grant-access-user@example.com"
+		// Given: User exists and model "gpt-4" is available
+		testUser := createTestUser(t, "grant-access", "user")
 		testModel := "gpt-4"
 
 		// When: User runs `ai-aas-org user models add --user <email> --model <model>`
 		result := runOrgCLI("user", "models", "add",
-			"--user", testEmail,
+			"--user", testUser.Email,
 			"--model", testModel)
 
 		// Then: Exit code is 0
@@ -569,7 +569,7 @@ func TestUC_USR_006_GrantUserModelAccess(t *testing.T) {
 		}
 
 		// Verify: Model appears in user's model list
-		listResult := runOrgCLI("user", "models", "list", "--user", testEmail, "--json")
+		listResult := runOrgCLI("user", "models", "list", "--user", testUser.Email, "--json")
 		if !strings.Contains(listResult.Output, testModel) {
 			t.Error("Granted model should appear in user's model list")
 		}
@@ -580,12 +580,12 @@ func TestUC_USR_006_GrantUserModelAccess(t *testing.T) {
 	t.Run("AC-02: Grant access to all models", func(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
-		// Given: User "user@example.com" exists and organization has multiple models
-		testEmail := "grant-all-user@example.com"
+		// Given: User exists and organization has multiple models
+		testUser := createTestUser(t, "grant-all", "user")
 
 		// When: User runs `ai-aas-org user models add --user <email> --all`
 		result := runOrgCLI("user", "models", "add",
-			"--user", testEmail,
+			"--user", testUser.Email,
 			"--all")
 
 		// Then: Exit code is 0
@@ -603,18 +603,18 @@ func TestUC_USR_006_GrantUserModelAccess(t *testing.T) {
 	t.Run("AC-03: Grant access to model user already has", func(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
-		// Given: User "user@example.com" already has access to "gpt-4"
-		testEmail := "idempotent-grant-user@example.com"
+		// Given: User already has access to "gpt-4"
+		testUser := createTestUser(t, "idempotent-grant", "user")
 		testModel := "gpt-4"
 
 		// First grant
 		runOrgCLI("user", "models", "add",
-			"--user", testEmail,
+			"--user", testUser.Email,
 			"--model", testModel)
 
 		// When: User runs grant again
 		result := runOrgCLI("user", "models", "add",
-			"--user", testEmail,
+			"--user", testUser.Email,
 			"--model", testModel)
 
 		// Then: Operation succeeds (idempotent)
@@ -636,12 +636,12 @@ func TestUC_USR_006_GrantUserModelAccess(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
 		// Given: Model "restricted-model" is not available to the organization
-		testEmail := "unavailable-model-user@example.com"
+		testUser := createTestUser(t, "unavailable-model", "user")
 		unavailableModel := "restricted-model-xyz"
 
 		// When: User runs `ai-aas-org user models add --user <email> --model <unavailable>`
 		result := runOrgCLI("user", "models", "add",
-			"--user", testEmail,
+			"--user", testUser.Email,
 			"--model", unavailableModel)
 
 		// Then: Command fails with exit code 5 (not found)
@@ -670,18 +670,18 @@ func TestUC_USR_007_RevokeUserModelAccess(t *testing.T) {
 	t.Run("AC-01: Revoke access to specific model", func(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
-		// Given: User "user@example.com" has access to model "gpt-4"
-		testEmail := "revoke-access-user@example.com"
+		// Given: User has access to model "gpt-4"
+		testUser := createTestUser(t, "revoke-access", "user")
 		testModel := "gpt-4"
 
 		// Setup: Ensure user has access
 		runOrgCLI("user", "models", "add",
-			"--user", testEmail,
+			"--user", testUser.Email,
 			"--model", testModel)
 
 		// When: User runs `ai-aas-org user models remove --user <email> --model <model>`
 		result := runOrgCLI("user", "models", "remove",
-			"--user", testEmail,
+			"--user", testUser.Email,
 			"--model", testModel)
 
 		// Then: Exit code is 0
@@ -697,7 +697,7 @@ func TestUC_USR_007_RevokeUserModelAccess(t *testing.T) {
 		}
 
 		// Verify: Model no longer appears in user's model list
-		listResult := runOrgCLI("user", "models", "list", "--user", testEmail, "--json")
+		listResult := runOrgCLI("user", "models", "list", "--user", testUser.Email, "--json")
 		if strings.Contains(listResult.Output, testModel) {
 			t.Error("Revoked model should not appear in user's model list")
 		}
@@ -708,13 +708,13 @@ func TestUC_USR_007_RevokeUserModelAccess(t *testing.T) {
 	t.Run("AC-02: Revoke access to model user doesn't have", func(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
-		// Given: User "user@example.com" does not have access to "gpt-4"
-		testEmail := "no-access-revoke-user@example.com"
+		// Given: User does not have access to "gpt-4"
+		testUser := createTestUser(t, "no-access-revoke", "user")
 		testModel := "gpt-4"
 
 		// When: User runs `ai-aas-org user models remove --user <email> --model <model>`
 		result := runOrgCLI("user", "models", "remove",
-			"--user", testEmail,
+			"--user", testUser.Email,
 			"--model", testModel)
 
 		// Then: Operation succeeds (idempotent)

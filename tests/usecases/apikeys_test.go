@@ -53,11 +53,11 @@ func TestUC_KEY_001_ListAPIKeys(t *testing.T) {
 	t.Run("AC-02: list API keys for specific user", func(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
-		// Given: User "user@example.com" has API keys
-		testUser := "user@example.com"
+		// Given: User has API keys
+		testUser := createTestUser(t, "list-user", "user")
 
 		// When: User runs `ai-aas-org apikey list --user <email>`
-		result := runOrgCLI("apikey", "list", "--user", testUser)
+		result := runOrgCLI("apikey", "list", "--user", testUser.Email)
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -135,12 +135,12 @@ func TestUC_KEY_002_CreateAPIKey(t *testing.T) {
 	t.Run("AC-01: create key with required fields", func(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
-		// Given: User "usr_abc123" exists in the organization
-		testUserID := "usr_abc123"
+		// Given: User exists in the organization
+		testUser := createTestUser(t, "create-key", "user")
 		keyName := "Production Key"
 
 		// When: User runs `ai-aas-org apikey create --user-id <id> --key-name <name>`
-		result := runOrgCLI("apikey", "create", "--user-id", testUserID, "--key-name", keyName)
+		result := runOrgCLI("apikey", "create", "--user-id", testUser.UserID, "--key-name", keyName)
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -164,11 +164,11 @@ func TestUC_KEY_002_CreateAPIKey(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
 		// Given: User exists in the organization
-		testUserID := "usr_abc123"
+		testUser := createTestUser(t, "temp-key", "user")
 		keyName := "Temp Key"
 
 		// When: User runs `ai-aas-org apikey create --user-id <id> --key-name <name> --expires 30d`
-		result := runOrgCLI("apikey", "create", "--user-id", testUserID, "--key-name", keyName, "--expires", "30d")
+		result := runOrgCLI("apikey", "create", "--user-id", testUser.UserID, "--key-name", keyName, "--expires", "30d")
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {

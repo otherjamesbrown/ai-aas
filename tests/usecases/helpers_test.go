@@ -81,6 +81,9 @@ func runOrgCLI(args ...string) CLIResult {
 	// Pass current environment to subprocess
 	cmd.Env = os.Environ()
 
+	// Track temp file for cleanup
+	var tmpFileName string
+
 	// If live API is configured, create a temp config file and use it
 	// This ensures the CLI uses the test configuration, not ~/.ai-aas-org.yaml
 	if endpoint := os.Getenv(envAPIEndpoint); endpoint != "" {
@@ -95,15 +98,20 @@ func runOrgCLI(args ...string) CLIResult {
 		if err == nil {
 			tmpFile.WriteString(configContent)
 			tmpFile.Close()
+			tmpFileName = tmpFile.Name()
 			// Add --config flag to use temp config
-			args = append([]string{"--config", tmpFile.Name()}, args...)
+			args = append([]string{"--config", tmpFileName}, args...)
 			cmd = exec.Command("ai-aas-org", args...)
 			cmd.Env = os.Environ()
-			defer os.Remove(tmpFile.Name())
 		}
 	}
 
 	output, err := cmd.CombinedOutput()
+
+	// Clean up temp file after command completes
+	if tmpFileName != "" {
+		os.Remove(tmpFileName)
+	}
 
 	result := CLIResult{
 		Output:   string(output),
@@ -163,4 +171,97 @@ func tempConfigFile(t *testing.T) string {
 func isValidJSON(s string) bool {
 	var js json.RawMessage
 	return json.Unmarshal([]byte(s), &js) == nil
+}
+
+// Test Fixture Helpers
+
+// TestUser represents a user created for testing
+type TestUser struct {
+	Email       string
+	DisplayName string
+	UserID      string
+	Role        string
+}
+
+// createTestUser creates a test user and registers cleanup
+func createTestUser(t *testing.T, emailPrefix string, role string) *TestUser {
+	t.Helper()
+
+	timestamp := generateUniqueID()
+	email := emailPrefix + "-" + timestamp + "@example.com"
+	displayName := "Test User " + timestamp
+
+	args := []string{"user", "create", "--user-email", email, "--user-display-name", displayName}
+	if role != "" && role != "user" {
+		args = append(args, "--role", role)
+	}
+
+	result := runOrgCLI(args...)
+	if result.ExitCode != 0 {
+		t.Fatalf("Failed to create test user: %s", result.Output)
+	}
+
+	// Extract user ID from output using JSON
+	listResult := runOrgCLI("user", "list", "--json")
+	if listResult.ExitCode != 0 {
+		t.Fatalf("Failed to list users to find created user: %s", listResult.Output)
+	}
+
+	var users []struct {
+		ID    string `json:"userId"`
+		Email string `json:"email"`
+		Role  string `json:"role"`
+	}
+	if err := json.Unmarshal([]byte(listResult.Output), &users); err != nil {
+		t.Fatalf("Failed to parse user list: %v\nOutput: %s", err, listResult.Output)
+	}
+
+	var userID string
+	for _, u := range users {
+		if u.Email == email {
+			userID = u.ID
+			break
+		}
+	}
+
+	if userID == "" {
+		t.Fatalf("Created user %s not found in user list. Found %d users total.", email, len(users))
+	}
+
+	testUser := &TestUser{
+		Email:       email,
+		DisplayName: displayName,
+		UserID:      userID,
+		Role:        role,
+	}
+
+	// Register cleanup to delete the user after the test
+	t.Cleanup(func() {
+		cleanupResult := runOrgCLI("user", "delete", email, "--force")
+		if cleanupResult.ExitCode != 0 && cleanupResult.ExitCode != 5 {
+			t.Logf("Warning: Failed to cleanup test user %s: %s", email, cleanupResult.Output)
+		}
+	})
+
+	return testUser
+}
+
+// generateUniqueID creates a unique identifier for test data using timestamp and random suffix
+func generateUniqueID() string {
+	// Using Unix timestamp in microseconds for uniqueness
+	return strings.ReplaceAll(strings.ReplaceAll(
+		getCurrentTimestamp(),
+		":", ""), "-", "")
+}
+
+// getCurrentTimestamp returns current time formatted as a unique string
+func getCurrentTimestamp() string {
+	// Get timestamp by running date command
+	cmd := exec.Command("date", "+%Y%m%d%H%M%S")
+	output, err := cmd.Output()
+	if err != nil {
+		// Fallback to process ID if date fails
+		return strings.TrimSpace(string(output))
+	}
+	return strings.TrimSpace(string(output))
 }
