@@ -1,0 +1,46 @@
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: ModelRecipe
+metadata:
+  name: gpt-oss-120b
+  namespace: ai-model-system
+  labels:
+    ai.ai-aas.io/model-family: gpt
+    ai.ai-aas.io/model-size: 120b
+    ai.ai-aas.io/task: text-generation
+    ai.ai-aas.io/runtime: vllm
+spec:
+  modelID: openai/gpt-oss-120b
+  displayName: "GPT OSS 120B"
+  description: "OpenAI GPT-OSS 120B parameter MoE model with MXFP4 quantization"
+  runtime: vllm
+  resources:
+    gpu:
+      vendor: nvidia
+      count: 1
+      minMemoryGB: 80
+    cpu:
+      requests: "16"
+      limits: "32"
+    memory:
+      requests: "128Gi"
+      limits: "188Gi"
+  runtimeArgs:
+    vllm:
+      dtype: auto
+      maxModelLen: 32768
+      gpuMemoryUtilization: "0.95"
+  scheduling:
+    tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+  healthCheck:
+    startupProbeSeconds: 900
+    livenessPath: /health
+    readinessPath: /health
+  metadata:
+    parameters: "120B (5.1B active)"
+    contextLength: 32768
+    architecture: GPT-OSS MoE
+    license: Apache-2.0
+    sourceURL: https://huggingface.co/openai/gpt-oss-120b
