@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -43,13 +44,13 @@ func tryAPIKeyAuth(ctx context.Context, rt *bootstrap.Runtime, token string, req
 	var principalType string
 	var status string
 	var expiresAt *time.Time
-	var scopes []string
+	var scopesJSON []byte
 
 	err := rt.Postgres.Pool().QueryRow(ctx, `
 		SELECT api_key_id, org_id, principal_id, principal_type, status, expires_at, scopes
 		FROM api_keys
 		WHERE fingerprint = $1 AND principal_type IN ('user', 'service_account')
-	`, fingerprint).Scan(&apiKeyID, &orgID, &principalID, &principalType, &status, &expiresAt, &scopes)
+	`, fingerprint).Scan(&apiKeyID, &orgID, &principalID, &principalType, &status, &expiresAt, &scopesJSON)
 
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
@@ -59,6 +60,23 @@ func tryAPIKeyAuth(ctx context.Context, rt *bootstrap.Runtime, token string, req
 				zap.String("request_id", requestID))
 		}
 		return false, nil
+	}
+
+	// Unmarshal JSONB scopes array into []string
+	// This is required because pgx v5 does not automatically convert JSONB arrays to Go slices
+	var scopes []string
+	if len(scopesJSON) > 0 {
+		if err := json.Unmarshal(scopesJSON, &scopes); err != nil {
+			logger.Error("RequireAuth: failed to unmarshal scopes from JSONB",
+				zap.Error(err),
+				zap.String("path", path),
+				zap.String("request_id", requestID),
+				zap.ByteString("scopes_json", scopesJSON))
+			return false, nil
+		}
+	}
+	if scopes == nil {
+		scopes = []string{}
 	}
 
 	// Log retrieved API key details for debugging scope enforcement
