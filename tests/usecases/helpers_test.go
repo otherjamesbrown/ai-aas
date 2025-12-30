@@ -13,6 +13,7 @@ import (
 const (
 	envAPIEndpoint = "AI_AAS_API_ENDPOINT"
 	envAPIKey      = "AI_AAS_API_KEY"
+	envOrgID       = "AI_AAS_ORG_ID"
 )
 
 // skipIfNoLiveAPI skips the test if the live API is not configured.
@@ -84,7 +85,11 @@ func runOrgCLI(args ...string) CLIResult {
 	// This ensures the CLI uses the test configuration, not ~/.ai-aas-org.yaml
 	if endpoint := os.Getenv(envAPIEndpoint); endpoint != "" {
 		apiKey := os.Getenv(envAPIKey)
+		orgID := os.Getenv(envOrgID)
 		configContent := "api_endpoint: " + endpoint + "\napi_key: " + apiKey + "\n"
+		if orgID != "" {
+			configContent += "org_id: " + orgID + "\n"
+		}
 
 		tmpFile, err := os.CreateTemp("", "ai-aas-org-test-*.yaml")
 		if err == nil {
