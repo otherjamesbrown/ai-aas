@@ -10,6 +10,7 @@ This document provides Claude-specific configuration for the AI-AAS Platform rep
 | **[context/context_map.md](./context/context_map.md)** | Navigation index for all context docs |
 | **[AI_ASSISTANT_GUIDE.md](./AI_ASSISTANT_GUIDE.md)** | Onboarding guide (repo structure, CLI commands) |
 | **[ARCHITECTURE.md](./ARCHITECTURE.md)** | System architecture (YAML format) |
+| **[usecases/SCHEMA.md](./usecases/SCHEMA.md)** | Use case YAML schema and examples |
 
 > **Note**: Rules in `context/agents.md` apply to ALL AI agents. This file contains Claude-specific extensions.
 
@@ -59,6 +60,164 @@ bd dep add <new-bead-id> aas-ih6c  # New bead depends on (was discovered from) p
 - Helps future developers understand why changes were made
 - Enables proper root cause analysis across related issues
 - Prevents "mystery fixes" that lack context
+
+## Use Case Driven Development
+
+**CRITICAL**: All new features and modifications to existing features MUST be driven by use cases.
+
+📖 **Schema Reference**: [usecases/SCHEMA.md](usecases/SCHEMA.md) - Complete YAML schema
+
+### Why Use Cases?
+
+- **Prevent context drift** - Clear scope boundaries prevent agents from adding/removing features accidentally
+- **Testable contracts** - Each acceptance criterion becomes a test
+- **Traceability** - Bugs map to use cases, revealing weak acceptance criteria
+
+### Workflow Integration
+
+Use cases fit into the JB workflow after spec:
+
+```
+jb-3.1-specify → jb-3.1b-usecases → jb-3.2-impact → jb-3.3-plan → jb-3.4-tasks
+```
+
+- Spec defines WHAT and WHY (requirements)
+- Use cases define HOW TO VERIFY (acceptance criteria)
+- Specs reference use cases instead of containing acceptance criteria
+
+### Before Implementation: Context Loading
+
+**REQUIRED**: Before implementing any UC, you MUST:
+
+1. **Read the use case file**:
+   ```bash
+   cat usecases/<feature>.yaml
+   ```
+
+2. **Output the structured context block**:
+   ```markdown
+   ## Implementation Context
+   **Use Case**: UC-BM-001 - Create Benchmark Target
+   **Acceptance Criteria**: AC-01, AC-02, AC-03
+   **In Scope**: Creating target, validation, returning ID
+   **Out of Scope**: Starting execution, modifying targets, creating scenarios
+   **Must NOT**: Auto-start benchmark, modify existing targets, expose internal metrics
+   ```
+
+3. **Write failing tests FIRST** (one subtest per AC)
+
+4. **Implement until tests pass**
+
+5. **STOP** - Do not add anything not in acceptance criteria
+
+### Test Naming Convention
+
+Tests must reference UC and AC IDs:
+
+```go
+func TestUC_BM_001_CreateBenchmarkTarget(t *testing.T) {
+    t.Run("AC-01: create target with required fields", func(t *testing.T) {
+        // Given: authenticated org admin
+        client := setupAuthenticatedClient(t)
+
+        // When: create benchmark target
+        target, err := client.CreateBenchmarkTarget(ctx, &CreateTargetRequest{
+            Model:    "llama-7b",
+            Scenario: "standard",
+        })
+
+        // Then: target is created
+        require.NoError(t, err)
+        assert.NotEmpty(t, target.ID)
+    })
+
+    t.Run("AC-02: reject unauthorized model", func(t *testing.T) {
+        // ...
+    })
+}
+```
+
+### After Implementation: Drift Review
+
+**REQUIRED**: Before marking a UC as complete, you MUST verify no drift occurred:
+
+```markdown
+## Drift Review for UC-BM-001
+
+### Changes Made
+1. Added `CreateBenchmarkTarget` function in `internal/cmd/benchmark.go`
+   → Maps to AC-01
+2. Added model access validation in `internal/api/benchmark.go`
+   → Maps to AC-02
+3. Added scenario validation in `internal/api/benchmark.go`
+   → Maps to AC-03
+
+### Verification
+- [ ] All code changes map to an acceptance criterion
+- [ ] No out_of_scope work was done
+- [ ] No must_not violations occurred
+- [ ] All AC subtests pass
+
+### Unmapped Code (potential drift)
+None
+```
+
+If any code doesn't map to an AC, either:
+- Remove it (if it's drift)
+- Add a new AC to the UC (if it's a legitimate discovery - requires UC update in same PR)
+
+### Partial Implementation
+
+If a UC spans multiple sessions:
+
+1. Document progress in bead comment:
+   ```bash
+   bd comments add aas-ucbm001 "Partial: AC-01, AC-02 complete. Remaining: AC-03, AC-04"
+   ```
+
+2. Create handoff note in PR or bead:
+   ```markdown
+   ## Handoff: UC-BM-001
+   Completed: AC-01, AC-02 (tests passing)
+   Remaining: AC-03 (error handling), AC-04 (edge cases)
+   Next steps: Implement scenario validation
+   ```
+
+### Bug Attribution to Use Cases
+
+**CRITICAL**: When creating bug beads, ALWAYS attribute them to the relevant use case(s).
+
+**Workflow:**
+1. Create the bug bead
+2. Add use case label: `bd label add <bug-id> uc:UC-BM-001`
+3. If the bug reveals an AC gap, note it in comments
+
+**Example:**
+```bash
+# Bug discovered: benchmark target accepts invalid scenarios
+bd create --title="Benchmark target accepts non-existent scenario" --type=bug --priority=2
+bd label add aas-xyz uc:UC-BM-001
+bd comments add aas-xyz "AC Gap: UC-BM-001/AC-03 should verify scenario exists before creation"
+```
+
+**Querying bugs by use case:**
+```bash
+bd list --label=uc:UC-BM-001 --type=bug        # All bugs for UC-BM-001
+bd list --label=uc:UC-BM-001 --status=open     # Open bugs for UC-BM-001
+```
+
+### Backfill Strategy
+
+- **New features**: UC required before implementation
+- **Modifying existing features**: Create UC first (backfill on touch)
+- **Bug fixes**: Create UC for the affected feature if none exists
+
+### UC Dependency Order
+
+- Dependencies between UCs are tracked in the YAML
+- You may implement UCs in any order during development
+- BUT: Dependency UC tests must pass before marking a UC complete
+- Run `./scripts/uc-deps.sh UC-BM-002` to see dependency tree
 
 ## CLI-First Operations
 

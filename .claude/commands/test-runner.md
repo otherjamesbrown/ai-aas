@@ -13,7 +13,9 @@ Use AskUserQuestion with header "Action":
 | Option | Description |
 |--------|-------------|
 | Run tests | Execute unit, E2E, integration, or other tests |
+| Run UC tests | Run use case acceptance criteria tests |
 | View open failures | Show test runs with unresolved failures |
+| View UC coverage | Show use case test coverage report |
 
 ---
 
@@ -59,6 +61,92 @@ For each test run with failures, list the child beads:
 ```bash
 bd list --status open --label test-failure
 bd list --status open --label e2e-failure
+```
+
+---
+
+### If "View UC coverage" Selected
+
+Run the UC coverage script and present results:
+
+```bash
+./scripts/uc-coverage.sh
+```
+
+**Present results in this format:**
+
+#### Use Case Test Coverage Report
+
+| Use Case | Title | ACs | Covered | Coverage |
+|----------|-------|-----|---------|----------|
+| UC-BM-001 | Create Benchmark Target | 4 | 4 | 100% |
+| UC-BM-002 | Trigger Benchmark Run | 3 | 2 | 67% |
+| UC-USR-001 | List Organization Users | 3 | 3 | 100% |
+
+**Summary:**
+- Total Use Cases: X
+- Total Acceptance Criteria: Y
+- Covered: Z (N%)
+
+**Missing Coverage** (if any):
+
+| Use Case | AC | Criterion | Status |
+|----------|-----|-----------|--------|
+| UC-BM-002 | AC-03 | Cancel running benchmark | NO TEST |
+
+**Next Steps:**
+- Run `/test-runner` → "Run UC tests" to execute covered tests
+- Create missing tests in `tests/usecases/` following naming convention
+- See `usecases/SCHEMA.md` for AC definitions
+
+---
+
+### If "Run UC tests" Selected
+
+Use AskUserQuestion with header "UC Scope":
+
+| Option | Description |
+|--------|-------------|
+| All UC tests | Run all use case acceptance criteria tests |
+| Specific UC | Run tests for a single use case (e.g., UC-BM-001) |
+| By feature | Run tests for a feature area (e.g., benchmarks, users) |
+
+**For "All UC tests"**: Run immediately:
+```bash
+cd tests/usecases && go test -v -count=1 ./...
+```
+
+**For "Specific UC"**: Ask for the UC ID, then run:
+```bash
+# Example: UC-BM-001
+cd tests/usecases && go test -v -count=1 -run "TestUC_BM_001" ./...
+```
+
+**For "By feature"**: Ask which feature:
+
+| Feature | Test Pattern | UC File |
+|---------|--------------|---------|
+| Authentication | `TestUC_AUTH` | `usecases/authentication.yaml` |
+| Users | `TestUC_USR` | `usecases/users.yaml` |
+| API Keys | `TestUC_KEY` | `usecases/apikeys.yaml` |
+| Models | `TestUC_MDL` | `usecases/models.yaml` |
+| Organization | `TestUC_ORG` | `usecases/organization.yaml` |
+| Usage | `TestUC_USG` | `usecases/usage.yaml` |
+| Audit | `TestUC_AUD` | `usecases/audit.yaml` |
+| Benchmarks | `TestUC_BM` | `usecases/benchmarks.yaml` |
+
+Then run:
+```bash
+cd tests/usecases && go test -v -count=1 -run "TestUC_<PREFIX>" ./...
+```
+
+**Important**: UC tests require a live API. Tests will skip if `AI_AAS_API_ENDPOINT` is not set.
+
+To run against development cluster:
+```bash
+export AI_AAS_API_ENDPOINT="https://api.dev.otherjamesbrown.com"
+export AI_AAS_API_KEY="<your-api-key>"
+cd tests/usecases && go test -v -count=1 ./...
 ```
 
 ---
@@ -190,6 +278,69 @@ bd create --title="FAIL: <TestName>" \
 # Link failure to parent (parent blocks failure)
 bd dep add <failure-bead> <parent-bead>
 ```
+
+#### UC-Aware Failure Tracking
+
+**IMPORTANT**: If the test name follows UC naming convention (`TestUC_XXX_NNN`), extract the UC ID and add context:
+
+1. **Extract UC ID from test name**:
+   - `TestUC_BM_001_CreateBenchmarkTarget` → `UC-BM-001`
+   - `TestUC_USR_003_ShowUserDetails` → `UC-USR-003`
+
+2. **Add UC label to failure bead**:
+```bash
+bd label add <failure-bead> uc:UC-BM-001
+```
+
+3. **Include UC context in description**:
+```bash
+# Read the UC definition
+yq eval '.usecases[] | select(.id == "UC-BM-001")' usecases/benchmarks.yaml
+```
+
+**Enhanced failure bead for UC tests**:
+
+```bash
+bd create --title="FAIL: TestUC_BM_001_CreateBenchmarkTarget/AC-01" \
+  --type=bug \
+  --priority=2 \
+  --label=test-failure \
+  --label=uc:UC-BM-001 \
+  --description="Use case test failure from test run aas-<parent>
+
+**Test**: TestUC_BM_001_CreateBenchmarkTarget
+**Subtest**: AC-01: create target with required fields
+**Use Case**: UC-BM-001 - Create Benchmark Target
+**Category**: UC Tests
+**Environment**: <environment>
+**Commit**: $COMMIT
+
+## Use Case Context
+
+**Acceptance Criteria Violated**:
+- AC-01: Given an authenticated org admin, when they create a benchmark target with model and scenario, then the target is created with a unique ID
+
+**Scope Boundaries**:
+- in_scope: Creating target configurations, validation
+- out_of_scope: Starting execution, modifying targets
+- must_not: Auto-start benchmark, modify existing targets
+
+## Error Output
+\`\`\`
+<error message>
+\`\`\`
+
+## Suggested Investigation
+- Review UC definition: \`cat usecases/benchmarks.yaml\`
+- Check if implementation matches AC requirements
+- Verify must_not constraints aren't violated
+"
+```
+
+This creates an audit trail linking test failures back to their requirements, enabling:
+- `bd list --label uc:UC-BM-001 --type bug` - All bugs for a UC
+- Pattern analysis: Which UCs have recurring failures?
+- AC gap detection: Failures may reveal missing acceptance criteria
 
 ### Step 5: Finalize Test Run Bead
 

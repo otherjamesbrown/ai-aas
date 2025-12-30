@@ -1,0 +1,119 @@
+feature: Audit
+description: |
+  Audit logging allows organization admins to track administrative actions
+  within their organization. This includes user management, API key operations,
+  and permission changes.
+
+  Audit logs are essential for security monitoring, compliance reporting,
+  and investigating security incidents or unauthorized access.
+
+dependencies:
+  - usecases/authentication.yaml
+
+usecases:
+  - id: UC-AUD-001
+    title: List Audit Events
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      An organization admin wants to view recent audit events for their
+      organization. This helps with security monitoring, compliance audits,
+      and investigating specific incidents.
+
+      Events can be filtered by action type, resource type, actor, and
+      limited to a specific number of results.
+
+    actor: Organization Admin
+
+    preconditions:
+      - User has valid org admin API key
+      - User is authenticated with the CLI
+
+    depends_on:
+      - UC-AUTH-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: List recent audit events
+        given: User is authenticated with org admin API key
+        when: User runs `ai-aas-org audit list`
+        then:
+          - Recent audit events are listed (default limit 25)
+          - Each event shows timestamp, action, actor, resource
+          - Events are sorted by timestamp descending
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Filter audit events by action
+        given: User is authenticated with org admin API key
+        when: User runs `ai-aas-org audit list --action user.created`
+        then:
+          - Only events with action "user.created" are shown
+          - Results show filtered subset of events
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Filter audit events by resource type
+        given: User is authenticated with org admin API key
+        when: User runs `ai-aas-org audit list --resource apikey`
+        then:
+          - Only events related to API keys are shown
+          - Results include apikey.created, apikey.deleted, etc.
+          - Exit code is 0
+
+      - id: AC-04
+        criterion: Filter audit events by actor
+        given: User is authenticated with org admin API key
+        when: User runs `ai-aas-org audit list --actor admin@example.com`
+        then:
+          - Only events performed by the specified actor are shown
+          - Exit code is 0
+
+      - id: AC-05
+        criterion: Limit number of audit events
+        given: User is authenticated with org admin API key
+        when: User runs `ai-aas-org audit list --limit 10`
+        then:
+          - At most 10 events are returned
+          - Events are the most recent matching criteria
+          - Exit code is 0
+
+      - id: AC-06
+        criterion: List audit events with JSON output
+        given: User is authenticated with org admin API key
+        when: User runs `ai-aas-org audit list --json`
+        then:
+          - Output is valid JSON array
+          - Each event includes timestamp, action, actor, resource
+          - Exit code is 0
+
+      - id: AC-07
+        criterion: Handle no matching audit events
+        given: No events match the filter criteria
+        when: User runs `ai-aas-org audit list --action nonexistent.action`
+        then:
+          - Message indicates no events found
+          - Exit code is 0
+
+    in_scope:
+      - Listing recent audit events
+      - Filtering by action type
+      - Filtering by resource type
+      - Filtering by actor email
+      - Limiting number of results
+      - Table and JSON output formats
+
+    out_of_scope:
+      - Viewing event details (future enhancement)
+      - Date range filtering
+      - Exporting audit logs to external systems
+      - Real-time event streaming
+      - Creating or modifying audit events
+
+    must_not:
+      - Show audit events from other organizations
+      - Modify or delete audit records
+      - Expose internal event IDs
+      - Show system-level audit events

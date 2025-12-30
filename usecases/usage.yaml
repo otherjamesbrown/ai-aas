@@ -1,0 +1,249 @@
+feature: Usage
+description: |
+  Usage tracking allows organization admins to monitor token consumption
+  and costs for their organization. Admins can view summary statistics
+  and breakdowns by model or user to understand usage patterns.
+
+  This information helps with cost management, capacity planning, and
+  identifying high-usage users or models that may need attention.
+
+dependencies:
+  - usecases/authentication.yaml
+
+usecases:
+  - id: UC-USG-001
+    title: Show Usage Summary
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      An organization admin wants to see an overview of token usage and
+      costs for their organization. This provides a quick snapshot of
+      total consumption over a specified time period.
+
+      The summary includes total tokens, total cost, and period information.
+      Different time periods can be selected (today, 7d, 30d, 90d, etc.).
+
+    actor: Organization Admin
+
+    preconditions:
+      - User has valid org admin API key
+      - User is authenticated with the CLI
+
+    depends_on:
+      - UC-AUTH-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Show usage summary with default period
+        given: User is authenticated with org admin API key
+        when: User runs `ai-aas-org usage summary`
+        then:
+          - Total tokens are displayed
+          - Total cost is displayed
+          - Time period is displayed (default 30d)
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Show usage summary with custom period
+        given: User is authenticated with org admin API key
+        when: User runs `ai-aas-org usage summary --period 7d`
+        then:
+          - Total tokens for the 7 day period are displayed
+          - Total cost for the 7 day period is displayed
+          - Time period is confirmed as 7d
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Show usage summary with JSON output
+        given: User is authenticated with org admin API key
+        when: User runs `ai-aas-org usage summary --json`
+        then:
+          - Output is valid JSON object
+          - JSON includes total_tokens, total_cost, period
+          - Exit code is 0
+
+      - id: AC-04
+        criterion: Handle zero usage period
+        given: Organization has no usage in the specified period
+        when: User runs `ai-aas-org usage summary --period today`
+        then:
+          - Zero tokens are displayed
+          - Zero cost is displayed
+          - Message indicates no usage in period
+          - Exit code is 0
+
+    in_scope:
+      - Displaying total token usage
+      - Displaying total cost
+      - Supporting multiple time periods
+      - Table and JSON output formats
+
+    out_of_scope:
+      - Detailed breakdown by model (UC-USG-002)
+      - Detailed breakdown by user (UC-USG-003)
+      - Historical trend analysis
+      - Cost projections
+
+    must_not:
+      - Show usage from other organizations
+      - Expose internal billing calculations
+      - Modify usage records
+      - Show individual request details
+
+  - id: UC-USG-002
+    title: Show Usage By Model
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      An organization admin wants to see token usage broken down by AI model.
+      This helps identify which models are consuming the most resources and
+      optimize model selection for cost efficiency.
+
+      The breakdown shows tokens and cost per model for the specified period.
+
+    actor: Organization Admin
+
+    preconditions:
+      - User has valid org admin API key
+      - User is authenticated with the CLI
+
+    depends_on:
+      - UC-AUTH-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Show usage by model with default period
+        given: User is authenticated with org admin API key
+        when: User runs `ai-aas-org usage by-model`
+        then:
+          - Each model with usage is listed
+          - Tokens per model are displayed
+          - Cost per model is displayed
+          - Time period is displayed (default 30d)
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Show usage by model with custom period
+        given: User is authenticated with org admin API key
+        when: User runs `ai-aas-org usage by-model --period 7d`
+        then:
+          - Usage for the 7 day period is displayed
+          - Each model shows tokens and cost for that period
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Show usage by model with JSON output
+        given: User is authenticated with org admin API key
+        when: User runs `ai-aas-org usage by-model --json`
+        then:
+          - Output is valid JSON array
+          - Each model object includes model_name, tokens, cost
+          - Exit code is 0
+
+      - id: AC-04
+        criterion: Handle no model usage
+        given: Organization has no model usage in the period
+        when: User runs `ai-aas-org usage by-model`
+        then:
+          - Message indicates no usage in period
+          - Exit code is 0
+
+    in_scope:
+      - Listing usage per model
+      - Displaying tokens and cost per model
+      - Supporting multiple time periods
+      - Table and JSON output formats
+
+    out_of_scope:
+      - Filtering by specific models
+      - Showing usage trends over time
+      - Breaking down by user per model
+      - Cost projections per model
+
+    must_not:
+      - Show usage from other organizations
+      - Expose internal model IDs
+      - Modify usage records
+      - Show per-request details
+
+  - id: UC-USG-003
+    title: Show Usage By User
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      An organization admin wants to see token usage broken down by user.
+      This helps identify high-usage users and ensure fair resource allocation
+      across the organization.
+
+      The breakdown shows tokens and cost per user for the specified period.
+
+    actor: Organization Admin
+
+    preconditions:
+      - User has valid org admin API key
+      - User is authenticated with the CLI
+
+    depends_on:
+      - UC-AUTH-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Show usage by user with default period
+        given: User is authenticated with org admin API key
+        when: User runs `ai-aas-org usage by-user`
+        then:
+          - Each user with usage is listed
+          - Tokens per user are displayed
+          - Cost per user is displayed
+          - Time period is displayed (default 30d)
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Show usage by user with custom period
+        given: User is authenticated with org admin API key
+        when: User runs `ai-aas-org usage by-user --period 7d`
+        then:
+          - Usage for the 7 day period is displayed
+          - Each user shows tokens and cost for that period
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Show usage by user with JSON output
+        given: User is authenticated with org admin API key
+        when: User runs `ai-aas-org usage by-user --json`
+        then:
+          - Output is valid JSON array
+          - Each user object includes user_email, tokens, cost
+          - Exit code is 0
+
+      - id: AC-04
+        criterion: Handle no user usage
+        given: Organization has no user usage in the period
+        when: User runs `ai-aas-org usage by-user`
+        then:
+          - Message indicates no usage in period
+          - Exit code is 0
+
+    in_scope:
+      - Listing usage per user
+      - Displaying tokens and cost per user
+      - Supporting multiple time periods
+      - Table and JSON output formats
+
+    out_of_scope:
+      - Filtering by specific users
+      - Showing usage trends over time
+      - Breaking down by model per user
+      - Setting usage limits per user
+
+    must_not:
+      - Show usage from other organizations
+      - Expose internal user IDs
+      - Modify usage records
+      - Show individual request details

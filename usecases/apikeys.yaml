@@ -1,0 +1,333 @@
+feature: API Key Management
+description: |
+  API key management allows organization administrators to create, view, and
+  manage API keys for users. API keys are the primary authentication method
+  for accessing the AI-as-a-Service platform.
+
+  Each user can have multiple API keys with different names and expiration
+  dates. Keys can be rotated for security, and revoked when no longer needed.
+
+dependencies:
+  - usecases/authentication.yaml
+  - usecases/users.yaml
+
+usecases:
+  - id: UC-KEY-001
+    title: List API Keys
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      An organization administrator wants to see all API keys in their
+      organization, or keys for a specific user. This helps with security
+      audits, tracking key usage, and identifying keys that need rotation
+      or revocation.
+
+    actor: Organization Admin
+
+    preconditions:
+      - CLI is configured with valid credentials (UC-AUTH-001 or UC-AUTH-002)
+      - User has organization admin permissions
+
+    depends_on:
+      - UC-AUTH-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: List all API keys in organization
+        given: Organization has users with API keys
+        when: User runs `ai-aas-org apikey list`
+        then:
+          - All API keys in the organization are listed
+          - Each key shows ID, name, user, created date, expiration
+          - Key values are NOT shown (only IDs)
+          - Output is formatted as a table
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: List API keys for specific user
+        given: User "user@example.com" has API keys
+        when: User runs `ai-aas-org apikey list --user user@example.com`
+        then:
+          - Only keys for the specified user are listed
+          - Each key shows ID, name, created date, expiration
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: List keys with JSON output
+        given: Organization has API keys
+        when: User runs `ai-aas-org apikey list --json`
+        then:
+          - Keys are output as valid JSON array
+          - Each key object includes id, name, user_id, created_at, expires_at
+          - Key values are NOT included in JSON
+          - Exit code is 0
+
+      - id: AC-04
+        criterion: List keys when none exist
+        given: Organization has no API keys
+        when: User runs `ai-aas-org apikey list`
+        then:
+          - Message indicates no API keys found
+          - Suggestion to create a key is shown
+          - Exit code is 0
+
+    in_scope:
+      - Listing all keys in organization
+      - Filtering keys by user
+      - Displaying key metadata (ID, name, dates)
+      - Table and JSON output formats
+      - Handling empty key list
+
+    out_of_scope:
+      - Showing actual key values (security)
+      - Filtering by expiration status
+      - Key usage statistics
+      - Pagination for large key counts
+
+    must_not:
+      - Show actual API key values
+      - Show keys from other organizations
+      - Modify any keys
+
+  - id: UC-KEY-002
+    title: Create API Key
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      An organization administrator wants to create a new API key for a user
+      so they can authenticate with the platform. The key value is only shown
+      once upon creation and must be securely shared with the user.
+
+      Keys can have optional expiration dates for security compliance.
+
+    actor: Organization Admin
+
+    preconditions:
+      - CLI is configured with valid credentials
+      - User has organization admin permissions
+      - Target user exists in the organization
+
+    depends_on:
+      - UC-AUTH-001
+      - UC-USR-002
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Create key with required fields
+        given: User "usr_abc123" exists in the organization
+        when: User runs `ai-aas-org apikey create --user-id usr_abc123 --key-name "Production Key"`
+        then:
+          - API key is created for the user
+          - Key value is displayed (only time it's shown)
+          - Key ID is displayed
+          - Warning to save the key is shown
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Create key with expiration
+        given: User exists in the organization
+        when: User runs `ai-aas-org apikey create --user-id usr_abc123 --key-name "Temp Key" --expires 30d`
+        then:
+          - API key is created with 30-day expiration
+          - Expiration date is displayed
+          - Key value is shown once
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Create key for non-existent user
+        given: User ID "usr_nonexistent" does not exist
+        when: User runs `ai-aas-org apikey create --user-id usr_nonexistent --key-name "Test"`
+        then:
+          - Command fails with exit code 5 (not found)
+          - Error message indicates user not found
+          - Suggestion to check user ID or list users
+          - No key is created
+
+      - id: AC-04
+        criterion: Interactive guided key creation
+        given: Admin wants to create key interactively
+        when: User runs `ai-aas-org apikey create --guided`
+        then:
+          - User is prompted to select a user
+          - User is prompted for key name
+          - User is optionally prompted for expiration
+          - Key is created and value displayed
+
+    in_scope:
+      - Creating API key for a user
+      - Setting key name/description
+      - Setting optional expiration
+      - Displaying key value once on creation
+      - Interactive guided mode
+
+    out_of_scope:
+      - Setting key scopes or permissions
+      - Creating keys with custom prefixes
+      - Bulk key creation
+      - Key value regeneration after creation
+
+    must_not:
+      - Create keys for users in other organizations
+      - Display key value after initial creation
+      - Create keys without a name
+      - Store key value in logs or history
+
+  - id: UC-KEY-003
+    title: Delete API Key
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      An organization administrator wants to revoke an API key, either because
+      it's no longer needed, may have been compromised, or the user has left
+      the organization. The key is immediately invalidated and cannot be used.
+
+    actor: Organization Admin
+
+    preconditions:
+      - CLI is configured with valid credentials
+      - User has organization admin permissions
+      - API key exists in the organization
+
+    depends_on:
+      - UC-AUTH-001
+      - UC-KEY-002
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Delete key with confirmation
+        given: API key "key_abc123" exists in the organization
+        when: User runs `ai-aas-org apikey delete key_abc123` and confirms
+        then:
+          - Confirmation prompt is shown with key details
+          - Key is deleted after confirmation
+          - Key is immediately invalidated
+          - Success message is displayed
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Delete key with --force flag
+        given: API key "key_abc123" exists in the organization
+        when: User runs `ai-aas-org apikey delete key_abc123 --force`
+        then:
+          - No confirmation prompt is shown
+          - Key is deleted immediately
+          - Key is immediately invalidated
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Delete non-existent key
+        given: No key with ID "key_nonexistent" exists
+        when: User runs `ai-aas-org apikey delete key_nonexistent --force`
+        then:
+          - Command fails with exit code 5 (not found)
+          - Error message indicates key not found
+          - No changes are made
+
+      - id: AC-04
+        criterion: Cancel deletion at confirmation
+        given: API key "key_abc123" exists
+        when: User runs `ai-aas-org apikey delete key_abc123` and declines
+        then:
+          - Key is NOT deleted
+          - Message confirms cancellation
+          - Key remains valid
+          - Exit code is 0
+
+    in_scope:
+      - Deleting API key by ID
+      - Confirmation prompt before deletion
+      - Force flag to skip confirmation
+      - Immediate key invalidation
+      - Handling non-existent keys
+
+    out_of_scope:
+      - Soft delete / temporary disable
+      - Bulk key deletion
+      - Scheduled deletion
+      - Key restoration after deletion
+
+    must_not:
+      - Delete keys without confirmation (unless --force)
+      - Delete keys from other organizations
+      - Allow key reactivation after deletion
+      - Delete keys that are currently in use without warning
+
+  - id: UC-KEY-004
+    title: Rotate API Key
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      An organization administrator wants to rotate an API key for security
+      purposes. Rotation creates a new key with the same properties and
+      immediately revokes the old key. This is useful for regular security
+      rotation or when a key may have been exposed.
+
+    actor: Organization Admin
+
+    preconditions:
+      - CLI is configured with valid credentials
+      - User has organization admin permissions
+      - API key exists and is valid
+
+    depends_on:
+      - UC-AUTH-001
+      - UC-KEY-002
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Rotate existing key
+        given: API key "key_abc123" exists and is valid
+        when: User runs `ai-aas-org apikey rotate key_abc123`
+        then:
+          - New API key is created with same properties
+          - New key value is displayed (only time shown)
+          - Old key is immediately revoked
+          - New key ID is displayed
+          - Warning to update applications is shown
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Rotate non-existent key
+        given: No key with ID "key_nonexistent" exists
+        when: User runs `ai-aas-org apikey rotate key_nonexistent`
+        then:
+          - Command fails with exit code 5 (not found)
+          - Error message indicates key not found
+          - No new key is created
+
+      - id: AC-03
+        criterion: Rotate key preserves user association
+        given: API key "key_abc123" belongs to user "usr_xyz789"
+        when: User runs `ai-aas-org apikey rotate key_abc123`
+        then:
+          - New key is associated with same user
+          - New key has same name as old key
+          - New key appears in user's key list
+          - Old key is removed from user's key list
+
+    in_scope:
+      - Creating replacement key with same properties
+      - Revoking old key immediately
+      - Preserving user association and key name
+      - Displaying new key value once
+      - Warning about application updates
+
+    out_of_scope:
+      - Grace period with both keys valid
+      - Automatic application notification
+      - Scheduled rotation
+      - Rotation history tracking
+
+    must_not:
+      - Leave old key valid after rotation
+      - Create key for different user
+      - Change key properties during rotation
+      - Allow retrieval of old key value

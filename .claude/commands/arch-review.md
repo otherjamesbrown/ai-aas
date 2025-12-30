@@ -313,6 +313,71 @@ bd close $EPIC_BEAD_ID --reason="Architecture review complete. Overall score: X.
 ═══════════════════════════════════════════════════
 ```
 
+## Theme 10: Use Case Compliance (Optional)
+
+If `usecases/` directory exists, add an additional theme:
+
+### Step 4 (Theme 10): Use Case Compliance
+
+#### 10a: Run Use Case Checks
+
+```bash
+# Lint use cases
+./scripts/lint-usecases.sh
+
+# Check test coverage
+./scripts/uc-coverage.sh
+
+# Check dependencies
+./scripts/uc-deps.sh
+```
+
+#### 10b: Analyze Compliance
+
+For each active use case:
+
+1. **Scope Boundary Check**: Look for code that violates `out_of_scope` or `must_not`
+2. **AC Coverage**: Verify each acceptance criterion has a corresponding test
+3. **Bug Attribution**: Check bugs are labeled with `uc:UC-XXX-NNN`
+
+#### 10c: Create Theme Report
+
+```bash
+# Create use case compliance report
+cat > docs/arch-review/reviews/$DATE/10-usecase-compliance.md << 'EOF'
+# Theme 10: Use Case Compliance
+
+## Use Case Health
+
+| UC ID | Title | ACs | Covered | Bugs | Status |
+|-------|-------|-----|---------|------|--------|
+
+## Scope Violations
+
+| File:Line | UC | Violation Type | Description |
+|-----------|-----|----------------|-------------|
+
+## Missing Test Coverage
+
+| UC | AC | Criterion | Priority |
+|----|-----|-----------|----------|
+
+## Recommendations
+
+1. ...
+EOF
+```
+
+#### 10d: Create Remediation Beads
+
+For each use case violation or missing coverage:
+
+```bash
+bd create --title="UC Compliance: $ISSUE" --type=task --priority=2
+bd label add $BEAD_ID uc-compliance
+bd label add $BEAD_ID uc:$UC_ID
+```
+
 ## Important Notes
 
 - **Checkpoints are mandatory**: Always pause and ask user before proceeding to next theme
@@ -320,3 +385,4 @@ bd close $EPIC_BEAD_ID --reason="Architecture review complete. Overall score: X.
 - **Label consistently**: All beads get `arch-review` label for easy filtering
 - **Reference beads in docs**: Link bead IDs in all markdown files
 - **Preserve context**: On resume, read existing files to understand progress
+- **Use Case Integration**: If usecases/ exists, Theme 10 is automatically included
