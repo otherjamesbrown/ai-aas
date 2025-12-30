@@ -10,20 +10,18 @@ ALTER TABLE analytics_daily_rollups DROP CONSTRAINT IF EXISTS analytics_daily_ro
 ALTER TABLE analytics_hourly_rollups ADD COLUMN IF NOT EXISTS actor_id UUID;
 ALTER TABLE analytics_daily_rollups ADD COLUMN IF NOT EXISTS actor_id UUID;
 
--- Create new primary keys that don't include nullable columns
--- Use COALESCE to handle NULL model_id and actor_id by converting to sentinel UUIDs
-ALTER TABLE analytics_hourly_rollups
-    ADD CONSTRAINT analytics_hourly_rollups_pkey
-    PRIMARY KEY (
+-- Create unique indexes to enforce uniqueness with nullable columns
+-- PRIMARY KEY cannot use expressions, so we use UNIQUE INDEXes with COALESCE instead
+CREATE UNIQUE INDEX analytics_hourly_rollups_unique_idx
+    ON analytics_hourly_rollups (
         bucket_start,
         organization_id,
         COALESCE(model_id, '00000000-0000-0000-0000-000000000000'::uuid),
         COALESCE(actor_id, '00000000-0000-0000-0000-000000000000'::uuid)
     );
 
-ALTER TABLE analytics_daily_rollups
-    ADD CONSTRAINT analytics_daily_rollups_pkey
-    PRIMARY KEY (
+CREATE UNIQUE INDEX analytics_daily_rollups_unique_idx
+    ON analytics_daily_rollups (
         bucket_start,
         organization_id,
         COALESCE(model_id, '00000000-0000-0000-0000-000000000000'::uuid),
@@ -58,9 +56,9 @@ DROP INDEX IF EXISTS idx_hourly_rollups_model;
 DROP INDEX IF EXISTS idx_daily_rollups_actor;
 DROP INDEX IF EXISTS idx_hourly_rollups_actor;
 
--- Restore original primary keys (will fail if NULL data exists)
-ALTER TABLE analytics_hourly_rollups DROP CONSTRAINT IF EXISTS analytics_hourly_rollups_pkey;
-ALTER TABLE analytics_daily_rollups DROP CONSTRAINT IF EXISTS analytics_daily_rollups_pkey;
+-- Drop unique indexes and restore original primary keys (will fail if NULL data exists)
+DROP INDEX IF EXISTS analytics_hourly_rollups_unique_idx;
+DROP INDEX IF EXISTS analytics_daily_rollups_unique_idx;
 
 ALTER TABLE analytics_hourly_rollups
     ADD PRIMARY KEY (bucket_start, organization_id, model_id);

@@ -54,6 +54,7 @@ CREATE INDEX IF NOT EXISTS idx_ingestion_batches_late
     ON analytics.ingestion_batches (late_arrival, completed_at);
 
 -- freshness_status: Track latest ingestion and aggregation timestamps
+-- Note: model_id is nullable (for org-wide status), so we use partial unique indexes instead of PRIMARY KEY
 CREATE TABLE IF NOT EXISTS analytics.freshness_status (
     org_id UUID NOT NULL,
     model_id UUID,
@@ -61,9 +62,14 @@ CREATE TABLE IF NOT EXISTS analytics.freshness_status (
     last_rollup_at TIMESTAMPTZ,
     lag_seconds INTEGER,
     status TEXT CHECK (status IN ('fresh', 'stale', 'delayed')),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (org_id, model_id)
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Enforce uniqueness with partial indexes to handle nullable model_id
+CREATE UNIQUE INDEX IF NOT EXISTS freshness_status_org_uniq_idx
+    ON analytics.freshness_status (org_id) WHERE model_id IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS freshness_status_org_model_uniq_idx
+    ON analytics.freshness_status (org_id, model_id) WHERE model_id IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_freshness_status_status
     ON analytics.freshness_status (status, updated_at DESC);
