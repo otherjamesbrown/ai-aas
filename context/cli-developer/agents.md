@@ -1,6 +1,6 @@
 # CLI Developer Context
 
-> **Inherits**: context/agents.md | **Verified**: 2025-12-13 | **Commit**: 24c3e0ee
+> **Inherits**: context/agents.md | **Verified**: 2025-12-30 | **Commit**: e58c8053
 
 ---
 
@@ -29,6 +29,34 @@ patterns:
       - Direct database access
       - Business logic calculations
       - Duplicating API client logic with raw HTTP
+
+  user_org_service_api_contract:
+    rule: user-org-service list endpoints return raw arrays, not wrapper objects
+    description: |
+      Unlike admin-api-service which wraps responses in {data: [...], meta: {...}},
+      user-org-service returns raw JSON arrays for list endpoints. CLI clients must
+      decode directly into a slice, not a wrapper struct.
+    endpoints:
+      - "GET /v1/orgs → []Organization (raw array)"
+      - "GET /v1/orgs/{orgId}/users → []User (raw array)"
+      - "GET /v1/orgs/{orgId}/api-keys → []APIKey (raw array)"
+      - "GET /v1/bootstrap-keys → {keys: [...]} (exception: uses wrapper)"
+    pattern: |
+      // CORRECT: Decode raw array from user-org-service
+      var items []ItemType
+      if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
+          return nil, fmt.Errorf("decode response: %w", err)
+      }
+      return items, nil
+
+      // WRONG: Expecting wrapper object
+      var result struct {
+          Data []ItemType `json:"data"`
+      }
+      json.NewDecoder(resp.Body).Decode(&result) // Will fail!
+    symptom: "Empty results when API returns valid data"
+    fix: "Check API response format - likely expecting wrapper but getting raw array"
+    reference: "aas-nacy - discovered during ListAPIKeys debugging"
 
   command_structure:
     rule: All commands follow Cobra conventions

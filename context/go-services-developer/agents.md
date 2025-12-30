@@ -1,6 +1,6 @@
 # Go Services Developer Context
 
-> **Inherits**: context/agents.md | **Verified**: 2025-12-25 | **Commit**: 084a4b2e
+> **Inherits**: context/agents.md | **Verified**: 2025-12-30 | **Commit**: e58c8053
 
 ---
 
@@ -140,8 +140,13 @@ api_endpoints:
       - "POST   /routing/policies/{id}/activate"
 
   user-org-service:  # /v1 prefix
+    response_format_note: |
+      IMPORTANT: user-org-service list endpoints return raw arrays, NOT wrapper objects.
+      This differs from admin-api-service which uses {data: [...], meta: {...}}.
+      CLI clients must decode directly into []Type slices.
+      Exception: /v1/bootstrap-keys uses {keys: [...]} wrapper.
     users:
-      - "GET    /orgs/{orgId}/users"
+      - "GET    /orgs/{orgId}/users → []User (raw array)"
       - "POST   /orgs/{orgId}/users"
       - "GET    /orgs/{orgId}/users/{userId}"
       - "GET    /orgs/{orgId}/users/by-email/{email}"
@@ -150,10 +155,12 @@ api_endpoints:
       - "PUT    /orgs/{orgId}/users/{userId}/roles"
     api_keys:
       - "POST   /orgs/{orgId}/api-keys"
-      - "GET    /orgs/{orgId}/api-keys"
+      - "GET    /orgs/{orgId}/api-keys → []APIKey (raw array)"
       - "PATCH  /orgs/{orgId}/api-keys/{id}"
       - "POST   /orgs/{orgId}/api-keys/{id}/rotate"
       - "DELETE /orgs/{orgId}/api-keys/{id}"
+    orgs:
+      - "GET    /orgs → []Organization (raw array)"
     self:
       - "POST   /organizations/me/api-keys"
       - "GET    /organizations/me/api-keys"
@@ -327,6 +334,20 @@ httpPath := fmt.Sprintf("/v2/models/%s/infer", policy.Model)
 grpcReq.ModelName = "ensemble"
 httpPath := "/v2/models/ensemble/infer"
 // TRT-LLM uses "ensemble" because it chains: preprocessing → inference → postprocessing
+
+// WRONG: Pushing code without verifying CI workflow triggered
+git add services/admin-api-service/
+git commit -m "fix: update API handler"
+git push origin develop
+# No verification step - deployment may use stale Docker image!
+
+// CORRECT: Verify CI workflow triggered after push
+git add services/admin-api-service/
+git commit -m "fix: update API handler"
+git push origin develop
+./scripts/ci/verify-workflow-triggered.sh develop CI
+# Or manually check:
+# gh run list --limit 1 --branch develop --workflow "CI" | grep $(git rev-parse --short HEAD)
 ```
 
 ---
@@ -353,6 +374,11 @@ go list -f '{{.ImportPath}}' ./...  # List all packages
 go mod tidy  # Clean up go.mod and go.sum
 go build ./...  # Ensure all packages compile
 go list -m github.com/ai-aas/shared-go  # Verify replace works
+
+# CI verification (after git push)
+./scripts/ci/verify-workflow-triggered.sh [branch] [workflow-name]
+gh run list --limit 1 --branch develop --workflow "CI" | grep $(git rev-parse --short HEAD)
+gh run watch  # Watch current workflow run
 ```
 
 ---
