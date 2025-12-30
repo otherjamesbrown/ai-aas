@@ -127,10 +127,37 @@ func RateLimitMiddleware(rateLimiter *limiter.RateLimiter, auditLogger *usage.Au
 	}
 }
 
+// isInferencePath returns true if the path is an inference endpoint that should
+// have quota enforcement. Admin and user-org proxy routes bypass quota checks.
+func isInferencePath(path string) bool {
+	// Inference endpoints that SHOULD have quota enforcement
+	inferencePathPrefixes := []string{
+		"/v1/chat/completions",
+		"/v1/completions",
+		"/v1/inference",
+		"/v1/embeddings",
+	}
+
+	for _, prefix := range inferencePathPrefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // BudgetMiddleware creates middleware for budget/quota checking.
+// Only applies to inference endpoints - admin and user-org operations bypass quota checks.
 func BudgetMiddleware(budgetClient *limiter.BudgetClient, auditLogger *usage.AuditLogger, logger *zap.Logger, tracer trace.Tracer) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Skip quota checks for non-inference paths (admin, user-org operations)
+			if !isInferencePath(r.URL.Path) {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			// Get authenticated context
 			authCtx := r.Context().Value(AuthContextKey)
 			if authCtx == nil {
@@ -424,6 +451,12 @@ func getModelFromRequest(r *http.Request) string {
 func TokenQuotaMiddleware(rateLimiter *limiter.RateLimiter, tokenLimits limiter.TokenQuotaLimits, auditLogger *usage.AuditLogger, logger *zap.Logger, tracer trace.Tracer) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Skip quota checks for non-inference paths (admin, user-org operations)
+			if !isInferencePath(r.URL.Path) {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			// Get authenticated context
 			authCtx := r.Context().Value(AuthContextKey)
 			if authCtx == nil {
