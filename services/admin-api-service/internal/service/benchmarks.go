@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -856,11 +857,7 @@ func max(values []float64) float64 {
 
 // sortFloat64s sorts a slice of float64s in place
 func sortFloat64s(a []float64) {
-	for i := 1; i < len(a); i++ {
-		for j := i; j > 0 && a[j] < a[j-1]; j-- {
-			a[j], a[j-1] = a[j-1], a[j]
-		}
-	}
+	sort.Float64s(a)
 }
 
 // BenchmarkValidationError represents a validation error in the benchmark service layer

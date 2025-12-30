@@ -3,8 +3,12 @@ package model
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
+
+// multiHyphenRegex matches two or more consecutive hyphens
+var multiHyphenRegex = regexp.MustCompile(`-{2,}`)
 
 // formatBytes formats a byte count as a human-readable string
 func formatBytes(bytes int64) string {
@@ -32,9 +36,7 @@ func sanitizeModelName(name string) string {
 	name = strings.ToLower(name)
 	name = strings.ReplaceAll(name, "_", "-")
 	name = strings.ReplaceAll(name, ".", "-")
-	// Remove consecutive hyphens
-	for strings.Contains(name, "--") {
-		name = strings.ReplaceAll(name, "--", "-")
-	}
+	// Remove consecutive hyphens using regex (more efficient for many consecutive chars)
+	name = multiHyphenRegex.ReplaceAllString(name, "-")
 	return strings.Trim(name, "-")
 }
