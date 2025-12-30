@@ -96,10 +96,26 @@ func (h *Handler) HandleOpenAIChatCompletions(w http.ResponseWriter, r *http.Req
 	}
 
 	// Parse OpenAI request
+	// Use buffered body from context if available (set by BodyBufferMiddleware)
+	// This ensures consistent parsing behavior after body has been read by middleware
 	var openAIReq OpenAIChatCompletionRequest
-	if err := json.NewDecoder(r.Body).Decode(&openAIReq); err != nil {
-		h.writeError(w, r, fmt.Errorf("invalid request body: %w", err), api.ErrCodeInvalidRequest)
-		return
+	if bufferedBody := r.Context().Value(BufferedBodyKey); bufferedBody != nil {
+		// Use json.Unmarshal with buffered bytes (more reliable after middleware)
+		bodyBytes, ok := bufferedBody.([]byte)
+		if !ok {
+			h.writeError(w, r, fmt.Errorf("invalid buffered body type"), api.ErrCodeInvalidRequest)
+			return
+		}
+		if err := json.Unmarshal(bodyBytes, &openAIReq); err != nil {
+			h.writeError(w, r, fmt.Errorf("invalid request body: %w", err), api.ErrCodeInvalidRequest)
+			return
+		}
+	} else {
+		// Fallback to decoder if no buffered body (shouldn't happen in production)
+		if err := json.NewDecoder(r.Body).Decode(&openAIReq); err != nil {
+			h.writeError(w, r, fmt.Errorf("invalid request body: %w", err), api.ErrCodeInvalidRequest)
+			return
+		}
 	}
 
 	// Validate request
@@ -274,10 +290,26 @@ func (h *Handler) HandleOpenAICompletions(w http.ResponseWriter, r *http.Request
 	}
 
 	// Parse OpenAI request
+	// Use buffered body from context if available (set by BodyBufferMiddleware)
+	// This ensures consistent parsing behavior after body has been read by middleware
 	var openAIReq OpenAICompletionRequest
-	if err := json.NewDecoder(r.Body).Decode(&openAIReq); err != nil {
-		h.writeError(w, r, fmt.Errorf("invalid request body: %w", err), api.ErrCodeInvalidRequest)
-		return
+	if bufferedBody := r.Context().Value(BufferedBodyKey); bufferedBody != nil {
+		// Use json.Unmarshal with buffered bytes (more reliable after middleware)
+		bodyBytes, ok := bufferedBody.([]byte)
+		if !ok {
+			h.writeError(w, r, fmt.Errorf("invalid buffered body type"), api.ErrCodeInvalidRequest)
+			return
+		}
+		if err := json.Unmarshal(bodyBytes, &openAIReq); err != nil {
+			h.writeError(w, r, fmt.Errorf("invalid request body: %w", err), api.ErrCodeInvalidRequest)
+			return
+		}
+	} else {
+		// Fallback to decoder if no buffered body (shouldn't happen in production)
+		if err := json.NewDecoder(r.Body).Decode(&openAIReq); err != nil {
+			h.writeError(w, r, fmt.Errorf("invalid request body: %w", err), api.ErrCodeInvalidRequest)
+			return
+		}
 	}
 
 	// Debug: Log the raw parsed request (aas-tv7d)

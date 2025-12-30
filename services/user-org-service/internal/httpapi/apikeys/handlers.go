@@ -648,8 +648,83 @@ func (h *Handler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
 
 // GetAPIKey handles GET /v1/orgs/{orgId}/api-keys/{apiKeyId} - Get API key details.
 func (h *Handler) GetAPIKey(w http.ResponseWriter, r *http.Request) {
-	// TODO: Implement getting API key
-	httputil.WriteNotImplemented(w, r, "not implemented")
+	ctx := r.Context()
+	orgIDParam := chi.URLParam(r, "orgId")
+	apiKeyIDParam := chi.URLParam(r, "apiKeyId")
+
+	// Parse org ID (UUID or slug)
+	var orgID uuid.UUID
+	var err error
+	if orgID, err = uuid.Parse(orgIDParam); err != nil {
+		// Try as slug
+		org, err := h.runtime.Postgres.GetOrgBySlug(ctx, orgIDParam)
+		if err != nil {
+			if err == postgres.ErrNotFound {
+				httputil.WriteNotFound(w, r, "organization", "")
+				return
+			}
+			h.logger.Error("failed to resolve organization", zap.Error(err), zap.String("orgId", orgIDParam))
+			httputil.WriteInternalError(w, r)
+			return
+		}
+		orgID = org.ID
+	}
+
+	// Look up API key by UUID or KeyID
+	apiKey, err := h.findAPIKey(ctx, orgID, apiKeyIDParam)
+	if err != nil {
+		if err == postgres.ErrNotFound {
+			httputil.WriteNotFound(w, r, "API key", "")
+			return
+		}
+		h.logger.Error("failed to get API key", zap.Error(err), zap.String("keyIdentifier", apiKeyIDParam))
+		httputil.WriteInternalError(w, r)
+		return
+	}
+
+	// Verify key belongs to org
+	if apiKey.OrgID != orgID {
+		httputil.WriteNotFound(w, r, "API key", "")
+		return
+	}
+
+	// Build response (without secret)
+	type APIKeyResponse struct {
+		KeyID         string   `json:"keyId"`
+		Notes         string   `json:"notes,omitempty"`
+		PrincipalType string   `json:"principalType"`
+		PrincipalID   string   `json:"principalId"`
+		Fingerprint   string   `json:"fingerprint"`
+		Status        string   `json:"status"`
+		Scopes        []string `json:"scopes"`
+		IssuedAt      string   `json:"issuedAt"`
+		ExpiresAt     *string  `json:"expiresAt,omitempty"`
+		LastUsedAt    *string  `json:"lastUsedAt,omitempty"`
+	}
+
+	resp := APIKeyResponse{
+		KeyID:         apiKey.KeyID,
+		Notes:         apiKey.Notes,
+		PrincipalType: string(apiKey.PrincipalType),
+		PrincipalID:   apiKey.PrincipalID.String(),
+		Fingerprint:   apiKey.Fingerprint,
+		Status:        apiKey.Status,
+		Scopes:        apiKey.Scopes,
+		IssuedAt:      apiKey.IssuedAt.Format(time.RFC3339),
+	}
+	if apiKey.ExpiresAt != nil {
+		expStr := apiKey.ExpiresAt.Format(time.RFC3339)
+		resp.ExpiresAt = &expStr
+	}
+	if apiKey.LastUsedAt != nil {
+		usedStr := apiKey.LastUsedAt.Format(time.RFC3339)
+		resp.LastUsedAt = &usedStr
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		h.logger.Error("failed to encode response", zap.Error(err))
+	}
 }
 
 // UpdateAPIKey handles PATCH /v1/orgs/{orgId}/api-keys/{apiKeyId} - Update API key metadata.
