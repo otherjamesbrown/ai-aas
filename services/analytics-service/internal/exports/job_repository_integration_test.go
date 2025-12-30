@@ -512,7 +512,7 @@ func TestGetPendingJobs(t *testing.T) {
 
 		// Immediately get pending jobs again (simulating worker 2)
 		// Due to SKIP LOCKED, this should succeed without blocking
-		jobs2, err := repo.GetPendingJobs(ctx, 1)
+		_, err = repo.GetPendingJobs(ctx, 1)
 		require.NoError(t, err)
 		// Worker 2 may or may not get a job depending on how many are pending
 		// The key is that it doesn't block or error

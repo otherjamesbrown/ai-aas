@@ -33,8 +33,8 @@ func newMockPostgresStore() *mockPostgresStore {
 	return &mockPostgresStore{
 		apiKeys:     make(map[uuid.UUID]postgres.APIKey),
 		apiKeysByID: make(map[string]postgres.APIKey),
-		orgs:        make(map[uuid.UUID]postgres.Organization),
-		orgsBySlug:  make(map[string]postgres.Organization),
+		orgs:        make(map[uuid.UUID]postgres.Org),
+		orgsBySlug:  make(map[string]postgres.Org),
 	}
 }
 
@@ -58,10 +58,10 @@ func (m *mockPostgresStore) GetAPIKeyByKeyID(ctx context.Context, orgID uuid.UUI
 	return key, nil
 }
 
-func (m *mockPostgresStore) GetOrgBySlug(ctx context.Context, slug string) (postgres.Organization, error) {
+func (m *mockPostgresStore) GetOrgBySlug(ctx context.Context, slug string) (postgres.Org, error) {
 	org, ok := m.orgsBySlug[slug]
 	if !ok {
-		return postgres.Organization{}, postgres.ErrNotFound
+		return postgres.Org{}, postgres.ErrNotFound
 	}
 	return org, nil
 }
