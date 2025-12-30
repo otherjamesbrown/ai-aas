@@ -52,22 +52,30 @@ type ListAPIKeysResponse struct {
 func (c *Client) ListAPIKeys(ctx context.Context, orgID string) (*ListAPIKeysResponse, error) {
 	path := fmt.Sprintf("/v1/orgs/%s/api-keys", url.PathEscape(orgID))
 
-	var result ListAPIKeysResponse
-	if err := c.doRequest(ctx, http.MethodGet, path, nil, &result); err != nil {
+	// API returns raw array of API keys, not a wrapper object
+	var apiKeys []APIKey
+	if err := c.doRequest(ctx, http.MethodGet, path, nil, &apiKeys); err != nil {
 		return nil, err
 	}
-	return &result, nil
+	return &ListAPIKeysResponse{
+		APIKeys:    apiKeys,
+		TotalCount: len(apiKeys),
+	}, nil
 }
 
 // ListUserAPIKeys lists API keys for a specific user.
 func (c *Client) ListUserAPIKeys(ctx context.Context, orgID, userID string) (*ListAPIKeysResponse, error) {
 	path := fmt.Sprintf("/v1/orgs/%s/users/%s/api-keys", url.PathEscape(orgID), url.PathEscape(userID))
 
-	var result ListAPIKeysResponse
-	if err := c.doRequest(ctx, http.MethodGet, path, nil, &result); err != nil {
+	// API returns raw array of API keys, not a wrapper object
+	var apiKeys []APIKey
+	if err := c.doRequest(ctx, http.MethodGet, path, nil, &apiKeys); err != nil {
 		return nil, err
 	}
-	return &result, nil
+	return &ListAPIKeysResponse{
+		APIKeys:    apiKeys,
+		TotalCount: len(apiKeys),
+	}, nil
 }
 
 // GetAPIKey gets an API key by ID.
