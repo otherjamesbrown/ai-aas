@@ -86,6 +86,9 @@ check_arch_compliance() {
     fi
 
     # Check for direct database access in CLI commands
+    # NOTE: This pattern detects sql.Open and gorm.Open. If new database libraries
+    # are introduced (e.g., pgx, ent, sqlx), add them to this pattern.
+    # The goal is to ensure CLI code uses API clients, not direct DB access.
     if echo "$recent_files" | xargs grep -l 'sql.Open\|gorm.Open' 2>/dev/null | grep -q 'cmd/'; then
         issues+=("CLI code contains direct database access - use API client instead")
     fi

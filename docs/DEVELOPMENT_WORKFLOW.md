@@ -313,7 +313,7 @@ Automatic compliance review on session end:
     "Stop": [{
       "hooks": [{
         "type": "command",
-        "command": ".claude/hooks/compliance-review.sh"
+        "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/compliance-review.sh"
       }]
     }]
   }
