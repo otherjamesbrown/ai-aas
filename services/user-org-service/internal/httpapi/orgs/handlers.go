@@ -136,9 +136,34 @@ func (h *Handler) CreateOrg(w http.ResponseWriter, r *http.Request) {
 			zap.Strings("scopes", session.GrantedScopes),
 			zap.String("user_id", session.UserID),
 			zap.String("org_id", session.OrgID))
+
+		// Defense in depth: Verify scopes even though middleware should have checked
+		requiredScopes := []string{"org:admin", "admin", "*"}
+		hasRequiredScope := false
+		for _, userScope := range session.GrantedScopes {
+			for _, required := range requiredScopes {
+				if userScope == required {
+					hasRequiredScope = true
+					break
+				}
+			}
+			if hasRequiredScope {
+				break
+			}
+		}
+		if !hasRequiredScope {
+			h.logger.Error("CreateOrg: SECURITY VIOLATION - insufficient scopes",
+				zap.Strings("user_scopes", session.GrantedScopes),
+				zap.Strings("required_scopes", requiredScopes),
+				zap.String("user_id", session.UserID))
+			httputil.WriteForbidden(w, r, "insufficient permissions to create organization")
+			return
+		}
 	} else {
 		h.logger.Warn("CreateOrg: NO SESSION in context - this should not happen if RequireAuth ran",
 			zap.String("path", r.URL.Path))
+		httputil.WriteUnauthorized(w, r, "authentication required")
+		return
 	}
 
 	var req CreateOrgRequest
