@@ -17,7 +17,7 @@ import (
 // See: usecases/audit.yaml
 func TestUC_AUD_001_ListAuditEvents(t *testing.T) {
 	t.Run("AC-01: list recent audit events", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org audit list`
@@ -37,7 +37,7 @@ func TestUC_AUD_001_ListAuditEvents(t *testing.T) {
 	})
 
 	t.Run("AC-02: filter audit events by action", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org audit list --action user.created`
@@ -53,7 +53,7 @@ func TestUC_AUD_001_ListAuditEvents(t *testing.T) {
 	})
 
 	t.Run("AC-03: filter audit events by resource type", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org audit list --resource apikey`
@@ -69,7 +69,7 @@ func TestUC_AUD_001_ListAuditEvents(t *testing.T) {
 	})
 
 	t.Run("AC-04: filter audit events by actor", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org audit list --actor admin@example.com`
@@ -84,7 +84,7 @@ func TestUC_AUD_001_ListAuditEvents(t *testing.T) {
 	})
 
 	t.Run("AC-05: limit number of audit events", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org audit list --limit 10`
@@ -100,7 +100,7 @@ func TestUC_AUD_001_ListAuditEvents(t *testing.T) {
 	})
 
 	t.Run("AC-06: list audit events with JSON output", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org audit list --json`
@@ -134,7 +134,7 @@ func TestUC_AUD_001_ListAuditEvents(t *testing.T) {
 	})
 
 	t.Run("AC-07: handle no matching audit events", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: No events match the filter criteria
 		// When: User runs `ai-aas-org audit list --action nonexistent.action`
@@ -152,7 +152,7 @@ func TestUC_AUD_001_ListAuditEvents(t *testing.T) {
 // TestUC_AUD_001_ListAuditEvents_MustNot validates negative requirements for audit use case.
 func TestUC_AUD_001_ListAuditEvents_MustNot(t *testing.T) {
 	t.Run("must not show audit events from other organizations", func(t *testing.T) {
-		t.Skip("requires live API with multiple orgs")
+		skipIfNoLiveAPIWithReason(t, "with multiple orgs")
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org audit list`
@@ -165,7 +165,7 @@ func TestUC_AUD_001_ListAuditEvents_MustNot(t *testing.T) {
 	})
 
 	t.Run("must not expose internal event IDs", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org audit list --json`
@@ -186,7 +186,7 @@ func TestUC_AUD_001_ListAuditEvents_MustNot(t *testing.T) {
 	})
 
 	t.Run("must not show system-level audit events", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org audit list --json`

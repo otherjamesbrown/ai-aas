@@ -40,7 +40,7 @@ type ModelAccessJSON struct {
 // list all users in their organization to understand who has access.
 func TestUC_USR_001_ListOrganizationUsers(t *testing.T) {
 	t.Run("AC-01: List all users in organization", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: Organization has multiple users
 		// (precondition: org setup with users)
@@ -69,7 +69,7 @@ func TestUC_USR_001_ListOrganizationUsers(t *testing.T) {
 	})
 
 	t.Run("AC-02: List users with JSON output", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: Organization has multiple users
 		// (precondition: org setup with users)
@@ -111,7 +111,7 @@ func TestUC_USR_001_ListOrganizationUsers(t *testing.T) {
 	})
 
 	t.Run("AC-03: Empty organization displays helpful message", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: Organization has no users (only the admin)
 		// (precondition: fresh org with only admin)
@@ -143,7 +143,7 @@ func TestUC_USR_001_ListOrganizationUsers(t *testing.T) {
 // new users who will be able to access AI models through the platform.
 func TestUC_USR_002_CreateUser(t *testing.T) {
 	t.Run("AC-01: Create user with required fields", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: Admin is authenticated and email is not in use
 		testEmail := "test-user-ac01@example.com"
@@ -179,7 +179,7 @@ func TestUC_USR_002_CreateUser(t *testing.T) {
 	})
 
 	t.Run("AC-02: Create user with admin role", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: Admin is authenticated
 		testEmail := "test-admin-ac02@example.com"
@@ -205,7 +205,7 @@ func TestUC_USR_002_CreateUser(t *testing.T) {
 	})
 
 	t.Run("AC-03: Reject duplicate email", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: Email is already registered in the organization
 		existingEmail := "existing-user@example.com"
@@ -255,7 +255,7 @@ func TestUC_USR_002_CreateUser(t *testing.T) {
 // detailed information about a specific user.
 func TestUC_USR_003_ShowUserDetails(t *testing.T) {
 	t.Run("AC-01: Show user by email", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User "user@example.com" exists in the organization
 		testEmail := "show-test-user@example.com"
@@ -287,7 +287,7 @@ func TestUC_USR_003_ShowUserDetails(t *testing.T) {
 	})
 
 	t.Run("AC-02: Show user by ID", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User with ID "usr_abc123" exists
 		testUserID := "usr_abc123" // Would be dynamically obtained in real test
@@ -310,7 +310,7 @@ func TestUC_USR_003_ShowUserDetails(t *testing.T) {
 	})
 
 	t.Run("AC-03: User not found", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: No user with the specified identifier exists
 		nonexistentEmail := "nonexistent-user-xyz@example.com"
@@ -333,7 +333,7 @@ func TestUC_USR_003_ShowUserDetails(t *testing.T) {
 	})
 
 	t.Run("AC-04: Show user details as JSON", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User exists in the organization
 		testEmail := "json-test-user@example.com"
@@ -388,7 +388,7 @@ func TestUC_USR_004_DeleteUser(t *testing.T) {
 	})
 
 	t.Run("AC-02: Delete user with --force flag", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User "user@example.com" exists in the organization
 		testEmail := "delete-force-user@example.com"
@@ -418,7 +418,7 @@ func TestUC_USR_004_DeleteUser(t *testing.T) {
 	})
 
 	t.Run("AC-03: Delete non-existent user", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: No user with the specified identifier exists
 		nonexistentEmail := "nonexistent-delete@example.com"
@@ -462,7 +462,7 @@ func TestUC_USR_004_DeleteUser(t *testing.T) {
 // see which AI models a specific user has access to.
 func TestUC_USR_005_ListUserModelAccess(t *testing.T) {
 	t.Run("AC-01: List models for user with access", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User "user@example.com" has access to multiple models
 		testEmail := "model-access-user@example.com"
@@ -486,7 +486,7 @@ func TestUC_USR_005_ListUserModelAccess(t *testing.T) {
 	})
 
 	t.Run("AC-02: List models for user with no access", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User "restricted@example.com" has no model access
 		restrictedEmail := "restricted-user@example.com"
@@ -510,7 +510,7 @@ func TestUC_USR_005_ListUserModelAccess(t *testing.T) {
 	})
 
 	t.Run("AC-03: List models with JSON output", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User has access to models
 		testEmail := "model-json-user@example.com"
@@ -545,7 +545,7 @@ func TestUC_USR_005_ListUserModelAccess(t *testing.T) {
 // grant users access to specific AI models.
 func TestUC_USR_006_GrantUserModelAccess(t *testing.T) {
 	t.Run("AC-01: Grant access to specific model", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User "user@example.com" exists and model "gpt-4" is available
 		testEmail := "grant-access-user@example.com"
@@ -578,7 +578,7 @@ func TestUC_USR_006_GrantUserModelAccess(t *testing.T) {
 	})
 
 	t.Run("AC-02: Grant access to all models", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User "user@example.com" exists and organization has multiple models
 		testEmail := "grant-all-user@example.com"
@@ -601,7 +601,7 @@ func TestUC_USR_006_GrantUserModelAccess(t *testing.T) {
 	})
 
 	t.Run("AC-03: Grant access to model user already has", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User "user@example.com" already has access to "gpt-4"
 		testEmail := "idempotent-grant-user@example.com"
@@ -633,7 +633,7 @@ func TestUC_USR_006_GrantUserModelAccess(t *testing.T) {
 	})
 
 	t.Run("AC-04: Grant access to unavailable model", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: Model "restricted-model" is not available to the organization
 		testEmail := "unavailable-model-user@example.com"
@@ -668,7 +668,7 @@ func TestUC_USR_006_GrantUserModelAccess(t *testing.T) {
 // revoke a user's access to specific AI models.
 func TestUC_USR_007_RevokeUserModelAccess(t *testing.T) {
 	t.Run("AC-01: Revoke access to specific model", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User "user@example.com" has access to model "gpt-4"
 		testEmail := "revoke-access-user@example.com"
@@ -706,7 +706,7 @@ func TestUC_USR_007_RevokeUserModelAccess(t *testing.T) {
 	})
 
 	t.Run("AC-02: Revoke access to model user doesn't have", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User "user@example.com" does not have access to "gpt-4"
 		testEmail := "no-access-revoke-user@example.com"
@@ -733,7 +733,7 @@ func TestUC_USR_007_RevokeUserModelAccess(t *testing.T) {
 	})
 
 	t.Run("AC-03: Revoke access for non-existent user", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: No user "nonexistent@example.com" exists
 		nonexistentEmail := "nonexistent-revoke@example.com"

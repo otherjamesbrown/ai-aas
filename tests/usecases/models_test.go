@@ -16,7 +16,7 @@ import (
 // See: usecases/models.yaml
 func TestUC_MDL_001_ListAvailableModels(t *testing.T) {
 	t.Run("AC-01: list all available models", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org model list`
@@ -36,7 +36,7 @@ func TestUC_MDL_001_ListAvailableModels(t *testing.T) {
 	})
 
 	t.Run("AC-02: list models with JSON output", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org model list --json`
@@ -60,7 +60,7 @@ func TestUC_MDL_001_ListAvailableModels(t *testing.T) {
 	})
 
 	t.Run("AC-03: handle no models available", func(t *testing.T) {
-		t.Skip("requires live API with empty org")
+		skipIfNoLiveAPIWithReason(t, "with empty org")
 
 		// Given: Organization has no models assigned
 		// When: User runs `ai-aas-org model list`
@@ -83,7 +83,7 @@ func TestUC_MDL_001_ListAvailableModels(t *testing.T) {
 // See: usecases/models.yaml
 func TestUC_MDL_002_ShowModelDetails(t *testing.T) {
 	t.Run("AC-01: show details for valid model", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated and model "gpt-4" is available
 		// When: User runs `ai-aas-org model show gpt-4`
@@ -101,7 +101,7 @@ func TestUC_MDL_002_ShowModelDetails(t *testing.T) {
 	})
 
 	t.Run("AC-02: show details with JSON output", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated and model "gpt-4" is available
 		// When: User runs `ai-aas-org model show gpt-4 --json`
@@ -125,7 +125,7 @@ func TestUC_MDL_002_ShowModelDetails(t *testing.T) {
 	})
 
 	t.Run("AC-03: reject request for non-existent model", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User specifies a model that doesn't exist
 		// When: User runs `ai-aas-org model show nonexistent-model`
@@ -141,7 +141,7 @@ func TestUC_MDL_002_ShowModelDetails(t *testing.T) {
 	})
 
 	t.Run("AC-04: reject request for unauthorized model", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User specifies a model they don't have access to
 		// When: User runs `ai-aas-org model show restricted-model`

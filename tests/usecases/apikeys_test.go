@@ -24,7 +24,7 @@ type APIKeyJSON struct {
 // See: usecases/apikeys.yaml UC-KEY-001
 func TestUC_KEY_001_ListAPIKeys(t *testing.T) {
 	t.Run("AC-01: list all API keys in organization", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: Organization has users with API keys
 		// When: User runs `ai-aas-org apikey list`
@@ -51,7 +51,7 @@ func TestUC_KEY_001_ListAPIKeys(t *testing.T) {
 	})
 
 	t.Run("AC-02: list API keys for specific user", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User "user@example.com" has API keys
 		testUser := "user@example.com"
@@ -69,7 +69,7 @@ func TestUC_KEY_001_ListAPIKeys(t *testing.T) {
 	})
 
 	t.Run("AC-03: list keys with JSON output", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: Organization has API keys
 		// When: User runs `ai-aas-org apikey list --json`
@@ -109,7 +109,7 @@ func TestUC_KEY_001_ListAPIKeys(t *testing.T) {
 	})
 
 	t.Run("AC-04: list keys when none exist", func(t *testing.T) {
-		t.Skip("requires live API with empty organization")
+		skipIfNoLiveAPIWithReason(t, "with empty organization")
 
 		// Given: Organization has no API keys
 		// When: User runs `ai-aas-org apikey list`
@@ -133,7 +133,7 @@ func TestUC_KEY_001_ListAPIKeys(t *testing.T) {
 // See: usecases/apikeys.yaml UC-KEY-002
 func TestUC_KEY_002_CreateAPIKey(t *testing.T) {
 	t.Run("AC-01: create key with required fields", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User "usr_abc123" exists in the organization
 		testUserID := "usr_abc123"
@@ -161,7 +161,7 @@ func TestUC_KEY_002_CreateAPIKey(t *testing.T) {
 	})
 
 	t.Run("AC-02: create key with expiration", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User exists in the organization
 		testUserID := "usr_abc123"
@@ -189,7 +189,7 @@ func TestUC_KEY_002_CreateAPIKey(t *testing.T) {
 	})
 
 	t.Run("AC-03: create key for non-existent user", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User ID "usr_nonexistent" does not exist
 		nonExistentUserID := "usr_nonexistent"
@@ -243,7 +243,7 @@ func TestUC_KEY_003_DeleteAPIKey(t *testing.T) {
 	})
 
 	t.Run("AC-02: delete key with --force flag", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: API key exists in the organization
 		testKeyID := "key_abc123"
@@ -260,7 +260,7 @@ func TestUC_KEY_003_DeleteAPIKey(t *testing.T) {
 	})
 
 	t.Run("AC-03: delete non-existent key", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: No key with ID "key_nonexistent" exists
 		nonExistentKeyID := "key_nonexistent"
@@ -298,7 +298,7 @@ func TestUC_KEY_003_DeleteAPIKey(t *testing.T) {
 // See: usecases/apikeys.yaml UC-KEY-004
 func TestUC_KEY_004_RotateAPIKey(t *testing.T) {
 	t.Run("AC-01: rotate existing key", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: API key "key_abc123" exists and is valid
 		testKeyID := "key_abc123"
@@ -326,7 +326,7 @@ func TestUC_KEY_004_RotateAPIKey(t *testing.T) {
 	})
 
 	t.Run("AC-02: rotate non-existent key", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: No key with ID "key_nonexistent" exists
 		nonExistentKeyID := "key_nonexistent"
@@ -349,7 +349,7 @@ func TestUC_KEY_004_RotateAPIKey(t *testing.T) {
 	})
 
 	t.Run("AC-03: rotate key preserves user association", func(t *testing.T) {
-		t.Skip("requires live API with actual key to rotate")
+		skipIfNoLiveAPIWithReason(t, "with actual key to rotate")
 
 		// Given: API key "key_abc123" belongs to user "usr_xyz789"
 		// When: User runs `ai-aas-org apikey rotate key_abc123`

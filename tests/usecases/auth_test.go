@@ -26,7 +26,7 @@ import (
 func TestUC_AUTH_001_InitializeCLIWithBootstrapKey(t *testing.T) {
 
 	t.Run("AC-01: initialize with valid bootstrap key", func(t *testing.T) {
-		t.Skip("requires live API - run with: go test -tags=e2e")
+		skipIfNoLiveAPI(t)
 
 		// Given: User has a valid, unused bootstrap key
 		configPath := tempConfigFile(t)
@@ -62,7 +62,7 @@ func TestUC_AUTH_001_InitializeCLIWithBootstrapKey(t *testing.T) {
 	})
 
 	t.Run("AC-02: reject already-used bootstrap key", func(t *testing.T) {
-		t.Skip("requires live API - run with: go test -tags=e2e")
+		skipIfNoLiveAPI(t)
 
 		// Given: User has a bootstrap key that was already redeemed
 		configPath := tempConfigFile(t)
@@ -100,7 +100,7 @@ func TestUC_AUTH_001_InitializeCLIWithBootstrapKey(t *testing.T) {
 	})
 
 	t.Run("AC-03: reject expired bootstrap key", func(t *testing.T) {
-		t.Skip("requires live API - run with: go test -tags=e2e")
+		skipIfNoLiveAPI(t)
 
 		// Given: User has a bootstrap key that expired more than 7 days ago
 		configPath := tempConfigFile(t)
@@ -138,7 +138,7 @@ func TestUC_AUTH_001_InitializeCLIWithBootstrapKey(t *testing.T) {
 	})
 
 	t.Run("AC-04: overwrite existing config with --force flag", func(t *testing.T) {
-		t.Skip("requires live API - run with: go test -tags=e2e")
+		skipIfNoLiveAPI(t)
 
 		// Given: User has existing credentials in config file
 		configPath := tempConfigFile(t)
@@ -222,7 +222,7 @@ api_key: sk_existing_key
 func TestUC_AUTH_002_ConfigureCLIManually(t *testing.T) {
 
 	t.Run("AC-01: configure with API endpoint and key", func(t *testing.T) {
-		t.Skip("requires live API - run with: go test -tags=e2e")
+		skipIfNoLiveAPI(t)
 
 		// Given: User has API credentials from another source
 		configPath := tempConfigFile(t)
@@ -263,7 +263,7 @@ func TestUC_AUTH_002_ConfigureCLIManually(t *testing.T) {
 	})
 
 	t.Run("AC-02: configure inference endpoint separately", func(t *testing.T) {
-		t.Skip("requires live API - run with: go test -tags=e2e")
+		skipIfNoLiveAPI(t)
 
 		// Given: User has existing basic configuration
 		configPath := tempConfigFile(t)
@@ -372,7 +372,7 @@ api_key: sk_existing_key
 	})
 
 	t.Run("must_not: accept configuration without validation", func(t *testing.T) {
-		t.Skip("requires live API to verify validation occurs")
+		skipIfNoLiveAPIWithReason(t, "to verify validation occurs")
 
 		// This test verifies that the CLI validates credentials before saving
 		// Implementation: would need to mock API responses to verify validation

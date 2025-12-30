@@ -17,7 +17,7 @@ import (
 // See: usecases/usage.yaml
 func TestUC_USG_001_ShowUsageSummary(t *testing.T) {
 	t.Run("AC-01: show usage summary with default period", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org usage summary`
@@ -37,7 +37,7 @@ func TestUC_USG_001_ShowUsageSummary(t *testing.T) {
 	})
 
 	t.Run("AC-02: show usage summary with custom period", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org usage summary --period 7d`
@@ -57,7 +57,7 @@ func TestUC_USG_001_ShowUsageSummary(t *testing.T) {
 	})
 
 	t.Run("AC-03: show usage summary with JSON output", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org usage summary --json`
@@ -81,7 +81,7 @@ func TestUC_USG_001_ShowUsageSummary(t *testing.T) {
 	})
 
 	t.Run("AC-04: handle zero usage period", func(t *testing.T) {
-		t.Skip("requires live API with org that has no usage")
+		skipIfNoLiveAPIWithReason(t, "with org that has no usage")
 
 		// Given: Organization has no usage in the specified period
 		// When: User runs `ai-aas-org usage summary --period today`
@@ -105,7 +105,7 @@ func TestUC_USG_001_ShowUsageSummary(t *testing.T) {
 // See: usecases/usage.yaml
 func TestUC_USG_002_ShowUsageByModel(t *testing.T) {
 	t.Run("AC-01: show usage by model with default period", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org usage by-model`
@@ -123,7 +123,7 @@ func TestUC_USG_002_ShowUsageByModel(t *testing.T) {
 	})
 
 	t.Run("AC-02: show usage by model with custom period", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org usage by-model --period 7d`
@@ -139,7 +139,7 @@ func TestUC_USG_002_ShowUsageByModel(t *testing.T) {
 	})
 
 	t.Run("AC-03: show usage by model with JSON output", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org usage by-model --json`
@@ -163,7 +163,7 @@ func TestUC_USG_002_ShowUsageByModel(t *testing.T) {
 	})
 
 	t.Run("AC-04: handle no model usage", func(t *testing.T) {
-		t.Skip("requires live API with org that has no usage")
+		skipIfNoLiveAPIWithReason(t, "with org that has no usage")
 
 		// Given: Organization has no model usage in the period
 		// When: User runs `ai-aas-org usage by-model`
@@ -185,7 +185,7 @@ func TestUC_USG_002_ShowUsageByModel(t *testing.T) {
 // See: usecases/usage.yaml
 func TestUC_USG_003_ShowUsageByUser(t *testing.T) {
 	t.Run("AC-01: show usage by user with default period", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org usage by-user`
@@ -203,7 +203,7 @@ func TestUC_USG_003_ShowUsageByUser(t *testing.T) {
 	})
 
 	t.Run("AC-02: show usage by user with custom period", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org usage by-user --period 7d`
@@ -219,7 +219,7 @@ func TestUC_USG_003_ShowUsageByUser(t *testing.T) {
 	})
 
 	t.Run("AC-03: show usage by user with JSON output", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org usage by-user --json`
@@ -243,7 +243,7 @@ func TestUC_USG_003_ShowUsageByUser(t *testing.T) {
 	})
 
 	t.Run("AC-04: handle no user usage", func(t *testing.T) {
-		t.Skip("requires live API with org that has no usage")
+		skipIfNoLiveAPIWithReason(t, "with org that has no usage")
 
 		// Given: Organization has no user usage in the period
 		// When: User runs `ai-aas-org usage by-user`
@@ -261,7 +261,7 @@ func TestUC_USG_003_ShowUsageByUser(t *testing.T) {
 // TestUC_USG_MustNot validates negative requirements for usage use cases.
 func TestUC_USG_MustNot(t *testing.T) {
 	t.Run("must not show usage from other organizations", func(t *testing.T) {
-		t.Skip("requires live API with multiple orgs")
+		skipIfNoLiveAPIWithReason(t, "with multiple orgs")
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org usage summary`
@@ -274,7 +274,7 @@ func TestUC_USG_MustNot(t *testing.T) {
 	})
 
 	t.Run("must not expose internal user IDs in by-user", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org usage by-user --json`
@@ -295,7 +295,7 @@ func TestUC_USG_MustNot(t *testing.T) {
 	})
 
 	t.Run("must not expose internal model IDs in by-model", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org usage by-model --json`

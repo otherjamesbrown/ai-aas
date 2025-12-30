@@ -17,7 +17,7 @@ import (
 // See: usecases/organization.yaml
 func TestUC_ORG_001_ShowOrganizationDetails(t *testing.T) {
 	t.Run("AC-01: show organization details", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org org show`
@@ -39,7 +39,7 @@ func TestUC_ORG_001_ShowOrganizationDetails(t *testing.T) {
 	})
 
 	t.Run("AC-02: show organization details with JSON output", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org org show --json`
@@ -72,7 +72,7 @@ func TestUC_ORG_001_ShowOrganizationDetails(t *testing.T) {
 	})
 
 	t.Run("AC-03: handle authentication failure", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User API key is invalid or expired
 		// This would require a way to pass an invalid API key to the CLI
@@ -89,7 +89,7 @@ func TestUC_ORG_001_ShowOrganizationDetails(t *testing.T) {
 // TestUC_ORG_001_ShowOrganizationDetails_MustNot validates negative requirements.
 func TestUC_ORG_001_ShowOrganizationDetails_MustNot(t *testing.T) {
 	t.Run("must not show details of other organizations", func(t *testing.T) {
-		t.Skip("requires live API with multiple orgs")
+		skipIfNoLiveAPIWithReason(t, "with multiple orgs")
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org org show`
@@ -103,7 +103,7 @@ func TestUC_ORG_001_ShowOrganizationDetails_MustNot(t *testing.T) {
 	})
 
 	t.Run("must not expose internal organization IDs", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org org show --json`

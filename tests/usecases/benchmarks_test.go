@@ -23,7 +23,7 @@ import (
 // See: usecases/benchmarks.yaml
 func TestUC_BM_001_CreateBenchmarkTarget(t *testing.T) {
 	t.Run("AC-01: create target with required fields", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org benchmark target add --model llama-7b --scenario standard`
@@ -48,7 +48,7 @@ func TestUC_BM_001_CreateBenchmarkTarget(t *testing.T) {
 	})
 
 	t.Run("AC-02: reject unauthorized model", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User specifies a model they don't have access to
 		// When: User runs `ai-aas-org benchmark target add --model restricted-model --scenario standard`
@@ -69,7 +69,7 @@ func TestUC_BM_001_CreateBenchmarkTarget(t *testing.T) {
 	})
 
 	t.Run("AC-03: reject invalid scenario", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User specifies a non-existent scenario
 		// When: User runs `ai-aas-org benchmark target add --model llama-7b --scenario nonexistent`
@@ -85,7 +85,7 @@ func TestUC_BM_001_CreateBenchmarkTarget(t *testing.T) {
 	})
 
 	t.Run("AC-04: create target with optional parameters", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org benchmark target add --model llama-7b --scenario throughput --concurrency 10 --duration 60s`
@@ -109,7 +109,7 @@ func TestUC_BM_001_CreateBenchmarkTarget(t *testing.T) {
 // TestUC_BM_001_CreateBenchmarkTarget_MustNot validates negative requirements.
 func TestUC_BM_001_CreateBenchmarkTarget_MustNot(t *testing.T) {
 	t.Run("must not auto-start benchmark after target creation", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User creates a benchmark target
 		// When: Target creation completes
@@ -128,7 +128,7 @@ func TestUC_BM_001_CreateBenchmarkTarget_MustNot(t *testing.T) {
 	})
 
 	t.Run("must not modify any existing targets", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Creating a new target should not affect existing targets
 		// This test would verify by creating a target, then creating another,
@@ -136,7 +136,7 @@ func TestUC_BM_001_CreateBenchmarkTarget_MustNot(t *testing.T) {
 	})
 
 	t.Run("must not expose internal system metrics or endpoints", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User creates a benchmark target
 		result := runOrgCLI("benchmark", "target", "add", "--model", "llama-7b", "--scenario", "standard")
@@ -163,7 +163,7 @@ func TestUC_BM_001_CreateBenchmarkTarget_MustNot(t *testing.T) {
 // See: usecases/benchmarks.yaml
 func TestUC_BM_002_TriggerBenchmarkRun(t *testing.T) {
 	t.Run("AC-01: trigger run on valid target", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User has created benchmark target "target-123"
 		// When: User runs `ai-aas-org benchmark run trigger --target target-123`
@@ -185,7 +185,7 @@ func TestUC_BM_002_TriggerBenchmarkRun(t *testing.T) {
 	})
 
 	t.Run("AC-02: reject run on non-existent target", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User specifies a target that doesn't exist
 		// When: User runs `ai-aas-org benchmark run trigger --target nonexistent-target`
@@ -201,7 +201,7 @@ func TestUC_BM_002_TriggerBenchmarkRun(t *testing.T) {
 	})
 
 	t.Run("AC-03: reject run when model unavailable", func(t *testing.T) {
-		t.Skip("requires live API with offline model")
+		skipIfNoLiveAPIWithReason(t, "with offline model")
 
 		// Given: Benchmark target exists but referenced model is offline
 		// When: User runs `ai-aas-org benchmark run trigger --target target-123`
@@ -220,7 +220,7 @@ func TestUC_BM_002_TriggerBenchmarkRun(t *testing.T) {
 // TestUC_BM_002_TriggerBenchmarkRun_MustNot validates negative requirements.
 func TestUC_BM_002_TriggerBenchmarkRun_MustNot(t *testing.T) {
 	t.Run("must not block until run completes", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User triggers a benchmark run
 		// When: Command returns
@@ -229,13 +229,13 @@ func TestUC_BM_002_TriggerBenchmarkRun_MustNot(t *testing.T) {
 	})
 
 	t.Run("must not modify the target configuration", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Triggering a run should not change the target configuration
 	})
 
 	t.Run("must not expose internal queue details", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User triggers a benchmark run
 		result := runOrgCLI("benchmark", "run", "trigger", "--target", "target-123")
@@ -263,7 +263,7 @@ func TestUC_BM_002_TriggerBenchmarkRun_MustNot(t *testing.T) {
 // See: usecases/benchmarks.yaml
 func TestUC_BM_003_ViewBenchmarkResults(t *testing.T) {
 	t.Run("AC-01: view completed run results", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: Benchmark run "run-456" has completed successfully
 		// When: User runs `ai-aas-org benchmark run show run-456`
@@ -285,7 +285,7 @@ func TestUC_BM_003_ViewBenchmarkResults(t *testing.T) {
 	})
 
 	t.Run("AC-02: view pending run status", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: Benchmark run "run-456" is still running
 		// When: User runs `ai-aas-org benchmark run show run-456`
@@ -301,7 +301,7 @@ func TestUC_BM_003_ViewBenchmarkResults(t *testing.T) {
 	})
 
 	t.Run("AC-03: view failed run details", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: Benchmark run "run-456" failed during execution
 		// When: User runs `ai-aas-org benchmark run show run-456`
@@ -323,7 +323,7 @@ func TestUC_BM_003_ViewBenchmarkResults(t *testing.T) {
 	})
 
 	t.Run("AC-04: export results as JSON", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: Benchmark run "run-456" has completed
 		// When: User runs `ai-aas-org benchmark run show run-456 --json`
@@ -350,7 +350,7 @@ func TestUC_BM_003_ViewBenchmarkResults(t *testing.T) {
 // TestUC_BM_003_ViewBenchmarkResults_MustNot validates negative requirements.
 func TestUC_BM_003_ViewBenchmarkResults_MustNot(t *testing.T) {
 	t.Run("must not show results from other organizations", func(t *testing.T) {
-		t.Skip("requires live API with multiple orgs")
+		skipIfNoLiveAPIWithReason(t, "with multiple orgs")
 
 		// Given: User is authenticated with org admin API key
 		// When: User tries to view results for another org's run
@@ -358,7 +358,7 @@ func TestUC_BM_003_ViewBenchmarkResults_MustNot(t *testing.T) {
 	})
 
 	t.Run("must not expose internal implementation details", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User views benchmark results
 		result := runOrgCLI("benchmark", "run", "show", "run-456", "--json")
@@ -384,7 +384,7 @@ func TestUC_BM_003_ViewBenchmarkResults_MustNot(t *testing.T) {
 // See: usecases/benchmarks.yaml
 func TestUC_BM_004_ListBenchmarkTargets(t *testing.T) {
 	t.Run("AC-01: list all targets", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User has created multiple benchmark targets
 		// When: User runs `ai-aas-org benchmark target list`
@@ -404,7 +404,7 @@ func TestUC_BM_004_ListBenchmarkTargets(t *testing.T) {
 	})
 
 	t.Run("AC-01b: list all targets with JSON output", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Given: User has created multiple benchmark targets
 		// When: User runs `ai-aas-org benchmark target list --json`
@@ -428,7 +428,7 @@ func TestUC_BM_004_ListBenchmarkTargets(t *testing.T) {
 	})
 
 	t.Run("AC-02: list targets with no results", func(t *testing.T) {
-		t.Skip("requires live API with org that has no targets")
+		skipIfNoLiveAPIWithReason(t, "with org that has no targets")
 
 		// Given: User has not created any benchmark targets
 		// When: User runs `ai-aas-org benchmark target list`
@@ -447,7 +447,7 @@ func TestUC_BM_004_ListBenchmarkTargets(t *testing.T) {
 // TestUC_BM_004_ListBenchmarkTargets_MustNot validates negative requirements.
 func TestUC_BM_004_ListBenchmarkTargets_MustNot(t *testing.T) {
 	t.Run("must not show targets from other organizations", func(t *testing.T) {
-		t.Skip("requires live API with multiple orgs")
+		skipIfNoLiveAPIWithReason(t, "with multiple orgs")
 
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org benchmark target list`
@@ -460,7 +460,7 @@ func TestUC_BM_004_ListBenchmarkTargets_MustNot(t *testing.T) {
 	})
 
 	t.Run("must not modify any targets", func(t *testing.T) {
-		t.Skip("requires live API")
+		skipIfNoLiveAPI(t)
 
 		// Listing targets is a read-only operation
 		// This test verifies no side effects occur
