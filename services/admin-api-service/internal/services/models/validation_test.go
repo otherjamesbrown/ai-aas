@@ -61,6 +61,16 @@ func TestValidateKServeName(t *testing.T) {
 			input:   "mistral-7b-instruct-v03",
 			wantErr: false,
 		},
+		{
+			name:    "invalid - contains period",
+			input:   "model-v0.3",
+			wantErr: true,
+		},
+		{
+			name:    "invalid - multiple periods",
+			input:   "mistral-7b-instruct-v0.3",
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/domain"
 	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/repository"
+	"github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/services/models"
 	"go.uber.org/zap"
 )
 
@@ -241,6 +242,10 @@ func (s *ModelRegistryService) validateRegistration(reg *domain.ModelRegistratio
 	}
 	if len(reg.ModelName) > 255 {
 		return fmt.Errorf("model_name must be 255 characters or less")
+	}
+	// Validate KServe naming constraints
+	if err := models.ValidateKServeName(reg.ModelName); err != nil {
+		return fmt.Errorf("invalid model name %q: %w", reg.ModelName, err)
 	}
 	if reg.DeploymentEndpoint == "" {
 		return fmt.Errorf("deployment_endpoint is required")
