@@ -221,10 +221,6 @@ func TestAPIKeyLifecycle(t *testing.T) {
 		t.Logf("Deleting API key %s", keyID)
 		result := runCLIWithUserOrg("apikey", "delete", "--org-id", orgID, "--api-key-id", keyID, "--force")
 		if result.ExitCode != 0 {
-			// Check for known issue: short keyId format not accepted by delete endpoint
-			if strings.Contains(result.Output, "invalid API key ID") {
-				t.Skip("Skipping: API key delete returns 'invalid API key ID' - known issue with short keyId format")
-			}
 			t.Fatalf("Failed to delete API key: %s\nOutput: %s", result.Error, result.Output)
 		}
 
