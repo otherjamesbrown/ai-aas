@@ -11,50 +11,81 @@ package exports
 
 import (
 	"context"
-	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
-	_ "github.com/jackc/pgx/v5/stdlib" // Register pgx driver for goose
-	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/require"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 )
 
-// setupTestDB creates a test Postgres container with TimescaleDB and runs migrations.
+// setupTestDB creates a test Postgres container with TimescaleDB and creates the export_jobs schema.
 func setupTestDB(t *testing.T) (*pgxpool.Pool, func()) {
 	t.Helper()
 
 	ctx := context.Background()
 
-	// Use TimescaleDB image
+	// Use TimescaleDB image with wait strategy
 	container, err := tcpostgres.Run(ctx, "timescale/timescaledb:latest-pg15",
 		tcpostgres.WithDatabase("analytics_test"),
 		tcpostgres.WithUsername("postgres"),
 		tcpostgres.WithPassword("postgres"),
+		tcpostgres.BasicWaitStrategies(),
 	)
 	require.NoError(t, err)
 
 	connString, err := container.ConnectionString(ctx, "sslmode=disable")
 	require.NoError(t, err)
 
-	// Run migrations
-	db, err := goose.OpenDBWithDriver("postgres", connString)
-	require.NoError(t, err)
-
-	_, filename, _, _ := runtime.Caller(0)
-	projectRoot := filepath.Join(filepath.Dir(filename), "..", "..", "..")
-	migrationsDir := filepath.Join(projectRoot, "db", "migrations", "analytics")
-
-	require.NoError(t, goose.SetDialect("postgres"))
-	require.NoError(t, goose.Up(db, migrationsDir))
-	require.NoError(t, db.Close())
-
 	pool, err := pgxpool.New(ctx, connString)
 	require.NoError(t, err)
+
+	// Create analytics schema and tables directly (avoiding goose migration parsing issues)
+	setupSchema := `
+		CREATE SCHEMA IF NOT EXISTS analytics;
+
+		-- Create ENUM types
+		DO $$ BEGIN
+			CREATE TYPE analytics.export_job_status AS ENUM ('pending', 'running', 'succeeded', 'failed', 'expired');
+		EXCEPTION
+			WHEN duplicate_object THEN null;
+		END $$;
+
+		DO $$ BEGIN
+			CREATE TYPE analytics.export_job_granularity AS ENUM ('hourly', 'daily', 'monthly');
+		EXCEPTION
+			WHEN duplicate_object THEN null;
+		END $$;
+
+		-- Create export_jobs table
+		CREATE TABLE IF NOT EXISTS analytics.export_jobs (
+			job_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			org_id UUID NOT NULL,
+			requested_by UUID NOT NULL,
+			time_range_start TIMESTAMPTZ NOT NULL,
+			time_range_end TIMESTAMPTZ NOT NULL,
+			granularity analytics.export_job_granularity NOT NULL DEFAULT 'daily',
+			status analytics.export_job_status NOT NULL DEFAULT 'pending',
+			output_uri TEXT,
+			checksum TEXT,
+			row_count BIGINT,
+			initiated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			completed_at TIMESTAMPTZ,
+			error_message TEXT,
+			CONSTRAINT valid_time_range CHECK (time_range_end > time_range_start)
+		);
+
+		-- Indexes for common query patterns
+		CREATE INDEX IF NOT EXISTS idx_export_jobs_org_initiated
+			ON analytics.export_jobs (org_id, initiated_at DESC);
+		CREATE INDEX IF NOT EXISTS idx_export_jobs_status_pending_running
+			ON analytics.export_jobs (status)
+			WHERE status IN ('pending', 'running');
+	`
+
+	_, err = pool.Exec(ctx, setupSchema)
+	require.NoError(t, err, "Failed to create test schema")
 
 	cleanup := func() {
 		pool.Close()
