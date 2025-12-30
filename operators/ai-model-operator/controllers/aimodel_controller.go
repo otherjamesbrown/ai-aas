@@ -1829,6 +1829,8 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 			freshAIModel.Status.Phase = latestAIModel.Status.Phase
 			freshAIModel.Status.Message = latestAIModel.Status.Message
 			freshAIModel.Status.SchedulingStatus = latestAIModel.Status.SchedulingStatus
+			freshAIModel.Status.AutoscalerStatus = latestAIModel.Status.AutoscalerStatus
+			freshAIModel.Status.ProbeStatus = latestAIModel.Status.ProbeStatus
 			freshAIModel.Status.RetryCount = latestAIModel.Status.RetryCount
 			freshAIModel.Status.LastRetryTime = latestAIModel.Status.LastRetryTime
 			freshAIModel.Status.NextRetryTime = latestAIModel.Status.NextRetryTime

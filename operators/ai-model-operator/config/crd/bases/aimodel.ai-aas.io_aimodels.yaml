@@ -1682,6 +1682,29 @@ spec:
           status:
             description: AIModelStatus defines the observed state of AIModel
             properties:
+              autoscalerStatus:
+                description: |-
+                  AutoscalerStatus provides information about cluster autoscaler activity
+                  Only populated when pod is pending and autoscaler events are detected
+                properties:
+                  atMaxCapacity:
+                    description: AtMaxCapacity indicates the autoscaler cannot add
+                      more nodes (node pool at max size)
+                    type: boolean
+                  pendingNodes:
+                    description: PendingNodes is the count of nodes currently being
+                      provisioned by the autoscaler
+                    format: int32
+                    type: integer
+                  scaleUpReason:
+                    description: ScaleUpReason explains why scaling is happening (e.g.,
+                      pod resource requirements)
+                    type: string
+                  scalingUp:
+                    description: ScalingUp indicates the cluster autoscaler is actively
+                      provisioning new nodes
+                    type: boolean
+                type: object
               conditions:
                 description: Conditions represent the latest available observations
                   of an object's state.
@@ -1802,6 +1825,25 @@ spec:
                 description: PhaseStartTime is when the current phase started.
                 format: date-time
                 type: string
+              probeStatus:
+                description: ProbeStatus provides information about container readiness
+                  probe status
+                properties:
+                  failureCount:
+                    description: FailureCount is number of consecutive probe failures
+                    format: int32
+                    type: integer
+                  lastProbeTime:
+                    description: LastProbeTime is when the last probe was attempted
+                    format: date-time
+                    type: string
+                  message:
+                    description: Message provides probe failure details
+                    type: string
+                  ready:
+                    description: Ready indicates if the container is currently ready
+                    type: boolean
+                type: object
               progress:
                 description: Progress tracks progress within the current phase.
                 properties:

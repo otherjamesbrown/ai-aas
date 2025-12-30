@@ -284,6 +284,40 @@ type SchedulingStatus struct {
 	NodeName string `json:"nodeName,omitempty"`
 }
 
+// ProbeStatus provides information about container readiness probe status
+type ProbeStatus struct {
+	// Ready indicates if the container is currently ready
+	Ready bool `json:"ready,omitempty"`
+
+	// FailureCount is number of consecutive probe failures
+	FailureCount int32 `json:"failureCount,omitempty"`
+
+	// LastProbeTime is when the last probe was attempted
+	// +optional
+	LastProbeTime *metav1.Time `json:"lastProbeTime,omitempty"`
+
+	// Message provides probe failure details
+	// +optional
+	Message string `json:"message,omitempty"`
+}
+
+// AutoscalerStatus provides information about cluster autoscaler activity
+type AutoscalerStatus struct {
+	// ScalingUp indicates the cluster autoscaler is actively provisioning new nodes
+	ScalingUp bool `json:"scalingUp,omitempty"`
+
+	// ScaleUpReason explains why scaling is happening (e.g., pod resource requirements)
+	// +optional
+	ScaleUpReason string `json:"scaleUpReason,omitempty"`
+
+	// AtMaxCapacity indicates the autoscaler cannot add more nodes (node pool at max size)
+	AtMaxCapacity bool `json:"atMaxCapacity,omitempty"`
+
+	// PendingNodes is the count of nodes currently being provisioned by the autoscaler
+	// +optional
+	PendingNodes int32 `json:"pendingNodes,omitempty"`
+}
+
 // AIModelStatus defines the observed state of AIModel
 type AIModelStatus struct {
 	// INSERT CUSTOM FIELDS - observed state of cluster
@@ -336,6 +370,15 @@ type AIModelStatus struct {
 	// SchedulingStatus provides information about pod scheduling status
 	// +optional
 	SchedulingStatus *SchedulingStatus `json:"schedulingStatus,omitempty"`
+
+	// AutoscalerStatus provides information about cluster autoscaler activity
+	// Only populated when pod is pending and autoscaler events are detected
+	// +optional
+	AutoscalerStatus *AutoscalerStatus `json:"autoscalerStatus,omitempty"`
+
+	// ProbeStatus provides information about container readiness probe status
+	// +optional
+	ProbeStatus *ProbeStatus `json:"probeStatus,omitempty"`
 
 	// RetryCount tracks the number of download retry attempts.
 	RetryCount int32 `json:"retryCount,omitempty"`
