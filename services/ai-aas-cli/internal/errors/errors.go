@@ -28,6 +28,8 @@ const (
 	ErrCodeOperationFailed ErrorCode = "OPERATION_FAILED"
 	// ErrCodeUsage indicates incorrect command usage.
 	ErrCodeUsage ErrorCode = "USAGE_ERROR"
+	// ErrCodeResourceConflict indicates a resource already exists.
+	ErrCodeResourceConflict ErrorCode = "RESOURCE_CONFLICT"
 )
 
 // CLIError represents a structured CLI error with recovery suggestions.
@@ -103,5 +105,16 @@ func NewUsageError(message string) *CLIError {
 		Details:    message,
 		Suggestion: "Run with --help for usage information.",
 		ExitCode:   2, // NFR-019: 2 = usage error
+	}
+}
+
+// NewUserConflictError creates an error for user already exists conflicts.
+func NewUserConflictError(email string) *CLIError {
+	return &CLIError{
+		Code:       ErrCodeResourceConflict,
+		Message:    fmt.Sprintf("User with email %s already exists", email),
+		Details:    "A user with this email is already a member of the organization.",
+		Suggestion: fmt.Sprintf("To return the existing user instead of failing, use:\n  ai-aas-org user create --user-email %s --upsert\n\nAlternatively, use a different email address.", email),
+		ExitCode:   1, // NFR-019: 1 = general error
 	}
 }

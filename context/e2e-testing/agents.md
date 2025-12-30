@@ -291,6 +291,83 @@ func TestFutureFeature(t *testing.T) {
 
 ---
 
+## Error Message Testing Patterns
+
+**CRITICAL**: Always verify error messages against actual API responses before asserting.
+
+### Recommended Pattern: Flexible Substring Matching
+
+Use substring matching that:
+1. Exists in the actual API error message
+2. Is meaningful enough to validate the right error occurred
+3. Is flexible enough to allow API message improvements without breaking tests
+
+```go
+// Example: Testing validation errors
+testCases := []struct {
+    name           string
+    request        map[string]interface{}
+    expectedStatus int
+    expectedError  string  // Substring that must exist in response
+}{
+    {
+        name: "invalid time range",
+        request: map[string]interface{}{
+            "timeRange": map[string]string{
+                "start": now.Format(time.RFC3339),
+                "end":   now.Add(-1 * time.Hour).Format(time.RFC3339),
+            },
+        },
+        expectedStatus: 400,
+        expectedError:  "must be after",  // Partial match that exists in API response
+    },
+}
+
+// Assertion using case-insensitive substring match
+if tc.expectedError != "" {
+    bodyStr := string(resp.Body)
+    if !strings.Contains(strings.ToLower(bodyStr), strings.ToLower(tc.expectedError)) {
+        t.Errorf("Expected error message to contain '%s', got: %s", tc.expectedError, bodyStr)
+    }
+}
+```
+
+### Anti-patterns
+
+```go
+// WRONG: Expect exact error message (too brittle)
+expectedError: "timeRange.end must be after timeRange.start"
+// Why wrong: Breaks if API improves message wording
+
+// WRONG: Expect substring that doesn't exist in API response
+expectedError: "end must be after start"
+// Why wrong: API actually returns "timeRange.end must be after timeRange.start"
+// The substring "end must be after start" does NOT appear in that string
+
+// WRONG: Use single generic word
+expectedError: "error"
+// Why wrong: Too vague - doesn't validate the specific error
+
+// CORRECT: Use meaningful substring from actual API response
+expectedError: "must be after"
+// Why correct: Exists in response, validates key logic, allows message improvements
+expectedError: "timeRange.end"
+// Why correct: Validates field-specific error, flexible on exact wording
+```
+
+### Verification Checklist
+
+Before committing error validation tests:
+- [ ] Run test against actual API endpoint (not mock)
+- [ ] Print/log the actual API error response
+- [ ] Verify expectedError substring exists in actual response (case-insensitive)
+- [ ] Use meaningful substring (not just "error" or "invalid")
+- [ ] Consider future message improvements won't break the test
+
+**Related**: Investigation aas-xgp3 for root cause of E2E test assertion mismatches.
+
+---
+
 ## Checklist
 
 Before completing E2E test work:

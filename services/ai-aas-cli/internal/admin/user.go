@@ -625,6 +625,10 @@ func runInviteUserCreate(cmd *cobra.Command, cfg *config.Config, userOrgClient *
 
 		invitedUser, err := userOrgClient.InviteUser(cmd.Context(), orgID, req)
 		if err != nil {
+			// Check if this is a user conflict error (409)
+			if userorg.IsUserConflictError(err) {
+				return errors.NewUserConflictError(email)
+			}
 			return errors.NewOperationError(
 				fmt.Sprintf("failed to invite user: %v", err),
 				"Verify your API key is valid and you have permission to invite users.",

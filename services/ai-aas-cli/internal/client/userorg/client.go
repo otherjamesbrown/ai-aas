@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -34,6 +35,21 @@ type Client struct {
 	apiKey     string
 	httpClient *http.Client
 	retryCfg   client.RetryConfig
+}
+
+// UserConflictError represents a 409 conflict error when a user already exists.
+type UserConflictError struct {
+	Email string
+}
+
+func (e *UserConflictError) Error() string {
+	return fmt.Sprintf("user with email %s already exists", e.Email)
+}
+
+// IsUserConflictError checks if an error is a UserConflictError.
+func IsUserConflictError(err error) bool {
+	var conflictErr *UserConflictError
+	return errors.As(err, &conflictErr)
 }
 
 // NewClient creates a new user-org-service API client.
@@ -224,6 +240,12 @@ func (c *Client) InviteUser(ctx context.Context, orgID string, req InviteUserReq
 	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusCreated {
 		bodyBytes := make([]byte, 1024)
 		n, _ := resp.Body.Read(bodyBytes)
+
+		// Handle 409 Conflict - user already exists
+		if resp.StatusCode == http.StatusConflict {
+			return nil, &UserConflictError{Email: req.Email}
+		}
+
 		return nil, fmt.Errorf("invite user failed: status %d, body: %s", resp.StatusCode, string(bodyBytes[:n]))
 	}
 

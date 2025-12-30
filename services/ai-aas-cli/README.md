@@ -142,11 +142,63 @@ ai-aas-cli org delete acme-corp
 Manage user accounts:
 
 ```bash
-ai-aas-cli user list
-ai-aas-cli user create john.doe@acme.com --org acme-corp --role admin
+# List users
+ai-aas-cli user list --org-id acme-corp
+
+# Create user (invite mode - sends email)
+ai-aas-cli user create --org-id acme-corp --email john.doe@acme.com
+
+# Create user directly with temporary password
+ai-aas-cli user create --org-id acme-corp --email john.doe@acme.com --direct
+
+# Idempotent user creation (won't fail if user exists)
+ai-aas-cli user create --org-id acme-corp --email john.doe@acme.com --upsert
+
+# Update user
 ai-aas-cli user update john.doe@acme.com --role member
+
+# Delete user
 ai-aas-cli user delete john.doe@acme.com
 ```
+
+#### Idempotent User Creation with --upsert
+
+The `--upsert` flag makes user creation idempotent, which is essential for automation and scripting:
+
+**Problem it solves:**
+Without `--upsert`, running `user create` for an existing user returns a 409 Conflict error and fails.
+
+**How it works:**
+- If user doesn't exist: Creates the user normally
+- If user already exists: Returns the existing user without error
+
+**When to use --upsert:**
+
+1. **Automation scripts** - Ensure users exist without conditional logic:
+   ```bash
+   # Script doesn't need to check if user exists first
+   ai-aas-cli user create --org-id acme --email ops@acme.com --upsert --direct
+   ```
+
+2. **CI/CD pipelines** - Idempotent setup for test environments:
+   ```bash
+   # Safe to run multiple times in deployment scripts
+   ai-aas-cli user create --org-id test-org --email ci-test@example.com --upsert
+   ```
+
+3. **Configuration management** - Declarative user provisioning:
+   ```bash
+   # Ansible/Terraform-style idempotent operations
+   for email in admin@acme.com dev@acme.com; do
+     ai-aas-cli user create --org-id acme --email "$email" --upsert --direct
+   done
+   ```
+
+**Important notes:**
+- Works with both invite mode (default) and direct mode (`--direct`)
+- Does NOT update existing users - only skips creation
+- Returns existing user details when user already exists
+- No password reset for existing users in direct mode
 
 ### API Key Commands
 
@@ -349,6 +401,33 @@ ai-aas-cli config show
 # Verify API key has correct permissions
 ai-aas-cli apikey list
 ```
+
+### User Already Exists (409 Conflict)
+
+**Error message:**
+```
+Error: User with email 'user@example.com' already exists in organization 'acme-corp'
+API Response: 409 Conflict
+```
+
+**Solution:**
+Use the `--upsert` flag to make the operation idempotent:
+
+```bash
+# Instead of this (fails if user exists):
+ai-aas-cli user create --org-id acme-corp --email user@example.com
+
+# Use this (succeeds whether user exists or not):
+ai-aas-cli user create --org-id acme-corp --email user@example.com --upsert
+```
+
+The `--upsert` flag is especially useful in:
+- Automation scripts
+- CI/CD pipelines
+- Configuration management tools
+- Test environment setup
+
+See the [User Commands](#user-commands) section for more details on `--upsert`.
 
 ### Command Not Found
 

@@ -83,8 +83,14 @@ ai-aas-cli user list --org-id acme
 ### Create a User
 
 ```bash
+# Create user (invite mode - sends email)
 ai-aas-cli user create --org-id acme --email alice@example.com --name "Alice Smith"
+
+# Create user with --upsert (idempotent, safe for scripts)
+ai-aas-cli user create --org-id acme --email alice@example.com --name "Alice Smith" --upsert
 ```
+
+**Tip:** Use `--upsert` in automation scripts to avoid 409 errors if the user already exists. See the CLI README for more details on idempotent operations.
 
 ## Managing API Keys
 

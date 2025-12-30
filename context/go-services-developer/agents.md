@@ -70,6 +70,35 @@ patterns:
       - Integration tests for API endpoints
     coverage: go test ./... -coverprofile=coverage.out
 
+  model_registration:
+    rule: Always validate model names for KServe compatibility BEFORE storing
+    validation_function: ValidateKServeName from models package
+    location: services/admin-api-service/internal/services/models/validation.go
+
+    pattern: |
+      import "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/services/models"
+
+      // In registration validation
+      if err := models.ValidateKServeName(reg.ModelName); err != nil {
+          return fmt.Errorf("invalid model name %q: %w", reg.ModelName, err)
+      }
+
+    why: |
+      - KServe requires names matching: ^[a-z]([-a-z0-9]*[a-z0-9])?$
+      - Invalid names cause deployment failures AFTER cache download
+      - Model operator sanitizes names (converts periods to hyphens), creating name mismatch
+      - Validation at registration time prevents waste and errors
+
+    kserve_requirements:
+      - Must start with lowercase letter
+      - Can contain lowercase letters, numbers, hyphens
+      - Cannot contain: periods, underscores, uppercase letters
+      - Cannot start or end with hyphen
+      - Max length: 253 characters
+
+    valid_examples: ["llama-7b", "gpt-4o-mini", "meta-llama-3-8b"]
+    invalid_examples: ["model-v0.3", "Model_Name", "-hyphen-start", "has_underscore"]
+
   triton_tensorrt_llm:
     model_name: "Always use 'ensemble' as model name"
     why: "TRT-LLM pipeline uses ensemble (preprocessing → inference → postprocessing)"
@@ -252,6 +281,27 @@ module_naming:
 ## Anti-patterns
 
 ```go
+// WRONG: Registering models without KServe name validation
+// Models with invalid names (periods, underscores) get registered but fail at deployment
+func validateRegistration(reg *ModelRegistration) error {
+    if reg.ModelName == "" { return errors.New("model name required") }
+    // ❌ Missing: ValidateKServeName check
+    return nil
+}
+// Impact: Name mismatch between registry and InferenceService
+// - Model registered as: "model-v0.3" (contains period)
+// - InferenceService created as: "model-v0-3" (period → hyphen by sanitizer)
+// - Result: Status updates fail, routing breaks, cache wasted
+
+// CORRECT: Call ValidateKServeName before storing in registry
+func validateRegistration(reg *ModelRegistration) error {
+    if reg.ModelName == "" { return errors.New("model name required") }
+    if err := models.ValidateKServeName(reg.ModelName); err != nil {
+        return fmt.Errorf("invalid model name %q: %w", reg.ModelName, err)
+    }
+    return nil
+}
+
 // WRONG: Swallow errors
 result, _ := doSomething()
 
@@ -388,7 +438,7 @@ gh run watch  # Watch current workflow run
 
 | Service | Key Code |
 |---------|----------|
-| admin-api | `internal/api/handlers/models.go`, `internal/repository/` |
+| admin-api | `internal/api/handlers/models.go`, `internal/repository/`, `internal/services/models/validation.go` |
 | api-router | `internal/api/public/openai.go`, `internal/adapter/triton/` |
 | user-org | `internal/api/handlers/auth.go`, `internal/services/auth_service.go` |
 | analytics | `internal/api/handlers/usage.go`, `internal/aggregation/` |
