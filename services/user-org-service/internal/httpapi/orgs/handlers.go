@@ -129,6 +129,18 @@ type OrganizationResponse struct {
 func (h *Handler) CreateOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	// Security audit: Log the scopes that allowed this request to proceed
+	session := middleware.GetSession(ctx)
+	if session != nil {
+		h.logger.Info("CreateOrg: request proceeding with scopes",
+			zap.Strings("scopes", session.GrantedScopes),
+			zap.String("user_id", session.UserID),
+			zap.String("org_id", session.OrgID))
+	} else {
+		h.logger.Warn("CreateOrg: NO SESSION in context - this should not happen if RequireAuth ran",
+			zap.String("path", r.URL.Path))
+	}
+
 	var req CreateOrgRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.Warn("invalid request payload", zap.Error(err))
