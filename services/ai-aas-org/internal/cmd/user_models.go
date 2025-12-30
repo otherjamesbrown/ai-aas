@@ -243,6 +243,7 @@ func runUserModelsAddGuided() error {
 var (
 	userModelsRemoveUser  string
 	userModelsRemoveModel string
+	userModelsRemoveForce bool
 )
 
 var userModelsRemoveCmd = &cobra.Command{
@@ -251,7 +252,8 @@ var userModelsRemoveCmd = &cobra.Command{
 	Long: `Revoke a user's access to an AI model.
 
 Examples:
-  ai-aas-org user models remove --user user@example.com --model gpt-4`,
+  ai-aas-org user models remove --user user@example.com --model gpt-4
+  ai-aas-org user models remove --user user@example.com --model gpt-4 --force`,
 	RunE: runUserModelsRemove,
 }
 
@@ -260,6 +262,7 @@ func init() {
 
 	userModelsRemoveCmd.Flags().StringVar(&userModelsRemoveUser, "user", "", "user email or ID")
 	userModelsRemoveCmd.Flags().StringVar(&userModelsRemoveModel, "model", "", "model ID to revoke access from")
+	userModelsRemoveCmd.Flags().BoolVar(&userModelsRemoveForce, "force", false, "skip confirmation")
 	userModelsRemoveCmd.MarkFlagRequired("user")
 	userModelsRemoveCmd.MarkFlagRequired("model")
 }
@@ -281,16 +284,18 @@ func runUserModelsRemove(cmd *cobra.Command, args []string) error {
 	}
 
 	// Confirm
-	confirmed, err := prompt.Confirm(
-		fmt.Sprintf("Revoke access to model %s for user %s?", userModelsRemoveModel, userModelsRemoveUser),
-		false,
-	)
-	if err != nil {
-		return errors.NewOperationError("failed to read confirmation", err.Error())
-	}
-	if !confirmed {
-		output.InfoMsg("Cancelled.")
-		return nil
+	if !userModelsRemoveForce {
+		confirmed, err := prompt.Confirm(
+			fmt.Sprintf("Revoke access to model %s for user %s?", userModelsRemoveModel, userModelsRemoveUser),
+			false,
+		)
+		if err != nil {
+			return errors.NewOperationError("failed to read confirmation", err.Error())
+		}
+		if !confirmed {
+			output.InfoMsg("Cancelled.")
+			return nil
+		}
 	}
 
 	if err := client.RevokeModelAccess(ctx, config.GetOrgID(), userID, userModelsRemoveModel); err != nil {

@@ -148,10 +148,10 @@ func TestUC_USR_002_CreateUser(t *testing.T) {
 		// Given: Admin is authenticated and email is not in use
 		testEmail := "test-user-ac01@example.com"
 
-		// When: User runs `ai-aas-org user create --user-email ... --display-name ...`
+		// When: User runs `ai-aas-org user create --user-email ... --user-display-name ...`
 		result := runOrgCLI("user", "create",
 			"--user-email", testEmail,
-			"--display-name", "Test User AC01")
+			"--user-display-name", "Test User AC01")
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -187,7 +187,7 @@ func TestUC_USR_002_CreateUser(t *testing.T) {
 		// When: User runs `ai-aas-org user create ... --role admin`
 		result := runOrgCLI("user", "create",
 			"--user-email", testEmail,
-			"--display-name", "Test Admin AC02",
+			"--user-display-name", "Test Admin AC02",
 			"--role", "admin")
 
 		// Then: User is created with admin role
@@ -213,12 +213,12 @@ func TestUC_USR_002_CreateUser(t *testing.T) {
 		// First create the user
 		runOrgCLI("user", "create",
 			"--user-email", existingEmail,
-			"--display-name", "Existing User")
+			"--user-display-name", "Existing User")
 
 		// When: User runs create with same email
 		result := runOrgCLI("user", "create",
 			"--user-email", existingEmail,
-			"--display-name", "Duplicate User")
+			"--user-display-name", "Duplicate User")
 
 		// Then: Command fails with exit code 6 (conflict)
 		if result.ExitCode != 6 {
@@ -396,7 +396,7 @@ func TestUC_USR_004_DeleteUser(t *testing.T) {
 		// Setup: Create user to delete
 		runOrgCLI("user", "create",
 			"--user-email", testEmail,
-			"--display-name", "Delete Force User")
+			"--user-display-name", "Delete Force User")
 
 		// When: User runs `ai-aas-org user delete <email> --force`
 		result := runOrgCLI("user", "delete", testEmail, "--force")
@@ -679,10 +679,11 @@ func TestUC_USR_007_RevokeUserModelAccess(t *testing.T) {
 			"--user", testUser.Email,
 			"--model", testModel)
 
-		// When: User runs `ai-aas-org user models remove --user <email> --model <model>`
+		// When: User runs `ai-aas-org user models remove --user <email> --model <model> --force`
 		result := runOrgCLI("user", "models", "remove",
 			"--user", testUser.Email,
-			"--model", testModel)
+			"--model", testModel,
+			"--force")
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -712,10 +713,11 @@ func TestUC_USR_007_RevokeUserModelAccess(t *testing.T) {
 		testUser := createTestUser(t, "no-access-revoke", "user")
 		testModel := "gpt-4"
 
-		// When: User runs `ai-aas-org user models remove --user <email> --model <model>`
+		// When: User runs `ai-aas-org user models remove --user <email> --model <model> --force`
 		result := runOrgCLI("user", "models", "remove",
 			"--user", testUser.Email,
-			"--model", testModel)
+			"--model", testModel,
+			"--force")
 
 		// Then: Operation succeeds (idempotent)
 		// Then: Exit code is 0
@@ -739,10 +741,11 @@ func TestUC_USR_007_RevokeUserModelAccess(t *testing.T) {
 		nonexistentEmail := "nonexistent-revoke@example.com"
 		testModel := "gpt-4"
 
-		// When: User runs `ai-aas-org user models remove --user <nonexistent> --model <model>`
+		// When: User runs `ai-aas-org user models remove --user <nonexistent> --model <model> --force`
 		result := runOrgCLI("user", "models", "remove",
 			"--user", nonexistentEmail,
-			"--model", testModel)
+			"--model", testModel,
+			"--force")
 
 		// Then: Command fails with exit code 5 (not found)
 		if result.ExitCode != 5 {
