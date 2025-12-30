@@ -143,3 +143,62 @@ func TestBodyBufferMiddleware_PreservesStreamField(t *testing.T) {
 		t.Errorf("Expected status 200, got %d", w.Code)
 	}
 }
+
+// TestBodyBufferMiddleware_StreamFieldWithUnmarshal tests that using json.Unmarshal
+// with buffered body (aas-wc6u fix) correctly preserves the Stream field
+func TestBodyBufferMiddleware_StreamFieldWithUnmarshal(t *testing.T) {
+	jsonPayload := `{"model":"gpt-4","prompt":"test","stream":true,"max_tokens":100}`
+
+	// Create a test handler that uses the buffered body from context
+	// This matches the pattern used in HandleOpenAICompletions after aas-wc6u fix
+	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var openAIReq OpenAICompletionRequest
+
+		// Use buffered body from context (aas-wc6u fix)
+		if bufferedBody := r.Context().Value(BufferedBodyKey); bufferedBody != nil {
+			bodyBytes, ok := bufferedBody.([]byte)
+			if !ok {
+				t.Fatalf("buffered body is not []byte")
+			}
+			if err := json.Unmarshal(bodyBytes, &openAIReq); err != nil {
+				t.Fatalf("failed to unmarshal buffered body: %v", err)
+			}
+		} else {
+			t.Fatal("buffered body not found in context")
+		}
+
+		// Verify the stream field is set correctly
+		if !openAIReq.Stream {
+			t.Errorf("Stream field should be true, got false")
+		}
+
+		// Verify other fields are also correct
+		if openAIReq.Model != "gpt-4" {
+			t.Errorf("Model mismatch: got %s, expected gpt-4", openAIReq.Model)
+		}
+		if openAIReq.Prompt != "test" {
+			t.Errorf("Prompt mismatch: got %s, expected test", openAIReq.Prompt)
+		}
+		if openAIReq.MaxTokens != 100 {
+			t.Errorf("MaxTokens mismatch: got %d, expected 100", openAIReq.MaxTokens)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	})
+
+	// Wrap with BodyBufferMiddleware
+	middleware := BodyBufferMiddleware(1024 * 1024) // 1MB max
+	handler := middleware(testHandler)
+
+	// Create test request
+	req := httptest.NewRequest("POST", "/v1/completions", bytes.NewBufferString(jsonPayload))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	// Execute request
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+}
