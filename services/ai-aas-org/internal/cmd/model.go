@@ -206,7 +206,7 @@ func runModelShow(cmd *cobra.Command, args []string) error {
 	client := newAPIClient()
 	model, err := client.GetModel(ctx, config.GetOrgID(), modelID)
 	if err != nil {
-		return errors.NewOperationError("failed to get model", err.Error())
+		return wrapAPIError(err, "failed to get model")
 	}
 
 	if IsJSONOutput() {

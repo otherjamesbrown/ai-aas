@@ -57,6 +57,20 @@ func newAdminAPIClient() *api.Client {
 	return api.NewClient(config.GetAdminEndpoint(), config.GetAPIKey())
 }
 
+// wrapAPIError wraps an API error with a user-friendly message while preserving semantic exit codes.
+// If the error is already a CLIError with an exit code, it passes through unchanged.
+// Otherwise, it wraps it in an OperationError.
+func wrapAPIError(err error, context string) error {
+	if err == nil {
+		return nil
+	}
+	// Pass through CLI errors with semantic exit codes from API client
+	if errors.IsCLIError(err) {
+		return err
+	}
+	return errors.NewOperationError(context, err.Error())
+}
+
 // --- user list ---
 
 var userListCmd = &cobra.Command{
@@ -87,7 +101,7 @@ func runUserList(cmd *cobra.Command, args []string) error {
 	client := newAPIClient()
 	result, err := client.ListUsers(ctx, config.GetOrgID(), 0, 0)
 	if err != nil {
-		return errors.NewOperationError("failed to list users", err.Error())
+		return wrapAPIError(err, "failed to list users")
 	}
 
 	if IsJSONOutput() {
@@ -210,7 +224,7 @@ func runUserCreate(cmd *cobra.Command, args []string) error {
 		Role:  role,
 	})
 	if err != nil {
-		return errors.NewOperationError("failed to create user", err.Error())
+		return wrapAPIError(err, "failed to create user")
 	}
 
 	if IsJSONOutput() {
@@ -282,7 +296,7 @@ func runUserShow(cmd *cobra.Command, args []string) error {
 	}
 
 	if err != nil {
-		return errors.NewOperationError("failed to get user", err.Error())
+		return wrapAPIError(err, "failed to get user")
 	}
 
 	if IsJSONOutput() {
@@ -355,7 +369,7 @@ func runUserDelete(cmd *cobra.Command, args []string) error {
 	}
 
 	if err != nil {
-		return errors.NewOperationError("failed to find user", err.Error())
+		return wrapAPIError(err, "failed to find user")
 	}
 
 	// Confirm deletion
@@ -383,7 +397,7 @@ func runUserDelete(cmd *cobra.Command, args []string) error {
 
 	// Delete user
 	if err := client.DeleteUser(ctx, config.GetOrgID(), user.ID); err != nil {
-		return errors.NewOperationError("failed to delete user", err.Error())
+		return wrapAPIError(err, "failed to delete user")
 	}
 
 	output.SuccessMsg("User %s has been deleted.", user.Email)

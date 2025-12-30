@@ -250,7 +250,7 @@ func runAPIKeyCreate(cmd *cobra.Command, args []string) error {
 		ExpiresIn: expires,
 	})
 	if err != nil {
-		return errors.NewOperationError("failed to create API key", err.Error())
+		return wrapAPIError(err, "failed to create API key")
 	}
 
 	if IsJSONOutput() {
@@ -317,7 +317,7 @@ func runAPIKeyDelete(cmd *cobra.Command, args []string) error {
 	// Get key details for confirmation
 	key, err := client.GetAPIKey(ctx, config.GetOrgID(), keyID)
 	if err != nil {
-		return errors.NewOperationError("failed to find API key", err.Error())
+		return wrapAPIError(err, "failed to find API key")
 	}
 
 	// Confirm
@@ -341,7 +341,7 @@ func runAPIKeyDelete(cmd *cobra.Command, args []string) error {
 	}
 
 	if err := client.DeleteAPIKey(ctx, config.GetOrgID(), keyID); err != nil {
-		return errors.NewOperationError("failed to delete API key", err.Error())
+		return wrapAPIError(err, "failed to delete API key")
 	}
 
 	output.SuccessMsg("API key %s has been deleted.", key.Name)
@@ -383,7 +383,7 @@ func runAPIKeyRotate(cmd *cobra.Command, args []string) error {
 	// Get key details for confirmation
 	key, err := client.GetAPIKey(ctx, config.GetOrgID(), keyID)
 	if err != nil {
-		return errors.NewOperationError("failed to find API key", err.Error())
+		return wrapAPIError(err, "failed to find API key")
 	}
 
 	// Confirm
@@ -406,7 +406,7 @@ func runAPIKeyRotate(cmd *cobra.Command, args []string) error {
 
 	result, err := client.RotateAPIKey(ctx, config.GetOrgID(), keyID)
 	if err != nil {
-		return errors.NewOperationError("failed to rotate API key", err.Error())
+		return wrapAPIError(err, "failed to rotate API key")
 	}
 
 	if IsJSONOutput() {

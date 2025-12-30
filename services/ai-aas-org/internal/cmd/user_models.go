@@ -73,7 +73,7 @@ func runUserModelsList(cmd *cobra.Command, args []string) error {
 	// List user's model access
 	result, err := client.ListUserModels(ctx, config.GetOrgID(), userID)
 	if err != nil {
-		return errors.NewOperationError("failed to list user models", err.Error())
+		return wrapAPIError(err, "failed to list user models")
 	}
 
 	if IsJSONOutput() {
@@ -158,13 +158,13 @@ func runUserModelsAdd(cmd *cobra.Command, args []string) error {
 	if userModelsAddAll {
 		// Grant access to all models
 		if err := client.GrantAllModelsAccess(ctx, config.GetOrgID(), userID); err != nil {
-			return errors.NewOperationError("failed to grant access", err.Error())
+			return wrapAPIError(err, "failed to grant access")
 		}
 		output.SuccessMsg("Granted access to all models for user %s", userModelsAddUser)
 	} else {
 		// Grant access to specific model
 		if err := client.GrantModelAccess(ctx, config.GetOrgID(), userID, userModelsAddModel); err != nil {
-			return errors.NewOperationError("failed to grant access", err.Error())
+			return wrapAPIError(err, "failed to grant access")
 		}
 		output.SuccessMsg("Granted access to model %s for user %s", userModelsAddModel, userModelsAddUser)
 	}
@@ -195,7 +195,7 @@ func runUserModelsAddGuided() error {
 	// List available models
 	models, err := client.ListModels(ctx, config.GetOrgID())
 	if err != nil {
-		return errors.NewOperationError("failed to list models", err.Error())
+		return wrapAPIError(err, "failed to list models")
 	}
 
 	if len(models.Models) == 0 {
@@ -225,12 +225,12 @@ func runUserModelsAddGuided() error {
 
 	if selected.Value == "__all__" {
 		if err := client.GrantAllModelsAccess(ctx, config.GetOrgID(), userID); err != nil {
-			return errors.NewOperationError("failed to grant access", err.Error())
+			return wrapAPIError(err, "failed to grant access")
 		}
 		output.SuccessMsg("Granted access to all models for user %s", userEmail)
 	} else {
 		if err := client.GrantModelAccess(ctx, config.GetOrgID(), userID, selected.Value); err != nil {
-			return errors.NewOperationError("failed to grant access", err.Error())
+			return wrapAPIError(err, "failed to grant access")
 		}
 		output.SuccessMsg("Granted access to model %s for user %s", selected.Label, userEmail)
 	}
@@ -294,7 +294,7 @@ func runUserModelsRemove(cmd *cobra.Command, args []string) error {
 	}
 
 	if err := client.RevokeModelAccess(ctx, config.GetOrgID(), userID, userModelsRemoveModel); err != nil {
-		return errors.NewOperationError("failed to revoke access", err.Error())
+		return wrapAPIError(err, "failed to revoke access")
 	}
 
 	output.SuccessMsg("Revoked access to model %s for user %s", userModelsRemoveModel, userModelsRemoveUser)
@@ -306,7 +306,7 @@ func resolveUserID(ctx context.Context, client *api.Client, identifier string) (
 	if isEmail(identifier) {
 		user, err := client.GetUserByEmail(ctx, config.GetOrgID(), identifier)
 		if err != nil {
-			return "", errors.NewOperationError("failed to find user", err.Error())
+			return "", wrapAPIError(err, "failed to find user")
 		}
 		return user.ID, nil
 	}

@@ -9,6 +9,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	clierrors "github.com/otherjamesbrown/ai-aas/services/cli-shared/errors"
 )
 
 // Client is the API client for the AI-as-a-Service platform.
@@ -85,16 +87,7 @@ func (c *Client) RedeemBootstrapKey(ctx context.Context, key string) (*RedeemBoo
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		switch resp.StatusCode {
-		case http.StatusNotFound:
-			return nil, fmt.Errorf("bootstrap key not found or already used")
-		case http.StatusGone:
-			return nil, fmt.Errorf("bootstrap key has expired")
-		case http.StatusBadRequest:
-			return nil, fmt.Errorf("invalid bootstrap key format")
-		default:
-			return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(bodyBytes))
-		}
+		return nil, convertHTTPErrorToCLIError(resp.StatusCode, string(bodyBytes))
 	}
 
 	var result RedeemBootstrapKeyResponse
@@ -148,11 +141,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 
 	if resp.StatusCode >= 400 {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return &APIError{
-			StatusCode: resp.StatusCode,
-			Message:    fmt.Sprintf("API request failed with status %d", resp.StatusCode),
-			Details:    string(bodyBytes),
-		}
+		return convertHTTPErrorToCLIError(resp.StatusCode, string(bodyBytes))
 	}
 
 	if result != nil {
@@ -162,4 +151,36 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 	}
 
 	return nil
+}
+
+// convertHTTPErrorToCLIError converts HTTP status codes to appropriate CLI errors with semantic exit codes.
+func convertHTTPErrorToCLIError(statusCode int, body string) error {
+	switch statusCode {
+	case http.StatusUnauthorized:
+		return clierrors.NewAuthenticationError(body)
+	case http.StatusForbidden:
+		return clierrors.NewAuthorizationError("perform this action", "resource")
+	case http.StatusNotFound:
+		// Extract resource type from body if possible, otherwise use generic message
+		return clierrors.NewNotFoundError("Resource", "").WithDetails(body)
+	case http.StatusConflict:
+		return clierrors.NewConflictError("Resource", "").WithDetails(body)
+	case http.StatusBadRequest:
+		return clierrors.NewValidationError(body, "Check your input and try again.")
+	case http.StatusTooManyRequests:
+		return clierrors.NewRateLimitError("")
+	case http.StatusServiceUnavailable, http.StatusBadGateway, http.StatusGatewayTimeout:
+		return clierrors.NewServiceUnavailableError("API", "").WithDetails(body)
+	default:
+		if statusCode >= 500 {
+			return clierrors.NewOperationError(
+				fmt.Sprintf("Server error (status %d)", statusCode),
+				"The server encountered an error. Please try again later.",
+			).WithDetails(body)
+		}
+		return clierrors.NewOperationError(
+			fmt.Sprintf("API request failed with status %d", statusCode),
+			"",
+		).WithDetails(body)
+	}
 }
