@@ -70,9 +70,9 @@ func TestAPIKeyListCommand_Flags(t *testing.T) {
 	}
 	require.NotNil(t, listCmd)
 
-	userFlag := listCmd.Flags().Lookup("user")
-	assert.NotNil(t, userFlag, "user flag should exist")
-	assert.Equal(t, "", userFlag.DefValue, "user flag should default to empty string")
+	userFlag := listCmd.Flags().Lookup("user-id")
+	assert.NotNil(t, userFlag, "user-id flag should exist")
+	assert.Equal(t, "", userFlag.DefValue, "user-id flag should default to empty string")
 }
 
 // TestAPIKeyListCommand_Examples verifies list command examples
@@ -88,7 +88,7 @@ func TestAPIKeyListCommand_Examples(t *testing.T) {
 
 	assert.Contains(t, listCmd.Long, "Examples:", "Long description should contain examples")
 	assert.Contains(t, listCmd.Long, "apikey list", "Examples should show basic list usage")
-	assert.Contains(t, listCmd.Long, "--user", "Examples should show user filter flag")
+	assert.Contains(t, listCmd.Long, "--user-id", "Examples should show user-id filter flag")
 }
 
 // TestAPIKeyCreateCommand verifies apikey create command structure
@@ -122,8 +122,8 @@ func TestAPIKeyCreateCommand_Flags(t *testing.T) {
 	flagTests := []struct {
 		name string
 	}{
-		{"user"},
-		{"name"},
+		{"user-id"},
+		{"key-name"},
 		{"expires"},
 	}
 
@@ -147,8 +147,8 @@ func TestAPIKeyCreateCommand_Examples(t *testing.T) {
 	require.NotNil(t, createCmd)
 
 	assert.Contains(t, createCmd.Long, "Examples:", "Long description should contain examples")
-	assert.Contains(t, createCmd.Long, "--user", "Examples should show user flag")
-	assert.Contains(t, createCmd.Long, "--name", "Examples should show name flag")
+	assert.Contains(t, createCmd.Long, "--user-id", "Examples should show user-id flag")
+	assert.Contains(t, createCmd.Long, "--key-name", "Examples should show key-name flag")
 	assert.Contains(t, createCmd.Long, "--expires", "Examples should show expires flag")
 	assert.Contains(t, createCmd.Long, "only be displayed once", "Long description should warn about one-time display")
 }

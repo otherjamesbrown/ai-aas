@@ -164,9 +164,9 @@ This command creates:
 Example:
   ai-aas-cli profile create-full acme-admin \
     --environment development \
-    --name "Acme Corp" \
-    --slug acme-corp \
-    --email admin@acme.com`,
+    --org-name "Acme Corp" \
+    --org-slug acme-corp \
+    --user-email admin@acme.com`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			profileName := args[0]
@@ -190,13 +190,13 @@ Example:
 				return fmt.Errorf("user-org-service endpoint is required (set via --user-org-endpoint or config)")
 			}
 			if orgName == "" {
-				return fmt.Errorf("--name is required")
+				return fmt.Errorf("--org-name is required")
 			}
 			if orgSlug == "" {
-				return fmt.Errorf("--slug is required")
+				return fmt.Errorf("--org-slug is required")
 			}
 			if email == "" {
-				return fmt.Errorf("--email is required")
+				return fmt.Errorf("--user-email is required")
 			}
 
 			// Create HTTP client
@@ -304,18 +304,18 @@ Example:
 	}
 
 	cmd.Flags().StringVarP(&environment, "environment", "e", "development", "Environment (development, staging, production)")
-	cmd.Flags().StringVar(&orgName, "name", "", "Organization name (required)")
-	cmd.Flags().StringVar(&orgSlug, "slug", "", "Organization slug (required)")
-	cmd.Flags().StringVar(&email, "email", "", "User email (required)")
-	cmd.Flags().StringVar(&displayName, "display-name", "", "User display name")
+	cmd.Flags().StringVar(&orgName, "org-name", "", "Organization name (required)")
+	cmd.Flags().StringVar(&orgSlug, "org-slug", "", "Organization slug (required)")
+	cmd.Flags().StringVar(&email, "user-email", "", "User email (required)")
+	cmd.Flags().StringVar(&displayName, "user-display-name", "", "User display name")
 	cmd.Flags().StringVar(&userOrgEndpoint, "user-org-endpoint", "", "User-org-service endpoint (overrides config)")
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "API key for authentication (overrides config)")
 	cmd.Flags().BoolVar(&insecureSkipTLS, "insecure-skip-tls-verify", false, "Skip TLS certificate verification")
 	cmd.Flags().BoolVar(&setActive, "use", false, "Set as active profile after creation")
 
-	cmd.MarkFlagRequired("name")
-	cmd.MarkFlagRequired("slug")
-	cmd.MarkFlagRequired("email")
+	cmd.MarkFlagRequired("org-name")
+	cmd.MarkFlagRequired("org-slug")
+	cmd.MarkFlagRequired("user-email")
 
 	return cmd
 }

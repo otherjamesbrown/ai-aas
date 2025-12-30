@@ -27,7 +27,7 @@ manage their access.
 
 Examples:
   ai-aas-org user list
-  ai-aas-org user create --email user@example.com --name "John Doe"
+  ai-aas-org user create --user-email user@example.com --display-name "John Doe"
   ai-aas-org user show user@example.com
   ai-aas-org user delete user@example.com`,
 }
@@ -103,7 +103,7 @@ func runUserList(cmd *cobra.Command, args []string) error {
 	}
 
 	// Build table
-	headers := []string{"USER_ID", "EMAIL", "NAME", "ROLES", "STATUS", "CREATED"}
+	headers := []string{"User ID", "Email", "Name", "Roles", "Status", "Created"}
 	var rows [][]string
 	for _, u := range result.Users {
 		roles := strings.Join(u.Metadata.Roles, ", ")
@@ -233,8 +233,8 @@ func runUserCreate(cmd *cobra.Command, args []string) error {
 
 	fmt.Println()
 	fmt.Println("Next steps:")
-	fmt.Println("  • Create an API key for this user:  ai-aas-org apikey create --user", result.User.Email)
-	fmt.Println("  • Grant model access:               ai-aas-org user models add --user", result.User.Email)
+	fmt.Println("  • Create an API key for this user:  ai-aas-org apikey create --user-id", result.User.ID)
+	fmt.Println("  • Grant model access:               ai-aas-org user models add --user-id", result.User.ID)
 
 	return nil
 }

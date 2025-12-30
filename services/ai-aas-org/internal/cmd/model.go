@@ -156,7 +156,7 @@ func runModelList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	headers := []string{"MODEL ID", "OWNER", "STATUS"}
+	headers := []string{"Model ID", "Owner", "Status"}
 	var rows [][]string
 	for _, m := range modelsResp.Data {
 		owner := m.OwnedBy

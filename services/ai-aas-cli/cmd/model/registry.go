@@ -79,23 +79,23 @@ Model types: text (default), vision-language, embedding, audio
 
 Examples:
   # Add a text model (default type)
-  ai-aas model registry add mistralai/Mistral-7B-v0.1 --name mistral-7b
+  ai-aas model registry add mistralai/Mistral-7B-v0.1 --model-name mistral-7b
 
   # Add a vision-language model
   ai-aas model registry add Qwen/Qwen2-VL-7B-Instruct \
-    --name qwen2-vl-7b-instruct --model-type vision-language --gpu-memory 16
+    --model-name qwen2-vl-7b-instruct --model-type vision-language --gpu-memory 16
 
   # Add an embedding model
   ai-aas model registry add sentence-transformers/all-MiniLM-L6-v2 \
-    --name all-minilm-l6-v2 --model-type embedding
+    --model-name all-minilm-l6-v2 --model-type embedding
 
   # Add a gated model (must accept license on HuggingFace first)
   ai-aas model registry add meta-llama/Llama-3-8B-Instruct \
-    --name llama-3-8b --accept-license
+    --model-name llama-3-8b --accept-license
 
   # Add with resource recommendations
   ai-aas model registry add mistralai/Mixtral-8x7B-v0.1 \
-    --name mixtral-8x7b --gpu-memory 80 --cpu-memory 128
+    --model-name mixtral-8x7b --gpu-memory 80 --cpu-memory 128
 
 See Also:
   ai-aas model registry list    List registered models
@@ -199,7 +199,7 @@ See Also:
 		},
 	}
 
-	cmd.Flags().StringVarP(&name, "name", "n", "", "internal name for the model (required)")
+	cmd.Flags().StringVarP(&name, "model-name", "n", "", "internal name for the model (required)")
 	cmd.Flags().BoolVar(&requiresAuth, "requires-auth", false, "model requires HuggingFace authentication")
 	cmd.Flags().StringVar(&licenseType, "license", "", "license type (auto-detected if not specified)")
 	cmd.Flags().BoolVar(&acceptLicense, "accept-license", false, "accept gated model license terms")
@@ -207,7 +207,7 @@ See Also:
 	cmd.Flags().IntVar(&cpuMemory, "cpu-memory", 0, "recommended CPU memory in GB")
 	cmd.Flags().StringVar(&modelType, "model-type", "", "model type (text, vision-language, embedding, audio)")
 
-	cmd.MarkFlagRequired("name")
+	cmd.MarkFlagRequired("model-name")
 
 	return cmd
 }
@@ -790,7 +790,7 @@ func showAllModelStatus(ctx context.Context, client *registry.Client, environmen
 	}
 
 	table := output.NewTableWriter()
-	table.SetHeader([]string{"MODEL", "REGISTRY", "CACHE", "DEPLOY", "STATUS"})
+	table.SetHeader([]string{"MODEL", "REGISTRY", "CACHED", "DEPLOYED", "STATUS"})
 
 	for _, m := range models {
 		regIcon := "[+]"

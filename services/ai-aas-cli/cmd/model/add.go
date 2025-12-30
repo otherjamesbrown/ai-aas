@@ -31,13 +31,13 @@ func NewAddCommand() *cobra.Command {
 
 Examples:
   # Add a public model
-  ai-aas-cli model add meta-llama/Llama-3-8B-Instruct --name llama-3-8b
+  ai-aas-cli model add meta-llama/Llama-3-8B-Instruct --model-name llama-3-8b
 
   # Add a gated model with license acceptance
-  ai-aas-cli model add meta-llama/Llama-3-8B-Instruct --name llama-3-8b --accept-license
+  ai-aas-cli model add meta-llama/Llama-3-8B-Instruct --model-name llama-3-8b --accept-license
 
   # Add with resource recommendations
-  ai-aas-cli model add mistralai/Mistral-7B-v0.1 --name mistral-7b --gpu-memory 24`,
+  ai-aas-cli model add mistralai/Mistral-7B-v0.1 --model-name mistral-7b --gpu-memory 24`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			hfModelID := args[0]
@@ -135,14 +135,14 @@ Examples:
 		},
 	}
 
-	cmd.Flags().StringVarP(&name, "name", "n", "", "internal name for the model (required)")
+	cmd.Flags().StringVarP(&name, "model-name", "n", "", "internal name for the model (required)")
 	cmd.Flags().BoolVar(&requiresAuth, "requires-auth", false, "model requires HuggingFace authentication")
 	cmd.Flags().StringVar(&licenseType, "license", "", "license type (auto-detected if not specified)")
 	cmd.Flags().BoolVar(&acceptLicense, "accept-license", false, "accept gated model license (for CI/CD)")
 	cmd.Flags().IntVar(&gpuMemory, "gpu-memory", 0, "recommended GPU memory in GB")
 	cmd.Flags().IntVar(&cpuMemory, "cpu-memory", 0, "recommended CPU memory in GB")
 
-	cmd.MarkFlagRequired("name")
+	cmd.MarkFlagRequired("model-name")
 
 	return cmd
 }

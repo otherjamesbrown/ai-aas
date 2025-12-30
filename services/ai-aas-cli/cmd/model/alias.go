@@ -297,7 +297,7 @@ Examples:
 		},
 	}
 
-	cmd.Flags().BoolVar(&force, "force", false, "Skip confirmation")
+	cmd.Flags().BoolVar(&force, "force", false, "skip confirmation")
 
 	return cmd
 }

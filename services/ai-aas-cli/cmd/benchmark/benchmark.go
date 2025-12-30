@@ -960,7 +960,7 @@ Examples:
 		},
 	}
 
-	cmd.Flags().BoolVar(&force, "force", false, "confirm deletion")
+	cmd.Flags().BoolVar(&force, "force", false, "skip confirmation")
 
 	return cmd
 }

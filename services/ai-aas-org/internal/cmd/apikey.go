@@ -26,7 +26,7 @@ Each user can have multiple API keys with different names and expiration dates.
 
 Examples:
   ai-aas-org apikey list
-  ai-aas-org apikey create --user user@example.com --name "Production Key"
+  ai-aas-org apikey create --user-id usr_abc123 --key-name "Production Key"
   ai-aas-org apikey delete key_abc123`,
 }
 
@@ -43,19 +43,19 @@ var apikeyListCmd = &cobra.Command{
 	Short: "List API keys",
 	Long: `List API keys in your organization.
 
-Without --user, lists all API keys in the organization.
-With --user, lists only keys for that user.
+Without --user-id, lists all API keys in the organization.
+With --user-id, lists only keys for that user.
 
 Examples:
   ai-aas-org apikey list
-  ai-aas-org apikey list --user user@example.com`,
+  ai-aas-org apikey list --user-id usr_abc123`,
 	RunE: runAPIKeyList,
 }
 
 func init() {
 	apikeyCmd.AddCommand(apikeyListCmd)
 
-	apikeyListCmd.Flags().StringVar(&apikeyListUser, "user", "", "filter by user email or ID")
+	apikeyListCmd.Flags().StringVar(&apikeyListUser, "user-id", "", "filter by user ID")
 }
 
 func runAPIKeyList(cmd *cobra.Command, args []string) error {
@@ -93,11 +93,11 @@ func runAPIKeyList(cmd *cobra.Command, args []string) error {
 		output.InfoMsg("No API keys found.")
 		fmt.Println()
 		fmt.Println("Create an API key with:")
-		fmt.Println("  ai-aas-org apikey create --user <email> --name <key-name>")
+		fmt.Println("  ai-aas-org apikey create --user-id <user-id> --key-name <key-name>")
 		return nil
 	}
 
-	headers := []string{"PREFIX", "NAME", "USER", "STATUS", "LAST USED", "EXPIRES"}
+	headers := []string{"Prefix", "Name", "User", "Status", "Last Used", "Expires"}
 	var rows [][]string
 	for _, k := range result.APIKeys {
 		lastUsed := "Never"
