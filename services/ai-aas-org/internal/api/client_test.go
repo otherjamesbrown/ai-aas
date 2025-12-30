@@ -106,12 +106,12 @@ func TestListUsers(t *testing.T) {
 		}
 
 		// API returns raw array of users, not a wrapper object
-		resp := []User{
+		users := []User{
 			{ID: "usr_1", Email: "user1@test.com", Name: "User One"},
 			{ID: "usr_2", Email: "user2@test.com", Name: "User Two"},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		json.NewEncoder(w).Encode(users)
 	}))
 	defer server.Close()
 

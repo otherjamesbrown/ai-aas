@@ -51,7 +51,7 @@ func (r *ExportJobRepository) CreateExportJob(ctx context.Context, req CreateExp
 	query := `
 		INSERT INTO analytics.export_jobs (
 			org_id, requested_by, time_range_start, time_range_end, granularity, status
-		) VALUES ($1, $2, $3, $4, $5, 'pending')
+		) VALUES ($1, $2, $3, $4, $5::analytics.export_job_granularity, 'pending'::analytics.export_job_status)
 		RETURNING job_id
 	`
 
@@ -131,7 +131,7 @@ func (r *ExportJobRepository) ListExportJobs(ctx context.Context, orgID uuid.UUI
 	argIdx := 2
 
 	if statusFilter != nil {
-		query += fmt.Sprintf(" AND status = $%d", argIdx)
+		query += fmt.Sprintf(" AND status = $%d::analytics.export_job_status", argIdx)
 		args = append(args, *statusFilter)
 	}
 
@@ -185,7 +185,7 @@ func (r *ExportJobRepository) ListExportJobs(ctx context.Context, orgID uuid.UUI
 func (r *ExportJobRepository) UpdateExportJobStatus(ctx context.Context, jobID uuid.UUID, status string) error {
 	query := `
 		UPDATE analytics.export_jobs
-		SET status = $1
+		SET status = $1::analytics.export_job_status
 		WHERE job_id = $2
 	`
 
@@ -201,7 +201,7 @@ func (r *ExportJobRepository) UpdateExportJobStatus(ctx context.Context, jobID u
 func (r *ExportJobRepository) SetExportJobOutput(ctx context.Context, jobID uuid.UUID, outputURI, checksum string, rowCount int64) error {
 	query := `
 		UPDATE analytics.export_jobs
-		SET output_uri = $1, checksum = $2, row_count = $3, completed_at = NOW(), status = 'succeeded'
+		SET output_uri = $1, checksum = $2, row_count = $3, completed_at = NOW(), status = 'succeeded'::analytics.export_job_status
 		WHERE job_id = $4
 	`
 
@@ -217,7 +217,7 @@ func (r *ExportJobRepository) SetExportJobOutput(ctx context.Context, jobID uuid
 func (r *ExportJobRepository) SetExportJobError(ctx context.Context, jobID uuid.UUID, errorMessage string) error {
 	query := `
 		UPDATE analytics.export_jobs
-		SET status = 'failed', error_message = $1, completed_at = NOW()
+		SET status = 'failed'::analytics.export_job_status, error_message = $1, completed_at = NOW()
 		WHERE job_id = $2
 	`
 
@@ -232,12 +232,12 @@ func (r *ExportJobRepository) SetExportJobError(ctx context.Context, jobID uuid.
 // GetPendingJobs retrieves pending export jobs for processing (used by worker).
 func (r *ExportJobRepository) GetPendingJobs(ctx context.Context, limit int) ([]ExportJob, error) {
 	query := `
-		SELECT 
+		SELECT
 			job_id, org_id, requested_by, time_range_start, time_range_end,
 			granularity, status, output_uri, checksum, row_count,
 			initiated_at, completed_at, error_message
 		FROM analytics.export_jobs
-		WHERE status = 'pending'
+		WHERE status = 'pending'::analytics.export_job_status
 		ORDER BY initiated_at ASC
 		LIMIT $1
 		FOR UPDATE SKIP LOCKED

@@ -61,6 +61,16 @@ func tryAPIKeyAuth(ctx context.Context, rt *bootstrap.Runtime, token string, req
 		return false, nil
 	}
 
+	// Log retrieved API key details for debugging scope enforcement
+	logger.Debug("RequireAuth: API key found in database",
+		zap.String("path", path),
+		zap.String("request_id", requestID),
+		zap.String("api_key_id", apiKeyID.String()),
+		zap.String("principal_type", principalType),
+		zap.String("status", status),
+		zap.Strings("scopes", scopes),
+		zap.Bool("has_expiration", expiresAt != nil))
+
 	// Check if API key is active
 	if status != "active" {
 		logger.Debug("RequireAuth: API key not active",

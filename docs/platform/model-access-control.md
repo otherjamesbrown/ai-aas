@@ -102,6 +102,62 @@ func (s *ModelRegistryService) Register(ctx context.Context, reg *domain.ModelRe
 }
 ```
 
+### Backend Type Configuration (Triton Support)
+
+Routing policies support different backend types for protocol translation. The `backend_type` field determines how requests are translated before forwarding to the backend.
+
+**Supported Backend Types:**
+
+| Backend Type | Description | Use Case |
+|--------------|-------------|----------|
+| `openai` (default) | OpenAI-compatible API | vLLM, TGI, OpenAI-compatible backends |
+| `triton` | NVIDIA Triton Inference Server | TensorRT-LLM, custom Triton models |
+
+**Triton Backend Configuration:**
+
+When using `backend_type: triton`, you must also specify a `tokenizer` encoding for accurate token counting:
+
+| Tokenizer | Description | Models |
+|-----------|-------------|--------|
+| `cl100k_base` | GPT-4, GPT-3.5-turbo encoding | OpenAI models |
+| `llama3` | Llama 3 encoding | Meta Llama 3.x models |
+| `o200k_base` | GPT-4o encoding | OpenAI GPT-4o models |
+
+**Example: Triton Backend Policy**:
+```json
+{
+  "policy_id": "660e8400-e29b-41d4-a716-446655440001",
+  "organization_id": "*",
+  "model": "llama-3.1-8b-trt",
+  "backends": [
+    {
+      "backend_id": "llama-3.1-8b-triton",
+      "weight": 100
+    }
+  ],
+  "backend_type": "triton",
+  "tokenizer": "llama3",
+  "failover_threshold": 3,
+  "enabled": true
+}
+```
+
+**CLI: Create Triton Routing Policy**:
+```bash
+ai-aas-cli routing policy create \
+  --global \
+  --model llama-3.1-8b-trt \
+  --backends llama-3.1-8b-triton:100 \
+  --backend-type triton \
+  --tokenizer llama3
+```
+
+**Important Notes:**
+- `tokenizer` is **required** when `backend_type` is `triton`
+- The API router translates OpenAI-format requests to Triton V2 protocol
+- Token counts are calculated using the specified tokenizer encoding
+- Streaming is not supported for Triton backends (returns error)
+
 ### Managing Routing Policies via CLI
 
 The CLI provides commands for manually creating, listing, and deleting routing policies.
@@ -685,6 +741,10 @@ ai-aas-cli routing policy create \
 
 ## Change History
 
+- **2025-12-29**: Added Triton backend documentation (aas-65m)
+  - Documented backend_type configuration for Triton backends
+  - Documented supported tokenizer encodings (cl100k_base, llama3, o200k_base)
+  - Added CLI examples for Triton routing policy creation
 - **2024-12-10**: Initial documentation created
   - Documented routing policy auto-creation (ai-aas-iti)
   - Documented auto_grant for admin users (ai-aas-cl3)

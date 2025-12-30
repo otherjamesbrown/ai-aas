@@ -233,8 +233,8 @@ func runUserCreate(cmd *cobra.Command, args []string) error {
 
 	fmt.Println()
 	fmt.Println("Next steps:")
-	fmt.Println("  • Create an API key for this user:  ai-aas-org apikey create --user-id", result.User.ID)
-	fmt.Println("  • Grant model access:               ai-aas-org user models add --user-id", result.User.ID)
+	fmt.Printf("  • Create an API key for this user:  ai-aas-org apikey create --user-id %s --key-name \"API Key\"\n", result.User.ID)
+	fmt.Printf("  • Grant model access:               ai-aas-org user models add --user %s\n", result.User.Email)
 
 	return nil
 }

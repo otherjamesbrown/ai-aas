@@ -123,6 +123,7 @@ func TestAPIKeyCreateCommand_Flags(t *testing.T) {
 		name string
 	}{
 		{"user-id"},
+		{"email"},
 		{"key-name"},
 		{"expires"},
 	}
@@ -148,6 +149,7 @@ func TestAPIKeyCreateCommand_Examples(t *testing.T) {
 
 	assert.Contains(t, createCmd.Long, "Examples:", "Long description should contain examples")
 	assert.Contains(t, createCmd.Long, "--user-id", "Examples should show user-id flag")
+	assert.Contains(t, createCmd.Long, "--email", "Examples should show email flag")
 	assert.Contains(t, createCmd.Long, "--key-name", "Examples should show key-name flag")
 	assert.Contains(t, createCmd.Long, "--expires", "Examples should show expires flag")
 	assert.Contains(t, createCmd.Long, "only be displayed once", "Long description should warn about one-time display")

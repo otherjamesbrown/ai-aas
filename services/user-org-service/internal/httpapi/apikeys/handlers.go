@@ -74,26 +74,26 @@ func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger *zap.Logger
 	}
 
 	// API key management requires apikey:manage or org:admin scope
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Post("/v1/orgs/{orgId}/service-accounts/{serviceAccountId}/api-keys", handler.IssueAPIKey)
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Post("/v1/orgs/{orgId}/users/{userId}/api-keys", handler.IssueUserAPIKey)
-	router.With(middleware.RequireAdminScope("org:read", "org:admin")).Get("/v1/orgs/{orgId}/api-keys", handler.ListAPIKeys)
-	router.With(middleware.RequireAdminScope("org:read", "org:admin")).Get("/v1/orgs/{orgId}/api-keys/{apiKeyId}", handler.GetAPIKey)
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Patch("/v1/orgs/{orgId}/api-keys/{apiKeyId}", handler.UpdateAPIKey)
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Post("/v1/orgs/{orgId}/api-keys/{apiKeyId}/rotate", handler.RotateAPIKey)
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Post("/v1/orgs/{orgId}/api-keys/{apiKeyId}/revoke", handler.RevokeAPIKey)
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Delete("/v1/orgs/{orgId}/api-keys/{apiKeyId}", handler.RevokeAPIKey)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Post("/v1/orgs/{orgId}/service-accounts/{serviceAccountId}/api-keys", handler.IssueAPIKey)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Post("/v1/orgs/{orgId}/users/{userId}/api-keys", handler.IssueUserAPIKey)
+	router.With(middleware.RequireAdminScope(logger, "org:read", "org:admin")).Get("/v1/orgs/{orgId}/api-keys", handler.ListAPIKeys)
+	router.With(middleware.RequireAdminScope(logger, "org:read", "org:admin")).Get("/v1/orgs/{orgId}/api-keys/{apiKeyId}", handler.GetAPIKey)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Patch("/v1/orgs/{orgId}/api-keys/{apiKeyId}", handler.UpdateAPIKey)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Post("/v1/orgs/{orgId}/api-keys/{apiKeyId}/rotate", handler.RotateAPIKey)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Post("/v1/orgs/{orgId}/api-keys/{apiKeyId}/revoke", handler.RevokeAPIKey)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Delete("/v1/orgs/{orgId}/api-keys/{apiKeyId}", handler.RevokeAPIKey)
 
 	// Register convenience routes for /organizations/me/* (frontend-friendly)
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Post("/organizations/me/api-keys", handler.IssueUserAPIKeyForMe)
-	router.With(middleware.RequireAdminScope("org:read", "org:admin")).Get("/organizations/me/api-keys", handler.ListAPIKeysForMe)
-	router.With(middleware.RequireAdminScope("org:read", "org:admin")).Get("/organizations/me/api-keys/{apiKeyId}", handler.GetAPIKeyForMe)
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Patch("/organizations/me/api-keys/{apiKeyId}", handler.UpdateAPIKeyForMe)
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Post("/organizations/me/api-keys/{apiKeyId}/rotate", handler.RotateAPIKeyForMe)
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Post("/organizations/me/api-keys/{apiKeyId}/revoke", handler.RevokeAPIKeyForMe)
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Delete("/organizations/me/api-keys/{apiKeyId}", handler.RevokeAPIKeyForMe)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Post("/organizations/me/api-keys", handler.IssueUserAPIKeyForMe)
+	router.With(middleware.RequireAdminScope(logger, "org:read", "org:admin")).Get("/organizations/me/api-keys", handler.ListAPIKeysForMe)
+	router.With(middleware.RequireAdminScope(logger, "org:read", "org:admin")).Get("/organizations/me/api-keys/{apiKeyId}", handler.GetAPIKeyForMe)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Patch("/organizations/me/api-keys/{apiKeyId}", handler.UpdateAPIKeyForMe)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Post("/organizations/me/api-keys/{apiKeyId}/rotate", handler.RotateAPIKeyForMe)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Post("/organizations/me/api-keys/{apiKeyId}/revoke", handler.RevokeAPIKeyForMe)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Delete("/organizations/me/api-keys/{apiKeyId}", handler.RevokeAPIKeyForMe)
 
 	// API key inspection endpoint (debugging/support) - requires admin scope
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Post("/v1/api-keys/inspect", handler.InspectAPIKey)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Post("/v1/api-keys/inspect", handler.InspectAPIKey)
 }
 
 // Handler serves API key lifecycle endpoints.
@@ -648,8 +648,83 @@ func (h *Handler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
 
 // GetAPIKey handles GET /v1/orgs/{orgId}/api-keys/{apiKeyId} - Get API key details.
 func (h *Handler) GetAPIKey(w http.ResponseWriter, r *http.Request) {
-	// TODO: Implement getting API key
-	httputil.WriteNotImplemented(w, r, "not implemented")
+	ctx := r.Context()
+	orgIDParam := chi.URLParam(r, "orgId")
+	apiKeyIDParam := chi.URLParam(r, "apiKeyId")
+
+	// Parse org ID (UUID or slug)
+	var orgID uuid.UUID
+	var err error
+	if orgID, err = uuid.Parse(orgIDParam); err != nil {
+		// Try as slug
+		org, err := h.runtime.Postgres.GetOrgBySlug(ctx, orgIDParam)
+		if err != nil {
+			if err == postgres.ErrNotFound {
+				httputil.WriteNotFound(w, r, "organization", "")
+				return
+			}
+			h.logger.Error("failed to resolve organization", zap.Error(err), zap.String("orgId", orgIDParam))
+			httputil.WriteInternalError(w, r)
+			return
+		}
+		orgID = org.ID
+	}
+
+	// Look up API key by UUID or KeyID
+	apiKey, err := h.findAPIKey(ctx, orgID, apiKeyIDParam)
+	if err != nil {
+		if err == postgres.ErrNotFound {
+			httputil.WriteNotFound(w, r, "API key", "")
+			return
+		}
+		h.logger.Error("failed to get API key", zap.Error(err), zap.String("keyIdentifier", apiKeyIDParam))
+		httputil.WriteInternalError(w, r)
+		return
+	}
+
+	// Verify key belongs to org
+	if apiKey.OrgID != orgID {
+		httputil.WriteNotFound(w, r, "API key", "")
+		return
+	}
+
+	// Build response (without secret)
+	type APIKeyResponse struct {
+		KeyID         string   `json:"keyId"`
+		Notes         string   `json:"notes,omitempty"`
+		PrincipalType string   `json:"principalType"`
+		PrincipalID   string   `json:"principalId"`
+		Fingerprint   string   `json:"fingerprint"`
+		Status        string   `json:"status"`
+		Scopes        []string `json:"scopes"`
+		IssuedAt      string   `json:"issuedAt"`
+		ExpiresAt     *string  `json:"expiresAt,omitempty"`
+		LastUsedAt    *string  `json:"lastUsedAt,omitempty"`
+	}
+
+	resp := APIKeyResponse{
+		KeyID:         apiKey.KeyID,
+		Notes:         apiKey.Notes,
+		PrincipalType: string(apiKey.PrincipalType),
+		PrincipalID:   apiKey.PrincipalID.String(),
+		Fingerprint:   apiKey.Fingerprint,
+		Status:        apiKey.Status,
+		Scopes:        apiKey.Scopes,
+		IssuedAt:      apiKey.IssuedAt.Format(time.RFC3339),
+	}
+	if apiKey.ExpiresAt != nil {
+		expStr := apiKey.ExpiresAt.Format(time.RFC3339)
+		resp.ExpiresAt = &expStr
+	}
+	if apiKey.LastUsedAt != nil {
+		usedStr := apiKey.LastUsedAt.Format(time.RFC3339)
+		resp.LastUsedAt = &usedStr
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		h.logger.Error("failed to encode response", zap.Error(err))
+	}
 }
 
 // UpdateAPIKey handles PATCH /v1/orgs/{orgId}/api-keys/{apiKeyId} - Update API key metadata.
@@ -951,9 +1026,76 @@ func (h *Handler) RevokeAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Call the main revoke handler with resolved org ID
-	r.URL.Path = fmt.Sprintf("/v1/orgs/%s/api-keys/%s", orgID.String(), apiKeyIDParam)
-	h.RevokeAPIKey(w, r)
+	// Look up API key by UUID or KeyID
+	apiKey, err := h.findAPIKey(ctx, orgID, apiKeyIDParam)
+	if err != nil {
+		if err == postgres.ErrNotFound {
+			httputil.WriteNotFound(w, r, "API key", "")
+			return
+		}
+		h.logger.Error("failed to get API key", zap.Error(err), zap.String("keyIdentifier", apiKeyIDParam))
+		httputil.WriteInternalError(w, r)
+		return
+	}
+
+	// Verify key belongs to org
+	if apiKey.OrgID != orgID {
+		httputil.WriteNotFound(w, r, "API key", "")
+		return
+	}
+
+	// Check if already revoked
+	if apiKey.Status == "revoked" || apiKey.RevokedAt != nil {
+		httputil.WriteConflict(w, r, "API key already revoked")
+		return
+	}
+
+	// Revoke key in database
+	revokedAt := time.Now().UTC()
+	_, err = h.runtime.Postgres.RevokeAPIKey(ctx, postgres.RevokeAPIKeyParams{
+		ID:        apiKey.ID,
+		Version:   apiKey.Version,
+		Status:    "revoked",
+		RevokedAt: revokedAt,
+	}, orgID)
+	if err != nil {
+		if err == postgres.ErrOptimisticLock {
+			httputil.WriteConflict(w, r, "API key was modified concurrently")
+			return
+		}
+		h.logger.Error("failed to revoke API key", zap.Error(err), zap.String("keyIdentifier", apiKeyIDParam))
+		httputil.WriteInternalError(w, r)
+		return
+	}
+
+	// Propagate revocation to Redis for fast revocation checks
+	if h.runtime.Redis != nil {
+		revocationKey := fmt.Sprintf("api_key:revoked:%s", apiKey.Fingerprint)
+		// Store with TTL matching key expiration (or 1 year if no expiration)
+		ttl := 365 * 24 * time.Hour
+		if apiKey.ExpiresAt != nil && apiKey.ExpiresAt.After(time.Now()) {
+			ttl = time.Until(*apiKey.ExpiresAt)
+		}
+		if err := h.runtime.Redis.Set(ctx, revocationKey, "1", ttl).Err(); err != nil {
+			h.logger.Warn("failed to propagate revocation to Redis", zap.Error(err), zap.String("fingerprint", apiKey.Fingerprint))
+			// Non-fatal: continue even if Redis propagation fails
+		}
+	}
+
+	// Emit audit event
+	actorID := middleware.GetUserID(r.Context())
+	event := audit.BuildEvent(orgID, actorID, audit.ActorTypeUser, audit.ActionAPIKeyRevoke, audit.TargetTypeAPIKey, &apiKey.ID)
+	event = audit.BuildEventFromRequest(event, r)
+	event.Metadata = map[string]any{
+		"fingerprint": apiKey.Fingerprint,
+		"revoked_at":  revokedAt.Format(time.RFC3339),
+	}
+	_ = h.runtime.Audit.Emit(ctx, event)
+
+	// Record API key revocation
+	metrics.RecordAPIKeyRevoked()
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // InspectAPIKeyRequest represents the payload for inspecting an API key.

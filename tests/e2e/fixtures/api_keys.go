@@ -85,19 +85,36 @@ func (akf *APIKeyFixture) CreateWithServiceAccount(ctx *harness.Context, orgID s
 	return akf.Create(ctx, orgID, sa.ID, name, scopes)
 }
 
-// Validate validates an API key by making an authenticated request
+// Validate validates an API key by calling the validate-api-key endpoint
 func (akf *APIKeyFixture) Validate(apiKey string, baseURL string) (bool, error) {
-	// Create a temporary client with the API key
+	// Create a temporary client (no auth header needed for validation endpoint)
 	tempClient := harness.NewClient(baseURL, 10*time.Second)
-	tempClient.SetHeader("Authorization", "Bearer "+apiKey)
 
-	// Try to make a simple authenticated request (e.g., get user info)
-	resp, err := tempClient.GET("/v1/me")
+	// Call the validate-api-key endpoint
+	reqBody := map[string]interface{}{
+		"apiKeySecret": apiKey,
+	}
+
+	resp, err := tempClient.POST("/v1/auth/validate-api-key", reqBody)
 	if err != nil {
 		return false, fmt.Errorf("validate API key: %w", err)
 	}
 
-	return resp.StatusCode == 200, nil
+	// Check response status
+	if resp.StatusCode != 200 {
+		return false, fmt.Errorf("validate API key failed: status %d, body: %s", resp.StatusCode, resp.String())
+	}
+
+	// Parse response to get valid field
+	var result struct {
+		Valid   bool   `json:"valid"`
+		Message string `json:"message,omitempty"`
+	}
+	if err := resp.UnmarshalJSON(&result); err != nil {
+		return false, fmt.Errorf("unmarshal validate response: %w", err)
+	}
+
+	return result.Valid, nil
 }
 
 // Get retrieves an API key by ID

@@ -1,6 +1,6 @@
 # Debugger Agent Context
 
-> **Inherits**: context/agents.md | **Verified**: 2025-12-13 | **Commit**: abb9d25a
+> **Inherits**: context/agents.md | **Verified**: 2025-12-30 | **Commit**: abb9d25a
 
 ---
 
@@ -123,6 +123,91 @@ git commit -m "fix: ..."  # Debugger should NEVER commit fixes
 # WRONG: Vague root cause
 # "Something is wrong with the database"
 # Should be: "Race condition in GetModel() when concurrent requests hit lines 45-52"
+```
+
+### Anti-pattern: Trusting unit test success when E2E fails
+
+**Symptom**: Unit tests for request parsing/handling pass, but E2E tests fail with parsing/validation errors.
+
+**Common Causes**:
+1. **Environment variable differences**: Unit tests use mocked config, E2E uses actual env vars
+2. **Mock vs real service behavior**: Unit tests mock external services, E2E hits real services
+3. **Database schema/data differences**: Unit tests use test fixtures, E2E uses actual database
+4. **Network/DNS differences**: Unit tests mock network calls, E2E makes real requests
+5. **Config file loading differences**: Unit tests may not load config files the same way
+6. **Middleware interference**: Body buffering middleware reads body, restoration doesn't work correctly
+7. **Header missing**: E2E request missing required headers (Content-Type, Authorization, etc)
+8. **JSON decoder issues**: json.Decoder behaves differently with restored vs fresh io.Reader
+9. **Type coercion**: Boolean/number fields parsing differently in HTTP vs unit test context
+10. **Content consumed**: Multiple middlewares reading body without proper restoration
+
+**Investigation Steps**:
+1. **Compare environments**: Check env vars, config files, database state between unit and E2E
+2. **Add integration logging**: Log ACTUAL parsed struct values (not just raw JSON)
+3. **Create HTTP integration test**: Isolate the environment difference with a minimal test
+4. **Check middleware chain**: Verify all middleware that reads request body
+5. **Verify headers**: Ensure Content-Type, Authorization, and other required headers are set
+6. **Test decoder approaches**: Compare json.Unmarshal(bytes) vs json.NewDecoder(reader).Decode()
+7. **Check database state**: Verify schema migrations and seed data match expectations
+8. **Test with real services**: Run unit tests against real dependencies (database, Redis, etc)
+
+**Example**:
+```go
+// Unit test - PASSES (direct unmarshaling)
+func TestStruct_Unmarshal(t *testing.T) {
+    jsonData := []byte(`{"field": true}`)
+    var req Request
+    json.Unmarshal(jsonData, &req)
+    assert.True(t, req.Field) // ✓ Works
+}
+
+// E2E test - FAILS (HTTP pipeline)
+func TestHandler_E2E(t *testing.T) {
+    body := `{"field": true}`
+    resp := httptest.POST("/endpoint", body)
+    // Handler receives req.Field == false ✗
+    // Why? Middleware consumed body, restoration failed
+}
+
+// HTTP integration test - REPRODUCES THE BUG
+func TestHandler_Integration(t *testing.T) {
+    // Use actual HTTP server with all middleware
+    server := httptest.NewServer(handler)
+    defer server.Close()
+
+    resp, _ := http.Post(server.URL+"/endpoint", "application/json",
+        strings.NewReader(`{"field": true}`))
+    // Now reproduces the same failure as E2E ✓
+}
+```
+
+**Prevention**:
+- Always add HTTP integration tests alongside unit tests
+- Log actual parsed struct values in handlers, not just raw request body
+- Test with full middleware stack enabled
+- Use test helpers that set all required headers
+- Verify environment variables match between test environments
+- Run unit tests with real database/Redis when testing data layer
+
+**Debug Commands**:
+```bash
+# Compare environment variables
+diff <(env | sort) <(kubectl exec -n <namespace> <pod> -- env | sort)
+
+# Check database schema/migrations
+kubectl exec -n <namespace> <db-pod> -- psql -U <user> -d <db> -c "\d <table>"
+
+# Verify config files loaded
+kubectl logs -n <namespace> -l app=<service> | grep -i "config"
+
+# Check HTTP headers in E2E logs
+kubectl logs -n <namespace> -l app=<service> | grep -i "content-type\|authorization"
+
+# Run E2E tests with verbose output
+go test ./tests/e2e/... -v -run <TestName>
+
+# Run unit tests against real database (not mocked)
+DATABASE_URL=<real-db-url> go test ./... -v
 ```
 
 ---

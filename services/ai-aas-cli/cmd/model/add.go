@@ -42,6 +42,15 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			hfModelID := args[0]
 
+			// Sanitize the model name for KServe compatibility
+			originalName := name
+			sanitizedName := sanitizeModelName(name)
+			if sanitizedName != originalName {
+				fmt.Printf("  Model name sanitized: '%s' -> '%s'\n", originalName, sanitizedName)
+				fmt.Printf("  (KServe requires lowercase alphanumeric with hyphens)\n\n")
+			}
+			name = sanitizedName
+
 			// Get configuration
 			// Get profile flag and load config with profile support
 			profileName, _ := cmd.Flags().GetString("profile")

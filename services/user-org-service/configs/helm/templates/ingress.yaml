@@ -26,10 +26,16 @@ spec:
   {{- end }}
   {{- if $tlsEnabled }}
   tls:
+    {{- if .Values.ingress.tls }}
+    {{- /* Use explicit TLS config when provided */ -}}
+    {{- toYaml .Values.ingress.tls | nindent 4 }}
+    {{- else }}
+    {{- /* Compute TLS config from subdomain and baseDomain */ -}}
     - secretName: {{ $tlsSecretName }}
       hosts:
         - {{ $publicHost | quote }}
         {{- /* Do not include local domain in TLS cert - Let's Encrypt cannot issue for .local domains */ -}}
+    {{- end }}
   {{- end }}
   rules:
     {{- /* Use explicit hosts if provided, otherwise compute from subdomain */ -}}

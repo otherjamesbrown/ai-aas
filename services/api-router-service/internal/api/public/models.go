@@ -140,11 +140,20 @@ func (h *Handler) HandleModels(w http.ResponseWriter, r *http.Request) {
 		// Fall back to empty list rather than failing the request
 		models = make([]ModelObject, 0)
 	} else {
-		// Convert all models to OpenAI format
-		// Models in the registry are available for routing - actual availability
-		// depends on backend configuration in routing policies
+		// Convert models to OpenAI format, filtering by deployment status
+		// Only show models that are fully deployed and ready
 		models = make([]ModelObject, 0, len(adminModels))
 		for _, adminModel := range adminModels {
+			// Filter: only include models with deployment_status == "ready"
+			// Models without a deployment or in other states (pending, deploying, failed, etc.)
+			// should not appear in the list to avoid exposing non-functional endpoints
+			if adminModel.DeploymentStatus == nil || *adminModel.DeploymentStatus != "ready" {
+				h.logger.Debug("skipping model - not ready",
+					zap.String("model", adminModel.Name),
+					zap.Stringp("deployment_status", adminModel.DeploymentStatus))
+				continue
+			}
+
 			// Use external_name if set, otherwise use the internal name
 			modelID := adminModel.ExternalName
 			if modelID == "" {

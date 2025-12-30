@@ -47,7 +47,7 @@ type RedeemBootstrapKeyResponse struct {
 
 // TestBootstrapKeyLifecycle tests the complete bootstrap key workflow
 // This test verifies:
-// 1. Create bootstrap key via admin API
+// 1. Create bootstrap key
 // 2. List bootstrap keys and verify new key appears
 // 3. Redeem the key (simulating new org admin onboarding)
 // 4. Verify org access granted after redemption
@@ -71,7 +71,7 @@ func TestBootstrapKeyLifecycle(t *testing.T) {
 	}
 	t.Logf("  PASS: Organization created: %s", org.ID)
 
-	// Step 2: Create bootstrap key via admin API
+	// Step 2: Create bootstrap key
 	t.Log("Step 2: Create Bootstrap Key")
 	reqBody := map[string]interface{}{
 		"orgId":         org.ID,
@@ -79,7 +79,7 @@ func TestBootstrapKeyLifecycle(t *testing.T) {
 		"notes":         "E2E test bootstrap key",
 	}
 
-	resp, err := ctx.AdminClient.POST("/v1/bootstrap-keys", reqBody)
+	resp, err := ctx.Client.POST("/v1/bootstrap-keys", reqBody)
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap key: %v", err)
 	}
@@ -105,9 +105,9 @@ func TestBootstrapKeyLifecycle(t *testing.T) {
 
 	t.Logf("  PASS: Bootstrap key created: %s (token: %s...)", bootstrapKey.KeyID, bootstrapKey.Token[:10])
 
-	// Step 3: List bootstrap keys and verify new key appears (Admin API)
+	// Step 3: List bootstrap keys and verify new key appears
 	t.Log("Step 3: List Bootstrap Keys")
-	listResp, err := ctx.AdminClient.GET("/v1/bootstrap-keys?orgId=" + org.ID)
+	listResp, err := ctx.Client.GET("/v1/bootstrap-keys?orgId=" + org.ID)
 	if err != nil {
 		t.Fatalf("Failed to list bootstrap keys: %v", err)
 	}
@@ -261,10 +261,10 @@ func TestBootstrapKeyLifecycle(t *testing.T) {
 		t.Log("  SKIP: No models available for inference test")
 	}
 
-	// Step 8: Verify bootstrap key status changed to 'redeemed' (Admin API)
+	// Step 8: Verify bootstrap key status changed to 'redeemed'
 	t.Log("Step 8: Verify Bootstrap Key Status Changed to 'redeemed'")
 
-	listResp2, err := ctx.AdminClient.GET("/v1/bootstrap-keys?orgId=" + org.ID)
+	listResp2, err := ctx.Client.GET("/v1/bootstrap-keys?orgId=" + org.ID)
 	if err != nil {
 		t.Fatalf("Failed to list bootstrap keys: %v", err)
 	}
@@ -321,7 +321,7 @@ func TestBootstrapKeyLifecycle(t *testing.T) {
 		"notes":         "E2E test revocation",
 	}
 
-	resp2, err := ctx.AdminClient.POST("/v1/bootstrap-keys", reqBody2)
+	resp2, err := ctx.Client.POST("/v1/bootstrap-keys", reqBody2)
 	if err != nil {
 		t.Fatalf("Failed to create second bootstrap key: %v", err)
 	}
@@ -333,8 +333,8 @@ func TestBootstrapKeyLifecycle(t *testing.T) {
 
 	t.Logf("  Created second bootstrap key: %s", bootstrapKey2.KeyID)
 
-	// Revoke the key (Admin API)
-	revokeResp, err := ctx.AdminClient.POST("/v1/bootstrap-keys/"+bootstrapKey2.KeyID+"/revoke", nil)
+	// Revoke the key
+	revokeResp, err := ctx.Client.POST("/v1/bootstrap-keys/"+bootstrapKey2.KeyID+"/revoke", nil)
 	if err != nil {
 		t.Fatalf("Failed to revoke bootstrap key: %v", err)
 	}
@@ -361,8 +361,8 @@ func TestBootstrapKeyLifecycle(t *testing.T) {
 
 	t.Logf("  PASS: Revoked bootstrap key cannot be redeemed (status: %d)", redeemRevokedResp.StatusCode)
 
-	// Verify status in list (Admin API)
-	listResp3, err := ctx.AdminClient.GET("/v1/bootstrap-keys?orgId=" + org.ID)
+	// Verify status in list
+	listResp3, err := ctx.Client.GET("/v1/bootstrap-keys?orgId=" + org.ID)
 	if err != nil {
 		t.Fatalf("Failed to list bootstrap keys: %v", err)
 	}
