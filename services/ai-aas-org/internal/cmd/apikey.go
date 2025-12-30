@@ -44,19 +44,20 @@ var apikeyListCmd = &cobra.Command{
 	Short: "List API keys",
 	Long: `List API keys in your organization.
 
-Without --user-id, lists all API keys in the organization.
-With --user-id, lists only keys for that user.
+Without --user, lists all API keys in the organization.
+With --user, lists only keys for that user.
 
 Examples:
   ai-aas-org apikey list
-  ai-aas-org apikey list --user-id usr_abc123`,
+  ai-aas-org apikey list --user user@example.com
+  ai-aas-org apikey list --user usr_abc123`,
 	RunE: runAPIKeyList,
 }
 
 func init() {
 	apikeyCmd.AddCommand(apikeyListCmd)
 
-	apikeyListCmd.Flags().StringVar(&apikeyListUser, "user-id", "", "filter by user ID")
+	apikeyListCmd.Flags().StringVar(&apikeyListUser, "user", "", "filter by user email or ID")
 }
 
 func runAPIKeyList(cmd *cobra.Command, args []string) error {
@@ -87,7 +88,12 @@ func runAPIKeyList(cmd *cobra.Command, args []string) error {
 	}
 
 	if IsJSONOutput() {
-		return output.PrintJSON(result.APIKeys)
+		// Convert to display format for user-friendly JSON output
+		displayKeys := make([]api.APIKeyDisplay, len(result.APIKeys))
+		for i, k := range result.APIKeys {
+			displayKeys[i] = k.ToDisplay()
+		}
+		return output.PrintJSON(displayKeys)
 	}
 
 	if len(result.APIKeys) == 0 {
@@ -99,7 +105,7 @@ func runAPIKeyList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	headers := []string{"Prefix", "Name", "User", "Status", "Last Used", "Expires"}
+	headers := []string{"ID", "NAME", "USER", "STATUS", "LAST USED", "EXPIRES"}
 	var rows [][]string
 	for _, k := range result.APIKeys {
 		lastUsed := "Never"
@@ -110,10 +116,25 @@ func runAPIKeyList(cmd *cobra.Command, args []string) error {
 		if k.ExpiresAt != nil {
 			expires = k.ExpiresAt.Format("2006-01-02")
 		}
+		// Use fingerprint prefix if available, otherwise key ID prefix
+		prefix := k.ID
+		if k.Fingerprint != "" && len(k.Fingerprint) > 8 {
+			prefix = k.Fingerprint[:8]
+		} else if len(k.ID) > 12 {
+			prefix = k.ID[:12]
+		}
+		// Show user ID if email not available
+		userDisplay := k.UserEmail
+		if userDisplay == "" {
+			userDisplay = k.UserID
+			if len(userDisplay) > 12 {
+				userDisplay = userDisplay[:12] + "..."
+			}
+		}
 		rows = append(rows, []string{
-			k.Prefix + "...",
+			prefix + "...",
 			k.Name,
-			k.UserEmail,
+			userDisplay,
 			output.StatusBadge(k.Status),
 			lastUsed,
 			expires,

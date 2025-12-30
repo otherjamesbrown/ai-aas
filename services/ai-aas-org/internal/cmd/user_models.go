@@ -24,9 +24,9 @@ By default, new users have access to all models available to your organization.
 You can restrict or grant access to specific models.
 
 Examples:
-  ai-aas-org user models list --user-id usr_abc123
-  ai-aas-org user models add --user-id usr_abc123 --model gpt-4
-  ai-aas-org user models remove --user-id usr_abc123 --model gpt-4`,
+  ai-aas-org user models list --user user@example.com
+  ai-aas-org user models add --user user@example.com --model gpt-4
+  ai-aas-org user models remove --user user@example.com --model gpt-4`,
 }
 
 func init() {
@@ -43,15 +43,15 @@ var userModelsListCmd = &cobra.Command{
 	Long: `List all AI models that a user has access to.
 
 Examples:
-  ai-aas-org user models list --user-id usr_abc123`,
+  ai-aas-org user models list --user user@example.com`,
 	RunE: runUserModelsList,
 }
 
 func init() {
 	userModelsCmd.AddCommand(userModelsListCmd)
 
-	userModelsListCmd.Flags().StringVar(&userModelsListUser, "user-id", "", "user ID")
-	userModelsListCmd.MarkFlagRequired("user-id")
+	userModelsListCmd.Flags().StringVar(&userModelsListUser, "user", "", "user email or ID")
+	userModelsListCmd.MarkFlagRequired("user")
 }
 
 func runUserModelsList(cmd *cobra.Command, args []string) error {
@@ -117,18 +117,18 @@ var userModelsAddCmd = &cobra.Command{
 	Long: `Grant a user access to an AI model.
 
 Examples:
-  ai-aas-org user models add --user-id usr_abc123 --model gpt-4
-  ai-aas-org user models add --user-id usr_abc123 --all`,
+  ai-aas-org user models add --user user@example.com --model gpt-4
+  ai-aas-org user models add --user user@example.com --all`,
 	RunE: runUserModelsAdd,
 }
 
 func init() {
 	userModelsCmd.AddCommand(userModelsAddCmd)
 
-	userModelsAddCmd.Flags().StringVar(&userModelsAddUser, "user-id", "", "user ID")
+	userModelsAddCmd.Flags().StringVar(&userModelsAddUser, "user", "", "user email or ID")
 	userModelsAddCmd.Flags().StringVar(&userModelsAddModel, "model", "", "model ID to grant access to")
 	userModelsAddCmd.Flags().BoolVar(&userModelsAddAll, "all", false, "grant access to all available models")
-	userModelsAddCmd.MarkFlagRequired("user-id")
+	userModelsAddCmd.MarkFlagRequired("user")
 }
 
 func runUserModelsAdd(cmd *cobra.Command, args []string) error {
@@ -251,16 +251,16 @@ var userModelsRemoveCmd = &cobra.Command{
 	Long: `Revoke a user's access to an AI model.
 
 Examples:
-  ai-aas-org user models remove --user-id usr_abc123 --model gpt-4`,
+  ai-aas-org user models remove --user user@example.com --model gpt-4`,
 	RunE: runUserModelsRemove,
 }
 
 func init() {
 	userModelsCmd.AddCommand(userModelsRemoveCmd)
 
-	userModelsRemoveCmd.Flags().StringVar(&userModelsRemoveUser, "user-id", "", "user ID")
+	userModelsRemoveCmd.Flags().StringVar(&userModelsRemoveUser, "user", "", "user email or ID")
 	userModelsRemoveCmd.Flags().StringVar(&userModelsRemoveModel, "model", "", "model ID to revoke access from")
-	userModelsRemoveCmd.MarkFlagRequired("user-id")
+	userModelsRemoveCmd.MarkFlagRequired("user")
 	userModelsRemoveCmd.MarkFlagRequired("model")
 }
 

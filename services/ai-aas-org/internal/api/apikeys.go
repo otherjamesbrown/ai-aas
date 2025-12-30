@@ -8,19 +8,57 @@ import (
 	"time"
 )
 
-// APIKey represents an API key.
+// APIKey represents an API key as returned by the user-org-service API.
+// JSON tags match the API response format for parsing.
 type APIKey struct {
-	ID          string     `json:"id"`
-	Name        string     `json:"name"`
-	Prefix      string     `json:"prefix"`
-	UserID      string     `json:"user_id"`
-	UserEmail   string     `json:"user_email"`
-	OrgID       string     `json:"org_id"`
-	Status      string     `json:"status"`
-	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
-	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
-	CreatedBy   string     `json:"created_by"`
+	ID            string     `json:"keyId"`
+	Name          string     `json:"notes"`
+	Prefix        string     `json:"prefix,omitempty"` // Derived from fingerprint if needed
+	UserID        string     `json:"principalId"`
+	PrincipalType string     `json:"principalType,omitempty"`
+	UserEmail     string     `json:"user_email,omitempty"` // Not returned by API, populated separately
+	OrgID         string     `json:"org_id,omitempty"`     // Not returned by API, known from request context
+	Fingerprint   string     `json:"fingerprint,omitempty"`
+	Status        string     `json:"status"`
+	Scopes        []string   `json:"scopes,omitempty"`
+	LastUsedAt    *time.Time `json:"lastUsedAt,omitempty"`
+	ExpiresAt     *time.Time `json:"expiresAt,omitempty"`
+	CreatedAt     *time.Time `json:"issuedAt,omitempty"`
+	CreatedBy     string     `json:"created_by,omitempty"` // Not returned by API
+}
+
+// APIKeyDisplay is the user-facing representation of an API key for JSON output.
+// Field names match user expectations and CLI documentation.
+type APIKeyDisplay struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	UserID    string `json:"user_id"`
+	UserEmail string `json:"user_email,omitempty"`
+	Status    string `json:"status"`
+	CreatedAt string `json:"created_at,omitempty"`
+	ExpiresAt string `json:"expires_at,omitempty"`
+	LastUsed  string `json:"last_used,omitempty"`
+}
+
+// ToDisplay converts an APIKey to its display representation.
+func (k *APIKey) ToDisplay() APIKeyDisplay {
+	display := APIKeyDisplay{
+		ID:        k.ID,
+		Name:      k.Name,
+		UserID:    k.UserID,
+		UserEmail: k.UserEmail,
+		Status:    k.Status,
+	}
+	if k.CreatedAt != nil {
+		display.CreatedAt = k.CreatedAt.Format(time.RFC3339)
+	}
+	if k.ExpiresAt != nil {
+		display.ExpiresAt = k.ExpiresAt.Format(time.RFC3339)
+	}
+	if k.LastUsedAt != nil {
+		display.LastUsed = k.LastUsedAt.Format(time.RFC3339)
+	}
+	return display
 }
 
 // CreateAPIKeyRequest is the request to create an API key.

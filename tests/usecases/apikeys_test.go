@@ -39,7 +39,7 @@ func TestUC_KEY_001_ListAPIKeys(t *testing.T) {
 		if !strings.Contains(result.Output, "ID") {
 			t.Error("expected table output with ID column")
 		}
-		if !strings.Contains(result.Output, "NAME") || !strings.Contains(result.Output, "Name") {
+		if !strings.Contains(result.Output, "NAME") && !strings.Contains(result.Output, "Name") {
 			t.Error("expected table output with NAME column")
 		}
 
