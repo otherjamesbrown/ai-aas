@@ -92,6 +92,8 @@ type Config struct {
 	LockoutWindowMinutes int `envconfig:"LOCKOUT_WINDOW_MINUTES" default:"15"`
 	// RecoveryRequiresAdminApproval enables admin approval workflow for recovery requests (default: false).
 	RecoveryRequiresAdminApproval bool `envconfig:"RECOVERY_REQUIRES_ADMIN_APPROVAL" default:"false"`
+	// AnalyticsServiceURL is the base URL for the analytics service (e.g., "http://analytics-service:8083").
+	AnalyticsServiceURL string `envconfig:"ANALYTICS_SERVICE_URL" default:"http://analytics-service:8083"`
 }
 
 // Load reads environment variables into Config, applying defaults where necessary.

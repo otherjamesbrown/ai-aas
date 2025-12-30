@@ -80,3 +80,15 @@ func WriteNotImplemented(w http.ResponseWriter, r *http.Request, message string)
 		"code":  "NOT_IMPLEMENTED",
 	})
 }
+
+// WriteError writes a generic error response with a custom code and message.
+func WriteError(w http.ResponseWriter, status int, code, message string, details interface{}) {
+	response := map[string]interface{}{
+		"error": message,
+		"code":  code,
+	}
+	if details != nil {
+		response["details"] = details
+	}
+	sharedhttputil.WriteJSON(w, status, response)
+}

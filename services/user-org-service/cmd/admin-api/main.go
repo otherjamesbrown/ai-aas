@@ -60,12 +60,14 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/bootstrap"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/apikeys"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/auditlogs"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/auth"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/bootstrapkeys"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/middleware"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/modelaccess"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/orgs"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/serviceaccounts"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/usage"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/users"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/logging"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/server"
@@ -130,6 +132,10 @@ func main() {
 				modelaccess.RegisterRoutes(r, runtime, logger)
 				// Register bootstrap key routes (Spec 033 - Org Admin CLI)
 				bootstrapkeys.RegisterRoutes(r, runtime, logger)
+				// Register usage routes (UC-USG-001, UC-USG-002, UC-USG-003)
+				usage.RegisterRoutes(r, runtime, logger)
+				// Register audit logs routes (UC-AUD-001)
+				auditlogs.RegisterRoutes(r, runtime, logger)
 			})
 		},
 	})
