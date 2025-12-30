@@ -24,6 +24,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -133,8 +135,10 @@ func init() {
 // AIModelReconciler reconciles an AIModel object
 type AIModelReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	Scheme    *runtime.Scheme
+	Recorder  record.EventRecorder
+	Clientset *kubernetes.Clientset // For reading pod logs
+	Config    *rest.Config          // REST config for creating clientset
 
 	// Download retry configuration
 	MaxDownloadRetries int32
@@ -578,9 +582,11 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		aiModel.Status.Message = fmt.Sprintf("Deployment timed out after %v. Manual intervention required.", defaultDeploymentTimeout)
 
 		// Emit Kubernetes Event
-		r.Recorder.Event(aiModel, corev1.EventTypeWarning, "PhaseTimeout",
-			fmt.Sprintf("Deployment stuck in Deploying phase for %v, exceeded timeout of %v",
-				time.Since(aiModel.Status.DeploymentStartedAt.Time), defaultDeploymentTimeout))
+		if r.Recorder != nil {
+			r.Recorder.Event(aiModel, corev1.EventTypeWarning, "PhaseTimeout",
+				fmt.Sprintf("Deployment stuck in Deploying phase for %v, exceeded timeout of %v",
+					time.Since(aiModel.Status.DeploymentStartedAt.Time), defaultDeploymentTimeout))
+		}
 
 		if err := r.Status().Update(ctx, aiModel); err != nil {
 			log.Error(err, "Failed to update AIModel status to Failed after timeout")
@@ -1690,8 +1696,10 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 			"message", phaseMessage)
 
 		// Emit Kubernetes Event on phase transitions
-		r.Recorder.Event(latestAIModel, corev1.EventTypeNormal, "PhaseTransition",
-			fmt.Sprintf("Phase changed to %s: %s", newPhase, phaseMessage))
+		if r.Recorder != nil {
+			r.Recorder.Event(latestAIModel, corev1.EventTypeNormal, "PhaseTransition",
+				fmt.Sprintf("Phase changed to %s: %s", newPhase, phaseMessage))
+		}
 	}
 
 	// Update phase based on InferenceService status
@@ -2300,7 +2308,20 @@ func (r *AIModelReconciler) determineGranularPhase(
 			if cs.State.Running != nil {
 				// Init container is running - downloading model
 				msg := "Downloading model artifacts"
-				// TODO: Extract download progress from init container logs
+
+				// Extract download progress from init container logs
+				logs := r.getPodLogs(ctx, pod, "storage-initializer", 50)
+				if progress := parseDownloadProgress(logs); progress != nil {
+					aiModel.Status.Progress = progress
+					// Update message if we have percentage info
+					if progress.Percentage > 0 {
+						msg = fmt.Sprintf("Downloading: %d%%", progress.Percentage)
+						if progress.Downloaded != "" {
+							msg = fmt.Sprintf("Downloading: %d%% (%s)", progress.Percentage, progress.Downloaded)
+						}
+					}
+				}
+
 				return aimodelv1alpha1.AIModelPhaseDownloading, msg
 			}
 			if cs.State.Waiting != nil {
@@ -2375,6 +2396,108 @@ func (r *AIModelReconciler) checkDeploymentTimeout(ctx context.Context, aiModel 
 	}
 
 	return false, nil
+}
+
+// parseDownloadProgress parses download progress information from storage-initializer logs.
+// It attempts to extract percentage, downloaded bytes, and ETA from common log patterns.
+//
+// Supported patterns:
+//   - "Downloading: 50% (1.2GB/2.4GB) ETA: 5m30s"
+//   - "download: s3://bucket/model.bin to ./model.bin (1073741824/2147483648)"
+//   - "Fetching 15 files: 60%|████████  | 9/15 [02:30<01:40]"
+//   - HuggingFace Hub CLI progress: "model.safetensors: 45%|████▌     | 2.25G/5.0G [00:30<00:45, 61.2MB/s]"
+//
+// Returns nil if no progress information can be extracted from logs.
+func parseDownloadProgress(logs string) *aimodelv1alpha1.PhaseProgress {
+	if logs == "" {
+		return nil
+	}
+
+	progress := &aimodelv1alpha1.PhaseProgress{}
+	found := false
+
+	// Pattern 1: Percentage with optional download size
+	// Matches: "50%", "60%|", "45%|████▌"
+	percentageRe := regexp.MustCompile(`(\d+)%`)
+	if matches := percentageRe.FindStringSubmatch(logs); len(matches) > 1 {
+		if pct, err := strconv.Atoi(matches[1]); err == nil && pct >= 0 && pct <= 100 {
+			progress.Percentage = pct
+			found = true
+		}
+	}
+
+	// Pattern 2: Downloaded/Total bytes
+	// Matches: "(1.2GB/2.4GB)", "(1073741824/2147483648)", "2.25G/5.0G"
+	bytesRe := regexp.MustCompile(`([\d.]+)\s*([KMGT]?B?)\s*/\s*([\d.]+)\s*([KMGT]?B?)`)
+	if matches := bytesRe.FindStringSubmatch(logs); len(matches) > 4 {
+		downloaded := matches[1] + matches[2]
+		total := matches[3] + matches[4]
+		progress.Downloaded = fmt.Sprintf("%s / %s", downloaded, total)
+		found = true
+	}
+
+	// Pattern 3: ETA (time remaining)
+	// Matches: "ETA: 5m30s", "[02:30<01:40]", "<00:45"
+	etaRe := regexp.MustCompile(`(?:ETA:\s*|<)(\d+[hms]\d*[ms]?|\d+:\d+)`)
+	if matches := etaRe.FindStringSubmatch(logs); len(matches) > 1 {
+		progress.ETA = matches[1]
+		found = true
+	}
+
+	if !found {
+		return nil
+	}
+
+	return progress
+}
+
+// getPodLogs retrieves the last N lines of logs from a specific container in a pod.
+// This is used to extract download progress from the storage-initializer init container.
+//
+// Parameters:
+//   - ctx: Context for the request
+//   - pod: The pod to get logs from
+//   - containerName: Name of the container (typically "storage-initializer")
+//   - tailLines: Number of recent log lines to retrieve (e.g., 50)
+//
+// Returns the log output as a string, or empty string on error.
+// Errors are logged but not returned to avoid disrupting reconciliation.
+func (r *AIModelReconciler) getPodLogs(ctx context.Context, pod *corev1.Pod, containerName string, tailLines int64) string {
+	if r.Clientset == nil {
+		// Clientset not configured - log reading not available
+		// This is expected if the operator was initialized without REST config
+		return ""
+	}
+
+	log := log.FromContext(ctx)
+
+	req := r.Clientset.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{
+		Container: containerName,
+		TailLines: &tailLines,
+	})
+
+	podLogs, err := req.Stream(ctx)
+	if err != nil {
+		// Log error at debug level - this is not critical to reconciliation
+		log.V(1).Info("Failed to get pod logs for progress tracking",
+			"pod", pod.Name,
+			"container", containerName,
+			"error", err.Error())
+		return ""
+	}
+	defer podLogs.Close()
+
+	buf := new(strings.Builder)
+	_, err = io.Copy(buf, podLogs)
+	if err != nil {
+		log.V(1).Info("Failed to read pod logs for progress tracking",
+			"pod", pod.Name,
+			"container", containerName,
+			"error", err.Error())
+		return ""
+	}
+
+	return buf.String()
 }
 
 // SetupWithManager sets up the controller with the Manager.

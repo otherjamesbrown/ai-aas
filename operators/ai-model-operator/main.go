@@ -27,6 +27,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -126,18 +127,31 @@ func main() {
 	recipeResolver := recipe.NewResolver(mgr.GetClient())
 	recipeValidator := recipe.NewValidator()
 
+	// Create Kubernetes clientset for pod log reading (progress tracking)
+	cfg := ctrl.GetConfigOrDie()
+	clientset, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		setupLog.Error(err, "unable to create Kubernetes clientset for log reading")
+		os.Exit(1)
+	}
+
 	if err = (&controllers.AIModelReconciler{
-		Client:             mgr.GetClient(),
-		Scheme:             mgr.GetScheme(),
-		Recorder:           mgr.GetEventRecorderFor("ai-model-operator"),
-		MaxDownloadRetries: int32(maxDownloadRetries),
-		InitialRetryDelay:  initialRetryDelay,
-		MaxRetryDelay:      maxRetryDelay,
-		DownloaderImage:    downloaderImage,
-		DefaultRuntime:     defaultRuntime,
-		AdminAPIClient:     adminAPIClient,
-		RecipeResolver:     recipeResolver,
-		RecipeValidator:    recipeValidator,
+		Client:                      mgr.GetClient(),
+		Scheme:                      mgr.GetScheme(),
+		Recorder:                    mgr.GetEventRecorderFor("ai-model-operator"),
+		Clientset:                   clientset,
+		Config:                      cfg,
+		MaxDownloadRetries:          int32(maxDownloadRetries),
+		InitialRetryDelay:           initialRetryDelay,
+		MaxRetryDelay:               maxRetryDelay,
+		MaxDeploymentRetries:        10,
+		InitialDeploymentRetryDelay: 30 * time.Second,
+		MaxDeploymentRetryDelay:     10 * time.Minute,
+		DownloaderImage:             downloaderImage,
+		DefaultRuntime:              defaultRuntime,
+		AdminAPIClient:              adminAPIClient,
+		RecipeResolver:              recipeResolver,
+		RecipeValidator:             recipeValidator,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AIModel")
 		os.Exit(1)
