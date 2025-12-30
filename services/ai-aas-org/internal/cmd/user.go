@@ -27,7 +27,7 @@ manage their access.
 
 Examples:
   ai-aas-org user list
-  ai-aas-org user create --user-email user@example.com --display-name "John Doe"
+  ai-aas-org user create --user-email user@example.com --user-display-name "John Doe"
   ai-aas-org user show user@example.com
   ai-aas-org user delete user@example.com`,
 }
@@ -142,7 +142,7 @@ The user will be created with the specified email and display name.
 By default, users are created with the 'user' role.
 
 Examples:
-  ai-aas-org user create --user-email user@example.com --display-name "John Doe"
+  ai-aas-org user create --user-email user@example.com --user-display-name "John Doe"
   ai-aas-org user create --guided`,
 	RunE: runUserCreate,
 }
@@ -151,7 +151,7 @@ func init() {
 	userCmd.AddCommand(userCreateCmd)
 
 	userCreateCmd.Flags().StringVarP(&userCreateEmail, "user-email", "e", "", "user email address")
-	userCreateCmd.Flags().StringVarP(&userCreateName, "display-name", "n", "", "user display name")
+	userCreateCmd.Flags().StringVarP(&userCreateName, "user-display-name", "n", "", "user display name")
 	userCreateCmd.Flags().StringVarP(&userCreateRole, "role", "r", "user", "user role (user, admin)")
 }
 
@@ -197,7 +197,7 @@ func runUserCreate(cmd *cobra.Command, args []string) error {
 		return errors.NewUsageError("--user-email is required")
 	}
 	if name == "" {
-		return errors.NewUsageError("--display-name is required")
+		return errors.NewUsageError("--user-display-name is required")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

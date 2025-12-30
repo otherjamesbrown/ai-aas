@@ -104,7 +104,7 @@ func TestUserCreateCommand_Flags(t *testing.T) {
 		shorthand string
 	}{
 		{"user-email", "e"},
-		{"display-name", "n"},
+		{"user-display-name", "n"},
 		{"role", "r"},
 	}
 
@@ -148,7 +148,7 @@ func TestUserCreateCommand_Examples(t *testing.T) {
 
 	assert.Contains(t, createCmd.Long, "Examples:", "Long description should contain examples")
 	assert.Contains(t, createCmd.Long, "--user-email", "Examples should show user-email flag")
-	assert.Contains(t, createCmd.Long, "--display-name", "Examples should show display-name flag")
+	assert.Contains(t, createCmd.Long, "--user-display-name", "Examples should show user-display-name flag")
 }
 
 // TestUserShowCommand verifies user show command structure
