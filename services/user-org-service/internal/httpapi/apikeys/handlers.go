@@ -74,26 +74,26 @@ func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger *zap.Logger
 	}
 
 	// API key management requires apikey:manage or org:admin scope
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Post("/v1/orgs/{orgId}/service-accounts/{serviceAccountId}/api-keys", handler.IssueAPIKey)
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Post("/v1/orgs/{orgId}/users/{userId}/api-keys", handler.IssueUserAPIKey)
-	router.With(middleware.RequireAdminScope("org:read", "org:admin")).Get("/v1/orgs/{orgId}/api-keys", handler.ListAPIKeys)
-	router.With(middleware.RequireAdminScope("org:read", "org:admin")).Get("/v1/orgs/{orgId}/api-keys/{apiKeyId}", handler.GetAPIKey)
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Patch("/v1/orgs/{orgId}/api-keys/{apiKeyId}", handler.UpdateAPIKey)
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Post("/v1/orgs/{orgId}/api-keys/{apiKeyId}/rotate", handler.RotateAPIKey)
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Post("/v1/orgs/{orgId}/api-keys/{apiKeyId}/revoke", handler.RevokeAPIKey)
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Delete("/v1/orgs/{orgId}/api-keys/{apiKeyId}", handler.RevokeAPIKey)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Post("/v1/orgs/{orgId}/service-accounts/{serviceAccountId}/api-keys", handler.IssueAPIKey)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Post("/v1/orgs/{orgId}/users/{userId}/api-keys", handler.IssueUserAPIKey)
+	router.With(middleware.RequireAdminScope(logger, "org:read", "org:admin")).Get("/v1/orgs/{orgId}/api-keys", handler.ListAPIKeys)
+	router.With(middleware.RequireAdminScope(logger, "org:read", "org:admin")).Get("/v1/orgs/{orgId}/api-keys/{apiKeyId}", handler.GetAPIKey)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Patch("/v1/orgs/{orgId}/api-keys/{apiKeyId}", handler.UpdateAPIKey)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Post("/v1/orgs/{orgId}/api-keys/{apiKeyId}/rotate", handler.RotateAPIKey)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Post("/v1/orgs/{orgId}/api-keys/{apiKeyId}/revoke", handler.RevokeAPIKey)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Delete("/v1/orgs/{orgId}/api-keys/{apiKeyId}", handler.RevokeAPIKey)
 
 	// Register convenience routes for /organizations/me/* (frontend-friendly)
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Post("/organizations/me/api-keys", handler.IssueUserAPIKeyForMe)
-	router.With(middleware.RequireAdminScope("org:read", "org:admin")).Get("/organizations/me/api-keys", handler.ListAPIKeysForMe)
-	router.With(middleware.RequireAdminScope("org:read", "org:admin")).Get("/organizations/me/api-keys/{apiKeyId}", handler.GetAPIKeyForMe)
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Patch("/organizations/me/api-keys/{apiKeyId}", handler.UpdateAPIKeyForMe)
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Post("/organizations/me/api-keys/{apiKeyId}/rotate", handler.RotateAPIKeyForMe)
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Post("/organizations/me/api-keys/{apiKeyId}/revoke", handler.RevokeAPIKeyForMe)
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Delete("/organizations/me/api-keys/{apiKeyId}", handler.RevokeAPIKeyForMe)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Post("/organizations/me/api-keys", handler.IssueUserAPIKeyForMe)
+	router.With(middleware.RequireAdminScope(logger, "org:read", "org:admin")).Get("/organizations/me/api-keys", handler.ListAPIKeysForMe)
+	router.With(middleware.RequireAdminScope(logger, "org:read", "org:admin")).Get("/organizations/me/api-keys/{apiKeyId}", handler.GetAPIKeyForMe)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Patch("/organizations/me/api-keys/{apiKeyId}", handler.UpdateAPIKeyForMe)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Post("/organizations/me/api-keys/{apiKeyId}/rotate", handler.RotateAPIKeyForMe)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Post("/organizations/me/api-keys/{apiKeyId}/revoke", handler.RevokeAPIKeyForMe)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Delete("/organizations/me/api-keys/{apiKeyId}", handler.RevokeAPIKeyForMe)
 
 	// API key inspection endpoint (debugging/support) - requires admin scope
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Post("/v1/api-keys/inspect", handler.InspectAPIKey)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Post("/v1/api-keys/inspect", handler.InspectAPIKey)
 }
 
 // Handler serves API key lifecycle endpoints.

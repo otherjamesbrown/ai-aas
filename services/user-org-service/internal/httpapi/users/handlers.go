@@ -82,13 +82,13 @@ func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger *zap.Logger
 	// Register routes directly under /v1/orgs/{orgId} without using Route()
 	// This prevents the route group from intercepting GET /v1/orgs/{orgId} requests
 	// Admin operations require user:manage or org:admin scope
-	router.With(middleware.RequireAdminScope("user:manage", "org:admin")).Post("/v1/orgs/{orgId}/invites", handler.InviteUser)
-	router.With(middleware.RequireAdminScope("user:manage", "org:admin")).Post("/v1/orgs/{orgId}/users", handler.CreateUser) // Direct user creation
-	router.With(middleware.RequireAdminScope("org:read", "org:admin")).Get("/v1/orgs/{orgId}/users", handler.ListUsers)
-	router.With(middleware.RequireAdminScope("org:read", "org:admin")).Get("/v1/orgs/{orgId}/users/{userId}", handler.GetUser)
-	router.With(middleware.RequireAdminScope("user:manage", "org:admin")).Patch("/v1/orgs/{orgId}/users/{userId}", handler.UpdateUser)
-	router.With(middleware.RequireAdminScope("user:manage", "org:admin")).Delete("/v1/orgs/{orgId}/users/{userId}", handler.DeleteUser)
-	router.With(middleware.RequireAdminScope("user:manage", "org:admin")).Put("/v1/orgs/{orgId}/users/{userId}/roles", handler.UpdateUserRoles)
+	router.With(middleware.RequireAdminScope(logger, "user:manage", "org:admin")).Post("/v1/orgs/{orgId}/invites", handler.InviteUser)
+	router.With(middleware.RequireAdminScope(logger, "user:manage", "org:admin")).Post("/v1/orgs/{orgId}/users", handler.CreateUser) // Direct user creation
+	router.With(middleware.RequireAdminScope(logger, "org:read", "org:admin")).Get("/v1/orgs/{orgId}/users", handler.ListUsers)
+	router.With(middleware.RequireAdminScope(logger, "org:read", "org:admin")).Get("/v1/orgs/{orgId}/users/{userId}", handler.GetUser)
+	router.With(middleware.RequireAdminScope(logger, "user:manage", "org:admin")).Patch("/v1/orgs/{orgId}/users/{userId}", handler.UpdateUser)
+	router.With(middleware.RequireAdminScope(logger, "user:manage", "org:admin")).Delete("/v1/orgs/{orgId}/users/{userId}", handler.DeleteUser)
+	router.With(middleware.RequireAdminScope(logger, "user:manage", "org:admin")).Put("/v1/orgs/{orgId}/users/{userId}/roles", handler.UpdateUserRoles)
 }
 
 // Handler serves user management endpoints.

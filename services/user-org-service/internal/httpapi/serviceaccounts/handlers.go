@@ -45,11 +45,11 @@ func RegisterRoutes(router chi.Router, rt *bootstrap.Runtime, logger *zap.Logger
 		logger:  logger,
 	}
 	// Service account management requires apikey:manage or org:admin scope
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Post("/v1/orgs/{orgId}/service-accounts", handler.CreateServiceAccount)
-	router.With(middleware.RequireAdminScope("org:read", "org:admin")).Get("/v1/orgs/{orgId}/service-accounts/{serviceAccountId}", handler.GetServiceAccount)
-	router.With(middleware.RequireAdminScope("org:read", "org:admin")).Get("/v1/orgs/{orgId}/service-accounts", handler.ListServiceAccounts)
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Patch("/v1/orgs/{orgId}/service-accounts/{serviceAccountId}", handler.UpdateServiceAccount)
-	router.With(middleware.RequireAdminScope("apikey:manage", "org:admin")).Delete("/v1/orgs/{orgId}/service-accounts/{serviceAccountId}", handler.DeleteServiceAccount)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Post("/v1/orgs/{orgId}/service-accounts", handler.CreateServiceAccount)
+	router.With(middleware.RequireAdminScope(logger, "org:read", "org:admin")).Get("/v1/orgs/{orgId}/service-accounts/{serviceAccountId}", handler.GetServiceAccount)
+	router.With(middleware.RequireAdminScope(logger, "org:read", "org:admin")).Get("/v1/orgs/{orgId}/service-accounts", handler.ListServiceAccounts)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Patch("/v1/orgs/{orgId}/service-accounts/{serviceAccountId}", handler.UpdateServiceAccount)
+	router.With(middleware.RequireAdminScope(logger, "apikey:manage", "org:admin")).Delete("/v1/orgs/{orgId}/service-accounts/{serviceAccountId}", handler.DeleteServiceAccount)
 }
 
 // Handler serves service account management endpoints.

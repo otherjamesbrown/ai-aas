@@ -127,16 +127,6 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 			r.Post("/{policy_id}/deactivate", policyHandler.Deactivate)
 		})
 
-		// Model management routes for ai-aas-cli (spec 020)
-		modelsSvc := modelsHandler.CreateModelsService(db.ConcretePool())
-
-		// Set up S3 client factory for model rename operations
-		modelsSvc.SetS3ClientFactory(createS3ClientFactory())
-
-		modelsAdapter := modelsHandler.NewServiceAdapter(modelsSvc)
-		modelsHdlr := modelsHandler.NewHandler(modelsAdapter)
-		modelsHdlr.RegisterRoutes(r)
-
 		// Inference engine management routes (AIAAS-042)
 		engSvc := enginesSvc.NewService(db.ConcretePool())
 		engHdlr := enginesHandler.NewHandler(engSvc)
@@ -173,6 +163,22 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 		recipeHdlr := recipesHandler.NewHandler(recipeAdapter)
 		recipeHdlr.RegisterRoutes(r)
 
+	})
+
+	// Model management routes (spec 020) - supports both master and org API keys
+	// These routes are outside the master-only auth group to allow org API key access
+	r.Route("/v1/models", func(r chi.Router) {
+		r.Use(middleware.MultiAuth(multiValidator, logger))
+		r.Use(middleware.RateLimit(rateLimiter))
+
+		modelsSvc := modelsHandler.CreateModelsService(db.ConcretePool())
+
+		// Set up S3 client factory for model rename operations
+		modelsSvc.SetS3ClientFactory(createS3ClientFactory())
+
+		modelsAdapter := modelsHandler.NewServiceAdapter(modelsSvc)
+		modelsHdlr := modelsHandler.NewHandler(modelsAdapter)
+		modelsHdlr.RegisterRoutes(r)
 	})
 
 	// Benchmark management routes (supports both master and org API keys)

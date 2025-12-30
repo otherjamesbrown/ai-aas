@@ -27,7 +27,7 @@ manage their access.
 
 Examples:
   ai-aas-org user list
-  ai-aas-org user create --email user@example.com --name "John Doe"
+  ai-aas-org user create --email user@example.com --display-name "John Doe"
   ai-aas-org user show user@example.com
   ai-aas-org user delete user@example.com`,
 }
@@ -142,7 +142,7 @@ The user will be created with the specified email and display name.
 By default, users are created with the 'user' role.
 
 Examples:
-  ai-aas-org user create --user-email user@example.com --display-name "John Doe"
+  ai-aas-org user create --email user@example.com --display-name "John Doe"
   ai-aas-org user create --guided`,
 	RunE: runUserCreate,
 }
@@ -150,7 +150,7 @@ Examples:
 func init() {
 	userCmd.AddCommand(userCreateCmd)
 
-	userCreateCmd.Flags().StringVarP(&userCreateEmail, "user-email", "e", "", "user email address")
+	userCreateCmd.Flags().StringVarP(&userCreateEmail, "email", "e", "", "user email address")
 	userCreateCmd.Flags().StringVarP(&userCreateName, "display-name", "n", "", "user display name")
 	userCreateCmd.Flags().StringVarP(&userCreateRole, "role", "r", "user", "user role (user, admin)")
 }
@@ -197,7 +197,7 @@ func runUserCreate(cmd *cobra.Command, args []string) error {
 		return errors.NewUsageError("--email is required")
 	}
 	if name == "" {
-		return errors.NewUsageError("--name is required")
+		return errors.NewUsageError("--display-name is required")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -233,8 +233,8 @@ func runUserCreate(cmd *cobra.Command, args []string) error {
 
 	fmt.Println()
 	fmt.Println("Next steps:")
-	fmt.Println("  • Create an API key for this user:  ai-aas-org apikey create --user", result.User.Email)
-	fmt.Println("  • Grant model access:               ai-aas-org user models add --user", result.User.Email)
+	fmt.Printf("  • Create an API key for this user:  ai-aas-org apikey create --user-id %s --key-name \"API Key\"\n", result.User.ID)
+	fmt.Printf("  • Grant model access:               ai-aas-org user models add --user %s\n", result.User.Email)
 
 	return nil
 }

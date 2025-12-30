@@ -63,10 +63,10 @@ type BenchmarkScenarioJSON struct {
 	Version     string `json:"version"`
 	Config      struct {
 		Defaults struct {
-			Profile     string `json:"profile"`
-			Rate        int    `json:"rate"`
-			MaxSeconds  int    `json:"max_seconds"`
-			RequestType string `json:"request_type"`
+			Profile     string  `json:"profile"`
+			Rate        float64 `json:"rate"`
+			MaxSeconds  int     `json:"max_seconds"`
+			RequestType string  `json:"request_type"`
 		} `json:"defaults"`
 	} `json:"config"`
 }
@@ -84,13 +84,13 @@ type BenchmarkTargetJSON struct {
 
 // RunnerTargetJSON represents runner target data
 type RunnerTargetJSON struct {
-	Name        string `json:"name"`
-	Model       string `json:"model"`
-	Status      string `json:"status"`
-	Profile     string `json:"profile"`
-	Rate        int    `json:"rate"`
-	MaxSeconds  int    `json:"max_seconds"`
-	RequestType string `json:"request_type"`
+	Name        string  `json:"name"`
+	Model       string  `json:"model"`
+	Status      string  `json:"status"`
+	Profile     string  `json:"profile"`
+	Rate        float64 `json:"rate"`
+	MaxSeconds  int     `json:"max_seconds"`
+	RequestType string  `json:"request_type"`
 	LastResults struct {
 		TotalRequests      int `json:"TotalRequests"`
 		SuccessfulRequests int `json:"SuccessfulRequests"`
@@ -140,7 +140,7 @@ func TestBenchmarkScenarioListJSON(t *testing.T) {
 
 	t.Logf("Found %d scenario(s)", len(scenarios))
 	for _, s := range scenarios {
-		t.Logf("  - %s: profile=%s, rate=%d, request_type=%s",
+		t.Logf("  - %s: profile=%s, rate=%v, request_type=%s",
 			s.Name, s.Config.Defaults.Profile, s.Config.Defaults.Rate, s.Config.Defaults.RequestType)
 	}
 }
@@ -293,7 +293,7 @@ func TestBenchmarkScenarioConfigPropagation(t *testing.T) {
 	expectedRate := scenario.Config.Defaults.Rate
 	expectedProfile := scenario.Config.Defaults.Profile
 
-	t.Logf("Scenario config: request_type=%s, rate=%d, profile=%s",
+	t.Logf("Scenario config: request_type=%s, rate=%v, profile=%s",
 		expectedRequestType, expectedRate, expectedProfile)
 
 	if expectedRequestType != "chat_completions" {

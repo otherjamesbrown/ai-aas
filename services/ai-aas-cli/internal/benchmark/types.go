@@ -179,3 +179,24 @@ type StatusSummary struct {
 	RecentRuns    []Run          `json:"recent_runs,omitempty"`
 	ByEnvironment map[string]int `json:"by_environment,omitempty"`
 }
+
+// ScenarioUpsert represents a scenario to create or update during sync
+type ScenarioUpsert struct {
+	Name        string                 `json:"name"`
+	Description string                 `json:"description,omitempty"`
+	Version     string                 `json:"version,omitempty"`
+	Config      map[string]interface{} `json:"config,omitempty"`
+}
+
+// SyncScenariosRequest represents the request to sync scenarios
+type SyncScenariosRequest struct {
+	Scenarios     []ScenarioUpsert `json:"scenarios"`
+	DeleteOrphans bool             `json:"delete_orphans,omitempty"`
+}
+
+// SyncScenariosResponse represents the response from syncing scenarios
+type SyncScenariosResponse struct {
+	Created []string `json:"created"`
+	Updated []string `json:"updated"`
+	Deleted []string `json:"deleted"`
+}

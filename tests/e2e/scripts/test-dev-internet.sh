@@ -19,6 +19,7 @@ NC='\033[0m' # No Color
 USER_ORG_URL="${USER_ORG_SERVICE_URL:-https://user-org.dev.otherjamesbrown.com}"
 API_ROUTER_URL="${API_ROUTER_SERVICE_URL:-https://api.dev.otherjamesbrown.com}"
 ANALYTICS_URL="${ANALYTICS_SERVICE_URL:-https://analytics.dev.otherjamesbrown.com}"
+ADMIN_API_URL="${ADMIN_API_SERVICE_URL:-https://admin-api.dev.otherjamesbrown.com}"
 
 # Check if URLs are accessible
 check_service_connectivity() {
@@ -28,6 +29,7 @@ check_service_connectivity() {
         "$USER_ORG_URL"
         "$API_ROUTER_URL"
         "$ANALYTICS_URL"
+        "$ADMIN_API_URL"
     )
     
     local failed=0
@@ -96,20 +98,26 @@ get_ingress_urls() {
         local user_org_ingress=$(kubectl get ingress -n "$namespace" -o jsonpath='{.items[?(@.metadata.name=="user-org-service")].spec.rules[0].host}' 2>/dev/null || echo "")
         local router_ingress=$(kubectl get ingress -n "$namespace" -o jsonpath='{.items[?(@.metadata.name=="api-router-service")].spec.rules[0].host}' 2>/dev/null || echo "")
         local analytics_ingress=$(kubectl get ingress -n "$namespace" -o jsonpath='{.items[?(@.metadata.name=="analytics-service")].spec.rules[0].host}' 2>/dev/null || echo "")
-        
+        local admin_api_ingress=$(kubectl get ingress -n admin-api-service -o jsonpath='{.items[?(@.metadata.name=="admin-api-service-development")].spec.rules[0].host}' 2>/dev/null || echo "")
+
         if [ -n "$user_org_ingress" ]; then
             USER_ORG_URL="https://$user_org_ingress"
             echo "  Using user-org-service: $USER_ORG_URL"
         fi
-        
+
         if [ -n "$router_ingress" ]; then
             API_ROUTER_URL="https://$router_ingress"
             echo "  Using api-router-service: $API_ROUTER_URL"
         fi
-        
+
         if [ -n "$analytics_ingress" ]; then
             ANALYTICS_URL="https://$analytics_ingress"
             echo "  Using analytics-service: $ANALYTICS_URL"
+        fi
+
+        if [ -n "$admin_api_ingress" ]; then
+            ADMIN_API_URL="https://$admin_api_ingress"
+            echo "  Using admin-api-service: $ADMIN_API_URL"
         fi
     else
         echo "  No ingress resources found or cannot access cluster"
@@ -129,6 +137,7 @@ main() {
     echo "  - user-org-service: $USER_ORG_URL"
     echo "  - api-router-service: $API_ROUTER_URL"
     echo "  - analytics-service: $ANALYTICS_URL"
+    echo "  - admin-api-service: $ADMIN_API_URL"
     echo ""
     
     # Check connectivity (non-blocking)
@@ -139,6 +148,7 @@ main() {
     export USER_ORG_SERVICE_URL="$USER_ORG_URL"
     export API_ROUTER_SERVICE_URL="$API_ROUTER_URL"
     export ANALYTICS_SERVICE_URL="$ANALYTICS_URL"
+    export ADMIN_API_SERVICE_URL="$ADMIN_API_URL"
     
     # Load admin API key from .admin-key.env if not already set
     if [ -z "${ADMIN_API_KEY:-}" ]; then

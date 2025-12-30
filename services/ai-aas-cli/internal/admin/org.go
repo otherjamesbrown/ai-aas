@@ -1142,10 +1142,10 @@ func runOrgBootstrap(cmd *cobra.Command, args []string, flagName, flagSlug, flag
 
 	// Validate required fields
 	if flagName == "" {
-		return errors.NewValidationError("--name is required", "Provide organization name with --name flag")
+		return errors.NewValidationError("--org-name is required", "Provide organization name with --org-name flag")
 	}
 	if flagSlug == "" {
-		return errors.NewValidationError("--slug is required", "Provide organization slug with --slug flag")
+		return errors.NewValidationError("--org-slug is required", "Provide organization slug with --org-slug flag")
 	}
 	if flagAdminEmail == "" {
 		return errors.NewValidationError("--admin-email is required", "Provide admin email with --admin-email flag")
@@ -1224,9 +1224,9 @@ func runOrgBootstrap(cmd *cobra.Command, args []string, flagName, flagSlug, flag
 		fmt.Println()
 	}
 
-	// Step 3: Create API key for admin user with org:admin scope
+	// Step 3: Create API key for admin user with admin scope
 	apiKeyReq := userorg.IssueAPIKeyRequest{
-		Scopes: []string{"org:admin"},
+		Scopes: []string{"admin"},
 		Notes:  "Bootstrap admin key - created by ai-aas-cli org bootstrap",
 	}
 	apiKey, err := userOrgClient.IssueUserAPIKey(cmd.Context(), org.Slug, user.UserID, apiKeyReq)

@@ -49,10 +49,10 @@ test-dev-ip:
 		echo ""; \
 	fi
 	@GOWORK=off TEST_ENV=development \
-	 USER_ORG_SERVICE_URL=https://172.232.58.222 \
-	 API_ROUTER_SERVICE_URL=https://172.232.58.222 \
-	 ANALYTICS_SERVICE_URL=https://172.232.58.222 \
-	 ADMIN_API_SERVICE_URL=https://172.232.58.222 \
+	 USER_ORG_SERVICE_URL=https://user-org.dev.otherjamesbrown.com \
+	 API_ROUTER_SERVICE_URL=https://api.dev.otherjamesbrown.com \
+	 ANALYTICS_SERVICE_URL=https://analytics.dev.otherjamesbrown.com \
+	 ADMIN_API_SERVICE_URL=https://admin-api.dev.otherjamesbrown.com \
 	 go test -v ./suites/... -timeout 30m
 
 setup:

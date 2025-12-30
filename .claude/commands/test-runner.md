@@ -23,12 +23,12 @@ Show all test run beads that have open child beads (unresolved failures):
 
 ```bash
 # Get test run beads with open child issues
-bd list --label test-run 2>/dev/null
+bd list --label test-run
 ```
 
 Then for each test run bead, check if it has open blocked issues:
 ```bash
-bd show <test-run-bead-id> 2>/dev/null
+bd show <test-run-bead-id>
 ```
 
 **Present results in this format:**
@@ -57,8 +57,8 @@ For each test run with failures, list the child beads:
 
 **Also show standalone test failures** (not linked to a test run):
 ```bash
-bd list --status open --label test-failure 2>/dev/null
-bd list --status open --label e2e-failure 2>/dev/null
+bd list --status open --label test-failure
+bd list --status open --label e2e-failure
 ```
 
 ---

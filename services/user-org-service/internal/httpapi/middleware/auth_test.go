@@ -78,7 +78,7 @@ func TestRequireAdminScope_Success(t *testing.T) {
 			})
 
 			// Apply scope middleware
-			middleware := RequireAdminScope(tt.requiredScopes...)
+			middleware := RequireAdminScope(nil, tt.requiredScopes...)
 			handler := middleware(testHandler)
 
 			// Create request with authenticated context
@@ -121,7 +121,7 @@ func TestRequireAdminScope_NoSession(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	middleware := RequireAdminScope("user:manage")
+	middleware := RequireAdminScope(nil, "user:manage")
 	handler := middleware(testHandler)
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -175,7 +175,7 @@ func TestRequireAdminScope_AdminScopeGrantsAll(t *testing.T) {
 
 			for _, required := range requiredScopes {
 				handlerCalled = false
-				middleware := RequireAdminScope(required...)
+				middleware := RequireAdminScope(nil, required...)
 				handler := middleware(testHandler)
 
 				req := httptest.NewRequest(http.MethodGet, "/test", nil)

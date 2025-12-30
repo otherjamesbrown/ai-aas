@@ -74,7 +74,7 @@ func TestGetAPIKeyByKeyID(t *testing.T) {
 		require.ErrorIs(t, err, ErrNotFound)
 	})
 
-	t.Run("NotFound_RevokedKey", func(t *testing.T) {
+	t.Run("Success_GetRevokedKey", func(t *testing.T) {
 		// Create another key to revoke
 		revokedKey, err := store.CreateAPIKey(ctx, CreateAPIKeyParams{
 			OrgID:         org.ID,

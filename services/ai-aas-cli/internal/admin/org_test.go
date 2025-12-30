@@ -121,11 +121,11 @@ func TestOrgBootstrapCommand(t *testing.T) {
 	assert.Equal(t, "Create organization with admin user and API key", bootstrapCmd.Short)
 
 	// Test required flags
-	nameFlag := bootstrapCmd.Flags().Lookup("name")
-	assert.NotNil(t, nameFlag, "name flag should exist")
+	nameFlag := bootstrapCmd.Flags().Lookup("org-name")
+	assert.NotNil(t, nameFlag, "org-name flag should exist")
 
-	slugFlag := bootstrapCmd.Flags().Lookup("slug")
-	assert.NotNil(t, slugFlag, "slug flag should exist")
+	slugFlag := bootstrapCmd.Flags().Lookup("org-slug")
+	assert.NotNil(t, slugFlag, "org-slug flag should exist")
 
 	adminEmailFlag := bootstrapCmd.Flags().Lookup("admin-email")
 	assert.NotNil(t, adminEmailFlag, "admin-email flag should exist")
