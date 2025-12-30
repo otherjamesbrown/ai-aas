@@ -695,13 +695,13 @@ kubectl create secret generic database-credentials \
   --from-literal=DATABASE_URL="postgresql://linpostgres:<password>@<host>:5432/defaultdb?sslmode=require" \
   --dry-run=client -o yaml | kubectl apply -f -
 
-# Copy to other service namespaces
-kubectl get secret database-credentials -n admin-api-service -o yaml | \
-  sed 's/namespace: admin-api-service/namespace: user-org-service/' | \
+# Copy to other service namespaces (using jq for robust JSON manipulation)
+kubectl get secret database-credentials -n admin-api-service -o json | \
+  jq 'del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp, .metadata.selfLink) | .metadata.namespace="user-org-service"' | \
   kubectl apply -f -
 
-kubectl get secret database-credentials -n admin-api-service -o yaml | \
-  sed 's/namespace: admin-api-service/namespace: analytics-service/' | \
+kubectl get secret database-credentials -n admin-api-service -o json | \
+  jq 'del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp, .metadata.selfLink) | .metadata.namespace="analytics-service"' | \
   kubectl apply -f -
 ```
 

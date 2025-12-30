@@ -56,6 +56,7 @@ Configure the platform CLI:
 ./scripts/build-clis.sh --install
 
 # Configure (values from secrets/env/.env)
+# Note: Run `source secrets/env/.env` first to load the API key variable
 ai-aas-cli config set --api-endpoint=https://admin-api.dev.otherjamesbrown.com
 ai-aas-cli config set --api-key=$MASTER_ADMIN_API_KEY
 

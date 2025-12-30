@@ -148,6 +148,7 @@ package fixtures
 
 import (
     "context"
+    "encoding/json"
     "fmt"
 
     "github.com/ai-aas/tests/e2e/harness"

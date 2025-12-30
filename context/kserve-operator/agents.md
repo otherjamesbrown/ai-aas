@@ -164,9 +164,17 @@ volumes:
     emptyDir: {}  # Lost on pod restart!
 
 # WRONG: PV size too small
-resources:
-  requests:
-    storage: 10Gi  # Model is 45GB - will fail to download!
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: model-cache-too-small
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: premium-rwo
+  resources:
+    requests:
+      storage: 10Gi  # Model is 45GB - will fail to download!
 
 # CORRECT: Properly sized persistent storage
 volumes:
