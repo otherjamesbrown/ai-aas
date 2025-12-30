@@ -596,12 +596,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count by (reason) (kube_pod_status_scheduled{namespace=~\"$namespace\", pod=~\".*-predictor-.*\", condition=\"false\"})",
+          "expr": "count by (reason) (kube_pod_container_status_waiting_reason{namespace=~\"$namespace\", pod=~\".*-predictor-.*\", reason=~\"ContainerCreating|PodInitializing|Unschedulable|CreateContainerError\"})",
           "legendFormat": "{{reason}}",
           "refId": "A"
         }
       ],
-      "title": "Scheduling Failures by Reason",
+      "title": "Scheduling/Init Issues by Reason",
       "type": "timeseries"
     },
     {

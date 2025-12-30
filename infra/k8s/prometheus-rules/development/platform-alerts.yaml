@@ -224,10 +224,10 @@ spec:
     # AI Model Deployment Alerts
     - name: aimodel-deployment
       rules:
-        # Stuck in Deploying
+        # Stuck in any in-progress phase (includes granular phases: Validating, Scheduling, Downloading, Initializing, Deploying)
         - alert: AIModelDeploymentStuck
           expr: |
-            (aimodel_status_phase{phase="Deploying"} == 1)
+            (sum by (name, namespace) (aimodel_status_phase{phase=~"Validating|Scheduling|Downloading|Initializing|Deploying"}) == 1)
             * on(name, namespace) group_left()
             (time() - aimodel_phase_start_time_seconds > 1800)
           for: 5m
@@ -236,8 +236,8 @@ spec:
             service: ai-model-operator
             category: deployment
           annotations:
-            summary: "Model {{ $labels.name }} stuck in Deploying for >30min"
-            description: "Model {{ $labels.name }} in {{ $labels.namespace }} has been deploying for over 30 minutes. Check scheduling status and operator logs. This may indicate resource constraints, image pull issues, or operator problems."
+            summary: "Model {{ $labels.name }} stuck in deployment for >30min"
+            description: "Model {{ $labels.name }} in {{ $labels.namespace }} has been deploying for over 30 minutes. Check scheduling status, download progress, and operator logs. This may indicate resource constraints, image pull issues, model download failures, or operator problems."
             runbook_url: "https://docs.ai-aas.io/runbooks/stuck-deployment"
 
         # Scheduling blocked
