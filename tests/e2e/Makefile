@@ -26,12 +26,17 @@ test-dev:
 	@echo "For automatic port-forwarding, use: ./scripts/test-dev.sh"
 	@echo "For internet access with IP, use: make test-dev-ip"
 	@echo ""
-	@if [ -z "$$ADMIN_API_KEY" ]; then \
+	@if [ -f .admin-key.env ]; then \
+		echo "Loading admin key from .admin-key.env..."; \
+		export $$(grep -v '^#' .admin-key.env | xargs) && \
+		echo "ADMIN_API_KEY loaded"; \
+	fi; \
+	if [ -z "$$ADMIN_API_KEY" ]; then \
 		echo "Warning: ADMIN_API_KEY not set. Some tests may fail."; \
 		echo "Set ADMIN_API_KEY environment variable before running tests."; \
 		echo ""; \
-	fi
-	GOWORK=off TEST_ENV=development go test -v ./suites/... -timeout 30m
+	fi; \
+	GOWORK=off TEST_ENV=development ADMIN_API_KEY=$${ADMIN_API_KEY} go test -v ./suites/... -timeout 30m
 
 test-dev-ip:
 	@echo "Running e2e tests against development environment using IP address..."
@@ -40,19 +45,21 @@ test-dev-ip:
 	@echo ""
 	@if [ -f .admin-key.env ]; then \
 		echo "Loading admin key from .admin-key.env..."; \
-		. .admin-key.env; \
-	fi
-	@if [ -z "$$ADMIN_API_KEY" ]; then \
+		export $$(grep -v '^#' .admin-key.env | xargs) && \
+		echo "ADMIN_API_KEY loaded"; \
+	fi; \
+	if [ -z "$$ADMIN_API_KEY" ]; then \
 		echo "Warning: ADMIN_API_KEY not set."; \
 		echo "Run './scripts/setup-test-env.sh' to bootstrap admin key, or:"; \
 		echo "  export ADMIN_API_KEY=your-admin-api-key"; \
 		echo ""; \
-	fi
-	@GOWORK=off TEST_ENV=development \
+	fi; \
+	GOWORK=off TEST_ENV=development \
 	 USER_ORG_SERVICE_URL=https://user-org.dev.otherjamesbrown.com \
 	 API_ROUTER_SERVICE_URL=https://api.dev.otherjamesbrown.com \
 	 ANALYTICS_SERVICE_URL=https://analytics.dev.otherjamesbrown.com \
 	 ADMIN_API_SERVICE_URL=https://admin-api.dev.otherjamesbrown.com \
+	 ADMIN_API_KEY=$${ADMIN_API_KEY} \
 	 go test -v ./suites/... -timeout 30m
 
 setup:
