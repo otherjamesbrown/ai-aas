@@ -105,12 +105,10 @@ func TestListUsers(t *testing.T) {
 			t.Errorf("missing or invalid authorization header")
 		}
 
-		resp := ListUsersResponse{
-			Users: []User{
-				{ID: "usr_1", Email: "user1@test.com", Name: "User One"},
-				{ID: "usr_2", Email: "user2@test.com", Name: "User Two"},
-			},
-			TotalCount: 2,
+		// API returns raw array of users, not a wrapper object
+		resp := []User{
+			{ID: "usr_1", Email: "user1@test.com", Name: "User One"},
+			{ID: "usr_2", Email: "user2@test.com", Name: "User Two"},
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
