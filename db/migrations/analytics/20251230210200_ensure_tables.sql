@@ -75,17 +75,21 @@ CREATE INDEX IF NOT EXISTS idx_freshness_status_status
     ON analytics.freshness_status (status, updated_at DESC);
 
 -- Create ENUM types for export job status and granularity (if they don't exist)
+-- +goose StatementBegin
 DO $$ BEGIN
     CREATE TYPE analytics.export_job_status AS ENUM ('pending', 'running', 'succeeded', 'failed', 'expired');
 EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
+-- +goose StatementEnd
 
+-- +goose StatementBegin
 DO $$ BEGIN
     CREATE TYPE analytics.export_job_granularity AS ENUM ('hourly', 'daily', 'monthly');
 EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
+-- +goose StatementEnd
 
 -- export_jobs: Track export job lifecycle for CSV generation and S3 delivery
 CREATE TABLE IF NOT EXISTS analytics.export_jobs (
