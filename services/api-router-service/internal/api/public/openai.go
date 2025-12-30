@@ -348,6 +348,16 @@ func (h *Handler) HandleOpenAICompletions(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Route based on backend type (spec032 - Triton API Support for text completions)
+	switch policy.BackendType {
+	case "triton", "triton-grpc":
+		// Both "triton" (HTTP) and "triton-grpc" are handled by the same entry point,
+		// which internally routes to HTTP or gRPC based on BackendType
+		h.handleTritonCompletion(ctx, w, r, policy, &openAIReq, authCtx, startTime)
+		return
+	default: // "openai" or empty - use existing vLLM/OpenAI flow
+	}
+
 	// Forward OpenAI request directly to backend's OpenAI endpoint
 	backendID := policy.Backends[0].BackendID
 	backendEndpoint := h.buildBackendEndpointForOpenAI(backendID, openAIReq.Model, "/v1/completions")

@@ -21,6 +21,7 @@ package auth
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -29,10 +30,12 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ai-aas/shared-go/auth/apikey"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
@@ -46,6 +49,7 @@ type Authenticator struct {
 	userOrgURL      string                       // URL to user-org-service for key validation
 	httpClient      *http.Client                 // HTTP client for user-org-service requests
 	validationCache map[string]*cachedValidation // Simple in-memory cache (key: fingerprint, value: validation result)
+	cacheMutex      sync.RWMutex                 // Protects validationCache from concurrent access
 }
 
 // cachedValidation stores a cached validation result with expiration.
@@ -93,13 +97,20 @@ func (a *Authenticator) Authenticate(r *http.Request) (*AuthenticatedContext, er
 func (a *Authenticator) validateAPIKey(key string) (*AuthenticatedContext, error) {
 	// Check cache first (compute fingerprint for cache key)
 	fingerprint := apikey.ComputeFingerprintHex(key)
-	if cached, ok := a.validationCache[fingerprint]; ok {
+
+	a.cacheMutex.RLock()
+	cached, ok := a.validationCache[fingerprint]
+	a.cacheMutex.RUnlock()
+
+	if ok {
 		if time.Now().Before(cached.expiresAt) {
 			a.logger.Debug("API key validation cache hit", zap.String("fingerprint", fingerprint[:8]))
 			return cached.result, nil
 		}
 		// Cache expired, remove it
+		a.cacheMutex.Lock()
 		delete(a.validationCache, fingerprint)
+		a.cacheMutex.Unlock()
 		a.logger.Debug("API key validation cache expired", zap.String("fingerprint", fingerprint[:8]))
 	}
 
@@ -183,10 +194,12 @@ func (a *Authenticator) validateAPIKey(key string) (*AuthenticatedContext, error
 	}
 
 	// Cache the result for 1 minute
+	a.cacheMutex.Lock()
 	a.validationCache[fingerprint] = &cachedValidation{
 		result:    ctx,
 		expiresAt: time.Now().Add(1 * time.Minute),
 	}
+	a.cacheMutex.Unlock()
 
 	return ctx, nil
 }
@@ -281,4 +294,68 @@ func (a *Authenticator) IsExpired(apiKeyID string) (bool, error) {
 func (a *Authenticator) UpdateLastUsed(apiKeyID string) error {
 	// Stub: no-op
 	return nil
+}
+
+// InvalidateCache removes a specific API key fingerprint from the validation cache.
+// This is called when receiving cache invalidation events from Redis pub/sub.
+func (a *Authenticator) InvalidateCache(fingerprint string) {
+	a.cacheMutex.Lock()
+	defer a.cacheMutex.Unlock()
+
+	if _, exists := a.validationCache[fingerprint]; exists {
+		delete(a.validationCache, fingerprint)
+		a.logger.Info("invalidated API key cache entry", zap.String("fingerprint", fingerprint[:8]))
+	}
+}
+
+// StartCacheInvalidationSubscriber subscribes to Redis pub/sub channel for cache invalidation events.
+// This should be called once during service startup in a separate goroutine.
+// The subscriber will run until the context is canceled.
+func (a *Authenticator) StartCacheInvalidationSubscriber(ctx context.Context, redisClient *redis.Client) error {
+	if redisClient == nil {
+		a.logger.Warn("Redis client not configured, cache invalidation disabled")
+		return nil
+	}
+
+	const channel = "apikey:invalidate"
+	pubsub := redisClient.Subscribe(ctx, channel)
+	defer func() {
+		if err := pubsub.Close(); err != nil {
+			a.logger.Error("failed to close Redis pubsub", zap.Error(err))
+		}
+	}()
+
+	a.logger.Info("started API key cache invalidation subscriber", zap.String("channel", channel))
+
+	// Wait for confirmation that subscription is created
+	_, err := pubsub.Receive(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to confirm subscription: %w", err)
+	}
+
+	// Listen for messages
+	ch := pubsub.Channel()
+	for {
+		select {
+		case <-ctx.Done():
+			a.logger.Info("stopping API key cache invalidation subscriber")
+			return nil
+		case msg := <-ch:
+			if msg == nil {
+				continue
+			}
+			// Message payload is the fingerprint to invalidate
+			fingerprint := msg.Payload
+			a.logger.Debug("received cache invalidation event", zap.String("fingerprint", fingerprint[:min(8, len(fingerprint))]))
+			a.InvalidateCache(fingerprint)
+		}
+	}
+}
+
+// min returns the minimum of two integers (helper for fingerprint logging).
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

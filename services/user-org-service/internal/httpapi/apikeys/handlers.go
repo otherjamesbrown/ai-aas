@@ -369,6 +369,15 @@ func (h *Handler) RevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 			h.logger.Warn("failed to propagate revocation to Redis", zap.Error(err), zap.String("fingerprint", apiKey.Fingerprint))
 			// Non-fatal: continue even if Redis propagation fails
 		}
+
+		// Publish cache invalidation event to notify api-router-service instances
+		const invalidationChannel = "apikey:invalidate"
+		if err := h.runtime.Redis.Publish(ctx, invalidationChannel, apiKey.Fingerprint).Err(); err != nil {
+			h.logger.Warn("failed to publish cache invalidation event", zap.Error(err), zap.String("fingerprint", apiKey.Fingerprint))
+			// Non-fatal: continue even if publish fails
+		} else {
+			h.logger.Debug("published API key cache invalidation event", zap.String("fingerprint", apiKey.Fingerprint[:8]))
+		}
 	}
 
 	// Emit audit event
@@ -1079,6 +1088,15 @@ func (h *Handler) RevokeAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 		if err := h.runtime.Redis.Set(ctx, revocationKey, "1", ttl).Err(); err != nil {
 			h.logger.Warn("failed to propagate revocation to Redis", zap.Error(err), zap.String("fingerprint", apiKey.Fingerprint))
 			// Non-fatal: continue even if Redis propagation fails
+		}
+
+		// Publish cache invalidation event to notify api-router-service instances
+		const invalidationChannel = "apikey:invalidate"
+		if err := h.runtime.Redis.Publish(ctx, invalidationChannel, apiKey.Fingerprint).Err(); err != nil {
+			h.logger.Warn("failed to publish cache invalidation event", zap.Error(err), zap.String("fingerprint", apiKey.Fingerprint))
+			// Non-fatal: continue even if publish fails
+		} else {
+			h.logger.Debug("published API key cache invalidation event", zap.String("fingerprint", apiKey.Fingerprint[:8]))
 		}
 	}
 

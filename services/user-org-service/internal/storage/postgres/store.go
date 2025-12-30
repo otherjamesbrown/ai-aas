@@ -1393,7 +1393,7 @@ func (s *Store) ListBootstrapKeys(ctx context.Context, orgID *uuid.UUID) ([]Boot
 		SELECT bk.id, bk.key_id, bk.org_id, o.name, bk.fingerprint, bk.status,
 		       bk.notes, bk.expires_at, bk.redeemed_at, bk.redeemed_by, bk.created_at, bk.updated_at
 		FROM bootstrap_keys bk
-		JOIN orgs o ON o.id = bk.org_id
+		JOIN orgs o ON o.org_id = bk.org_id
 		WHERE ($1::uuid IS NULL OR bk.org_id = $1)
 		ORDER BY bk.created_at DESC
 	`
@@ -1435,7 +1435,7 @@ func (s *Store) GetBootstrapKeyByKeyID(ctx context.Context, keyID string) (Boots
 		SELECT bk.id, bk.key_id, bk.org_id, o.name, bk.fingerprint, bk.status,
 		       bk.notes, bk.expires_at, bk.redeemed_at, bk.redeemed_by, bk.created_at, bk.updated_at
 		FROM bootstrap_keys bk
-		JOIN orgs o ON o.id = bk.org_id
+		JOIN orgs o ON o.org_id = bk.org_id
 		WHERE bk.key_id = $1
 	`
 
@@ -1468,7 +1468,7 @@ func (s *Store) GetBootstrapKeyByFingerprint(ctx context.Context, fingerprint st
 		SELECT bk.id, bk.key_id, bk.org_id, o.name, bk.fingerprint, bk.status,
 		       bk.notes, bk.expires_at, bk.redeemed_at, bk.redeemed_by, bk.created_at, bk.updated_at
 		FROM bootstrap_keys bk
-		JOIN orgs o ON o.id = bk.org_id
+		JOIN orgs o ON o.org_id = bk.org_id
 		WHERE bk.fingerprint = $1
 	`
 

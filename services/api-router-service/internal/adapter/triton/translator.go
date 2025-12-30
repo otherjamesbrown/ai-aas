@@ -117,6 +117,44 @@ func (t *Translator) TranslateOpenAIToTriton(req *OpenAIChatCompletionRequest) (
 	}, nil
 }
 
+// TranslateOpenAICompletionToTriton converts an OpenAI Text Completion request to Triton V2 format.
+// It converts the prompt string into a chat message format internally, then reuses the
+// existing chat completion translation logic.
+func (t *Translator) TranslateOpenAICompletionToTriton(req *OpenAICompletionRequest) (*InferRequest, error) {
+	if req == nil {
+		return nil, fmt.Errorf("request is nil")
+	}
+
+	if req.Prompt == "" {
+		return nil, fmt.Errorf("prompt is required")
+	}
+
+	// Convert text completion request to chat completion format
+	// Use a single user message containing the prompt text
+	chatReq := &OpenAIChatCompletionRequest{
+		Model: req.Model,
+		Messages: []ChatMessage{
+			{
+				Role:    "user",
+				Content: req.Prompt,
+			},
+		},
+		Temperature:      req.Temperature,
+		MaxTokens:        req.MaxTokens,
+		TopP:             req.TopP,
+		N:                req.N,
+		Stream:           req.Stream,
+		Stop:             req.Stop,
+		PresencePenalty:  req.PresencePenalty,
+		FrequencyPenalty: req.FrequencyPenalty,
+		LogitBias:        req.LogitBias,
+		User:             req.User,
+	}
+
+	// Reuse the existing chat completion translation
+	return t.TranslateOpenAIToTriton(chatReq)
+}
+
 // TranslateTritonToOpenAI converts a Triton V2 response to OpenAI Chat Completion format.
 func (t *Translator) TranslateTritonToOpenAI(
 	resp *InferResponse,
@@ -166,6 +204,57 @@ func (t *Translator) TranslateTritonToOpenAI(
 		Created: time.Now().Unix(),
 		Model:   originalReq.Model,
 		Choices: []ChatCompletionChoice{choice},
+		Usage: UsageInfo{
+			PromptTokens:     promptTokens,
+			CompletionTokens: completionTokens,
+			TotalTokens:      promptTokens + completionTokens,
+		},
+	}, nil
+}
+
+// TranslateTritonToOpenAICompletion converts a Triton V2 response to OpenAI Text Completion format.
+func (t *Translator) TranslateTritonToOpenAICompletion(
+	resp *InferResponse,
+	originalReq *OpenAICompletionRequest,
+) (*OpenAICompletionResponse, error) {
+	if resp == nil {
+		return nil, fmt.Errorf("response is nil")
+	}
+
+	if len(resp.Outputs) == 0 {
+		return nil, fmt.Errorf("no outputs in Triton response")
+	}
+
+	// Extract completion text from outputs
+	completionText, err := t.extractCompletionText(resp)
+	if err != nil {
+		return nil, fmt.Errorf("extract completion text: %w", err)
+	}
+
+	// Calculate token counts using tiktoken
+	promptTokens := t.tokenizer.CountTokens(originalReq.Prompt)
+	completionTokens := t.tokenizer.CountTokens(completionText)
+
+	// Determine finish reason
+	// Convert the completion request to chat format for finish reason logic
+	chatReq := &OpenAIChatCompletionRequest{
+		MaxTokens: originalReq.MaxTokens,
+	}
+	finishReason := t.determineFinishReason(resp, chatReq, completionTokens)
+
+	// Build OpenAI text completion response
+	choice := CompletionChoice{
+		Index:        0,
+		Text:         completionText,
+		FinishReason: finishReason,
+	}
+
+	return &OpenAICompletionResponse{
+		ID:      fmt.Sprintf("cmpl-%s", resp.ID),
+		Object:  "text_completion",
+		Created: time.Now().Unix(),
+		Model:   originalReq.Model,
+		Choices: []CompletionChoice{choice},
 		Usage: UsageInfo{
 			PromptTokens:     promptTokens,
 			CompletionTokens: completionTokens,

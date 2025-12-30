@@ -273,6 +273,18 @@ func main() {
 		}
 	}
 
+	// Start API key cache invalidation subscriber (if Redis is available)
+	if redisClient != nil {
+		subscriberCtx, cancelSubscriber := context.WithCancel(context.Background())
+		defer cancelSubscriber()
+
+		go func() {
+			if err := authenticator.StartCacheInvalidationSubscriber(subscriberCtx, redisClient); err != nil {
+				logger.Error("API key cache invalidation subscriber failed", zap.Error(err))
+			}
+		}()
+	}
+
 	// Initialize rate limiter
 	var rateLimiter *limiter.RateLimiter
 	if redisClient != nil {

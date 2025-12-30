@@ -239,6 +239,40 @@ const (
 	DatatypeSTRING = "BYTES" // Triton uses BYTES for string data
 )
 
+// OpenAICompletionRequest represents an OpenAI Text Completions API request.
+// This format uses a simple prompt string instead of the messages array used by chat completions.
+type OpenAICompletionRequest struct {
+	Model            string             `json:"model"`
+	Prompt           string             `json:"prompt"`
+	Temperature      *float64           `json:"temperature,omitempty"`
+	MaxTokens        *int               `json:"max_tokens,omitempty"`
+	TopP             *float64           `json:"top_p,omitempty"`
+	N                *int               `json:"n,omitempty"`
+	Stream           bool               `json:"stream,omitempty"`
+	Stop             []string           `json:"stop,omitempty"`
+	PresencePenalty  *float64           `json:"presence_penalty,omitempty"`
+	FrequencyPenalty *float64           `json:"frequency_penalty,omitempty"`
+	LogitBias        map[string]float64 `json:"logit_bias,omitempty"`
+	User             string             `json:"user,omitempty"`
+}
+
+// OpenAICompletionResponse represents an OpenAI Text Completions API response.
+type OpenAICompletionResponse struct {
+	ID      string              `json:"id"`
+	Object  string              `json:"object"` // "text_completion"
+	Created int64               `json:"created"`
+	Model   string              `json:"model"`
+	Choices []CompletionChoice  `json:"choices"`
+	Usage   UsageInfo           `json:"usage"`
+}
+
+// CompletionChoice represents a completion choice in the text completion response.
+type CompletionChoice struct {
+	Text         string `json:"text"`
+	Index        int    `json:"index"`
+	FinishReason string `json:"finish_reason"` // "stop", "length", "content_filter"
+}
+
 // DecodeBase64Data decodes base64-encoded tensor data from Triton response.
 // Some Triton configurations return data as base64-encoded strings.
 func DecodeBase64Data(encoded string) (string, error) {
