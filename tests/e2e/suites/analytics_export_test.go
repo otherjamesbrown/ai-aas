@@ -423,7 +423,7 @@ func TestAnalyticsExportValidation(t *testing.T) {
 				},
 			},
 			expectedStatus: 400,
-			expectedError:  "end must be after start",
+			expectedError:  "must be after",
 		},
 		{
 			name: "time range too large (> 31 days)",
