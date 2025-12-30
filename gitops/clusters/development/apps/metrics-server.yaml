@@ -1,0 +1,71 @@
+# Metrics Server ArgoCD Application
+# Required for Horizontal Pod Autoscaler (HPA) to function
+# Provides CPU/memory metrics to the Kubernetes API server
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: metrics-server-development
+  namespace: argocd
+  labels:
+    environment: development
+    app: metrics-server
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform-development
+  source:
+    repoURL: https://kubernetes-sigs.github.io/metrics-server/
+    chart: metrics-server
+    targetRevision: 3.12.2
+    helm:
+      releaseName: metrics-server
+      values: |
+        # API service configuration
+        apiService:
+          create: true
+          insecureSkipTLSVerify: true
+
+        # Resource limits
+        resources:
+          requests:
+            cpu: 100m
+            memory: 200Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+
+        # Args for metrics-server container
+        args:
+          - --kubelet-insecure-tls
+          - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
+          - --metric-resolution=15s
+
+        # Replicas for HA (optional, 1 is fine for dev)
+        replicas: 1
+
+        # Pod disruption budget
+        podDisruptionBudget:
+          enabled: false
+
+        # Service monitor for Prometheus (disabled for now)
+        serviceMonitor:
+          enabled: false
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

@@ -122,7 +122,8 @@ backends:
   # 1. The routing policy's backend_id
   # 2. The model name vLLM was started with (--served-model-name)
   #
-  # IMPORTANT: Use the -private service on port 8012 (queue-proxy port)
-  # - Port 80 on regular services routes through Istio which causes timeouts
-  # - Port 8012 on -private services connects directly to the queue-proxy sidecar
-  endpoints: "mistralai/Mistral-7B-Instruct-v0.3:http://mistral-7b-instruct-v03-predictor-00001-private.staging.svc.cluster.local:8012,unsloth/gpt-oss-20b:http://unsloth-gpt-oss-20b-predictor-00001-private.staging.svc.cluster.local:8012,openai/gpt-oss-20b:http://openai-gpt-oss-20b-predictor-00001-private.staging.svc.cluster.local:8012"
+  # IMPORTANT: Use revision-independent KServe predictor services on port 80
+  # - KServe creates revision-specific services (predictor-00001-private) that break when new revisions are created
+  # - The predictor service without revision suffix always points to the latest active revision
+  # - Port 80 is the standard KServe predictor service port
+  endpoints: "mistralai/Mistral-7B-Instruct-v0.3:http://mistral-7b-instruct-v03-predictor.staging.svc.cluster.local:80,unsloth/gpt-oss-20b:http://unsloth-gpt-oss-20b-predictor.staging.svc.cluster.local:80,openai/gpt-oss-20b:http://openai-gpt-oss-20b-predictor.staging.svc.cluster.local:80"

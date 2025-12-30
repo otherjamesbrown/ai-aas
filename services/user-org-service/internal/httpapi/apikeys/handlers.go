@@ -951,9 +951,76 @@ func (h *Handler) RevokeAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Call the main revoke handler with resolved org ID
-	r.URL.Path = fmt.Sprintf("/v1/orgs/%s/api-keys/%s", orgID.String(), apiKeyIDParam)
-	h.RevokeAPIKey(w, r)
+	// Look up API key by UUID or KeyID
+	apiKey, err := h.findAPIKey(ctx, orgID, apiKeyIDParam)
+	if err != nil {
+		if err == postgres.ErrNotFound {
+			httputil.WriteNotFound(w, r, "API key", "")
+			return
+		}
+		h.logger.Error("failed to get API key", zap.Error(err), zap.String("keyIdentifier", apiKeyIDParam))
+		httputil.WriteInternalError(w, r)
+		return
+	}
+
+	// Verify key belongs to org
+	if apiKey.OrgID != orgID {
+		httputil.WriteNotFound(w, r, "API key", "")
+		return
+	}
+
+	// Check if already revoked
+	if apiKey.Status == "revoked" || apiKey.RevokedAt != nil {
+		httputil.WriteConflict(w, r, "API key already revoked")
+		return
+	}
+
+	// Revoke key in database
+	revokedAt := time.Now().UTC()
+	_, err = h.runtime.Postgres.RevokeAPIKey(ctx, postgres.RevokeAPIKeyParams{
+		ID:        apiKey.ID,
+		Version:   apiKey.Version,
+		Status:    "revoked",
+		RevokedAt: revokedAt,
+	}, orgID)
+	if err != nil {
+		if err == postgres.ErrOptimisticLock {
+			httputil.WriteConflict(w, r, "API key was modified concurrently")
+			return
+		}
+		h.logger.Error("failed to revoke API key", zap.Error(err), zap.String("keyIdentifier", apiKeyIDParam))
+		httputil.WriteInternalError(w, r)
+		return
+	}
+
+	// Propagate revocation to Redis for fast revocation checks
+	if h.runtime.Redis != nil {
+		revocationKey := fmt.Sprintf("api_key:revoked:%s", apiKey.Fingerprint)
+		// Store with TTL matching key expiration (or 1 year if no expiration)
+		ttl := 365 * 24 * time.Hour
+		if apiKey.ExpiresAt != nil && apiKey.ExpiresAt.After(time.Now()) {
+			ttl = time.Until(*apiKey.ExpiresAt)
+		}
+		if err := h.runtime.Redis.Set(ctx, revocationKey, "1", ttl).Err(); err != nil {
+			h.logger.Warn("failed to propagate revocation to Redis", zap.Error(err), zap.String("fingerprint", apiKey.Fingerprint))
+			// Non-fatal: continue even if Redis propagation fails
+		}
+	}
+
+	// Emit audit event
+	actorID := middleware.GetUserID(r.Context())
+	event := audit.BuildEvent(orgID, actorID, audit.ActorTypeUser, audit.ActionAPIKeyRevoke, audit.TargetTypeAPIKey, &apiKey.ID)
+	event = audit.BuildEventFromRequest(event, r)
+	event.Metadata = map[string]any{
+		"fingerprint": apiKey.Fingerprint,
+		"revoked_at":  revokedAt.Format(time.RFC3339),
+	}
+	_ = h.runtime.Audit.Emit(ctx, event)
+
+	// Record API key revocation
+	metrics.RecordAPIKeyRevoked()
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // InspectAPIKeyRequest represents the payload for inspecting an API key.

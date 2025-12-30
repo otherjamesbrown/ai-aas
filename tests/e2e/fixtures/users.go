@@ -48,11 +48,11 @@ func (uf *UserFixture) Create(ctx *harness.Context, orgID string, email string, 
 	reqBody := map[string]interface{}{
 		"email":          email,
 		"name":           name,
-		"organization_id": orgID,
 		"roles":          roles,
 	}
 
-	resp, err := uf.client.POST("/v1/users", reqBody)
+	// Use correct org-scoped endpoint: POST /v1/orgs/{orgId}/users
+	resp, err := uf.client.POST(fmt.Sprintf("/v1/orgs/%s/users", orgID), reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("create user: %w", err)
 	}
@@ -101,8 +101,9 @@ func (uf *UserFixture) Invite(orgID string, email string) (*InviteResponse, erro
 }
 
 // Get retrieves a user by ID
-func (uf *UserFixture) Get(id string) (*User, error) {
-	resp, err := uf.client.GET(fmt.Sprintf("/v1/users/%s", id))
+func (uf *UserFixture) Get(orgID string, userID string) (*User, error) {
+	// Use correct org-scoped endpoint: GET /v1/orgs/{orgId}/users/{userId}
+	resp, err := uf.client.GET(fmt.Sprintf("/v1/orgs/%s/users/%s", orgID, userID))
 	if err != nil {
 		return nil, fmt.Errorf("get user: %w", err)
 	}
@@ -120,8 +121,9 @@ func (uf *UserFixture) Get(id string) (*User, error) {
 }
 
 // Delete deletes a user
-func (uf *UserFixture) Delete(id string) error {
-	resp, err := uf.client.DELETE(fmt.Sprintf("/v1/users/%s", id))
+func (uf *UserFixture) Delete(orgID string, userID string) error {
+	// Use correct org-scoped endpoint: DELETE /v1/orgs/{orgId}/users/{userId}
+	resp, err := uf.client.DELETE(fmt.Sprintf("/v1/orgs/%s/users/%s", orgID, userID))
 	if err != nil {
 		return fmt.Errorf("delete user: %w", err)
 	}

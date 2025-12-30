@@ -450,6 +450,87 @@ grep VITE_SENTRY_DSN web/portal/.env.development
 - CPU and memory utilization
 - Database query time
 
+### Scenario 9: Triton Backend Errors
+
+**Symptoms:** Requests to Triton-backed models fail, protocol translation errors, token count missing
+
+**Debug Steps:**
+1. Identify if model uses Triton backend:
+   ```bash
+   ai-aas-cli routing policy list --model <model-name> --format json | jq '.backend_type'
+   ```
+
+2. Query for Triton-specific errors:
+   ```logql
+   {namespace="system", service="api-router-service"} | json | msg=~".*triton.*" | level="error"
+   ```
+
+3. Check translation errors:
+   ```logql
+   {namespace="system", service="api-router-service"} | json | msg=~".*translation.*failed.*"
+   ```
+
+4. Verify tokenizer configuration:
+   ```logql
+   {namespace="system", service="api-router-service"} | json | msg=~".*tokenizer.*"
+   ```
+
+5. Check Triton backend health:
+   ```bash
+   # Get backend endpoint from routing policy
+   kubectl exec -n system deployment/api-router-service -- \
+     curl -s http://<triton-endpoint>:8000/v2/health/ready
+   ```
+
+**Triton Error Code Mapping:**
+
+| Triton Status | HTTP Code | OpenAI Error Type | Meaning |
+|---------------|-----------|-------------------|---------|
+| `UNAVAILABLE` | 503 | `service_unavailable` | Backend not ready |
+| `INVALID_ARG` | 400 | `invalid_request_error` | Bad request format |
+| `NOT_FOUND` | 404 | `model_not_found` | Model not loaded |
+| `RESOURCE_EXHAUSTED` | 429 | `rate_limit_exceeded` | Queue full |
+| `DEADLINE_EXCEEDED` | 504 | `timeout` | Request timeout |
+| `INTERNAL` | 500 | `internal_error` | Backend error |
+
+**Common Triton Issues:**
+
+1. **Missing tokenizer configuration**:
+   ```
+   Error: tokenizer is required when backend_type is 'triton'
+   ```
+   Fix: Update routing policy with `--tokenizer` flag
+
+2. **Invalid tokenizer encoding**:
+   ```
+   Error: invalid tokenizer: must be one of [cl100k_base, llama3, o200k_base]
+   ```
+   Fix: Use a supported tokenizer encoding
+
+3. **Streaming not supported**:
+   ```
+   Error: streaming not supported for triton backend
+   ```
+   Fix: Client must use non-streaming requests for Triton models
+
+4. **Backend unreachable**:
+   ```logql
+   {namespace="system", service="api-router-service"} | json | msg=~".*triton backend unreachable.*"
+   ```
+   Fix: Check Triton pod status and network connectivity
+
+**Triton-Specific Queries:**
+```logql
+# All Triton translation errors
+{namespace="system"} | json | backend_type="triton" | level="error"
+
+# Translation duration (performance)
+{namespace="system"} | json | triton_translation_duration_ms > 0
+
+# Successful Triton requests
+{namespace="system"} | json | backend_type="triton" | status < 400
+```
+
 ## LogQL Query Patterns
 
 LogQL is the query language for Loki, similar to PromQL for Prometheus.
@@ -1525,7 +1606,7 @@ For additional help:
 
 ---
 
-**Last Updated**: 2025-12-15
-**Version**: 2.1
+**Last Updated**: 2025-12-29
+**Version**: 2.2
 **Maintained By**: AI-AAS Platform Team
 **Spec**: 024-logging-observability-improvements

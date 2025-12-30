@@ -80,10 +80,16 @@ See Also:
 				} else {
 					name = hfModelID
 				}
-				// Sanitize name for k8s (lowercase, no special chars)
-				name = strings.ToLower(name)
-				name = strings.ReplaceAll(name, "_", "-")
 			}
+
+			// Sanitize name for KServe (lowercase, no periods/underscores)
+			originalName := name
+			sanitizedName := sanitizeModelName(name)
+			if sanitizedName != originalName {
+				fmt.Printf("  Model name sanitized: '%s' -> '%s'\n", originalName, sanitizedName)
+				fmt.Printf("  (KServe requires lowercase alphanumeric with hyphens)\n\n")
+			}
+			name = sanitizedName
 
 			// Get profile flag and load config with profile support
 			profileName, _ := cmd.Flags().GetString("profile")
