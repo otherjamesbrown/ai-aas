@@ -208,6 +208,65 @@ goose -dir db/migrations/operational postgres "$DATABASE_URL" down  # Rollback l
 goose -dir db/migrations/operational postgres "$DATABASE_URL" status
 ```
 
+### Migration Dependencies
+
+Migrations execute in timestamp order. When adding foreign key constraints or referencing other tables, ensure the dependent table is created first.
+
+**Pattern: Multi-table dependencies in a single migration**
+
+```sql
+-- 20251201001_api_keys.sql
+-- +goose Up
+-- Service accounts must exist before API keys (FK constraint)
+CREATE TABLE IF NOT EXISTS service_accounts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID NOT NULL REFERENCES organizations(id),
+    name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS api_keys (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID NOT NULL REFERENCES organizations(id),
+    service_account_id UUID NOT NULL REFERENCES service_accounts(id),  -- Depends on service_accounts
+    key_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- +goose Down
+DROP TABLE IF EXISTS api_keys;  -- Drop in reverse order
+DROP TABLE IF EXISTS service_accounts;
+```
+
+**Anti-pattern: Referencing non-existent tables**
+
+```sql
+-- WRONG: 20251201001_api_keys.sql
+-- +goose Up
+CREATE TABLE api_keys (
+    service_account_id UUID NOT NULL REFERENCES service_accounts(id)  -- service_accounts doesn't exist yet!
+);
+
+-- CORRECT: Either include service_accounts in this migration,
+-- or ensure a prior migration (20251130xxx_service_accounts.sql) creates it
+```
+
+**Checking dependencies before migration:**
+
+```bash
+# List current tables before writing migration
+psql "$DATABASE_URL" -c "\dt"
+
+# Check specific table exists
+psql "$DATABASE_URL" -c "SELECT 1 FROM information_schema.tables WHERE table_name = 'service_accounts'"
+
+# Check foreign key constraints
+psql "$DATABASE_URL" -c "SELECT conname, conrelid::regclass, confrelid::regclass
+                          FROM pg_constraint WHERE contype = 'f'"
+```
+
+**Related**: See aas-1cqt investigation for API key foreign key constraint issues.
+
 ### Migration Configuration
 
 Migrations are configured in Helm values:

@@ -337,6 +337,84 @@ kubectl get pod <predictor-pod> -n <namespace> -o yaml | grep -A 10 livenessProb
 kubectl get events -n <namespace> | grep "failed liveness probe"
 ```
 
+### Concurrent Resource Update Patterns
+
+Controllers often encounter "the object has been modified" errors when multiple reconciliations try to update the same resource simultaneously. Use these patterns to handle concurrent updates gracefully.
+
+**Pattern 1: Retry with Backoff (Recommended for most cases)**
+
+```go
+import "k8s.io/client-go/util/retry"
+
+func (r *Reconciler) updateResource(ctx context.Context, key types.NamespacedName, mutateFn func(*v1alpha1.AIModel)) error {
+    return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+        // Always fetch latest version inside retry loop
+        latest := &v1alpha1.AIModel{}
+        if err := r.Get(ctx, key, latest); err != nil {
+            return err
+        }
+
+        // Apply mutations to latest version
+        mutateFn(latest)
+
+        // Update - will fail with conflict if another reconcile beat us
+        return r.Update(ctx, latest)
+    })
+}
+
+// Usage:
+err := r.updateResource(ctx, req.NamespacedName, func(m *v1alpha1.AIModel) {
+    m.Spec.Enabled = false
+})
+```
+
+**Pattern 2: Server-Side Apply (Best for complex/partial updates)**
+
+```go
+import "sigs.k8s.io/controller-runtime/pkg/client"
+
+func (r *Reconciler) applyResourcePatch(ctx context.Context, obj client.Object) error {
+    // Server-Side Apply handles merges and conflicts automatically
+    return r.Patch(ctx, obj, client.Apply, client.FieldOwner("ai-model-operator"))
+}
+```
+
+**When to use each pattern:**
+
+| Pattern | Use When |
+|---------|----------|
+| Retry with Backoff | Simple field updates, status transitions, most common case |
+| Server-Side Apply | Multiple controllers managing different fields, complex merges |
+
+**Anti-pattern: Raw Update without retry**
+
+```go
+// WRONG: Will fail intermittently with "object modified" errors
+func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+    aiModel := &v1alpha1.AIModel{}
+    r.Get(ctx, req.NamespacedName, aiModel)
+
+    aiModel.Spec.MinReplicas = 2
+    r.Update(ctx, aiModel)  // May fail if another reconcile updated it!
+    // Result: Intermittent failures, dropped updates
+}
+
+// CORRECT: Always use retry pattern
+func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+    err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+        aiModel := &v1alpha1.AIModel{}
+        if err := r.Get(ctx, req.NamespacedName, aiModel); err != nil {
+            return err
+        }
+        aiModel.Spec.MinReplicas = 2
+        return r.Update(ctx, aiModel)
+    })
+    // ...
+}
+```
+
+**Related**: See investigation aas-kaj for root cause analysis of concurrent update failures.
+
 ---
 
 ## Commands

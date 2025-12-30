@@ -230,6 +230,77 @@ kubectl get applications -n argocd -o json | \
 
 ---
 
+## Infrastructure Prerequisites
+
+**CRITICAL**: These cluster components MUST be installed before deploying services that depend on them.
+
+### Required Components
+
+| Component | Purpose | Required By |
+|-----------|---------|-------------|
+| **metrics-server** | HPA CPU/memory metrics | Any service with HPA |
+| **CSI driver** | PersistentVolumeClaims | Model cache, databases |
+| **GPU Operator** | nvidia.com/gpu resources | vLLM, TensorRT-LLM workloads |
+| **cert-manager** | TLS certificate automation | All HTTPS endpoints |
+| **Istio** | Service mesh, ingress | KServe serverless mode |
+| **KServe** | Model inference | AIModel operator |
+
+### Validation Checklist
+
+Before deploying workloads that depend on these components:
+
+```bash
+# Check metrics-server (required for HPA)
+kubectl get apiservice v1beta1.metrics.k8s.io
+kubectl top nodes  # Should show CPU/memory, not "error: metrics not available"
+
+# Check CSI driver (required for PVCs)
+kubectl get csidrivers
+kubectl get storageclass  # Should show at least one default class
+
+# Check GPU Operator (required for GPU workloads)
+kubectl get pods -n gpu-operator-resources -l app=nvidia-device-plugin-daemonset
+kubectl describe nodes | grep "nvidia.com/gpu"  # Should show GPU capacity
+
+# Check cert-manager
+kubectl get pods -n cert-manager
+kubectl get clusterissuer  # Should show letsencrypt-prod
+
+# Check Istio
+kubectl get pods -n istio-system
+kubectl get gateway -A  # Should show istio-ingressgateway
+
+# Check KServe
+kubectl get pods -n kserve
+kubectl get clusterservingruntimes  # Should list available runtimes
+```
+
+### Failure Symptoms Without Prerequisites
+
+| Missing Component | Symptom |
+|-------------------|---------|
+| metrics-server | `HorizontalPodAutoscaler: unable to fetch metrics from resource metrics API: the server is currently unable to handle the request` |
+| CSI driver | `PersistentVolumeClaim "model-cache" pending: no persistent volumes available` |
+| GPU Operator | `Insufficient nvidia.com/gpu` even with GPU nodes |
+| cert-manager | `Certificate "tls-secret" not ready` or expired certificates |
+| Istio | `VirtualService: no matches for kind` or `503 Service Unavailable` |
+| KServe | `InferenceService: no matches for kind "InferenceService"` |
+
+### Installation Order
+
+Some components have dependencies:
+
+1. **cert-manager** (no dependencies)
+2. **Istio** (requires cert-manager for webhook certs)
+3. **KServe** (requires Istio and cert-manager)
+4. **GPU Operator** (no dependencies, but install before GPU workloads)
+5. **metrics-server** (no dependencies)
+6. **CSI driver** (cloud-provider specific)
+
+**Related**: See investigation aas-f3x for metrics-server missing symptoms.
+
+---
+
 ## Commands
 
 ```bash

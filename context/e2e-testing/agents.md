@@ -213,6 +213,84 @@ models:
 
 ---
 
+## Test Lifecycle and Feature Readiness
+
+**CRITICAL**: Never commit E2E tests for unimplemented features without marking them as skipped. This prevents CI failures that mislead developers.
+
+### Marking Tests as Skipped
+
+**Option 1: t.Skip (Recommended)**
+```go
+func TestUnimplementedFeature(t *testing.T) {
+    t.Skip("Feature not implemented - see bead aas-xxxx")
+}
+
+// Or skip conditionally based on feature availability
+func TestNewAPIEndpoint(t *testing.T) {
+    if !featureAvailable(ctx, "new-endpoint") {
+        t.Skip("new-endpoint feature not deployed")
+    }
+    // Test continues...
+}
+```
+
+**Option 2: Build Tags**
+```go
+//go:build feature_new_auth
+// +build feature_new_auth
+
+package suites
+
+// This test only runs when: go test -tags="feature_new_auth,e2e_tier"
+func TestNewAuth(t *testing.T) {
+    // ...
+}
+```
+
+**Option 3: Check Endpoint Existence**
+```go
+func TestOptionalFeature(t *testing.T) {
+    resp, err := client.Get(ctx, "/v1/optional-feature/health")
+    if err != nil || resp.StatusCode == 404 {
+        t.Skip("Optional feature not deployed")
+    }
+    // Test continues...
+}
+```
+
+### Why This Matters
+
+| Problem | Impact |
+|---------|--------|
+| Tests for unimplemented features | CI failures confuse developers |
+| Developers investigate "bugs" that are just missing features | Wasted time |
+| Unclear which features are complete vs. planned | Poor visibility |
+| Broken CI becomes normalized | Real failures get ignored |
+
+### Anti-patterns
+
+```go
+// WRONG: Commit failing test for unimplemented feature
+func TestFutureFeature(t *testing.T) {
+    resp, _ := client.Post(ctx, "/v1/future-endpoint", body)  // 404!
+    require.Equal(t, 200, resp.StatusCode)  // CI fails every run
+}
+
+// WRONG: Comment out failing test
+// func TestFutureFeature(t *testing.T) {
+//     ...  // Easy to forget, no visibility
+// }
+
+// CORRECT: Skip with tracking reference
+func TestFutureFeature(t *testing.T) {
+    t.Skip("Endpoint not implemented - tracking in bead aas-xxxx")
+}
+```
+
+**Related**: Investigation aas-2t4i for root cause of E2E test failures from unimplemented features.
+
+---
+
 ## Checklist
 
 Before completing E2E test work:
