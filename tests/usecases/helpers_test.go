@@ -159,6 +159,36 @@ func runOrgCLIWithEnv(env map[string]string, args ...string) CLIResult {
 	return result
 }
 
+// runOrgCLIWithConfig executes an ai-aas-org command with a specific config file.
+// This is the preferred way to run tests that need to use a custom config path,
+// as the CLI reads the config path from the --config flag, not from environment variables.
+func runOrgCLIWithConfig(configPath string, args ...string) CLIResult {
+	// Prepend --config flag to args
+	fullArgs := append([]string{"--config", configPath}, args...)
+	cmd := exec.Command("ai-aas-org", fullArgs...)
+
+	// Pass current environment
+	cmd.Env = os.Environ()
+
+	output, err := cmd.CombinedOutput()
+
+	result := CLIResult{
+		Output:   string(output),
+		ExitCode: 0,
+	}
+
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			result.ExitCode = exitErr.ExitCode()
+		} else {
+			result.ExitCode = 1
+		}
+		result.Error = err.Error()
+	}
+
+	return result
+}
+
 // tempConfigFile creates a temporary config file path and returns it
 // The temporary directory is automatically cleaned up when the test ends
 func tempConfigFile(t *testing.T) string {

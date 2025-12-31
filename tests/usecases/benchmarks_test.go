@@ -26,8 +26,8 @@ func TestUC_BM_001_CreateBenchmarkTarget(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
-		// When: User runs `ai-aas-org benchmark target add --model llama-7b --scenario standard`
-		result := runOrgCLI("benchmark", "target", "add", "--model", "llama-7b", "--scenario", "standard")
+		// When: User runs `ai-aas-org benchmark target add test-target-01 --model llama-7b --scenario standard`
+		result := runOrgCLI("benchmark", "target", "add", "test-target-01", "--model", "llama-7b", "--scenario", "standard")
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -51,8 +51,8 @@ func TestUC_BM_001_CreateBenchmarkTarget(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
 		// Given: User specifies a model they don't have access to
-		// When: User runs `ai-aas-org benchmark target add --model restricted-model --scenario standard`
-		result := runOrgCLI("benchmark", "target", "add", "--model", "restricted-model", "--scenario", "standard")
+		// When: User runs `ai-aas-org benchmark target add test-unauthorized --model restricted-model --scenario standard`
+		result := runOrgCLI("benchmark", "target", "add", "test-unauthorized", "--model", "restricted-model", "--scenario", "standard")
 
 		// Then: Command fails with exit code 4 (auth error)
 		if result.ExitCode != 4 {
@@ -72,8 +72,8 @@ func TestUC_BM_001_CreateBenchmarkTarget(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
 		// Given: User specifies a non-existent scenario
-		// When: User runs `ai-aas-org benchmark target add --model llama-7b --scenario nonexistent`
-		result := runOrgCLI("benchmark", "target", "add", "--model", "llama-7b", "--scenario", "nonexistent")
+		// When: User runs `ai-aas-org benchmark target add test-invalid-scenario --model llama-7b --scenario nonexistent`
+		result := runOrgCLI("benchmark", "target", "add", "test-invalid-scenario", "--model", "llama-7b", "--scenario", "nonexistent")
 
 		// Then: Command fails with exit code 5 (not found)
 		if result.ExitCode != 5 {
@@ -88,12 +88,14 @@ func TestUC_BM_001_CreateBenchmarkTarget(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
-		// When: User runs `ai-aas-org benchmark target add --model llama-7b --scenario throughput --concurrency 10 --duration 60s`
+		// When: User runs `ai-aas-org benchmark target add test-target-04 --model llama-7b --scenario throughput --interval 120`
+		// Note: CLI supports --interval for scheduled runs, not --concurrency/--duration
 		result := runOrgCLI("benchmark", "target", "add",
+			"test-target-04",
 			"--model", "llama-7b",
 			"--scenario", "throughput",
-			"--concurrency", "10",
-			"--duration", "60s")
+			"--schedule",
+			"--interval", "120")
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -113,7 +115,7 @@ func TestUC_BM_001_CreateBenchmarkTarget_MustNot(t *testing.T) {
 
 		// Given: User creates a benchmark target
 		// When: Target creation completes
-		result := runOrgCLI("benchmark", "target", "add", "--model", "llama-7b", "--scenario", "standard")
+		result := runOrgCLI("benchmark", "target", "add", "test-no-autostart", "--model", "llama-7b", "--scenario", "standard")
 
 		// Then: No benchmark run is started automatically
 		if result.ExitCode != 0 {
@@ -139,7 +141,7 @@ func TestUC_BM_001_CreateBenchmarkTarget_MustNot(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
 		// Given: User creates a benchmark target
-		result := runOrgCLI("benchmark", "target", "add", "--model", "llama-7b", "--scenario", "standard")
+		result := runOrgCLI("benchmark", "target", "add", "test-no-internals", "--model", "llama-7b", "--scenario", "standard")
 
 		// Then: No internal endpoints or metrics are exposed
 		internalPatterns := []string{"internal", "endpoint", "metrics", "prometheus"}
@@ -166,8 +168,8 @@ func TestUC_BM_002_TriggerBenchmarkRun(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
 		// Given: User has created benchmark target "target-123"
-		// When: User runs `ai-aas-org benchmark run trigger --target target-123`
-		result := runOrgCLI("benchmark", "run", "trigger", "--target", "target-123")
+		// When: User runs `ai-aas-org benchmark run trigger target-123`
+		result := runOrgCLI("benchmark", "run", "trigger", "target-123")
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -188,8 +190,8 @@ func TestUC_BM_002_TriggerBenchmarkRun(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
 		// Given: User specifies a target that doesn't exist
-		// When: User runs `ai-aas-org benchmark run trigger --target nonexistent-target`
-		result := runOrgCLI("benchmark", "run", "trigger", "--target", "nonexistent-target")
+		// When: User runs `ai-aas-org benchmark run trigger nonexistent-target`
+		result := runOrgCLI("benchmark", "run", "trigger", "nonexistent-target")
 
 		// Then: Command fails with exit code 5 (not found)
 		if result.ExitCode != 5 {
@@ -204,8 +206,8 @@ func TestUC_BM_002_TriggerBenchmarkRun(t *testing.T) {
 		skipIfNoLiveAPIWithReason(t, "with offline model")
 
 		// Given: Benchmark target exists but referenced model is offline
-		// When: User runs `ai-aas-org benchmark run trigger --target target-123`
-		result := runOrgCLI("benchmark", "run", "trigger", "--target", "target-with-offline-model")
+		// When: User runs `ai-aas-org benchmark run trigger target-with-offline-model`
+		result := runOrgCLI("benchmark", "run", "trigger", "target-with-offline-model")
 
 		// Then: Command fails with exit code 3 (service error)
 		if result.ExitCode != 3 {
@@ -238,7 +240,7 @@ func TestUC_BM_002_TriggerBenchmarkRun_MustNot(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
 		// Given: User triggers a benchmark run
-		result := runOrgCLI("benchmark", "run", "trigger", "--target", "target-123")
+		result := runOrgCLI("benchmark", "run", "trigger", "target-123")
 
 		// Then: No internal queue details are exposed
 		internalPatterns := []string{"queue", "worker", "internal", "redis"}

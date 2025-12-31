@@ -36,10 +36,7 @@ func TestUC_AUTH_001_InitializeCLIWithBootstrapKey(t *testing.T) {
 		}
 
 		// When: User runs ai-aas-org init --key <key>
-		result := runOrgCLIWithEnv(
-			map[string]string{"AI_AAS_ORG_CONFIG": configPath},
-			"init", "--key", bootstrapKey,
-		)
+		result := runOrgCLIWithConfig(configPath, "init", "--key", bootstrapKey)
 
 		// Then: Bootstrap key is exchanged for permanent API credentials
 		// Then: Credentials are saved to config file
@@ -65,17 +62,17 @@ func TestUC_AUTH_001_InitializeCLIWithBootstrapKey(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
 		// Given: User has a bootstrap key that was already redeemed
+		// NOTE: This test requires a real used bootstrap key to test against the live API.
+		// Without TEST_USED_BOOTSTRAP_KEY, we skip because we cannot simulate an already-used
+		// key without server-side state.
 		configPath := tempConfigFile(t)
 		usedKey := os.Getenv("TEST_USED_BOOTSTRAP_KEY")
 		if usedKey == "" {
-			usedKey = "bsk_already_used_key"
+			t.Skip("TEST_USED_BOOTSTRAP_KEY environment variable not set - cannot test already-used key without real key")
 		}
 
 		// When: User runs ai-aas-org init --key <used_key>
-		result := runOrgCLIWithEnv(
-			map[string]string{"AI_AAS_ORG_CONFIG": configPath},
-			"init", "--key", usedKey,
-		)
+		result := runOrgCLIWithConfig(configPath, "init", "--key", usedKey)
 
 		// Then: Command fails with exit code 4 (auth error)
 		if result.ExitCode != 4 {
@@ -103,17 +100,17 @@ func TestUC_AUTH_001_InitializeCLIWithBootstrapKey(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
 		// Given: User has a bootstrap key that expired more than 7 days ago
+		// NOTE: This test requires a real expired bootstrap key to test against the live API.
+		// Without TEST_EXPIRED_BOOTSTRAP_KEY, we skip because we cannot simulate an expired
+		// key without server-side state.
 		configPath := tempConfigFile(t)
 		expiredKey := os.Getenv("TEST_EXPIRED_BOOTSTRAP_KEY")
 		if expiredKey == "" {
-			expiredKey = "bsk_expired_key"
+			t.Skip("TEST_EXPIRED_BOOTSTRAP_KEY environment variable not set - cannot test expired key without real key")
 		}
 
 		// When: User runs ai-aas-org init --key <expired_key>
-		result := runOrgCLIWithEnv(
-			map[string]string{"AI_AAS_ORG_CONFIG": configPath},
-			"init", "--key", expiredKey,
-		)
+		result := runOrgCLIWithConfig(configPath, "init", "--key", expiredKey)
 
 		// Then: Command fails with exit code 4 (auth error)
 		if result.ExitCode != 4 {
@@ -157,10 +154,7 @@ api_key: sk_old_key
 		}
 
 		// When: User runs ai-aas-org init --key <new_key> --force
-		result := runOrgCLIWithEnv(
-			map[string]string{"AI_AAS_ORG_CONFIG": configPath},
-			"init", "--key", bootstrapKey, "--force",
-		)
+		result := runOrgCLIWithConfig(configPath, "init", "--key", bootstrapKey, "--force")
 
 		// Then: Existing credentials are overwritten
 		// Then: New credentials are saved to config file
@@ -194,10 +188,7 @@ api_key: sk_existing_key
 		}
 
 		// When: User runs ai-aas-org init --key <new_key> WITHOUT --force
-		result := runOrgCLIWithEnv(
-			map[string]string{"AI_AAS_ORG_CONFIG": configPath},
-			"init", "--key", "bsk_test_key",
-		)
+		result := runOrgCLIWithConfig(configPath, "init", "--key", "bsk_test_key")
 
 		// Then: Command should fail (must_not: silently overwrite without --force)
 		// Note: We expect non-zero exit code, specific code depends on implementation
@@ -233,10 +224,7 @@ func TestUC_AUTH_002_ConfigureCLIManually(t *testing.T) {
 		}
 
 		// When: User runs ai-aas-org configure --api-endpoint <url> --api-key <key>
-		result := runOrgCLIWithEnv(
-			map[string]string{"AI_AAS_ORG_CONFIG": configPath},
-			"configure", "--api-endpoint", apiEndpoint, "--api-key", apiKey,
-		)
+		result := runOrgCLIWithConfig(configPath, "configure", "--api-endpoint", apiEndpoint, "--api-key", apiKey)
 
 		// Then: Credentials are saved to config file
 		// Then: Configuration is validated against the endpoint
@@ -282,10 +270,7 @@ api_key: sk_existing_key
 		}
 
 		// When: User runs ai-aas-org configure --inference-endpoint <url>
-		result := runOrgCLIWithEnv(
-			map[string]string{"AI_AAS_ORG_CONFIG": configPath},
-			"configure", "--inference-endpoint", inferenceEndpoint,
-		)
+		result := runOrgCLIWithConfig(configPath, "configure", "--inference-endpoint", inferenceEndpoint)
 
 		// Then: Inference endpoint is added to config
 		// Then: Existing credentials are preserved
@@ -341,10 +326,7 @@ api_key: sk_existing_key
 		invalidEndpoint := "https://invalid.nonexistent.example.com"
 
 		// When: User runs ai-aas-org configure --api-endpoint <invalid> --api-key <key>
-		result := runOrgCLIWithEnv(
-			map[string]string{"AI_AAS_ORG_CONFIG": configPath},
-			"configure", "--api-endpoint", invalidEndpoint, "--api-key", "sk_test_key",
-		)
+		result := runOrgCLIWithConfig(configPath, "configure", "--api-endpoint", invalidEndpoint, "--api-key", "sk_test_key")
 
 		// Then: Command fails with exit code 3 (connection error)
 		if result.ExitCode != 3 {
@@ -384,10 +366,7 @@ api_key: sk_existing_key
 		apiKey := "sk_secret_test_key_12345"
 
 		// When: User runs configure with verbose/debug output
-		result := runOrgCLIWithEnv(
-			map[string]string{"AI_AAS_ORG_CONFIG": configPath},
-			"configure", "--api-endpoint", "https://example.com", "--api-key", apiKey, "-v",
-		)
+		result := runOrgCLIWithConfig(configPath, "configure", "--api-endpoint", "https://example.com", "--api-key", apiKey, "-v")
 
 		// Then: API key should not appear in output
 		if strings.Contains(result.Output, apiKey) {
@@ -406,10 +385,7 @@ api_key: sk_existing_key
 		apiKey := "sk_secret_error_key_67890"
 
 		// When: Command fails with an error
-		result := runOrgCLIWithEnv(
-			map[string]string{"AI_AAS_ORG_CONFIG": configPath},
-			"configure", "--api-endpoint", "https://invalid.example.com", "--api-key", apiKey,
-		)
+		result := runOrgCLIWithConfig(configPath, "configure", "--api-endpoint", "https://invalid.example.com", "--api-key", apiKey)
 
 		// Then: API key should not appear in error output
 		if strings.Contains(result.Output, apiKey) {
