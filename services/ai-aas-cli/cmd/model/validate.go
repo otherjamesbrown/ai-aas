@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"time"
 
@@ -27,12 +29,13 @@ func NewValidateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "validate [model-name]",
 		Short: "Validate model configuration and deployment",
-		Long: `Validate a model across all layers: registry, cache, deployment, and endpoint.
+		Long: `Validate a model across all layers: registry, cache, deployment, routing, and endpoint.
 
 The validation performs these checks:
 - Registry: Model is registered and configuration is valid
 - Cache: Model files are cached in object storage
 - Deployment: InferenceService exists and is healthy
+- Routing: Routing policy exists for the model
 - Endpoint: Model responds to inference requests
 
 Examples:
@@ -46,7 +49,7 @@ Examples:
   ai-aas-cli model validate llama-3-8b -e development --json
 
   # Skip certain checks
-  ai-aas-cli model validate llama-3-8b -e development --skip endpoint`,
+  ai-aas-cli model validate llama-3-8b -e development --skip endpoint,routing`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -105,7 +108,7 @@ Examples:
 			inferenceTimeout := time.Duration(cfg.InferenceTimeout) * time.Second
 
 			for _, modelName := range modelNames {
-				result := validateModel(ctx, modelName, environment, regClient, skipSet, inferenceTimeout)
+				result := validateModel(ctx, modelName, environment, regClient, cfg, skipSet, inferenceTimeout)
 				results[modelName] = result
 				if !result.Passed {
 					allPassed = false
@@ -152,6 +155,7 @@ type ModelValidationResult struct {
 	Registry   *CheckResult  `json:"registry,omitempty"`
 	Cache      *CheckResult  `json:"cache,omitempty"`
 	Deployment *CheckResult  `json:"deployment,omitempty"`
+	Routing    *CheckResult  `json:"routing,omitempty"`
 	Endpoint   *CheckResult  `json:"endpoint,omitempty"`
 }
 
@@ -164,7 +168,7 @@ type CheckResult struct {
 	Skipped  bool              `json:"skipped,omitempty"`
 }
 
-func validateModel(ctx context.Context, modelName, environment string, regClient *registry.Client, skipSet map[string]bool, inferenceTimeout time.Duration) *ModelValidationResult {
+func validateModel(ctx context.Context, modelName, environment string, regClient *registry.Client, cfg *config.Config, skipSet map[string]bool, inferenceTimeout time.Duration) *ModelValidationResult {
 	start := time.Now()
 	result := &ModelValidationResult{
 		Model:  modelName,
@@ -191,6 +195,14 @@ func validateModel(ctx context.Context, modelName, environment string, regClient
 	if !skipSet["deployment"] && environment != "" {
 		result.Deployment = checkDeployment(ctx, modelName, environment)
 		if !result.Deployment.Passed && !result.Deployment.Skipped {
+			result.Passed = false
+		}
+	}
+
+	// Routing check (verify routing policy exists)
+	if !skipSet["routing"] {
+		result.Routing = checkRouting(ctx, modelName, cfg)
+		if !result.Routing.Passed && !result.Routing.Skipped {
 			result.Passed = false
 		}
 	}
@@ -311,6 +323,103 @@ func checkDeployment(ctx context.Context, modelName, environment string) *CheckR
 	return result
 }
 
+// checkRouting verifies that a routing policy exists for the model
+func checkRouting(ctx context.Context, modelName string, cfg *config.Config) *CheckResult {
+	start := time.Now()
+	result := &CheckResult{}
+
+	if cfg == nil || cfg.GetAdminEndpoint() == "" {
+		result.Message = "Admin API not configured"
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	adminEndpoint := cfg.GetAdminEndpoint()
+
+	// Query routing policies for this model
+	url := fmt.Sprintf("%s/v1/routing/policies?model=%s", adminEndpoint, modelName)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		result.Message = fmt.Sprintf("Failed to create request: %v", err)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cfg.APIKey))
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		result.Message = fmt.Sprintf("Failed to query routing policies: %v", err)
+		result.Duration = time.Since(start)
+		return result
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		result.Message = fmt.Sprintf("API error: %s", string(body))
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	// Parse response
+	var listResp struct {
+		Policies []struct {
+			PolicyID       string `json:"policy_id"`
+			OrganizationID string `json:"organization_id"`
+			Model          string `json:"model"`
+			Enabled        bool   `json:"enabled"`
+		} `json:"policies"`
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	if err := json.Unmarshal(body, &listResp); err != nil {
+		result.Message = fmt.Sprintf("Failed to parse response: %v", err)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	if len(listResp.Policies) == 0 {
+		result.Message = "No routing policy found"
+		result.Details = map[string]string{
+			"fix": fmt.Sprintf("ai-aas routing policy create --global --model %s --backends \"%s:100\"", modelName, modelName),
+		}
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	// Check if any policy is enabled
+	var enabledCount int
+	var globalPolicy bool
+	for _, p := range listResp.Policies {
+		if p.Enabled {
+			enabledCount++
+			if p.OrganizationID == "*" {
+				globalPolicy = true
+			}
+		}
+	}
+
+	if enabledCount == 0 {
+		result.Message = fmt.Sprintf("Found %d policy(ies) but none enabled", len(listResp.Policies))
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	result.Passed = true
+	policyType := "org-specific"
+	if globalPolicy {
+		policyType = "global"
+	}
+	result.Message = fmt.Sprintf("Routing policy exists (%s, %d enabled)", policyType, enabledCount)
+	result.Details = map[string]string{
+		"policy_count": fmt.Sprintf("%d", len(listResp.Policies)),
+	}
+	result.Duration = time.Since(start)
+	return result
+}
+
 func checkEndpoint(ctx context.Context, modelName, environment string, inferenceTimeout time.Duration) *CheckResult {
 	start := time.Now()
 	result := &CheckResult{}
@@ -387,6 +496,9 @@ func printValidationResults(results map[string]*ModelValidationResult, allPassed
 		}
 		if result.Deployment != nil {
 			printCheck("Deployment", result.Deployment)
+		}
+		if result.Routing != nil {
+			printCheck("Routing", result.Routing)
 		}
 		if result.Endpoint != nil {
 			printCheck("Endpoint", result.Endpoint)

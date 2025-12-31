@@ -691,7 +691,7 @@ See Also:
 			inferenceTimeout := time.Duration(cfg.InferenceTimeout) * time.Second
 
 			for _, modelName := range modelNames {
-				result := validateModel(ctx, modelName, environment, regClient, skipSet, inferenceTimeout)
+				result := validateModel(ctx, modelName, environment, regClient, cfg, skipSet, inferenceTimeout)
 				results[modelName] = result
 				if !result.Passed {
 					allPassed = false
