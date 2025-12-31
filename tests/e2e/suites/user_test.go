@@ -11,6 +11,51 @@ import (
 	"time"
 )
 
+// TestMain validates environment before running tests
+func TestMain(m *testing.M) {
+	// Validate required environment variables in CI/development environments
+	// In CI mode, we need ADMIN_API_KEY for tests requiring cross-org admin access
+	testEnv := os.Getenv("TEST_ENV")
+
+	if testEnv == "ci" || testEnv == "development" {
+		adminAPIKey := os.Getenv("ADMIN_API_KEY")
+
+		if adminAPIKey == "" {
+			if testEnv == "ci" {
+				// In CI, this is a hard failure - tests cannot proceed without admin key
+				fmt.Fprintln(os.Stderr, "FATAL: ADMIN_API_KEY environment variable must be set for CI tests")
+				fmt.Fprintln(os.Stderr, "")
+				fmt.Fprintln(os.Stderr, "The ADMIN_API_KEY is required for user/org tests that need cross-org admin access.")
+				fmt.Fprintln(os.Stderr, "")
+				fmt.Fprintln(os.Stderr, "To fix this:")
+				fmt.Fprintln(os.Stderr, "  1. Set the ADMIN_API_KEY environment variable:")
+				fmt.Fprintln(os.Stderr, "     export ADMIN_API_KEY=<your-admin-api-key>")
+				fmt.Fprintln(os.Stderr, "")
+				fmt.Fprintln(os.Stderr, "  2. OR source the admin key file:")
+				fmt.Fprintln(os.Stderr, "     source tests/e2e/.admin-key.env")
+				fmt.Fprintln(os.Stderr, "")
+				fmt.Fprintln(os.Stderr, "  3. OR run the setup script:")
+				fmt.Fprintln(os.Stderr, "     ./tests/e2e/scripts/setup-test-env.sh")
+				os.Exit(1)
+			} else {
+				// In development, warn but allow tests to proceed (they may use profile credentials)
+				fmt.Fprintln(os.Stderr, "WARNING: ADMIN_API_KEY not set. Tests requiring admin access may fail.")
+				fmt.Fprintln(os.Stderr, "")
+				fmt.Fprintln(os.Stderr, "To fix this:")
+				fmt.Fprintln(os.Stderr, "  1. Set the ADMIN_API_KEY environment variable:")
+				fmt.Fprintln(os.Stderr, "     export ADMIN_API_KEY=<your-admin-api-key>")
+				fmt.Fprintln(os.Stderr, "")
+				fmt.Fprintln(os.Stderr, "  2. OR source the admin key file:")
+				fmt.Fprintln(os.Stderr, "     source tests/e2e/.admin-key.env")
+				fmt.Fprintln(os.Stderr, "")
+			}
+		}
+	}
+
+	// Run tests
+	os.Exit(m.Run())
+}
+
 // UserE2ETestSuite runs comprehensive E2E tests for user management using the CLI
 //
 // Prerequisites:
