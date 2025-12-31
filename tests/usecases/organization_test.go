@@ -57,17 +57,26 @@ func TestUC_ORG_001_ShowOrganizationDetails(t *testing.T) {
 
 		// Then: JSON includes organization ID, name, plan
 		// Then: JSON includes limits and resource counts
-		var org map[string]interface{}
-		if err := json.Unmarshal([]byte(result.Output), &org); err != nil {
+		// Note: The JSON structure is nested with "organization" and "limits" top-level keys
+		var response struct {
+			Organization map[string]interface{} `json:"organization"`
+			Limits       map[string]interface{} `json:"limits"`
+		}
+		if err := json.Unmarshal([]byte(result.Output), &response); err != nil {
 			t.Fatalf("failed to parse JSON: %v", err)
 		}
 
-		// Verify required fields exist
+		// Verify required organization fields exist
 		requiredFields := []string{"id", "name", "plan"}
 		for _, field := range requiredFields {
-			if _, ok := org[field]; !ok {
-				t.Errorf("expected field %q in JSON output", field)
+			if _, ok := response.Organization[field]; !ok {
+				t.Errorf("expected field %q in organization JSON output", field)
 			}
+		}
+
+		// Verify limits section exists
+		if response.Limits == nil {
+			t.Error("expected 'limits' section in JSON output")
 		}
 	})
 

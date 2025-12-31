@@ -44,8 +44,8 @@ func TestUC_KEY_001_ListAPIKeys(t *testing.T) {
 		}
 
 		// Then: Key values are NOT shown (only IDs)
-		// API key values typically start with specific prefixes
-		if strings.Contains(result.Output, "sk-") || strings.Contains(result.Output, "aak_") {
+		// API key values have the ai-aas_ prefix; full values should not appear in list
+		if strings.Contains(result.Output, "ai-aas_") {
 			t.Error("key values should NOT be shown in list output")
 		}
 	})
@@ -103,7 +103,8 @@ func TestUC_KEY_001_ListAPIKeys(t *testing.T) {
 		}
 
 		// Then: Key values are NOT included in JSON
-		if strings.Contains(result.Output, `"key"`) || strings.Contains(result.Output, `"value"`) {
+		// The JSON should not contain a "key" or "value" field with actual key secrets
+		if strings.Contains(result.Output, `"key"`) || strings.Contains(result.Output, `"value"`) || strings.Contains(result.Output, "ai-aas_") {
 			t.Error("key values should NOT be included in JSON output")
 		}
 	})
@@ -148,8 +149,8 @@ func TestUC_KEY_002_CreateAPIKey(t *testing.T) {
 		}
 
 		// Then: Key value is displayed (only time it's shown)
-		// Key values typically have identifiable patterns
-		if !strings.Contains(result.Output, "sk-") && !strings.Contains(result.Output, "aak_") {
+		// Key values typically have identifiable patterns (ai-aas_ prefix)
+		if !strings.Contains(result.Output, "ai-aas_") {
 			t.Error("expected key value to be displayed")
 		}
 
@@ -182,8 +183,8 @@ func TestUC_KEY_002_CreateAPIKey(t *testing.T) {
 			t.Error("expected expiration date to be displayed")
 		}
 
-		// Then: Key value is shown once
-		if !strings.Contains(result.Output, "sk-") && !strings.Contains(result.Output, "aak_") {
+		// Then: Key value is shown once (ai-aas_ prefix)
+		if !strings.Contains(result.Output, "ai-aas_") {
 			t.Error("expected key value to be displayed")
 		}
 	})
@@ -313,7 +314,7 @@ func TestUC_KEY_004_RotateAPIKey(t *testing.T) {
 
 		if result.ExitCode == 0 {
 			// Then: New API key value is displayed (only time shown)
-			if !strings.Contains(result.Output, "sk-") && !strings.Contains(result.Output, "aak_") {
+			if !strings.Contains(result.Output, "ai-aas_") {
 				t.Error("expected new key value to be displayed")
 			}
 
