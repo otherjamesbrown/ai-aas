@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -47,6 +46,10 @@ func NewS3Delivery(endpoint, accessKey, secretKey, bucket, region string, signed
 		if endpoint != "" {
 			o.UsePathStyle = true // Required for Linode Object Storage
 		}
+		// Disable request checksum calculation for Linode Object Storage compatibility
+		// This prevents XAmzContentSHA256Mismatch errors from the per-request middleware approach
+		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
+		o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
 	})
 
 	return &S3Delivery{
@@ -68,8 +71,7 @@ func (s *S3Delivery) UploadCSV(ctx context.Context, orgID, jobID uuid.UUID, csvD
 	key := fmt.Sprintf("analytics/exports/%s/%s.csv", orgID.String(), jobID.String())
 
 	// Upload to Linode Object Storage
-	// Use UNSIGNED-PAYLOAD to avoid XAmzContentSHA256Mismatch errors
-	// Linode Object Storage doesn't properly handle the x-amz-content-sha256 header
+	// Client-level checksum configuration prevents XAmzContentSHA256Mismatch errors
 	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:        aws.String(s.bucket),
 		Key:           aws.String(key),
@@ -81,9 +83,7 @@ func (s *S3Delivery) UploadCSV(ctx context.Context, orgID, jobID uuid.UUID, csvD
 			"org-id":   orgID.String(),
 			"job-id":   jobID.String(),
 		},
-	}, s3.WithAPIOptions(
-		v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware,
-	))
+	})
 	if err != nil {
 		return "", "", fmt.Errorf("upload CSV to Linode Object Storage: %w", err)
 	}
