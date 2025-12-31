@@ -1,11 +1,26 @@
 # GitHub Actions Workflow Guide
 
 ---
-last_updated: 2025-12-08
+last_updated: 2025-12-31
 document_type: guide
 ---
 
 This guide documents best practices and common pitfalls when working with GitHub Actions workflows.
+
+## GitHub Secrets
+
+Many workflows require secrets for authentication and access. See the comprehensive guide:
+
+**[GitHub Secrets Setup Guide](github-secrets-setup.md)** - Complete list of required secrets and how to configure them
+
+To validate which secrets are configured:
+```bash
+# Python script (recommended)
+./scripts/ci/validate-secrets.py
+
+# Shell script
+./scripts/ci/validate-github-secrets.sh
+```
 
 ## Workflow Files
 
@@ -25,6 +40,8 @@ All workflows are in `.github/workflows/`. Current workflows:
 | `branch-sync-check.yml` | Branch synchronization checks |
 | `db-guardrails.yml` | Database migration guardrails |
 | `e2e.yml` | End-to-end tests |
+| `nightly-e2e.yml` | Nightly E2E tests (scheduled and manual) |
+| `failure-mode-tests.yml` | Infrastructure failure mode tests |
 | `infra-availability.yml` | Infrastructure availability checks |
 | `infra-terraform.yml` | Terraform validation |
 | `post-deploy-health-check.yml` | Post-deployment health checks |
