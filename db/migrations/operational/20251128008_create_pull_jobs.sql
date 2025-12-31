@@ -14,18 +14,21 @@ CREATE TABLE IF NOT EXISTS pull_jobs (
     error_message TEXT,
     started_at TIMESTAMP DEFAULT NOW(),
     completed_at TIMESTAMP,
-    created_by VARCHAR(255),
-    -- Partial unique index: Ensures only one active pull job can exist per model/revision.
-    -- This prevents race conditions and redundant downloads by constraining uniqueness
-    -- only for in-progress statuses (pending, downloading, uploading).
-    -- Completed/failed/cancelled jobs are not constrained, allowing historical records.
-    UNIQUE(model_id, revision, status) WHERE status IN ('pending', 'downloading', 'uploading')
+    created_by VARCHAR(255)
 );
 
 -- Indexes for common queries
 CREATE INDEX idx_pull_jobs_model_id ON pull_jobs(model_id);
 CREATE INDEX idx_pull_jobs_status ON pull_jobs(status);
 CREATE INDEX idx_pull_jobs_started_at ON pull_jobs(started_at DESC);
+
+-- Partial unique index: Ensures only one active pull job can exist per model/revision.
+-- This prevents race conditions and redundant downloads by constraining uniqueness
+-- only for in-progress statuses (pending, downloading, uploading).
+-- Completed/failed/cancelled jobs are not constrained, allowing historical records.
+CREATE UNIQUE INDEX idx_pull_jobs_active_unique
+    ON pull_jobs(model_id, revision)
+    WHERE status IN ('pending', 'downloading', 'uploading');
 
 -- Constraint for valid status values (idempotent)
 -- +goose StatementBegin
