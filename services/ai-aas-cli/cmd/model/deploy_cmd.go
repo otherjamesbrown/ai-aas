@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/admin"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/cli"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/engines"
@@ -66,18 +67,20 @@ Workflow:
 // newDeployCreateCommand creates the deploy create subcommand
 func newDeployCreateCommand() *cobra.Command {
 	var (
-		environment     string
-		engineConfig    string
-		gpuCount        int
-		memoryGB        int
-		minReplicas     int
-		maxReplicas     int
-		revision        string
-		dryRun          bool
-		skipValidation  bool
-		wait            bool
-		timeout         time.Duration
-		trustRemoteCode bool
+		environment       string
+		engineConfig      string
+		gpuCount          int
+		memoryGB          int
+		minReplicas       int
+		maxReplicas       int
+		revision          string
+		dryRun            bool
+		skipValidation    bool
+		wait              bool
+		timeout           time.Duration
+		trustRemoteCode   bool
+		noRoutingPolicy   bool
+		routingOrg        string
 	)
 
 	cmd := &cobra.Command{
@@ -92,8 +95,13 @@ The model can be loaded from the object storage cache (faster) or directly
 from HuggingFace. GPU and memory resources are allocated based on flags
 or an engine configuration profile.
 
+By default, a global routing policy is automatically created after deployment,
+allowing the model to receive inference requests via the API Router. Use
+--no-routing-policy to skip this step, or --routing-org to create an
+organization-specific policy instead of a global one.
+
 Examples:
-  # Deploy to development
+  # Deploy to development (creates global routing policy)
   ai-aas model deploy create mistral-7b -e development
 
   # Deploy with engine config profile
@@ -108,6 +116,12 @@ Examples:
   # Deploy with trust remote code (for custom model architectures)
   ai-aas model deploy create mistral-7b -e development --trust-remote-code
 
+  # Deploy without creating a routing policy
+  ai-aas model deploy create mistral-7b -e development --no-routing-policy
+
+  # Deploy with org-specific routing policy
+  ai-aas model deploy create mistral-7b -e development --routing-org aa6f9015-132a-4694-8b10-7d4d4550faed
+
   # Preview deployment YAML
   ai-aas model deploy create mistral-7b -e development --dry-run
 
@@ -118,7 +132,8 @@ See Also:
   ai-aas model deploy status      Check deployment status
   ai-aas model deploy delete      Remove deployment
   ai-aas engine config list       List available engine configs
-  ai-aas model troubleshoot logs  View startup logs`,
+  ai-aas model troubleshoot logs  View startup logs
+  ai-aas routing policy list      List routing policies`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			modelName := args[0]
@@ -349,6 +364,45 @@ See Also:
 				}
 			}
 
+			// Create routing policy unless --no-routing-policy is set
+			if !noRoutingPolicy && !dryRun {
+				fmt.Println("\nCreating routing policy...")
+
+				// Determine org ID for the policy
+				policyOrgID := admin.GlobalOrgID()
+				policyType := "global"
+				if routingOrg != "" {
+					policyOrgID = routingOrg
+					policyType = fmt.Sprintf("org-specific (%s)", routingOrg)
+				}
+
+				policy, err := admin.CreateRoutingPolicy(admin.CreateRoutingPolicyOptions{
+					APIEndpoint: cfg.GetAdminEndpoint(),
+					APIKey:      cfg.APIKey,
+					Model:       modelName,
+					BackendID:   modelName,
+					OrgID:       policyOrgID,
+					Weight:      100,
+					Quiet:       false,
+				})
+				if err != nil {
+					// Routing policy creation failure is a warning, not a fatal error
+					// The deployment succeeded, but the model won't be routable until policy is created
+					fmt.Printf("⚠ Warning: Failed to create routing policy: %v\n", err)
+					fmt.Printf("  The model was deployed but is NOT routable.\n")
+					fmt.Printf("  Create a routing policy manually:\n")
+					fmt.Printf("    ai-aas routing policy create --global --model %s --backends \"%s:100\"\n", modelName, modelName)
+				} else {
+					fmt.Printf("✓ Routing policy created (%s)\n", policyType)
+					fmt.Printf("  Policy ID: %s\n", policy.PolicyID)
+					fmt.Printf("  Backend: %s (100%%)\n", modelName)
+				}
+			} else if noRoutingPolicy && !dryRun {
+				fmt.Println("\nSkipping routing policy creation (--no-routing-policy)")
+				fmt.Println("  Create one manually when ready:")
+				fmt.Printf("    ai-aas routing policy create --global --model %s --backends \"%s:100\"\n", modelName, modelName)
+			}
+
 			fmt.Println()
 			cli.PrintDeploymentStarted(modelName, environment)
 
@@ -368,6 +422,8 @@ See Also:
 	cmd.Flags().BoolVar(&wait, "wait", false, "wait for deployment to be ready")
 	cmd.Flags().DurationVar(&timeout, "timeout", 10*time.Minute, "timeout when waiting")
 	cmd.Flags().BoolVar(&trustRemoteCode, "trust-remote-code", false, "allow execution of custom model code (required for some models)")
+	cmd.Flags().BoolVar(&noRoutingPolicy, "no-routing-policy", false, "skip automatic routing policy creation")
+	cmd.Flags().StringVar(&routingOrg, "routing-org", "", "create org-specific routing policy instead of global")
 	_ = cmd.MarkFlagRequired("environment")
 
 	return cmd

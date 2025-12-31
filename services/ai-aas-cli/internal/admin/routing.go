@@ -595,3 +595,119 @@ func parseBackends(backends string) ([]BackendWeight, error) {
 
 	return weights, nil
 }
+
+// CreateRoutingPolicyOptions configures the routing policy creation
+type CreateRoutingPolicyOptions struct {
+	APIEndpoint string // Admin API endpoint
+	APIKey      string // API key for authentication
+	Model       string // Model name
+	BackendID   string // Backend ID (usually same as model name)
+	OrgID       string // Organization ID (use "*" for global, empty defaults to global)
+	Weight      int    // Weight percentage (0-100), defaults to 100
+	Quiet       bool   // Suppress output
+}
+
+// CreateRoutingPolicy creates a routing policy via the Admin API.
+// This is a programmatic function that can be called from other commands.
+func CreateRoutingPolicy(opts CreateRoutingPolicyOptions) (*Policy, error) {
+	// Set defaults
+	if opts.OrgID == "" {
+		opts.OrgID = globalOrgID
+	}
+	if opts.Weight <= 0 {
+		opts.Weight = 100
+	}
+	if opts.BackendID == "" {
+		opts.BackendID = opts.Model
+	}
+
+	// Validate required fields
+	if opts.APIEndpoint == "" {
+		return nil, errors.NewOperationError(
+			"Admin API endpoint not configured",
+			"Set AI_AAS_API_ENDPOINT environment variable or configure api_endpoint in ~/.ai-aas-cli.yaml",
+		)
+	}
+	if opts.APIKey == "" {
+		return nil, errors.NewOperationError(
+			"API key not configured",
+			"Set AI_AAS_API_KEY environment variable or configure api_key in ~/.ai-aas-cli.yaml",
+		)
+	}
+	if opts.Model == "" {
+		return nil, errors.NewValidationError(
+			"model name required",
+			"Provide a model name",
+		)
+	}
+
+	// Build request
+	reqBody := PolicyCreateRequest{
+		OrganizationID:    opts.OrgID,
+		Model:             opts.Model,
+		Backends:          []BackendWeight{{BackendID: opts.BackendID, Weight: opts.Weight}},
+		FailoverThreshold: 3,
+	}
+
+	reqJSON, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, errors.NewOperationError(
+			fmt.Sprintf("failed to serialize request: %v", err),
+			"Internal error",
+		)
+	}
+
+	// Call Admin API
+	url := fmt.Sprintf("%s/v1/routing/policies", opts.APIEndpoint)
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(reqJSON))
+	if err != nil {
+		return nil, errors.NewOperationError(
+			fmt.Sprintf("failed to create request: %v", err),
+			"Internal error",
+		)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", opts.APIKey))
+
+	client := &http.Client{Timeout: 90 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, errors.NewOperationError(
+			fmt.Sprintf("failed to call Admin API Service: %v", err),
+			"Check your AI_AAS_API_ENDPOINT configuration and network connectivity.",
+		)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode >= 400 {
+		var apiErr APIError
+		if err := json.Unmarshal(body, &apiErr); err == nil && apiErr.Error.Detail != "" {
+			return nil, errors.NewOperationError(
+				fmt.Sprintf("%s: %s", apiErr.Error.Title, apiErr.Error.Detail),
+				"Check your request parameters.",
+			)
+		}
+		return nil, errors.NewOperationError(
+			fmt.Sprintf("API request failed with status %d: %s", resp.StatusCode, string(body)),
+			"Check your request parameters and API key.",
+		)
+	}
+
+	var policy Policy
+	if err := json.Unmarshal(body, &policy); err != nil {
+		return nil, errors.NewOperationError(
+			fmt.Sprintf("failed to parse response: %v", err),
+			"Internal error",
+		)
+	}
+
+	return &policy, nil
+}
+
+// GlobalOrgID returns the special organization ID for global policies
+func GlobalOrgID() string {
+	return globalOrgID
+}
