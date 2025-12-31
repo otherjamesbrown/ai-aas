@@ -36,22 +36,9 @@ service:
   port: 8081
 
 # Ingress configuration for public access
+# Disabled because ingress is managed centrally by ingress-development ArgoCD app
 ingress:
-  enabled: true
-  className: nginx
-  annotations:
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-  hosts:
-    - host: user-org.dev.otherjamesbrown.com
-      paths:
-        - path: /
-          pathType: Prefix
-  tls:
-    - secretName: user-org-tls
-      hosts:
-        - user-org.dev.otherjamesbrown.com
+  enabled: false
 
 resources:
   requests:
