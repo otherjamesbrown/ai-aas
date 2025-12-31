@@ -1,11 +1,11 @@
 -- +goose Up
 -- Add unique index on event_id for ON CONFLICT deduplication
--- This allows ON CONFLICT (event_id) while preserving the composite primary key
--- (event_id, occurred_at) required for TimescaleDB hypertable partitioning
+-- TimescaleDB requires unique indexes to include the partitioning column (occurred_at)
+-- This allows ON CONFLICT (event_id, occurred_at) for deduplication
 BEGIN;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_usage_events_event_id_unique
-    ON analytics.usage_events (event_id);
+    ON analytics.usage_events (event_id, occurred_at);
 
 COMMIT;
 
