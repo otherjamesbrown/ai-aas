@@ -88,15 +88,15 @@ jobs:
 
       - name: Measure migration window
         run: |
-          LATEST=$(ls db/migrations/operational/*.up.sql | sort | tail -1)
-          VERSION=$(basename "$LATEST" | sed 's/.up.sql$//')
+          LATEST=$(ls db/migrations/operational/*.sql | sort | tail -1)
+          VERSION=$(basename "$LATEST" | sed 's/.sql$//')
           scripts/db/measure-window.sh --env migrate.env --component operational --version "$VERSION" --rollback
         env:
           MIGRATION_ACTOR: ci-guardrail
           MIGRATION_APPROVED_BY: ci-guardrail
 
       - name: Run rollback downtime test
-        run: MIGRATION_ENV_FILE=migrate.env MIGRATION_TEST_VERSION=$(ls db/migrations/operational/*.up.sql | sort | tail -1 | xargs -n1 basename | sed 's/.up.sql$//') go test ./tests/infra/perf -run TestRollbackDowntimeUnderOneMinute -count=1
+        run: MIGRATION_ENV_FILE=migrate.env MIGRATION_TEST_VERSION=$(ls db/migrations/operational/*.sql | sort | tail -1 | xargs -n1 basename | sed 's/.sql$//') go test ./tests/infra/perf -run TestRollbackDowntimeUnderOneMinute -count=1
 
       - name: Migration status
         run: scripts/db/status.sh --env migrate.env --component operational

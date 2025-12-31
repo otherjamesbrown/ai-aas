@@ -361,19 +361,42 @@ func discoverMigrations(dir string) ([]migrationFile, error) {
 			continue
 		}
 		name := entry.Name()
-		if !strings.HasSuffix(name, ".up.sql") {
+		if !strings.HasSuffix(name, ".sql") {
 			continue
 		}
-		version, slug, err := parseMigrationFilename(name)
-		if err != nil {
-			return nil, fmt.Errorf("parse migration filename %s: %w", name, err)
+		// Skip .down.sql files - they are paired with .up.sql files
+		if strings.HasSuffix(name, ".down.sql") {
+			continue
 		}
-		upPath := filepath.Join(dir, name)
-		downCandidate := strings.TrimSuffix(name, ".up.sql") + ".down.sql"
-		downPath := filepath.Join(dir, downCandidate)
-		if _, err := os.Stat(downPath); err != nil {
-			downPath = ""
+
+		var version uint64
+		var slug string
+		var upPath, downPath string
+
+		if strings.HasSuffix(name, ".up.sql") {
+			// Split file format: <version>_<slug>.up.sql / <version>_<slug>.down.sql
+			var err error
+			version, slug, err = parseMigrationFilename(name)
+			if err != nil {
+				return nil, fmt.Errorf("parse migration filename %s: %w", name, err)
+			}
+			upPath = filepath.Join(dir, name)
+			downCandidate := strings.TrimSuffix(name, ".up.sql") + ".down.sql"
+			downPath = filepath.Join(dir, downCandidate)
+			if _, err := os.Stat(downPath); err != nil {
+				downPath = ""
+			}
+		} else {
+			// Single file format (goose style): <version>_<slug>.sql with +goose Up/Down markers
+			var err error
+			version, slug, err = parseSingleFileMigrationFilename(name)
+			if err != nil {
+				return nil, fmt.Errorf("parse migration filename %s: %w", name, err)
+			}
+			upPath = filepath.Join(dir, name)
+			downPath = upPath // Same file contains both up and down
 		}
+
 		migrations = append(migrations, migrationFile{
 			Version:  version,
 			Slug:     slug,
@@ -408,6 +431,23 @@ func parseMigrationFilename(filename string) (uint64, string, error) {
 	parts := strings.SplitN(trimmed, "_", 2)
 	if len(parts) != 2 {
 		return 0, "", fmt.Errorf("expected format <version>_<slug>.up.sql")
+	}
+	version, err := strconv.ParseUint(parts[0], 10, 64)
+	if err != nil {
+		return 0, "", fmt.Errorf("parse version %q: %w", parts[0], err)
+	}
+	return version, parts[1], nil
+}
+
+func parseSingleFileMigrationFilename(filename string) (uint64, string, error) {
+	base := filepath.Base(filename)
+	if !strings.HasSuffix(base, ".sql") {
+		return 0, "", fmt.Errorf("expected .sql suffix")
+	}
+	trimmed := strings.TrimSuffix(base, ".sql")
+	parts := strings.SplitN(trimmed, "_", 2)
+	if len(parts) != 2 {
+		return 0, "", fmt.Errorf("expected format <version>_<slug>.sql")
 	}
 	version, err := strconv.ParseUint(parts[0], 10, 64)
 	if err != nil {
@@ -561,20 +601,128 @@ func executeMigration(ctx context.Context, db *sql.DB, path, direction string, m
 		return nil
 	}
 
+	// Check if this is a goose-style single file with +goose Up/Down markers
+	if strings.Contains(sqlText, "-- +goose Up") {
+		sqlText, err = extractGooseSection(sqlText, direction)
+		if err != nil {
+			return fmt.Errorf("extract goose section from %s: %w", path, err)
+		}
+		if sqlText == "" {
+			log.Printf("[INFO] migration %s (%s) has no content for direction; skipping", path, direction)
+			return nil
+		}
+	}
+
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
 		return fmt.Errorf("begin transaction for %s: %w", path, err)
 	}
 	defer tx.Rollback()
 
-	if _, err := tx.ExecContext(ctx, sqlText); err != nil {
-		return fmt.Errorf("execute migration %s: %w", path, err)
+	// Execute statements, handling +goose StatementBegin/End markers
+	statements := parseGooseStatements(sqlText)
+	for _, stmt := range statements {
+		stmt = strings.TrimSpace(stmt)
+		if stmt == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("execute migration %s: %w", path, err)
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit migration %s: %w", path, err)
 	}
 	return nil
+}
+
+// extractGooseSection extracts the SQL for the specified direction from a goose-style migration file
+func extractGooseSection(content, direction string) (string, error) {
+	upMarker := "-- +goose Up"
+	downMarker := "-- +goose Down"
+
+	upIdx := strings.Index(content, upMarker)
+	downIdx := strings.Index(content, downMarker)
+
+	if direction == "up" {
+		if upIdx == -1 {
+			return "", fmt.Errorf("missing -- +goose Up marker")
+		}
+		start := upIdx + len(upMarker)
+		end := len(content)
+		if downIdx != -1 && downIdx > upIdx {
+			end = downIdx
+		}
+		return strings.TrimSpace(content[start:end]), nil
+	}
+
+	if direction == "down" {
+		if downIdx == -1 {
+			// No down section - this is valid, just means no rollback
+			return "", nil
+		}
+		start := downIdx + len(downMarker)
+		return strings.TrimSpace(content[start:]), nil
+	}
+
+	return "", fmt.Errorf("unknown direction %q", direction)
+}
+
+// parseGooseStatements splits SQL content respecting +goose StatementBegin/End markers
+func parseGooseStatements(content string) []string {
+	beginMarker := "-- +goose StatementBegin"
+	endMarker := "-- +goose StatementEnd"
+
+	var statements []string
+	remaining := content
+
+	for {
+		beginIdx := strings.Index(remaining, beginMarker)
+		if beginIdx == -1 {
+			// No more statement blocks, treat the rest as regular SQL
+			if before := strings.TrimSpace(remaining); before != "" {
+				// Split by semicolon for regular statements
+				for _, stmt := range strings.Split(before, ";") {
+					if s := strings.TrimSpace(stmt); s != "" {
+						statements = append(statements, s)
+					}
+				}
+			}
+			break
+		}
+
+		// Add any content before the block as regular statements
+		before := strings.TrimSpace(remaining[:beginIdx])
+		if before != "" {
+			for _, stmt := range strings.Split(before, ";") {
+				if s := strings.TrimSpace(stmt); s != "" {
+					statements = append(statements, s)
+				}
+			}
+		}
+
+		// Find the end of this block
+		afterBegin := remaining[beginIdx+len(beginMarker):]
+		endIdx := strings.Index(afterBegin, endMarker)
+		if endIdx == -1 {
+			// No end marker - treat rest as one statement
+			if s := strings.TrimSpace(afterBegin); s != "" {
+				statements = append(statements, s)
+			}
+			break
+		}
+
+		// Add the block content as a single statement
+		blockContent := strings.TrimSpace(afterBegin[:endIdx])
+		if blockContent != "" {
+			statements = append(statements, blockContent)
+		}
+
+		remaining = afterBegin[endIdx+len(endMarker):]
+	}
+
+	return statements
 }
 
 func ensureApplicationName(dsn string) (string, error) {
