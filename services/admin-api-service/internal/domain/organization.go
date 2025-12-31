@@ -46,11 +46,11 @@ type OrganizationListResponse struct {
 	Pagination    Pagination     `json:"pagination"`
 }
 
-// Valid plan tiers
-var ValidPlanTiers = []string{"free", "starter", "enterprise"}
+// Valid plan tiers - must match DB CHECK constraint
+var ValidPlanTiers = []string{"starter", "growth", "enterprise"}
 
-// Valid organization statuses
-var ValidOrgStatuses = []string{"active", "suspended", "deleted"}
+// Valid organization statuses - must match DB CHECK constraint
+var ValidOrgStatuses = []string{"active", "suspended", "closed"}
 
 // IsValidPlanTier checks if a plan tier is valid
 func IsValidPlanTier(tier string) bool {

@@ -24,7 +24,14 @@ func NewOrganizationRepository(db *DB) *OrganizationRepository {
 func (r *OrganizationRepository) Create(ctx context.Context, create *domain.OrganizationCreate) (*domain.Organization, error) {
 	planTier := create.PlanTier
 	if planTier == "" {
-		planTier = "free"
+		planTier = "starter" // Default tier - must match DB CHECK constraint
+	}
+
+	// Default budget to 0 (unlimited) if not specified
+	budgetLimit := create.BudgetLimitTokens
+	if budgetLimit == nil {
+		defaultBudget := int64(0)
+		budgetLimit = &defaultBudget
 	}
 
 	org := &domain.Organization{
@@ -33,7 +40,7 @@ func (r *OrganizationRepository) Create(ctx context.Context, create *domain.Orga
 		DisplayName:       create.DisplayName,
 		PlanTier:          planTier,
 		Status:            "active",
-		BudgetLimitTokens: create.BudgetLimitTokens,
+		BudgetLimitTokens: budgetLimit,
 		CreatedAt:         time.Now().UTC(),
 		UpdatedAt:         time.Now().UTC(),
 	}
