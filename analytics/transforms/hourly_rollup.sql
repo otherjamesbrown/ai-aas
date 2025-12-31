@@ -1,3 +1,17 @@
+-- Hourly rollup: aggregate usage_events into hourly buckets
+-- Uses DELETE + INSERT pattern to avoid ON CONFLICT expression limitations
+BEGIN;
+
+WITH bounds AS (
+    SELECT
+        '{{START_WINDOW}}'::timestamptz AS start_window,
+        '{{END_WINDOW}}'::timestamptz AS end_window
+)
+-- Delete existing rollups for this time window (will be re-aggregated)
+DELETE FROM analytics_hourly_rollups
+WHERE bucket_start >= (SELECT start_window FROM bounds)
+  AND bucket_start < (SELECT end_window FROM bounds);
+
 WITH bounds AS (
     SELECT
         '{{START_WINDOW}}'::timestamptz AS start_window,
@@ -24,11 +38,6 @@ SELECT
     NOW() AS updated_at
 FROM usage_events, bounds
 WHERE occurred_at >= bounds.start_window AND occurred_at < bounds.end_window
-GROUP BY 1, 2, 3
-ON CONFLICT (bucket_start, organization_id, model_id)
-DO UPDATE SET
-    request_count = EXCLUDED.request_count,
-    tokens_total  = EXCLUDED.tokens_total,
-    error_count   = EXCLUDED.error_count,
-    cost_total    = EXCLUDED.cost_total,
-    updated_at    = NOW();
+GROUP BY 1, 2, 3;
+
+COMMIT;
