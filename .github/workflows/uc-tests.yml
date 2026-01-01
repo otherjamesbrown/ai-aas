@@ -1,0 +1,107 @@
+name: UC Tests
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'tests/usecases/**'
+      - 'services/**'
+      - '.github/workflows/uc-tests.yml'
+  pull_request:
+    paths:
+      - 'tests/usecases/**'
+      - 'services/**'
+      - '.github/workflows/uc-tests.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Test environment'
+        required: true
+        default: 'development'
+        type: choice
+        options:
+          - development
+          - staging
+
+env:
+  GO_VERSION: '1.24.x'
+  TEST_TIMEOUT: '15m'
+
+jobs:
+  uc-tests:
+    name: UC Tests (${{ matrix.environment }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        environment: [development]
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-uc-${{ hashFiles('tests/usecases/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-uc-
+            ${{ runner.os }}-go-
+
+      - name: Install dependencies
+        run: |
+          cd tests/usecases
+          go mod download
+          go mod verify
+
+      - name: Configure test environment
+        run: |
+          ENV="${{ matrix.environment }}"
+          echo "TEST_ENV=$ENV" >> $GITHUB_ENV
+
+          if [ "$ENV" = "development" ]; then
+            echo "AI_AAS_API_ENDPOINT=https://user-org.dev.otherjamesbrown.com" >> $GITHUB_ENV
+            echo "AI_AAS_API_KEY=${{ secrets.MASTER_ADMIN_API_KEY }}" >> $GITHUB_ENV
+          elif [ "$ENV" = "staging" ]; then
+            echo "AI_AAS_API_ENDPOINT=https://user-org.staging.otherjamesbrown.com" >> $GITHUB_ENV
+            echo "AI_AAS_API_KEY=${{ secrets.STAGING_MASTER_ADMIN_API_KEY }}" >> $GITHUB_ENV
+          fi
+
+      - name: Run UC tests
+        working-directory: tests/usecases
+        run: |
+          go test -v ./... \
+            -timeout ${{ env.TEST_TIMEOUT }} \
+            -json > test-results.json || true
+
+      - name: Generate JUnit XML report
+        if: always()
+        working-directory: tests/usecases
+        run: |
+          go install github.com/jstemmer/go-junit-report/v2@latest
+          cat test-results.json | go-junit-report -parser gojson > test-results.xml
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uc-test-reports-${{ matrix.environment }}
+          path: tests/usecases/test-results.xml
+          retention-days: 30
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uc-test-results-${{ matrix.environment }}
+          path: tests/usecases/test-results.json
+          retention-days: 30

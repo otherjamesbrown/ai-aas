@@ -26,7 +26,6 @@ use (
 	./services/world-service
 	./shared/go
 	./tests/analytics/integration
-	./tests/e2e
 	./tests/go/contract
 	./tests/go/integration
 	./tests/go/perf

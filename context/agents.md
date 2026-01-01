@@ -144,12 +144,12 @@ After fixing a context gap bug:
 
 | Agent | Owns | Hand Off To |
 |-------|------|-------------|
-| `cli-developer` | services/ai-aas-cli/, services/ai-aas-org/ | go-services-developer (API issues), test-developer (E2E tests) |
-| `go-services-developer` | services/*-service/, shared/ | operator-developer (CRD), infra-ops-manager (Helm), test-developer (E2E tests) |
+| `cli-developer` | services/ai-aas-cli/, services/ai-aas-org/ | go-services-developer (API issues), test-developer (UC tests) |
+| `go-services-developer` | services/*-service/, shared/ | operator-developer (CRD), infra-ops-manager (Helm), test-developer (UC tests) |
 | `operator-developer` | operators/, model-downloader/ | go-services-developer (API sync) |
 | `infra-ops-manager` | infra/, gitops/, .github/, Helm charts | Developer agents (app code) |
 | `web-portal-developer` | web/ | go-services-developer (API issues) |
-| `test-developer` | tests/e2e/, tests/usecases/, tests/integration/ | go-services-developer (API bugs), cli-developer (CLI bugs) |
+| `test-developer` | tests/usecases/, tests/integration/ | go-services-developer (API bugs), cli-developer (CLI bugs) |
 | `debugger` | Bug investigation (read-only) | Domain agents (fixes), context-maintainer (gaps) |
 | `compliance-reviewer` | Drift detection (read-only) | Domain agents (fixes) |
 
@@ -187,7 +187,7 @@ Create handoff bead and spawn agent when:
 | Frontend needs API integration fix | `web-portal-developer` |
 | CI/CD pipeline failing | `infra-ops-manager` |
 | Database migration needed | `go-services-developer` |
-| E2E test needed or failing | `test-developer` |
+| UC acceptance test needed or failing | `test-developer` |
 | Contract test (CLI-to-API) needed | `test-developer` |
 | Test fixture or harness work | `test-developer` |
 | User asks "why did this happen?" | `debugger` |

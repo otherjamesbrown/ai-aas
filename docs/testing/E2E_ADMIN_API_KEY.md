@@ -27,14 +27,14 @@
 
 ### Quick Setup
 
-The credentials are saved in `.env.e2e` at the project root:
+The credentials are stored in `secrets/env/.env` (git-crypt encrypted):
 
 ```bash
-# Load credentials into your environment
-export $(grep -v '^#' .env.e2e | xargs)
+# Load credentials into your environment (after git-crypt unlock)
+export $(grep -v '^#' secrets/env/.env | xargs)
 
-# Or source the file
-set -a; source .env.e2e; set +a
+# Or for UC tests, use the testconfig loader (auto-loads from secrets/env/.env)
+cd tests/usecases && make test-dev
 
 # Verify
 echo $E2E_API_KEY

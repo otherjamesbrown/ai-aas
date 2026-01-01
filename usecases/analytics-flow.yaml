@@ -1,0 +1,407 @@
+feature: Analytics Flow
+description: |
+  Analytics flow use cases validate the platform's ability to collect, aggregate,
+  and export usage data across services. This includes recording individual
+  inference requests, aggregating usage over time periods, exporting data for
+  billing or analysis, and correlating requests across service boundaries.
+
+  Analytics is critical for billing accuracy, usage transparency, performance
+  monitoring, and cost attribution.
+
+dependencies:
+  - usecases/authentication.yaml
+  - usecases/inference-flow.yaml
+  - usecases/organization.yaml
+
+usecases:
+  - id: UC-ANL-001
+    title: Usage Recording
+    interface: api
+    status: active
+    bead: null
+
+    description: |
+      Every successful inference request must create a usage record that
+      captures token counts, model used, organization, timestamp, and
+      correlation IDs. This raw usage data is the foundation for all
+      analytics, billing, and reporting.
+
+      Usage recording must be reliable, accurate, and low-latency to avoid
+      impacting inference request performance.
+
+    actor: System Integration
+
+    preconditions:
+      - User makes successful inference request
+      - Usage recording service is available
+      - Organization exists and is active
+
+    depends_on:
+      - UC-INF-001
+      - UC-INF-004
+      - UC-ORG-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Create usage record for successful request
+        given: User makes successful chat completion request
+        when: Request completes successfully
+        then:
+          - Usage record is created in analytics database
+          - Record includes organization_id
+          - Record includes model name
+          - Record includes prompt_tokens, completion_tokens, total_tokens
+          - Record includes timestamp (request start or end)
+          - Record includes trace_id for correlation
+
+      - id: AC-02
+        criterion: Record includes request metadata
+        given: Usage record is created
+        when: Record is persisted
+        then:
+          - Record includes request_id
+          - Record includes user_id or service_account_id
+          - Record includes API key ID
+          - Record includes model backend endpoint
+          - Metadata enables detailed analysis
+
+      - id: AC-03
+        criterion: Usage recorded asynchronously
+        given: Inference request succeeds
+        when: Response is returned to user
+        then:
+          - Response is not delayed by usage recording
+          - Usage recording happens asynchronously
+          - Recording failures don't impact user response
+          - Failed recordings are retried or logged
+
+      - id: AC-04
+        criterion: No duplicate records for retries
+        given: Internal retry occurs for backend request
+        when: Request eventually succeeds
+        then:
+          - Only one usage record is created
+          - Record reflects actual tokens used
+          - Retry attempts don't create duplicate charges
+
+      - id: AC-05
+        criterion: Usage record for streaming requests
+        given: User makes streaming chat completion request
+        when: Stream completes successfully
+        then:
+          - Single usage record is created
+          - Total tokens include all streamed chunks
+          - Record created after stream completion
+          - Incomplete streams record partial usage
+
+    in_scope:
+      - Creating usage records for successful requests
+      - Recording token counts and metadata
+      - Asynchronous recording to avoid latency
+      - Correlation IDs for tracing
+      - Handling streaming requests
+      - Preventing duplicate records
+
+    out_of_scope:
+      - Usage aggregation over time (UC-ANL-002)
+      - Usage export (UC-ANL-003)
+      - Cost calculation
+      - Usage analytics dashboards
+      - Real-time usage quotas
+
+    must_not:
+      - Record usage for failed authentication
+      - Record usage for validation errors
+      - Block inference response on usage recording
+      - Create duplicate records
+      - Lose usage data on recording failures
+
+  - id: UC-ANL-002
+    title: Usage Aggregation
+    interface: api
+    status: active
+    bead: null
+
+    description: |
+      Raw usage records are aggregated over time periods (hourly, daily,
+      monthly) to support efficient querying and reporting. Aggregation
+      rolls up token usage by organization, model, and time bucket.
+
+      Aggregated data enables fast dashboard queries, trend analysis, and
+      billing calculations without scanning millions of raw records.
+
+    actor: System Integration
+
+    preconditions:
+      - Raw usage records exist
+      - Aggregation job runs periodically
+      - Time series database is available
+
+    depends_on:
+      - UC-ANL-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Hourly aggregation by organization and model
+        given: Raw usage records exist for last hour
+        when: Hourly aggregation job runs
+        then:
+          - Aggregated records are created for each (org, model, hour) tuple
+          - Total prompt_tokens are summed
+          - Total completion_tokens are summed
+          - Total request count is included
+          - Hour bucket is correctly labeled
+
+      - id: AC-02
+        criterion: Daily aggregation from hourly data
+        given: Hourly aggregated data exists
+        when: Daily aggregation job runs
+        then:
+          - Daily aggregates roll up hourly data
+          - Totals match sum of hourly records
+          - Daily bucket is correctly labeled
+          - Raw records are not re-scanned
+
+      - id: AC-03
+        criterion: Aggregation idempotency
+        given: Aggregation job may run multiple times
+        when: Job runs for same time period
+        then:
+          - Results are identical
+          - No double-counting occurs
+          - Existing aggregates are updated or skipped
+
+      - id: AC-04
+        criterion: Handle missing or late data
+        given: Some raw usage records arrive late
+        when: Aggregation has already run for that period
+        then:
+          - Late data is included in next run
+          - Aggregates are updated to include late arrivals
+          - Reconciliation process detects gaps
+
+    in_scope:
+      - Hourly and daily aggregation
+      - Aggregation by organization, model, time bucket
+      - Idempotent aggregation logic
+      - Handling late-arriving data
+      - Roll-up from hourly to daily
+
+    out_of_scope:
+      - Real-time aggregation
+      - Custom aggregation dimensions
+      - Monthly or yearly aggregates
+      - Aggregation alerts
+      - Aggregation data retention policies
+
+    must_not:
+      - Double-count usage
+      - Lose data during aggregation
+      - Block raw usage recording
+      - Overwrite correct aggregates with incorrect data
+
+  - id: UC-ANL-003
+    title: Analytics Export
+    interface: api
+    status: active
+    bead: null
+
+    description: |
+      Organization administrators can export usage data for external analysis,
+      billing integration, or archival. Exports are generated asynchronously
+      and delivered as downloadable files (CSV, JSON, Parquet).
+
+      Export capability enables customers to audit their usage, integrate
+      with their own billing systems, and comply with data retention policies.
+
+    actor: Organization Admin
+
+    preconditions:
+      - User is authenticated with org admin API key
+      - Usage data exists for requested time range
+      - Export service is available
+      - Object storage is available for export files
+
+    depends_on:
+      - UC-AUTH-002
+      - UC-ANL-001
+      - UC-ANL-002
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Create export job
+        given: User is authenticated as org admin
+        when: User sends POST /analytics/v1/orgs/{orgId}/exports with time range
+        then:
+          - Export job is created
+          - Job ID is returned
+          - Job status is "pending"
+          - User can poll job status
+
+      - id: AC-02
+        criterion: Export job processes data
+        given: Export job is created
+        when: Background worker processes job
+        then:
+          - Job status transitions to "in_progress"
+          - Usage records are queried for time range and org
+          - Data is written to export file
+          - File is uploaded to object storage
+          - Job status transitions to "completed"
+
+      - id: AC-03
+        criterion: Download completed export
+        given: Export job status is "completed"
+        when: User retrieves job status
+        then:
+          - Job includes download URL
+          - Download URL is signed and time-limited
+          - User can download export file
+          - Export file contains expected data
+
+      - id: AC-04
+        criterion: Export format options
+        given: User creates export job
+        when: User specifies format parameter
+        then:
+          - CSV format is supported
+          - JSON format is supported
+          - Format parameter is validated
+          - Invalid format returns 400 error
+
+      - id: AC-05
+        criterion: Export includes metadata
+        given: Export file is generated
+        when: User downloads export
+        then:
+          - Export includes header with org_id, time_range, export_date
+          - Export includes column headers or schema
+          - Export includes all usage fields (tokens, model, timestamp, trace_id)
+          - Export data matches usage records
+
+      - id: AC-06
+        criterion: Export validation errors
+        given: User creates export job with invalid parameters
+        when: Validation is performed
+        then:
+          - Invalid time range returns 400 error
+          - Future dates return 400 error
+          - Time range exceeding max duration returns 400 error
+          - Missing required parameters return 400 error
+
+    in_scope:
+      - Creating export jobs
+      - Asynchronous export processing
+      - Export format options (CSV, JSON)
+      - Signed download URLs
+      - Export metadata and headers
+      - Validation of export parameters
+
+    out_of_scope:
+      - Real-time streaming exports
+      - Scheduled recurring exports
+      - Export data transformations
+      - Export to external systems (S3, GCS)
+      - Custom export schemas
+
+    must_not:
+      - Allow export of other organizations' data
+      - Block usage recording during export
+      - Expose raw database access
+      - Generate exports without time limits
+
+  - id: UC-ANL-004
+    title: Cross-Service Correlation
+    interface: api
+    status: active
+    bead: null
+
+    description: |
+      Requests flowing through multiple services (authentication, routing,
+      inference, analytics) must be correlated using trace IDs. This enables
+      end-to-end request tracking, debugging, and performance analysis.
+
+      Correlation is essential for troubleshooting issues, understanding
+      request flow, and attributing latency to specific services.
+
+    actor: System Integration
+
+    preconditions:
+      - Trace ID generation is enabled
+      - All services propagate trace IDs
+      - Logging includes trace IDs
+      - Analytics database stores trace IDs
+
+    depends_on:
+      - UC-INF-001
+      - UC-ANL-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Generate trace ID for new request
+        given: User sends request without trace ID header
+        when: Request enters API gateway
+        then:
+          - Trace ID is generated (UUID format)
+          - Trace ID is included in all service logs
+          - Trace ID is propagated to downstream services
+          - Trace ID is returned in response headers
+
+      - id: AC-02
+        criterion: Propagate client trace ID
+        given: User sends request with X-Trace-ID header
+        when: Request is processed
+        then:
+          - Client-provided trace ID is used
+          - Trace ID is propagated to all downstream services
+          - Trace ID is included in all logs
+          - Trace ID is returned in response
+
+      - id: AC-03
+        criterion: Usage record includes trace ID
+        given: Inference request succeeds
+        when: Usage record is created
+        then:
+          - Usage record includes trace_id field
+          - Trace ID matches request trace ID
+          - Usage can be queried by trace ID
+          - Trace ID enables correlation with request logs
+
+      - id: AC-04
+        criterion: Error response includes trace ID
+        given: Request fails at any service
+        when: Error response is returned
+        then:
+          - Error body includes trace_id field
+          - Trace ID enables log correlation
+          - User can provide trace ID to support
+
+      - id: AC-05
+        criterion: Query usage by trace ID
+        given: Usage records include trace IDs
+        when: Administrator queries analytics database
+        then:
+          - Usage can be filtered by trace_id
+          - Single trace ID returns single request usage
+          - Trace ID enables request forensics
+
+    in_scope:
+      - Trace ID generation
+      - Trace ID propagation across services
+      - Including trace IDs in logs
+      - Including trace IDs in usage records
+      - Including trace IDs in error responses
+      - Querying usage by trace ID
+
+    out_of_scope:
+      - Distributed tracing UI (Jaeger, Zipkin)
+      - Span-level tracing
+      - Trace sampling
+      - Trace retention policies
+      - Cross-platform trace correlation
+
+    must_not:
+      - Drop trace IDs between services
+      - Generate new trace ID mid-request
+      - Omit trace IDs from errors
+      - Expose trace IDs in sensitive contexts

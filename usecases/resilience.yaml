@@ -1,0 +1,471 @@
+feature: System Resilience
+description: |
+  System resilience use cases validate the platform's ability to handle
+  failures, enforce limits, and provide graceful degradation. These tests
+  ensure the platform behaves correctly under adverse conditions including
+  rate limiting, backend failures, timeouts, and budget constraints.
+
+  Resilience is critical for platform stability, security, and fair resource
+  allocation across organizations.
+
+dependencies:
+  - usecases/authentication.yaml
+  - usecases/apikeys.yaml
+  - usecases/inference-flow.yaml
+
+usecases:
+  - id: UC-RSL-001
+    title: Rate Limit Enforcement
+    interface: api
+    status: active
+    bead: null
+
+    description: |
+      The platform must enforce rate limits on API requests to prevent abuse,
+      ensure fair resource allocation, and protect backend services from
+      overload. Rate limits are applied per organization and per time window.
+
+      When rate limits are exceeded, requests are rejected with clear error
+      messages that indicate when the user can retry.
+
+    actor: System Integration
+
+    preconditions:
+      - User has valid API key
+      - Rate limits are configured for organization
+      - Rate limit tracking is enabled
+
+    depends_on:
+      - UC-AUTH-002
+      - UC-INF-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Allow requests within rate limit
+        given: Organization has rate limit of 10 requests per minute
+        when: User sends 10 requests within one minute
+        then:
+          - All 10 requests succeed
+          - No rate limit errors are returned
+          - Requests are processed normally
+          - Usage is tracked for all requests
+
+      - id: AC-02
+        criterion: Reject requests exceeding rate limit
+        given: Organization has rate limit of 10 requests per minute
+        when: User sends 11th request within same minute
+        then:
+          - 11th request fails with 429 status
+          - Error message indicates rate limit exceeded
+          - Error includes retry-after time or reset timestamp
+          - No inference is performed
+          - No usage is recorded
+
+      - id: AC-03
+        criterion: Rate limit resets after window
+        given: User hit rate limit in previous window
+        when: Rate limit window resets (new minute begins)
+        then:
+          - User can send requests up to limit again
+          - Previous violations don't carry over
+          - Counter resets to zero
+
+      - id: AC-04
+        criterion: Rate limit headers in response
+        given: User makes request
+        when: Response is returned
+        then:
+          - X-RateLimit-Limit header shows limit
+          - X-RateLimit-Remaining header shows remaining requests
+          - X-RateLimit-Reset header shows reset time
+          - Headers are present for both success and rate-limited responses
+
+    in_scope:
+      - Per-organization rate limiting
+      - Time window enforcement
+      - Rate limit error responses
+      - Rate limit headers
+      - Window reset behavior
+
+    out_of_scope:
+      - Per-user rate limiting
+      - Per-model rate limiting
+      - Dynamic rate limit adjustment
+      - Rate limit bypass for premium users
+      - Burst allowances
+
+    must_not:
+      - Allow unlimited requests
+      - Charge usage for rate-limited requests
+      - Reset counter mid-window
+      - Apply rate limits across organizations
+
+  - id: UC-RSL-002
+    title: Backend Failover
+    interface: api
+    status: active
+    bead: null
+
+    description: |
+      When a backend model service becomes unavailable, the platform must
+      detect the failure quickly and return a clear error to the user.
+      The system should not hang indefinitely or return confusing errors.
+
+      Backend failover validation ensures users receive timely feedback
+      when services are degraded, allowing them to retry or use alternate
+      models.
+
+    actor: System Integration
+
+    preconditions:
+      - Model backend may be unavailable or unresponsive
+      - Health check system is active
+      - Timeout configurations are set
+
+    depends_on:
+      - UC-INF-001
+      - UC-INF-003
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Detect backend unavailability
+        given: Backend for requested model is down
+        when: User sends inference request for that model
+        then:
+          - Request fails with 503 status
+          - Error message indicates service unavailable
+          - Error identifies the affected model
+          - Response time is within timeout threshold
+          - No long delays or hangs occur
+
+      - id: AC-02
+        criterion: Propagate backend errors clearly
+        given: Backend returns 500 error
+        when: User sends inference request
+        then:
+          - Request fails with 500 or 502 status
+          - Error message indicates internal error
+          - Error does not expose backend stack traces
+          - Request ID is included for support
+          - Error is logged for debugging
+
+      - id: AC-03
+        criterion: Timeout on unresponsive backend
+        given: Backend does not respond within timeout
+        when: User sends inference request
+        then:
+          - Request fails with 504 status (gateway timeout)
+          - Error message indicates timeout
+          - Connection to backend is terminated
+          - User receives response within configured timeout
+          - No zombie requests remain
+
+      - id: AC-04
+        criterion: Other models remain available
+        given: Backend for model-A is unavailable
+        when: User requests model-B (different backend)
+        then:
+          - Request to model-B succeeds
+          - Only affected backend causes failures
+          - Platform remains partially operational
+
+    in_scope:
+      - Backend unavailability detection
+      - Timeout enforcement
+      - Error message clarity
+      - Partial platform availability
+      - Connection cleanup
+
+    out_of_scope:
+      - Automatic retry to same backend
+      - Failover to alternate backend for same model
+      - Circuit breaker patterns
+      - Health-based request routing
+      - Backup model suggestions
+
+    must_not:
+      - Hang indefinitely on backend failures
+      - Expose backend internal errors to users
+      - Route to wrong backend as fallback
+      - Leave dangling connections
+
+  - id: UC-RSL-003
+    title: Timeout Handling
+    interface: api
+    status: active
+    bead: null
+
+    description: |
+      The platform must enforce timeouts at multiple levels (client, gateway,
+      backend) to prevent requests from consuming resources indefinitely.
+      Timeouts ensure predictable response times and protect system resources.
+
+      Proper timeout handling prevents resource exhaustion and provides
+      users with clear feedback when operations take too long.
+
+    actor: System Integration
+
+    preconditions:
+      - Timeout configurations are set for each layer
+      - Backend may respond slowly or not at all
+      - Request context includes timeout
+
+    depends_on:
+      - UC-INF-001
+      - UC-RSL-002
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Enforce gateway timeout
+        given: Backend does not respond within gateway timeout (30s)
+        when: User sends inference request
+        then:
+          - Request fails with 504 status
+          - Error message indicates gateway timeout
+          - Response is returned to user within timeout
+          - Backend connection is terminated
+
+      - id: AC-02
+        criterion: Respect client timeout header
+        given: Client sends X-Request-Timeout header (10s)
+        when: Gateway timeout is 30s
+        then:
+          - Gateway respects shorter client timeout
+          - Request fails with 504 if not complete in 10s
+          - Client timeout takes precedence over gateway timeout
+
+      - id: AC-03
+        criterion: Streaming timeout handling
+        given: Streaming request is active
+        when: No data is received for inactivity timeout period
+        then:
+          - Stream is terminated with error event
+          - Connection is closed gracefully
+          - Partial usage is recorded
+          - Error is logged with trace ID
+
+      - id: AC-04
+        criterion: Timeout error includes trace ID
+        given: Request times out
+        when: Error response is returned
+        then:
+          - Error body includes trace ID
+          - Error message suggests retry or shorter request
+          - User can correlate error with logs using trace ID
+
+    in_scope:
+      - Gateway-level timeouts
+      - Client-specified timeouts
+      - Streaming inactivity timeouts
+      - Timeout error messages
+      - Connection termination
+
+    out_of_scope:
+      - Backend-level timeout configuration
+      - Automatic timeout adjustment
+      - Timeout prediction based on model
+      - Partial result return on timeout
+
+    must_not:
+      - Allow requests to run indefinitely
+      - Ignore client timeout headers
+      - Return incomplete data without error
+      - Leak connections on timeout
+
+  - id: UC-RSL-004
+    title: Error Response Format
+    interface: api
+    status: active
+    bead: null
+
+    description: |
+      All error responses from the platform must follow a consistent format
+      that includes error type, message, trace ID, and appropriate HTTP
+      status code. Consistent error format enables reliable error handling
+      in client applications.
+
+      Error format standardization improves debugging, client integration,
+      and user experience.
+
+    actor: System Integration
+
+    preconditions:
+      - Various error conditions exist (auth, validation, backend, timeout)
+      - Error handling middleware is active
+      - Trace ID generation is enabled
+
+    depends_on:
+      - UC-AUTH-002
+      - UC-INF-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Authentication error format
+        given: User sends request with invalid API key
+        when: Request is rejected by authentication
+        then:
+          - Status code is 401
+          - Response includes error.type field
+          - Response includes error.message field
+          - Response includes trace_id field
+          - Error message is actionable
+
+      - id: AC-02
+        criterion: Validation error format
+        given: User sends malformed request body
+        when: Request validation fails
+        then:
+          - Status code is 400
+          - Response includes error.type field
+          - Response includes error.message field
+          - Response includes error.details array with specific validation failures
+          - Each detail includes field name and constraint
+
+      - id: AC-03
+        criterion: Backend error format
+        given: Backend service returns error
+        when: Error is propagated to user
+        then:
+          - Status code is 500 or 503
+          - Response includes error.type field
+          - Response includes error.message field
+          - Response includes trace_id field
+          - Backend stack traces are not exposed
+
+      - id: AC-04
+        criterion: Not found error format
+        given: User requests resource that doesn't exist
+        when: Request returns not found
+        then:
+          - Status code is 404
+          - Response includes error.type field
+          - Response includes error.message field
+          - Error message suggests alternatives or next steps
+
+      - id: AC-05
+        criterion: Error format consistency across services
+        given: Different services may return errors
+        when: Errors are returned from user-org-service, api-router, analytics
+        then:
+          - All errors follow same JSON schema
+          - All errors include trace_id
+          - Error field names are consistent
+          - HTTP status codes follow same conventions
+
+    in_scope:
+      - Standardized error JSON schema
+      - Consistent HTTP status codes
+      - Trace ID inclusion
+      - Actionable error messages
+      - Cross-service consistency
+
+    out_of_scope:
+      - Error message localization
+      - Error code enumerations
+      - Detailed error documentation URLs
+      - Error severity levels
+
+    must_not:
+      - Expose internal error details
+      - Return HTML errors for JSON endpoints
+      - Omit trace IDs
+      - Use inconsistent field names
+
+  - id: UC-RSL-005
+    title: Budget Enforcement
+    interface: api
+    status: active
+    bead: null
+
+    description: |
+      Organizations can set spending budgets to control costs. When an
+      organization reaches its budget limit, further inference requests
+      are rejected until the budget is increased or the billing period resets.
+
+      Budget enforcement prevents unexpected costs and gives organizations
+      control over their platform spending.
+
+    actor: System Integration
+
+    preconditions:
+      - Organization has budget configured
+      - Usage tracking is active
+      - Budget checking is enabled
+      - Cost calculation is configured per model
+
+    depends_on:
+      - UC-INF-001
+      - UC-INF-004
+      - UC-ORG-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Allow requests within budget
+        given: Organization budget is $100 and current spend is $50
+        when: User sends inference request costing $10
+        then:
+          - Request succeeds
+          - Usage is recorded
+          - Spend is updated to $60
+          - Remaining budget is $40
+
+      - id: AC-02
+        criterion: Reject requests exceeding budget
+        given: Organization budget is $100 and current spend is $95
+        when: User sends inference request that would cost $10
+        then:
+          - Request fails with 429 status (too many requests / quota exceeded)
+          - Error message indicates budget exceeded
+          - Error includes current spend and budget limit
+          - No inference is performed
+          - No usage is recorded
+
+      - id: AC-03
+        criterion: Budget reset on billing period
+        given: Organization budget period is monthly
+        when: New billing month begins
+        then:
+          - Spend counter resets to zero
+          - Requests are allowed up to budget limit
+          - Previous period's spend is archived
+
+      - id: AC-04
+        criterion: Budget check includes estimated cost
+        given: Request is received
+        when: Budget check is performed
+        then:
+          - Estimated request cost is calculated
+          - Estimated cost is checked against remaining budget
+          - Request is rejected if estimated cost exceeds remaining
+          - Buffer is applied to prevent overspend
+
+      - id: AC-05
+        criterion: Budget headers in response
+        given: Organization has budget configured
+        when: Successful request is returned
+        then:
+          - X-Budget-Limit header shows total budget
+          - X-Budget-Remaining header shows remaining budget
+          - X-Budget-Used header shows current spend
+          - Headers help users track spending
+
+    in_scope:
+      - Budget limit enforcement
+      - Spend tracking
+      - Budget period resets
+      - Cost estimation
+      - Budget headers
+      - Overspend prevention
+
+    out_of_scope:
+      - Budget alerts and notifications
+      - Automatic budget increases
+      - Pay-per-use without budget
+      - Budget forecasting
+      - Cost optimization recommendations
+
+    must_not:
+      - Allow spending beyond budget
+      - Charge for rejected requests
+      - Reset budget mid-period
+      - Apply budget limits across organizations

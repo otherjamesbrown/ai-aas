@@ -1,0 +1,16 @@
+# UC Test Configuration Template
+#
+# Copy this file to .ai-aas-test.yaml and fill in your values
+# Alternatively, use environment variables:
+#   AI_AAS_API_ENDPOINT - API endpoint URL
+#   AI_AAS_API_KEY - Admin API key
+#   AI_AAS_ORG_ID - (optional) Organization ID
+
+# API endpoint for user-org-service
+api_endpoint: https://user-org.dev.otherjamesbrown.com
+
+# Admin API key (get from secrets/env/.env as MASTER_ADMIN_API_KEY)
+api_key: your-admin-api-key-here
+
+# Optional: Default organization ID for tests
+# org_id: ""
