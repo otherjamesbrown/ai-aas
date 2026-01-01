@@ -40,7 +40,8 @@ type Handler struct {
 	routingMetrics    *telemetry.RoutingMetrics
 	tokenMetrics      *telemetry.TokenMetrics
 	usageHook         *UsageHook
-	rateLimiter       *limiter.RateLimiter // Rate limiter for token quota tracking
+	rateLimiter       *limiter.RateLimiter        // Rate limiter for org-level token quota tracking
+	tokenLimiter      *limiter.CachedTokenLimiter // Token limiter for per-user rate limits (spec035)
 	tracer            trace.Tracer
 	errorBuilder      *api.ErrorBuilder
 	backendURIs       map[string]string // Map of backend ID to URI (for testing/configuration - overrides registry)
@@ -170,6 +171,11 @@ func (h *Handler) SetBackendURI(backendID, uri string) {
 // SetUserOrgServiceURL sets the URL for user-org-service (for auth proxy).
 func (h *Handler) SetUserOrgServiceURL(url string) {
 	h.userOrgServiceURL = url
+}
+
+// SetTokenLimiter sets the per-user token limiter for rate limiting (spec035).
+func (h *Handler) SetTokenLimiter(tokenLimiter *limiter.CachedTokenLimiter) {
+	h.tokenLimiter = tokenLimiter
 }
 
 // RegisterRoutes registers public API routes.
@@ -500,4 +506,33 @@ func (h *Handler) writeJSON(w http.ResponseWriter, statusCode int, v interface{}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	return json.NewEncoder(w).Encode(v)
+}
+
+// recordUserTokenUsage records token usage for per-user rate limiting (spec035).
+// This is called asynchronously after a successful inference request.
+// Service accounts are skipped since they bypass rate limits.
+func (h *Handler) recordUserTokenUsage(ctx context.Context, authCtx *auth.AuthenticatedContext, totalTokens int) {
+	if h.tokenLimiter == nil || authCtx == nil {
+		return
+	}
+
+	// Service accounts bypass rate limits
+	if authCtx.PrincipalType == "service_account" {
+		return
+	}
+
+	// Record usage asynchronously to avoid blocking the response
+	go func() {
+		// Use a background context since the request context may be cancelled
+		bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		if err := h.tokenLimiter.RecordUsage(bgCtx, authCtx.PrincipalID, int64(totalTokens)); err != nil {
+			h.logger.Warn("failed to record per-user token usage",
+				zap.String("user_id", authCtx.PrincipalID),
+				zap.Int("tokens", totalTokens),
+				zap.Error(err),
+			)
+		}
+	}()
 }
