@@ -182,11 +182,30 @@ apiKey, err := apiKeyFixture.CreateWithServiceAccount(orgID, "my-key", nil)
 err := apiKeyFixture.Delete(orgID, apiKey.ID)
 ```
 
-#### ModelDeploymentFixture (Placeholder)
+#### ModelDeploymentFixture
 
 ```go
-// TODO: Implement once Admin API model deployment endpoints are available
 modelFixture := NewModelDeploymentFixture(fm, client)
+
+// Create a deployment (registers for automatic cleanup)
+deployment, err := modelFixture.Create("llama-7b", "development")
+
+// Create with custom options
+deployment, err := modelFixture.CreateWithOptions(CreateDeploymentRequest{
+    ModelName:   "llama-7b",
+    Environment: "development",
+    GPUCount:    1,
+    Replicas:    2,
+})
+
+// Get a deployment
+deployment, err := modelFixture.Get("llama-7b", "development")
+
+// List deployments with filters
+deployments, err := modelFixture.List("development", "")
+
+// Delete (usually not needed - automatic cleanup)
+err := modelFixture.Delete("llama-7b", "development")
 ```
 
 ### Fixture Cleanup

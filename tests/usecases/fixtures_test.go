@@ -317,24 +317,170 @@ func NewModelDeploymentFixture(fm *FixtureManager, client *TestClient) *ModelDep
 	}
 }
 
-// ModelDeployment represents a deployed model
+// ModelDeployment represents a deployed model (matches Admin API response)
 type ModelDeployment struct {
-	ID          string `json:"deploymentId"`
-	Name        string `json:"name"`
-	Model       string `json:"model"`
-	Environment string `json:"environment"`
-	Status      string `json:"status"`
+	ID                   string `json:"id"`
+	ModelID              string `json:"model_id"`
+	ModelName            string `json:"model_name,omitempty"`
+	ExternalName         string `json:"external_name,omitempty"`
+	CacheID              string `json:"cache_id,omitempty"`
+	Environment          string `json:"environment"`
+	Namespace            string `json:"namespace"`
+	InferenceServiceName string `json:"inferenceservice_name,omitempty"`
+	Endpoint             string `json:"endpoint,omitempty"`
+	Enabled              bool   `json:"enabled"`
+	Status               string `json:"status"`
+	ReplicasDesired      int    `json:"replicas_desired"`
+	ReplicasReady        int    `json:"replicas_ready"`
+	GPUCount             int    `json:"gpu_count"`
+	MemoryGB             int    `json:"memory_gb,omitempty"`
+}
+
+// CreateDeploymentRequest represents a request to create a deployment
+type CreateDeploymentRequest struct {
+	ModelName    string `json:"model_name"`
+	ModelID      string `json:"model_id,omitempty"`
+	ExternalName string `json:"external_name,omitempty"`
+	CacheID      string `json:"cache_id,omitempty"`
+	Environment  string `json:"environment"`
+	Namespace    string `json:"namespace,omitempty"`
+	GPUCount     int    `json:"gpu_count,omitempty"`
+	MemoryGB     int    `json:"memory_gb,omitempty"`
+	Replicas     int    `json:"replicas,omitempty"`
+	ModelType    string `json:"model_type,omitempty"`
 }
 
 // Create creates a model deployment and registers it for cleanup
-// Note: This is a placeholder - actual implementation depends on Admin API endpoints
+// Uses Admin API: POST /v1/models/deployments
 func (mdf *ModelDeploymentFixture) Create(modelName, environment string) (*ModelDeployment, error) {
-	// TODO: Implement once Admin API model deployment endpoints are available
-	return nil, fmt.Errorf("model deployment fixture not yet implemented")
+	reqBody := CreateDeploymentRequest{
+		ModelName:   modelName,
+		Environment: environment,
+		Replicas:    1,
+	}
+
+	resp, err := mdf.client.POST("/v1/models/deployments", reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("create deployment request failed: %w", err)
+	}
+
+	if resp.StatusCode != 201 && resp.StatusCode != 200 {
+		return nil, fmt.Errorf("create deployment failed: status %d, body: %s", resp.StatusCode, resp.String())
+	}
+
+	var deployment ModelDeployment
+	if err := resp.UnmarshalJSON(&deployment); err != nil {
+		return nil, fmt.Errorf("parse deployment response: %w", err)
+	}
+
+	// Register cleanup
+	mdf.fm.RegisterCleanup(func() error {
+		return mdf.Delete(deployment.ModelName, deployment.Environment)
+	})
+
+	return &deployment, nil
+}
+
+// CreateWithOptions creates a model deployment with custom options
+func (mdf *ModelDeploymentFixture) CreateWithOptions(req CreateDeploymentRequest) (*ModelDeployment, error) {
+	resp, err := mdf.client.POST("/v1/models/deployments", req)
+	if err != nil {
+		return nil, fmt.Errorf("create deployment request failed: %w", err)
+	}
+
+	if resp.StatusCode != 201 && resp.StatusCode != 200 {
+		return nil, fmt.Errorf("create deployment failed: status %d, body: %s", resp.StatusCode, resp.String())
+	}
+
+	var deployment ModelDeployment
+	if err := resp.UnmarshalJSON(&deployment); err != nil {
+		return nil, fmt.Errorf("parse deployment response: %w", err)
+	}
+
+	// Register cleanup
+	mdf.fm.RegisterCleanup(func() error {
+		return mdf.Delete(deployment.ModelName, deployment.Environment)
+	})
+
+	return &deployment, nil
 }
 
 // Delete deletes a model deployment
-func (mdf *ModelDeploymentFixture) Delete(deploymentID string) error {
-	// TODO: Implement once Admin API model deployment endpoints are available
-	return fmt.Errorf("model deployment fixture not yet implemented")
+// Uses Admin API: DELETE /v1/models/deployments/{model_name}/{environment}
+func (mdf *ModelDeploymentFixture) Delete(modelName, environment string) error {
+	path := fmt.Sprintf("/v1/models/deployments/%s/%s", modelName, environment)
+	resp, err := mdf.client.DELETE(path)
+	if err != nil {
+		return fmt.Errorf("delete deployment request failed: %w", err)
+	}
+
+	// 204 No Content or 404 Not Found are both acceptable
+	if resp.StatusCode != 204 && resp.StatusCode != 200 && resp.StatusCode != 404 {
+		return fmt.Errorf("delete deployment failed: status %d, body: %s", resp.StatusCode, resp.String())
+	}
+
+	return nil
+}
+
+// Get retrieves a model deployment
+// Uses Admin API: GET /v1/models/deployments/{model_name}/{environment}
+func (mdf *ModelDeploymentFixture) Get(modelName, environment string) (*ModelDeployment, error) {
+	path := fmt.Sprintf("/v1/models/deployments/%s/%s", modelName, environment)
+	resp, err := mdf.client.GET(path)
+	if err != nil {
+		return nil, fmt.Errorf("get deployment request failed: %w", err)
+	}
+
+	if resp.StatusCode == 404 {
+		return nil, nil // Not found
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("get deployment failed: status %d, body: %s", resp.StatusCode, resp.String())
+	}
+
+	var deployment ModelDeployment
+	if err := resp.UnmarshalJSON(&deployment); err != nil {
+		return nil, fmt.Errorf("parse deployment response: %w", err)
+	}
+
+	return &deployment, nil
+}
+
+// List retrieves all deployments with optional filters
+// Uses Admin API: GET /v1/models/deployments
+func (mdf *ModelDeploymentFixture) List(environment, modelName string) ([]ModelDeployment, error) {
+	path := "/v1/models/deployments"
+	params := []string{}
+	if environment != "" {
+		params = append(params, "environment="+environment)
+	}
+	if modelName != "" {
+		params = append(params, "model_name="+modelName)
+	}
+	if len(params) > 0 {
+		path += "?"
+		for i, p := range params {
+			if i > 0 {
+				path += "&"
+			}
+			path += p
+		}
+	}
+
+	resp, err := mdf.client.GET(path)
+	if err != nil {
+		return nil, fmt.Errorf("list deployments request failed: %w", err)
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("list deployments failed: status %d, body: %s", resp.StatusCode, resp.String())
+	}
+
+	var deployments []ModelDeployment
+	if err := resp.UnmarshalJSON(&deployments); err != nil {
+		return nil, fmt.Errorf("parse deployments response: %w", err)
+	}
+
+	return deployments, nil
 }
