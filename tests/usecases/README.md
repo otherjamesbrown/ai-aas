@@ -143,15 +143,22 @@ Tests automatically load credentials from `secrets/env/.env` via the testconfig 
 
 | Source | Priority | Description |
 |--------|----------|-------------|
-| Environment variables | 1 (highest) | `AI_AAS_API_KEY`, `AI_AAS_API_ENDPOINT` |
+| Environment variables | 1 (highest) | `AI_AAS_API_KEY`, `AI_AAS_API_ENDPOINT`, etc. |
 | `secrets/env/.env` | 2 | Auto-loaded if env vars not set |
 
 **Key environment variables:**
-- `AI_AAS_API_ENDPOINT` - API endpoint URL (required, set by Makefile)
+- `AI_AAS_API_ENDPOINT` - Admin API endpoint URL (e.g., `https://admin-api.dev.otherjamesbrown.com`)
 - `AI_AAS_API_KEY` - API key (auto-loaded from `MASTER_ADMIN_API_KEY` in .env)
+- `AI_AAS_ORG_ID` - Organization ID (auto-loaded from `MASTER_ADMIN_ORG_ID` in .env)
+- `AI_AAS_API_ROUTER_URL` - API Router URL (e.g., `https://api.dev.otherjamesbrown.com`)
 
-The testconfig loader (`shared/go/testconfig`) parses `secrets/env/.env` and exports
-credentials to environment variables for CLI subprocess execution.
+The testconfig loader (`shared/go/testconfig`) parses `secrets/env/.env` and:
+1. Loads `MASTER_ADMIN_API_KEY` → sets `AI_AAS_API_KEY`
+2. Loads `MASTER_ADMIN_ORG_ID` → sets `AI_AAS_ORG_ID`
+3. Sets `AI_AAS_API_ENDPOINT` to development admin API (if not already set)
+4. Sets `AI_AAS_API_ROUTER_URL` to development API router (if not already set)
+
+This configuration is handled by `config_test.go` init() function and runs automatically when tests are loaded.
 
 ## Coverage Analysis
 

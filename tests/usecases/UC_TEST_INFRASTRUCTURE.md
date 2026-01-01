@@ -329,6 +329,37 @@ Fixture cleanup failures are logged but don't fail tests. Check logs for:
 - Permission problems
 - Resource already deleted
 
+### "Organization with this slug already exists" (409 Conflict)
+
+This error indicates stale test organizations from interrupted test runs.
+
+**Cause**: When tests are interrupted (Ctrl+C, timeout, panic), the `t.Cleanup()` handlers don't run, leaving test organizations in the database.
+
+**Solution 1: Shell script cleanup** (recommended for manual cleanup):
+
+```bash
+cd tests/usecases
+export AI_AAS_API_ENDPOINT=https://user-org.dev.otherjamesbrown.com
+export AI_AAS_API_KEY=<your-admin-key>
+
+# Dry run (list only)
+./cleanup_test_orgs.sh
+
+# Actually delete
+./cleanup_test_orgs.sh --delete
+```
+
+**Solution 2: Go test cleanup** (for automated cleanup):
+
+```bash
+cd tests/usecases
+AI_AAS_API_ENDPOINT=https://user-org.dev.otherjamesbrown.com \
+AI_AAS_API_KEY=<your-admin-key> \
+go test -v -run TestCleanupStaleTestOrgs
+```
+
+**Prevention**: The test fixture framework now uses cryptographically random suffixes for organization slugs (timestamp + 6 random hex chars), making collisions extremely unlikely even across multiple test runs.
+
 ## Related Documentation
 
 - [Use Case Schema](../../usecases/SCHEMA.md) - Use case YAML format
