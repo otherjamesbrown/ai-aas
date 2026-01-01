@@ -432,9 +432,18 @@ func skipIfNoVLLMBackend(t *testing.T) {
 		return
 	}
 
-	// Try to determine if vLLM backend is available by checking if we can make a simple request
-	// We don't need a valid API key for this check - we just need to see if the route exists
-	client := NewTestClient(apiRouterURL, "")
+	// Use admin API key to check if routing policies/backends are configured
+	// If no admin key is available, we cannot check backend availability
+	adminKey := getAdminAPIKey()
+	t.Logf("skipIfNoVLLMBackend: adminKey=%q (len=%d)", adminKey, len(adminKey))
+	if adminKey == "" {
+		// No credentials available - cannot verify backend availability
+		// Skip the test to avoid false failures
+		t.Skip("Skipping: no admin API key available to verify vLLM backend availability")
+		return
+	}
+
+	client := NewTestClient(apiRouterURL, adminKey)
 
 	// Try a minimal request to see if the endpoint exists
 	reqBody := map[string]interface{}{
@@ -452,15 +461,24 @@ func skipIfNoVLLMBackend(t *testing.T) {
 		return
 	}
 
+	// Check response body for common "no backend" indicators
+	bodyStr := resp.String()
+	lowerBody := strings.ToLower(bodyStr)
+	t.Logf("skipIfNoVLLMBackend: status=%d body=%s", resp.StatusCode, bodyStr)
+
 	// If we get a "route not found" error (404), the API router has no vLLM backends configured
-	if resp.StatusCode == 404 {
-		bodyStr := resp.String()
-		if strings.Contains(bodyStr, "route not found") {
-			t.Skip("Skipping: no vLLM backend available in this environment (route not found)")
-			return
-		}
+	if resp.StatusCode == 404 && strings.Contains(lowerBody, "route not found") {
+		t.Skip("Skipping: no vLLM backend available in this environment (route not found)")
+		return
 	}
 
-	// Any other response (401 unauthorized, 400 bad request, 200 success) means the backend exists
-	// The test can proceed - authentication and validation will be handled by the actual test
+	// If we get a "no routing policy configured" error, there are no backends configured
+	if strings.Contains(lowerBody, "no routing policy") || strings.Contains(lowerBody, "routing_error") {
+		t.Skip("Skipping: no vLLM backend available in this environment (no routing policy configured)")
+		return
+	}
+
+	// Any other response (401 unauthorized, 400 bad request, 200 success, 500 other error)
+	// means the endpoint exists and tests should proceed
+	// The actual tests will handle authentication and validation
 }
