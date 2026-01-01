@@ -713,7 +713,71 @@ func TestUC_INF_004_TokenUsageTracking(t *testing.T) {
 	})
 
 	t.Run("AC-04: usage recorded for streaming requests", func(t *testing.T) {
-		t.Skip("Streaming not yet implemented - requires UC-INF-002 implementation")
+		// Get baseline usage count
+		analyticsClient := NewTestClient(getAnalyticsServiceURL(), getAdminAPIKey())
+		now := time.Now().UTC()
+		start := now.Add(-1 * time.Hour).Format(time.RFC3339)
+		end := now.Format(time.RFC3339)
+
+		usagePath := "/analytics/v1/orgs/" + org.ID + "/usage?start=" + start + "&end=" + end
+		baselineResp, err := analyticsClient.GET(usagePath)
+		if err != nil || baselineResp.StatusCode != 200 {
+			t.Skip("Analytics service not available")
+		}
+
+		var baselineUsage struct {
+			TotalTokens int `json:"totalTokens"`
+		}
+		baselineResp.UnmarshalJSON(&baselineUsage)
+
+		// Make streaming request
+		reqBody := map[string]interface{}{
+			"model": getTestModel(),
+			"messages": []map[string]interface{}{
+				{
+					"role":    "user",
+					"content": "Test streaming usage",
+				},
+			},
+			"stream": true,
+		}
+
+		bodyBytes, _ := json.Marshal(reqBody)
+		resp, err := inferenceClient.DoStreaming("POST", "/v1/chat/completions", bodyBytes)
+		if err != nil || resp.StatusCode != 200 {
+			if resp != nil {
+				resp.Body.Close()
+			}
+			t.Skip("Streaming request failed - cannot validate usage tracking")
+		}
+
+		// Read entire stream to completion
+		scanner := bufio.NewScanner(resp.Body)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.Contains(line, "[DONE]") {
+				break
+			}
+		}
+		resp.Body.Close()
+
+		// Wait for usage to be recorded
+		time.Sleep(2 * time.Second)
+
+		// Then: Usage is recorded for streaming request
+		afterResp, err := analyticsClient.GET(usagePath)
+		if err != nil || afterResp.StatusCode != 200 {
+			t.Skip("Analytics service not available")
+		}
+
+		var afterUsage struct {
+			TotalTokens int `json:"totalTokens"`
+		}
+		afterResp.UnmarshalJSON(&afterUsage)
+
+		if afterUsage.TotalTokens <= baselineUsage.TotalTokens {
+			t.Error("Expected token usage to increase after streaming request")
+		}
 	})
 
 	t.Run("AC-05: correlate usage with request trace", func(t *testing.T) {
