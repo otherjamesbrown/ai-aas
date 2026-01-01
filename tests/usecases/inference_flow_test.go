@@ -3,7 +3,9 @@ package usecases_test
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"io"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -172,8 +174,132 @@ func TestUC_INF_001_EndToEndChatCompletion(t *testing.T) {
 	})
 
 	t.Run("AC-04: unauthorized model access rejected", func(t *testing.T) {
-		t.Skip("Model access control not implemented - requires UC-MDL-002")
-		// TODO: Implement once model access control is in place
+		// Check if MODEL_ACCESS_ENABLED is true in the environment
+		// If not, skip this test as the feature is disabled by default
+		if os.Getenv("MODEL_ACCESS_ENABLED") != "true" {
+			t.Skip("Model access control disabled (set MODEL_ACCESS_ENABLED=true to enable)")
+		}
+
+		// Given: A second organization with a user that has restricted model access
+		org2, err := orgFixture.Create("")
+		if err != nil {
+			t.Fatalf("Failed to create second organization: %v", err)
+		}
+
+		// Create API key for the second org
+		apiKey2, err := apiKeyFixture.CreateWithServiceAccount(org2.ID, "", []string{"inference:read", "inference:write"})
+		if err != nil {
+			t.Fatalf("Failed to create API key for second org: %v", err)
+		}
+
+		// Get the user associated with the service account
+		// Service accounts create associated users, so we need to fetch the user list
+		usersResp, err := client.GET(fmt.Sprintf("/v1/orgs/%s/users", org2.ID))
+		if err != nil || usersResp.StatusCode != 200 {
+			t.Fatalf("Failed to get users for org: %v, status: %d", err, usersResp.StatusCode)
+		}
+
+		var users []struct {
+			UserID string `json:"userId"`
+		}
+		if err := usersResp.UnmarshalJSON(&users); err != nil || len(users) == 0 {
+			t.Fatalf("Failed to parse users or no users found: %v", err)
+		}
+
+		userID := users[0].UserID
+
+		// Set user to restricted access mode
+		setModeResp, err := client.PUT(
+			fmt.Sprintf("/v1/orgs/%s/users/%s/model-access/mode", org2.ID, userID),
+			map[string]interface{}{
+				"accessMode": "restricted",
+			},
+		)
+		if err != nil || (setModeResp.StatusCode != 200 && setModeResp.StatusCode != 204) {
+			t.Fatalf("Failed to set access mode to restricted: %v, status: %d, body: %s",
+				err, setModeResp.StatusCode, setModeResp.String())
+		}
+
+		// Verify that the user's model access is restricted
+		accessResp, err := client.GET(fmt.Sprintf("/v1/orgs/%s/users/%s/model-access", org2.ID, userID))
+		if err != nil || accessResp.StatusCode != 200 {
+			t.Fatalf("Failed to get model access config: %v, status: %d", err, accessResp.StatusCode)
+		}
+
+		var accessConfig struct {
+			AccessMode string `json:"accessMode"`
+		}
+		if err := accessResp.UnmarshalJSON(&accessConfig); err != nil {
+			t.Fatalf("Failed to parse access config: %v", err)
+		}
+
+		if accessConfig.AccessMode != "restricted" {
+			t.Fatalf("Expected access mode to be 'restricted', got: %s", accessConfig.AccessMode)
+		}
+
+		// When: User tries to access a model they don't have permission for
+		inferenceClient2 := NewTestClient(getAPIRouterURL(), apiKey2.Key)
+		reqBody := map[string]interface{}{
+			"model": getTestModel(),
+			"messages": []map[string]interface{}{
+				{
+					"role":    "user",
+					"content": "Test unauthorized access",
+				},
+			},
+		}
+
+		resp, err := inferenceClient2.POST("/v1/chat/completions", reqBody)
+		if err != nil {
+			t.Fatalf("Request failed: %v", err)
+		}
+
+		// Then: Request fails with 403 status
+		if resp.StatusCode != 403 {
+			t.Errorf("Expected status 403 (Forbidden), got %d: %s", resp.StatusCode, resp.String())
+		}
+
+		// Then: Error message indicates insufficient permissions
+		bodyStr := strings.ToLower(resp.String())
+		if !strings.Contains(bodyStr, "access") && !strings.Contains(bodyStr, "denied") && !strings.Contains(bodyStr, "forbidden") {
+			t.Logf("Warning: Error message should indicate access denied, got: %s", resp.String())
+		}
+
+		// Verify that granting access allows the request to succeed
+		t.Run("AC-04-GrantAccess: granting access allows request", func(t *testing.T) {
+			// Grant access to the test model
+			grantResp, err := client.POST(
+				fmt.Sprintf("/v1/orgs/%s/users/%s/model-access/grants", org2.ID, userID),
+				map[string]interface{}{
+					"modelName": getTestModel(),
+				},
+			)
+			if err != nil || (grantResp.StatusCode != 200 && grantResp.StatusCode != 201) {
+				t.Fatalf("Failed to grant model access: %v, status: %d, body: %s",
+					err, grantResp.StatusCode, grantResp.String())
+			}
+
+			// Now the request should succeed
+			reqBody := map[string]interface{}{
+				"model": getTestModel(),
+				"messages": []map[string]interface{}{
+					{
+						"role":    "user",
+						"content": "Test authorized access",
+					},
+				},
+			}
+
+			resp, err := inferenceClient2.POST("/v1/chat/completions", reqBody)
+			if err != nil {
+				t.Fatalf("Request failed after granting access: %v", err)
+			}
+
+			// Then: Request succeeds with 200 status
+			if resp.StatusCode != 200 {
+				t.Errorf("Expected status 200 after granting access, got %d: %s", resp.StatusCode, resp.String())
+			}
+		})
 	})
 }
 

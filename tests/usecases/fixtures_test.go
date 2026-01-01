@@ -374,7 +374,10 @@ func (mdf *ModelDeploymentFixture) Create(modelName, environment string) (*Model
 	}
 
 	// Register cleanup
-	mdf.fm.RegisterCleanup(func() error {
+	mdf.fm.Register("model_deployment", deployment.ModelName+"-"+deployment.Environment, map[string]string{
+		"model_name":  deployment.ModelName,
+		"environment": deployment.Environment,
+	}, func() error {
 		return mdf.Delete(deployment.ModelName, deployment.Environment)
 	})
 
@@ -398,7 +401,10 @@ func (mdf *ModelDeploymentFixture) CreateWithOptions(req CreateDeploymentRequest
 	}
 
 	// Register cleanup
-	mdf.fm.RegisterCleanup(func() error {
+	mdf.fm.Register("model_deployment", deployment.ModelName+"-"+deployment.Environment, map[string]string{
+		"model_name":  deployment.ModelName,
+		"environment": deployment.Environment,
+	}, func() error {
 		return mdf.Delete(deployment.ModelName, deployment.Environment)
 	})
 
