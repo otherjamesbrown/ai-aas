@@ -20,10 +20,16 @@ type TestClient struct {
 
 // NewTestClient creates a new test HTTP client
 func NewTestClient(baseURL, apiKey string) *TestClient {
-	// Create HTTP client with TLS config that skips verification for development
+	// Create HTTP client with TLS config
+	// Note: InsecureSkipVerify is used because test environments use self-signed certs.
+	// For production-grade test infrastructure, consider loading the CA certificate:
+	//   caCert, _ := os.ReadFile("/path/to/ca.crt")
+	//   caCertPool := x509.NewCertPool()
+	//   caCertPool.AppendCertsFromPEM(caCert)
+	//   TLSClientConfig: &tls.Config{RootCAs: caCertPool}
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true, // Skip TLS verification for development
+			InsecureSkipVerify: true, //nolint:gosec // Test environments use self-signed certs
 		},
 	}
 

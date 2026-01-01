@@ -1,6 +1,7 @@
 package usecases_test
 
 import (
+	"encoding/hex"
 	"strings"
 	"testing"
 	"time"
@@ -56,28 +57,43 @@ func TestUC_ANL_001_UsageRecording(t *testing.T) {
 			t.Skip("Inference request failed - cannot validate usage recording")
 		}
 
-		// Wait for usage to be recorded asynchronously
-		time.Sleep(3 * time.Second)
-
-		// Then: Usage record is created in analytics database
+		// Poll for usage to be recorded asynchronously (instead of fixed sleep)
 		now := time.Now().UTC()
 		start := now.Add(-1 * time.Hour).Format(time.RFC3339)
 		end := now.Format(time.RFC3339)
-
 		usagePath := "/analytics/v1/orgs/" + org.ID + "/usage?start=" + start + "&end=" + end
-		usageResp, err := analyticsClient.GET(usagePath)
-		if err != nil || usageResp.StatusCode != 200 {
-			t.Skip("Analytics service not available")
-		}
 
 		var usage struct {
 			RequestCount int `json:"requestCount"`
 			TotalTokens  int `json:"totalTokens"`
 		}
 
-		if err := usageResp.UnmarshalJSON(&usage); err != nil {
-			t.Fatalf("Failed to parse usage response: %v", err)
+		// Poll with timeout for usage to appear
+		timeout := time.After(30 * time.Second)
+		ticker := time.NewTicker(500 * time.Millisecond)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-timeout:
+				t.Fatal("Timeout waiting for usage record to appear")
+			case <-ticker.C:
+				usageResp, err := analyticsClient.GET(usagePath)
+				if err != nil || usageResp.StatusCode != 200 {
+					continue // Retry
+				}
+
+				if err := usageResp.UnmarshalJSON(&usage); err != nil {
+					continue // Retry
+				}
+
+				// Check if usage has been recorded
+				if usage.RequestCount > 0 && usage.TotalTokens > 0 {
+					goto usageFound
+				}
+			}
 		}
+	usageFound:
 
 		// Then: Record includes organization_id, model, tokens, timestamp, trace_id
 		if usage.RequestCount == 0 {
@@ -606,12 +622,9 @@ func TestUC_ANL_004_CrossServiceCorrelation(t *testing.T) {
 			t.Errorf("Trace ID should be 32 hex characters, got length %d: %s", len(traceID), traceID)
 		}
 
-		// Verify trace ID is hex
-		for _, c := range traceID {
-			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
-				t.Errorf("Trace ID should only contain hex characters, got: %s", traceID)
-				break
-			}
+		// Verify trace ID is valid hex using standard library
+		if _, err := hex.DecodeString(traceID); err != nil {
+			t.Errorf("Trace ID is not a valid hex string: %v", err)
 		}
 
 		t.Logf("Generated trace ID: %s", traceID)

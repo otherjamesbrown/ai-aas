@@ -3,14 +3,23 @@ package usecases_test
 import (
 	"fmt"
 	"os"
+	"testing"
 
 	"github.com/ai-aas/shared-go/testconfig"
 	"gopkg.in/yaml.v3"
 )
 
-// init loads test configuration from secrets/env/.env if environment variables
-// are not already set. This enables running tests without manual env setup.
-func init() {
+// TestMain provides explicit test setup, loading configuration from secrets/env/.env
+// if environment variables are not already set. This replaces init() for clearer,
+// more predictable test initialization.
+func TestMain(m *testing.M) {
+	setupTestConfig()
+	os.Exit(m.Run())
+}
+
+// setupTestConfig loads test configuration from secrets/env/.env if environment
+// variables are not already set. This enables running tests without manual env setup.
+func setupTestConfig() {
 	// Skip if already configured via env vars
 	if os.Getenv(envAPIEndpoint) != "" && os.Getenv(envAPIKey) != "" {
 		return
