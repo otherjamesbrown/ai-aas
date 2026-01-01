@@ -470,6 +470,12 @@ func main() {
 	//      - HMAC verification needs the buffered body
 	//      - Sets auth context for downstream middleware and handlers
 	//
+	//   2.5. ModelAccessMiddleware - Applied after auth to:
+	//      - Check if user/org has access to requested model
+	//      - Uses auth context from AuthContextMiddleware
+	//      - Uses model extracted by BodyBufferMiddleware
+	//      - Can be enabled/disabled via MODEL_ACCESS_ENABLED config
+	//
 	//   3. RateLimitMiddleware - Applied after auth to:
 	//      - Use authenticated user/org context for rate limiting
 	//      - Track rate limits per organization or API key
@@ -488,6 +494,14 @@ func main() {
 
 	// Step 2: Authentication (requires buffered body for HMAC)
 	appRouter.Use(public.AuthContextMiddleware(authenticator, logger, tracer))
+
+	// Step 2.5: Model access control (requires auth context and buffered body)
+	appRouter.Use(public.ModelAccessMiddleware(auditLogger, logger, tracer, cfg.ModelAccessEnabled))
+	if cfg.ModelAccessEnabled {
+		logger.Info("model access control enabled")
+	} else {
+		logger.Info("model access control disabled (set MODEL_ACCESS_ENABLED=true to enable)")
+	}
 
 	// Step 3: Rate limiting (requires auth context)
 	if rateLimiter != nil {

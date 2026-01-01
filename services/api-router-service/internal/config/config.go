@@ -87,6 +87,9 @@ type Config struct {
 	CORSExposedHeaders   string `envconfig:"CORS_EXPOSED_HEADERS" default:"X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Reset,X-Correlation-ID"`
 	CORSMaxAge           int    `envconfig:"CORS_MAX_AGE" default:"3600"`
 	CORSAllowCredentials bool   `envconfig:"CORS_ALLOW_CREDENTIALS" default:"true"`
+
+	// Model Access Control
+	ModelAccessEnabled bool `envconfig:"MODEL_ACCESS_ENABLED" default:"false"`
 }
 
 // BackendEndpointConfig represents a configured backend endpoint.
