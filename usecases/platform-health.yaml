@@ -1,0 +1,401 @@
+feature: Platform Health
+description: |
+  Platform health monitoring enables operators to validate that all platform
+  services are operational and accessible. These smoke tests verify basic
+  connectivity, authentication, and service availability across the platform.
+
+  Platform operators use these commands during deployment validation, incident
+  response, and routine health checks to ensure the platform is ready to serve
+  user requests.
+
+dependencies:
+  - usecases/authentication.yaml
+
+usecases:
+  - id: UC-PLH-001
+    title: Platform Smoke Test
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      A platform operator wants to quickly verify that all core platform services
+      are reachable and responding. This is the first check after deployment,
+      configuration changes, or when troubleshooting platform-wide issues.
+
+      The smoke test checks health endpoints for Admin API, User-Org Service,
+      API Router, Web Portal, Analytics, Grafana, and ArgoCD. It also validates
+      that at least one inference backend is operational.
+
+    actor: Platform Operator
+
+    preconditions:
+      - Platform operator has API credentials configured
+      - Base domain is configured in CLI
+      - Services are deployed to the target environment
+
+    depends_on:
+      - UC-AUTH-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: All services healthy
+        given: All platform services are deployed and operational
+        when: Operator runs `ai-aas-cli status`
+        then:
+          - Health check results are displayed in table format
+          - Each service shows "healthy" status with green checkmark
+          - Latency is displayed for each service
+          - Overall summary shows "All services are healthy"
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Detect unreachable service
+        given: API Router is not deployed or not responding
+        when: Operator runs `ai-aas-cli status`
+        then:
+          - API Router row shows "unreachable" status with red X
+          - Error message indicates connection failure
+          - Overall summary shows "Some services are unhealthy"
+          - Troubleshooting suggestions are displayed
+          - Exit code is 0 (status retrieved, but services unhealthy)
+
+      - id: AC-03
+        criterion: Detect slow service response
+        given: Admin API responds but takes > 1 second
+        when: Operator runs `ai-aas-cli status`
+        then:
+          - Admin API row shows "slow" status with yellow warning icon
+          - Latency is displayed (e.g., "1.2s")
+          - Overall summary shows "All services reachable but some are slow"
+          - Possible causes are listed (high load, cold start, network latency)
+          - Exit code is 0
+
+      - id: AC-04
+        criterion: Show verbose service details
+        given: Operator wants detailed diagnostic information
+        when: Operator runs `ai-aas-cli status --verbose`
+        then:
+          - Additional details column shows HTTP status codes
+          - Error messages are shown for failed checks
+          - Service URLs are displayed
+          - Exit code is 0
+
+      - id: AC-05
+        criterion: Output status as JSON
+        given: Operator wants machine-readable output for monitoring
+        when: Operator runs `ai-aas-cli status --json`
+        then:
+          - Output is valid JSON object
+          - JSON includes environment, timestamp, healthy boolean, services array
+          - Each service includes name, url, status, latency, error fields
+          - Exit code is 0
+
+      - id: AC-06
+        criterion: Check profile-specific endpoints
+        given: Operator has multiple profiles configured (dev, staging, prod)
+        when: Operator runs `ai-aas-cli status --profile staging`
+        then:
+          - Status checks use endpoints from staging profile
+          - Profile name is displayed in output header
+          - Services from staging environment are checked
+          - Exit code is 0
+
+    in_scope:
+      - Checking health endpoints for all core services
+      - Displaying service status, latency, and errors
+      - Detecting unreachable, slow, and healthy services
+      - Profile-specific endpoint checking
+      - Table and JSON output formats
+      - Providing troubleshooting suggestions
+
+    out_of_scope:
+      - Detailed pod-level health checks (Kubernetes diagnostics)
+      - Historical health trends or metrics
+      - Automatic remediation of unhealthy services
+      - Checking database connectivity directly
+
+    must_not:
+      - Modify service configurations during health check
+      - Cache health results (always fetch live status)
+      - Require authentication for public health endpoints
+      - Fail on first unhealthy service (check all services)
+
+  - id: UC-PLH-002
+    title: Service Health Check
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      A platform operator wants to check the health of a specific service in
+      detail, including its deployment status, pod health, recent events, and
+      resource utilization.
+
+      This is used during troubleshooting to drill down into a specific service
+      that showed issues in the platform smoke test.
+
+    actor: Platform Operator
+
+    preconditions:
+      - Platform operator has API credentials configured
+      - Kubernetes access is configured for target environment
+      - Service is deployed (may be healthy or unhealthy)
+
+    depends_on:
+      - UC-PLH-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Check healthy service details
+        given: Admin API service is deployed and running
+        when: Operator runs `ai-aas-cli service health admin-api -e development`
+        then:
+          - Service deployment status is shown
+          - Pod count and ready status are displayed
+          - Recent events are listed (if any)
+          - Health endpoint response is shown
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Detect service with pod failures
+        given: API Router has 1/3 pods ready
+        when: Operator runs `ai-aas-cli service health api-router -e development`
+        then:
+          - Deployment shows "Degraded" status
+          - Pod details show which pods are failing
+          - Recent error events are displayed
+          - Suggested troubleshooting steps are shown
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Check service in different environment
+        given: Operator wants to check production API Router
+        when: Operator runs `ai-aas-cli service health api-router -e production`
+        then:
+          - Health check targets production cluster
+          - Production-specific configuration is used
+          - Exit code is 0
+
+      - id: AC-04
+        criterion: Handle non-existent service
+        given: Service "unknown-service" does not exist
+        when: Operator runs `ai-aas-cli service health unknown-service -e development`
+        then:
+          - Command fails with exit code 5 (not found)
+          - Error message indicates service not found
+          - List of available services is shown
+
+    in_scope:
+      - Checking Kubernetes deployment/pod status
+      - Displaying health endpoint responses
+      - Showing recent Kubernetes events
+      - Environment-specific health checks
+      - Providing troubleshooting suggestions
+
+    out_of_scope:
+      - Real-time log streaming (separate command)
+      - Resource utilization graphs
+      - Historical health data
+      - Automatic service restart
+
+    must_not:
+      - Modify service configuration during check
+      - Restart pods automatically
+      - Expose sensitive configuration details
+      - Require full cluster admin permissions
+
+  - id: UC-PLH-003
+    title: Model Availability Check
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      A platform operator wants to verify that deployed models are accessible
+      via the API Router and can successfully process inference requests. This
+      validates the complete request path from API Router through to vLLM backends.
+
+      The check makes a minimal inference request to each available model to
+      confirm end-to-end functionality.
+
+    actor: Platform Operator
+
+    preconditions:
+      - Platform operator has valid API key
+      - At least one model is deployed
+      - API Router is operational
+
+    depends_on:
+      - UC-PLH-001
+      - UC-MLC-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: All models accessible and responding
+        given: Models "llama-7b" and "mistral-7b" are deployed and healthy
+        when: Operator runs `ai-aas-cli models check -e development`
+        then:
+          - List of available models is retrieved from /v1/models endpoint
+          - Minimal inference request is sent to each model
+          - Each model shows "healthy" status with response latency
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Detect model backend not responding
+        given: llama-7b backend is deployed but not ready
+        when: Operator runs `ai-aas-cli models check -e development`
+        then:
+          - llama-7b shows backend_error status
+          - Error message indicates backend connection refused
+          - Suggested troubleshooting includes checking Knative/Istio routing
+          - Other healthy models still show as healthy
+          - Exit code is 0 (partial success)
+
+      - id: AC-03
+        criterion: Detect slow model response
+        given: mistral-7b responds but takes more than 10 seconds
+        when: Operator runs `ai-aas-cli models check -e development`
+        then:
+          - mistral-7b shows slow status with yellow warning
+          - Latency is displayed (e.g. 12.3s)
+          - Possible causes are listed (cold start, model loading, high load)
+          - Exit code is 0
+
+      - id: AC-04
+        criterion: Check specific model only
+        given: Operator wants to test one model
+        when: Operator runs `ai-aas-cli models check llama-7b -e development`
+        then:
+          - Only llama-7b is checked
+          - Inference request and response are shown
+          - Exit code is 0 if model is healthy
+
+      - id: AC-05
+        criterion: Handle no models available
+        given: No routing policies exist, so /v1/models returns empty list
+        when: Operator runs `ai-aas-cli models check -e development`
+        then:
+          - Message shows No models available
+          - Suggestion to deploy models and create routing policies
+          - Exit code is 0 or non-zero (depends on interpretation)
+
+    in_scope:
+      - Retrieving available models from /v1/models
+      - Making minimal inference requests to validate backends
+      - Detecting slow responses and errors
+      - Checking all models or specific model
+      - Displaying latency and error details
+
+    out_of_scope:
+      - Load testing or sustained inference requests
+      - Benchmarking model performance
+      - Validating model output quality
+      - Testing model-specific features
+
+    must_not:
+      - Make expensive inference requests (use max_tokens: 1)
+      - Retry failed requests automatically
+      - Cache model availability results
+      - Test models in production without proper API key
+
+  - id: UC-PLH-004
+    title: End-to-End Validation
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      A platform operator wants to run a comprehensive validation of the entire
+      platform after deployment or configuration changes. This combines platform
+      smoke test, service health checks, and model availability checks into a
+      single validation workflow.
+
+      This is used during initial deployment validation, post-upgrade verification,
+      and before promoting changes to higher environments (dev -> staging -> production).
+
+    actor: Platform Operator
+
+    preconditions:
+      - Platform operator has API credentials configured
+      - All services are deployed to target environment
+      - At least one model is deployed for inference validation
+
+    depends_on:
+      - UC-PLH-001
+      - UC-PLH-002
+      - UC-PLH-003
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: All validation checks pass
+        given: Platform is fully operational with healthy services and models
+        when: Operator runs `ai-aas-cli validate --full -e development`
+        then:
+          - Platform smoke test executes and shows all services healthy
+          - Service health checks execute for critical services
+          - Model availability check executes and shows models responding
+          - Overall summary shows "Platform validation passed"
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Validation fails on unhealthy service
+        given: User-Org Service is not responding
+        when: Operator runs `ai-aas-cli validate --full -e development`
+        then:
+          - Platform smoke test shows User-Org Service as unhealthy
+          - Validation stops or continues (based on --fail-fast flag)
+          - Overall summary shows "Platform validation failed"
+          - Failed checks are listed with remediation steps
+          - Exit code is non-zero
+
+      - id: AC-03
+        criterion: Quick validation (services only)
+        given: Operator wants fast validation without model checks
+        when: Operator runs `ai-aas-cli validate -e development`
+        then:
+          - Platform smoke test executes
+          - Critical service health checks execute
+          - Model availability check is skipped
+          - Faster execution time
+          - Exit code is 0 if services are healthy
+
+      - id: AC-04
+        criterion: Validation with fail-fast mode
+        given: Operator wants to stop on first failure
+        when: Operator runs `ai-aas-cli validate --full --fail-fast -e development`
+        then:
+          - Validation stops immediately on first failed check
+          - Error details for failed check are displayed
+          - Remaining checks are not executed
+          - Exit code is non-zero
+
+      - id: AC-05
+        criterion: Generate validation report
+        given: Operator wants detailed validation report for documentation
+        when: Operator runs `ai-aas-cli validate --full -e development --report validation-report.json`
+        then:
+          - All validation checks execute
+          - Results are written to validation-report.json
+          - Report includes timestamps, check results, errors, latencies
+          - Exit code is 0 if validation passed
+
+    in_scope:
+      - Running platform smoke test
+      - Running critical service health checks
+      - Running model availability checks
+      - Combining results into overall validation status
+      - Generating validation reports
+      - Fail-fast mode for CI/CD pipelines
+
+    out_of_scope:
+      - Performance benchmarking
+      - Security vulnerability scanning
+      - Load testing
+      - Database integrity checks
+
+    must_not:
+      - Modify platform configuration during validation
+      - Make destructive changes to test validation
+      - Skip critical checks in --full mode
+      - Cache validation results across runs

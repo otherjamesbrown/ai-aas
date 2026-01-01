@@ -1,0 +1,449 @@
+feature: Model Lifecycle
+description: |
+  Model lifecycle management enables platform operators to deploy, scale, monitor,
+  and retire AI model deployments across environments. These operations work with
+  AIModel custom resources and KServe InferenceServices managed by the ai-model-operator.
+
+  Operators use the ai-aas-cli to perform routine deployment operations without
+  needing direct kubectl access to Kubernetes clusters.
+
+dependencies:
+  - usecases/authentication.yaml
+
+usecases:
+  - id: UC-MLC-001
+    title: Deploy Model from Registry
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      A platform operator wants to deploy a registered model to a target environment
+      (development, staging, or production). The model must already be registered in
+      the model registry and optionally cached in object storage.
+
+      The deployment creates an AIModel custom resource that the ai-model-operator
+      reconciles into a KServe InferenceService with appropriate resource allocations.
+      A routing policy is automatically created to make the model accessible via the
+      API Router.
+
+    actor: Platform Operator
+
+    preconditions:
+      - Model is registered in the model registry
+      - Platform operator has API credentials configured
+      - Target environment kubeconfig is configured in CLI
+      - Model is cached in S3 or HuggingFace access is available
+
+    depends_on:
+      - UC-AUTH-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Deploy model with default settings
+        given: Model "llama-7b" is registered and cached
+        when: Operator runs `ai-aas-cli model deploy create llama-7b -e development`
+        then:
+          - AIModel CR is created in development namespace
+          - Deployment configuration is displayed (runtime, resources, replicas)
+          - Global routing policy is created automatically
+          - Success message with next steps is shown
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Deploy model with custom resources
+        given: Model requires specific GPU and memory allocation
+        when: Operator runs `ai-aas-cli model deploy create llama-70b -e development --gpu-count 4 --memory 96`
+        then:
+          - AIModel CR is created with 4 GPUs and 96GB memory
+          - Resource configuration is displayed before creation
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Deploy with auto-scaling configuration
+        given: Production environment requires auto-scaling
+        when: Operator runs `ai-aas-cli model deploy create mistral-7b -e production --min-replicas 2 --max-replicas 5`
+        then:
+          - AIModel CR is created with min=2, max=5 replicas
+          - Scaling configuration is displayed
+          - Exit code is 0
+
+      - id: AC-04
+        criterion: Deploy without routing policy
+        given: Operator wants to test deployment before exposing to traffic
+        when: Operator runs `ai-aas-cli model deploy create llama-7b -e development --no-routing-policy`
+        then:
+          - AIModel CR is created successfully
+          - No routing policy is created
+          - Message explains manual policy creation if needed
+          - Exit code is 0
+
+      - id: AC-05
+        criterion: Wait for deployment to be ready
+        given: Operator wants confirmation deployment is operational
+        when: Operator runs `ai-aas-cli model deploy create llama-7b -e development --wait`
+        then:
+          - Command blocks until AIModel phase is "Ready"
+          - Progress indicator shows deployment status
+          - Final status shows ready replicas and inference endpoint
+          - Exit code is 0 only if deployment succeeds
+
+      - id: AC-06
+        criterion: Reject deployment to unconfigured environment
+        given: Environment "staging" is not configured in CLI
+        when: Operator runs `ai-aas-cli model deploy create llama-7b -e staging`
+        then:
+          - Command fails with exit code 3 (config error)
+          - Error message indicates environment not configured
+          - Suggestion to configure environment is shown
+
+      - id: AC-07
+        criterion: Reject deployment of unregistered model
+        given: Model "unknown-model" is not in the registry
+        when: Operator runs `ai-aas-cli model deploy create unknown-model -e development`
+        then:
+          - Command fails with exit code 5 (not found)
+          - Error message indicates model not found in registry
+          - Suggestion to register model is shown
+
+    in_scope:
+      - Creating AIModel custom resource
+      - Configuring runtime, resources, and replicas
+      - Validating model exists in registry
+      - Checking cache exists before deployment
+      - Automatically creating global routing policy
+      - Waiting for deployment to be ready (optional)
+      - Displaying deployment configuration
+
+    out_of_scope:
+      - Registering models (UC-MLC-006)
+      - Caching models (separate model cache operations)
+      - Modifying existing deployments (UC-MLC-007)
+      - Deleting deployments (UC-MLC-004)
+      - Creating custom routing policies (UC-RTG-001)
+      - Managing Kubernetes resources directly
+
+    must_not:
+      - Deploy without validating model exists in registry
+      - Create deployment without operator reconciliation
+      - Modify InferenceService directly (operator manages it)
+      - Expose internal Kubernetes implementation details
+
+  - id: UC-MLC-002
+    title: Scale Model Deployment
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      A platform operator needs to adjust the number of replicas for a deployed
+      model in response to load changes or capacity planning. This operation
+      modifies the InferenceService replica count to scale up or down.
+
+      Scaling changes take effect within seconds to minutes depending on the
+      runtime's startup time. Traffic is automatically load-balanced across replicas.
+
+    actor: Platform Operator
+
+    preconditions:
+      - Model is already deployed in target environment
+      - Platform operator has API credentials configured
+      - Target environment kubeconfig is configured
+
+    depends_on:
+      - UC-MLC-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Scale deployment to specific replica count
+        given: Model "llama-7b" is deployed with 1 replica in development
+        when: Operator runs `ai-aas-cli model deploy scale llama-7b -e development --replicas 3`
+        then:
+          - Current and target replica counts are displayed
+          - InferenceService is scaled to 3 replicas
+          - Success message confirms scaling operation
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Scale down to reduce costs
+        given: Model "mistral-7b" is running 5 replicas
+        when: Operator runs `ai-aas-cli model deploy scale mistral-7b -e development --replicas 1`
+        then:
+          - Scaling operation reduces replicas to 1
+          - Current status shows the scale-down
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Reject scaling non-existent deployment
+        given: Model "unknown-model" is not deployed
+        when: Operator runs `ai-aas-cli model deploy scale unknown-model -e development --replicas 2`
+        then:
+          - Command fails with exit code 5 (not found)
+          - Error message indicates deployment not found
+          - Suggestion to deploy first is shown
+
+    in_scope:
+      - Modifying InferenceService replica count
+      - Displaying current and target replica counts
+      - Validating deployment exists
+
+    out_of_scope:
+      - Auto-scaling configuration (UC-MLC-001)
+      - Horizontal Pod Autoscaler (HPA) management
+      - Vertical scaling (changing GPU/memory)
+      - Load testing to determine scale needs
+
+    must_not:
+      - Scale to 0 replicas (use delete instead)
+      - Bypass Kubernetes API for scaling
+      - Modify resource limits during scaling
+
+  - id: UC-MLC-003
+    title: View Deployment Status
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      A platform operator wants to check the current status of a deployed model
+      to verify it's operational, troubleshoot issues, or monitor replica counts.
+
+      The status shows InferenceService readiness, replica counts, URL, and
+      condition details from Kubernetes.
+
+    actor: Platform Operator
+
+    preconditions:
+      - Model is deployed in target environment
+      - Platform operator has API credentials configured
+      - Target environment kubeconfig is configured
+
+    depends_on:
+      - UC-MLC-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Show deployment status in table format
+        given: Model "llama-7b" is deployed and ready
+        when: Operator runs `ai-aas-cli model deploy status llama-7b -e development`
+        then:
+          - Deployment name and namespace are displayed
+          - Ready status shows true with checkmark icon
+          - Replica counts show ready/total (e.g., "2/2 ready")
+          - Inference URL is displayed
+          - Conditions list shows recent state transitions
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Show status as JSON
+        given: Operator wants machine-readable output
+        when: Operator runs `ai-aas-cli model deploy status llama-7b -e development --format json`
+        then:
+          - Output is valid JSON object
+          - JSON includes ready, replicas, readyReplicas, url, conditions
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Show status of failing deployment
+        given: Model deployment is not ready due to pod errors
+        when: Operator runs `ai-aas-cli model deploy status llama-7b -e development`
+        then:
+          - Ready status shows false with X icon
+          - Conditions show error reasons (e.g., "ImagePullBackOff")
+          - Suggested next steps include checking logs and events
+          - Exit code is 0 (status retrieved successfully)
+
+      - id: AC-04
+        criterion: Handle non-existent deployment
+        given: Model "unknown-model" is not deployed
+        when: Operator runs `ai-aas-cli model deploy status unknown-model -e development`
+        then:
+          - Command fails with exit code 5 (not found)
+          - Error message indicates deployment not found
+          - Suggestion to deploy is shown
+
+    in_scope:
+      - Displaying InferenceService status fields
+      - Showing replica counts and readiness
+      - Listing Kubernetes conditions
+      - Table and JSON output formats
+      - Suggesting next troubleshooting steps
+
+    out_of_scope:
+      - Showing pod-level details (use troubleshoot commands)
+      - Displaying resource utilization metrics
+      - Showing request logs or traces
+      - Real-time log streaming
+
+    must_not:
+      - Modify deployment state while checking status
+      - Require authentication to backend services
+      - Cache stale status information
+
+  - id: UC-MLC-004
+    title: Retire Model Deployment
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      A platform operator wants to remove a model deployment from an environment.
+      This might be due to the model being deprecated, replaced by a better version,
+      or no longer needed.
+
+      The deletion removes the AIModel CR, which triggers the operator to clean up
+      the InferenceService. Model cache files are preserved for future redeployment.
+
+    actor: Platform Operator
+
+    preconditions:
+      - Model is deployed in target environment
+      - Platform operator has API credentials configured
+      - Target environment kubeconfig is configured
+
+    depends_on:
+      - UC-MLC-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Delete deployment with confirmation
+        given: Model "llama-7b" is deployed in development
+        when: Operator runs `ai-aas-cli model deploy delete llama-7b -e development` and confirms with "y"
+        then:
+          - Current deployment status is displayed
+          - User is prompted "Are you sure? [y/N]:"
+          - After confirmation, AIModel CR is deleted
+          - Success message indicates deletion initiated
+          - Note explains cache is preserved
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Force delete without confirmation
+        given: Operator wants to skip interactive prompt
+        when: Operator runs `ai-aas-cli model deploy delete llama-7b -e development --force`
+        then:
+          - No confirmation prompt is shown
+          - AIModel CR is deleted immediately
+          - Success message is displayed
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Wait for deletion to complete
+        given: Operator wants confirmation cleanup finished
+        when: Operator runs `ai-aas-cli model deploy delete llama-7b -e development --force --wait`
+        then:
+          - Deletion is initiated
+          - Command waits for operator to clean up resources
+          - Message confirms deletion complete
+          - Exit code is 0
+
+      - id: AC-04
+        criterion: Cancel deletion on negative confirmation
+        given: Operator decides not to delete
+        when: Operator runs `ai-aas-cli model deploy delete llama-7b -e development` and types "n"
+        then:
+          - Message shows "Cancelled."
+          - No resources are deleted
+          - Exit code is 0
+
+      - id: AC-05
+        criterion: Handle non-existent deployment gracefully
+        given: Model "unknown-model" is not deployed
+        when: Operator runs `ai-aas-cli model deploy delete unknown-model -e development`
+        then:
+          - Message shows "Deployment unknown-model-development not found in development"
+          - No error is raised
+          - Exit code is 0
+
+    in_scope:
+      - Deleting AIModel custom resource
+      - Prompting for confirmation (unless --force)
+      - Waiting for cleanup (optional --wait)
+      - Preserving model cache files
+      - Displaying current deployment status before deletion
+
+    out_of_scope:
+      - Deleting cached model files (separate operation)
+      - Removing model from registry (separate operation)
+      - Deleting routing policies (manual cleanup required)
+      - Backing up deployment configuration
+
+    must_not:
+      - Delete without confirmation unless --force specified
+      - Remove model cache files automatically
+      - Delete deployments across multiple environments at once
+      - Allow deletion of production deployments without explicit environment flag
+
+  - id: UC-MLC-005
+    title: Rollback Deployment
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      A platform operator needs to perform a rolling restart of a model deployment
+      to pick up new model weights, recover from issues, or refresh pods after
+      configuration changes.
+
+      This triggers a new rollout of InferenceService pods without changing the
+      deployment configuration. Traffic is gradually shifted to new pods during
+      the restart.
+
+    actor: Platform Operator
+
+    preconditions:
+      - Model is deployed in target environment
+      - Platform operator has API credentials configured
+      - Target environment kubeconfig is configured
+
+    depends_on:
+      - UC-MLC-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Trigger rolling restart
+        given: Model "llama-7b" is deployed in development
+        when: Operator runs `ai-aas-cli model deploy restart llama-7b -e development`
+        then:
+          - Deployment name and namespace are displayed
+          - Message confirms "Rolling restart triggered"
+          - Suggested next steps include checking status and logs
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Restart and wait for completion
+        given: Operator wants confirmation pods are ready after restart
+        when: Operator runs `ai-aas-cli model deploy restart llama-7b -e development --wait`
+        then:
+          - Restart is initiated
+          - Message shows "Waiting for pods to be ready..."
+          - Command blocks until all pods are ready
+          - Success message confirms all pods ready
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Reject restart of non-existent deployment
+        given: Model "unknown-model" is not deployed
+        when: Operator runs `ai-aas-cli model deploy restart unknown-model -e development`
+        then:
+          - Command fails with exit code 5 (not found)
+          - Error message indicates deployment not found
+          - Suggestion to deploy first is shown
+
+    in_scope:
+      - Triggering InferenceService pod restart
+      - Waiting for restart completion (optional)
+      - Displaying restart progress
+      - Validating deployment exists
+
+    out_of_scope:
+      - Modifying deployment configuration during restart
+      - Updating model version/revision (separate operation)
+      - Performing blue/green deployment
+      - Rolling back to previous configuration
+
+    must_not:
+      - Cause downtime during restart (rolling restart only)
+      - Modify resource allocations during restart
+      - Clear model cache during restart
+      - Skip operator reconciliation
