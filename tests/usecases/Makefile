@@ -1,49 +1,34 @@
 # Makefile for Use Case Tests
 #
 # Targets:
-#   test-dev      - Run tests against development cluster (api.dev.otherjamesbrown.com)
-#   test-staging  - Run tests against staging cluster (api.staging.otherjamesbrown.com)
+#   test-dev      - Run tests against development cluster
+#   test-staging  - Run tests against staging cluster
 #   test-uc       - Run specific UC test (usage: make test-uc UC=UC-ORG-001)
+#   test          - Run tests (auto-loads credentials from secrets/env/.env)
 #   help          - Show this help message
+#
+# Note: API keys are auto-loaded from secrets/env/.env via the testconfig loader.
+# You only need to set AI_AAS_API_ENDPOINT for the target environment.
 
-.PHONY: test-dev test-staging test-uc help
+.PHONY: test-dev test-staging test-uc test help
 
-# Secrets file location
+# Secrets file location (used for Makefile-based loading)
 SECRETS_DIR := ../../secrets/env
 SECRETS_FILE := $(SECRETS_DIR)/.env
 
-# Load environment-specific API keys from secrets
-# Development uses MASTER_ADMIN_API_KEY, staging uses STAGING_MASTER_ADMIN_API_KEY
+# Development cluster endpoint
+DEV_ENDPOINT := https://user-org.dev.otherjamesbrown.com
+
+# Staging cluster endpoint
+STAGING_ENDPOINT := https://user-org.staging.otherjamesbrown.com
 
 test-dev:
 	@echo "Running UC tests against development cluster..."
-	@if [ ! -f $(SECRETS_FILE) ]; then \
-		echo "Error: Secrets file not found at $(SECRETS_FILE)"; \
-		exit 1; \
-	fi
-	@export $$(grep -v '^#' $(SECRETS_FILE) | grep MASTER_ADMIN_API_KEY | head -1 | xargs) && \
-	if [ -z "$$MASTER_ADMIN_API_KEY" ]; then \
-		echo "Error: MASTER_ADMIN_API_KEY not found in $(SECRETS_FILE)"; \
-		exit 1; \
-	fi && \
-	AI_AAS_API_ENDPOINT=https://user-org.dev.otherjamesbrown.com \
-	AI_AAS_API_KEY=$$MASTER_ADMIN_API_KEY \
-	go test -v ./... -timeout 10m
+	@AI_AAS_API_ENDPOINT=$(DEV_ENDPOINT) go test -v ./... -timeout 10m
 
 test-staging:
 	@echo "Running UC tests against staging cluster..."
-	@if [ ! -f $(SECRETS_FILE) ]; then \
-		echo "Error: Secrets file not found at $(SECRETS_FILE)"; \
-		exit 1; \
-	fi
-	@export $$(grep -v '^#' $(SECRETS_FILE) | grep STAGING_MASTER_ADMIN_API_KEY | head -1 | xargs) && \
-	if [ -z "$$STAGING_MASTER_ADMIN_API_KEY" ]; then \
-		echo "Error: STAGING_MASTER_ADMIN_API_KEY not found in $(SECRETS_FILE)"; \
-		exit 1; \
-	fi && \
-	AI_AAS_API_ENDPOINT=https://user-org.staging.otherjamesbrown.com \
-	AI_AAS_API_KEY=$$STAGING_MASTER_ADMIN_API_KEY \
-	go test -v ./... -timeout 10m
+	@AI_AAS_API_ENDPOINT=$(STAGING_ENDPOINT) go test -v ./... -timeout 10m
 
 test-uc:
 	@if [ -z "$(UC)" ]; then \
@@ -51,30 +36,26 @@ test-uc:
 		exit 1; \
 	fi
 	@echo "Running specific UC test: $(UC)..."
-	@if [ ! -f $(SECRETS_FILE) ]; then \
-		echo "Error: Secrets file not found at $(SECRETS_FILE)"; \
-		exit 1; \
-	fi
-	@export $$(grep -v '^#' $(SECRETS_FILE) | grep MASTER_ADMIN_API_KEY | head -1 | xargs) && \
-	if [ -z "$$MASTER_ADMIN_API_KEY" ]; then \
-		echo "Error: MASTER_ADMIN_API_KEY not found in $(SECRETS_FILE)"; \
-		exit 1; \
-	fi && \
-	AI_AAS_API_ENDPOINT=https://user-org.dev.otherjamesbrown.com \
-	AI_AAS_API_KEY=$$MASTER_ADMIN_API_KEY \
-	go test -v ./... -run "$(UC)" -timeout 10m
+	@AI_AAS_API_ENDPOINT=$(DEV_ENDPOINT) go test -v ./... -run "$(UC)" -timeout 10m
+
+test:
+	@echo "Running UC tests (auto-loading credentials)..."
+	@go test -v ./... -timeout 10m
 
 help:
 	@echo "Use Case Test Infrastructure"
 	@echo ""
 	@echo "Targets:"
-	@echo "  test-dev      - Run tests against development cluster (api.dev.otherjamesbrown.com)"
-	@echo "  test-staging  - Run tests against staging cluster (api.staging.otherjamesbrown.com)"
+	@echo "  test-dev      - Run tests against development cluster"
+	@echo "  test-staging  - Run tests against staging cluster"
 	@echo "  test-uc       - Run specific UC test (usage: make test-uc UC=UC-ORG-001)"
+	@echo "  test          - Run tests (requires AI_AAS_API_ENDPOINT to be set)"
 	@echo "  help          - Show this help message"
 	@echo ""
 	@echo "Environment Variables:"
-	@echo "  UC            - Use case ID to run (required for test-uc)"
+	@echo "  AI_AAS_API_ENDPOINT - API endpoint (set automatically by test-dev/test-staging)"
+	@echo "  AI_AAS_API_KEY      - API key (auto-loaded from secrets/env/.env)"
+	@echo "  UC                  - Use case ID to run (required for test-uc)"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make test-dev              # Run all UC tests against development"
@@ -82,6 +63,5 @@ help:
 	@echo "  make test-uc UC=UC-ORG-001 # Run specific UC test against development"
 	@echo ""
 	@echo "Secrets:"
-	@echo "  API keys are loaded from: $(SECRETS_FILE)"
-	@echo "  Development:  MASTER_ADMIN_API_KEY"
-	@echo "  Staging:      STAGING_MASTER_ADMIN_API_KEY"
+	@echo "  API keys auto-loaded from: $(SECRETS_FILE)"
+	@echo "  Uses testconfig loader from shared/go/testconfig"

@@ -41,18 +41,21 @@ The master admin account is the primary administrative account with full platfor
 The master admin credentials are stored in:
 
 ```
-secrets/env/.env.master-admin
+secrets/env/.env
 ```
 
-This file is encrypted using `git-crypt` and is only accessible to authorized team members with the git-crypt key.
+This file is encrypted using `git-crypt` and is only accessible to authorized team members with the git-crypt key. All test credentials (master admin, E2E, staging) are consolidated in this single file.
 
 ## Usage
 
 ### Loading Credentials
 
 ```bash
-# Load credentials into your shell
-export $(grep -v '^#' secrets/env/.env.master-admin | xargs)
+# Load credentials into your shell (after git-crypt unlock)
+export $(grep -v '^#' secrets/env/.env | xargs)
+
+# For Go tests, use the testconfig loader (auto-loads from secrets/env/.env)
+# See: shared/go/testconfig/loader.go
 ```
 
 ### Using with Admin CLI
@@ -106,7 +109,7 @@ The master admin account was created on 2025-11-23 using the following process:
    - User record in `users` table with bcrypt password hash
    - API key record in `api_keys` table with fingerprint
 
-3. **Stored Credentials**: Created `secrets/env/.env.master-admin` with all credentials
+3. **Stored Credentials**: Added credentials to `secrets/env/.env`
 
 4. **Updated Admin CLI**: Updated `~/.admin-cli/config.yaml` with the new API key
 
@@ -175,7 +178,7 @@ If you need to reset the password directly:
 
 4. **Update the .env file**:
    ```bash
-   # Edit secrets/env/.env.master-admin
+   # Edit secrets/env/.env
    MASTER_ADMIN_USER_PASSWORD=your_new_secure_password
    ```
 
@@ -225,7 +228,7 @@ To rotate the master admin API key:
 
 1. Generate a new API key using `scripts/create-e2e-admin-key.py`
 2. Update the database record for the existing API key
-3. Update `secrets/env/.env.master-admin`
+3. Update `secrets/env/.env`
 4. Update `~/.admin-cli/config.yaml`
 5. Update any CI/CD pipelines or automation using the key
 6. Revoke the old key after migration is complete

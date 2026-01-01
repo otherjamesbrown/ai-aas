@@ -4,8 +4,31 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/ai-aas/shared-go/testconfig"
 	"gopkg.in/yaml.v3"
 )
+
+// init loads test configuration from secrets/env/.env if environment variables
+// are not already set. This enables running tests without manual env setup.
+func init() {
+	// Skip if already configured via env vars
+	if os.Getenv(envAPIEndpoint) != "" && os.Getenv(envAPIKey) != "" {
+		return
+	}
+
+	// Try to load from secrets/env/.env
+	cfg, err := testconfig.Load()
+	if err != nil {
+		// No config available - tests will skip via skipIfNoLiveAPI
+		return
+	}
+
+	// Set environment variables for CLI subprocesses
+	// UC tests use AI_AAS_API_KEY which maps to MASTER_ADMIN_API_KEY
+	if cfg.MasterAdminAPIKey != "" && os.Getenv(envAPIKey) == "" {
+		os.Setenv(envAPIKey, cfg.MasterAdminAPIKey)
+	}
+}
 
 // TestConfig holds configuration for UC tests
 type TestConfig struct {
@@ -15,7 +38,7 @@ type TestConfig struct {
 }
 
 // LoadConfig loads test configuration from environment or optional config file
-// Priority: Environment variables > Config file > Error
+// Priority: Environment variables > secrets/env/.env > Config file > Error
 func LoadConfig() (*TestConfig, error) {
 	cfg := &TestConfig{}
 

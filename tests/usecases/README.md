@@ -104,22 +104,54 @@ func TestUC_BM_001_CreateBenchmarkTarget(t *testing.T) {
 
 ## Running Tests
 
+### Using Makefile (Recommended)
+
 ```bash
-# Run all use case tests
-go test ./tests/usecases/...
+cd tests/usecases
+
+# Run all tests against development cluster
+make test-dev
+
+# Run all tests against staging cluster
+make test-staging
+
+# Run specific UC test
+make test-uc UC=UC-ORG-001
+```
+
+### Manual Execution
+
+```bash
+# Run with explicit environment variables
+AI_AAS_API_ENDPOINT=https://user-org.dev.otherjamesbrown.com \
+AI_AAS_API_KEY=<your-api-key> \
+go test -v ./...
 
 # Run tests for a specific feature
-go test ./tests/usecases/... -run "TestUC_BM_"
+go test ./... -run "TestUC_BM_"
 
 # Run a specific use case
-go test ./tests/usecases/... -run "TestUC_BM_001"
+go test ./... -run "TestUC_BM_001"
 
 # Run a specific acceptance criterion
-go test ./tests/usecases/... -run "TestUC_BM_001/AC-01"
-
-# Run with verbose output
-go test ./tests/usecases/... -v
+go test ./... -run "TestUC_BM_001/AC-01"
 ```
+
+## Configuration
+
+Tests automatically load credentials from `secrets/env/.env` via the testconfig loader:
+
+| Source | Priority | Description |
+|--------|----------|-------------|
+| Environment variables | 1 (highest) | `AI_AAS_API_KEY`, `AI_AAS_API_ENDPOINT` |
+| `secrets/env/.env` | 2 | Auto-loaded if env vars not set |
+
+**Key environment variables:**
+- `AI_AAS_API_ENDPOINT` - API endpoint URL (required, set by Makefile)
+- `AI_AAS_API_KEY` - API key (auto-loaded from `MASTER_ADMIN_API_KEY` in .env)
+
+The testconfig loader (`shared/go/testconfig`) parses `secrets/env/.env` and exports
+credentials to environment variables for CLI subprocess execution.
 
 ## Coverage Analysis
 
