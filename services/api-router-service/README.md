@@ -57,7 +57,7 @@ Requests require an API key via:
 
 Key environment variables:
 - `HTTP_PORT` - HTTP port (default: 8080)
-- `REDIS_ADDRESS` - Redis for rate limiting
+- `REDIS_ADDRESS` - **Redis for rate limiting + API key cache invalidation** (required for immediate revocation)
 - `KAFKA_BROKERS` - Kafka for usage records
 - `CONFIG_SERVICE_ENDPOINT` - etcd for configuration
 - `BACKEND_ENDPOINTS` - Comma-separated backend URLs
@@ -66,6 +66,26 @@ Key environment variables:
 - `ADMIN_API_ENDPOINT` - Admin API URL for model list
 
 ## Caching Behavior
+
+### API Key Validation Cache
+
+API key validation results are cached for 1 minute to reduce load on user-org-service:
+
+**Cache Invalidation:**
+- When an API key is revoked, user-org-service publishes a cache invalidation event to Redis
+- api-router-service subscribes to the `apikey:invalidate` channel and invalidates cached entries
+- **CRITICAL**: Redis is required for immediate revocation. Without Redis, revoked keys remain valid for up to 1 minute (cache TTL)
+
+**Configuration:**
+```yaml
+env:
+  - name: REDIS_ADDRESS
+    value: "redis-service:6379"  # Required for immediate revocation
+```
+
+**Monitoring:**
+- Check logs for `"API key cache invalidation subscriber failed"` errors
+- Warning logged on startup if Redis is unavailable: `"cache invalidation disabled"`
 
 ### /v1/models Endpoint Cache
 
