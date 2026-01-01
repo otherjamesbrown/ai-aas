@@ -194,6 +194,43 @@ func (c *TestClient) POSTWithHeaders(path string, body interface{}, headers map[
 	return c.DoWithHeaders("POST", path, bodyBytes, headers)
 }
 
+// ModelsResponse represents the response from GET /v1/models
+type ModelsResponse struct {
+	Object string       `json:"object"`
+	Data   []ModelInfo  `json:"data"`
+}
+
+// ModelInfo represents a single model in the models list
+type ModelInfo struct {
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	OwnedBy string `json:"owned_by"`
+}
+
+// GetAvailableModels fetches the list of available models from /v1/models
+func (c *TestClient) GetAvailableModels() ([]string, error) {
+	resp, err := c.GET("/v1/models")
+	if err != nil {
+		return nil, fmt.Errorf("fetch models: %w", err)
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("models endpoint returned %d: %s", resp.StatusCode, resp.String())
+	}
+
+	var modelsResp ModelsResponse
+	if err := resp.UnmarshalJSON(&modelsResp); err != nil {
+		return nil, fmt.Errorf("parse models response: %w", err)
+	}
+
+	models := make([]string, len(modelsResp.Data))
+	for i, m := range modelsResp.Data {
+		models[i] = m.ID
+	}
+
+	return models, nil
+}
+
 // DoStreaming performs an HTTP request and returns the raw response for streaming.
 // The caller is responsible for closing the response body.
 func (c *TestClient) DoStreaming(method, path string, body []byte) (*http.Response, error) {

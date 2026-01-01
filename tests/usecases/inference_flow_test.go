@@ -500,13 +500,103 @@ func TestUC_INF_003_MultiModelRouting(t *testing.T) {
 
 	inferenceClient := NewTestClient(getAPIRouterURL(), apiKey.Key)
 
+	// Fetch available models dynamically
+	availableModels, modelsErr := inferenceClient.GetAvailableModels()
+	if modelsErr != nil {
+		t.Logf("Warning: could not fetch available models: %v", modelsErr)
+	}
+
 	t.Run("AC-01: route to correct backend by model name", func(t *testing.T) {
-		t.Skip("Multi-model routing validation requires multiple deployed models")
-		// TODO: Implement once we have multiple models deployed
+		if len(availableModels) < 2 {
+			t.Skipf("Multi-model routing requires 2+ models, found %d", len(availableModels))
+		}
+
+		// Test that each model routes to its correct backend
+		for _, model := range availableModels[:2] { // Test first 2 models
+			reqBody := map[string]interface{}{
+				"model": model,
+				"messages": []map[string]interface{}{
+					{"role": "user", "content": "Hello"},
+				},
+				"max_tokens": 10,
+			}
+
+			resp, err := inferenceClient.POST("/v1/chat/completions", reqBody)
+			if err != nil {
+				t.Fatalf("Request for model %s failed: %v", model, err)
+			}
+
+			if resp.StatusCode != 200 {
+				t.Errorf("Model %s: expected status 200, got %d: %s", model, resp.StatusCode, resp.String())
+				continue
+			}
+
+			var chatResp struct {
+				Model string `json:"model"`
+			}
+			if err := resp.UnmarshalJSON(&chatResp); err != nil {
+				t.Errorf("Model %s: failed to parse response: %v", model, err)
+				continue
+			}
+
+			// Verify the response model matches what we requested
+			if chatResp.Model != model {
+				t.Errorf("Model %s: response model mismatch, got %s", model, chatResp.Model)
+			}
+		}
 	})
 
 	t.Run("AC-02: route different models in sequence", func(t *testing.T) {
-		t.Skip("Multi-model routing validation requires multiple deployed models")
+		if len(availableModels) < 2 {
+			t.Skipf("Multi-model routing requires 2+ models, found %d", len(availableModels))
+		}
+
+		// Send requests to different models in sequence to verify routing isolation
+		model1 := availableModels[0]
+		model2 := availableModels[1]
+
+		// Request to model 1
+		resp1, err := inferenceClient.POST("/v1/chat/completions", map[string]interface{}{
+			"model":      model1,
+			"messages":   []map[string]interface{}{{"role": "user", "content": "Test 1"}},
+			"max_tokens": 5,
+		})
+		if err != nil {
+			t.Fatalf("Request to model 1 failed: %v", err)
+		}
+
+		// Request to model 2
+		resp2, err := inferenceClient.POST("/v1/chat/completions", map[string]interface{}{
+			"model":      model2,
+			"messages":   []map[string]interface{}{{"role": "user", "content": "Test 2"}},
+			"max_tokens": 5,
+		})
+		if err != nil {
+			t.Fatalf("Request to model 2 failed: %v", err)
+		}
+
+		// Both should succeed
+		if resp1.StatusCode != 200 {
+			t.Errorf("Model 1 (%s): expected 200, got %d", model1, resp1.StatusCode)
+		}
+		if resp2.StatusCode != 200 {
+			t.Errorf("Model 2 (%s): expected 200, got %d", model2, resp2.StatusCode)
+		}
+
+		// Verify each response has the correct model
+		var chatResp1, chatResp2 struct {
+			Model string `json:"model"`
+		}
+		if err := resp1.UnmarshalJSON(&chatResp1); err == nil {
+			if chatResp1.Model != model1 {
+				t.Errorf("Response 1 model mismatch: expected %s, got %s", model1, chatResp1.Model)
+			}
+		}
+		if err := resp2.UnmarshalJSON(&chatResp2); err == nil {
+			if chatResp2.Model != model2 {
+				t.Errorf("Response 2 model mismatch: expected %s, got %s", model2, chatResp2.Model)
+			}
+		}
 	})
 
 	t.Run("AC-03: handle backend unavailability", func(t *testing.T) {
