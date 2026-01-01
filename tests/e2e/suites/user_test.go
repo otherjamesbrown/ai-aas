@@ -1,5 +1,12 @@
 //go:build (admin || nightly || full) && e2e_tier || !e2e_tier
 
+// DEPRECATED: Migrated to tests/usecases/users_test.go
+// This file contains CLI-based user management tests that have been
+// migrated to the use case test suite. The UC tests use ai-aas-org CLI
+// which is the preferred interface for user domain operations.
+//
+// API-level user tests remain in user_lifecycle_test.go.
+
 package suites
 
 import (

@@ -1,5 +1,13 @@
 //go:build (benchmark || nightly || full) && e2e_tier || !e2e_tier
 
+// DEPRECATED: Migrated to tests/usecases/benchmarks_test.go
+// This file contains CLI-based benchmark tests that have been migrated to the
+// use case test suite. The UC tests use ai-aas-org CLI which is the preferred
+// interface for benchmark operations.
+//
+// Tests in this file use ai-aas-cli --profile dev-admin, but ai-aas-org is
+// the canonical CLI for user-domain operations including benchmarks.
+
 package suites
 
 import (

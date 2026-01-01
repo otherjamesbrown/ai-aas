@@ -1,5 +1,13 @@
 //go:build (nightly || full) && e2e_tier || !e2e_tier
 
+// NOTE: This file contains authorization and RBAC tests (not CLI authentication).
+// These tests exercise API-level access control and permission enforcement.
+// CLI authentication/configuration tests are in tests/usecases/auth_test.go.
+//
+// Tests in this file:
+// - Authorization denial with insufficient permissions
+// - Role-based access control (RBAC)
+
 package suites
 
 import (

@@ -1,5 +1,16 @@
 //go:build (nightly || full) && e2e_tier || !e2e_tier
 
+// NOTE: This file contains API-level user management tests (not CLI-based).
+// These tests exercise the User-Org Service API directly using HTTP fixtures.
+// CLI-based user management tests are in tests/usecases/users_test.go.
+//
+// Tests in this file:
+// - User invitation and acceptance flow
+// - User updates (PATCH operations)
+// - User role changes
+// - User deletion and API key revocation
+// - User status transitions (active/suspended)
+
 package suites
 
 import (

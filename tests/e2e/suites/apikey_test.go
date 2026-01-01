@@ -1,5 +1,12 @@
 //go:build (apikey || nightly || full) && e2e_tier || !e2e_tier
 
+// DEPRECATED: Migrated to tests/usecases/apikeys_test.go
+// This file contains CLI-based API key management tests that have been
+// migrated to the use case test suite. The UC tests use ai-aas-org CLI
+// which is the preferred interface for user domain operations.
+//
+// API-level API key tests remain in apikey_lifecycle_test.go.
+
 package suites
 
 import (

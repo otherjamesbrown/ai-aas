@@ -1,5 +1,10 @@
 //go:build (smoke || nightly || full) && e2e_tier || !e2e_tier
 
+// NOTE: This file contains bootstrap key lifecycle tests.
+// Bootstrap keys are special admin keys used for initial CLI setup.
+// These tests exercise the Admin API bootstrap endpoints directly.
+// CLI initialization using bootstrap keys is tested in tests/usecases/auth_test.go.
+
 package suites
 
 import (

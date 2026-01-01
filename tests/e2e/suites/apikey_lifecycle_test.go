@@ -1,5 +1,14 @@
 //go:build (smoke || nightly || full) && e2e_tier || !e2e_tier
 
+// NOTE: This file contains API-level API key tests (not CLI-based).
+// These tests exercise the User-Org Service API and API Router directly using HTTP fixtures.
+// CLI-based API key management tests are in tests/usecases/apikeys_test.go.
+//
+// Tests in this file:
+// - API key creation and inference usage
+// - API key revocation and invalidation
+// - Multiple API keys per service account
+
 package suites
 
 import (

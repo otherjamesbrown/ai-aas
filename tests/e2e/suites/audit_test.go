@@ -1,5 +1,16 @@
 //go:build full && e2e_tier || !e2e_tier
 
+// NOTE: This file contains audit system integration tests.
+// These tests exercise audit event generation, correlation IDs, and export API.
+// CLI-based audit listing/filtering tests are in tests/usecases/audit_test.go.
+//
+// Tests in this file:
+// - Audit event verification (event generation)
+// - Correlation ID validation across services
+// - Audit log query and export
+// - Denial event verification
+// - Audit log unavailability handling
+
 package suites
 
 import (
