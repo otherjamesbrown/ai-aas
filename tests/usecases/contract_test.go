@@ -230,7 +230,7 @@ func TestContract_CreateUser_ResponseFields(t *testing.T) {
 	// When: User runs `ai-aas-org user create --json`
 	result := runOrgCLI("user", "create",
 		"--user-email", testEmail,
-		"--display-name", "Contract Test User",
+		"--user-display-name", "Contract Test User",
 		"--json")
 
 	// Then: CLI successfully parses API response
