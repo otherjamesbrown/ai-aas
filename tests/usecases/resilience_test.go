@@ -409,6 +409,7 @@ func TestUC_RSL_005_BudgetEnforcement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create organization: %v", err)
 	}
+	_ = org // TODO: Use when budget API is implemented
 
 	t.Run("AC-01: allow requests within budget", func(t *testing.T) {
 		// Given: Organization budget is $100 and current spend is $50

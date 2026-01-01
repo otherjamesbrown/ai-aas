@@ -1,7 +1,6 @@
 package usecases_test
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -203,6 +202,7 @@ func TestUC_INF_002_StreamingCompletion(t *testing.T) {
 	}
 
 	inferenceClient := NewTestClient(getAPIRouterURL(), apiKey.Key)
+	_ = inferenceClient // TODO: Use when streaming is implemented
 
 	t.Run("AC-01: enable streaming with request parameter", func(t *testing.T) {
 		t.Skip("Streaming not yet implemented - requires UC-INF-002 implementation")
