@@ -2,6 +2,15 @@
 
 package suites
 
+// DEPRECATED: Integration tests in this file have been migrated to UC structure.
+// See tests/usecases/inference_flow_test.go for:
+//   - TestUC_INF_001_EndToEndChatCompletion (includes chat completions)
+//   - TestUC_INF_002_StreamingCompletion (replaces TestTextCompletionsStreaming)
+//   - TestUC_INF_004_TokenUsageTracking (replaces TestTextCompletionsUsageAnalytics)
+//
+// These E2E tests remain for backwards compatibility but should not be extended.
+// All new integration tests should be added to tests/usecases/ following UC specs.
+
 import (
 	"encoding/json"
 	"io"

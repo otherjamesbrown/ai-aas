@@ -2,6 +2,15 @@
 
 package suites
 
+// DEPRECATED: Integration tests in this file have been migrated to UC structure.
+// See tests/usecases/analytics_flow_test.go for:
+//   - TestUC_ANL_001_UsageRecording (usage recording validation)
+//   - TestUC_ANL_003_AnalyticsExport (replaces all export tests)
+//   - TestUC_ANL_004_CrossServiceCorrelation (trace ID correlation)
+//
+// These E2E tests remain for backwards compatibility but should not be extended.
+// All new integration tests should be added to tests/usecases/ following UC specs.
+
 import (
 	"encoding/json"
 	"strings"

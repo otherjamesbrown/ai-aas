@@ -2,6 +2,13 @@
 
 package suites
 
+// DEPRECATED: Integration tests in this file have been migrated to UC structure.
+// See tests/usecases/resilience_test.go for:
+//   - TestUC_RSL_005_BudgetEnforcement (replaces all budget tests)
+//
+// These E2E tests remain for backwards compatibility but should not be extended.
+// All new integration tests should be added to tests/usecases/ following UC specs.
+
 import (
 	"testing"
 

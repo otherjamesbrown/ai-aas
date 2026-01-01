@@ -11,9 +11,13 @@ import (
 
 // Environment variable names for API configuration
 const (
-	envAPIEndpoint = "AI_AAS_API_ENDPOINT"
-	envAPIKey      = "AI_AAS_API_KEY"
-	envOrgID       = "AI_AAS_ORG_ID"
+	envAPIEndpoint     = "AI_AAS_API_ENDPOINT"
+	envAPIKey          = "AI_AAS_API_KEY"
+	envOrgID           = "AI_AAS_ORG_ID"
+	envAPIRouterURL    = "AI_AAS_API_ROUTER_URL"
+	envAnalyticsURL    = "AI_AAS_ANALYTICS_URL"
+	envAdminAPIKey     = "AI_AAS_ADMIN_API_KEY"
+	envTestModel       = "AI_AAS_TEST_MODEL"
 )
 
 // skipIfNoLiveAPI skips the test if the live API is not configured.
@@ -350,4 +354,50 @@ func runPlatformCLIWithProfile(profile string, args ...string) CLIResult {
 	}
 
 	return result
+}
+
+// skipIfNoOrgCLI skips the test if ai-aas-org is not available.
+// Tests should call this at the start to conditionally run when the org CLI is installed.
+func skipIfNoOrgCLI(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("ai-aas-org"); err != nil {
+		t.Skip("ai-aas-org not found in PATH: install or build it first")
+	}
+}
+
+// getAPIRouterURL returns the API router service URL.
+// Defaults to AI_AAS_API_ENDPOINT if AI_AAS_API_ROUTER_URL not set.
+func getAPIRouterURL() string {
+	url := os.Getenv(envAPIRouterURL)
+	if url == "" {
+		// Fallback to main API endpoint
+		url = os.Getenv(envAPIEndpoint)
+	}
+	return url
+}
+
+// getAnalyticsServiceURL returns the analytics service URL.
+func getAnalyticsServiceURL() string {
+	return os.Getenv(envAnalyticsURL)
+}
+
+// getAdminAPIKey returns the admin API key for administrative operations.
+// Defaults to AI_AAS_API_KEY if AI_AAS_ADMIN_API_KEY not set.
+func getAdminAPIKey() string {
+	adminKey := os.Getenv(envAdminAPIKey)
+	if adminKey == "" {
+		// Fallback to regular API key
+		return os.Getenv(envAPIKey)
+	}
+	return adminKey
+}
+
+// getTestModel returns the model name to use for testing.
+// Defaults to "gpt-4" if not specified.
+func getTestModel() string {
+	model := os.Getenv(envTestModel)
+	if model == "" {
+		return "gpt-4" // Default test model
+	}
+	return model
 }

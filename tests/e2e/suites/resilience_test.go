@@ -2,6 +2,15 @@
 
 package suites
 
+// DEPRECATED: Integration tests in this file have been migrated to UC structure.
+// See tests/usecases/resilience_test.go for:
+//   - TestUC_RSL_002_BackendFailover (replaces TestBackendFailover, TestAllBackendsUnavailable)
+//   - TestUC_RSL_003_TimeoutHandling (timeout scenarios)
+//   - TestUC_RSL_004_ErrorResponseFormat (error format validation)
+//
+// These E2E tests remain for backwards compatibility but should not be extended.
+// All new integration tests should be added to tests/usecases/ following UC specs.
+
 import (
 	"fmt"
 	"testing"
