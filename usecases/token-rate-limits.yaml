@@ -1,0 +1,683 @@
+feature: Token Rate-Limit Policies
+description: |
+  Token Rate-Limit Policies allow organization administrators to control API usage
+  by setting token consumption limits across rolling time windows (1h, 24h, 7d).
+  Policies can be applied as an organization default or overridden per-user.
+
+  When limits are exceeded, requests are rejected with OpenAI-compatible 429 errors.
+  Users can query their current usage to see consumption percentage and absolute values.
+
+dependencies:
+  - usecases/authentication.yaml
+  - usecases/organizations.yaml
+  - usecases/users.yaml
+
+usecases:
+  # --- Policy Management ---
+
+  - id: UC-TRL-001
+    title: Create Token Rate-Limit Policy
+    interface: api
+    status: draft
+    bead: aas-2zku
+
+    description: |
+      An organization admin wants to create a named token rate-limit policy
+      with limits for one or more time windows (1h, 24h, 7d). Any combination
+      of windows is valid - for example, a policy with only 1h and 7d limits.
+
+      Policies are org-scoped and can be assigned as the org default or to
+      individual users.
+
+    actor: Organization Admin
+
+    preconditions:
+      - User has valid org admin API key
+      - User belongs to the target organization
+
+    depends_on:
+      - UC-AUTH-001
+      - UC-ORG-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Create policy with all three time windows
+        given: User is authenticated as org admin
+        when: |
+          POST /v1/orgs/{orgId}/token-policies
+          {"name": "standard", "limit_1h": 10000, "limit_24h": 100000, "limit_7d": 500000}
+        then:
+          - Policy is created with status 201
+          - Response includes policy ID
+          - Policy appears in GET /v1/orgs/{orgId}/token-policies
+
+      - id: AC-02
+        criterion: Create policy with partial limits
+        given: User is authenticated as org admin
+        when: |
+          POST /v1/orgs/{orgId}/token-policies
+          {"name": "burst-control", "limit_1h": 5000}
+        then:
+          - Policy is created with only 1h limit
+          - limit_24h and limit_7d are null (unlimited)
+
+      - id: AC-03
+        criterion: Reject policy with no limits
+        given: User is authenticated as org admin
+        when: |
+          POST /v1/orgs/{orgId}/token-policies
+          {"name": "empty"}
+        then:
+          - Request fails with 400 Bad Request
+          - Error message indicates at least one limit required
+
+      - id: AC-04
+        criterion: Reject duplicate policy name
+        given: Policy "standard" already exists in org
+        when: |
+          POST /v1/orgs/{orgId}/token-policies
+          {"name": "standard", "limit_1h": 5000}
+        then:
+          - Request fails with 409 Conflict
+          - Error message indicates name already exists
+
+      - id: AC-05
+        criterion: Reject reserved policy name
+        given: User is authenticated as org admin
+        when: |
+          POST /v1/orgs/{orgId}/token-policies
+          {"name": "No Token Rate-Limit", "limit_1h": 5000}
+        then:
+          - Request fails with 400 Bad Request
+          - Error message indicates name is reserved
+
+    in_scope:
+      - Creating policy with name and optional limits
+      - Validating at least one limit is specified
+      - Validating policy name uniqueness within org
+      - Preventing use of reserved name
+
+    out_of_scope:
+      - Assigning policy to users (UC-TRL-004)
+      - Setting as org default (UC-TRL-003)
+      - Usage tracking
+
+    must_not:
+      - Create policies in other organizations
+      - Auto-assign policy to any users
+      - Allow creation of "No Token Rate-Limit" policy (system singleton)
+
+  - id: UC-TRL-002
+    title: List and View Token Policies
+    interface: api
+    status: draft
+    bead: aas-2zku
+
+    description: |
+      An organization admin wants to view all token rate-limit policies
+      available in their organization, including the system-wide
+      "No Token Rate-Limit" policy.
+
+    actor: Organization Admin
+
+    preconditions:
+      - User has valid org admin API key
+
+    depends_on:
+      - UC-AUTH-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: List all policies including built-in
+        given: Org has policies "standard" and "low-usage"
+        when: GET /v1/orgs/{orgId}/token-policies
+        then:
+          - Response includes "standard" and "low-usage"
+          - Response includes "No Token Rate-Limit" (is_builtin: true)
+          - Each policy shows all limit fields
+
+      - id: AC-02
+        criterion: Get single policy by ID
+        given: Policy "standard" exists with ID xyz
+        when: GET /v1/orgs/{orgId}/token-policies/xyz
+        then:
+          - Response includes full policy details
+          - Shows all three limit fields (null if unlimited)
+
+      - id: AC-03
+        criterion: Get built-in policy
+        given: System "No Token Rate-Limit" policy exists
+        when: GET /v1/orgs/{orgId}/token-policies/no-limit
+        then:
+          - Response includes policy with is_builtin=true
+          - All limits are null
+
+    in_scope:
+      - Listing org-scoped policies
+      - Including system "No Token Rate-Limit" in list
+      - Viewing individual policy details
+
+    out_of_scope:
+      - Viewing policies from other orgs
+      - Usage statistics per policy
+
+    must_not:
+      - Expose policies from other organizations
+      - Hide the built-in "No Token Rate-Limit" policy
+
+  - id: UC-TRL-003
+    title: Set Organization Default Policy
+    interface: api
+    status: draft
+    bead: aas-2zku
+
+    description: |
+      An organization admin wants to set a token rate-limit policy as the
+      default for all users in their organization. Users without explicit
+      overrides will inherit this policy.
+
+      New organizations default to "No Token Rate-Limit" (unlimited).
+
+    actor: Organization Admin
+
+    preconditions:
+      - User has valid org admin API key
+      - Target policy exists in org (or is the built-in unlimited policy)
+
+    depends_on:
+      - UC-TRL-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Set org default policy
+        given: Policy "standard" exists in org
+        when: |
+          PUT /v1/orgs/{orgId}/token-policy
+          {"policy_id": "standard-policy-uuid"}
+        then:
+          - Org default is updated
+          - GET /v1/orgs/{orgId}/token-policy returns "standard"
+
+      - id: AC-02
+        criterion: New org defaults to unlimited
+        given: Organization was just created
+        when: GET /v1/orgs/{orgId}/token-policy
+        then:
+          - Response shows "No Token Rate-Limit"
+          - is_builtin is true
+
+      - id: AC-03
+        criterion: Set back to unlimited
+        given: Org currently has "standard" as default
+        when: |
+          PUT /v1/orgs/{orgId}/token-policy
+          {"policy_id": "no-limit"}
+        then:
+          - Org default is set to "No Token Rate-Limit"
+          - All users without overrides become unlimited
+
+      - id: AC-04
+        criterion: Reject policy from another org
+        given: Policy belongs to different organization
+        when: |
+          PUT /v1/orgs/{orgId}/token-policy
+          {"policy_id": "other-org-policy-uuid"}
+        then:
+          - Request fails with 404 Not Found
+          - Error message indicates policy not found
+
+    in_scope:
+      - Setting org default to any org-scoped policy
+      - Setting org default to built-in unlimited policy
+      - Getting current org default
+
+    out_of_scope:
+      - Per-user overrides (UC-TRL-004)
+      - Policy creation
+
+    must_not:
+      - Allow setting policy from another organization
+      - Affect users with explicit overrides
+
+  - id: UC-TRL-004
+    title: Override Policy for Specific User
+    interface: api
+    status: draft
+    bead: aas-2zku
+
+    description: |
+      An organization admin wants to assign a specific token rate-limit
+      policy to an individual user, overriding the organization default.
+      This allows granting more or fewer tokens to specific users.
+
+    actor: Organization Admin
+
+    preconditions:
+      - User has valid org admin API key
+      - Target user exists in org
+      - Target policy exists in org (or is built-in unlimited)
+
+    depends_on:
+      - UC-TRL-001
+      - UC-USR-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Set user policy override
+        given: User "bob" exists, policy "low-usage" exists
+        when: |
+          PUT /v1/orgs/{orgId}/users/{bobId}/token-policy
+          {"policy_id": "low-usage-uuid"}
+        then:
+          - User's policy override is set
+          - GET returns "low-usage" as effective policy
+
+      - id: AC-02
+        criterion: User override takes precedence
+        given: Org default is "standard", Bob has "low-usage" override
+        when: GET /v1/orgs/{orgId}/users/{bobId}/token-policy
+        then:
+          - Response shows "low-usage" as effective policy
+          - Response indicates this is an override (not inherited)
+
+      - id: AC-03
+        criterion: Remove override to inherit org default
+        given: Bob has "low-usage" override, org default is "standard"
+        when: DELETE /v1/orgs/{orgId}/users/{bobId}/token-policy
+        then:
+          - Override is removed
+          - GET now returns "standard" (inherited from org)
+
+      - id: AC-04
+        criterion: Grant unlimited to specific user
+        given: Org default is "standard" (limited)
+        when: |
+          PUT /v1/orgs/{orgId}/users/{bobId}/token-policy
+          {"policy_id": "no-limit"}
+        then:
+          - Bob's policy is set to "No Token Rate-Limit"
+          - Bob has unlimited access despite org default
+
+    in_scope:
+      - Setting per-user policy override
+      - Removing override (inherit org default)
+      - Viewing effective policy for user
+
+    out_of_scope:
+      - Org default changes (UC-TRL-003)
+      - Service account policies (service accounts are unlimited)
+
+    must_not:
+      - Set policy for users in other orgs
+      - Set policy for service accounts
+      - Use policy from another organization
+
+  # --- Usage Visibility ---
+
+  - id: UC-TRL-005
+    title: Query Own Token Usage
+    interface: api
+    status: draft
+    bead: aas-2zku
+
+    description: |
+      A user wants to check their current token usage against their
+      rate limits. This shows consumption as both percentage and
+      absolute values for each applicable time window.
+
+    actor: API User
+
+    preconditions:
+      - User has valid API key
+
+    depends_on:
+      - UC-AUTH-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: View usage with all windows
+        given: User has policy with 1h/24h/7d limits, has used some tokens
+        when: GET /v1/usage/tokens
+        then:
+          - Response shows policy name
+          - Response shows usage for each window (1h, 24h, 7d)
+          - Each window shows limit, used, remaining, percentage, resets_at
+
+      - id: AC-02
+        criterion: View usage with partial limits
+        given: User has policy with only 1h limit
+        when: GET /v1/usage/tokens
+        then:
+          - Response shows only 1h window
+          - 24h and 7d windows are omitted (unlimited)
+
+      - id: AC-03
+        criterion: View usage with no limits
+        given: User has "No Token Rate-Limit" policy
+        when: GET /v1/usage/tokens
+        then:
+          - Response shows policy_name as "No Token Rate-Limit"
+          - windows array is empty
+
+      - id: AC-04
+        criterion: Percentage calculation is accurate
+        given: User has 1h limit of 10000, has used 3500 tokens
+        when: GET /v1/usage/tokens
+        then:
+          - 1h window shows percentage as 35.0
+          - 1h window shows remaining as 6500
+
+    in_scope:
+      - Querying own usage
+      - Showing percentage consumed
+      - Showing absolute used/remaining/limit
+      - Showing reset times
+
+    out_of_scope:
+      - Querying other users' usage (admin-only via UC-TRL-006)
+      - Historical usage data
+      - Per-model breakdown
+
+    must_not:
+      - Expose other users' usage data
+      - Show windows that have no limit
+
+  - id: UC-TRL-006
+    title: Admin Views User Token Usage
+    interface: api
+    status: draft
+    bead: aas-2zku
+
+    description: |
+      An organization admin wants to check a specific user's token usage
+      to understand their consumption patterns or troubleshoot rate limit issues.
+
+    actor: Organization Admin
+
+    preconditions:
+      - User has valid org admin API key
+      - Target user exists in org
+
+    depends_on:
+      - UC-TRL-005
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: View any org user's usage
+        given: Bob exists in org with "standard" policy
+        when: GET /v1/orgs/{orgId}/users/{bobId}/usage/tokens
+        then:
+          - Response shows Bob's effective policy
+          - Response shows Bob's usage for each window
+
+      - id: AC-02
+        criterion: Cannot view user in other org
+        given: User belongs to different organization
+        when: GET /v1/orgs/{orgId}/users/{otherUserId}/usage/tokens
+        then:
+          - Request fails with 404 Not Found
+
+    in_scope:
+      - Viewing any user's usage within own org
+      - Seeing effective policy (inherited or override)
+
+    out_of_scope:
+      - Viewing users in other orgs
+      - Modifying usage data
+
+    must_not:
+      - Expose usage for users outside admin's org
+
+  # --- Enforcement ---
+
+  - id: UC-TRL-007
+    title: Enforce Rate Limit on API Request
+    interface: api
+    status: draft
+    bead: aas-2zku
+
+    description: |
+      When a user makes an API request that would exceed their token rate limit,
+      the system rejects the request with an OpenAI-compatible 429 error including
+      details about which window was exceeded and when it resets.
+
+    actor: API User
+
+    preconditions:
+      - User has a policy with at least one limit
+      - User has already consumed tokens in current windows
+
+    depends_on:
+      - UC-TRL-004
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Reject when limit exceeded
+        given: User has 1h limit of 10000, has used 10000 tokens
+        when: User makes any API request
+        then:
+          - Request is rejected with HTTP 429
+          - Error body is OpenAI-compatible format
+          - Error includes window that triggered (1h)
+          - Error includes resets_at timestamp
+
+      - id: AC-02
+        criterion: Include OpenAI-compatible headers
+        given: User exceeds their rate limit
+        when: Request is rejected with 429
+        then:
+          - Response includes x-ratelimit-limit-tokens header
+          - Response includes x-ratelimit-remaining-tokens header
+          - Response includes x-ratelimit-reset-tokens header
+          - Response includes Retry-After header (seconds)
+
+      - id: AC-03
+        criterion: Report soonest-resetting window
+        given: User exceeds both 1h and 24h limits
+        when: Request is rejected
+        then:
+          - Error reports the 1h window (resets sooner)
+          - Retry-After reflects 1h window reset time
+
+      - id: AC-04
+        criterion: Allow when under all limits
+        given: User is under all window limits
+        when: User makes API request
+        then:
+          - Request proceeds normally
+          - Response includes usage headers for awareness
+
+    in_scope:
+      - Rejecting requests when any window limit exceeded
+      - OpenAI-compatible error format
+      - OpenAI-compatible rate limit headers
+      - Reporting soonest-resetting exceeded window
+
+    out_of_scope:
+      - Streaming cutoff mid-response
+      - Queuing requests for later
+
+    must_not:
+      - Block service account requests (they are unlimited)
+      - Block requests for users with "No Token Rate-Limit"
+
+  - id: UC-TRL-008
+    title: Allow Overage Then Block
+    interface: api
+    status: draft
+    bead: aas-2zku
+
+    description: |
+      When a request's actual token usage exceeds the limit (because the
+      estimate was under), the current request completes but subsequent
+      requests are blocked until the window resets.
+
+    actor: API User
+
+    preconditions:
+      - User is near their limit but not over
+
+    depends_on:
+      - UC-TRL-007
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Allow request that goes over
+        given: User has 500 tokens remaining in 1h window
+        when: User sends request, response uses 800 tokens
+        then:
+          - Request completes successfully
+          - 800 tokens are recorded (total now over limit)
+
+      - id: AC-02
+        criterion: Block next request after overage
+        given: User went over limit on previous request
+        when: User sends another request
+        then:
+          - Request is rejected with 429
+          - Error shows negative remaining (-300)
+          - Must wait for window reset
+
+    in_scope:
+      - Allowing current request to complete
+      - Recording actual usage even when over
+      - Blocking subsequent requests
+
+    out_of_scope:
+      - Cutting off streaming responses
+      - Refunding tokens
+
+    must_not:
+      - Terminate in-flight requests
+      - Lose usage data when over limit
+
+  # --- Policy Lifecycle ---
+
+  - id: UC-TRL-009
+    title: Update Token Policy
+    interface: api
+    status: draft
+    bead: aas-2zku
+
+    description: |
+      An organization admin wants to modify an existing token rate-limit
+      policy's limits. Changes take effect for all users with this policy
+      on their next request (after cache refresh).
+
+    actor: Organization Admin
+
+    preconditions:
+      - User has valid org admin API key
+      - Policy exists and is not built-in
+
+    depends_on:
+      - UC-TRL-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Update policy limits
+        given: Policy "standard" has 1h=10000
+        when: |
+          PUT /v1/orgs/{orgId}/token-policies/{id}
+          {"limit_1h": 20000}
+        then:
+          - Policy is updated
+          - 1h limit is now 20000
+          - Other limits unchanged
+
+      - id: AC-02
+        criterion: Remove a limit
+        given: Policy has all three limits set
+        when: |
+          PUT /v1/orgs/{orgId}/token-policies/{id}
+          {"limit_24h": null}
+        then:
+          - 24h limit is removed (unlimited)
+          - Other limits unchanged
+
+      - id: AC-03
+        criterion: Cannot update built-in policy
+        given: Attempting to update "No Token Rate-Limit"
+        when: PUT /v1/orgs/{orgId}/token-policies/no-limit
+        then:
+          - Request fails with 403 Forbidden
+          - Error indicates built-in policies cannot be modified
+
+    in_scope:
+      - Updating limit values
+      - Removing limits (set to null)
+      - Updating policy name/description
+
+    out_of_scope:
+      - Modifying built-in policies
+      - Immediate enforcement (cache has TTL)
+
+    must_not:
+      - Allow modification of built-in "No Token Rate-Limit"
+      - Remove all limits (at least one required)
+
+  - id: UC-TRL-010
+    title: Delete Token Policy
+    interface: api
+    status: draft
+    bead: aas-2zku
+
+    description: |
+      An organization admin wants to delete a token rate-limit policy
+      that is no longer needed. Policies in use cannot be deleted.
+
+    actor: Organization Admin
+
+    preconditions:
+      - User has valid org admin API key
+      - Policy exists and is not built-in
+      - Policy is not in use (not org default, no user overrides)
+
+    depends_on:
+      - UC-TRL-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Delete unused policy
+        given: Policy "old-policy" exists with no assignments
+        when: DELETE /v1/orgs/{orgId}/token-policies/{id}
+        then:
+          - Policy is deleted with 204 No Content
+          - Policy no longer appears in list
+
+      - id: AC-02
+        criterion: Cannot delete policy in use as org default
+        given: Policy is org's default policy
+        when: DELETE /v1/orgs/{orgId}/token-policies/{id}
+        then:
+          - Request fails with 409 Conflict
+          - Error lists that policy is org default
+
+      - id: AC-03
+        criterion: Cannot delete policy with user overrides
+        given: Policy is assigned to user Bob
+        when: DELETE /v1/orgs/{orgId}/token-policies/{id}
+        then:
+          - Request fails with 409 Conflict
+          - Error lists users with this policy
+
+      - id: AC-04
+        criterion: Cannot delete built-in policy
+        given: Attempting to delete "No Token Rate-Limit"
+        when: DELETE /v1/orgs/{orgId}/token-policies/no-limit
+        then:
+          - Request fails with 403 Forbidden
+
+    in_scope:
+      - Deleting unused policies
+      - Checking for assignments before delete
+      - Returning conflict with usage details
+
+    out_of_scope:
+      - Cascade delete (reassign users first)
+      - Force delete option
+
+    must_not:
+      - Delete policies that are in use
+      - Delete built-in "No Token Rate-Limit"
+      - Delete policies from other orgs
