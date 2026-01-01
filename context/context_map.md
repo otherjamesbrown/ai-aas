@@ -163,9 +163,8 @@ sources:
     - shared/
 
   tests:
-    - tests/e2e/harness/
-    - tests/e2e/fixtures/
-    - tests/e2e/suites/
+    - tests/usecases/       # UC acceptance tests (CLI-based)
+    - tests/integration/    # Contract and integration tests
 
   config:
     - services/*/deployments/helm/
@@ -252,24 +251,12 @@ hierarchy:
 
       context/test-developer/agents.md:
         type: rules
-        purpose: E2E, contract, and integration test patterns
-        read_when: Working on tests/e2e/, tests/usecases/, tests/integration/
+        purpose: UC acceptance, contract, and integration test patterns
+        read_when: Working on tests/usecases/, tests/integration/
         inherits: context/agents.md
         links_to:
-          - tests/e2e/ (source)
           - tests/usecases/ (source)
-          - context/e2e-testing/agents.md (reference)
-
-      context/e2e-testing/agents.md:
-        type: rules
-        purpose: E2E test patterns (fixtures, tiers, harness)
-        read_when: Working on tests/e2e/, running E2E tests
-        inherits: context/agents.md
-        links_to:
-          - tests/e2e/harness/ (source)
-          - tests/e2e/fixtures/ (source)
-          - tests/e2e/suites/ (source)
-          - tests/e2e/README.md (reference)
+          - usecases/ (specifications)
 
       context/compliance-reviewer-agent.md:
         type: rules

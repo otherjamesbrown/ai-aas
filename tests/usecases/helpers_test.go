@@ -11,9 +11,13 @@ import (
 
 // Environment variable names for API configuration
 const (
-	envAPIEndpoint = "AI_AAS_API_ENDPOINT"
-	envAPIKey      = "AI_AAS_API_KEY"
-	envOrgID       = "AI_AAS_ORG_ID"
+	envAPIEndpoint     = "AI_AAS_API_ENDPOINT"
+	envAPIKey          = "AI_AAS_API_KEY"
+	envOrgID           = "AI_AAS_ORG_ID"
+	envAPIRouterURL    = "AI_AAS_API_ROUTER_URL"
+	envAnalyticsURL    = "AI_AAS_ANALYTICS_URL"
+	envAdminAPIKey     = "AI_AAS_ADMIN_API_KEY"
+	envTestModel       = "AI_AAS_TEST_MODEL"
 )
 
 // skipIfNoLiveAPI skips the test if the live API is not configured.
@@ -294,4 +298,106 @@ func getCurrentTimestamp() string {
 		return strings.TrimSpace(string(output))
 	}
 	return strings.TrimSpace(string(output))
+}
+
+// Platform CLI Helpers
+// These helpers support running the ai-aas-cli (platform CLI) for UC tests.
+
+// skipIfNoPlatformCLI skips the test if ai-aas-cli is not available.
+// Tests should call this at the start to conditionally run when the CLI is installed.
+func skipIfNoPlatformCLI(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("ai-aas-cli"); err != nil {
+		t.Skip("ai-aas-cli not found in PATH: install or build it first")
+	}
+}
+
+// runPlatformCLI executes an ai-aas-cli command and returns the result.
+// It automatically uses the API endpoint and key from environment variables
+// if AI_AAS_API_ENDPOINT is set.
+func runPlatformCLI(args ...string) CLIResult {
+	return runPlatformCLIWithProfile("", args...)
+}
+
+// runPlatformCLIWithProfile executes an ai-aas-cli command with a specific profile.
+// If profile is empty, it uses the default profile or environment variables.
+func runPlatformCLIWithProfile(profile string, args ...string) CLIResult {
+	cmd := exec.Command("ai-aas-cli", args...)
+
+	// Pass current environment to subprocess
+	cmd.Env = os.Environ()
+
+	// If a profile is specified, add --profile flag
+	if profile != "" {
+		args = append([]string{"--profile", profile}, args...)
+		cmd = exec.Command("ai-aas-cli", args...)
+		cmd.Env = os.Environ()
+	}
+
+	// If live API is configured via env vars, ensure they're passed through
+	// The ai-aas-cli will respect AI_AAS_API_ENDPOINT and AI_AAS_API_KEY
+
+	output, err := cmd.CombinedOutput()
+
+	result := CLIResult{
+		Output:   string(output),
+		ExitCode: 0,
+	}
+
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			result.ExitCode = exitErr.ExitCode()
+		} else {
+			result.ExitCode = 1
+		}
+		result.Error = err.Error()
+	}
+
+	return result
+}
+
+// skipIfNoOrgCLI skips the test if ai-aas-org is not available.
+// Tests should call this at the start to conditionally run when the org CLI is installed.
+func skipIfNoOrgCLI(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("ai-aas-org"); err != nil {
+		t.Skip("ai-aas-org not found in PATH: install or build it first")
+	}
+}
+
+// getAPIRouterURL returns the API router service URL.
+// Defaults to AI_AAS_API_ENDPOINT if AI_AAS_API_ROUTER_URL not set.
+func getAPIRouterURL() string {
+	url := os.Getenv(envAPIRouterURL)
+	if url == "" {
+		// Fallback to main API endpoint
+		url = os.Getenv(envAPIEndpoint)
+	}
+	return url
+}
+
+// getAnalyticsServiceURL returns the analytics service URL.
+func getAnalyticsServiceURL() string {
+	return os.Getenv(envAnalyticsURL)
+}
+
+// getAdminAPIKey returns the admin API key for administrative operations.
+// Defaults to AI_AAS_API_KEY if AI_AAS_ADMIN_API_KEY not set.
+func getAdminAPIKey() string {
+	adminKey := os.Getenv(envAdminAPIKey)
+	if adminKey == "" {
+		// Fallback to regular API key
+		return os.Getenv(envAPIKey)
+	}
+	return adminKey
+}
+
+// getTestModel returns the model name to use for testing.
+// Defaults to "gpt-4" if not specified.
+func getTestModel() string {
+	model := os.Getenv(envTestModel)
+	if model == "" {
+		return "gpt-4" // Default test model
+	}
+	return model
 }

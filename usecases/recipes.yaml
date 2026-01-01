@@ -1,0 +1,342 @@
+feature: Recipes
+description: |
+  Model deployment recipes provide known-good configurations for deploying
+  specific models with optimal settings. Recipes capture best practices for
+  runtime selection, resource allocation, and runtime arguments based on
+  community experience and benchmarking.
+
+  Platform operators use recipes to simplify deployment by referencing tested
+  configurations instead of manually specifying GPU counts, memory, and engine
+  parameters for each model.
+
+dependencies:
+  - usecases/authentication.yaml
+
+usecases:
+  - id: UC-RCP-001
+    title: List Available Recipes
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      A platform operator wants to discover what pre-configured recipes are
+      available for deploying models. This helps identify which models have
+      tested configurations and what settings they use.
+
+      Recipes are YAML files that define model metadata, runtime engine,
+      resource requirements, and engine-specific arguments.
+
+    actor: Platform Operator
+
+    preconditions:
+      - Platform operator has API credentials configured
+      - Recipe files exist in the deployment configuration
+
+    depends_on:
+      - UC-AUTH-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: List all available recipes
+        given: Multiple recipe YAML files exist in the recipes directory
+        when: Operator runs `ai-aas-cli model recipe list`
+        then:
+          - All recipes are displayed in table format
+          - Table shows name, model_id, runtime, gpu_count, memory_gb
+          - Total count is displayed
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: List recipes as JSON
+        given: Operator wants machine-readable output
+        when: Operator runs `ai-aas-cli model recipe list --format json`
+        then:
+          - Output is valid JSON array of recipe objects
+          - Each recipe includes name, model_id, runtime, resources, args
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Filter recipes by runtime
+        given: Operator wants to see only vLLM-based recipes
+        when: Operator runs `ai-aas-cli model recipe list --runtime vllm`
+        then:
+          - Only recipes with runtime "vllm" are displayed
+          - Exit code is 0
+
+      - id: AC-04
+        criterion: Show empty list when no recipes exist
+        given: No recipe files are present
+        when: Operator runs `ai-aas-cli model recipe list`
+        then:
+          - Message shows "No recipes found"
+          - Suggestion to check recipe directory is shown
+          - Exit code is 0
+
+    in_scope:
+      - Listing recipe YAML files from configured directory
+      - Displaying recipe metadata (name, model, runtime, resources)
+      - Filtering by runtime engine
+      - Table and JSON output formats
+
+    out_of_scope:
+      - Creating or editing recipes (manual YAML editing)
+      - Downloading recipes from remote registry
+      - Validating recipe compatibility with deployed models
+      - Showing recipe usage statistics
+
+    must_not:
+      - Execute or deploy recipes during list operation
+      - Modify recipe files
+      - Download remote content automatically
+      - Expose file system paths in output
+
+  - id: UC-RCP-002
+    title: Deploy Recipe
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      A platform operator wants to deploy a model using a pre-configured recipe
+      instead of manually specifying all deployment parameters. This simplifies
+      deployment by using tested, community-validated settings.
+
+      The recipe defines the model ID, runtime engine, resource allocations,
+      and runtime-specific arguments. The operator can override specific settings
+      if needed.
+
+    actor: Platform Operator
+
+    preconditions:
+      - Recipe exists and is valid
+      - Model specified in recipe is registered or accessible
+      - Target environment is configured
+
+    depends_on:
+      - UC-RCP-001
+      - UC-MLC-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Deploy using recipe defaults
+        given: Recipe "mistral-7b-instruct-v03" exists with tested settings
+        when: Operator runs `ai-aas-cli model recipe deploy mistral-7b-instruct-v03 -e development`
+        then:
+          - Recipe is loaded and validated
+          - Model is deployed with recipe's runtime, GPU, memory settings
+          - Recipe's runtime arguments are applied
+          - Deployment configuration is displayed
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Deploy recipe with custom replica override
+        given: Recipe specifies 1 replica by default
+        when: Operator runs `ai-aas-cli model recipe deploy mistral-7b-instruct-v03 -e production --replicas 3`
+        then:
+          - Recipe settings are used for runtime and resources
+          - Replica count is overridden to 3
+          - Override is clearly indicated in deployment summary
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Deploy recipe with custom resource override
+        given: Recipe specifies 1 GPU and 24GB memory
+        when: Operator runs `ai-aas-cli model recipe deploy llama-70b-recipe -e development --gpu-count 4 --memory 96`
+        then:
+          - Recipe's runtime and arguments are used
+          - GPU and memory are overridden to specified values
+          - Exit code is 0
+
+      - id: AC-04
+        criterion: Reject deployment of non-existent recipe
+        given: Recipe "unknown-recipe" does not exist
+        when: Operator runs `ai-aas-cli model recipe deploy unknown-recipe -e development`
+        then:
+          - Command fails with exit code 5 (not found)
+          - Error message indicates recipe not found
+          - Suggestion to list available recipes is shown
+
+      - id: AC-05
+        criterion: Reject deployment to unconfigured environment
+        given: Environment "staging" is not configured in CLI
+        when: Operator runs `ai-aas-cli model recipe deploy mistral-7b-instruct-v03 -e staging`
+        then:
+          - Command fails with exit code 3 (config error)
+          - Error message indicates environment not configured
+
+    in_scope:
+      - Loading recipe YAML configuration
+      - Deploying model with recipe's default settings
+      - Overriding specific parameters (replicas, resources)
+      - Validating recipe exists and is parseable
+      - Displaying deployment configuration with overrides
+
+    out_of_scope:
+      - Creating custom recipes (manual YAML authoring)
+      - Validating recipe compatibility before deployment
+      - Updating recipes programmatically
+      - Deploying multiple models from one recipe
+
+    must_not:
+      - Deploy without loading recipe configuration
+      - Silently ignore recipe parameters
+      - Modify recipe files during deployment
+      - Mix incompatible overrides (e.g., TensorRT-LLM runtime with vLLM args)
+
+  - id: UC-RCP-003
+    title: Customize Recipe Parameters
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      A platform operator wants to inspect a recipe's detailed configuration
+      to understand what parameters it uses, what can be overridden, and what
+      trade-offs exist for different settings.
+
+      This is primarily for learning and validation before deployment, not for
+      programmatic modification of recipes.
+
+    actor: Platform Operator
+
+    preconditions:
+      - Recipe exists and is valid
+      - Platform operator has API credentials configured
+
+    depends_on:
+      - UC-RCP-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Show detailed recipe configuration
+        given: Recipe "mistral-7b-instruct-v03" exists
+        when: Operator runs `ai-aas-cli model recipe show mistral-7b-instruct-v03`
+        then:
+          - Recipe name and description are displayed
+          - Model ID and HuggingFace path are shown
+          - Runtime engine is displayed
+          - Resource requirements (GPU, memory, replicas) are shown
+          - Runtime arguments are listed
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Show recipe as JSON
+        given: Operator wants machine-readable output
+        when: Operator runs `ai-aas-cli model recipe show mistral-7b-instruct-v03 --format json`
+        then:
+          - Output is valid JSON object with all recipe fields
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Show recipe with deployment command example
+        given: Operator wants to know how to use the recipe
+        when: Operator runs `ai-aas-cli model recipe show mistral-7b-instruct-v03`
+        then:
+          - Example deployment command is shown in output
+          - Example includes environment flag and basic usage
+          - Exit code is 0
+
+      - id: AC-04
+        criterion: Reject showing non-existent recipe
+        given: Recipe "unknown-recipe" does not exist
+        when: Operator runs `ai-aas-cli model recipe show unknown-recipe`
+        then:
+          - Command fails with exit code 5 (not found)
+          - Error message indicates recipe not found
+
+    in_scope:
+      - Displaying recipe metadata and configuration
+      - Showing runtime, resources, and arguments
+      - Providing deployment command examples
+      - Table and JSON output formats
+
+    out_of_scope:
+      - Editing recipe configuration via CLI
+      - Validating recipe against current cluster resources
+      - Showing recipe usage history or statistics
+      - Comparing multiple recipes
+
+    must_not:
+      - Modify recipe files
+      - Validate deployment feasibility (separate operation)
+      - Execute deployment automatically
+      - Expose internal file paths
+
+  - id: UC-RCP-004
+    title: View Recipe Status
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      A platform operator wants to validate that a recipe YAML file is correctly
+      formatted and contains all required fields before attempting deployment.
+
+      This prevents deployment failures due to malformed recipe configurations
+      and provides early feedback on recipe quality.
+
+    actor: Platform Operator
+
+    preconditions:
+      - Recipe file exists (may be valid or invalid)
+      - Platform operator has file system access to recipe path
+
+    depends_on:
+      - UC-RCP-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Validate well-formed recipe
+        given: Recipe YAML has all required fields and valid values
+        when: Operator runs `ai-aas-cli model recipe validate my-recipe.yaml`
+        then:
+          - Validation checks pass
+          - Success message indicates recipe is valid
+          - Summary shows recipe name, model, runtime
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Reject recipe with missing required fields
+        given: Recipe YAML is missing "runtime" field
+        when: Operator runs `ai-aas-cli model recipe validate incomplete-recipe.yaml`
+        then:
+          - Command fails with exit code 2 (validation error)
+          - Error message lists missing required fields
+          - Exit code is non-zero
+
+      - id: AC-03
+        criterion: Reject recipe with invalid YAML syntax
+        given: Recipe file has YAML parsing errors
+        when: Operator runs `ai-aas-cli model recipe validate malformed.yaml`
+        then:
+          - Command fails with exit code 2 (validation error)
+          - Error message indicates YAML syntax error
+          - Line number of error is shown if available
+
+      - id: AC-04
+        criterion: Reject recipe with invalid resource values
+        given: Recipe specifies negative GPU count
+        when: Operator runs `ai-aas-cli model recipe validate invalid-resources.yaml`
+        then:
+          - Command fails with exit code 2 (validation error)
+          - Error message indicates invalid resource specification
+          - Valid range or values are suggested
+
+    in_scope:
+      - Validating YAML syntax
+      - Checking required fields are present
+      - Validating resource value ranges
+      - Providing clear error messages with remediation hints
+
+    out_of_scope:
+      - Validating runtime compatibility with cluster
+      - Checking if model exists in registry
+      - Validating against specific environment constraints
+      - Fixing invalid recipes automatically
+
+    must_not:
+      - Modify recipe files during validation
+      - Deploy the recipe as part of validation
+      - Make network calls to validate external references
+      - Fail silently on validation errors

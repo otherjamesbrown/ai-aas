@@ -12,7 +12,7 @@ Use AskUserQuestion with header "Action":
 
 | Option | Description |
 |--------|-------------|
-| Run tests | Execute unit, E2E, integration, or other tests |
+| Run tests | Execute unit, integration, or other tests |
 | Run UC tests | Run use case acceptance criteria tests |
 | View open failures | Show test runs with unresolved failures |
 | View UC coverage | Show use case test coverage report |
@@ -158,25 +158,25 @@ Use AskUserQuestion with header "Test":
 | Option | Description | Duration |
 |--------|-------------|----------|
 | Unit tests (local) | Fast, isolated tests - all services, no dependencies | 1-5 min |
-| E2E smoke (develop) | Quick smoke tests against development cluster | 2-5 min |
-| E2E full (develop) | Complete E2E suite against development cluster | 10-30 min |
+| UC tests (develop) | Use case acceptance tests against development cluster | 5-15 min |
+| UC tests (staging) | Use case acceptance tests against staging cluster | 5-15 min |
 | Other | Integration, CLI, web, infra, or custom tests | varies |
 
 ### Step 2: Handle Selection
 
 **For "Unit tests (local)"**: Run immediately:
 ```bash
-cd /home/dev/worktrees/test-updates && make test SERVICE=all
+make test SERVICE=all
 ```
 
-**For "E2E smoke (develop)"**: Run immediately:
+**For "UC tests (develop)"**: Run immediately:
 ```bash
-cd /home/dev/worktrees/test-updates/tests/e2e && make test-dev-ip TEST_PATTERN=TestSmoke
+cd tests/usecases && make test-dev
 ```
 
-**For "E2E full (develop)"**: Run immediately:
+**For "UC tests (staging)"**: Run immediately:
 ```bash
-cd /home/dev/worktrees/test-updates/tests/e2e && make test-dev-ip
+cd tests/usecases && make test-staging
 ```
 
 **For "Other"**: Ask a follow-up question with header "Test Type":
@@ -405,33 +405,36 @@ make shared-test         # All shared libs
 
 ---
 
-### E2E / Smoke Tests
+### UC Acceptance Tests
 
 ```bash
-# Smoke tests (fastest, ~2 min)
-cd tests/e2e && go test -v ./suites -run TestSmoke -timeout 10m
+# All UC tests against development cluster
+cd tests/usecases && make test-dev
 
-# Happy path tests
-cd tests/e2e && go test -v ./suites -run TestHappyPath -timeout 15m
+# All UC tests against staging cluster
+cd tests/usecases && make test-staging
 
-# Full E2E suite (local)
-cd tests/e2e && make test-local
+# Specific UC test
+cd tests/usecases && make test-uc UC=UC-ORG-001
 
-# E2E against development cluster (via public ingress)
-cd tests/e2e && make test-dev-internet
+# By domain - User domain
+cd tests/usecases && go test -v ./... -run "TestUC_(AUTH|USR|KEY|ORG)"
 
-# E2E against development cluster (via port-forwarding)
-cd tests/e2e && make test-dev-remote
+# By domain - Platform domain
+cd tests/usecases && go test -v ./... -run "TestUC_(MLC|RTG|RCP|PLH)"
 
-# Test tiers (using build tags)
-cd tests/e2e && go test -v ./suites -tags="smoke,e2e_tier" -timeout 10m      # Quick
-cd tests/e2e && go test -v ./suites -tags="nightly,e2e_tier" -timeout 20m    # Daily
-cd tests/e2e && go test -v ./suites -tags="full,e2e_tier" -timeout 45m       # Complete
+# By domain - Integration domain
+cd tests/usecases && go test -v ./... -run "TestUC_(INF|RSL|ANL)"
+
+# With explicit environment variables
+AI_AAS_API_ENDPOINT=https://user-org.dev.otherjamesbrown.com \
+AI_AAS_API_KEY=<key> \
+go test -v ./...
 ```
 
-**Requirements**: Running services (local or cluster)
-**Duration**: 2-45 minutes depending on tier
-**Setup**: See `tests/e2e/SETUP.md` for initial configuration
+**Requirements**: API access to target environment
+**Duration**: 5-15 minutes
+**Setup**: Requires `MASTER_ADMIN_API_KEY` in `secrets/env/.env`
 
 ---
 
@@ -589,8 +592,7 @@ cd web/portal && pnpm test      # Web unit tests
 | Shared Libs | Yes | - | - | - |
 | Web Unit | Yes | - | - | - |
 | Integration | Partial | Yes | Yes | Yes |
-| E2E Smoke | With services | Yes | Yes | Yes |
-| E2E Full | - | Yes | Yes | Yes |
+| UC Acceptance | - | - | Yes | Yes |
 | CLI Smoke | - | - | Yes | Yes |
 | Web E2E | With services | - | Yes | Yes |
 | Performance | Yes | - | Optional | - |
@@ -616,11 +618,11 @@ export KUBECONFIG=/home/dev/secrets/kubeconfigs/kubeconfig-development.yaml
 export KUBECONFIG=/home/dev/secrets/kubeconfigs/kubeconfig-staging.yaml
 ```
 
-### E2E Test Configuration
-See `tests/e2e/SETUP.md` for:
-- Setting up `.admin-key.env`
+### UC Test Configuration
+See `tests/usecases/README.md` for:
+- Setting up API keys
 - Configuring test endpoints
-- Database URLs
+- Running against different environments
 
 ---
 
@@ -672,10 +674,9 @@ make diagnose          # Check what's missing
 make deps             # Install dependencies
 ```
 
-### E2E Test Setup
+### UC Test Setup
 ```bash
-cat tests/e2e/SETUP.md           # Initial setup
-cat tests/e2e/TROUBLESHOOTING.md # Common issues
+cat tests/usecases/README.md     # Test infrastructure docs
 ```
 
 ### Check for Existing Test Failures
@@ -705,7 +706,7 @@ When test issues require more than a simple run:
 
 | Issue | Agent |
 |-------|-------|
-| E2E test failing, needs investigation | `test-developer` |
+| UC test failing, needs investigation | `test-developer` |
 | Contract test mismatch (CLI vs API) | `test-developer` |
 | New test fixture or harness needed | `test-developer` |
 | Test environment/cluster issues | `infra-ops-manager` |
@@ -714,4 +715,3 @@ When test issues require more than a simple run:
 
 **Context files:**
 - `context/test-developer/agents.md` - Test patterns and infrastructure
-- `context/e2e-testing/agents.md` - E2E test specifics

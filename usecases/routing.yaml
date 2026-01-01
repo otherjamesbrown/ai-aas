@@ -1,0 +1,332 @@
+feature: Routing
+description: |
+  Routing management enables platform operators to control how inference requests
+  are distributed across model backends. Routing policies define which backends
+  serve requests for each model, with support for weighted distribution and
+  organization-specific overrides.
+
+  The API Router Service uses these policies to route incoming /v1/chat/completions
+  requests to the appropriate vLLM backend endpoints.
+
+dependencies:
+  - usecases/authentication.yaml
+  - usecases/model-lifecycle.yaml
+
+usecases:
+  - id: UC-RTG-001
+    title: Configure Backend Endpoint
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      A platform operator wants to create or update a routing policy that directs
+      traffic for a specific model to one or more backend endpoints. Policies can
+      be global (applied to all organizations) or organization-specific.
+
+      Routing policies support weighted distribution across multiple backends for
+      A/B testing, canary deployments, or load distribution.
+
+    actor: Platform Operator
+
+    preconditions:
+      - Platform operator has API credentials configured
+      - Model deployment exists and is ready
+      - Backend ID matches the deployed model name
+
+    depends_on:
+      - UC-AUTH-001
+      - UC-MLC-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Create global routing policy with single backend
+        given: Model "llama-7b" is deployed and ready
+        when: Operator runs `ai-aas-cli routing policy create --global --model llama-7b --backends "llama-7b:100"`
+        then:
+          - Routing policy is created with organization_id "*" (global)
+          - Backend "llama-7b" receives 100% of traffic
+          - Policy ID is returned and displayed
+          - Success message confirms policy creation
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Create org-specific routing policy
+        given: Organization "aa6f9015-132a-4694-8b10-7d4d4550faed" needs custom routing
+        when: Operator runs `ai-aas-cli routing policy create --org-id aa6f9015-132a-4694-8b10-7d4d4550faed --model gpt-4 --backends "gpt4-backend:100"`
+        then:
+          - Routing policy is created for specified organization
+          - Policy overrides any global policy for this org
+          - Policy ID and org ID are displayed
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Create weighted multi-backend policy
+        given: Canary deployment requires 90/10 traffic split
+        when: Operator runs `ai-aas-cli routing policy create --global --model mistral-7b --backends "mistral-stable:90,mistral-canary:10"`
+        then:
+          - Policy is created with two backends
+          - Traffic is weighted 90% to mistral-stable, 10% to mistral-canary
+          - Both backend IDs and weights are displayed
+          - Exit code is 0
+
+      - id: AC-04
+        criterion: Update existing policy
+        given: Global policy exists for "llama-7b"
+        when: Operator runs `ai-aas-cli routing policy create --global --model llama-7b --backends "llama-7b-v2:100"`
+        then:
+          - Existing policy is updated with new backend
+          - Policy version is incremented
+          - Message indicates update (not creation)
+          - Exit code is 0
+
+      - id: AC-05
+        criterion: Reject policy with invalid weight total
+        given: Backend weights must sum to 100
+        when: Operator runs `ai-aas-cli routing policy create --global --model llama-7b --backends "backend1:50,backend2:30"`
+        then:
+          - Command fails with exit code 2 (validation error)
+          - Error message indicates weights must sum to 100
+          - Example of valid weights is shown
+
+      - id: AC-06
+        criterion: Reject policy without org-id or global flag
+        given: Either --org-id or --global must be specified
+        when: Operator runs `ai-aas-cli routing policy create --model llama-7b --backends "llama-7b:100"`
+        then:
+          - Command fails with exit code 2 (validation error)
+          - Error message requires --org-id or --global flag
+
+    in_scope:
+      - Creating global routing policies (organization_id is "*")
+      - Creating organization-specific policies
+      - Weighted distribution across multiple backends
+      - Updating existing policies
+      - Validating backend weight totals
+
+    out_of_scope:
+      - Validating backend endpoints are reachable (UC-PLH-003)
+      - Creating backends/deployments (UC-MLC-001)
+      - Deleting policies (UC-RTG-003)
+      - Listing policies (UC-RTG-004)
+      - Managing failover thresholds
+
+    must_not:
+      - Create policy without specifying org-id or global flag
+      - Allow weights that don't sum to 100
+      - Bypass Admin API validation
+      - Modify API Router configuration directly
+
+  - id: UC-RTG-002
+    title: Set Routing Policy
+    interface: cli
+    status: deprecated
+    deprecated_reason: Merged into UC-RTG-001 (Configure Backend Endpoint handles both create and update)
+    deprecated_by: UC-RTG-001
+
+    description: |
+      This use case was originally planned for updating routing policies separately
+      from creation. The implementation merged create and update into a single
+      idempotent operation in UC-RTG-001.
+
+    actor: Platform Operator
+
+    preconditions:
+      - None (deprecated use case)
+
+    depends_on:
+      - UC-RTG-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Deprecated - see UC-RTG-001
+        given: This use case is deprecated
+        when: N/A
+        then:
+          - See UC-RTG-001 for current implementation
+
+    in_scope:
+      - Deprecated
+
+    out_of_scope:
+      - All functionality moved to UC-RTG-001
+
+    must_not:
+      - Use this deprecated use case
+
+  - id: UC-RTG-003
+    title: Enable/Disable Backend
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      A platform operator needs to temporarily disable traffic to a backend
+      (during maintenance or issues) or re-enable it after resolution. This is
+      accomplished by deleting the routing policy (disable) or recreating it (enable).
+
+      For weighted multi-backend policies, the operator should adjust weights
+      to exclude the problematic backend rather than deleting the entire policy.
+
+    actor: Platform Operator
+
+    preconditions:
+      - Platform operator has API credentials configured
+      - Routing policy exists for the target model
+
+    depends_on:
+      - UC-RTG-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Disable backend by deleting global policy
+        given: Global policy exists for "llama-7b"
+        when: Operator runs `ai-aas-cli routing policy delete --global --model llama-7b` and confirms with "y"
+        then:
+          - Current policy details are displayed
+          - User is prompted "Delete this policy? [y/N]:"
+          - After confirmation, policy is deleted
+          - Message confirms deletion
+          - Requests to "llama-7b" will fail (no route)
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Force delete without confirmation
+        given: Operator wants to skip interactive prompt
+        when: Operator runs `ai-aas-cli routing policy delete --global --model llama-7b --force`
+        then:
+          - No confirmation prompt is shown
+          - Policy is deleted immediately
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Delete org-specific policy
+        given: Org-specific policy exists for organization "aa6f9015-132a-4694-8b10-7d4d4550faed"
+        when: Operator runs `ai-aas-cli routing policy delete --org-id aa6f9015-132a-4694-8b10-7d4d4550faed --model gpt-4 --force`
+        then:
+          - Org-specific policy is deleted
+          - Organization falls back to global policy if one exists
+          - Exit code is 0
+
+      - id: AC-04
+        criterion: Re-enable backend by creating new policy
+        given: Routing policy was previously deleted
+        when: Operator runs `ai-aas-cli routing policy create --global --model llama-7b --backends "llama-7b:100"`
+        then:
+          - New routing policy is created
+          - Traffic to "llama-7b" is restored
+          - Exit code is 0
+
+      - id: AC-05
+        criterion: Handle non-existent policy gracefully
+        given: No policy exists for "unknown-model"
+        when: Operator runs `ai-aas-cli routing policy delete --global --model unknown-model --force`
+        then:
+          - Message indicates "Policy not found"
+          - No error is raised
+          - Exit code is 0 or 5 (not found)
+
+    in_scope:
+      - Deleting routing policies
+      - Prompting for confirmation (unless --force)
+      - Supporting both global and org-specific deletions
+      - Re-enabling via policy creation
+
+    out_of_scope:
+      - Suspending policies without deletion (not supported)
+      - Partial backend disabling in multi-backend policies (adjust weights instead)
+      - Automatic failover policy creation
+      - Draining existing requests before deletion
+
+    must_not:
+      - Delete without confirmation unless --force specified
+      - Automatically recreate deleted policies
+      - Leave orphaned routing state in API Router
+
+  - id: UC-RTG-004
+    title: View Routing Configuration
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      A platform operator wants to view existing routing policies to understand
+      current traffic distribution, troubleshoot routing issues, or audit
+      configuration changes.
+
+      The list command shows all policies or can be filtered by model name,
+      organization, or enabled status.
+
+    actor: Platform Operator
+
+    preconditions:
+      - Platform operator has API credentials configured
+
+    depends_on:
+      - UC-AUTH-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: List all routing policies
+        given: Multiple routing policies exist
+        when: Operator runs `ai-aas-cli routing policy list`
+        then:
+          - All policies are displayed in table format
+          - Table shows policy_id, org_id, model, backends, enabled, created_at
+          - Global policies show org_id as "*"
+          - Total count is displayed
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: List policies as JSON
+        given: Operator wants machine-readable output
+        when: Operator runs `ai-aas-cli routing policy list --format json`
+        then:
+          - Output is valid JSON array of policy objects
+          - Each policy includes all fields (policy_id, org_id, model, backends, version, etc.)
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Filter policies by model
+        given: Operator wants to see only "llama-7b" policies
+        when: Operator runs `ai-aas-cli routing policy list --model llama-7b`
+        then:
+          - Only policies for "llama-7b" are displayed
+          - Both global and org-specific policies are shown
+          - Exit code is 0
+
+      - id: AC-04
+        criterion: Filter policies by organization
+        given: Operator wants to see policies for specific org
+        when: Operator runs `ai-aas-cli routing policy list --org-id aa6f9015-132a-4694-8b10-7d4d4550faed`
+        then:
+          - Only policies for specified organization are displayed
+          - Exit code is 0
+
+      - id: AC-05
+        criterion: Show empty list when no policies exist
+        given: No routing policies have been created
+        when: Operator runs `ai-aas-cli routing policy list`
+        then:
+          - Message shows "No routing policies found"
+          - Suggestion to create policy is shown
+          - Exit code is 0
+
+    in_scope:
+      - Listing all routing policies
+      - Filtering by model name
+      - Filtering by organization ID
+      - Table and JSON output formats
+      - Displaying backend weights and policy metadata
+
+    out_of_scope:
+      - Showing policy history/versions
+      - Displaying actual routing metrics (request counts)
+      - Validating backend health status
+      - Showing effective policy resolution (org-specific vs global)
+
+    must_not:
+      - Show policies from other environments
+      - Cache stale policy data
+      - Expose internal routing implementation details
+      - Modify policies during list operation

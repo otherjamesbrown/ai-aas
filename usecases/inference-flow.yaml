@@ -1,0 +1,373 @@
+feature: Inference Flow
+description: |
+  Inference flow use cases validate end-to-end request processing from user
+  request to response generation, including streaming, routing, and usage
+  tracking. These integration tests ensure all services work together correctly
+  to deliver inference results.
+
+dependencies:
+  - usecases/authentication.yaml
+  - usecases/apikeys.yaml
+  - usecases/models.yaml
+
+usecases:
+  - id: UC-INF-001
+    title: End-to-End Chat Completion
+    interface: api
+    status: active
+    bead: null
+
+    description: |
+      A user with a valid API key wants to send a chat completion request
+      and receive a response. This validates the complete request flow through
+      authentication, routing, model inference, and response delivery.
+
+      This is the primary happy path for the platform - a successful inference
+      request demonstrates that all critical services are functioning correctly.
+
+    actor: API User
+
+    preconditions:
+      - User has valid API key with inference:write scope
+      - At least one model is deployed and available
+      - User has model access permissions
+      - User is within rate limits and budget
+
+    depends_on:
+      - UC-AUTH-002
+      - UC-KEY-002
+      - UC-MDL-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Successful chat completion request
+        given: User has valid API key and model is available
+        when: User sends POST /v1/chat/completions with valid request body
+        then:
+          - Request is authenticated successfully
+          - Request is routed to correct backend
+          - Model generates completion
+          - Response includes id, model, choices, usage fields
+          - Response status is 200
+          - Usage tokens are recorded for the organization
+
+      - id: AC-02
+        criterion: Response includes usage data
+        given: Chat completion request succeeds
+        when: Response is returned
+        then:
+          - usage.prompt_tokens is greater than 0
+          - usage.completion_tokens is greater than 0
+          - usage.total_tokens equals prompt_tokens + completion_tokens
+          - Token counts match actual request/response
+
+      - id: AC-03
+        criterion: Invalid model returns clear error
+        given: User requests a model that doesn't exist
+        when: User sends POST /v1/chat/completions with model "nonexistent"
+        then:
+          - Request fails with 404 status
+          - Error message indicates model not found
+          - Error message lists available models or suggests checking model name
+          - No usage is recorded
+
+      - id: AC-04
+        criterion: Unauthorized model access rejected
+        given: User requests a model they don't have access to
+        when: User sends POST /v1/chat/completions with restricted model
+        then:
+          - Request fails with 403 status
+          - Error message indicates insufficient permissions
+          - No inference is performed
+          - No usage is recorded
+
+    in_scope:
+      - Full request flow from API gateway to backend
+      - Authentication and authorization
+      - Model routing
+      - Response generation
+      - Usage tracking
+      - Error handling for invalid/unauthorized requests
+
+    out_of_scope:
+      - Streaming responses (UC-INF-002)
+      - Rate limiting (UC-RSL-001)
+      - Budget enforcement (UC-RSL-005)
+      - Multi-turn conversations
+      - Function calling
+
+    must_not:
+      - Allow unauthenticated requests
+      - Record usage for failed requests
+      - Expose backend error details to user
+      - Route to wrong model backend
+
+  - id: UC-INF-002
+    title: Streaming Completion
+    interface: api
+    status: active
+    bead: null
+
+    description: |
+      A user wants to receive streaming responses for chat completions,
+      where tokens are delivered incrementally via Server-Sent Events (SSE)
+      as they are generated. This provides real-time feedback for interactive
+      applications.
+
+      Streaming validation ensures the platform correctly handles chunked
+      responses, maintains connection stability, and properly tracks usage
+      even when responses are delivered incrementally.
+
+    actor: API User
+
+    preconditions:
+      - User has valid API key with inference:write scope
+      - Model supports streaming responses
+      - User is within rate limits and budget
+
+    depends_on:
+      - UC-AUTH-002
+      - UC-KEY-002
+      - UC-INF-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Enable streaming with request parameter
+        given: User has valid API key and model supports streaming
+        when: User sends POST /v1/chat/completions with stream=true
+        then:
+          - Response Content-Type is text/event-stream
+          - Response status is 200
+          - First event contains initial message
+          - Multiple data events are received
+          - Final event is [DONE]
+
+      - id: AC-02
+        criterion: Streaming chunks have valid format
+        given: Streaming request is in progress
+        when: Server sends SSE events
+        then:
+          - Each chunk starts with data colon prefix
+          - Each chunk contains valid JSON
+          - Each chunk includes id, model, choices fields
+          - delta field contains incremental text
+          - finish_reason is null until final chunk
+
+      - id: AC-03
+        criterion: Final chunk includes usage data
+        given: Streaming response is complete
+        when: Last data chunk before [DONE] is received
+        then:
+          - usage field is present
+          - usage.prompt_tokens is greater than 0
+          - usage.completion_tokens is greater than 0
+          - finish_reason is "stop" or "length"
+
+      - id: AC-04
+        criterion: Connection interruption handling
+        given: Streaming request is in progress
+        when: Connection is interrupted mid-stream
+        then:
+          - Partial usage is recorded
+          - Error is logged for debugging
+          - No zombie backend requests remain
+
+    in_scope:
+      - SSE streaming protocol
+      - Incremental token delivery
+      - Connection management
+      - Usage tracking for streaming
+      - Proper stream termination
+
+    out_of_scope:
+      - WebSocket streaming
+      - Buffering strategies
+      - Stream resume after disconnect
+      - Client-side reconnection logic
+
+    must_not:
+      - Send malformed SSE events
+      - Drop tokens during streaming
+      - Leave connections open indefinitely
+      - Record usage multiple times for same request
+
+  - id: UC-INF-003
+    title: Multi-Model Routing
+    interface: api
+    status: active
+    bead: null
+
+    description: |
+      The platform must correctly route requests to different model backends
+      based on the requested model name. This validates the routing logic
+      ensures requests reach the correct inference engine.
+
+      Multi-model routing is critical for platform scalability and supports
+      diverse use cases requiring different model capabilities.
+
+    actor: System Integration
+
+    preconditions:
+      - Multiple models are deployed with different backends
+      - Each backend has unique service endpoint
+      - Routing configuration is loaded
+
+    depends_on:
+      - UC-INF-001
+      - UC-MDL-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Route to correct backend by model name
+        given: Model "gpt-oss-20b" maps to backend-A and "llama-7b" maps to backend-B
+        when: User requests model "gpt-oss-20b"
+        then:
+          - Request is routed to backend-A
+          - Response model field is "gpt-oss-20b"
+          - No requests are sent to backend-B
+
+      - id: AC-02
+        criterion: Route different models in sequence
+        given: Multiple models are available
+        when: User sends request for "gpt-oss-20b" then "llama-7b"
+        then:
+          - First request routes to backend-A
+          - Second request routes to backend-B
+          - Both requests succeed independently
+          - Usage is tracked separately for each model
+
+      - id: AC-03
+        criterion: Handle backend unavailability
+        given: Backend for requested model is unavailable
+        when: User sends request for that model
+        then:
+          - Request fails with 503 status
+          - Error indicates service unavailable
+          - Error message identifies the affected model
+          - No fallback to different model occurs
+
+      - id: AC-04
+        criterion: Preserve model name in response
+        given: User requests specific model
+        when: Request succeeds
+        then:
+          - Response model field matches requested model exactly
+          - Model name is not transformed or aliased
+          - Usage is attributed to correct model
+
+    in_scope:
+      - Model name to backend mapping
+      - Request routing logic
+      - Backend availability checking
+      - Model name consistency
+      - Error handling for routing failures
+
+    out_of_scope:
+      - Load balancing across multiple instances
+      - Automatic failover to alternate models
+      - Dynamic routing based on load
+      - A/B testing between backends
+
+    must_not:
+      - Route to wrong backend
+      - Change requested model name
+      - Fallback to different model without user consent
+      - Mix requests between backends
+
+  - id: UC-INF-004
+    title: Token Usage Tracking
+    interface: api
+    status: active
+    bead: null
+
+    description: |
+      Every inference request must accurately track token usage (prompt tokens,
+      completion tokens, total tokens) and attribute it to the correct
+      organization. This usage data drives billing, analytics, and quota
+      enforcement.
+
+      Accurate usage tracking is critical for platform operations, billing
+      accuracy, and customer transparency.
+
+    actor: System Integration
+
+    preconditions:
+      - User has valid API key associated with an organization
+      - Model backend returns token usage in response
+      - Usage recording service is available
+
+    depends_on:
+      - UC-INF-001
+      - UC-ORG-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Record usage for successful requests
+        given: User makes successful chat completion request
+        when: Response is returned
+        then:
+          - Usage record is created with prompt_tokens, completion_tokens, total_tokens
+          - Usage is attributed to correct organization
+          - Usage is attributed to correct model
+          - Usage timestamp is recorded
+          - Request ID is included for correlation
+
+      - id: AC-02
+        criterion: Usage matches backend response
+        given: Backend returns usage in response
+        when: Usage is recorded
+        then:
+          - Recorded prompt_tokens matches backend response
+          - Recorded completion_tokens matches backend response
+          - Recorded total_tokens matches backend response
+          - No tokens are lost or inflated
+
+      - id: AC-03
+        criterion: No usage recorded for failed requests
+        given: Request fails authentication or validation
+        when: Request returns 4xx error before reaching backend
+        then:
+          - No usage record is created
+          - No tokens are charged to organization
+          - Failure is logged for debugging
+
+      - id: AC-04
+        criterion: Usage recorded for streaming requests
+        given: User makes streaming chat completion request
+        when: Stream completes successfully
+        then:
+          - Single usage record is created
+          - Total tokens include all streamed tokens
+          - Usage is recorded after stream completion
+          - Partial streams still record actual usage
+
+      - id: AC-05
+        criterion: Correlate usage with request trace
+        given: Request has trace ID
+        when: Usage is recorded
+        then:
+          - Usage record includes trace ID
+          - Usage can be correlated with request logs
+          - Usage can be queried by trace ID
+
+    in_scope:
+      - Token counting from backend responses
+      - Usage attribution to organization
+      - Usage attribution to model
+      - Usage correlation with request traces
+      - Handling streaming request usage
+      - Preventing usage recording for failed requests
+
+    out_of_scope:
+      - Usage aggregation over time periods
+      - Usage export (UC-ANL-003)
+      - Budget enforcement (UC-RSL-005)
+      - Billing calculations
+      - Usage analytics dashboards
+
+    must_not:
+      - Record usage for failed authentication
+      - Record usage for validation errors
+      - Double-count usage for retries
+      - Lose usage data on partial failures
+      - Attribute usage to wrong organization
