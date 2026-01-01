@@ -435,7 +435,6 @@ func skipIfNoVLLMBackend(t *testing.T) {
 	// Use admin API key to check if routing policies/backends are configured
 	// If no admin key is available, we cannot check backend availability
 	adminKey := getAdminAPIKey()
-	t.Logf("skipIfNoVLLMBackend: adminKey=%q (len=%d)", adminKey, len(adminKey))
 	if adminKey == "" {
 		// No credentials available - cannot verify backend availability
 		// Skip the test to avoid false failures
@@ -464,7 +463,6 @@ func skipIfNoVLLMBackend(t *testing.T) {
 	// Check response body for common "no backend" indicators
 	bodyStr := resp.String()
 	lowerBody := strings.ToLower(bodyStr)
-	t.Logf("skipIfNoVLLMBackend: status=%d body=%s", resp.StatusCode, bodyStr)
 
 	// If we get a "route not found" error (404), the API router has no vLLM backends configured
 	if resp.StatusCode == 404 && strings.Contains(lowerBody, "route not found") {
@@ -475,6 +473,13 @@ func skipIfNoVLLMBackend(t *testing.T) {
 	// If we get a "no routing policy configured" error, there are no backends configured
 	if strings.Contains(lowerBody, "no routing policy") || strings.Contains(lowerBody, "routing_error") {
 		t.Skip("Skipping: no vLLM backend available in this environment (no routing policy configured)")
+		return
+	}
+
+	// If we get a quota exceeded error, we cannot reliably check backend availability
+	// Skip the test to avoid false failures when the admin key has exceeded quota
+	if resp.StatusCode == 402 || strings.Contains(lowerBody, "quota_exceeded") || strings.Contains(lowerBody, "quota exceeded") {
+		t.Skip("Skipping: cannot verify vLLM backend availability (quota exceeded)")
 		return
 	}
 
