@@ -1,0 +1,21 @@
+# Allow User-Org Service to Redis
+# =================================
+# Allows the user-org-service (in its own namespace) to access Redis
+# in the development namespace for caching.
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-user-org-service-to-redis
+  namespace: development
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: user-org-service
