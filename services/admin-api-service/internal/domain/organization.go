@@ -47,10 +47,10 @@ type OrganizationListResponse struct {
 }
 
 // Valid plan tiers - must match DB CHECK constraint
-var ValidPlanTiers = []string{"starter", "growth", "enterprise"}
+var ValidPlanTiers = []string{"free", "starter", "enterprise"}
 
 // Valid organization statuses - must match DB CHECK constraint
-var ValidOrgStatuses = []string{"active", "suspended", "closed"}
+var ValidOrgStatuses = []string{"active", "suspended", "deleted"}
 
 // IsValidPlanTier checks if a plan tier is valid
 func IsValidPlanTier(tier string) bool {
