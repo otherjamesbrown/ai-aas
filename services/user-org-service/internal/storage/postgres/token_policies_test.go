@@ -97,8 +97,7 @@ func TestTokenPolicyRepository(t *testing.T) {
 			OrgID: org.ID,
 			Name:  "no-limits-policy",
 		})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "at least one limit")
+		require.ErrorIs(t, err, ErrNoLimitsSpecified)
 	})
 
 	t.Run("CreateTokenPolicy_ReservedName_Fails", func(t *testing.T) {

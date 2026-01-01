@@ -17,7 +17,7 @@ const tokenPolicyColumns = `id, org_id, name, description, limit_1h, limit_24h, 
 func (s *Store) CreateTokenPolicy(ctx context.Context, params CreateTokenPolicyParams) (TokenRateLimitPolicy, error) {
 	// Validate: at least one limit must be specified
 	if params.Limit1h == nil && params.Limit24h == nil && params.Limit7d == nil {
-		return TokenRateLimitPolicy{}, fmt.Errorf("at least one limit (1h, 24h, or 7d) must be specified")
+		return TokenRateLimitPolicy{}, ErrNoLimitsSpecified
 	}
 
 	// Reserved name check

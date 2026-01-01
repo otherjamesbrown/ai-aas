@@ -18,6 +18,7 @@ package tokenpolicies
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -160,7 +161,7 @@ func (h *Handler) CreatePolicy(w http.ResponseWriter, r *http.Request) {
 			h.writeError(w, http.StatusConflict, "conflict", "Policy Name Conflict", "policy name already exists or is reserved")
 			return
 		}
-		if containsAtLeastOneLimit(err) {
+		if isNoLimitsSpecifiedError(err) {
 			h.writeError(w, http.StatusBadRequest, "bad_request", "Invalid Request", "at least one limit (1h, 24h, or 7d) must be specified")
 			return
 		}
@@ -710,6 +711,6 @@ func toPolicyDTO(p postgres.TokenRateLimitPolicy) TokenRateLimitPolicyDTO {
 	return dto
 }
 
-func containsAtLeastOneLimit(err error) bool {
-	return err != nil && err.Error() == "at least one limit (1h, 24h, or 7d) must be specified"
+func isNoLimitsSpecifiedError(err error) bool {
+	return errors.Is(err, postgres.ErrNoLimitsSpecified)
 }

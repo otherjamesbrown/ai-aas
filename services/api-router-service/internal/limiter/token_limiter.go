@@ -161,7 +161,15 @@ func (l *TokenLimiter) CheckLimit(ctx context.Context, userID string) (*RateLimi
 
 	// Convert windows
 	for i, w := range rlResp.Windows {
-		resetsAt, _ := time.Parse(time.RFC3339, w.ResetsAt)
+		resetsAt, err := time.Parse(time.RFC3339, w.ResetsAt)
+		if err != nil {
+			l.logger.Warn("failed to parse window resets_at timestamp",
+				zap.String("user_id", userID),
+				zap.String("window", w.Window),
+				zap.String("resets_at", w.ResetsAt),
+				zap.Error(err),
+			)
+		}
 		status.Windows[i] = WindowStatus{
 			Window:     w.Window,
 			Limit:      w.Limit,
@@ -174,7 +182,15 @@ func (l *TokenLimiter) CheckLimit(ctx context.Context, userID string) (*RateLimi
 
 	// Convert blocking window if present
 	if rlResp.BlockingWindow != nil {
-		resetsAt, _ := time.Parse(time.RFC3339, rlResp.BlockingWindow.ResetsAt)
+		resetsAt, err := time.Parse(time.RFC3339, rlResp.BlockingWindow.ResetsAt)
+		if err != nil {
+			l.logger.Warn("failed to parse blocking window resets_at timestamp",
+				zap.String("user_id", userID),
+				zap.String("window", rlResp.BlockingWindow.Window),
+				zap.String("resets_at", rlResp.BlockingWindow.ResetsAt),
+				zap.Error(err),
+			)
+		}
 		status.BlockingWindow = &WindowStatus{
 			Window:     rlResp.BlockingWindow.Window,
 			Limit:      rlResp.BlockingWindow.Limit,
