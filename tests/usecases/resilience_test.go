@@ -12,6 +12,7 @@ import (
 // Migrated from: tests/e2e/suites/ratelimit_test.go (TestAPIKeyRateLimiting, TestRateLimitRecovery)
 func TestUC_RSL_001_RateLimitEnforcement(t *testing.T) {
 	skipIfNoPlatformCLI(t)
+	skipIfNoVLLMBackend(t)
 
 	client, err := NewTestClientFromEnv()
 	if err != nil {
@@ -163,6 +164,7 @@ func TestUC_RSL_001_RateLimitEnforcement(t *testing.T) {
 // Migrated from: tests/e2e/suites/resilience_test.go (TestBackendFailover, TestAllBackendsUnavailable)
 func TestUC_RSL_002_BackendFailover(t *testing.T) {
 	skipIfNoPlatformCLI(t)
+	skipIfNoVLLMBackend(t)
 
 	client, err := NewTestClientFromEnv()
 	if err != nil {
@@ -265,6 +267,7 @@ func TestUC_RSL_002_BackendFailover(t *testing.T) {
 // Spec: usecases/resilience.yaml
 func TestUC_RSL_003_TimeoutHandling(t *testing.T) {
 	skipIfNoPlatformCLI(t)
+	skipIfNoVLLMBackend(t)
 
 	t.Run("AC-01: enforce gateway timeout", func(t *testing.T) {
 		t.Skip("Requires simulating slow backend - needs test infrastructure")
@@ -287,6 +290,7 @@ func TestUC_RSL_003_TimeoutHandling(t *testing.T) {
 // Spec: usecases/resilience.yaml
 func TestUC_RSL_004_ErrorResponseFormat(t *testing.T) {
 	skipIfNoPlatformCLI(t)
+	skipIfNoVLLMBackend(t)
 
 	client, err := NewTestClientFromEnv()
 	if err != nil {
@@ -428,6 +432,7 @@ func TestUC_RSL_004_ErrorResponseFormat(t *testing.T) {
 // Migrated from: tests/e2e/suites/budget_test.go (all budget tests)
 func TestUC_RSL_005_BudgetEnforcement(t *testing.T) {
 	skipIfNoPlatformCLI(t)
+	skipIfNoVLLMBackend(t)
 
 	t.Skip("Budget API not implemented yet - see bead aas-2zku")
 
