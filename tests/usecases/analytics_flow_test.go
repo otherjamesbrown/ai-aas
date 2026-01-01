@@ -12,6 +12,7 @@ import (
 // Migrated from: tests/e2e/suites/completions_test.go (TestTextCompletionsUsageAnalytics)
 func TestUC_ANL_001_UsageRecording(t *testing.T) {
 	skipIfNoPlatformCLI(t)
+	skipIfNoVLLMBackend(t)
 
 	if getAnalyticsServiceURL() == "" {
 		t.Skip("Analytics service not configured")
@@ -187,6 +188,7 @@ func TestUC_ANL_002_UsageAggregation(t *testing.T) {
 // Migrated from: tests/e2e/suites/analytics_export_test.go (all export tests)
 func TestUC_ANL_003_AnalyticsExport(t *testing.T) {
 	skipIfNoPlatformCLI(t)
+	skipIfNoVLLMBackend(t)
 
 	if getAnalyticsServiceURL() == "" {
 		t.Skip("Analytics service not configured")
@@ -438,6 +440,7 @@ func TestUC_ANL_003_AnalyticsExport(t *testing.T) {
 // Spec: usecases/analytics-flow.yaml
 func TestUC_ANL_004_CrossServiceCorrelation(t *testing.T) {
 	skipIfNoPlatformCLI(t)
+	skipIfNoVLLMBackend(t)
 
 	client, err := NewTestClientFromEnv()
 	if err != nil {

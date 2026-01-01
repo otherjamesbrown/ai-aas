@@ -13,6 +13,7 @@ import (
 //                tests/e2e/suites/completions_test.go (chat completion logic)
 func TestUC_INF_001_EndToEndChatCompletion(t *testing.T) {
 	skipIfNoPlatformCLI(t)
+	skipIfNoVLLMBackend(t)
 
 	client, err := NewTestClientFromEnv()
 	if err != nil {
@@ -180,6 +181,7 @@ func TestUC_INF_001_EndToEndChatCompletion(t *testing.T) {
 // Migrated from: tests/e2e/suites/completions_test.go (TestTextCompletionsStreaming)
 func TestUC_INF_002_StreamingCompletion(t *testing.T) {
 	skipIfNoPlatformCLI(t)
+	skipIfNoVLLMBackend(t)
 
 	client, err := NewTestClientFromEnv()
 	if err != nil {
@@ -228,6 +230,7 @@ func TestUC_INF_002_StreamingCompletion(t *testing.T) {
 // Migrated from: tests/e2e/suites/happy_path_test.go (TestModelRequestRouting)
 func TestUC_INF_003_MultiModelRouting(t *testing.T) {
 	skipIfNoPlatformCLI(t)
+	skipIfNoVLLMBackend(t)
 
 	client, err := NewTestClientFromEnv()
 	if err != nil {
@@ -327,6 +330,7 @@ func TestUC_INF_003_MultiModelRouting(t *testing.T) {
 // Migrated from: tests/e2e/suites/completions_test.go (TestTextCompletionsUsageAnalytics)
 func TestUC_INF_004_TokenUsageTracking(t *testing.T) {
 	skipIfNoPlatformCLI(t)
+	skipIfNoVLLMBackend(t)
 
 	if getAnalyticsServiceURL() == "" {
 		t.Skip("Analytics service not configured")

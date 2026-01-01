@@ -84,14 +84,19 @@ func runAPIKeyList(cmd *cobra.Command, args []string) error {
 	}
 
 	if err != nil {
-		return errors.NewOperationError("failed to list API keys", err.Error())
+		return wrapAPIError(err, "failed to list API keys")
 	}
 
 	if IsJSONOutput() {
 		// Convert to display format for user-friendly JSON output
 		displayKeys := make([]api.APIKeyDisplay, len(result.APIKeys))
 		for i, k := range result.APIKeys {
-			displayKeys[i] = k.ToDisplay()
+			display := k.ToDisplay()
+			// Show "(unnamed)" for empty names in JSON output
+			if display.Name == "" {
+				display.Name = "(unnamed)"
+			}
+			displayKeys[i] = display
 		}
 		return output.PrintJSON(displayKeys)
 	}
@@ -131,9 +136,14 @@ func runAPIKeyList(cmd *cobra.Command, args []string) error {
 				userDisplay = userDisplay[:12] + "..."
 			}
 		}
+		// Show "(unnamed)" for empty names in table output
+		nameDisplay := k.Name
+		if nameDisplay == "" {
+			nameDisplay = "(unnamed)"
+		}
 		rows = append(rows, []string{
 			prefix + "...",
-			k.Name,
+			nameDisplay,
 			userDisplay,
 			output.StatusBadge(k.Status),
 			lastUsed,
