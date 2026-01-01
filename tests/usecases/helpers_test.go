@@ -1,12 +1,15 @@
 package usecases_test
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Environment variable names for API configuration
@@ -93,9 +96,17 @@ func runOrgCLI(args ...string) CLIResult {
 	if endpoint := os.Getenv(envAPIEndpoint); endpoint != "" {
 		apiKey := os.Getenv(envAPIKey)
 		orgID := os.Getenv(envOrgID)
-		configContent := "api_endpoint: " + endpoint + "\napi_key: " + apiKey + "\n"
+		apiRouterURL := getAPIRouterURL()
+
+		// Build config with all required endpoints
+		configContent := "api_endpoint: " + endpoint + "\n"
+		configContent += "admin_endpoint: " + endpoint + "\n" // Use same endpoint for admin operations
+		configContent += "api_key: " + apiKey + "\n"
 		if orgID != "" {
 			configContent += "org_id: " + orgID + "\n"
+		}
+		if apiRouterURL != "" {
+			configContent += "inference_endpoint: " + apiRouterURL + "\n"
 		}
 
 		tmpFile, err := os.CreateTemp("", "ai-aas-org-test-*.yaml")
@@ -280,12 +291,19 @@ func createTestUser(t *testing.T, emailPrefix string, role string) *TestUser {
 	return testUser
 }
 
-// generateUniqueID creates a unique identifier for test data using timestamp and random suffix
+// generateUniqueID creates a unique identifier for test data using timestamp + random suffix
+// This ensures uniqueness even across test runs in the same second
 func generateUniqueID() string {
-	// Using Unix timestamp in microseconds for uniqueness
-	return strings.ReplaceAll(strings.ReplaceAll(
-		getCurrentTimestamp(),
-		":", ""), "-", "")
+	// Use timestamp (YYYYMMDDHHMMSS) + random 6-char hex suffix for guaranteed uniqueness
+	// Random suffix prevents collisions when tests run in parallel or in same second
+	randomBytes := make([]byte, 3) // 3 bytes = 6 hex chars
+	if _, err := rand.Read(randomBytes); err != nil {
+		// Fallback to nanosecond timestamp if crypto/rand fails
+		return getCurrentTimestamp() + strings.ReplaceAll(time.Now().Format("150405.000000"), ".", "")[:6]
+	}
+
+	timestamp := getCurrentTimestamp()
+	return timestamp + hex.EncodeToString(randomBytes)
 }
 
 // getCurrentTimestamp returns current time formatted as a unique string
@@ -400,4 +418,49 @@ func getTestModel() string {
 		return "gpt-4" // Default test model
 	}
 	return model
+}
+
+// skipIfNoVLLMBackend skips the test if vLLM backend is not available.
+// Tests that require inference capability should call this to gracefully skip
+// when the infrastructure (GPU nodes, vLLM deployments) is not available.
+func skipIfNoVLLMBackend(t *testing.T) {
+	t.Helper()
+
+	apiRouterURL := getAPIRouterURL()
+	if apiRouterURL == "" {
+		t.Skip("Skipping: API router URL not configured (AI_AAS_API_ROUTER_URL)")
+		return
+	}
+
+	// Try to determine if vLLM backend is available by checking if we can make a simple request
+	// We don't need a valid API key for this check - we just need to see if the route exists
+	client := NewTestClient(apiRouterURL, "")
+
+	// Try a minimal request to see if the endpoint exists
+	reqBody := map[string]interface{}{
+		"model": getTestModel(),
+		"messages": []map[string]interface{}{
+			{"role": "user", "content": "test"},
+		},
+	}
+
+	resp, err := client.POST("/v1/chat/completions", reqBody)
+
+	// If we get a network error or connection refused, backend is not available
+	if err != nil {
+		t.Skipf("Skipping: vLLM backend not reachable (%v)", err)
+		return
+	}
+
+	// If we get a "route not found" error (404), the API router has no vLLM backends configured
+	if resp.StatusCode == 404 {
+		bodyStr := resp.String()
+		if strings.Contains(bodyStr, "route not found") {
+			t.Skip("Skipping: no vLLM backend available in this environment (route not found)")
+			return
+		}
+	}
+
+	// Any other response (401 unauthorized, 400 bad request, 200 success) means the backend exists
+	// The test can proceed - authentication and validation will be handled by the actual test
 }

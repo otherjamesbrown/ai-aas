@@ -32,6 +32,15 @@ func init() {
 	if cfg.MasterAdminOrgID != "" && os.Getenv(envOrgID) == "" {
 		os.Setenv(envOrgID, cfg.MasterAdminOrgID)
 	}
+	// Set API endpoint for development environment
+	// This is required for NewTestClientFromEnv() to work
+	if os.Getenv(envAPIEndpoint) == "" {
+		os.Setenv(envAPIEndpoint, "https://admin-api.dev.otherjamesbrown.com")
+	}
+	// Set API router URL for routing tests
+	if os.Getenv(envAPIRouterURL) == "" {
+		os.Setenv(envAPIRouterURL, "https://api.dev.otherjamesbrown.com")
+	}
 }
 
 // TestConfig holds configuration for UC tests
