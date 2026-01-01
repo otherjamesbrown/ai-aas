@@ -7,22 +7,23 @@ import (
 )
 
 type Org struct {
-	ID                    uuid.UUID
-	Slug                  string
-	Name                  string
-	Status                string
-	BillingOwnerUserID    *uuid.UUID
-	BudgetPolicyID        *uuid.UUID
-	DeclarativeMode       string
-	DeclarativeRepoURL    *string
-	DeclarativeBranch     *string
-	DeclarativeLastCommit *string
-	MFARequiredRoles      []string
-	Metadata              map[string]any
-	Version               int64
-	CreatedAt             time.Time
-	UpdatedAt             time.Time
-	DeletedAt             *time.Time
+	ID                     uuid.UUID
+	Slug                   string
+	Name                   string
+	Status                 string
+	BillingOwnerUserID     *uuid.UUID
+	BudgetPolicyID         *uuid.UUID
+	DeclarativeMode        string
+	DeclarativeRepoURL     *string
+	DeclarativeBranch      *string
+	DeclarativeLastCommit  *string
+	MFARequiredRoles       []string
+	Metadata               map[string]any
+	Version                int64
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
+	DeletedAt              *time.Time
+	DefaultTokenPolicyID   *uuid.UUID
 }
 
 type CreateOrgParams struct {
@@ -56,24 +57,25 @@ type UpdateOrgParams struct {
 }
 
 type User struct {
-	ID             uuid.UUID
-	OrgID          uuid.UUID
-	Email          string
-	DisplayName    string
-	PasswordHash   string
-	Status         string
-	MFAEnrolled    bool
-	MFAMethods     []string
-	MFASecret      *string
-	LastLoginAt    *time.Time
-	LockoutUntil   *time.Time
-	RecoveryTokens []string
-	ExternalIDP    *string
-	Metadata       map[string]any
-	Version        int64
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	DeletedAt      *time.Time
+	ID                      uuid.UUID
+	OrgID                   uuid.UUID
+	Email                   string
+	DisplayName             string
+	PasswordHash            string
+	Status                  string
+	MFAEnrolled             bool
+	MFAMethods              []string
+	MFASecret               *string
+	LastLoginAt             *time.Time
+	LockoutUntil            *time.Time
+	RecoveryTokens          []string
+	ExternalIDP             *string
+	Metadata                map[string]any
+	Version                 int64
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
+	DeletedAt               *time.Time
+	TokenPolicyOverrideID   *uuid.UUID
 }
 
 type CreateUserParams struct {

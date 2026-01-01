@@ -1103,15 +1103,16 @@ func (s *Store) RevokeAPIKey(ctx context.Context, params RevokeAPIKeyParams, org
 
 func scanOrg(row pgx.Row) (Org, error) {
 	var (
-		o            Org
-		billingOwner pgtype.UUID
-		budgetPolicy pgtype.UUID
-		repoURL      pgtype.Text
-		branch       pgtype.Text
-		lastCommit   pgtype.Text
-		mfaJSON      []byte
-		metadataJSON []byte
-		deleted      pgtype.Timestamptz
+		o                  Org
+		billingOwner       pgtype.UUID
+		budgetPolicy       pgtype.UUID
+		repoURL            pgtype.Text
+		branch             pgtype.Text
+		lastCommit         pgtype.Text
+		mfaJSON            []byte
+		metadataJSON       []byte
+		deleted            pgtype.Timestamptz
+		defaultTokenPolicy pgtype.UUID
 	)
 
 	err := row.Scan(
@@ -1131,6 +1132,7 @@ func scanOrg(row pgx.Row) (Org, error) {
 		&o.CreatedAt,
 		&o.UpdatedAt,
 		&deleted,
+		&defaultTokenPolicy,
 	)
 	if err != nil {
 		return Org{}, err
@@ -1141,6 +1143,7 @@ func scanOrg(row pgx.Row) (Org, error) {
 	o.DeclarativeRepoURL = textPtr(repoURL)
 	o.DeclarativeBranch = textPtr(branch)
 	o.DeclarativeLastCommit = textPtr(lastCommit)
+	o.DefaultTokenPolicyID = uuidPtr(defaultTokenPolicy)
 
 	roles, err := jsonSliceStringDefault(mfaJSON)
 	if err != nil {
@@ -1160,17 +1163,18 @@ func scanOrg(row pgx.Row) (Org, error) {
 
 func scanUser(row pgx.Row) (User, error) {
 	var (
-		u            User
-		orgID        uuid.UUID
-		passwordHash string
-		mfaJSON      []byte
-		mfaSecret    pgtype.Text
-		recoveryJSON []byte
-		metadataJSON []byte
-		lastLogin    pgtype.Timestamptz
-		lockout      pgtype.Timestamptz
-		externalIDP  pgtype.Text
-		deleted      pgtype.Timestamptz
+		u                     User
+		orgID                 uuid.UUID
+		passwordHash          string
+		mfaJSON               []byte
+		mfaSecret             pgtype.Text
+		recoveryJSON          []byte
+		metadataJSON          []byte
+		lastLogin             pgtype.Timestamptz
+		lockout               pgtype.Timestamptz
+		externalIDP           pgtype.Text
+		deleted               pgtype.Timestamptz
+		tokenPolicyOverrideID pgtype.UUID
 	)
 	err := row.Scan(
 		&u.ID,
@@ -1191,12 +1195,14 @@ func scanUser(row pgx.Row) (User, error) {
 		&u.CreatedAt,
 		&u.UpdatedAt,
 		&deleted,
+		&tokenPolicyOverrideID,
 	)
 	if err != nil {
 		return User{}, err
 	}
 	u.OrgID = orgID
 	u.PasswordHash = passwordHash
+	u.TokenPolicyOverrideID = uuidPtr(tokenPolicyOverrideID)
 
 	mfa, err := jsonSliceStringDefault(mfaJSON)
 	if err != nil {
