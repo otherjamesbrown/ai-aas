@@ -1,7 +1,7 @@
 # api-router-service Deployment Specification
 
 ---
-last_updated: 2025-12-22
+last_updated: 2026-01-01
 maintained_by: go-services-developer
 consumed_by: infra-ops-manager
 ---
@@ -44,7 +44,7 @@ This document defines the deployment requirements for the api-router-service. Th
 | `SERVICE_NAME` | Service identifier | `api-router-service` |
 | `ENVIRONMENT` | Environment name | `development` |
 | `LOG_LEVEL` | Logging level | `info` |
-| `REDIS_ADDRESS` | Redis for rate limiting | `redis-service:6379` |
+| `REDIS_ADDRESS` | **Redis for rate limiting + API key cache invalidation** | `redis-service:6379` |
 | `REDIS_PASSWORD` | Redis password | (empty) |
 | `REDIS_DB` | Redis database number | `0` |
 | `KAFKA_BROKERS` | Kafka broker addresses | `kafka-service:9092` |
@@ -77,7 +77,7 @@ This document defines the deployment requirements for the api-router-service. Th
 
 | Dependency | Purpose | Notes |
 |------------|---------|-------|
-| Redis 7+ | Rate limiting | Required for rate limiting to work |
+| Redis 7+ | Rate limiting, API key cache invalidation | **CRITICAL**: Required for immediate API key revocation. Without Redis, revoked keys remain valid for up to 1 minute (cache TTL). Also required for rate limiting. |
 | Kafka | Usage tracking | Required for usage analytics |
 | etcd | Dynamic config | Required for config hot-reload |
 

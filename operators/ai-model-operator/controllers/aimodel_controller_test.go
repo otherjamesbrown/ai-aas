@@ -1445,7 +1445,6 @@ func TestAIModelReconciler_SkipsUpdateWhenSpecUnchanged(t *testing.T) {
 
 	runtimeArgs := []string{
 		"--dtype=float16",
-		"--max-model-len=4096",
 		"--gpu-memory-utilization=0.9",
 	}
 
