@@ -17,7 +17,7 @@ type APIKey struct {
 	UserID        string     `json:"principalId"`
 	PrincipalType string     `json:"principalType,omitempty"`
 	UserEmail     string     `json:"user_email,omitempty"` // Not returned by API, populated separately
-	OrgID         string     `json:"org_id,omitempty"`     // Not returned by API, known from request context
+	OrgID         string     `json:"org_id,omitempty"`     // Returned by API
 	Fingerprint   string     `json:"fingerprint,omitempty"`
 	Status        string     `json:"status"`
 	Scopes        []string   `json:"scopes,omitempty"`
@@ -34,6 +34,7 @@ type APIKeyDisplay struct {
 	Name      string `json:"name"`
 	UserID    string `json:"user_id"`
 	UserEmail string `json:"user_email,omitempty"`
+	OrgID     string `json:"org_id"`
 	Status    string `json:"status"`
 	CreatedAt string `json:"created_at,omitempty"`
 	ExpiresAt string `json:"expires_at,omitempty"`
@@ -47,6 +48,7 @@ func (k *APIKey) ToDisplay() APIKeyDisplay {
 		Name:      k.Name,
 		UserID:    k.UserID,
 		UserEmail: k.UserEmail,
+		OrgID:     k.OrgID,
 		Status:    k.Status,
 	}
 	if k.CreatedAt != nil {
