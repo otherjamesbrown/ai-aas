@@ -667,6 +667,7 @@ func (h *Handler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
 		Notes         string   `json:"notes,omitempty"`
 		PrincipalType string   `json:"principalType"`
 		PrincipalID   string   `json:"principalId"`
+		OrgID         string   `json:"org_id"`
 		Fingerprint   string   `json:"fingerprint"`
 		Status        string   `json:"status"`
 		Scopes        []string `json:"scopes"`
@@ -682,6 +683,7 @@ func (h *Handler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
 			Notes:         key.Notes,
 			PrincipalType: string(key.PrincipalType),
 			PrincipalID:   key.PrincipalID.String(),
+			OrgID:         key.OrgID.String(),
 			Fingerprint:   key.Fingerprint,
 			Status:        key.Status,
 			Scopes:        key.Scopes,
@@ -764,6 +766,7 @@ func (h *Handler) ListUserAPIKeys(w http.ResponseWriter, r *http.Request) {
 	type APIKeyResponse struct {
 		KeyID       string   `json:"keyId"`
 		Notes       string   `json:"notes,omitempty"`
+		OrgID       string   `json:"org_id"`
 		Fingerprint string   `json:"fingerprint"`
 		Status      string   `json:"status"`
 		Scopes      []string `json:"scopes"`
@@ -777,6 +780,7 @@ func (h *Handler) ListUserAPIKeys(w http.ResponseWriter, r *http.Request) {
 		responses[i] = APIKeyResponse{
 			KeyID:       key.KeyID,
 			Notes:       key.Notes,
+			OrgID:       key.OrgID.String(),
 			Fingerprint: key.Fingerprint,
 			Status:      key.Status,
 			Scopes:      key.Scopes,
@@ -846,6 +850,7 @@ func (h *Handler) GetAPIKey(w http.ResponseWriter, r *http.Request) {
 		Notes         string   `json:"notes,omitempty"`
 		PrincipalType string   `json:"principalType"`
 		PrincipalID   string   `json:"principalId"`
+		OrgID         string   `json:"org_id"`
 		Fingerprint   string   `json:"fingerprint"`
 		Status        string   `json:"status"`
 		Scopes        []string `json:"scopes"`
@@ -859,6 +864,7 @@ func (h *Handler) GetAPIKey(w http.ResponseWriter, r *http.Request) {
 		Notes:         apiKey.Notes,
 		PrincipalType: string(apiKey.PrincipalType),
 		PrincipalID:   apiKey.PrincipalID.String(),
+		OrgID:         apiKey.OrgID.String(),
 		Fingerprint:   apiKey.Fingerprint,
 		Status:        apiKey.Status,
 		Scopes:        apiKey.Scopes,
@@ -1055,6 +1061,7 @@ func (h *Handler) ListAPIKeysForMe(w http.ResponseWriter, r *http.Request) {
 	type APIKeyResponse struct {
 		KeyID       string   `json:"keyId"`
 		Notes       string   `json:"notes,omitempty"`
+		OrgID       string   `json:"org_id"`
 		Fingerprint string   `json:"fingerprint"`
 		Status      string   `json:"status"`
 		Scopes      []string `json:"scopes"`
@@ -1068,6 +1075,7 @@ func (h *Handler) ListAPIKeysForMe(w http.ResponseWriter, r *http.Request) {
 		responses[i] = APIKeyResponse{
 			KeyID:       key.KeyID,
 			Notes:       key.Notes,
+			OrgID:       key.OrgID.String(),
 			Fingerprint: key.Fingerprint,
 			Status:      key.Status,
 			Scopes:      key.Scopes,
@@ -1123,6 +1131,7 @@ func (h *Handler) GetAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 	type APIKeyResponse struct {
 		KeyID       string   `json:"keyId"`
 		Notes       string   `json:"notes,omitempty"`
+		OrgID       string   `json:"org_id"`
 		Fingerprint string   `json:"fingerprint"`
 		Status      string   `json:"status"`
 		Scopes      []string `json:"scopes"`
@@ -1134,6 +1143,7 @@ func (h *Handler) GetAPIKeyForMe(w http.ResponseWriter, r *http.Request) {
 	resp := APIKeyResponse{
 		KeyID:       apiKey.KeyID,
 		Notes:       apiKey.Notes,
+		OrgID:       apiKey.OrgID.String(),
 		Fingerprint: apiKey.Fingerprint,
 		Status:      apiKey.Status,
 		Scopes:      apiKey.Scopes,
