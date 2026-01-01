@@ -148,27 +148,52 @@ func TestForEnvironment(t *testing.T) {
 
 func TestSetEnvFromConfig(t *testing.T) {
 	// Clear environment first
-	os.Unsetenv(EnvMasterAdminAPIKey)
-	os.Unsetenv(EnvMasterAdminOrgID)
+	envVars := []string{
+		EnvMasterAdminAPIKey,
+		EnvMasterAdminOrgID,
+		EnvStagingMasterAdminAPIKey,
+		EnvStagingMasterAdminOrgID,
+		EnvHFToken,
+		EnvLinodeObjectStorageAccessKey,
+		EnvLinodeObjectStorageSecretKey,
+	}
+	for _, v := range envVars {
+		os.Unsetenv(v)
+	}
 	defer func() {
-		os.Unsetenv(EnvMasterAdminAPIKey)
-		os.Unsetenv(EnvMasterAdminOrgID)
+		for _, v := range envVars {
+			os.Unsetenv(v)
+		}
 	}()
 
 	cfg := &Config{
-		MasterAdminAPIKey: "exported-key",
-		MasterAdminOrgID:  "exported-org",
+		MasterAdminAPIKey:            "exported-key",
+		MasterAdminOrgID:             "exported-org",
+		StagingMasterAdminAPIKey:     "staging-key",
+		StagingMasterAdminOrgID:      "staging-org",
+		HFToken:                      "hf-token",
+		LinodeObjectStorageAccessKey: "linode-access",
+		LinodeObjectStorageSecretKey: "linode-secret",
 	}
 
 	if err := cfg.SetEnvFromConfig(); err != nil {
 		t.Fatalf("SetEnvFromConfig() failed: %v", err)
 	}
 
-	if got := os.Getenv(EnvMasterAdminAPIKey); got != "exported-key" {
-		t.Errorf("MASTER_ADMIN_API_KEY = %q, want %q", got, "exported-key")
+	// Verify all fields are exported
+	tests := map[string]string{
+		EnvMasterAdminAPIKey:            "exported-key",
+		EnvMasterAdminOrgID:             "exported-org",
+		EnvStagingMasterAdminAPIKey:     "staging-key",
+		EnvStagingMasterAdminOrgID:      "staging-org",
+		EnvHFToken:                      "hf-token",
+		EnvLinodeObjectStorageAccessKey: "linode-access",
+		EnvLinodeObjectStorageSecretKey: "linode-secret",
 	}
-	if got := os.Getenv(EnvMasterAdminOrgID); got != "exported-org" {
-		t.Errorf("MASTER_ADMIN_ORG_ID = %q, want %q", got, "exported-org")
+	for envVar, want := range tests {
+		if got := os.Getenv(envVar); got != want {
+			t.Errorf("%s = %q, want %q", envVar, got, want)
+		}
 	}
 }
 

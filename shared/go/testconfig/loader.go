@@ -188,24 +188,21 @@ func loadFromFile(cfg *Config, path string) error {
 // SetEnvFromConfig exports config values to environment variables.
 // This is useful for passing credentials to CLI subprocesses.
 func (c *Config) SetEnvFromConfig() error {
-	if c.MasterAdminAPIKey != "" {
-		if err := os.Setenv(EnvMasterAdminAPIKey, c.MasterAdminAPIKey); err != nil {
-			return err
-		}
+	vars := map[string]string{
+		EnvMasterAdminAPIKey:            c.MasterAdminAPIKey,
+		EnvMasterAdminOrgID:             c.MasterAdminOrgID,
+		EnvStagingMasterAdminAPIKey:     c.StagingMasterAdminAPIKey,
+		EnvStagingMasterAdminOrgID:      c.StagingMasterAdminOrgID,
+		EnvHFToken:                      c.HFToken,
+		EnvLinodeObjectStorageAccessKey: c.LinodeObjectStorageAccessKey,
+		EnvLinodeObjectStorageSecretKey: c.LinodeObjectStorageSecretKey,
 	}
-	if c.MasterAdminOrgID != "" {
-		if err := os.Setenv(EnvMasterAdminOrgID, c.MasterAdminOrgID); err != nil {
-			return err
-		}
-	}
-	if c.StagingMasterAdminAPIKey != "" {
-		if err := os.Setenv(EnvStagingMasterAdminAPIKey, c.StagingMasterAdminAPIKey); err != nil {
-			return err
-		}
-	}
-	if c.StagingMasterAdminOrgID != "" {
-		if err := os.Setenv(EnvStagingMasterAdminOrgID, c.StagingMasterAdminOrgID); err != nil {
-			return err
+
+	for key, value := range vars {
+		if value != "" {
+			if err := os.Setenv(key, value); err != nil {
+				return fmt.Errorf("failed to set env var %s: %w", key, err)
+			}
 		}
 	}
 	return nil
