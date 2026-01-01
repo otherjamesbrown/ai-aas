@@ -18,6 +18,10 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+// DEPRECATED: This E2E test suite is being migrated to UC structure.
+// New tests for recipe operations are in tests/usecases/recipes_test.go (UC-RCP-*)
+// This file remains for backward compatibility during the migration.
+
 // TestRecipeDeployE2E tests the full E2E flow of deploying a model using a recipe
 //
 // Prerequisites:

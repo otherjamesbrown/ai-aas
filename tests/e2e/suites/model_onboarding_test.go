@@ -17,6 +17,10 @@ import (
 	"github.com/ai-aas/tests/e2e/harness"
 )
 
+// DEPRECATED: This E2E test suite is being migrated to UC structure.
+// New tests for model lifecycle operations are in tests/usecases/model_lifecycle_test.go (UC-MLC-*)
+// This file remains for backward compatibility during the migration.
+
 // TestModelOnboardingE2E tests the full model onboarding workflow
 //
 // Prerequisites:

@@ -12,6 +12,10 @@ import (
 	"github.com/ai-aas/tests/e2e/harness"
 )
 
+// DEPRECATED: This E2E test suite is being migrated to UC structure.
+// New tests for platform health are in tests/usecases/platform_health_test.go (UC-PLH-*)
+// This file remains for backward compatibility during the migration.
+
 // SmokeTestSuite runs a comprehensive smoke test of the platform
 // This is the primary test to verify the development environment is working
 //

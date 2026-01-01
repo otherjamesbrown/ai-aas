@@ -8,6 +8,10 @@ import (
 	"github.com/ai-aas/tests/e2e/fixtures"
 )
 
+// DEPRECATED: This E2E test suite is being migrated to UC structure.
+// New tests for routing operations are in tests/usecases/routing_test.go (UC-RTG-*)
+// This file remains for backward compatibility during the migration.
+
 // TestRoutingPolicyLifecycle tests the complete routing policy lifecycle
 // This test covers policy creation, validation, activation, deactivation, and deletion
 func TestRoutingPolicyLifecycle(t *testing.T) {
