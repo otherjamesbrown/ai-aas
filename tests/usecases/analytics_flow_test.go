@@ -164,20 +164,129 @@ func TestUC_ANL_002_UsageAggregation(t *testing.T) {
 		t.Skip("Analytics service not configured")
 	}
 
+	client, err := NewTestClientFromEnv()
+	if err != nil {
+		t.Fatalf("Failed to create test client: %v", err)
+	}
+
+	fm := NewFixtureManager(t, client)
+	orgFixture := NewOrganizationFixture(fm, client)
+
+	org, err := orgFixture.Create("")
+	if err != nil {
+		t.Fatalf("Failed to create organization: %v", err)
+	}
+
+	analyticsClient := NewTestClient(getAnalyticsServiceURL(), getAdminAPIKey())
+
 	t.Run("AC-01: hourly aggregation by organization and model", func(t *testing.T) {
-		t.Skip("Aggregation validation requires analytics database access")
+		// When: Query usage with hourly granularity
+		now := time.Now().UTC()
+		start := now.Add(-24 * time.Hour).Format(time.RFC3339)
+		end := now.Format(time.RFC3339)
+
+		usagePath := "/analytics/v1/orgs/" + org.ID + "/usage?start=" + start + "&end=" + end + "&granularity=hour"
+		resp, err := analyticsClient.GET(usagePath)
+		if err != nil {
+			t.Fatalf("Analytics request failed: %v", err)
+		}
+
+		if resp.StatusCode != 200 {
+			t.Fatalf("Expected status 200, got %d: %s", resp.StatusCode, resp.String())
+		}
+
+		// Then: Response contains hourly aggregated data
+		var usageResp struct {
+			OrgID       string `json:"orgId"`
+			Granularity string `json:"granularity"`
+			Series      []struct {
+				BucketStart  string  `json:"bucketStart"`
+				ModelID      *string `json:"modelId,omitempty"`
+				Invocations  int64   `json:"invocations"`
+				InputTokens  int64   `json:"inputTokens"`
+				OutputTokens int64   `json:"outputTokens"`
+			} `json:"series"`
+			Totals struct {
+				Invocations  int64 `json:"invocations"`
+				InputTokens  int64 `json:"inputTokens"`
+				OutputTokens int64 `json:"outputTokens"`
+			} `json:"totals"`
+		}
+
+		if err := resp.UnmarshalJSON(&usageResp); err != nil {
+			t.Fatalf("Failed to parse usage response: %v", err)
+		}
+
+		// Verify response structure
+		if usageResp.OrgID != org.ID {
+			t.Errorf("Expected orgId %s, got %s", org.ID, usageResp.OrgID)
+		}
+		if usageResp.Granularity != "hour" {
+			t.Errorf("Expected granularity 'hour', got %s", usageResp.Granularity)
+		}
+
+		// Verify bucket format if there's data
+		for _, point := range usageResp.Series {
+			// BucketStart should be RFC3339 formatted
+			if _, err := time.Parse(time.RFC3339, point.BucketStart); err != nil {
+				t.Errorf("Invalid bucketStart format: %s", point.BucketStart)
+			}
+		}
 	})
 
 	t.Run("AC-02: daily aggregation from hourly data", func(t *testing.T) {
-		t.Skip("Aggregation validation requires analytics database access")
+		// When: Query usage with daily granularity
+		now := time.Now().UTC()
+		start := now.Add(-7 * 24 * time.Hour).Format(time.RFC3339)
+		end := now.Format(time.RFC3339)
+
+		usagePath := "/analytics/v1/orgs/" + org.ID + "/usage?start=" + start + "&end=" + end + "&granularity=day"
+		resp, err := analyticsClient.GET(usagePath)
+		if err != nil {
+			t.Fatalf("Analytics request failed: %v", err)
+		}
+
+		if resp.StatusCode != 200 {
+			t.Fatalf("Expected status 200, got %d: %s", resp.StatusCode, resp.String())
+		}
+
+		// Then: Response contains daily aggregated data
+		var usageResp struct {
+			OrgID       string `json:"orgId"`
+			Granularity string `json:"granularity"`
+			Series      []struct {
+				BucketStart  string  `json:"bucketStart"`
+				ModelID      *string `json:"modelId,omitempty"`
+				Invocations  int64   `json:"invocations"`
+				InputTokens  int64   `json:"inputTokens"`
+				OutputTokens int64   `json:"outputTokens"`
+			} `json:"series"`
+			Totals struct {
+				Invocations  int64 `json:"invocations"`
+				InputTokens  int64 `json:"inputTokens"`
+				OutputTokens int64 `json:"outputTokens"`
+			} `json:"totals"`
+		}
+
+		if err := resp.UnmarshalJSON(&usageResp); err != nil {
+			t.Fatalf("Failed to parse usage response: %v", err)
+		}
+
+		// Verify response structure
+		if usageResp.OrgID != org.ID {
+			t.Errorf("Expected orgId %s, got %s", org.ID, usageResp.OrgID)
+		}
+		if usageResp.Granularity != "day" {
+			t.Errorf("Expected granularity 'day', got %s", usageResp.Granularity)
+		}
 	})
 
 	t.Run("AC-03: aggregation idempotency", func(t *testing.T) {
-		t.Skip("Aggregation validation requires analytics database access")
+		t.Skip("Idempotency validation requires triggering aggregation job - needs test infrastructure")
 	})
 
 	t.Run("AC-04: handle missing or late data", func(t *testing.T) {
-		t.Skip("Aggregation validation requires analytics database access")
+		t.Skip("Late data handling requires simulating delayed events - needs test infrastructure")
 	})
 }
 
