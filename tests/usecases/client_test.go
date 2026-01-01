@@ -127,6 +127,11 @@ func (c *TestClient) PATCH(path string, body interface{}) (*TestResponse, error)
 
 // Do performs an HTTP request
 func (c *TestClient) Do(method, path string, body []byte) (*TestResponse, error) {
+	return c.DoWithHeaders(method, path, body, nil)
+}
+
+// DoWithHeaders performs an HTTP request with custom headers
+func (c *TestClient) DoWithHeaders(method, path string, body []byte, headers map[string]string) (*TestResponse, error) {
 	url := c.baseURL + path
 
 	var bodyReader io.Reader
@@ -139,11 +144,16 @@ func (c *TestClient) Do(method, path string, body []byte) (*TestResponse, error)
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	// Set headers
+	// Set default headers
 	req.Header.Set("Content-Type", "application/json")
 	if c.apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+c.apiKey)
 		req.Header.Set("X-API-Key", c.apiKey)
+	}
+
+	// Set custom headers (can override defaults)
+	for k, v := range headers {
+		req.Header.Set(k, v)
 	}
 
 	start := time.Now()
@@ -167,4 +177,49 @@ func (c *TestClient) Do(method, path string, body []byte) (*TestResponse, error)
 		Body:       respBody,
 		Duration:   duration,
 	}, nil
+}
+
+// POSTWithHeaders performs a POST request with custom headers
+func (c *TestClient) POSTWithHeaders(path string, body interface{}, headers map[string]string) (*TestResponse, error) {
+	var bodyBytes []byte
+	var err error
+
+	if body != nil {
+		bodyBytes, err = json.Marshal(body)
+		if err != nil {
+			return nil, fmt.Errorf("marshal request body: %w", err)
+		}
+	}
+
+	return c.DoWithHeaders("POST", path, bodyBytes, headers)
+}
+
+// DoStreaming performs an HTTP request and returns the raw response for streaming.
+// The caller is responsible for closing the response body.
+func (c *TestClient) DoStreaming(method, path string, body []byte) (*http.Response, error) {
+	url := c.baseURL + path
+
+	var bodyReader io.Reader
+	if body != nil {
+		bodyReader = bytes.NewReader(body)
+	}
+
+	req, err := http.NewRequest(method, url, bodyReader)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+		req.Header.Set("X-API-Key", c.apiKey)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("execute request: %w", err)
+	}
+
+	return resp, nil
 }

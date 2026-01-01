@@ -1,7 +1,9 @@
 package usecases_test
 
 import (
+	"bufio"
 	"encoding/json"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -205,21 +207,269 @@ func TestUC_INF_002_StreamingCompletion(t *testing.T) {
 	inferenceClient := NewTestClient(getAPIRouterURL(), apiKey.Key)
 
 	t.Run("AC-01: enable streaming with request parameter", func(t *testing.T) {
-		t.Skip("Streaming not yet implemented - requires UC-INF-002 implementation")
-		// TODO: Implement streaming test once backend supports it
+		// When: User sends POST /v1/chat/completions with stream:true
+		reqBody := map[string]interface{}{
+			"model": getTestModel(),
+			"messages": []map[string]interface{}{
+				{
+					"role":    "user",
+					"content": "Say hello",
+				},
+			},
+			"stream": true,
+		}
+
+		bodyBytes, err := json.Marshal(reqBody)
+		if err != nil {
+			t.Fatalf("Failed to marshal request: %v", err)
+		}
+
+		resp, err := inferenceClient.DoStreaming("POST", "/v1/chat/completions", bodyBytes)
+		if err != nil {
+			t.Fatalf("Request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		// Then: Response status is 200
+		if resp.StatusCode != 200 {
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			t.Fatalf("Expected status 200, got %d: %s", resp.StatusCode, string(bodyBytes))
+		}
+
+		// Then: Response content-type is text/event-stream
+		contentType := resp.Header.Get("Content-Type")
+		if !strings.Contains(contentType, "text/event-stream") {
+			t.Errorf("Expected Content-Type to contain 'text/event-stream', got: %s", contentType)
+		}
+
+		// Then: Response includes SSE data chunks
+		scanner := bufio.NewScanner(resp.Body)
+		foundData := false
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.HasPrefix(line, "data: ") {
+				foundData = true
+				break
+			}
+		}
+
+		if !foundData {
+			t.Error("Expected SSE response to contain 'data:' prefix")
+		}
 	})
 
 	t.Run("AC-02: streaming chunks have valid format", func(t *testing.T) {
-		t.Skip("Streaming not yet implemented - requires UC-INF-002 implementation")
+		// When: User enables streaming
+		reqBody := map[string]interface{}{
+			"model": getTestModel(),
+			"messages": []map[string]interface{}{
+				{
+					"role":    "user",
+					"content": "Count to 3",
+				},
+			},
+			"stream": true,
+		}
+
+		bodyBytes, err := json.Marshal(reqBody)
+		if err != nil {
+			t.Fatalf("Failed to marshal request: %v", err)
+		}
+
+		resp, err := inferenceClient.DoStreaming("POST", "/v1/chat/completions", bodyBytes)
+		if err != nil {
+			t.Fatalf("Request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != 200 {
+			t.Skip("Streaming request failed - cannot validate chunk format")
+		}
+
+		// Then: Each chunk has valid JSON format
+		scanner := bufio.NewScanner(resp.Body)
+		chunkCount := 0
+		foundDone := false
+
+		for scanner.Scan() {
+			line := scanner.Text()
+
+			// Skip empty lines
+			if line == "" {
+				continue
+			}
+
+			// Check for data: prefix
+			if !strings.HasPrefix(line, "data: ") {
+				continue
+			}
+
+			// Extract JSON after "data: "
+			jsonStr := strings.TrimPrefix(line, "data: ")
+
+			// Check for [DONE] marker
+			if strings.TrimSpace(jsonStr) == "[DONE]" {
+				foundDone = true
+				break
+			}
+
+			// Then: Each chunk parses as valid JSON
+			var chunk map[string]interface{}
+			if err := json.Unmarshal([]byte(jsonStr), &chunk); err != nil {
+				t.Errorf("Failed to parse chunk JSON: %v\nChunk: %s", err, jsonStr)
+				continue
+			}
+
+			// Then: Chunk includes required fields (id, object, choices)
+			if _, ok := chunk["id"]; !ok {
+				t.Error("Chunk missing 'id' field")
+			}
+			if _, ok := chunk["object"]; !ok {
+				t.Error("Chunk missing 'object' field")
+			}
+			if _, ok := chunk["choices"]; !ok {
+				t.Error("Chunk missing 'choices' field")
+			}
+
+			chunkCount++
+		}
+
+		if chunkCount == 0 {
+			t.Error("Expected at least one data chunk")
+		}
+
+		if !foundDone {
+			t.Error("Expected stream to end with [DONE] marker")
+		}
 	})
 
 	t.Run("AC-03: final chunk includes usage data", func(t *testing.T) {
-		t.Skip("Streaming not yet implemented - requires UC-INF-002 implementation")
+		// When: User completes a streaming request
+		reqBody := map[string]interface{}{
+			"model": getTestModel(),
+			"messages": []map[string]interface{}{
+				{
+					"role":    "user",
+					"content": "Hello",
+				},
+			},
+			"stream":         true,
+			"stream_options": map[string]interface{}{"include_usage": true},
+		}
+
+		bodyBytes, err := json.Marshal(reqBody)
+		if err != nil {
+			t.Fatalf("Failed to marshal request: %v", err)
+		}
+
+		resp, err := inferenceClient.DoStreaming("POST", "/v1/chat/completions", bodyBytes)
+		if err != nil {
+			t.Fatalf("Request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != 200 {
+			t.Skip("Streaming request failed - cannot validate usage data")
+		}
+
+		// Read all chunks and find the one with usage
+		scanner := bufio.NewScanner(resp.Body)
+		foundUsage := false
+
+		for scanner.Scan() {
+			line := scanner.Text()
+
+			if !strings.HasPrefix(line, "data: ") {
+				continue
+			}
+
+			jsonStr := strings.TrimPrefix(line, "data: ")
+			if strings.TrimSpace(jsonStr) == "[DONE]" {
+				break
+			}
+
+			var chunk struct {
+				Usage struct {
+					PromptTokens     int `json:"prompt_tokens"`
+					CompletionTokens int `json:"completion_tokens"`
+					TotalTokens      int `json:"total_tokens"`
+				} `json:"usage"`
+			}
+
+			if err := json.Unmarshal([]byte(jsonStr), &chunk); err != nil {
+				continue
+			}
+
+			// Then: Final chunk includes usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
+			if chunk.Usage.TotalTokens > 0 {
+				foundUsage = true
+				if chunk.Usage.PromptTokens <= 0 {
+					t.Error("Expected prompt_tokens > 0 in usage data")
+				}
+				if chunk.Usage.CompletionTokens <= 0 {
+					t.Error("Expected completion_tokens > 0 in usage data")
+				}
+				expected := chunk.Usage.PromptTokens + chunk.Usage.CompletionTokens
+				if chunk.Usage.TotalTokens != expected {
+					t.Errorf("Expected total_tokens=%d, got %d", expected, chunk.Usage.TotalTokens)
+				}
+			}
+		}
+
+		if !foundUsage {
+			t.Log("Warning: No usage data found in streaming response - may require stream_options.include_usage=true")
+		}
 	})
 
 	t.Run("AC-04: connection interruption handling", func(t *testing.T) {
-		t.Skip("Streaming not yet implemented - requires UC-INF-002 implementation")
+		// This test validates graceful handling when connection is closed early
+		reqBody := map[string]interface{}{
+			"model": getTestModel(),
+			"messages": []map[string]interface{}{
+				{
+					"role":    "user",
+					"content": "Write a long story",
+				},
+			},
+			"stream":     true,
+			"max_tokens": 500,
+		}
+
+		bodyBytes, err := json.Marshal(reqBody)
+		if err != nil {
+			t.Fatalf("Failed to marshal request: %v", err)
+		}
+
+		resp, err := inferenceClient.DoStreaming("POST", "/v1/chat/completions", bodyBytes)
+		if err != nil {
+			t.Fatalf("Request failed: %v", err)
+		}
+
+		if resp.StatusCode != 200 {
+			resp.Body.Close()
+			t.Skip("Streaming request failed - cannot validate interruption handling")
+		}
+
+		// Read first few chunks then close connection
+		scanner := bufio.NewScanner(resp.Body)
+		chunkCount := 0
+		for scanner.Scan() && chunkCount < 3 {
+			line := scanner.Text()
+			if strings.HasPrefix(line, "data: ") {
+				chunkCount++
+			}
+		}
+
+		// Then: Connection closes without error
+		resp.Body.Close()
+
+		if chunkCount < 1 {
+			t.Error("Expected to read at least 1 chunk before closing")
+		}
+
+		// Success: Connection closed gracefully after partial read
 	})
+
 }
 
 // TestUC_INF_003_MultiModelRouting validates UC-INF-003: Multi-Model Routing.
@@ -467,6 +717,39 @@ func TestUC_INF_004_TokenUsageTracking(t *testing.T) {
 	})
 
 	t.Run("AC-05: correlate usage with request trace", func(t *testing.T) {
-		t.Skip("Trace ID correlation not yet validated - requires UC-ANL-004")
+		// Given: User makes inference request
+		reqBody := map[string]interface{}{
+			"model": getTestModel(),
+			"messages": []map[string]interface{}{
+				{
+					"role":    "user",
+					"content": "Test usage correlation",
+				},
+			},
+		}
+
+		// When: Request completes successfully
+		resp, err := inferenceClient.POST("/v1/chat/completions", reqBody)
+		if err != nil {
+			t.Fatalf("Request failed: %v", err)
+		}
+
+		if resp.StatusCode != 200 {
+			t.Skipf("Inference request failed with status %d", resp.StatusCode)
+		}
+
+		// Then: Response includes trace_id
+		var result map[string]interface{}
+		if err := resp.UnmarshalJSON(&result); err != nil {
+			t.Fatalf("Failed to parse response: %v", err)
+		}
+
+		traceID, ok := result["trace_id"].(string)
+		if !ok || traceID == "" {
+			t.Errorf("Response should include trace_id for usage correlation")
+		} else {
+			t.Logf("Trace ID for usage correlation: %s", traceID)
+			// Full correlation validation requires analytics database access (UC-ANL-004/AC-03)
+		}
 	})
 }

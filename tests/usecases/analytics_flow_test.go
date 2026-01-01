@@ -467,27 +467,120 @@ func TestUC_ANL_004_CrossServiceCorrelation(t *testing.T) {
 			"messages": []map[string]interface{}{
 				{
 					"role":    "user",
-					"content": "Test",
+					"content": "Test trace ID generation",
 				},
 			},
 		}
 
 		resp, err := inferenceClient.POST("/v1/chat/completions", reqBody)
-		if err != nil || resp.StatusCode != 200 {
-			t.Skip("Inference request failed")
+		if err != nil {
+			t.Fatalf("Request failed: %v", err)
 		}
 
-		// Then: Trace ID is returned in response headers
-		traceID := resp.Headers.Get("X-Trace-ID")
-		if traceID == "" {
-			t.Log("Warning: X-Trace-ID header not present in response")
+		if resp.StatusCode != 200 {
+			t.Skipf("Inference request failed with status %d: %s", resp.StatusCode, resp.String())
+		}
+
+		// Then: Trace ID is returned in response body
+		var result map[string]interface{}
+		if err := resp.UnmarshalJSON(&result); err != nil {
+			t.Fatalf("Failed to parse response: %v", err)
+		}
+
+		traceID, ok := result["trace_id"].(string)
+		if !ok || traceID == "" {
+			t.Errorf("Response should include non-empty trace_id field, got: %v", result)
+		}
+
+		// Verify trace ID format - OpenTelemetry trace IDs are 32 hex characters
+		if len(traceID) != 32 {
+			t.Errorf("Trace ID should be 32 hex characters, got length %d: %s", len(traceID), traceID)
+		}
+
+		// Verify trace ID is hex
+		for _, c := range traceID {
+			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+				t.Errorf("Trace ID should only contain hex characters, got: %s", traceID)
+				break
+			}
+		}
+
+		t.Logf("Generated trace ID: %s", traceID)
+
+		// Verify each request gets a unique trace ID
+		resp2, err := inferenceClient.POST("/v1/chat/completions", reqBody)
+		if err != nil {
+			t.Fatalf("Second request failed: %v", err)
+		}
+
+		if resp2.StatusCode != 200 {
+			t.Skipf("Second request failed with status %d", resp2.StatusCode)
+		}
+
+		var result2 map[string]interface{}
+		if err := resp2.UnmarshalJSON(&result2); err != nil {
+			t.Fatalf("Failed to parse second response: %v", err)
+		}
+
+		traceID2, ok := result2["trace_id"].(string)
+		if !ok || traceID2 == "" {
+			t.Errorf("Second response should include trace_id")
+		}
+
+		// Verify trace IDs are different
+		if traceID == traceID2 {
+			t.Errorf("Each request should get a unique trace ID, got duplicate: %s", traceID)
 		} else {
-			t.Logf("Generated trace ID: %s", traceID)
+			t.Logf("Second request got unique trace ID: %s", traceID2)
 		}
 	})
 
 	t.Run("AC-02: propagate client trace ID", func(t *testing.T) {
-		t.Skip("Requires setting X-Trace-ID header in request and verifying propagation")
+		// Given: User provides custom trace ID in header
+		clientTraceID := "12345678901234567890123456789012" // 32 hex chars
+
+		reqBody := map[string]interface{}{
+			"model": getTestModel(),
+			"messages": []map[string]interface{}{
+				{
+					"role":    "user",
+					"content": "Test client trace ID",
+				},
+			},
+		}
+
+		// When: User sends request with X-Trace-ID header
+		resp, err := inferenceClient.POSTWithHeaders("/v1/chat/completions", reqBody, map[string]string{
+			"X-Trace-ID": clientTraceID,
+		})
+
+		if err != nil {
+			t.Fatalf("Request failed: %v", err)
+		}
+
+		if resp.StatusCode != 200 {
+			t.Skipf("Inference request failed with status %d: %s", resp.StatusCode, resp.String())
+		}
+
+		// Then: Client-provided trace ID is used
+		var result map[string]interface{}
+		if err := resp.UnmarshalJSON(&result); err != nil {
+			t.Fatalf("Failed to parse response: %v", err)
+		}
+
+		traceID, ok := result["trace_id"].(string)
+		if !ok || traceID == "" {
+			t.Errorf("Response should include non-empty trace_id field")
+		}
+
+		// Verify the client-provided trace ID is used (or at least present in response)
+		// NOTE: Implementation may not honor client trace ID yet - log as warning
+		if traceID != clientTraceID {
+			t.Logf("Warning: Client-provided trace ID not used. Sent: %s, Got: %s", clientTraceID, traceID)
+			t.Skip("Client trace ID propagation not yet implemented")
+		} else {
+			t.Logf("Client trace ID successfully propagated: %s", traceID)
+		}
 	})
 
 	t.Run("AC-03: usage record includes trace ID", func(t *testing.T) {
@@ -499,13 +592,13 @@ func TestUC_ANL_004_CrossServiceCorrelation(t *testing.T) {
 	})
 
 	t.Run("AC-04: error response includes trace ID", func(t *testing.T) {
-		// Make request that will fail
+		// Make request that will fail - use nonexistent model
 		reqBody := map[string]interface{}{
-			"model": "nonexistent-model",
+			"model": "nonexistent-model-12345",
 			"messages": []map[string]interface{}{
 				{
 					"role":    "user",
-					"content": "Test",
+					"content": "Test error trace ID",
 				},
 			},
 		}
@@ -515,15 +608,26 @@ func TestUC_ANL_004_CrossServiceCorrelation(t *testing.T) {
 			t.Fatalf("Request failed: %v", err)
 		}
 
-		// Then: Error body includes trace_id field
-		var errResp struct {
-			TraceID string `json:"trace_id"`
+		// Expect error response (4xx or 5xx)
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			t.Skip("Expected error response but got success - cannot validate trace ID in error")
 		}
 
-		if err := resp.UnmarshalJSON(&errResp); err == nil {
-			if errResp.TraceID == "" {
-				t.Log("Warning: trace_id field not present in error response")
+		// Then: Error body includes trace_id field
+		var errResp map[string]interface{}
+		if err := resp.UnmarshalJSON(&errResp); err != nil {
+			t.Fatalf("Failed to parse error response: %v", err)
+		}
+
+		traceID, ok := errResp["trace_id"].(string)
+		if !ok || traceID == "" {
+			t.Errorf("Error response should include non-empty trace_id field, got: %v", errResp)
+		} else {
+			// Verify trace ID format
+			if len(traceID) != 32 {
+				t.Errorf("Trace ID should be 32 hex characters, got length %d: %s", len(traceID), traceID)
 			}
+			t.Logf("Error response includes trace ID: %s", traceID)
 		}
 	})
 
