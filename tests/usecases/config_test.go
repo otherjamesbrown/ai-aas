@@ -37,6 +37,10 @@ func setupTestConfig() {
 	if cfg.MasterAdminAPIKey != "" && os.Getenv(envAPIKey) == "" {
 		os.Setenv(envAPIKey, cfg.MasterAdminAPIKey)
 	}
+	// Also set org ID if available
+	if cfg.MasterAdminOrgID != "" && os.Getenv(envOrgID) == "" {
+		os.Setenv(envOrgID, cfg.MasterAdminOrgID)
+	}
 }
 
 // TestConfig holds configuration for UC tests

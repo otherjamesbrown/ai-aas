@@ -331,6 +331,7 @@ func TestUC_INF_002_StreamingCompletion(t *testing.T) {
 	}
 
 	inferenceClient := NewTestClient(getAPIRouterURL(), apiKey.Key)
+	_ = inferenceClient // TODO: Use when streaming is implemented
 
 	t.Run("AC-01: enable streaming with request parameter", func(t *testing.T) {
 		// When: User sends POST /v1/chat/completions with stream:true
