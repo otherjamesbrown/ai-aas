@@ -295,3 +295,59 @@ func getCurrentTimestamp() string {
 	}
 	return strings.TrimSpace(string(output))
 }
+
+// Platform CLI Helpers
+// These helpers support running the ai-aas-cli (platform CLI) for UC tests.
+
+// skipIfNoPlatformCLI skips the test if ai-aas-cli is not available.
+// Tests should call this at the start to conditionally run when the CLI is installed.
+func skipIfNoPlatformCLI(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("ai-aas-cli"); err != nil {
+		t.Skip("ai-aas-cli not found in PATH: install or build it first")
+	}
+}
+
+// runPlatformCLI executes an ai-aas-cli command and returns the result.
+// It automatically uses the API endpoint and key from environment variables
+// if AI_AAS_API_ENDPOINT is set.
+func runPlatformCLI(args ...string) CLIResult {
+	return runPlatformCLIWithProfile("", args...)
+}
+
+// runPlatformCLIWithProfile executes an ai-aas-cli command with a specific profile.
+// If profile is empty, it uses the default profile or environment variables.
+func runPlatformCLIWithProfile(profile string, args ...string) CLIResult {
+	cmd := exec.Command("ai-aas-cli", args...)
+
+	// Pass current environment to subprocess
+	cmd.Env = os.Environ()
+
+	// If a profile is specified, add --profile flag
+	if profile != "" {
+		args = append([]string{"--profile", profile}, args...)
+		cmd = exec.Command("ai-aas-cli", args...)
+		cmd.Env = os.Environ()
+	}
+
+	// If live API is configured via env vars, ensure they're passed through
+	// The ai-aas-cli will respect AI_AAS_API_ENDPOINT and AI_AAS_API_KEY
+
+	output, err := cmd.CombinedOutput()
+
+	result := CLIResult{
+		Output:   string(output),
+		ExitCode: 0,
+	}
+
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			result.ExitCode = exitErr.ExitCode()
+		} else {
+			result.ExitCode = 1
+		}
+		result.Error = err.Error()
+	}
+
+	return result
+}
