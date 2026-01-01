@@ -6,7 +6,7 @@ This directory contains the GitHub Actions workflows for the AI-AAS platform.
 
 *   **`ci.yml`**: This is the main Continuous Integration (CI) workflow. It is triggered on every push to the `main` branch and on every pull request. It discovers all the services in the `services/` directory and then builds and tests each service in parallel. It also runs a linting job and a security scan.
 *   **`ci-remote.yml`**: This workflow is used to run the CI pipeline on a remote environment. It is triggered manually and requires a git revision and a service name as input.
-*   **`e2e-tests.yml`**: This workflow runs the end-to-end tests. It is triggered manually.
+*   **`uc-tests.yml`**: This workflow runs the Use Case (UC) acceptance tests. It is triggered on PR and push to main/develop.
 *   **`reusable-build.yml`**: This is a reusable workflow that builds or tests a single service. It is used by the `ci.yml` workflow.
 
 ## Service-Specific Workflows
@@ -22,8 +22,8 @@ These workflows are largely redundant with the main `ci.yml` workflow and will b
 
 ## Testing Workflows
 
-*   `e2e.yml`: Runs end-to-end tests against live environments.
-*   `nightly-e2e.yml`: Scheduled nightly end-to-end tests across development and staging environments.
+*   `uc-tests.yml`: Runs Use Case (UC) acceptance tests against live environments. Triggered on PR and push.
+*   `nightly-uc.yml`: Scheduled nightly UC tests across development and staging environments. Supports domain filtering (user, platform, integration).
 *   `failure-mode-tests.yml`: Validates model deployment failure modes and CLI observability output. Runs weekly on schedule and on-demand. Includes both Go integration tests and shell-based test harness.
 
 ## Other Workflows

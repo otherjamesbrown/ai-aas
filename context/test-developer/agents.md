@@ -1,6 +1,6 @@
 # Test Developer Context
 
-> **Inherits**: context/agents.md | **Verified**: 2025-12-30 | **Commit**: 51afbadb
+> **Inherits**: context/agents.md | **Verified**: 2026-01-01 | **Commit**: phase-4-cleanup
 
 ---
 
@@ -10,8 +10,7 @@ The test-developer agent owns cross-service testing infrastructure:
 
 | Directory | Purpose |
 |-----------|---------|
-| `tests/e2e/` | End-to-end tests against live cluster |
-| `tests/usecases/` | Contract tests (CLI-to-API validation) |
+| `tests/usecases/` | UC acceptance tests (CLI-based, requirement traceability) |
 | `tests/integration/` | Cross-service integration tests |
 
 **NOT owned by test-developer** (use domain agent):
@@ -25,56 +24,98 @@ The test-developer agent owns cross-service testing infrastructure:
 
 ```
 tests/
-├── e2e/                          # End-to-end tests
-│   ├── harness/                  # Test infrastructure
-│   │   ├── client.go            # HTTP client with auth, retries
-│   │   ├── context.go           # Test context with run ID
-│   │   └── fixture_manager.go   # Resource lifecycle
-│   ├── fixtures/                 # Test data management
-│   │   ├── organizations.go     # Org CRUD
-│   │   ├── service_accounts.go  # SA CRUD
-│   │   ├── api_keys.go          # API key issuance
-│   │   └── users.go             # User management
-│   ├── suites/                   # Test suites by tier
-│   │   ├── smoke_test.go        # Quick health validation
-│   │   ├── happy_path_test.go   # Full CRUD flows
-│   │   ├── auth_test.go         # Authentication tests
-│   │   └── analytics_export_test.go # Analytics tests
-│   └── utils/                    # Shared utilities
-├── usecases/                     # Contract tests
-│   ├── helpers_test.go          # CLI execution helpers
+├── usecases/                     # UC acceptance tests
+│   ├── Makefile                 # test-dev, test-staging, test-uc
+│   ├── README.md                # Test infrastructure docs
+│   │
+│   │ # User Domain (UC-AUTH, UC-USR, UC-KEY, UC-ORG, UC-USG, UC-AUD, UC-BM, UC-MDL)
+│   ├── auth_test.go             # UC-AUTH-* (bootstrap, config)
+│   ├── users_test.go            # UC-USR-* (user management)
+│   ├── apikeys_test.go          # UC-KEY-* (API key lifecycle)
+│   ├── organization_test.go     # UC-ORG-* (org management)
+│   ├── usage_test.go            # UC-USG-* (usage queries)
+│   ├── audit_test.go            # UC-AUD-* (audit logs)
+│   ├── benchmarks_test.go       # UC-BM-* (benchmarking)
+│   ├── models_test.go           # UC-MDL-* (user model access)
+│   │
+│   │ # Platform Domain (UC-MLC, UC-RTG, UC-RCP, UC-PLH)
+│   ├── model_lifecycle_test.go  # UC-MLC-* (model deployment)
+│   ├── routing_test.go          # UC-RTG-* (traffic routing)
+│   ├── recipes_test.go          # UC-RCP-* (deployment recipes)
+│   ├── platform_health_test.go  # UC-PLH-* (platform status)
+│   │
+│   │ # Integration Domain (UC-INF, UC-RSL, UC-ANL)
+│   ├── inference_flow_test.go   # UC-INF-* (end-to-end inference)
+│   ├── resilience_test.go       # UC-RSL-* (rate limits, budgets)
+│   ├── analytics_flow_test.go   # UC-ANL-* (analytics export)
+│   │
+│   │ # Infrastructure
 │   ├── contract_test.go         # CLI-API contract validation
-│   └── organization_test.go     # Use case tests
-└── integration/                  # Integration tests
+│   ├── helpers_test.go          # CLI execution helpers
+│   ├── fixtures_test.go         # Test fixture management
+│   ├── client_test.go           # HTTP client helpers
+│   └── config_test.go           # Environment configuration
+│
+└── integration/                  # Cross-service integration tests
 ```
+
+---
+
+## Test Domains
+
+### User Domain
+
+Actor: Organization administrators using `ai-aas-org` CLI.
+
+| UC Prefix | Area | Spec File |
+|-----------|------|-----------|
+| UC-AUTH | Authentication | usecases/authentication.yaml |
+| UC-USR | User management | usecases/users.yaml |
+| UC-KEY | API key lifecycle | usecases/apikeys.yaml |
+| UC-ORG | Organization management | usecases/organization.yaml |
+| UC-USG | Usage queries | usecases/usage.yaml |
+| UC-AUD | Audit logging | usecases/audit.yaml |
+| UC-BM | Benchmarking | usecases/benchmarks.yaml |
+| UC-MDL | Model access (user) | usecases/models.yaml |
+
+### Platform Domain
+
+Actor: Platform operators using `ai-aas-cli`.
+
+| UC Prefix | Area | Spec File |
+|-----------|------|-----------|
+| UC-MLC | Model lifecycle | usecases/model-lifecycle.yaml |
+| UC-RTG | Traffic routing | usecases/routing.yaml |
+| UC-RCP | Deployment recipes | usecases/recipes.yaml |
+| UC-PLH | Platform health | usecases/platform-health.yaml |
+
+### Integration Domain
+
+Cross-service flows testing end-to-end behavior.
+
+| UC Prefix | Area | Spec File |
+|-----------|------|-----------|
+| UC-INF | Inference flow | usecases/inference-flow.yaml |
+| UC-RSL | Resilience | usecases/resilience.yaml |
+| UC-ANL | Analytics flow | usecases/analytics-flow.yaml |
 
 ---
 
 ## Test Categories
 
-### E2E Tests
+### UC Acceptance Tests
 
-Full platform validation against live development cluster.
+Test acceptance criteria from use case specifications. Each test maps to a specific UC and AC.
 
-```yaml
-tiers:
-  smoke:
-    files: [smoke_test.go]
-    duration: ~2 min
-    purpose: Quick health validation
-    command: GOWORK=off go test -v ./suites/... -tags="smoke,e2e_tier"
-
-  nightly:
-    files: [smoke_test.go, happy_path_test.go, auth_test.go, budget_test.go]
-    duration: ~15 min
-    purpose: Daily regression
-    command: GOWORK=off go test -v ./suites/... -tags="nightly,e2e_tier"
-
-  full:
-    files: [all test files]
-    duration: ~30 min
-    purpose: Weekly/pre-release
-    command: GOWORK=off go test -v ./suites/... -tags="full,e2e_tier"
+```go
+// Test naming convention: TestUC_<PREFIX>_<NUM>_<Name>
+func TestUC_ORG_001_ShowOrganizationDetails(t *testing.T) {
+    t.Run("AC-01: show organization details", func(t *testing.T) {
+        // Given: authenticated org admin
+        // When: run ai-aas-org org show
+        // Then: organization details displayed
+    })
+}
 ```
 
 ### Contract Tests
@@ -98,55 +139,60 @@ func TestContract_ListAPIKeys_JSONParsing(t *testing.T) {
 }
 ```
 
-### Use Case Tests
-
-Test acceptance criteria from use case specifications.
-
-```go
-// Test naming convention: TestUC_<ID>_<Name>
-func TestUC_ORG_001_ShowOrganizationDetails(t *testing.T) {
-    t.Run("AC-01: show organization details", func(t *testing.T) {
-        // Given/When/Then structure
-    })
-}
-```
-
 ---
 
 ## Patterns
 
-### pattern: fixture_lifecycle
+### pattern: uc_test_naming
 
-**Rule**: Always use FixtureManager for resource creation and cleanup.
+**Rule**: Test names must include UC ID and AC number.
 
 ```go
-// CORRECT: Use fixture manager
-fm := harness.NewFixtureManager(client)
-defer fm.Cleanup(ctx)  // Automatic cleanup in reverse order
+// CORRECT: Full UC traceability
+func TestUC_KEY_002_CreateAPIKey(t *testing.T) {
+    t.Run("AC-01: create key with required fields", func(t *testing.T) { ... })
+    t.Run("AC-02: create key with expiration", func(t *testing.T) { ... })
+}
 
-org, _ := fm.CreateOrganization(ctx, "test-org")
-sa, _ := fm.CreateServiceAccount(ctx, org.ID, "test-sa")
-apiKey, _ := fm.CreateAPIKey(ctx, org.ID, sa.ID, scopes)
-
-// WRONG: Manual creation without cleanup
-resp, _ := client.Post("/v1/orgs", body)
-// Resources leak on test failure!
+// WRONG: No UC traceability
+func TestCreateAPIKey(t *testing.T) { ... }
 ```
 
-### pattern: api_key_flow
+### pattern: cli_execution
 
-**Rule**: API keys require a service account. Cannot create directly under org.
+**Rule**: Use helper functions for CLI execution.
 
 ```go
-// CORRECT: Create service account first
-sa, _ := saFixture.Create(ctx, org.ID, "")
-apiKey, _ := apiKeyFixture.Create(ctx, org.ID, sa.ID, "", scopes)
+// CORRECT: Use CLI helpers
+result := runOrgCLI("user", "list", "--json")
+require.Equal(t, 0, result.ExitCode)
 
-// CORRECT: Use convenience method
-apiKey, _ := apiKeyFixture.CreateWithServiceAccount(ctx, org.ID, "", scopes)
+result := runPlatformCLI("model", "list")
+require.Equal(t, 0, result.ExitCode)
 
-// WRONG: Try to create API key without service account
-apiKey, _ := apiKeyFixture.Create(ctx, org.ID, "", nil)  // Missing SA ID!
+// WRONG: Direct exec
+cmd := exec.Command("ai-aas-org", "user", "list")
+output, _ := cmd.Output()
+```
+
+### pattern: skip_unimplemented
+
+**Rule**: Skip tests for unimplemented features with tracking reference.
+
+```go
+// CORRECT: Skip with bead reference
+func TestUC_MLC_005_CanaryDeployment(t *testing.T) {
+    t.Skip("Feature not implemented - see bead aas-xxxx")
+}
+
+// CORRECT: Conditional skip based on feature availability
+func TestUC_PLH_003_GPUMetrics(t *testing.T) {
+    result := runPlatformCLI("status", "--check-gpu")
+    if result.ExitCode != 0 {
+        t.Skip("GPU monitoring not enabled")
+    }
+    // Continue with test...
+}
 ```
 
 ### pattern: json_field_mapping
@@ -158,11 +204,6 @@ apiKey, _ := apiKeyFixture.Create(ctx, org.ID, "", nil)  // Missing SA ID!
 type Organization struct {
     ID        string `json:"orgId"`      // NOT "id"
     CreatedAt string `json:"createdAt"`  // NOT "created_at"
-}
-
-type ServiceAccount struct {
-    ID             string `json:"serviceAccountId"`  // NOT "id"
-    OrganizationID string `json:"orgId"`
 }
 
 type APIKey struct {
@@ -177,115 +218,39 @@ type APIKey struct {
 
 ```go
 // CORRECT: Meaningful substring that exists in API response
-testCases := []struct {
-    name          string
-    expectedError string
-}{
-    {
-        name:          "invalid time range",
-        expectedError: "must be after",  // Exists in actual response
-    },
-}
+expectedError := "must be after"
 
 // Assertion
-if !strings.Contains(strings.ToLower(bodyStr), strings.ToLower(tc.expectedError)) {
-    t.Errorf("Expected error containing '%s', got: %s", tc.expectedError, bodyStr)
-}
-```
-
-### pattern: skip_unimplemented
-
-**Rule**: Skip tests for unimplemented features with tracking reference.
-
-```go
-// CORRECT: Skip with bead reference
-func TestFutureFeature(t *testing.T) {
-    t.Skip("Feature not implemented - see bead aas-xxxx")
+if !strings.Contains(strings.ToLower(result.Output), strings.ToLower(expectedError)) {
+    t.Errorf("Expected error containing '%s', got: %s", expectedError, result.Output)
 }
 
-// CORRECT: Conditional skip based on feature availability
-func TestOptionalFeature(t *testing.T) {
-    resp, err := client.Get(ctx, "/v1/optional-feature/health")
-    if err != nil || resp.StatusCode == 404 {
-        t.Skip("Optional feature not deployed")
-    }
-    // Continue with test...
-}
-
-// WRONG: Commit failing test
-func TestFutureFeature(t *testing.T) {
-    resp, _ := client.Post(ctx, "/v1/future-endpoint", body)
-    require.Equal(t, 200, resp.StatusCode)  // Fails every CI run!
-}
-
-// WRONG: Comment out test (loses visibility)
-// func TestFutureFeature(t *testing.T) { ... }
-```
-
-### pattern: gowork_disabled
-
-**Rule**: E2E tests must run with GOWORK=off.
-
-```bash
-# CORRECT: Disable go.work
-cd tests/e2e && GOWORK=off go test ./suites/...
-
-# WRONG: Run from repo root
-go test ./tests/e2e/suites/...  # Module error!
+// WRONG: Exact error message (too brittle)
+expectedError := "timeRange.end must be after timeRange.start"
 ```
 
 ---
 
 ## Anti-patterns
 
-### anti-pattern: exact_error_matching
+### anti-pattern: missing_uc_traceability
 
 ```go
-// WRONG: Exact error message (too brittle)
-expectedError: "timeRange.end must be after timeRange.start"
-// Breaks if API message changes
+// WRONG: No UC reference
+func TestUserCreation(t *testing.T) { ... }
 
-// CORRECT: Flexible substring
-expectedError: "must be after"
+// CORRECT: Full traceability
+func TestUC_USR_002_CreateUser(t *testing.T) { ... }
 ```
 
-### anti-pattern: missing_fixture_cleanup
+### anti-pattern: api_level_tests
 
 ```go
-// WRONG: No cleanup on failure
-org, _ := createOrg(ctx)
-// If test fails here, org leaks!
-doSomethingThatMightFail()
-deleteOrg(ctx, org.ID)
+// WRONG: Direct API testing (use CLI instead)
+resp, _ := http.Post(apiURL+"/v1/orgs", "application/json", body)
 
-// CORRECT: Use fixture manager with defer
-fm := harness.NewFixtureManager(client)
-defer fm.Cleanup(ctx)
-org, _ := fm.CreateOrganization(ctx, "")
-```
-
-### anti-pattern: wrong_json_tags
-
-```go
-// WRONG: Assumed field names
-type Organization struct {
-    ID string `json:"id"`  // API returns "orgId"!
-}
-
-// CORRECT: Verify against actual API
-type Organization struct {
-    ID string `json:"orgId"`
-}
-```
-
-### anti-pattern: hardcoded_endpoints
-
-```go
-// WRONG: Hardcoded URLs
-client.Post("https://user-org.dev.otherjamesbrown.com/v1/orgs", body)
-
-// CORRECT: Use environment-based configuration
-client.Post(cfg.UserOrgBaseURL + "/v1/orgs", body)
+// CORRECT: CLI-based testing
+result := runOrgCLI("org", "create", "--name", "test-org")
 ```
 
 ### anti-pattern: missing_live_api_skip
@@ -294,50 +259,13 @@ client.Post(cfg.UserOrgBaseURL + "/v1/orgs", body)
 // WRONG: Test fails when live API not available
 func TestContract_ListUsers(t *testing.T) {
     result := runOrgCLI("user", "list", "--json")  // Fails without API!
-    // ...
 }
 
 // CORRECT: Skip when live API unavailable
 func TestContract_ListUsers(t *testing.T) {
     skipIfNoLiveAPI(t)
     result := runOrgCLI("user", "list", "--json")
-    // ...
 }
-```
-
----
-
-## API Endpoints Reference
-
-```yaml
-user_org_service:
-  base: https://user-org.dev.otherjamesbrown.com
-  organizations:
-    create: POST /v1/orgs
-    get: GET /v1/orgs/{orgId}
-    delete: DELETE /v1/orgs/{orgId}
-  service_accounts:
-    create: POST /v1/orgs/{orgId}/service-accounts
-    delete: DELETE /v1/orgs/{orgId}/service-accounts/{serviceAccountId}
-  api_keys:
-    create: POST /v1/orgs/{orgId}/service-accounts/{serviceAccountId}/api-keys
-    list_for_user: GET /v1/orgs/{orgId}/users/{userId}/api-keys
-  users:
-    create: POST /v1/orgs/{orgId}/users
-    list: GET /v1/orgs/{orgId}/users
-    get: GET /v1/orgs/{orgId}/users/{userId}
-
-api_router:
-  base: https://api.dev.otherjamesbrown.com
-  inference: POST /v1/chat/completions
-
-admin_api:
-  base: https://admin-api.dev.otherjamesbrown.com
-  models: GET /v1/registry/models
-
-analytics_service:
-  base: https://analytics.dev.otherjamesbrown.com
-  export: POST /analytics/v1/orgs/{orgId}/exports
 ```
 
 ---
@@ -345,28 +273,35 @@ analytics_service:
 ## Running Tests
 
 ```bash
-# E2E smoke tests
-cd tests/e2e
-GOWORK=off go test -v ./suites/... -tags="smoke,e2e_tier" -timeout 5m
-
-# E2E nightly tests
-GOWORK=off go test -v ./suites/... -tags="nightly,e2e_tier" -timeout 20m
-
-# E2E full suite
-GOWORK=off go test -v ./suites/... -tags="full,e2e_tier" -timeout 45m
-
-# Contract tests
+# Run all UC tests against development
 cd tests/usecases
-go test -v ./...
+make test-dev
 
-# Single test
-GOWORK=off go test -v ./suites/... -run TestSpecificTest
+# Run all UC tests against staging
+make test-staging
 
-# With live API (contract tests)
+# Run specific UC tests
+make test-uc UC=UC-ORG-001
+
+# Run with verbose output
 AI_AAS_API_ENDPOINT=https://user-org.dev.otherjamesbrown.com \
 AI_AAS_API_KEY=<key> \
-go test -v ./...
+go test -v ./... -run "TestUC_KEY"
+
+# Run by domain
+go test -v ./... -run "TestUC_(AUTH|USR|KEY|ORG)"      # User domain
+go test -v ./... -run "TestUC_(MLC|RTG|RCP|PLH)"       # Platform domain
+go test -v ./... -run "TestUC_(INF|RSL|ANL)"           # Integration domain
 ```
+
+---
+
+## CI Workflows
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `uc-tests.yml` | PR, push to main/develop | Run UC tests against development |
+| `nightly-uc.yml` | Daily 2 AM UTC | Run all UC tests against dev and staging |
 
 ---
 
@@ -385,12 +320,11 @@ go test -v ./...
 ## Completion Checklist
 
 Before completing test work:
-- [ ] Tests pass locally with `GOWORK=off`
+- [ ] Tests use UC naming convention (TestUC_XXX_NNN)
+- [ ] Each t.Run maps to an AC from the spec
 - [ ] JSON struct tags verified against actual API responses
-- [ ] Fixtures register all resources for cleanup
 - [ ] Error assertions use flexible substring matching
 - [ ] Skipped tests reference tracking beads
-- [ ] New fixtures follow service account flow
 - [ ] Contract tests have `skipIfNoLiveAPI(t)` check
 - [ ] Commits reference bead ID
 - [ ] Bead closed with commit hash and summary
@@ -401,9 +335,7 @@ Before completing test work:
 
 | Component | Location |
 |-----------|----------|
-| E2E Harness | `tests/e2e/harness/` |
-| E2E Fixtures | `tests/e2e/fixtures/` |
-| E2E Suites | `tests/e2e/suites/` |
-| Contract Tests | `tests/usecases/` |
-| E2E README | `tests/e2e/README.md` |
-| E2E Testing Context | `context/e2e-testing/agents.md` |
+| UC Test Infrastructure | `tests/usecases/` |
+| UC Specifications | `usecases/` |
+| UC Schema | `usecases/SCHEMA.md` |
+| CI Workflows | `.github/workflows/uc-tests.yml`, `.github/workflows/nightly-uc.yml` |

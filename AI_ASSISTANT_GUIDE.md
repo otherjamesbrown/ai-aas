@@ -99,7 +99,7 @@ If you need to perform an operation that the CLI doesn't support:
 ## Accessing the Development Environment
 
 - **URLs**: A complete list of service URLs for the development and production environments can be found in the [Endpoints and URLs Configuration Guide](./docs/platform/endpoints-and-urls.md).
-- **Seeded Data**: Information on the seeded test users, organizations, and the E2E Admin API key is available in the [Seeded Test Data Guide](./docs/seeded-data.md).
+- **Seeded Data**: Information on the seeded test users, organizations, and the Master Admin API key is available in the [Seeded Test Data Guide](./docs/seeded-data.md).
 
 ## Important Documents
 
