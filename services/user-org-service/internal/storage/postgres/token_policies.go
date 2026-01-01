@@ -2,11 +2,13 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -467,6 +469,11 @@ func scanTokenPolicy(row pgx.Row) (TokenRateLimitPolicy, error) {
 }
 
 // isDuplicateKeyError checks if the error is a unique constraint violation.
+// Uses PostgreSQL error code 23505 for robust error checking.
 func isDuplicateKeyError(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "duplicate key")
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "23505" // unique_violation
+	}
+	return false
 }
