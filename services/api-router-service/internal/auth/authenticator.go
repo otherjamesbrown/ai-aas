@@ -326,9 +326,15 @@ func (a *Authenticator) InvalidateCache(fingerprint string) {
 // StartCacheInvalidationSubscriber subscribes to Redis pub/sub channel for cache invalidation events.
 // This should be called once during service startup in a separate goroutine.
 // The subscriber will run until the context is canceled.
+//
+// CRITICAL: This is required for API key revocation to work immediately.
+// Without Redis pub/sub, revoked API keys will continue to work for up to 1 minute (cache TTL).
+// For production deployments, Redis MUST be configured and available.
 func (a *Authenticator) StartCacheInvalidationSubscriber(ctx context.Context, redisClient *redis.Client) error {
 	if redisClient == nil {
-		a.logger.Warn("Redis client not configured, cache invalidation disabled")
+		a.logger.Warn("Redis client not configured, cache invalidation disabled",
+			zap.String("impact", "revoked API keys will remain valid for up to 1 minute"),
+			zap.String("recommendation", "configure Redis for immediate revocation"))
 		return nil
 	}
 
