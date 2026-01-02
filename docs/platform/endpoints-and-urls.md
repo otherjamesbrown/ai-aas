@@ -1,8 +1,8 @@
 # Endpoints and URLs
 
 ---
-last_updated: 2025-12-09
-last_verified: 2025-12-09
+last_updated: 2026-01-02
+last_verified: 2026-01-02
 document_type: reference
 verification_command: "kubectl get ingress -A"
 ---
@@ -105,9 +105,11 @@ curl -k https://api.staging.otherjamesbrown.com/v1/status/healthz
 | `/v1/auth/*` | Authentication |
 | `/v1/orgs/*` | Organization management |
 | `/v1/users/*` | User management |
+| `/v1/orgs/{orgId}/token-policies` | Token rate limit policies |
 | `/healthz` | Health check |
+| `/readyz` | Readiness check |
 
-**Configuration**: `services/user-org-service/deployments/helm/user-org-service/values-development.yaml`
+**Configuration**: `services/user-org-service/configs/helm/values-development.yaml`
 
 ### Analytics Service
 
@@ -288,7 +290,7 @@ sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keyc
 | Service | Helm Values Location |
 |---------|---------------------|
 | API Router | `services/api-router-service/deployments/helm/api-router-service/values-*.yaml` |
-| User-Org | `services/user-org-service/deployments/helm/user-org-service/values-*.yaml` |
+| User-Org | `services/user-org-service/configs/helm/values-*.yaml` |
 | Analytics | `services/analytics-service/deployments/helm/analytics-service/values-*.yaml` |
 | Admin API | `services/admin-api-service/deployments/helm/admin-api-service/values-*.yaml` |
 | Web Portal | `web/portal/deployments/helm/web-portal/values-*.yaml` |

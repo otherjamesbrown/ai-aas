@@ -1,7 +1,7 @@
 # user-org-service Deployment Specification
 
 ---
-last_updated: 2025-12-08
+last_updated: 2026-01-02
 maintained_by: go-services-developer
 consumed_by: infra-ops-manager
 ---
@@ -77,12 +77,11 @@ None.
 
 ## Helm Chart Location
 
-**Note**: This service may not have a Helm chart yet. Check:
 ```
-services/user-org-service/deployments/helm/user-org-service/
+services/user-org-service/configs/helm/
 ```
 
-If missing, contact infra-ops-manager to create one.
+**Note**: This service uses a non-standard location (`configs/helm/` instead of `deployments/helm/`). The Helm chart includes templates for deployment, service, and ingress.
 
 ## Container Image
 
