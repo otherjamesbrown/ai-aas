@@ -201,6 +201,22 @@ func IsCLIError(err error) bool {
 	return ok
 }
 
+// IsConflict checks if an error is a conflict error (resource already exists).
+func IsConflict(err error) bool {
+	if cliErr, ok := err.(*CLIError); ok {
+		return cliErr.Code == ErrCodeConflict
+	}
+	return false
+}
+
+// IsNotFound checks if an error is a not found error (resource doesn't exist).
+func IsNotFound(err error) bool {
+	if cliErr, ok := err.(*CLIError); ok {
+		return cliErr.Code == ErrCodeNotFound
+	}
+	return false
+}
+
 // GetExitCode returns the appropriate exit code for an error.
 func GetExitCode(err error) int {
 	if cliErr, ok := err.(*CLIError); ok {

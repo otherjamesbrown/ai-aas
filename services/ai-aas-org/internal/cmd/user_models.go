@@ -158,12 +158,22 @@ func runUserModelsAdd(cmd *cobra.Command, args []string) error {
 	if userModelsAddAll {
 		// Grant access to all models
 		if err := client.GrantAllModelsAccess(ctx, config.GetOrgID(), userID); err != nil {
+			// Idempotent: if already has access, treat as success
+			if errors.IsConflict(err) {
+				output.SuccessMsg("User %s already has access to all models", userModelsAddUser)
+				return nil
+			}
 			return wrapAPIError(err, "failed to grant access")
 		}
 		output.SuccessMsg("Granted access to all models for user %s", userModelsAddUser)
 	} else {
 		// Grant access to specific model
 		if err := client.GrantModelAccess(ctx, config.GetOrgID(), userID, userModelsAddModel); err != nil {
+			// Idempotent: if already has access, treat as success
+			if errors.IsConflict(err) {
+				output.SuccessMsg("User %s already has access to model %s", userModelsAddUser, userModelsAddModel)
+				return nil
+			}
 			return wrapAPIError(err, "failed to grant access")
 		}
 		output.SuccessMsg("Granted access to model %s for user %s", userModelsAddModel, userModelsAddUser)
@@ -225,11 +235,21 @@ func runUserModelsAddGuided() error {
 
 	if selected.Value == "__all__" {
 		if err := client.GrantAllModelsAccess(ctx, config.GetOrgID(), userID); err != nil {
+			// Idempotent: if already has access, treat as success
+			if errors.IsConflict(err) {
+				output.SuccessMsg("User %s already has access to all models", userEmail)
+				return nil
+			}
 			return wrapAPIError(err, "failed to grant access")
 		}
 		output.SuccessMsg("Granted access to all models for user %s", userEmail)
 	} else {
 		if err := client.GrantModelAccess(ctx, config.GetOrgID(), userID, selected.Value); err != nil {
+			// Idempotent: if already has access, treat as success
+			if errors.IsConflict(err) {
+				output.SuccessMsg("User %s already has access to model %s", userEmail, selected.Label)
+				return nil
+			}
 			return wrapAPIError(err, "failed to grant access")
 		}
 		output.SuccessMsg("Granted access to model %s for user %s", selected.Label, userEmail)
@@ -299,6 +319,11 @@ func runUserModelsRemove(cmd *cobra.Command, args []string) error {
 	}
 
 	if err := client.RevokeModelAccess(ctx, config.GetOrgID(), userID, userModelsRemoveModel); err != nil {
+		// Idempotent: if user doesn't have access, treat as success
+		if errors.IsNotFound(err) {
+			output.SuccessMsg("User %s does not have access to model %s (no action needed)", userModelsRemoveUser, userModelsRemoveModel)
+			return nil
+		}
 		return wrapAPIError(err, "failed to revoke access")
 	}
 
