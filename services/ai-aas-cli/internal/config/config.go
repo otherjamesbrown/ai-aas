@@ -52,6 +52,11 @@ type Config struct {
 	MaxRetries int `mapstructure:"max_retries" json:"max_retries,omitempty"`
 	Timeout    int `mapstructure:"timeout" json:"timeout,omitempty"`
 
+	// GitOps Configuration
+	// Path to the ai-aas-config repository for GitOps-based deployments
+	// Set via config file key 'config_repo_path' or environment variable 'AI_AAS_CONFIG_REPO_PATH'
+	ConfigRepoPath string `mapstructure:"config_repo_path" json:"config_repo_path,omitempty"`
+
 	// Inference Timeout (seconds) - for GPU model validation
 	// Default: 90s (allows for cold starts on large GPU models)
 	// Set via config file key 'inference_timeout' or environment variable 'AI_AAS_CLI_INFERENCE_TIMEOUT'
@@ -65,7 +70,8 @@ func DefaultConfig() *Config {
 		Environment:      "development",
 		Verbose:          false,
 		OutputFormat:     "table",
-		InferenceTimeout: 90, // 90 seconds for GPU model cold starts
+		InferenceTimeout: 90,            // 90 seconds for GPU model cold starts
+		ConfigRepoPath:   "~/ai-aas-config", // Default GitOps config repo path
 	}
 }
 
@@ -77,6 +83,7 @@ func Load() (*Config, error) {
 	viper.SetDefault("verbose", false)
 	viper.SetDefault("output_format", "table")
 	viper.SetDefault("inference_timeout", 90)
+	viper.SetDefault("config_repo_path", "~/ai-aas-config")
 
 	// Config file settings
 	viper.SetConfigName(ConfigFileName)
@@ -142,6 +149,11 @@ func Load() (*Config, error) {
 	// AI_AAS_HF_TOKEN overrides config file HuggingFace token
 	if hfTokenOverride := os.Getenv("AI_AAS_HF_TOKEN"); hfTokenOverride != "" {
 		cfg.HFToken = hfTokenOverride
+	}
+
+	// AI_AAS_CONFIG_REPO_PATH overrides config file GitOps config repo path
+	if configRepoOverride := os.Getenv("AI_AAS_CONFIG_REPO_PATH"); configRepoOverride != "" {
+		cfg.ConfigRepoPath = configRepoOverride
 	}
 
 	// Ensure inference timeout has a reasonable value

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/gitops"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/kubernetes"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/registry"
@@ -32,21 +33,35 @@ func NewDeployCommand() *cobra.Command {
 		timeout         time.Duration
 		trustRemoteCode bool
 		recipe          string
+		autoPush        bool
+		noPush          bool
+		configRepoPath  string
 	)
 
 	cmd := &cobra.Command{
 		Use:   "deploy <model-name>",
-		Short: "Deploy model to Kubernetes",
-		Long: `Deploy a cached model to Kubernetes using AIModel custom resource.
+		Short: "Deploy model to Kubernetes via GitOps",
+		Long: `Deploy a cached model to Kubernetes using GitOps workflow.
 
-The AIModel CR is managed by the ai-model-operator, which creates the underlying
-KServe InferenceService and syncs deployment status to the Admin API.
+This command commits an AIModel manifest to the ai-aas-config repository,
+which is then synced to the cluster by ArgoCD. The ai-model-operator
+creates the underlying KServe InferenceService and syncs deployment
+status to the Admin API.
 
 The model must already be cached in object storage before deployment.
 
+GitOps Flow:
+  1. Generate AIModel manifest from parameters
+  2. Commit to ai-aas-config (environments/<env>/models/<model>.yaml)
+  3. Push to remote (ArgoCD syncs automatically)
+  4. Operator creates InferenceService
+
 Examples:
-  # Deploy a model to development
+  # Deploy a model to development (commits and pushes)
   ai-aas-cli model deploy llama-3-8b -e development
+
+  # Deploy without auto-push (commit only, push manually)
+  ai-aas-cli model deploy llama-3-8b -e development --no-push
 
   # Deploy with specific resource requirements
   ai-aas-cli model deploy llama-3-8b -e development --gpu-count 2 --memory 48
@@ -63,11 +78,11 @@ Examples:
   # Deploy with trust remote code (for custom model architectures)
   ai-aas-cli model deploy llama-3-8b -e development --trust-remote-code
 
-  # Preview deployment YAML
+  # Preview deployment YAML (no commit)
   ai-aas-cli model deploy llama-3-8b -e development --dry-run
 
-  # Deploy and wait for ready
-  ai-aas-cli model deploy llama-3-8b -e development --wait`,
+  # Specify custom config repo path
+  ai-aas-cli model deploy llama-3-8b -e development --config-repo ~/my-config-repo`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			modelName := args[0]
@@ -212,50 +227,65 @@ Examples:
 				fmt.Println("\nUsing HuggingFace direct loading (no S3 cache configured)")
 			}
 
-			// Get kubeconfig for environment
-			kubeconfig := viper.GetString(fmt.Sprintf("environments.%s.kubeconfig", environment))
-			kubecontext := viper.GetString(fmt.Sprintf("environments.%s.context", environment))
+			// Determine config repo path
+			repoPath := configRepoPath
+			if repoPath == "" {
+				repoPath = cfg.ConfigRepoPath
+			}
+			if repoPath == "" {
+				repoPath = "~/ai-aas-config"
+			}
 
-			// Create Kubernetes client
-			k8sClient, err := kubernetes.NewClient(kubernetes.ClientConfig{
-				Kubeconfig: kubeconfig,
-				Context:    kubecontext,
-				Namespace:  namespace,
+			// Create GitOps client
+			fmt.Printf("\nUsing GitOps workflow with config repo: %s\n", repoPath)
+			gitClient, err := gitops.NewClient(repoPath)
+			if err != nil {
+				return fmt.Errorf("create gitops client: %w\n\nEnsure ai-aas-config repo is cloned at %s\nOr set AI_AAS_CONFIG_REPO_PATH environment variable", err, repoPath)
+			}
+
+			// Deploy via GitOps
+			deployer := gitops.NewDeployer(gitClient)
+			result, err := deployer.Deploy(ctx, gitops.DeployOptions{
+				ModelName:   modelName,
+				Environment: environment,
+				AIModelCfg:  aimodelCfg,
+				AutoPush:    !noPush, // Push unless --no-push is set
 			})
 			if err != nil {
-				return fmt.Errorf("create k8s client: %w", err)
+				return fmt.Errorf("gitops deploy: %w", err)
 			}
 
-			// Test connectivity
-			if err := k8sClient.Ping(ctx); err != nil {
-				return fmt.Errorf("cannot connect to cluster: %w", err)
+			// Summary
+			fmt.Printf("\nDeployment committed to GitOps!\n")
+			fmt.Printf("  Manifest: %s\n", result.ManifestPath)
+			fmt.Printf("  Branch: %s\n", result.Branch)
+			fmt.Printf("  Commit: %s\n", result.CommitMsg)
+			if result.Pushed {
+				fmt.Printf("  Status: Pushed to origin - ArgoCD will sync automatically\n")
+			} else {
+				fmt.Printf("  Status: Committed locally - push manually to deploy\n")
+				fmt.Printf("\nTo push:\n")
+				fmt.Printf("  cd %s && git push origin %s\n", repoPath, result.Branch)
 			}
 
-			// Check if already deployed
-			existing, err := k8sClient.GetAIModel(ctx, aimodelName, namespace)
-			if err == nil && existing != nil {
-				fmt.Printf("\nWARNING: AIModel %s already exists.\n", aimodelName)
-				fmt.Printf("  Phase: %s\n", existing.Phase)
-				if existing.InferenceEndpoint != "" {
-					fmt.Printf("  Endpoint: %s\n", existing.InferenceEndpoint)
-				}
-				fmt.Println("Use 'model undeploy' first to remove the existing deployment.")
-				return nil
-			}
-
-			// Create AIModel
-			fmt.Println("\nCreating AIModel custom resource...")
-			fmt.Println("The ai-model-operator will create the InferenceService and sync status to Admin API.")
-			if err := k8sClient.CreateAIModel(ctx, aimodelCfg); err != nil {
-				return fmt.Errorf("create aimodel: %w", err)
-			}
-
-			fmt.Printf("Created AIModel: %s/%s\n", namespace, aimodelName)
-
-			// Wait for ready if requested
-			if wait {
+			// Wait for ready if requested (via K8s API after ArgoCD sync)
+			if wait && result.Pushed {
 				fmt.Println("\nWaiting for deployment to be ready...")
-				fmt.Println("(The operator will download the model, create InferenceService, and wait for pods)")
+				fmt.Println("(ArgoCD will sync, then operator creates InferenceService)")
+
+				// Get kubeconfig for environment
+				kubeconfig := viper.GetString(fmt.Sprintf("environments.%s.kubeconfig", environment))
+				kubecontext := viper.GetString(fmt.Sprintf("environments.%s.context", environment))
+
+				k8sClient, err := kubernetes.NewClient(kubernetes.ClientConfig{
+					Kubeconfig: kubeconfig,
+					Context:    kubecontext,
+					Namespace:  namespace,
+				})
+				if err != nil {
+					return fmt.Errorf("create k8s client for wait: %w", err)
+				}
+
 				spinner := output.NewSpinner("Deploying")
 				spinner.Start()
 
@@ -264,7 +294,7 @@ Examples:
 					PollInterval: 5 * time.Second,
 				}
 
-				err := k8sClient.WaitForAIModelReady(ctx, aimodelName, namespace, waitOpts)
+				err = k8sClient.WaitForAIModelReady(ctx, aimodelName, namespace, waitOpts)
 				spinner.Stop()
 
 				if err != nil {
@@ -280,10 +310,14 @@ Examples:
 					}
 					fmt.Printf("  Ready Replicas: %d\n", status.ReadyReplicas)
 				}
+			} else if wait && !result.Pushed {
+				fmt.Println("\nNote: --wait requires push. Push to origin and use 'model status' to check.")
 			}
 
-			fmt.Printf("\nModel deployed successfully!\n")
 			fmt.Println("\nNext steps:")
+			if !result.Pushed {
+				fmt.Printf("  cd %s && git push origin %s    # Push to deploy\n", repoPath, result.Branch)
+			}
 			fmt.Printf("  ai-aas-cli model status %s -e %s    # Check status\n", modelName, environment)
 			fmt.Printf("  ai-aas-cli model test %s -e %s      # Test inference\n", modelName, environment)
 
@@ -303,7 +337,12 @@ Examples:
 	cmd.Flags().DurationVar(&timeout, "timeout", 10*time.Minute, "timeout when waiting")
 	cmd.Flags().BoolVar(&trustRemoteCode, "trust-remote-code", false, "allow execution of custom model code (required for some models)")
 	cmd.Flags().StringVar(&recipe, "recipe", "", "use a model recipe for deployment configuration")
+	cmd.Flags().BoolVar(&noPush, "no-push", false, "commit locally without pushing (manual push required)")
+	cmd.Flags().StringVar(&configRepoPath, "config-repo", "", "path to ai-aas-config repository (default: ~/ai-aas-config)")
 	_ = cmd.MarkFlagRequired("environment")
+
+	// Mark autoPush as unused (we use noPush instead)
+	_ = autoPush
 
 	return cmd
 }
@@ -311,23 +350,30 @@ Examples:
 // NewUndeployCommand creates the model undeploy command
 func NewUndeployCommand() *cobra.Command {
 	var (
-		environment string
-		force       bool
-		wait        bool
+		environment    string
+		force          bool
+		wait           bool
+		noPush         bool
+		configRepoPath string
 	)
 
 	cmd := &cobra.Command{
 		Use:   "undeploy <model-name>",
-		Short: "Remove model deployment",
-		Long: `Remove a model deployment from Kubernetes.
+		Short: "Remove model deployment via GitOps",
+		Long: `Remove a model deployment from Kubernetes using GitOps workflow.
 
-This removes the AIModel custom resource, which will trigger the operator to
-clean up the InferenceService. Model cache files are preserved.
+This deletes the AIModel manifest from the ai-aas-config repository,
+which triggers ArgoCD to remove the resource. The operator then
+cleans up the InferenceService. Model cache files are preserved.
+
 To fully remove a model including cache, use 'model cache delete'.
 
 Examples:
-  # Undeploy a model
+  # Undeploy a model (removes manifest, commits, pushes)
   ai-aas-cli model undeploy llama-3-8b -e development
+
+  # Undeploy without auto-push (commit only, push manually)
+  ai-aas-cli model undeploy llama-3-8b -e development --no-push
 
   # Force undeploy without confirmation
   ai-aas-cli model undeploy llama-3-8b -e development --force
@@ -338,43 +384,45 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			modelName := args[0]
 
+			// Get profile flag and load config with profile support
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
 
 			// Build AIModel name
 			aimodelName := fmt.Sprintf("%s-%s", modelName, environment)
-			namespace := environment
 
-			// Get kubeconfig for environment
-			kubeconfig := viper.GetString(fmt.Sprintf("environments.%s.kubeconfig", environment))
-			kubecontext := viper.GetString(fmt.Sprintf("environments.%s.context", environment))
-
-			// Create Kubernetes client
-			k8sClient, err := kubernetes.NewClient(kubernetes.ClientConfig{
-				Kubeconfig: kubeconfig,
-				Context:    kubecontext,
-				Namespace:  namespace,
-			})
-			if err != nil {
-				return fmt.Errorf("create k8s client: %w", err)
+			// Determine config repo path
+			repoPath := configRepoPath
+			if repoPath == "" {
+				repoPath = cfg.ConfigRepoPath
+			}
+			if repoPath == "" {
+				repoPath = "~/ai-aas-config"
 			}
 
-			// Check if exists
-			status, err := k8sClient.GetAIModel(ctx, aimodelName, namespace)
+			// Create GitOps client
+			gitClient, err := gitops.NewClient(repoPath)
 			if err != nil {
-				fmt.Printf("AIModel %s not found in %s\n", aimodelName, namespace)
+				return fmt.Errorf("create gitops client: %w\n\nEnsure ai-aas-config repo is cloned at %s\nOr set AI_AAS_CONFIG_REPO_PATH environment variable", err, repoPath)
+			}
+
+			// Check if manifest exists in git repo
+			if !gitClient.ModelManifestExists(environment, aimodelName) {
+				fmt.Printf("Model manifest %s not found in %s environment\n", aimodelName, environment)
+				fmt.Printf("\nManifest path: environments/%s/models/%s.yaml\n", environment, aimodelName)
 				return nil
 			}
 
-			fmt.Printf("Removing AIModel: %s/%s\n", namespace, aimodelName)
-			fmt.Printf("  Phase: %s\n", status.Phase)
-			if status.InferenceEndpoint != "" {
-				fmt.Printf("  Endpoint: %s\n", status.InferenceEndpoint)
-			}
-			fmt.Printf("  Ready Replicas: %d\n", status.ReadyReplicas)
+			fmt.Printf("Found manifest: environments/%s/models/%s.yaml\n", environment, aimodelName)
 
 			if !force {
-				fmt.Print("\nAre you sure? [y/N]: ")
+				fmt.Print("\nAre you sure you want to remove this deployment? [y/N]: ")
 				var response string
 				fmt.Scanln(&response)
 				if strings.ToLower(response) != "y" {
@@ -383,19 +431,62 @@ Examples:
 				}
 			}
 
-			// Delete AIModel (the operator will clean up the InferenceService)
-			fmt.Println("\nDeleting AIModel...")
-			fmt.Println("The operator will automatically clean up the InferenceService.")
-			if err := k8sClient.DeleteAIModel(ctx, aimodelName, namespace); err != nil {
-				return fmt.Errorf("delete aimodel: %w", err)
+			// Undeploy via GitOps
+			deployer := gitops.NewDeployer(gitClient)
+			result, err := deployer.Undeploy(ctx, gitops.DeleteOptions{
+				ModelName:   aimodelName,
+				Environment: environment,
+				AutoPush:    !noPush,
+			})
+			if err != nil {
+				return fmt.Errorf("gitops undeploy: %w", err)
 			}
 
-			if wait {
-				fmt.Println("Waiting for deletion...")
-				// For now, we don't have a wait function for AIModel deletion
-				// Just give it a few seconds
-				time.Sleep(5 * time.Second)
-				fmt.Println("AIModel deleted. The operator will continue cleaning up resources.")
+			// Summary
+			fmt.Printf("\nUndeployment committed to GitOps!\n")
+			fmt.Printf("  Manifest removed: %s\n", result.ManifestPath)
+			fmt.Printf("  Branch: %s\n", result.Branch)
+			fmt.Printf("  Commit: %s\n", result.CommitMsg)
+			if result.Pushed {
+				fmt.Printf("  Status: Pushed to origin - ArgoCD will sync and remove the resource\n")
+			} else {
+				fmt.Printf("  Status: Committed locally - push manually to undeploy\n")
+				fmt.Printf("\nTo push:\n")
+				fmt.Printf("  cd %s && git push origin %s\n", repoPath, result.Branch)
+			}
+
+			// Wait for deletion if requested
+			if wait && result.Pushed {
+				fmt.Println("\nWaiting for resource to be deleted...")
+
+				// Get kubeconfig for environment
+				kubeconfig := viper.GetString(fmt.Sprintf("environments.%s.kubeconfig", environment))
+				kubecontext := viper.GetString(fmt.Sprintf("environments.%s.context", environment))
+				namespace := environment
+
+				k8sClient, err := kubernetes.NewClient(kubernetes.ClientConfig{
+					Kubeconfig: kubeconfig,
+					Context:    kubecontext,
+					Namespace:  namespace,
+				})
+				if err != nil {
+					fmt.Printf("Warning: Could not check deletion status: %v\n", err)
+				} else {
+					// Poll for deletion
+					for i := 0; i < 30; i++ { // 30 * 5s = 2.5 minutes
+						time.Sleep(5 * time.Second)
+						_, err := k8sClient.GetAIModel(ctx, aimodelName, namespace)
+						if err != nil {
+							fmt.Println("AIModel deleted. The operator will continue cleaning up resources.")
+							break
+						}
+						if i == 29 {
+							fmt.Println("Timeout waiting for deletion. Check ArgoCD sync status.")
+						}
+					}
+				}
+			} else if wait && !result.Pushed {
+				fmt.Println("\nNote: --wait requires push. Push to origin and check status manually.")
 			}
 
 			fmt.Printf("\nUndeployed %s from %s\n", modelName, environment)
@@ -407,6 +498,8 @@ Examples:
 
 	cmd.Flags().StringVarP(&environment, "environment", "e", "", "target environment (required)")
 	cmd.Flags().BoolVar(&force, "force", false, "skip confirmation")
+	cmd.Flags().BoolVar(&noPush, "no-push", false, "commit locally without pushing (manual push required)")
+	cmd.Flags().StringVar(&configRepoPath, "config-repo", "", "path to ai-aas-config repository (default: ~/ai-aas-config)")
 	cmd.Flags().BoolVar(&wait, "wait", false, "wait for deletion to complete")
 	_ = cmd.MarkFlagRequired("environment")
 
