@@ -44,7 +44,7 @@ func setupTestConfig() {
 	// Set API endpoint for development environment
 	// This is required for NewTestClientFromEnv() to work
 	if os.Getenv(envAPIEndpoint) == "" {
-		os.Setenv(envAPIEndpoint, "https://admin-api.dev.otherjamesbrown.com")
+		os.Setenv(envAPIEndpoint, "https://user-org.dev.otherjamesbrown.com")
 	}
 	// Set API router URL for routing tests
 	if os.Getenv(envAPIRouterURL) == "" {

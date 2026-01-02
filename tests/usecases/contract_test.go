@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 )
 
 // CLI-to-API Contract Integration Tests
@@ -324,9 +325,7 @@ func TestContract_EmptyLists_ReturnEmptyArrays(t *testing.T) {
 
 // generateTimestamp creates a unique timestamp string for test data.
 func generateTimestamp() string {
-	return strings.ReplaceAll(strings.ReplaceAll(
-		strings.Split(runOrgCLI("user", "list").Output, "\n")[0],
-		":", ""), " ", "")[:14]
+	return time.Now().Format("20060102150405")
 }
 
 // min returns the minimum of two integers.
