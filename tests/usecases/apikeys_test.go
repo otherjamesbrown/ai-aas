@@ -113,6 +113,17 @@ func TestUC_KEY_001_ListAPIKeys(t *testing.T) {
 		skipIfNoLiveAPIWithReason(t, "with empty organization")
 
 		// Given: Organization has no API keys
+		// First, check if org actually has any API keys
+		checkResult := runOrgCLI("apikey", "list", "--json")
+		if checkResult.ExitCode == 0 {
+			// Parse JSON to check if empty
+			output := strings.TrimSpace(checkResult.Output)
+			if output != "[]" && output != "null" && output != "" {
+				// Org has API keys - skip this test as it requires empty org
+				t.Skip("skipping: organization has existing API keys (test requires empty org)")
+			}
+		}
+
 		// When: User runs `ai-aas-org apikey list`
 		result := runOrgCLI("apikey", "list")
 
