@@ -2,6 +2,7 @@ package usecases_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -146,7 +147,7 @@ func TestUC_USR_002_CreateUser(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
 		// Given: Admin is authenticated and email is not in use
-		testEmail := "test-user-ac01@example.com"
+		testEmail := fmt.Sprintf("test-user-ac01-%s@example.com", generateUniqueID())
 
 		// When: User runs `ai-aas-org user create --user-email ... --user-display-name ...`
 		result := runOrgCLI("user", "create",
@@ -175,6 +176,11 @@ func TestUC_USR_002_CreateUser(t *testing.T) {
 			t.Log("Warning: Expected default role 'user' to be shown")
 		}
 
+		// Register cleanup to delete the test user
+		t.Cleanup(func() {
+			runOrgCLI("user", "delete", testEmail, "--force")
+		})
+
 		t.Logf("Create user output:\n%s", result.Output)
 	})
 
@@ -182,7 +188,7 @@ func TestUC_USR_002_CreateUser(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
 		// Given: Admin is authenticated
-		testEmail := "test-admin-ac02@example.com"
+		testEmail := fmt.Sprintf("test-admin-ac02-%s@example.com", generateUniqueID())
 
 		// When: User runs `ai-aas-org user create ... --role admin`
 		result := runOrgCLI("user", "create",
@@ -201,6 +207,11 @@ func TestUC_USR_002_CreateUser(t *testing.T) {
 			t.Error("Expected admin role to be displayed in output")
 		}
 
+		// Register cleanup to delete the test user
+		t.Cleanup(func() {
+			runOrgCLI("user", "delete", testEmail, "--force")
+		})
+
 		t.Logf("Create admin user output:\n%s", result.Output)
 	})
 
@@ -208,7 +219,7 @@ func TestUC_USR_002_CreateUser(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
 		// Given: Email is already registered in the organization
-		existingEmail := "existing-user@example.com"
+		existingEmail := fmt.Sprintf("existing-user-ac03-%s@example.com", generateUniqueID())
 
 		// First create the user
 		runOrgCLI("user", "create",
@@ -230,6 +241,11 @@ func TestUC_USR_002_CreateUser(t *testing.T) {
 		if !strings.Contains(output, "exist") && !strings.Contains(output, "duplicate") && !strings.Contains(output, "conflict") {
 			t.Error("Expected error message indicating email already exists")
 		}
+
+		// Register cleanup to delete the test user
+		t.Cleanup(func() {
+			runOrgCLI("user", "delete", existingEmail, "--force")
+		})
 
 		t.Logf("Duplicate email error:\n%s", result.Output)
 	})
