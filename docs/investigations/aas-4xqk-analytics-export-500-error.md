@@ -4,6 +4,8 @@
 **Date**: 2025-12-30
 **Investigator**: debugger agent
 
+> **Note**: The E2E tests referenced in this investigation have been migrated to UC tests in `tests/usecases/`. See `TestUC_ANL_003_AnalyticsExport` for the current implementation.
+
 ## Symptom
 
 E2E test `TestAnalyticsExportWorkflow` failing with HTTP 500 Internal Server Error when creating an analytics export job.

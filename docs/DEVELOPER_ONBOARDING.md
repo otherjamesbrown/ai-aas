@@ -215,10 +215,10 @@ ai-aas-cli config test
 
 ### Tests fail with module errors
 
-For E2E tests, disable go.work:
+For UC tests, disable go.work:
 ```bash
-cd tests/e2e
-GOWORK=off go test ./suites/... -tags="smoke,e2e_tier"
+cd tests/usecases
+GOWORK=off go test ./... -v
 ```
 
 ## Next Steps

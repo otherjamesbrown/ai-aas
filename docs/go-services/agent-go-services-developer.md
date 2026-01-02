@@ -93,7 +93,7 @@ The infra-ops-manager agent reads these files when deploying services.
 |-------------|----------|
 | Unit tests | `services/<name>/**/*_test.go` |
 | Integration tests | `services/<name>/tests/` |
-| E2E tests | `tests/e2e/` |
+| UC (Use Case) tests | `tests/usecases/` |
 
 ## Common Tasks - Where to Look
 

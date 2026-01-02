@@ -4,20 +4,24 @@ This document tracks test coverage across the AI-AAS platform. It serves as the 
 
 ## Quick Reference
 
-### Run Smoke Tests Against Dev Cluster
+### Run UC Tests Against Dev Cluster
 
 > **Security Note**: The export command below may save the API key in your shell history.
-> To avoid this, prefix with a space (` export ...`) or use `read -s ADMIN_API_KEY` to input interactively.
+> To avoid this, prefix with a space (` export ...`) or use `read -s` to input interactively.
 
 ```bash
-cd tests/e2e
-# Option 1: Direct (may save to history)
-export ADMIN_API_KEY=$(grep MASTER_ADMIN_API_KEY ../../secrets/env/.env | cut -d= -f2)
+cd tests/usecases
 
-# Option 2: Safer (not saved to history in most shells)
- export ADMIN_API_KEY=$(grep MASTER_ADMIN_API_KEY ../../secrets/env/.env | cut -d= -f2)
+# Set required environment variables
+export AI_AAS_API_ENDPOINT=https://admin.dev.otherjamesbrown.com
+export AI_AAS_API_KEY=$(grep MASTER_ADMIN_API_KEY ../../secrets/env/.env | cut -d= -f2)
+export AI_AAS_API_ROUTER_URL=https://api.dev.otherjamesbrown.com
 
-go test -v ./suites -run TestSmokeEndToEnd -timeout 10m
+# Run all UC tests
+go test ./... -v -timeout 10m
+
+# Run specific domain
+go test ./... -v -run "UC_INF"
 ```
 
 ### Check Platform Health (CLI)
@@ -26,32 +30,63 @@ go test -v ./suites -run TestSmokeEndToEnd -timeout 10m
 ai-aas-cli status
 ```
 
+## Test Structure
+
+Tests are organized by type:
+
+| Location | Type | Description |
+|----------|------|-------------|
+| `tests/usecases/` | UC (Use Case) tests | End-to-end user journey validation |
+| `services/<name>/*_test.go` | Unit tests | Service-level unit tests |
+| `services/<name>/tests/` | Integration tests | Service integration tests |
+| `tests/go/` | Shared Go tests | Contract, unit, integration, perf |
+
+## UC Test Domains
+
+| Domain | Tests | Description |
+|--------|-------|-------------|
+| UC_INF | 4 | Inference flow (chat completions) |
+| UC_ANL | 4 | Analytics and usage tracking |
+| UC_RSL | 5 | Resilience (rate limits, failover) |
+| UC_USR | 7 | User management |
+| UC_KEY | 4 | API key lifecycle |
+| UC_ORG | 2 | Organization management |
+| UC_MDL | 2 | Model information |
+| UC_MLC | 5 | Model lifecycle (deploy, scale) |
+| UC_RCP | 4 | Recipes |
+| UC_RTG | 3 | Routing configuration |
+| UC_PLH | 4 | Platform health |
+| UC_BM | 8 | Benchmarking |
+| UC_AUTH | 2 | Authentication |
+| UC_AUD | 2 | Audit logging |
+| UC_USG | 4 | Usage reporting |
+| Contract_* | 8 | CLI-API contract tests |
+
 ## Test Coverage Matrix
 
 ### Core Platform Flows
 
-| Flow | Unit Tests | Integration | E2E | Smoke | Notes |
-|------|------------|-------------|-----|-------|-------|
-| Health Check | - | - | `resilience_test.go` | `smoke_test.go` | All services |
-| Models Available | - | - | - | `smoke_test.go` | GET /v1/models |
-| Organization CRUD | `user-org-service` | - | `happy_path_test.go` | `smoke_test.go` | Create, read, update, delete |
-| User Invite/Create | `user-org-service` | - | `happy_path_test.go` | `smoke_test.go` | Invite flow |
-| API Key Lifecycle | `user-org-service` | - | `happy_path_test.go` | `smoke_test.go` | Create, validate, revoke |
-| Inference Request | - | - | `happy_path_test.go` | `smoke_test.go` | Chat completions |
-| Token Usage | - | - | - | `smoke_test.go` | Verify usage tracked |
-| Budget Enforcement | - | - | `budget_test.go` | - | Limits and alerts |
-| Audit Logging | - | - | `audit_test.go` | - | Request audit trail |
-| RBAC/Auth | `server_test.go` | - | `auth_test.go` | - | Role-based access |
+| Flow | Unit Tests | Integration | UC Tests | Notes |
+|------|------------|-------------|----------|-------|
+| Health Check | - | - | `UC_PLH_*` | All services |
+| Models Available | - | - | `UC_MDL_*` | GET /v1/models |
+| Organization CRUD | `user-org-service` | - | `UC_ORG_*` | Create, read, update, delete |
+| User Invite/Create | `user-org-service` | - | `UC_USR_*` | User management |
+| API Key Lifecycle | `user-org-service` | - | `UC_KEY_*` | Create, validate, revoke |
+| Inference Request | - | - | `UC_INF_*` | Chat completions |
+| Token Usage | - | - | `UC_ANL_*` | Usage tracking |
+| Rate Limiting | - | - | `UC_RSL_001` | Rate limit enforcement |
+| Audit Logging | - | - | `UC_AUD_*` | Request audit trail |
 
 ### Service-Level Tests
 
-| Service | Unit | Integration | E2E | Coverage Target |
-|---------|------|-------------|-----|-----------------|
-| user-org-service | `*_test.go` | - | `cmd/e2e-test/` | 80% |
-| api-router-service | `*_test.go` | `test/integration/` | - | 80% |
-| analytics-service | `*_test.go` | `test/integration/` | - | 80% |
-| admin-api-service | `*_test.go` | - | - | 80% |
-| web-portal | `*.test.tsx` | - | Playwright | 80% |
+| Service | Unit | Integration | Coverage Target |
+|---------|------|-------------|-----------------|
+| user-org-service | `*_test.go` | - | 80% |
+| api-router-service | `*_test.go` | `test/integration/` | 80% |
+| analytics-service | `*_test.go` | `test/integration/` | 80% |
+| admin-api-service | `*_test.go` | - | 80% |
+| web-portal | `*.test.tsx` | Playwright | 80% |
 
 ### Infrastructure Tests
 
@@ -62,31 +97,33 @@ ai-aas-cli status
 | Helm Charts | - | - | TODO: Add helm test hooks |
 | CI/CD | - | `.github/workflows/` | Workflow validation |
 
-## Test Environments
+## Running Tests
 
-### Local Development
+### UC Tests (Recommended)
 
 ```bash
-# Start services locally
-make dev
+# All UC tests
+cd tests/usecases
+go test ./... -v
 
-# Run unit tests
-make test SERVICE=all
+# Specific domain
+go test ./... -v -run "UC_INF"
 
-# Run service-specific E2E
-cd services/user-org-service && make e2e-test-local
+# Contract tests only
+go test ./... -v -run "Contract"
+
+# Skip tests requiring vLLM backend
+go test ./... -v -short
 ```
 
-### Development Cluster (Remote)
+### Unit Tests
 
 ```bash
-# Via public internet
-cd tests/e2e
-export ADMIN_API_KEY=your-key
-make test-dev-internet
+# All services
+make test SERVICE=all
 
-# Via port-forward
-make test-dev-remote
+# Specific service
+cd services/api-router-service && go test ./...
 ```
 
 ### CI/CD
@@ -94,18 +131,7 @@ make test-dev-remote
 Tests run automatically on:
 - Pull requests to `main` or `develop`
 - Push to `main`
-
-## Smoke Test Checklist
-
-The smoke test (`TestSmokeEndToEnd`) verifies:
-
-- [ ] API Router health check passes
-- [ ] Models endpoint returns available models
-- [ ] Organization can be created
-- [ ] User can be created in organization
-- [ ] API key can be created
-- [ ] Inference request completes (if backend available)
-- [ ] Token usage is tracked (if analytics available)
+- Nightly UC tests via `nightly-uc.yml`
 
 ## Adding New Tests
 
@@ -115,50 +141,57 @@ Add co-located with source code:
 - Go: `*_test.go` next to implementation
 - TypeScript: `*.test.ts` or `*.test.tsx`
 
-### E2E Tests
+### UC Tests
 
-Add to `tests/e2e/suites/`:
-1. Follow existing patterns in `happy_path_test.go`
-2. Use fixtures for resource management
-3. Ensure cleanup in `defer ctx.Cleanup()`
+Add to `tests/usecases/`:
+1. Follow existing patterns in domain test files
+2. Use fixtures from `fixtures_test.go` for resource management
+3. Name tests as `TestUC_<DOMAIN>_<NUMBER>_<Description>`
+4. Include acceptance criteria subtests
 
-### Smoke Tests
+Example:
+```go
+func TestUC_INF_001_EndToEndChatCompletion(t *testing.T) {
+    skipIfNoPlatformCLI(t)
+    skipIfNoVLLMBackend(t)
 
-Add to `tests/e2e/suites/smoke_test.go`:
-1. Should be fast (< 1 minute)
-2. Should be read-only where possible
-3. Should skip gracefully if dependencies unavailable
+    t.Run("AC-01: successful request", func(t *testing.T) {
+        // Test implementation
+    })
+}
+```
+
+### Contract Tests
+
+Add to `tests/usecases/contract_test.go`:
+1. Verify CLI can parse API responses
+2. Name as `TestContract_<Entity>_<Behavior>`
 
 ## Known Issues
 
-### Playwright Authentication Hang
-
-Playwright E2E tests hang during OAuth login due to incompatibility with Fosite library. Workaround: Use API-based authentication.
-
-See: `tests/README.md#playwright-authentication-hangs-known-issue`
-
 ### Backend Model Availability
 
-Inference tests may fail if vLLM backends are not running or models are still loading. Tests gracefully skip when backends are unavailable.
+Inference tests may fail if vLLM backends are not running or models are still loading. Tests gracefully skip when backends are unavailable via `skipIfNoVLLMBackend()`.
+
+### Playwright Authentication
+
+Web portal Playwright tests may hang during OAuth login. Workaround: Use API-based authentication.
 
 ## Test Metrics
 
 | Metric | Target | Current | Notes |
 |--------|--------|---------|-------|
 | Unit test coverage | 80% | TBD | Run `make coverage` |
-| E2E pass rate | 100% | TBD | CI dashboard |
-| Smoke test duration | < 2 min | TBD | `TestSmokeEndToEnd` |
+| UC test pass rate | 100% | TBD | CI dashboard |
 
 ## Related Documentation
 
-- [Test README](../../tests/README.md) - Detailed test organization
-- [E2E Test Harness](../../tests/e2e/README.md) - E2E framework documentation
-- [E2E Spec](../../specs/012-e2e-tests/spec.md) - E2E test specification
-- [User-Org E2E](../../services/user-org-service/docs/e2e-testing.md) - Service-specific E2E
+- [UC Test Infrastructure](../../tests/usecases/UC_TEST_INFRASTRUCTURE.md) - UC test framework
+- [Use Case Schema](../../usecases/SCHEMA.md) - UC YAML specification
 
 ## Changelog
 
 | Date | Change | Author |
 |------|--------|--------|
 | 2025-11-29 | Initial test coverage tracking document | Claude |
-| 2025-11-29 | Added smoke_test.go with models and usage verification | Claude |
+| 2026-01-02 | Migrated from E2E to UC test structure | Claude |

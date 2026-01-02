@@ -200,11 +200,11 @@ kubectl exec -n <namespace> <db-pod> -- psql -U <user> -d <db> -c "\d <table>"
 # Verify config files loaded
 kubectl logs -n <namespace> -l app=<service> | grep -i "config"
 
-# Check HTTP headers in E2E logs
+# Check HTTP headers in logs
 kubectl logs -n <namespace> -l app=<service> | grep -i "content-type\|authorization"
 
-# Run E2E tests with verbose output
-go test ./tests/e2e/... -v -run <TestName>
+# Run UC tests with verbose output
+go test ./tests/usecases/... -v -run <TestName>
 
 # Run unit tests against real database (not mocked)
 DATABASE_URL=<real-db-url> go test ./... -v
