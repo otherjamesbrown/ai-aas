@@ -107,44 +107,23 @@ func TestUC_BM_001_CreateBenchmarkTarget(t *testing.T) {
 
 ### GitOps Tests (UC-MLC-010, UC-MLC-011)
 
-GitOps model lifecycle tests validate the end-to-end GitOps deployment flow. These tests require additional setup:
+GitOps model lifecycle tests validate the end-to-end GitOps deployment flow. These tests require additional setup and run as **nightly jobs** due to their 15-25 minute duration.
 
-**Prerequisites:**
-- `RUN_GITOPS_TESTS=1` - Enable GitOps tests (disabled by default)
-- `AI_AAS_CONFIG_PATH` - Path to ai-aas-config repository (defaults to `~/ai-aas-config`)
-- `KUBECONFIG` - Path to development cluster kubeconfig
-- Git credentials configured for push access to ai-aas-config
-- ArgoCD configured to sync from ai-aas-config develop branch
-
-**Optional:**
-- `KYVERNO_POLICY_DEPLOYED=1` - Enable Kyverno policy test (UC-MLC-010/AC-03)
-
-**Running GitOps tests:**
+**Quick Start:**
 ```bash
-# Run all GitOps tests
-RUN_GITOPS_TESTS=1 \
-AI_AAS_CONFIG_PATH=~/ai-aas-config \
-KUBECONFIG=~/kubeconfigs/kubeconfig-development.yaml \
-go test -v ./... -run "TestUC_MLC_01"
-
-# Run with Kyverno policy test
-RUN_GITOPS_TESTS=1 \
-KYVERNO_POLICY_DEPLOYED=1 \
-go test -v ./... -run "TestUC_MLC_010_AC03"
+export RUN_GITOPS_TESTS=1
+export AI_AAS_CONFIG_PATH=~/ai-aas-config
+export KUBECONFIG=secrets/kubeconfigs/kubeconfig-development.yaml
+go test -v ./... -run "TestUC_MLC_01" -timeout 30m
 ```
 
-**What these tests do:**
-1. Commit TinyLlama model config to ai-aas-config/environments/development/models/
-2. Wait for ArgoCD to sync and create AIModel CR
-3. Wait for model to reach Ready phase
-4. Verify InferenceService and pod are created
-5. Remove model config from ai-aas-config
-6. Wait for ArgoCD to prune the AIModel CR
-7. Verify all resources are cleaned up (InferenceService, pods, services)
-8. Verify model is no longer accessible via inference endpoint
-
-**Cleanup:**
-Tests automatically clean up their model files on completion or failure using `t.Cleanup()`.
+**Full Documentation:** See [GITOPS_TESTS.md](GITOPS_TESTS.md) for:
+- Complete prerequisites and verification steps
+- Running tests locally with all options
+- CI/CD integration via `.github/workflows/nightly-gitops.yml`
+- Required GitHub secrets setup
+- Troubleshooting common issues
+- Test workflow details and cleanup procedures
 
 ## Running Tests
 

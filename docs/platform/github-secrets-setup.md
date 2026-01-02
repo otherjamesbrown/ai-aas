@@ -1,7 +1,7 @@
 # GitHub Secrets Setup Guide
 
 ---
-last_updated: 2025-12-31
+last_updated: 2026-01-02
 document_type: reference
 ---
 
@@ -127,6 +127,19 @@ gh secret list --repo otherjamesbrown/ai-aas
 - **Value**: Check your production kubeconfig for exact value
 - **Used in**: GitHub workflows requiring production access
 
+### GitOps Integration Tests
+
+#### AI_AAS_CONFIG_PAT
+- **Purpose**: GitHub Personal Access Token for ai-aas-config repository access during GitOps tests
+- **Value**: GitHub Personal Access Token with `repo` scope
+- **Used in**: `.github/workflows/nightly-gitops.yml` (line 44)
+- **Generation**:
+  1. GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)
+  2. Generate new token with `repo` scope (full control of private repositories)
+  3. Copy the token value
+- **Required for**: Pushing test model YAML files to ai-aas-config repo during integration tests
+- **Note**: This token must have write access to `otherjamesbrown/ai-aas-config` repository
+
 ### Container Registry
 
 #### GHCR_TOKEN
@@ -225,6 +238,7 @@ Use this checklist when setting up a new repository or troubleshooting CI/CD fai
 - [ ] PROD_KUBE_CONTEXT
 - [ ] GHCR_TOKEN
 - [ ] LINODE_TOKEN
+- [ ] AI_AAS_CONFIG_PAT
 
 ### Optional (Degrades functionality)
 - [ ] GRAFANA_API_KEY
