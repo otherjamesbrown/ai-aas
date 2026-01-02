@@ -306,3 +306,244 @@ usecases:
     must_not:
       - Show targets from other organizations
       - Modify any targets
+
+  - id: UC-BM-005
+    title: Wait for Run Completion
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      After triggering a benchmark run, the admin may want to wait for it to
+      complete before proceeding. The CLI provides a blocking wait option that
+      polls for completion status and returns when the run finishes.
+
+      This is useful for scripting and automation where subsequent steps
+      depend on benchmark results.
+
+    actor: Organization Admin
+
+    preconditions:
+      - User has valid org admin API key
+      - Benchmark run exists and is in pending or running state
+
+    depends_on:
+      - UC-BM-002
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Wait for successful completion
+        given: Benchmark run "run-456" is in running state
+        when: User runs `ai-aas-org benchmark run wait run-456`
+        then:
+          - Command blocks until run completes
+          - Final status is displayed as "completed"
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Wait with timeout
+        given: Benchmark run "run-456" is in running state
+        when: User runs `ai-aas-org benchmark run wait run-456 --timeout 60s`
+        then:
+          - Command waits up to 60 seconds
+          - If run completes within timeout, exit code is 0
+          - If timeout expires, exit code is 1
+          - Timeout message indicates run still in progress
+
+      - id: AC-03
+        criterion: Wait for already completed run
+        given: Benchmark run "run-456" has already completed
+        when: User runs `ai-aas-org benchmark run wait run-456`
+        then:
+          - Command returns immediately
+          - Status shown as "completed"
+          - Exit code is 0
+
+      - id: AC-04
+        criterion: Wait for failed run
+        given: Benchmark run fails during execution
+        when: User runs `ai-aas-org benchmark run wait run-456`
+        then:
+          - Command returns when run fails
+          - Status shown as "failed"
+          - Exit code is 2 (indicating run failure)
+          - Error details are displayed
+
+    in_scope:
+      - Blocking wait for run completion
+      - Timeout configuration
+      - Returning appropriate exit codes
+      - Displaying final status
+
+    out_of_scope:
+      - Progress streaming during wait
+      - Canceling the run (UC-BM-006)
+      - Modifying run parameters
+
+    must_not:
+      - Modify the run in any way
+      - Return success exit code for failed runs
+      - Hang indefinitely without timeout option
+
+  - id: UC-BM-006
+    title: Cancel Running Benchmarks
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      An admin may need to cancel a benchmark run that is in progress,
+      either because it's taking too long, was started with wrong parameters,
+      or resources are needed for other work.
+
+      Cancellation stops the benchmark gracefully and marks it as cancelled.
+      Partial results may be preserved.
+
+    actor: Organization Admin
+
+    preconditions:
+      - User has valid org admin API key
+      - Benchmark run exists and is in pending or running state
+
+    depends_on:
+      - UC-BM-002
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Cancel running benchmark
+        given: Benchmark run "run-456" is in running state
+        when: User runs `ai-aas-org benchmark run cancel run-456`
+        then:
+          - Benchmark run is cancelled
+          - Status changes to "cancelled"
+          - Exit code is 0
+          - Message confirms cancellation
+
+      - id: AC-02
+        criterion: Cancel pending benchmark
+        given: Benchmark run "run-456" is in pending state (queued)
+        when: User runs `ai-aas-org benchmark run cancel run-456`
+        then:
+          - Benchmark run is removed from queue
+          - Status changes to "cancelled"
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Reject cancel on completed run
+        given: Benchmark run "run-456" has already completed
+        when: User runs `ai-aas-org benchmark run cancel run-456`
+        then:
+          - Command fails with exit code 3 (invalid operation)
+          - Error message indicates run already completed
+          - Run status unchanged
+
+      - id: AC-04
+        criterion: Reject cancel on non-existent run
+        given: Benchmark run "nonexistent" does not exist
+        when: User runs `ai-aas-org benchmark run cancel nonexistent`
+        then:
+          - Command fails with exit code 5 (not found)
+          - Error message indicates run not found
+
+    in_scope:
+      - Cancelling running benchmarks
+      - Cancelling pending/queued benchmarks
+      - Appropriate error handling for invalid states
+
+    out_of_scope:
+      - Force killing stuck runs (admin operation)
+      - Partial result preservation details
+      - Automatic cleanup of resources
+
+    must_not:
+      - Cancel runs from other organizations
+      - Delete run records (only update status)
+      - Cancel already completed or failed runs
+
+  - id: UC-BM-007
+    title: Compare Results Across Runs
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      After running multiple benchmarks, the admin wants to compare results
+      to understand performance trends, validate improvements, or detect
+      regressions between runs.
+
+      The compare command shows side-by-side metrics and highlights
+      significant differences.
+
+    actor: Organization Admin
+
+    preconditions:
+      - User has valid org admin API key
+      - At least two completed benchmark runs exist
+
+    depends_on:
+      - UC-BM-003
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Compare two runs
+        given: Two completed benchmark runs "run-1" and "run-2" exist
+        when: User runs `ai-aas-org benchmark compare run-1 run-2`
+        then:
+          - Side-by-side comparison is displayed
+          - Throughput difference is shown
+          - Latency differences are shown (p50, p90, p99)
+          - Error rate difference is shown
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Compare with percentage changes
+        given: Two completed benchmark runs exist
+        when: User runs `ai-aas-org benchmark compare run-1 run-2 --show-delta`
+        then:
+          - Percentage changes are displayed
+          - Positive changes marked as improvements
+          - Negative changes marked as regressions
+
+      - id: AC-03
+        criterion: Compare as JSON output
+        given: Two completed benchmark runs exist
+        when: User runs `ai-aas-org benchmark compare run-1 run-2 --json`
+        then:
+          - Results output as valid JSON
+          - JSON includes both run metrics
+          - JSON includes delta calculations
+          - Exit code is 0
+
+      - id: AC-04
+        criterion: Reject compare with incomplete run
+        given: Run "run-1" is completed but "run-2" is still running
+        when: User runs `ai-aas-org benchmark compare run-1 run-2`
+        then:
+          - Command fails with exit code 3 (invalid operation)
+          - Error message indicates run-2 is not completed
+          - Suggestion to wait for completion
+
+      - id: AC-05
+        criterion: Reject compare with non-existent run
+        given: Run "run-1" exists but "run-999" does not
+        when: User runs `ai-aas-org benchmark compare run-1 run-999`
+        then:
+          - Command fails with exit code 5 (not found)
+          - Error message indicates which run was not found
+
+    in_scope:
+      - Side-by-side metric comparison
+      - Delta/percentage change calculation
+      - JSON output format
+      - Validation of run states
+
+    out_of_scope:
+      - Comparing more than two runs at once
+      - Historical trend analysis
+      - Automated regression detection with thresholds
+      - Export to external systems
+
+    must_not:
+      - Compare runs from different organizations
+      - Modify any run data
+      - Show results from other organizations' runs
