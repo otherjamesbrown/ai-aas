@@ -94,6 +94,8 @@ type Config struct {
 	RecoveryRequiresAdminApproval bool `envconfig:"RECOVERY_REQUIRES_ADMIN_APPROVAL" default:"false"`
 	// AnalyticsServiceURL is the base URL for the analytics service (e.g., "http://analytics-service:8083").
 	AnalyticsServiceURL string `envconfig:"ANALYTICS_SERVICE_URL" default:"http://analytics-service:8083"`
+	// InferenceEndpoint is the base URL for the inference API (e.g., "http://api-router-service.system.svc.cluster.local:80").
+	InferenceEndpoint string `envconfig:"INFERENCE_ENDPOINT" default:"http://api-router-service.system.svc.cluster.local:80"`
 }
 
 // Load reads environment variables into Config, applying defaults where necessary.

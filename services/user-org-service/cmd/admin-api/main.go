@@ -65,6 +65,7 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/bootstrapkeys"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/middleware"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/modelaccess"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/models"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/orgs"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/serviceaccounts"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/tokenpolicies"
@@ -123,6 +124,8 @@ func main() {
 
 				// Register orgs routes first - this creates /v1/orgs/{orgId} routes
 				orgs.RegisterRoutes(r, runtime, logger)
+				// Register org-level model routes (UC-MDL-001, UC-MDL-002)
+				models.RegisterRoutes(r, runtime, logger)
 				// Register users routes - these are more specific (/v1/orgs/{orgId}/invites, etc.)
 				// and will match after the orgs routes
 				users.RegisterRoutes(r, runtime, logger)
