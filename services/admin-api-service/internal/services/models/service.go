@@ -92,9 +92,9 @@ func (s *Service) ListModels(ctx context.Context, opts ListModelsOptions) ([]Mod
 			r.pinned_version, r.model_type, r.metadata, r.created_at, r.updated_at,
 			-- Cache status: get status of the most recent cache entry
 			(SELECT status FROM model_cache WHERE model_id = r.id ORDER BY cached_at DESC LIMIT 1) as cache_status,
-			-- Deployment status: get status if any deployment exists (priority: ready > deploying > others)
+			-- Deployment status: get status if any ENABLED deployment exists (priority: ready > deploying > others)
 			(SELECT status FROM model_deployments
-			 WHERE model_id = r.id
+			 WHERE model_id = r.id AND enabled = true
 			 ORDER BY
 			   CASE
 			     WHEN status = 'ready' THEN 1
@@ -143,9 +143,9 @@ func (s *Service) GetModel(ctx context.Context, name string) (*Model, error) {
 			r.pinned_version, r.model_type, r.metadata, r.created_at, r.updated_at,
 			-- Cache status: get status of the most recent cache entry
 			(SELECT status FROM model_cache WHERE model_id = r.id ORDER BY cached_at DESC LIMIT 1) as cache_status,
-			-- Deployment status: get status if any deployment exists
+			-- Deployment status: get status if any ENABLED deployment exists
 			(SELECT status FROM model_deployments
-			 WHERE model_id = r.id
+			 WHERE model_id = r.id AND enabled = true
 			 ORDER BY
 			   CASE
 			     WHEN status = 'ready' THEN 1
