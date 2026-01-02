@@ -32,6 +32,9 @@ env:
       secretKeyRef:
         name: user-org-service-secrets
         key: oauth-client-secret
+  # Inference endpoint for fetching models - points to api-router-service
+  - name: INFERENCE_ENDPOINT
+    value: "http://api-router-service-development-api-router-service.development.svc.cluster.local:8080"
 
 service:
   type: ClusterIP
