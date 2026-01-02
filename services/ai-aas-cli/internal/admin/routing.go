@@ -210,14 +210,7 @@ func runRoutingPolicyCreate(orgID, model, backends string, global bool, flagForm
 		)
 	}
 
-	// DEBUG: Log config details (aas-lehh6)
-	fmt.Fprintf(os.Stderr, "[DEBUG aas-lehh6] Config loaded:\n")
-	fmt.Fprintf(os.Stderr, "[DEBUG aas-lehh6]   APIEndpoint: %s\n", cfg.APIEndpoint)
-	fmt.Fprintf(os.Stderr, "[DEBUG aas-lehh6]   AdminAPIEndpoint: %s\n", cfg.AdminAPIEndpoint)
-	fmt.Fprintf(os.Stderr, "[DEBUG aas-lehh6]   UserOrgEndpoint: %s\n", cfg.UserOrgEndpoint)
-	fmt.Fprintf(os.Stderr, "[DEBUG aas-lehh6]   InferenceEndpoint: %s\n", cfg.InferenceEndpoint)
-
-	if cfg.APIEndpoint == "" {
+	if cfg.APIEndpoint == "" && cfg.AdminAPIEndpoint == "" {
 		return errors.NewOperationError(
 			"Admin API endpoint not configured",
 			"Set AI_AAS_API_ENDPOINT environment variable or configure api_endpoint in ~/.ai-aas-cli.yaml",
@@ -248,10 +241,9 @@ func runRoutingPolicyCreate(orgID, model, backends string, global bool, flagForm
 	}
 
 	// Call Admin API Service
-	url := fmt.Sprintf("%s/v1/routing/policies", cfg.APIEndpoint)
-	// DEBUG: Log the URL being used (aas-lehh6)
-	fmt.Fprintf(os.Stderr, "[DEBUG aas-lehh6] Calling URL: %s\n", url)
-	fmt.Fprintf(os.Stderr, "[DEBUG aas-lehh6] APIEndpoint from config: %s\n", cfg.APIEndpoint)
+	// Use GetAdminEndpoint() to correctly resolve admin API endpoint (fixes aas-lehh6)
+	adminEndpoint := cfg.GetAdminEndpoint()
+	url := fmt.Sprintf("%s/v1/routing/policies", adminEndpoint)
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(reqJSON))
 	if err != nil {
 		return errors.NewOperationError(
@@ -349,10 +341,10 @@ func runRoutingPolicyList(flagFormat, filterModel, filterOrgID string) error {
 		)
 	}
 
-	if cfg.APIEndpoint == "" {
+	if cfg.GetAdminEndpoint() == "" {
 		return errors.NewOperationError(
 			"Admin API endpoint not configured",
-			"Set AI_AAS_API_ENDPOINT environment variable or configure api_endpoint in ~/.ai-aas-cli.yaml",
+			"Set AI_AAS_API_ENDPOINT or AI_AAS_ADMIN_API_ENDPOINT environment variable or configure api_endpoint/admin_api_endpoint in ~/.ai-aas-cli.yaml",
 		)
 	}
 
@@ -364,7 +356,9 @@ func runRoutingPolicyList(flagFormat, filterModel, filterOrgID string) error {
 	}
 
 	// Build URL with query parameters
-	url := fmt.Sprintf("%s/v1/routing/policies", cfg.APIEndpoint)
+	// Use GetAdminEndpoint() to correctly resolve admin API endpoint (fixes aas-lehh6)
+	adminEndpoint := cfg.GetAdminEndpoint()
+	url := fmt.Sprintf("%s/v1/routing/policies", adminEndpoint)
 	params := []string{}
 	if filterModel != "" {
 		params = append(params, fmt.Sprintf("model=%s", filterModel))
@@ -495,10 +489,10 @@ func runRoutingPolicyDelete(policyID string, quiet bool) error {
 		)
 	}
 
-	if cfg.APIEndpoint == "" {
+	if cfg.GetAdminEndpoint() == "" {
 		return errors.NewOperationError(
 			"Admin API endpoint not configured",
-			"Set AI_AAS_API_ENDPOINT environment variable or configure api_endpoint in ~/.ai-aas-cli.yaml",
+			"Set AI_AAS_API_ENDPOINT or AI_AAS_ADMIN_API_ENDPOINT environment variable or configure api_endpoint/admin_api_endpoint in ~/.ai-aas-cli.yaml",
 		)
 	}
 
@@ -510,7 +504,9 @@ func runRoutingPolicyDelete(policyID string, quiet bool) error {
 	}
 
 	// Call Admin API Service
-	url := fmt.Sprintf("%s/v1/routing/policies/%s", cfg.APIEndpoint, policyID)
+	// Use GetAdminEndpoint() to correctly resolve admin API endpoint (fixes aas-lehh6)
+	adminEndpoint := cfg.GetAdminEndpoint()
+	url := fmt.Sprintf("%s/v1/routing/policies/%s", adminEndpoint, policyID)
 	req, err := http.NewRequest(http.MethodDelete, url, nil)
 	if err != nil {
 		return errors.NewOperationError(

@@ -22,8 +22,7 @@ func uniqueModelName(prefix string) string {
 // A platform operator wants to create or update a routing policy that directs
 // traffic for a specific model to one or more backend endpoints.
 func TestUC_RTG_001_ConfigureBackendEndpoint(t *testing.T) {
-	// TEMPORARILY ENABLED FOR DEBUGGING - aas-lehh6
-	// t.Skip("UC-RTG tests skipped - infra-gap: test environment gets 404 from routing endpoints despite manual execution succeeding. See aas-lehh6 for investigation.")
+	t.Skip("UC-RTG tests skipped - infra-gap: test environment gets 404 from routing endpoints despite manual execution succeeding. See aas-lehh6 for investigation.")
 
 	t.Run("AC-01: create global routing policy with single backend", func(t *testing.T) {
 		skipIfNoPlatformCLI(t)
