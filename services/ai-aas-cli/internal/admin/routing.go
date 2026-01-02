@@ -210,6 +210,13 @@ func runRoutingPolicyCreate(orgID, model, backends string, global bool, flagForm
 		)
 	}
 
+	// DEBUG: Log config details (aas-lehh6)
+	fmt.Fprintf(os.Stderr, "[DEBUG aas-lehh6] Config loaded:\n")
+	fmt.Fprintf(os.Stderr, "[DEBUG aas-lehh6]   APIEndpoint: %s\n", cfg.APIEndpoint)
+	fmt.Fprintf(os.Stderr, "[DEBUG aas-lehh6]   AdminAPIEndpoint: %s\n", cfg.AdminAPIEndpoint)
+	fmt.Fprintf(os.Stderr, "[DEBUG aas-lehh6]   UserOrgEndpoint: %s\n", cfg.UserOrgEndpoint)
+	fmt.Fprintf(os.Stderr, "[DEBUG aas-lehh6]   InferenceEndpoint: %s\n", cfg.InferenceEndpoint)
+
 	if cfg.APIEndpoint == "" {
 		return errors.NewOperationError(
 			"Admin API endpoint not configured",
@@ -242,6 +249,9 @@ func runRoutingPolicyCreate(orgID, model, backends string, global bool, flagForm
 
 	// Call Admin API Service
 	url := fmt.Sprintf("%s/v1/routing/policies", cfg.APIEndpoint)
+	// DEBUG: Log the URL being used (aas-lehh6)
+	fmt.Fprintf(os.Stderr, "[DEBUG aas-lehh6] Calling URL: %s\n", url)
+	fmt.Fprintf(os.Stderr, "[DEBUG aas-lehh6] APIEndpoint from config: %s\n", cfg.APIEndpoint)
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(reqJSON))
 	if err != nil {
 		return errors.NewOperationError(
