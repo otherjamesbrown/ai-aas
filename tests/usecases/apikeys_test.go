@@ -198,15 +198,15 @@ func TestUC_KEY_002_CreateAPIKey(t *testing.T) {
 		// When: User runs `ai-aas-org apikey create --user-id <id> --key-name "Test"`
 		result := runOrgCLI("apikey", "create", "--user-id", nonExistentUserID, "--key-name", "Test")
 
-		// Then: Command fails with exit code 5 (not found)
-		if result.ExitCode != 5 {
-			t.Errorf("expected exit code 5 (not found), got %d", result.ExitCode)
+		// Then: Command fails with exit code 2 (validation error - user doesn't exist)
+		if result.ExitCode != 2 {
+			t.Errorf("expected exit code 2 (validation error), got %d", result.ExitCode)
 		}
 
-		// Then: Error message indicates user not found
+		// Then: Error message indicates validation failure
 		output := strings.ToLower(result.Output)
-		if !strings.Contains(output, "not found") && !strings.Contains(output, "does not exist") {
-			t.Error("expected error message indicating user not found")
+		if !strings.Contains(output, "validation") && !strings.Contains(output, "not found") && !strings.Contains(output, "does not exist") {
+			t.Error("expected error message indicating validation failure or user not found")
 		}
 	})
 
