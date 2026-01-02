@@ -447,3 +447,147 @@ usecases:
       - Modify resource allocations during restart
       - Clear model cache during restart
       - Skip operator reconciliation
+
+  - id: UC-MLC-010
+    title: Deploy Model via GitOps
+    interface: gitops
+    status: active
+    bead: aas-fr6tz
+
+    description: |
+      The platform enforces GitOps-only model deployment. AIModel resources can only
+      be created by ArgoCD syncing from the ai-aas-config repository. This ensures
+      all model deployments are version-controlled, auditable, and reproducible.
+
+      This use case validates the end-to-end GitOps deployment flow from config
+      commit to model readiness.
+
+    actor: Platform Operator
+
+    preconditions:
+      - ai-aas-config repository is accessible
+      - ArgoCD is configured to sync from ai-aas-config
+      - Kyverno policy blocks non-ArgoCD AIModel creation
+      - Target model (TinyLlama) image is available
+
+    depends_on:
+      - UC-AUTH-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: AIModel config added to ai-aas-config creates deployment
+        given: ai-aas-config/environments/development/models/ is synced by ArgoCD
+        when: Operator commits tinyllama-test.yaml to ai-aas-config develop branch
+        then:
+          - ArgoCD detects the change within 3 minutes
+          - AIModel CR is created in development namespace
+          - AIModel matches the committed YAML spec
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Deployed model reaches Ready phase
+        given: AIModel CR exists from GitOps sync
+        when: Operator waits for model to deploy (up to 10 minutes)
+        then:
+          - AIModel phase transitions to Ready
+          - InferenceService is created with correct configuration
+          - Pod is running and healthy
+          - Model is accessible via inference endpoint
+
+      - id: AC-03
+        criterion: Non-GitOps AIModel creation is blocked
+        given: Kyverno policy is active
+        when: Operator attempts to create AIModel via kubectl apply
+        then:
+          - Kyverno rejects the request
+          - Error message explains GitOps-only policy
+          - No AIModel is created in cluster
+
+    in_scope:
+      - Committing AIModel YAML to ai-aas-config
+      - Waiting for ArgoCD sync
+      - Verifying AIModel CR creation
+      - Verifying model reaches Ready phase
+      - Testing inference endpoint
+
+    out_of_scope:
+      - Creating AIModel via Admin API (deprecated path)
+      - Direct kubectl create/apply (blocked by policy)
+      - Model registry operations
+      - Routing policy configuration
+
+    must_not:
+      - Create AIModel directly in cluster
+      - Bypass GitOps workflow
+      - Leave test resources after cleanup
+      - Modify production configurations
+
+  - id: UC-MLC-011
+    title: Remove Model via GitOps
+    interface: gitops
+    status: active
+    bead: aas-fr6tz
+
+    description: |
+      When a model configuration is removed from ai-aas-config, ArgoCD's prune
+      policy automatically deletes the corresponding AIModel CR. The ai-model-operator
+      then cleans up the InferenceService and all associated resources.
+
+      This use case validates complete cleanup with no orphaned resources.
+
+    actor: Platform Operator
+
+    preconditions:
+      - Model was deployed via GitOps (UC-MLC-010)
+      - ArgoCD has prune: true enabled
+      - Model is currently in Ready phase
+
+    depends_on:
+      - UC-MLC-010
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Removing config from ai-aas-config triggers deletion
+        given: tinyllama-test.yaml exists in ai-aas-config and model is Ready
+        when: Operator deletes tinyllama-test.yaml and pushes to develop branch
+        then:
+          - ArgoCD detects the change within 3 minutes
+          - ArgoCD prunes the AIModel CR
+          - AIModel is deleted from development namespace
+
+      - id: AC-02
+        criterion: Operator cleans up all resources
+        given: AIModel CR is deleted by ArgoCD prune
+        when: Operator reconciles the deletion (up to 5 minutes)
+        then:
+          - InferenceService is deleted
+          - Associated pods are terminated
+          - Services are removed
+          - No orphaned resources remain
+
+      - id: AC-03
+        criterion: Model no longer accessible via inference
+        given: All resources are cleaned up
+        when: Client attempts inference request to the deleted model
+        then:
+          - Request returns 404 or model not found error
+          - No stale routing entries remain
+
+    in_scope:
+      - Removing AIModel YAML from ai-aas-config
+      - Waiting for ArgoCD sync with prune
+      - Verifying AIModel CR deletion
+      - Verifying InferenceService deletion
+      - Verifying no orphaned pods/services
+
+    out_of_scope:
+      - Deleting via Admin API (not supported)
+      - Direct kubectl delete (bypass check only)
+      - Cache cleanup (preserved intentionally)
+      - Registry cleanup
+
+    must_not:
+      - Leave orphaned InferenceService
+      - Leave orphaned pods or services
+      - Affect other model deployments
+      - Delete resources outside test scope
