@@ -369,7 +369,7 @@ func (mdf *ModelDeploymentFixture) Create(modelName, environment string) (*Model
 	}
 
 	var deployment ModelDeployment
-	if err := resp.UnmarshalJSON(&deployment); err != nil {
+	if err := resp.DecodeJSON(&deployment); err != nil {
 		return nil, fmt.Errorf("parse deployment response: %w", err)
 	}
 
@@ -396,7 +396,7 @@ func (mdf *ModelDeploymentFixture) CreateWithOptions(req CreateDeploymentRequest
 	}
 
 	var deployment ModelDeployment
-	if err := resp.UnmarshalJSON(&deployment); err != nil {
+	if err := resp.DecodeJSON(&deployment); err != nil {
 		return nil, fmt.Errorf("parse deployment response: %w", err)
 	}
 
@@ -446,7 +446,7 @@ func (mdf *ModelDeploymentFixture) Get(modelName, environment string) (*ModelDep
 	}
 
 	var deployment ModelDeployment
-	if err := resp.UnmarshalJSON(&deployment); err != nil {
+	if err := resp.DecodeJSON(&deployment); err != nil {
 		return nil, fmt.Errorf("parse deployment response: %w", err)
 	}
 
@@ -484,7 +484,7 @@ func (mdf *ModelDeploymentFixture) List(environment, modelName string) ([]ModelD
 	}
 
 	var deployments []ModelDeployment
-	if err := resp.UnmarshalJSON(&deployments); err != nil {
+	if err := resp.DecodeJSON(&deployments); err != nil {
 		return nil, fmt.Errorf("parse deployments response: %w", err)
 	}
 

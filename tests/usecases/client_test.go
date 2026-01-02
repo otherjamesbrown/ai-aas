@@ -66,8 +66,8 @@ type TestResponse struct {
 	Duration   time.Duration
 }
 
-// UnmarshalJSON unmarshals the response body as JSON
-func (r *TestResponse) UnmarshalJSON(v interface{}) error {
+// DecodeJSON unmarshals the response body as JSON into v
+func (r *TestResponse) DecodeJSON(v interface{}) error {
 	return json.Unmarshal(r.Body, v)
 }
 
@@ -225,7 +225,7 @@ func (c *TestClient) GetAvailableModels() ([]string, error) {
 	}
 
 	var modelsResp ModelsResponse
-	if err := resp.UnmarshalJSON(&modelsResp); err != nil {
+	if err := resp.DecodeJSON(&modelsResp); err != nil {
 		return nil, fmt.Errorf("parse models response: %w", err)
 	}
 

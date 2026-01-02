@@ -239,7 +239,7 @@ resp, err := client.PATCH("/v1/orgs/123", body)
 
 // Parse JSON response
 var orgs []Organization
-err := resp.UnmarshalJSON(&orgs)
+err := resp.DecodeJSON(&orgs)
 ```
 
 ## Test Structure

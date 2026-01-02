@@ -81,7 +81,7 @@ func TestUC_INF_001_EndToEndChatCompletion(t *testing.T) {
 			} `json:"usage"`
 		}
 
-		if err := resp.UnmarshalJSON(&chatResp); err != nil {
+		if err := resp.DecodeJSON(&chatResp); err != nil {
 			t.Fatalf("Failed to parse response: %v", err)
 		}
 
@@ -124,7 +124,7 @@ func TestUC_INF_001_EndToEndChatCompletion(t *testing.T) {
 			} `json:"usage"`
 		}
 
-		if err := resp.UnmarshalJSON(&chatResp); err != nil {
+		if err := resp.DecodeJSON(&chatResp); err != nil {
 			t.Fatalf("Failed to parse response: %v", err)
 		}
 
@@ -203,7 +203,7 @@ func TestUC_INF_001_EndToEndChatCompletion(t *testing.T) {
 		var users []struct {
 			UserID string `json:"userId"`
 		}
-		if err := usersResp.UnmarshalJSON(&users); err != nil || len(users) == 0 {
+		if err := usersResp.DecodeJSON(&users); err != nil || len(users) == 0 {
 			t.Fatalf("Failed to parse users or no users found: %v", err)
 		}
 
@@ -230,7 +230,7 @@ func TestUC_INF_001_EndToEndChatCompletion(t *testing.T) {
 		var accessConfig struct {
 			AccessMode string `json:"accessMode"`
 		}
-		if err := accessResp.UnmarshalJSON(&accessConfig); err != nil {
+		if err := accessResp.DecodeJSON(&accessConfig); err != nil {
 			t.Fatalf("Failed to parse access config: %v", err)
 		}
 
@@ -664,7 +664,7 @@ func TestUC_INF_003_MultiModelRouting(t *testing.T) {
 			var chatResp struct {
 				Model string `json:"model"`
 			}
-			if err := resp.UnmarshalJSON(&chatResp); err != nil {
+			if err := resp.DecodeJSON(&chatResp); err != nil {
 				t.Errorf("Model %s: failed to parse response: %v", model, err)
 				continue
 			}
@@ -717,12 +717,12 @@ func TestUC_INF_003_MultiModelRouting(t *testing.T) {
 		var chatResp1, chatResp2 struct {
 			Model string `json:"model"`
 		}
-		if err := resp1.UnmarshalJSON(&chatResp1); err == nil {
+		if err := resp1.DecodeJSON(&chatResp1); err == nil {
 			if chatResp1.Model != model1 {
 				t.Errorf("Response 1 model mismatch: expected %s, got %s", model1, chatResp1.Model)
 			}
 		}
-		if err := resp2.UnmarshalJSON(&chatResp2); err == nil {
+		if err := resp2.DecodeJSON(&chatResp2); err == nil {
 			if chatResp2.Model != model2 {
 				t.Errorf("Response 2 model mismatch: expected %s, got %s", model2, chatResp2.Model)
 			}
@@ -780,7 +780,7 @@ func TestUC_INF_003_MultiModelRouting(t *testing.T) {
 			Model string `json:"model"`
 		}
 
-		if err := resp.UnmarshalJSON(&chatResp); err != nil {
+		if err := resp.DecodeJSON(&chatResp); err != nil {
 			t.Fatalf("Failed to parse response: %v", err)
 		}
 
@@ -861,7 +861,7 @@ func TestUC_INF_004_TokenUsageTracking(t *testing.T) {
 			TotalTokens  int `json:"totalTokens"`
 		}
 
-		if err := usageResp.UnmarshalJSON(&usage); err != nil {
+		if err := usageResp.DecodeJSON(&usage); err != nil {
 			t.Fatalf("Failed to parse usage response: %v", err)
 		}
 
@@ -895,7 +895,7 @@ func TestUC_INF_004_TokenUsageTracking(t *testing.T) {
 		var baselineUsage struct {
 			RequestCount int `json:"requestCount"`
 		}
-		baselineResp.UnmarshalJSON(&baselineUsage)
+		baselineResp.DecodeJSON(&baselineUsage)
 
 		// Make request that fails authentication
 		unauthClient := NewTestClient(getAPIRouterURL(), "invalid-api-key")
@@ -925,7 +925,7 @@ func TestUC_INF_004_TokenUsageTracking(t *testing.T) {
 		var afterUsage struct {
 			RequestCount int `json:"requestCount"`
 		}
-		afterResp.UnmarshalJSON(&afterUsage)
+		afterResp.DecodeJSON(&afterUsage)
 
 		// Then: No tokens are charged to organization
 		if afterUsage.RequestCount != baselineUsage.RequestCount {
@@ -949,7 +949,7 @@ func TestUC_INF_004_TokenUsageTracking(t *testing.T) {
 		var baselineUsage struct {
 			TotalTokens int `json:"totalTokens"`
 		}
-		baselineResp.UnmarshalJSON(&baselineUsage)
+		baselineResp.DecodeJSON(&baselineUsage)
 
 		// Make streaming request
 		reqBody := map[string]interface{}{
@@ -994,7 +994,7 @@ func TestUC_INF_004_TokenUsageTracking(t *testing.T) {
 		var afterUsage struct {
 			TotalTokens int `json:"totalTokens"`
 		}
-		afterResp.UnmarshalJSON(&afterUsage)
+		afterResp.DecodeJSON(&afterUsage)
 
 		if afterUsage.TotalTokens <= baselineUsage.TotalTokens {
 			t.Error("Expected token usage to increase after streaming request")
@@ -1025,7 +1025,7 @@ func TestUC_INF_004_TokenUsageTracking(t *testing.T) {
 
 		// Then: Response includes trace_id
 		var result map[string]interface{}
-		if err := resp.UnmarshalJSON(&result); err != nil {
+		if err := resp.DecodeJSON(&result); err != nil {
 			t.Fatalf("Failed to parse response: %v", err)
 		}
 

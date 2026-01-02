@@ -84,7 +84,7 @@ func TestUC_ANL_001_UsageRecording(t *testing.T) {
 					continue // Retry
 				}
 
-				if err := usageResp.UnmarshalJSON(&usage); err != nil {
+				if err := usageResp.DecodeJSON(&usage); err != nil {
 					continue // Retry
 				}
 
@@ -129,7 +129,7 @@ func TestUC_ANL_001_UsageRecording(t *testing.T) {
 		var baselineUsage struct {
 			RequestCount int `json:"requestCount"`
 		}
-		baselineResp.UnmarshalJSON(&baselineUsage)
+		baselineResp.DecodeJSON(&baselineUsage)
 
 		// Make request
 		reqBody := map[string]interface{}{
@@ -158,7 +158,7 @@ func TestUC_ANL_001_UsageRecording(t *testing.T) {
 		var afterUsage struct {
 			RequestCount int `json:"requestCount"`
 		}
-		afterResp.UnmarshalJSON(&afterUsage)
+		afterResp.DecodeJSON(&afterUsage)
 
 		// Then: Only one usage record is created
 		if afterUsage.RequestCount != baselineUsage.RequestCount+1 {
@@ -230,7 +230,7 @@ func TestUC_ANL_002_UsageAggregation(t *testing.T) {
 			} `json:"totals"`
 		}
 
-		if err := resp.UnmarshalJSON(&usageResp); err != nil {
+		if err := resp.DecodeJSON(&usageResp); err != nil {
 			t.Fatalf("Failed to parse usage response: %v", err)
 		}
 
@@ -285,7 +285,7 @@ func TestUC_ANL_002_UsageAggregation(t *testing.T) {
 			} `json:"totals"`
 		}
 
-		if err := resp.UnmarshalJSON(&usageResp); err != nil {
+		if err := resp.DecodeJSON(&usageResp); err != nil {
 			t.Fatalf("Failed to parse usage response: %v", err)
 		}
 
@@ -386,7 +386,7 @@ func TestUC_ANL_003_AnalyticsExport(t *testing.T) {
 			Status string `json:"status"`
 		}
 
-		if err := resp.UnmarshalJSON(&exportJob); err != nil {
+		if err := resp.DecodeJSON(&exportJob); err != nil {
 			t.Fatalf("Failed to parse export job: %v", err)
 		}
 
@@ -422,7 +422,7 @@ func TestUC_ANL_003_AnalyticsExport(t *testing.T) {
 			JobID  string `json:"jobId"`
 			Status string `json:"status"`
 		}
-		createResp.UnmarshalJSON(&exportJob)
+		createResp.DecodeJSON(&exportJob)
 
 		// Poll for completion
 		getJobPath := "/analytics/v1/orgs/" + org.ID + "/exports/" + exportJob.JobID
@@ -440,7 +440,7 @@ func TestUC_ANL_003_AnalyticsExport(t *testing.T) {
 			var job struct {
 				Status string `json:"status"`
 			}
-			getResp.UnmarshalJSON(&job)
+			getResp.DecodeJSON(&job)
 
 			// Then: Job status transitions to "in_progress" then "completed"
 			if job.Status == "succeeded" || job.Status == "completed" {
@@ -611,7 +611,7 @@ func TestUC_ANL_004_CrossServiceCorrelation(t *testing.T) {
 
 		// Then: Trace ID is returned in response body
 		var result map[string]interface{}
-		if err := resp.UnmarshalJSON(&result); err != nil {
+		if err := resp.DecodeJSON(&result); err != nil {
 			t.Fatalf("Failed to parse response: %v", err)
 		}
 
@@ -643,7 +643,7 @@ func TestUC_ANL_004_CrossServiceCorrelation(t *testing.T) {
 		}
 
 		var result2 map[string]interface{}
-		if err := resp2.UnmarshalJSON(&result2); err != nil {
+		if err := resp2.DecodeJSON(&result2); err != nil {
 			t.Fatalf("Failed to parse second response: %v", err)
 		}
 
@@ -689,7 +689,7 @@ func TestUC_ANL_004_CrossServiceCorrelation(t *testing.T) {
 
 		// Then: Client-provided trace ID is used
 		var result map[string]interface{}
-		if err := resp.UnmarshalJSON(&result); err != nil {
+		if err := resp.DecodeJSON(&result); err != nil {
 			t.Fatalf("Failed to parse response: %v", err)
 		}
 
@@ -740,7 +740,7 @@ func TestUC_ANL_004_CrossServiceCorrelation(t *testing.T) {
 
 		// Then: Error body includes trace_id field
 		var errResp map[string]interface{}
-		if err := resp.UnmarshalJSON(&errResp); err != nil {
+		if err := resp.DecodeJSON(&errResp); err != nil {
 			t.Fatalf("Failed to parse error response: %v", err)
 		}
 

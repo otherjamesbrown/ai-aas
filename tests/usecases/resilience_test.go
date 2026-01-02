@@ -343,7 +343,7 @@ func TestUC_RSL_004_ErrorResponseFormat(t *testing.T) {
 			TraceID string `json:"trace_id"`
 		}
 
-		if err := resp.UnmarshalJSON(&errResp); err == nil {
+		if err := resp.DecodeJSON(&errResp); err == nil {
 			if errResp.Error.Type == "" {
 				t.Log("Warning: error.type field missing")
 			}
