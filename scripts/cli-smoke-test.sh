@@ -375,7 +375,41 @@ run_environment_tests() {
             else
                 local model_ids
                 model_ids=$(echo "$models_output" | jq -r '[.data[].id] | join(", ")' | cut -c1-60)
-                results+=("list_models:PASS:${model_count}_models")
+
+                # Validate API response matches deployment state
+                local validation_failed=false
+                local validation_msg=""
+                if [[ -n "$kubeconfig" && -n "$namespace" ]]; then
+                    # Fetch AIModel deployment state from Kubernetes
+                    local aimodels_temp=$(mktemp)
+                    if kubectl --kubeconfig="$kubeconfig" get aimodels -n "$namespace" -o json 2>/dev/null > "$aimodels_temp"; then
+                        # Get models that should be published (enabled=true AND phase=Ready)
+                        local expected_models
+                        expected_models=$(jq -r '[.items[] | select(.spec.enabled == true and .status.phase == "Ready") | .spec.externalName // .metadata.name] | sort | join("\n")' "$aimodels_temp" 2>/dev/null)
+
+                        # Get models from API response
+                        local api_models
+                        api_models=$(echo "$models_output" | jq -r '[.data[].id] | sort | join("\n")' 2>/dev/null)
+
+                        # Compare
+                        if [[ "$expected_models" != "$api_models" ]]; then
+                            validation_failed=true
+                            # Count differences
+                            local expected_count api_count
+                            expected_count=$(echo "$expected_models" | grep -v '^$' | wc -l)
+                            api_count=$(echo "$api_models" | grep -v '^$' | wc -l)
+                            validation_msg="mismatch:expected_${expected_count}_got_${api_count}"
+                        fi
+                    fi
+                    rm -f "$aimodels_temp"
+                fi
+
+                if [[ "$validation_failed" == "true" ]]; then
+                    results+=("list_models:FAIL:$validation_msg")
+                else
+                    results+=("list_models:PASS:${model_count}_models")
+                fi
+
                 # Store full models JSON for verbose output
                 models_json="$models_output"
                 # Get first model for inference test
