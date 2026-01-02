@@ -84,8 +84,8 @@ This file highlights the most relevant specifications, plans, and external refer
 - [012 E2E Tests Tasks](./specs/012-e2e-tests/tasks.md): Phase-by-phase implementation backlog covering setup through polish (Phases 1-8, 67 tasks).
 - [012 E2E Tests Data Model](./specs/012-e2e-tests/data-model.md): Test fixtures, test context, test results, and artifact data models.
 - [012 E2E Tests Research](./specs/012-e2e-tests/research.md): Test framework evaluation, patterns, best practices, and implementation recommendations.
-- [E2E Test Harness README](./tests/e2e/README.md): Test harness usage, API reference, configuration options, test patterns, and best practices.
-- [E2E Test Troubleshooting](./tests/e2e/TROUBLESHOOTING.md): Common issues, debugging tips, and solutions for E2E test execution.
+- [Use Case Tests](./tests/usecases/): CLI-driven use case tests with helpers in `helpers_test.go` and test implementations per feature domain.
+- [Use Case Schema](./usecases/SCHEMA.md): Use case YAML format, acceptance criteria structure, and test naming conventions.
 - [Constitution](./memory/constitution.md): Non-negotiable architecture principles (API-first, LKE Kubernetes, GitOps, security gates).
 
 ## External References
