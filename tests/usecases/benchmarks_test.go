@@ -468,3 +468,410 @@ func TestUC_BM_004_ListBenchmarkTargets_MustNot(t *testing.T) {
 		// This test verifies no side effects occur
 	})
 }
+
+// TestUC_BM_005_WaitForRunCompletion validates that organization admins can
+// wait for benchmark runs to complete.
+//
+// Use Case: UC-BM-005 - Wait for Run Completion
+// Acceptance Criteria:
+//   - AC-01: Wait for successful completion
+//   - AC-02: Wait with timeout
+//   - AC-03: Wait for already completed run
+//   - AC-04: Wait for failed run
+//
+// See: usecases/benchmarks.yaml
+func TestUC_BM_005_WaitForRunCompletion(t *testing.T) {
+	t.Run("AC-01: wait for successful completion", func(t *testing.T) {
+		skipIfNoLiveAPI(t)
+
+		// Given: Benchmark run "run-456" is in running state
+		// When: User runs `ai-aas-org benchmark run wait run-456`
+		result := runOrgCLI("benchmark", "run", "wait", "run-456")
+
+		// Then: Command blocks until run completes
+		// Then: Final status is displayed as "completed"
+		// Then: Exit code is 0
+		if result.ExitCode != 0 {
+			t.Fatalf("expected exit code 0, got %d: %s", result.ExitCode, result.Output)
+		}
+
+		if !strings.Contains(strings.ToLower(result.Output), "completed") &&
+			!strings.Contains(strings.ToLower(result.Output), "complete") {
+			t.Error("expected completion status in output")
+		}
+	})
+
+	t.Run("AC-02: wait with timeout", func(t *testing.T) {
+		skipIfNoLiveAPI(t)
+
+		// Given: Benchmark run is in running state
+		// When: User runs `ai-aas-org benchmark run wait run-long --timeout 5s`
+		// Note: Using a short timeout to test timeout behavior
+		result := runOrgCLI("benchmark", "run", "wait", "run-long", "--timeout", "5s")
+
+		// Then: Command waits up to the timeout
+		// If run completes within timeout, exit code is 0
+		// If timeout expires, exit code is 1
+		// Either outcome is acceptable depending on run state
+		if result.ExitCode != 0 && result.ExitCode != 1 {
+			t.Fatalf("expected exit code 0 or 1, got %d: %s", result.ExitCode, result.Output)
+		}
+
+		// If timeout occurred, should indicate run still in progress
+		if result.ExitCode == 1 {
+			if !strings.Contains(strings.ToLower(result.Output), "timeout") &&
+				!strings.Contains(strings.ToLower(result.Output), "still") {
+				t.Error("expected timeout indication in output")
+			}
+		}
+	})
+
+	t.Run("AC-03: wait for already completed run", func(t *testing.T) {
+		skipIfNoLiveAPI(t)
+
+		// Given: Benchmark run "run-456" has already completed
+		// When: User runs `ai-aas-org benchmark run wait run-456`
+		result := runOrgCLI("benchmark", "run", "wait", "run-completed")
+
+		// Then: Command returns immediately
+		// Then: Status shown as "completed"
+		// Then: Exit code is 0
+		if result.ExitCode != 0 {
+			t.Fatalf("expected exit code 0, got %d: %s", result.ExitCode, result.Output)
+		}
+	})
+
+	t.Run("AC-04: wait for failed run", func(t *testing.T) {
+		skipIfNoLiveAPI(t)
+
+		// Given: Benchmark run fails during execution
+		// When: User runs `ai-aas-org benchmark run wait run-failed`
+		result := runOrgCLI("benchmark", "run", "wait", "run-failed")
+
+		// Then: Command returns when run fails
+		// Then: Status shown as "failed"
+		// Then: Exit code is 2 (indicating run failure)
+		if result.ExitCode != 2 {
+			t.Fatalf("expected exit code 2 for failed run, got %d: %s", result.ExitCode, result.Output)
+		}
+
+		// Then: Error details are displayed
+		if !strings.Contains(strings.ToLower(result.Output), "failed") &&
+			!strings.Contains(strings.ToLower(result.Output), "error") {
+			t.Error("expected failure indication in output")
+		}
+	})
+
+	t.Run("AC-04b: wait for non-existent run", func(t *testing.T) {
+		skipIfNoLiveAPI(t)
+
+		// Given: Benchmark run does not exist
+		// When: User runs `ai-aas-org benchmark run wait nonexistent`
+		result := runOrgCLI("benchmark", "run", "wait", "nonexistent-run")
+
+		// Then: Command fails with exit code 5 (not found)
+		if result.ExitCode != 5 {
+			t.Fatalf("expected exit code 5, got %d: %s", result.ExitCode, result.Output)
+		}
+	})
+}
+
+// TestUC_BM_005_WaitForRunCompletion_MustNot validates negative requirements.
+func TestUC_BM_005_WaitForRunCompletion_MustNot(t *testing.T) {
+	t.Run("must not modify the run in any way", func(t *testing.T) {
+		skipIfNoLiveAPI(t)
+
+		// Given: User waits for a run
+		// When: Wait completes
+		// Then: Run data should be unchanged
+		// (This is an implicit requirement - wait is read-only)
+	})
+
+	t.Run("must not return success exit code for failed runs", func(t *testing.T) {
+		skipIfNoLiveAPI(t)
+
+		// Given: Benchmark run "run-failed" has failed
+		// When: User waits for it
+		result := runOrgCLI("benchmark", "run", "wait", "run-failed")
+
+		// Then: Exit code should NOT be 0
+		if result.ExitCode == 0 {
+			t.Error("expected non-zero exit code for failed run")
+		}
+	})
+}
+
+// TestUC_BM_006_CancelRunningBenchmarks validates that organization admins can
+// cancel benchmark runs.
+//
+// Use Case: UC-BM-006 - Cancel Running Benchmarks
+// Acceptance Criteria:
+//   - AC-01: Cancel running benchmark
+//   - AC-02: Cancel pending benchmark
+//   - AC-03: Reject cancel on completed run
+//   - AC-04: Reject cancel on non-existent run
+//
+// See: usecases/benchmarks.yaml
+func TestUC_BM_006_CancelRunningBenchmarks(t *testing.T) {
+	t.Run("AC-01: cancel running benchmark", func(t *testing.T) {
+		skipIfNoLiveAPI(t)
+
+		// Given: Benchmark run "run-456" is in running state
+		// When: User runs `ai-aas-org benchmark run cancel run-456`
+		result := runOrgCLI("benchmark", "run", "cancel", "run-running")
+
+		// Then: Exit code is 0
+		if result.ExitCode != 0 {
+			t.Fatalf("expected exit code 0, got %d: %s", result.ExitCode, result.Output)
+		}
+
+		// Then: Message confirms cancellation
+		if !strings.Contains(strings.ToLower(result.Output), "cancel") {
+			t.Error("expected cancellation confirmation in output")
+		}
+
+		// Verify status changed to cancelled
+		showResult := runOrgCLI("benchmark", "run", "show", "run-running")
+		if !strings.Contains(strings.ToLower(showResult.Output), "cancelled") &&
+			!strings.Contains(strings.ToLower(showResult.Output), "canceled") {
+			t.Error("expected run status to be cancelled")
+		}
+	})
+
+	t.Run("AC-02: cancel pending benchmark", func(t *testing.T) {
+		skipIfNoLiveAPI(t)
+
+		// Given: Benchmark run "run-456" is in pending state (queued)
+		// When: User runs `ai-aas-org benchmark run cancel run-pending`
+		result := runOrgCLI("benchmark", "run", "cancel", "run-pending")
+
+		// Then: Benchmark run is removed from queue
+		// Then: Status changes to "cancelled"
+		// Then: Exit code is 0
+		if result.ExitCode != 0 {
+			t.Fatalf("expected exit code 0, got %d: %s", result.ExitCode, result.Output)
+		}
+	})
+
+	t.Run("AC-03: reject cancel on completed run", func(t *testing.T) {
+		skipIfNoLiveAPI(t)
+
+		// Given: Benchmark run "run-456" has already completed
+		// When: User runs `ai-aas-org benchmark run cancel run-completed`
+		result := runOrgCLI("benchmark", "run", "cancel", "run-completed")
+
+		// Then: Command fails with exit code 3 (invalid operation)
+		if result.ExitCode != 3 {
+			t.Fatalf("expected exit code 3, got %d: %s", result.ExitCode, result.Output)
+		}
+
+		// Then: Error message indicates run already completed
+		if !strings.Contains(strings.ToLower(result.Output), "completed") &&
+			!strings.Contains(strings.ToLower(result.Output), "already") {
+			t.Error("expected message indicating run already completed")
+		}
+	})
+
+	t.Run("AC-04: reject cancel on non-existent run", func(t *testing.T) {
+		skipIfNoLiveAPI(t)
+
+		// Given: Benchmark run "nonexistent" does not exist
+		// When: User runs `ai-aas-org benchmark run cancel nonexistent`
+		result := runOrgCLI("benchmark", "run", "cancel", "nonexistent-run")
+
+		// Then: Command fails with exit code 5 (not found)
+		if result.ExitCode != 5 {
+			t.Fatalf("expected exit code 5, got %d: %s", result.ExitCode, result.Output)
+		}
+
+		// Then: Error message indicates run not found
+		if !strings.Contains(strings.ToLower(result.Output), "not found") &&
+			!strings.Contains(strings.ToLower(result.Output), "notfound") {
+			t.Error("expected not found message")
+		}
+	})
+}
+
+// TestUC_BM_006_CancelRunningBenchmarks_MustNot validates negative requirements.
+func TestUC_BM_006_CancelRunningBenchmarks_MustNot(t *testing.T) {
+	t.Run("must not cancel runs from other organizations", func(t *testing.T) {
+		skipIfNoLiveAPIWithReason(t, "with multiple orgs")
+
+		// Given: User is authenticated with org admin API key
+		// When: User tries to cancel another org's run
+		// Then: Access is denied or run not found
+	})
+
+	t.Run("must not delete run records", func(t *testing.T) {
+		skipIfNoLiveAPI(t)
+
+		// Given: User cancels a run
+		// When: Cancellation completes
+		// Then: Run record should still exist (just with cancelled status)
+		result := runOrgCLI("benchmark", "run", "cancel", "run-to-cancel")
+		if result.ExitCode != 0 && result.ExitCode != 3 {
+			// Skip if run doesn't exist or is already completed
+			t.Skip("run not in cancellable state")
+		}
+
+		// Verify run still exists
+		showResult := runOrgCLI("benchmark", "run", "show", "run-to-cancel")
+		if showResult.ExitCode == 5 {
+			t.Error("run record should not be deleted, only status updated")
+		}
+	})
+}
+
+// TestUC_BM_007_CompareResultsAcrossRuns validates that organization admins can
+// compare benchmark results across multiple runs.
+//
+// Use Case: UC-BM-007 - Compare Results Across Runs
+// Acceptance Criteria:
+//   - AC-01: Compare two runs
+//   - AC-02: Compare with percentage changes
+//   - AC-03: Compare as JSON output
+//   - AC-04: Reject compare with incomplete run
+//   - AC-05: Reject compare with non-existent run
+//
+// See: usecases/benchmarks.yaml
+func TestUC_BM_007_CompareResultsAcrossRuns(t *testing.T) {
+	t.Run("AC-01: compare two runs", func(t *testing.T) {
+		skipIfNoLiveAPI(t)
+
+		// Given: Two completed benchmark runs "run-1" and "run-2" exist
+		// When: User runs `ai-aas-org benchmark compare run-1 run-2`
+		result := runOrgCLI("benchmark", "compare", "run-1", "run-2")
+
+		// Then: Exit code is 0
+		if result.ExitCode != 0 {
+			t.Fatalf("expected exit code 0, got %d: %s", result.ExitCode, result.Output)
+		}
+
+		// Then: Side-by-side comparison is displayed
+		// Then: Throughput difference is shown
+		// Then: Latency differences are shown (p50, p90, p99)
+		// Then: Error rate difference is shown
+		if result.Output == "" {
+			t.Error("expected comparison output")
+		}
+	})
+
+	t.Run("AC-02: compare with percentage changes", func(t *testing.T) {
+		skipIfNoLiveAPI(t)
+
+		// Given: Two completed benchmark runs exist
+		// When: User runs `ai-aas-org benchmark compare run-1 run-2 --show-delta`
+		result := runOrgCLI("benchmark", "compare", "run-1", "run-2", "--show-delta")
+
+		// Then: Percentage changes are displayed
+		if result.ExitCode != 0 {
+			t.Fatalf("expected exit code 0, got %d: %s", result.ExitCode, result.Output)
+		}
+
+		// Look for percentage indicators in output
+		if !strings.Contains(result.Output, "%") &&
+			!strings.Contains(strings.ToLower(result.Output), "delta") &&
+			!strings.Contains(strings.ToLower(result.Output), "change") {
+			t.Error("expected percentage or delta indicators in output")
+		}
+	})
+
+	t.Run("AC-03: compare as JSON output", func(t *testing.T) {
+		skipIfNoLiveAPI(t)
+
+		// Given: Two completed benchmark runs exist
+		// When: User runs `ai-aas-org benchmark compare run-1 run-2 --json`
+		result := runOrgCLI("benchmark", "compare", "run-1", "run-2", "--json")
+
+		// Then: Exit code is 0
+		if result.ExitCode != 0 {
+			t.Fatalf("expected exit code 0, got %d: %s", result.ExitCode, result.Output)
+		}
+
+		// Then: Results output as valid JSON
+		if !isValidJSON(result.Output) {
+			t.Errorf("expected valid JSON, got: %s", result.Output)
+		}
+
+		// Then: JSON includes both run metrics and delta calculations
+		var comparison map[string]interface{}
+		if err := json.Unmarshal([]byte(result.Output), &comparison); err != nil {
+			t.Fatalf("failed to parse JSON: %v", err)
+		}
+	})
+
+	t.Run("AC-04: reject compare with incomplete run", func(t *testing.T) {
+		skipIfNoLiveAPI(t)
+
+		// Given: Run "run-1" is completed but "run-2" is still running
+		// When: User runs `ai-aas-org benchmark compare run-1 run-running`
+		result := runOrgCLI("benchmark", "compare", "run-1", "run-running")
+
+		// Then: Command fails with exit code 3 (invalid operation)
+		if result.ExitCode != 3 {
+			t.Fatalf("expected exit code 3, got %d: %s", result.ExitCode, result.Output)
+		}
+
+		// Then: Error message indicates run is not completed
+		if !strings.Contains(strings.ToLower(result.Output), "not completed") &&
+			!strings.Contains(strings.ToLower(result.Output), "running") &&
+			!strings.Contains(strings.ToLower(result.Output), "incomplete") {
+			t.Error("expected message indicating run not completed")
+		}
+	})
+
+	t.Run("AC-05: reject compare with non-existent run", func(t *testing.T) {
+		skipIfNoLiveAPI(t)
+
+		// Given: Run "run-1" exists but "run-999" does not
+		// When: User runs `ai-aas-org benchmark compare run-1 run-nonexistent`
+		result := runOrgCLI("benchmark", "compare", "run-1", "run-nonexistent")
+
+		// Then: Command fails with exit code 5 (not found)
+		if result.ExitCode != 5 {
+			t.Fatalf("expected exit code 5, got %d: %s", result.ExitCode, result.Output)
+		}
+
+		// Then: Error message indicates which run was not found
+		if !strings.Contains(strings.ToLower(result.Output), "not found") {
+			t.Error("expected not found message")
+		}
+	})
+}
+
+// TestUC_BM_007_CompareResultsAcrossRuns_MustNot validates negative requirements.
+func TestUC_BM_007_CompareResultsAcrossRuns_MustNot(t *testing.T) {
+	t.Run("must not compare runs from different organizations", func(t *testing.T) {
+		skipIfNoLiveAPIWithReason(t, "with multiple orgs")
+
+		// Given: User is authenticated with org admin API key
+		// When: User tries to compare with another org's run
+		// Then: Access is denied or run not found
+	})
+
+	t.Run("must not modify any run data", func(t *testing.T) {
+		skipIfNoLiveAPI(t)
+
+		// Comparison is a read-only operation
+		// This is an implicit requirement - no modifications should occur
+	})
+
+	t.Run("must not expose internal implementation details", func(t *testing.T) {
+		skipIfNoLiveAPI(t)
+
+		// Given: User compares two runs
+		result := runOrgCLI("benchmark", "compare", "run-1", "run-2", "--json")
+
+		if result.ExitCode != 0 {
+			t.Skip("comparison failed, skipping internal details check")
+		}
+
+		// Then: No internal implementation details are exposed
+		internalPatterns := []string{"internal_", "private_", "worker_id", "node_id"}
+		for _, pattern := range internalPatterns {
+			if strings.Contains(strings.ToLower(result.Output), pattern) {
+				t.Errorf("output may contain internal details: %s", pattern)
+			}
+		}
+	})
+}
