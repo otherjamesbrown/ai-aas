@@ -290,8 +290,9 @@ func checkDeployment(ctx context.Context, modelName, environment string) *CheckR
 		return result
 	}
 
-	isvcName := fmt.Sprintf("%s-%s", modelName, environment)
-	status, err := k8sClient.GetInferenceService(ctx, isvcName, environment)
+	// Resolve actual InferenceService name
+	isvcName, resolvedNs, _ := k8sClient.ResolveInferenceServiceName(ctx, modelName, environment)
+	status, err := k8sClient.GetInferenceService(ctx, isvcName, resolvedNs)
 	if err != nil {
 		result.Message = fmt.Sprintf("Not deployed: %v", err)
 		result.Duration = time.Since(start)
@@ -439,8 +440,9 @@ func checkEndpoint(ctx context.Context, modelName, environment string, inference
 		return result
 	}
 
-	isvcName := fmt.Sprintf("%s-%s", modelName, environment)
-	status, err := k8sClient.GetInferenceService(ctx, isvcName, environment)
+	// Resolve actual InferenceService name
+	isvcName, resolvedNs, _ := k8sClient.ResolveInferenceServiceName(ctx, modelName, environment)
+	status, err := k8sClient.GetInferenceService(ctx, isvcName, resolvedNs)
 	if err != nil {
 		result.Message = "Cannot get endpoint URL"
 		result.Duration = time.Since(start)

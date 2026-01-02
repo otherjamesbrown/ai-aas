@@ -304,10 +304,11 @@ Examples:
 					return fmt.Errorf("create k8s client: %w", err)
 				}
 
-				isvcName := fmt.Sprintf("%s-%s", modelName, environment)
+				// Resolve actual InferenceService name
+				isvcName, resolvedNs, _ := k8sClient.ResolveInferenceServiceName(ctx, modelName, environment)
 
 				// Trigger rolling restart
-				if err := k8sClient.RestartInferenceService(ctx, isvcName, environment); err != nil {
+				if err := k8sClient.RestartInferenceService(ctx, isvcName, resolvedNs); err != nil {
 					return fmt.Errorf("restart deployment: %w", err)
 				}
 
@@ -319,7 +320,7 @@ Examples:
 					Timeout:      10 * time.Minute,
 					PollInterval: 5 * time.Second,
 				}
-				if err := k8sClient.WaitForReady(ctx, isvcName, environment, waitOpts); err != nil {
+				if err := k8sClient.WaitForReady(ctx, isvcName, resolvedNs, waitOpts); err != nil {
 					fmt.Printf(" TIMEOUT\n")
 					return fmt.Errorf("deployment did not become ready: %w", err)
 				}

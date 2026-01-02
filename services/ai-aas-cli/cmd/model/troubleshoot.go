@@ -73,8 +73,9 @@ Examples:
 				return fmt.Errorf("create k8s client: %w", err)
 			}
 
-			// Find pods for this model
-			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
+			// Find pods for this model - resolve actual InferenceService name
+			isvcName, resolvedNs, _ := k8sClient.ResolveInferenceServiceName(ctx, modelName, environment)
+			namespace = resolvedNs
 			pods, err := k8sClient.Clientset().CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
 				LabelSelector: fmt.Sprintf("serving.kserve.io/inferenceservice=%s", isvcName),
 			})
@@ -191,7 +192,9 @@ Examples:
 				return fmt.Errorf("create k8s client: %w", err)
 			}
 
-			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
+			// Resolve actual InferenceService name
+			isvcName, resolvedNs, _ := k8sClient.ResolveInferenceServiceName(ctx, modelName, environment)
+			namespace = resolvedNs
 
 			// Get all events in namespace and filter by related objects
 			events, err := k8sClient.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{})
@@ -275,7 +278,9 @@ Examples:
 				return fmt.Errorf("create k8s client: %w", err)
 			}
 
-			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
+			// Resolve actual InferenceService name
+			isvcName, resolvedNs, _ := k8sClient.ResolveInferenceServiceName(ctx, modelName, environment)
+			namespace = resolvedNs
 
 			// Get InferenceService
 			isvc, err := k8sClient.GetInferenceService(ctx, isvcName, namespace)
@@ -422,7 +427,9 @@ Examples:
 				return fmt.Errorf("create k8s client: %w", err)
 			}
 
-			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
+			// Resolve actual InferenceService name
+			isvcName, resolvedNs, _ := k8sClient.ResolveInferenceServiceName(ctx, modelName, environment)
+			namespace = resolvedNs
 
 			// Check if deployed
 			isvc, err := k8sClient.GetInferenceService(ctx, isvcName, namespace)

@@ -135,6 +135,40 @@ func (c *Client) GetAIModel(ctx context.Context, name, namespace string) (*AIMod
 	return status, nil
 }
 
+// ResolveInferenceServiceName resolves the actual InferenceService name for a model deployment.
+// It first checks the AIModel CR status (source of truth for GitOps deployments),
+// then falls back to the CLI naming convention (model-environment) for backwards compatibility.
+//
+// Returns: inferenceServiceName, namespace, error
+func (c *Client) ResolveInferenceServiceName(ctx context.Context, modelName, environment string) (string, string, error) {
+	// Default namespace is the environment name
+	namespace := environment
+
+	// Try to get the AIModel status (works for GitOps-deployed models)
+	// The AIModel name in GitOps is typically just the model name, not model-environment
+	aimodel, err := c.GetAIModel(ctx, modelName, environment)
+	if err == nil && aimodel.InferenceServiceName != "" {
+		// Found AIModel with InferenceService name - use it
+		if aimodel.Namespace != "" {
+			namespace = aimodel.Namespace
+		}
+		return aimodel.InferenceServiceName, namespace, nil
+	}
+
+	// Try the CLI naming convention (model-environment) for CLI-created deployments
+	cliStyleName := fmt.Sprintf("%s-%s", modelName, environment)
+	aimodel, err = c.GetAIModel(ctx, cliStyleName, environment)
+	if err == nil && aimodel.InferenceServiceName != "" {
+		if aimodel.Namespace != "" {
+			namespace = aimodel.Namespace
+		}
+		return aimodel.InferenceServiceName, namespace, nil
+	}
+
+	// Fall back to constructed name (for deployments not yet synced or missing)
+	return cliStyleName, namespace, nil
+}
+
 // DeleteAIModel deletes an AIModel
 func (c *Client) DeleteAIModel(ctx context.Context, name, namespace string) error {
 	dynamicClient, err := dynamic.NewForConfig(c.config)

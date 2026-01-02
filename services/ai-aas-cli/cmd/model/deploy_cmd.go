@@ -655,7 +655,6 @@ See Also:
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 			defer cancel()
 
-			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
 			namespace := environment
 
 			kubeconfig := viper.GetString(fmt.Sprintf("environments.%s.kubeconfig", environment))
@@ -669,6 +668,10 @@ See Also:
 			if err != nil {
 				return fmt.Errorf("create k8s client: %w", err)
 			}
+
+			// Resolve actual InferenceService name
+			isvcName, resolvedNs, _ := k8sClient.ResolveInferenceServiceName(ctx, modelName, environment)
+			namespace = resolvedNs
 
 			_, err = k8sClient.GetInferenceService(ctx, isvcName, namespace)
 			if err != nil {
@@ -758,7 +761,6 @@ See Also:
 				return fmt.Errorf("invalid replicas: %w", err)
 			}
 
-			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
 			namespace := environment
 
 			kubeconfig := viper.GetString(fmt.Sprintf("environments.%s.kubeconfig", environment))
@@ -772,6 +774,10 @@ See Also:
 			if err != nil {
 				return fmt.Errorf("create k8s client: %w", err)
 			}
+
+			// Resolve actual InferenceService name
+			isvcName, resolvedNs, _ := k8sClient.ResolveInferenceServiceName(ctx, modelName, environment)
+			namespace = resolvedNs
 
 			status, err := k8sClient.GetInferenceService(ctx, isvcName, namespace)
 			if err != nil {
@@ -837,7 +843,6 @@ See Also:
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
 			namespace := environment
 
 			kubeconfig := viper.GetString(fmt.Sprintf("environments.%s.kubeconfig", environment))
@@ -851,6 +856,10 @@ See Also:
 			if err != nil {
 				return fmt.Errorf("create k8s client: %w", err)
 			}
+
+			// Resolve actual InferenceService name
+			isvcName, resolvedNs, _ := k8sClient.ResolveInferenceServiceName(ctx, modelName, environment)
+			namespace = resolvedNs
 
 			status, err := k8sClient.GetInferenceService(ctx, isvcName, namespace)
 			if err != nil {

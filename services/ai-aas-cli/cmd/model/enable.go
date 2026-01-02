@@ -93,10 +93,12 @@ Examples:
 
 				// Build storage URI
 				storageURI := fmt.Sprintf("s3://%s/models/%s/main/", s3Bucket, modelName)
-				isvcName := fmt.Sprintf("%s-%s", modelName, environment)
+
+				// Resolve actual InferenceService name (for checking existing)
+				isvcName, resolvedNs, _ := k8sClient.ResolveInferenceServiceName(ctx, modelName, environment)
 
 				// Check if already deployed
-				existing, err := k8sClient.GetInferenceService(ctx, isvcName, environment)
+				existing, err := k8sClient.GetInferenceService(ctx, isvcName, resolvedNs)
 				if err == nil && existing != nil {
 					fmt.Printf("  Already enabled (ready: %v)\n", existing.Ready)
 					continue
@@ -211,10 +213,11 @@ Examples:
 				return fmt.Errorf("create k8s client: %w", err)
 			}
 
-			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
+			// Resolve actual InferenceService name
+			isvcName, resolvedNs, _ := k8sClient.ResolveInferenceServiceName(ctx, modelName, environment)
 
 			// Check if deployed
-			status, err := k8sClient.GetInferenceService(ctx, isvcName, environment)
+			status, err := k8sClient.GetInferenceService(ctx, isvcName, resolvedNs)
 			if err != nil {
 				fmt.Printf("Model %s is not enabled in %s\n", modelName, environment)
 				return nil
@@ -240,7 +243,7 @@ Examples:
 			}
 
 			// Delete InferenceService
-			if err := k8sClient.DeleteInferenceService(ctx, isvcName, environment); err != nil {
+			if err := k8sClient.DeleteInferenceService(ctx, isvcName, resolvedNs); err != nil {
 				return fmt.Errorf("delete inferenceservice: %w", err)
 			}
 

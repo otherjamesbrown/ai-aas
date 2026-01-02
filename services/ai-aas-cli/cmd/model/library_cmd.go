@@ -425,9 +425,11 @@ See Also:
 				}
 
 				storageURI := fmt.Sprintf("s3://%s/models/%s/%s/", s3Bucket, modelName, revision)
-				isvcName := fmt.Sprintf("%s-%s", modelName, environment)
 
-				existing, err := k8sClient.GetInferenceService(ctx, isvcName, environment)
+				// Resolve actual InferenceService name (for checking existing)
+				isvcName, resolvedNs, _ := k8sClient.ResolveInferenceServiceName(ctx, modelName, environment)
+
+				existing, err := k8sClient.GetInferenceService(ctx, isvcName, resolvedNs)
 				if err == nil && existing != nil {
 					fmt.Printf("  Already enabled (ready: %v)\n", existing.Ready)
 					continue
@@ -552,9 +554,10 @@ See Also:
 				return fmt.Errorf("create k8s client: %w", err)
 			}
 
-			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
+			// Resolve actual InferenceService name
+			isvcName, resolvedNs, _ := k8sClient.ResolveInferenceServiceName(ctx, modelName, environment)
 
-			status, err := k8sClient.GetInferenceService(ctx, isvcName, environment)
+			status, err := k8sClient.GetInferenceService(ctx, isvcName, resolvedNs)
 			if err != nil {
 				fmt.Printf("Model %s is not enabled in %s\n", modelName, environment)
 				return nil
@@ -579,7 +582,7 @@ See Also:
 				}
 			}
 
-			if err := k8sClient.DeleteInferenceService(ctx, isvcName, environment); err != nil {
+			if err := k8sClient.DeleteInferenceService(ctx, isvcName, resolvedNs); err != nil {
 				return fmt.Errorf("delete inferenceservice: %w", err)
 			}
 

@@ -534,8 +534,6 @@ Examples:
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 			defer cancel()
 
-			// Build InferenceService name
-			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
 			namespace := environment
 
 			// Get kubeconfig for environment
@@ -551,6 +549,10 @@ Examples:
 			if err != nil {
 				return fmt.Errorf("create k8s client: %w", err)
 			}
+
+			// Resolve actual InferenceService name
+			isvcName, resolvedNs, _ := k8sClient.ResolveInferenceServiceName(ctx, modelName, environment)
+			namespace = resolvedNs
 
 			// Check if exists
 			_, err = k8sClient.GetInferenceService(ctx, isvcName, namespace)
@@ -627,8 +629,6 @@ Examples:
 				return fmt.Errorf("invalid replicas: %w", err)
 			}
 
-			// Build InferenceService name
-			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
 			namespace := environment
 
 			// Get kubeconfig for environment
@@ -644,6 +644,10 @@ Examples:
 			if err != nil {
 				return fmt.Errorf("create k8s client: %w", err)
 			}
+
+			// Resolve actual InferenceService name
+			isvcName, resolvedNs, _ := k8sClient.ResolveInferenceServiceName(ctx, modelName, environment)
+			namespace = resolvedNs
 
 			// Check if exists
 			status, err := k8sClient.GetInferenceService(ctx, isvcName, namespace)

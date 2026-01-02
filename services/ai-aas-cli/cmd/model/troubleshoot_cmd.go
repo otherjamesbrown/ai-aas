@@ -127,7 +127,9 @@ See Also:
 				return fmt.Errorf("create k8s client: %w", err)
 			}
 
-			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
+			// Resolve actual InferenceService name
+			isvcName, resolvedNs, _ := k8sClient.ResolveInferenceServiceName(ctx, modelName, environment)
+			namespace = resolvedNs
 			pods, err := k8sClient.Clientset().CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
 				LabelSelector: fmt.Sprintf("serving.kserve.io/inferenceservice=%s", isvcName),
 			})
@@ -246,7 +248,9 @@ See Also:
 				return fmt.Errorf("create k8s client: %w", err)
 			}
 
-			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
+			// Resolve actual InferenceService name
+			isvcName, resolvedNs, _ := k8sClient.ResolveInferenceServiceName(ctx, modelName, environment)
+			namespace = resolvedNs
 
 			events, err := k8sClient.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{})
 			if err != nil {
@@ -341,7 +345,9 @@ See Also:
 				return fmt.Errorf("create k8s client: %w", err)
 			}
 
-			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
+			// Resolve actual InferenceService name
+			isvcName, resolvedNs, _ := k8sClient.ResolveInferenceServiceName(ctx, modelName, environment)
+			namespace = resolvedNs
 
 			isvc, err := k8sClient.GetInferenceService(ctx, isvcName, namespace)
 			if err != nil {
@@ -490,7 +496,9 @@ See Also:
 				return fmt.Errorf("create k8s client: %w", err)
 			}
 
-			isvcName := fmt.Sprintf("%s-%s", modelName, environment)
+			// Resolve actual InferenceService name
+			isvcName, resolvedNs, _ := k8sClient.ResolveInferenceServiceName(ctx, modelName, environment)
+			namespace = resolvedNs
 
 			isvc, err := k8sClient.GetInferenceService(ctx, isvcName, namespace)
 			if err != nil {
