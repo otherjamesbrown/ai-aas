@@ -96,7 +96,8 @@ func (of *OrganizationFixture) Create(name string) (*Organization, error) {
 		name = fmt.Sprintf("test-org-%s", generateUniqueID())
 	}
 
-	slug := name // For simplicity, use name as slug
+	// Always add unique suffix to slug to prevent collisions, even when name is provided
+	slug := fmt.Sprintf("%s-%s", name, generateUniqueID())
 	reqBody := map[string]interface{}{
 		"name": name,
 		"slug": slug,
