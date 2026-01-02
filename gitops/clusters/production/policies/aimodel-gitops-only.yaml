@@ -1,0 +1,82 @@
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: aimodel-gitops-only
+  annotations:
+    policies.kyverno.io/title: AIModel GitOps-Only Enforcement
+    policies.kyverno.io/category: Security
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: AIModel
+    policies.kyverno.io/description: >-
+      Prevents direct creation or modification of AIModel resources.
+      Only ArgoCD (GitOps) is allowed to manage AIModels.
+      Emergency bypass available via 'bypass.kyverno.io/ticket' annotation.
+spec:
+  validationFailureAction: Enforce
+  background: false
+  failurePolicy: Fail
+  rules:
+    - name: aimodel-must-be-created-by-argocd
+      match:
+        any:
+          - resources:
+              kinds:
+                - AIModel
+              operations:
+                - CREATE
+                - UPDATE
+      exclude:
+        any:
+          # Allow ArgoCD application controller
+          - subjects:
+              - kind: ServiceAccount
+                name: argocd-application-controller
+                namespace: argocd
+          # Allow emergency bypass with ticket ID annotation
+          - resources:
+              annotations:
+                bypass.kyverno.io/ticket: "?*"
+      validate:
+        message: >-
+          AIModel resources must be managed via GitOps in the ai-aas-config repository.
+          Direct creation or modification is not allowed.
+
+          To deploy or modify an AIModel:
+          1. Commit changes to: https://github.com/otherjamesbrown/ai-aas-config
+          2. ArgoCD will automatically sync the changes
+
+          For emergency bypass (requires approval):
+          Add annotation: bypass.kyverno.io/ticket=TICKET-ID
+
+          Contact platform team for assistance.
+        deny: {}
+    - name: aimodel-deletion-requires-ticket
+      match:
+        any:
+          - resources:
+              kinds:
+                - AIModel
+              operations:
+                - DELETE
+      exclude:
+        any:
+          # Allow ArgoCD application controller
+          - subjects:
+              - kind: ServiceAccount
+                name: argocd-application-controller
+                namespace: argocd
+          # Allow deletion with ticket ID annotation
+          - resources:
+              annotations:
+                bypass.kyverno.io/ticket: "?*"
+      validate:
+        message: >-
+          Deletion of AIModel resources requires a ticket ID for audit trail.
+
+          To delete an AIModel:
+          1. Add annotation: bypass.kyverno.io/ticket=TICKET-ID
+          2. OR remove from ai-aas-config repository and let ArgoCD prune it
+
+          Recommended approach: Remove from GitOps repository for proper tracking.
+        deny: {}
