@@ -1,15 +1,19 @@
 package usecases_test
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/creack/pty"
 )
 
 // Environment variable names for API configuration
@@ -77,6 +81,117 @@ type CLIResult struct {
 	Output   string
 	Error    string
 	ExitCode int
+}
+
+// PTYInteraction represents a prompt/response pair for interactive CLI testing
+type PTYInteraction struct {
+	// WaitFor is the string to wait for before sending input (e.g., "[y/N]:")
+	WaitFor string
+	// SendInput is the input to send when WaitFor is detected (e.g., "y\n")
+	SendInput string
+}
+
+// runPlatformCLIWithPTY executes an ai-aas-cli command with a PTY for interactive input.
+// It allows testing commands that prompt for confirmation (y/N).
+//
+// Example usage:
+//
+//	result := runPlatformCLIWithPTY(
+//	    []PTYInteraction{{WaitFor: "[y/N]:", SendInput: "y\n"}},
+//	    "model", "deploy", "delete", "llama-7b", "-e", "development",
+//	)
+func runPlatformCLIWithPTY(interactions []PTYInteraction, args ...string) CLIResult {
+	cmd := exec.Command("ai-aas-cli", args...)
+	cmd.Env = os.Environ()
+
+	// Start the command with a PTY
+	ptmx, err := pty.Start(cmd)
+	if err != nil {
+		return CLIResult{
+			Error:    "failed to start PTY: " + err.Error(),
+			ExitCode: -1,
+		}
+	}
+	defer ptmx.Close()
+
+	// Collect all output
+	var outputBuf bytes.Buffer
+
+	// Channel to signal when we're done reading
+	done := make(chan error, 1)
+
+	// Read output in a goroutine
+	go func() {
+		buf := make([]byte, 1024)
+		interactionIdx := 0
+
+		for {
+			n, err := ptmx.Read(buf)
+			if err != nil {
+				if err == io.EOF {
+					done <- nil
+				} else {
+					done <- err
+				}
+				return
+			}
+
+			if n > 0 {
+				outputBuf.Write(buf[:n])
+
+				// Check if we need to send any interaction
+				if interactionIdx < len(interactions) {
+					currentOutput := outputBuf.String()
+					if strings.Contains(currentOutput, interactions[interactionIdx].WaitFor) {
+						// Small delay to ensure the prompt is fully written
+						time.Sleep(50 * time.Millisecond)
+						_, writeErr := ptmx.Write([]byte(interactions[interactionIdx].SendInput))
+						if writeErr != nil {
+							done <- writeErr
+							return
+						}
+						interactionIdx++
+					}
+				}
+			}
+		}
+	}()
+
+	// Wait for the command to complete with timeout
+	cmdDone := make(chan error, 1)
+	go func() {
+		cmdDone <- cmd.Wait()
+	}()
+
+	// Wait for either completion or timeout
+	var cmdErr error
+	select {
+	case cmdErr = <-cmdDone:
+		// Command completed, give a moment for final output
+		time.Sleep(100 * time.Millisecond)
+	case <-time.After(30 * time.Second):
+		cmd.Process.Kill()
+		return CLIResult{
+			Output:   outputBuf.String(),
+			Error:    "command timed out after 30 seconds",
+			ExitCode: -1,
+		}
+	}
+
+	// Get exit code
+	exitCode := 0
+	if cmdErr != nil {
+		if exitErr, ok := cmdErr.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		} else {
+			exitCode = -1
+		}
+	}
+
+	return CLIResult{
+		Output:   outputBuf.String(),
+		ExitCode: exitCode,
+	}
 }
 
 // runOrgCLI executes an ai-aas-org command and returns the result.

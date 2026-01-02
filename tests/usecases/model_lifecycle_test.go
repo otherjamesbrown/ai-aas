@@ -245,10 +245,25 @@ func TestUC_MLC_003_ViewDeploymentStatus(t *testing.T) {
 func TestUC_MLC_004_RetireModelDeployment(t *testing.T) {
 	t.Run("AC-01: delete deployment with confirmation", func(t *testing.T) {
 		skipIfNoPlatformCLI(t)
-		t.Skip("UC-MLC-004/AC-01 requires interactive input - difficult to test in automated tests")
+		t.Skip("UC-MLC-004/AC-01 requires GitOps config repo and deployed model")
 
-		// This test requires interactive confirmation which is difficult to test
-		// in automated tests. Manual testing recommended.
+		// Given: Model "llama-7b" is deployed in development
+		// When: Operator runs `ai-aas-cli model deploy delete llama-7b -e development` and confirms with "y"
+		result := runPlatformCLIWithPTY(
+			[]PTYInteraction{{WaitFor: "[y/N]:", SendInput: "y\n"}},
+			"model", "deploy", "delete", "llama-7b", "-e", "development",
+		)
+
+		// Then: Current deployment status is displayed
+		// Then: User is prompted "Are you sure? [y/N]:"
+		assertContains(t, result.Output, "[y/N]")
+
+		// Then: After confirmation, AIModel CR is deleted
+		// Then: Success message indicates deletion initiated
+		require.Equal(t, 0, result.ExitCode, "command should succeed after confirmation")
+		assertContains(t, result.Output, "delet")
+
+		// Then: Note explains cache is preserved (optional - depends on CLI output)
 	})
 
 	t.Run("AC-02: force delete without confirmation", func(t *testing.T) {
@@ -292,10 +307,24 @@ func TestUC_MLC_004_RetireModelDeployment(t *testing.T) {
 
 	t.Run("AC-04: cancel deletion on negative confirmation", func(t *testing.T) {
 		skipIfNoPlatformCLI(t)
-		t.Skip("UC-MLC-004/AC-04 requires interactive input - difficult to test in automated tests")
+		t.Skip("UC-MLC-004/AC-04 requires GitOps config repo and deployed model")
 
-		// This test requires interactive confirmation which is difficult to test
-		// in automated tests. Manual testing recommended.
+		// Given: Model "llama-7b" is deployed in development
+		// When: Operator runs `ai-aas-cli model deploy delete llama-7b -e development` and types "n"
+		result := runPlatformCLIWithPTY(
+			[]PTYInteraction{{WaitFor: "[y/N]:", SendInput: "n\n"}},
+			"model", "deploy", "delete", "llama-7b", "-e", "development",
+		)
+
+		// Then: User is prompted "Are you sure? [y/N]:"
+		assertContains(t, result.Output, "[y/N]")
+
+		// Then: Message shows "Cancelled."
+		assertContains(t, result.Output, "Cancelled")
+
+		// Then: No resources are deleted (verified by exit code 0 - graceful cancel)
+		// Then: Exit code is 0
+		require.Equal(t, 0, result.ExitCode, "command should exit gracefully after cancellation")
 	})
 
 	t.Run("AC-05: handle non-existent deployment gracefully", func(t *testing.T) {
