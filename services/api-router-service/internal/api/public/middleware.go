@@ -541,6 +541,180 @@ func TokenQuotaMiddleware(rateLimiter *limiter.RateLimiter, tokenLimits limiter.
 	}
 }
 
+// TokenRateLimitMiddleware creates middleware for per-user token rate limit checking.
+// This middleware checks if the authenticated user is within their token rate limits
+// by calling user-org-service (via CachedTokenLimiter).
+//
+// Key behaviors:
+// - Only applies to inference endpoints (chat/completions, completions, embeddings)
+// - Service accounts (principalType="service_account") bypass rate limits
+// - Graceful degradation: allows request if user-org-service is unavailable
+// - Returns OpenAI-compatible 429 response when limit exceeded
+//
+// Spec reference: 035-token-rate-limits
+func TokenRateLimitMiddleware(tokenLimiter *limiter.CachedTokenLimiter, auditLogger *usage.AuditLogger, logger *zap.Logger, tracer trace.Tracer) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Skip if token limiter is not configured
+			if tokenLimiter == nil || !tokenLimiter.IsConfigured() {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Skip for non-inference paths (admin, user-org operations)
+			if !isInferencePath(r.URL.Path) {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Get authenticated context
+			authCtx := r.Context().Value(AuthContextKey)
+			if authCtx == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			authContext, ok := authCtx.(*auth.AuthenticatedContext)
+			if !ok {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Service accounts bypass token rate limits (FR-013)
+			if authContext.PrincipalType == "service_account" {
+				logger.Debug("skipping token rate limit for service account",
+					zap.String("principal_id", authContext.PrincipalID),
+				)
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Check token rate limit for user
+			userID := authContext.PrincipalID
+			status, err := tokenLimiter.CheckLimit(r.Context(), userID)
+			if err != nil {
+				logger.Warn("token rate limit check failed, allowing request (graceful degradation)",
+					zap.String("user_id", userID),
+					zap.Error(err),
+				)
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			if !status.Allowed {
+				// Emit audit event
+				if auditLogger != nil {
+					auditLogger.LogDenial(usage.AuditEvent{
+						RequestID:      getRequestID(r),
+						OrganizationID: authContext.OrganizationID,
+						APIKeyID:       authContext.APIKeyID,
+						Model:          getModelFromRequest(r),
+						Action:         "REQUEST_DENIED",
+						DecisionReason: "TOKEN_RATE_LIMIT_EXCEEDED",
+						LimitState:     "TOKEN_RATE_LIMITED",
+					})
+				}
+
+				// Record Prometheus metric
+				if status.BlockingWindow != nil {
+					telemetry.RecordQuotaDenial("token_rate_limit_" + status.BlockingWindow.Window)
+				} else {
+					telemetry.RecordQuotaDenial("token_rate_limit")
+				}
+
+				// Write 429 response with OpenAI-compatible headers
+				writeTokenRateLimitError(w, r, status, logger, tracer)
+				return
+			}
+
+			// Add rate limit headers for successful requests
+			if len(status.Windows) > 0 {
+				// Use the most restrictive window for headers
+				window := findMostRestrictiveWindow(status.Windows)
+				w.Header().Set("x-ratelimit-limit-tokens", strconv.FormatInt(window.Limit, 10))
+				w.Header().Set("x-ratelimit-remaining-tokens", strconv.FormatInt(window.Remaining, 10))
+				w.Header().Set("x-ratelimit-reset-tokens", window.ResetsAt.Format(time.RFC3339))
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// writeTokenRateLimitError writes an OpenAI-compatible 429 response.
+func writeTokenRateLimitError(w http.ResponseWriter, r *http.Request, status *limiter.RateLimitStatus, logger *zap.Logger, tracer trace.Tracer) {
+	var window *limiter.WindowStatus
+	if status.BlockingWindow != nil {
+		window = status.BlockingWindow
+	} else if len(status.Windows) > 0 {
+		// Find the first exceeded window
+		for i := range status.Windows {
+			if status.Windows[i].Remaining <= 0 {
+				window = &status.Windows[i]
+				break
+			}
+		}
+	}
+
+	if window == nil {
+		// Fallback: shouldn't happen, but handle gracefully
+		logger.Error("token rate limit blocked but no blocking window found")
+		w.WriteHeader(http.StatusTooManyRequests)
+		return
+	}
+
+	// Calculate retry-after in seconds
+	retryAfterSeconds := int(time.Until(window.ResetsAt).Seconds())
+	if retryAfterSeconds <= 0 {
+		retryAfterSeconds = 60 // Default to 1 minute
+	}
+
+	// Set OpenAI-compatible headers (FR-021)
+	w.Header().Set("x-ratelimit-limit-tokens", strconv.FormatInt(window.Limit, 10))
+	w.Header().Set("x-ratelimit-remaining-tokens", strconv.FormatInt(window.Remaining, 10))
+	w.Header().Set("x-ratelimit-reset-tokens", window.ResetsAt.Format(time.RFC3339))
+	w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds))
+
+	// Build error response
+	errorBuilder := api.NewErrorBuilder(tracer)
+	limitContext := map[string]interface{}{
+		"window":    window.Window,
+		"limit":     window.Limit,
+		"used":      window.Used,
+		"resets_at": window.ResetsAt.Format(time.RFC3339),
+	}
+
+	response := errorBuilder.BuildLimitError(
+		r.Context(),
+		api.NewError(api.ErrCodeRateLimitExceeded, fmt.Sprintf("Rate limit exceeded: %s token limit (%d) reached. Resets at %s", window.Window, window.Limit, window.ResetsAt.Format(time.RFC3339))),
+		api.ErrCodeRateLimitExceeded,
+		&retryAfterSeconds,
+		limitContext,
+	)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(api.GetHTTPStatus(api.ErrCodeRateLimitExceeded))
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.Error("failed to write token rate limit error response", zap.Error(err))
+	}
+}
+
+// findMostRestrictiveWindow returns the window with the smallest remaining tokens.
+func findMostRestrictiveWindow(windows []limiter.WindowStatus) *limiter.WindowStatus {
+	if len(windows) == 0 {
+		return nil
+	}
+
+	mostRestrictive := &windows[0]
+	for i := 1; i < len(windows); i++ {
+		// Lower remaining percentage = more restrictive
+		if windows[i].Percentage > mostRestrictive.Percentage {
+			mostRestrictive = &windows[i]
+		}
+	}
+	return mostRestrictive
+}
+
 // ModelAccessMiddleware creates middleware for user-level model access control.
 // This middleware checks if the authenticated user has access to the requested model.
 // Requires BodyBufferMiddleware to run first to extract the model from the request body.

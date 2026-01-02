@@ -413,3 +413,255 @@ func isEmail(s string) bool {
 	}
 	return false
 }
+
+// --- user set-token-policy ---
+
+var (
+	userSetTokenPolicyUser   string
+	userSetTokenPolicyPolicy string
+)
+
+var userSetTokenPolicyCmd = &cobra.Command{
+	Use:   "set-token-policy",
+	Short: "Set a user's token rate-limit policy",
+	Long: `Set a token rate-limit policy override for a user.
+
+Use "inherit" to clear the override and use the org default.
+
+Examples:
+  ai-aas-org user set-token-policy --user user@example.com --policy "Standard"
+  ai-aas-org user set-token-policy --user user@example.com --policy inherit
+  ai-aas-org user set-token-policy --user user@example.com --policy no-limit`,
+	RunE: runUserSetTokenPolicy,
+}
+
+func init() {
+	userCmd.AddCommand(userSetTokenPolicyCmd)
+
+	userSetTokenPolicyCmd.Flags().StringVar(&userSetTokenPolicyUser, "user", "", "user email or ID (required)")
+	userSetTokenPolicyCmd.Flags().StringVar(&userSetTokenPolicyPolicy, "policy", "", "policy name, ID, 'inherit', or 'no-limit' (required)")
+	userSetTokenPolicyCmd.MarkFlagRequired("user")
+	userSetTokenPolicyCmd.MarkFlagRequired("policy")
+}
+
+func runUserSetTokenPolicy(cmd *cobra.Command, args []string) error {
+	if err := requireConfig(); err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	client := newAPIClient()
+
+	// Resolve user
+	var user *api.User
+	var err error
+	if isEmail(userSetTokenPolicyUser) {
+		user, err = client.GetUserByEmail(ctx, config.GetOrgID(), userSetTokenPolicyUser)
+	} else {
+		user, err = client.GetUser(ctx, config.GetOrgID(), userSetTokenPolicyUser)
+	}
+	if err != nil {
+		return wrapAPIError(err, "failed to find user")
+	}
+
+	// Handle "inherit" to clear override
+	if userSetTokenPolicyPolicy == "inherit" {
+		result, err := client.ClearUserTokenPolicy(ctx, config.GetOrgID(), user.ID)
+		if err != nil {
+			return wrapAPIError(err, "failed to clear token policy override")
+		}
+
+		if IsJSONOutput() {
+			return output.PrintJSON(result)
+		}
+
+		output.SuccessMsg("Token policy override cleared for %s", user.Email)
+		fmt.Println()
+		output.KeyValue("Effective Policy", result.Policy.Name)
+		output.KeyValue("Source", result.Source)
+		return nil
+	}
+
+	// Resolve policy ID
+	policyID := userSetTokenPolicyPolicy
+	if policyID != "no-limit" {
+		policy, err := findPolicyByNameOrID(ctx, client, policyID)
+		if err != nil {
+			return wrapAPIError(err, "failed to find token policy")
+		}
+		policyID = policy.ID
+	}
+
+	result, err := client.SetUserTokenPolicy(ctx, config.GetOrgID(), user.ID, policyID)
+	if err != nil {
+		return wrapAPIError(err, "failed to set token policy")
+	}
+
+	if IsJSONOutput() {
+		return output.PrintJSON(result)
+	}
+
+	output.SuccessMsg("Token policy set for %s", user.Email)
+	fmt.Println()
+	output.KeyValue("Policy", result.Policy.Name)
+	output.KeyValue("Source", result.Source)
+	return nil
+}
+
+// --- user get-token-policy ---
+
+var userGetTokenPolicyUser string
+
+var userGetTokenPolicyCmd = &cobra.Command{
+	Use:   "get-token-policy",
+	Short: "Get a user's effective token policy",
+	Long: `Get the effective token rate-limit policy for a user.
+
+Shows whether the policy is from an override or inherited from the org default.
+
+Examples:
+  ai-aas-org user get-token-policy --user user@example.com
+  ai-aas-org user get-token-policy --user usr_abc123`,
+	RunE: runUserGetTokenPolicy,
+}
+
+func init() {
+	userCmd.AddCommand(userGetTokenPolicyCmd)
+
+	userGetTokenPolicyCmd.Flags().StringVar(&userGetTokenPolicyUser, "user", "", "user email or ID (required)")
+	userGetTokenPolicyCmd.MarkFlagRequired("user")
+}
+
+func runUserGetTokenPolicy(cmd *cobra.Command, args []string) error {
+	if err := requireConfig(); err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	client := newAPIClient()
+
+	// Resolve user
+	var user *api.User
+	var err error
+	if isEmail(userGetTokenPolicyUser) {
+		user, err = client.GetUserByEmail(ctx, config.GetOrgID(), userGetTokenPolicyUser)
+	} else {
+		user, err = client.GetUser(ctx, config.GetOrgID(), userGetTokenPolicyUser)
+	}
+	if err != nil {
+		return wrapAPIError(err, "failed to find user")
+	}
+
+	result, err := client.GetUserTokenPolicy(ctx, config.GetOrgID(), user.ID)
+	if err != nil {
+		return wrapAPIError(err, "failed to get token policy")
+	}
+
+	if IsJSONOutput() {
+		return output.PrintJSON(result)
+	}
+
+	output.Header("User Token Policy")
+	output.KeyValue("User", user.Email)
+	output.KeyValue("Policy", result.Policy.Name)
+	output.KeyValue("Source", result.Source)
+	fmt.Println()
+	output.Header("Policy Limits")
+	output.KeyValue("1h Limit", formatLimit(result.Policy.Limit1h))
+	output.KeyValue("24h Limit", formatLimit(result.Policy.Limit24h))
+	output.KeyValue("7d Limit", formatLimit(result.Policy.Limit7d))
+	return nil
+}
+
+// --- user usage ---
+
+var userUsageUser string
+
+var userUsageCmd = &cobra.Command{
+	Use:   "usage",
+	Short: "Show a user's token usage",
+	Long: `Show token usage for a user across all rate-limit windows.
+
+Displays current usage, limits, and percentage for each window.
+
+Examples:
+  ai-aas-org user usage --user user@example.com
+  ai-aas-org user usage --user usr_abc123`,
+	RunE: runUserUsage,
+}
+
+func init() {
+	userCmd.AddCommand(userUsageCmd)
+
+	userUsageCmd.Flags().StringVar(&userUsageUser, "user", "", "user email or ID (required)")
+	userUsageCmd.MarkFlagRequired("user")
+}
+
+func runUserUsage(cmd *cobra.Command, args []string) error {
+	if err := requireConfig(); err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	client := newAPIClient()
+
+	// Resolve user
+	var user *api.User
+	var err error
+	if isEmail(userUsageUser) {
+		user, err = client.GetUserByEmail(ctx, config.GetOrgID(), userUsageUser)
+	} else {
+		user, err = client.GetUser(ctx, config.GetOrgID(), userUsageUser)
+	}
+	if err != nil {
+		return wrapAPIError(err, "failed to find user")
+	}
+
+	usage, err := client.GetUserTokenUsage(ctx, config.GetOrgID(), user.ID)
+	if err != nil {
+		return wrapAPIError(err, "failed to get token usage")
+	}
+
+	if IsJSONOutput() {
+		return output.PrintJSON(usage)
+	}
+
+	output.Header("Token Usage for " + user.Email)
+	output.KeyValue("Policy", usage.PolicyName)
+	fmt.Println()
+
+	if len(usage.Windows) == 0 {
+		output.InfoMsg("No usage data available.")
+		return nil
+	}
+
+	headers := []string{"WINDOW", "USED", "LIMIT", "REMAINING", "USAGE %", "RESETS AT"}
+	var rows [][]string
+	for _, w := range usage.Windows {
+		limitStr := "unlimited"
+		remainingStr := "unlimited"
+		pctStr := "-"
+		if w.Limit > 0 {
+			limitStr = formatTokenCount(w.Limit)
+			remainingStr = formatTokenCount(w.Remaining)
+			pctStr = fmt.Sprintf("%.1f%%", w.Percentage)
+		}
+		rows = append(rows, []string{
+			w.Window,
+			formatTokenCount(w.Used),
+			limitStr,
+			remainingStr,
+			pctStr,
+			w.ResetsAt,
+		})
+	}
+
+	output.PrintTable(headers, rows)
+	return nil
+}

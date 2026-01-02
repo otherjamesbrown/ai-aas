@@ -854,3 +854,410 @@ func (c *Client) InspectAPIKey(ctx context.Context, key string) (*InspectAPIKeyR
 
 	return &result, nil
 }
+
+// ---- Token Rate-Limit Policy Methods ----
+
+// CreateTokenPolicy creates a new token rate-limit policy for an organization.
+func (c *Client) CreateTokenPolicy(ctx context.Context, orgID string, req CreateTokenPolicyRequest) (*TokenRateLimitPolicyResponse, error) {
+	reqURL := fmt.Sprintf("%s/v1/orgs/%s/token-policies", c.baseURL, url.PathEscape(orgID))
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", reqURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
+	}
+
+	resp, err := client.DoWithRetry(ctx, c.httpClient, httpReq, c.retryCfg)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("create token policy failed: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result TokenRateLimitPolicyResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// ListTokenPolicies lists token rate-limit policies for an organization.
+func (c *Client) ListTokenPolicies(ctx context.Context, orgID string) ([]TokenRateLimitPolicyResponse, error) {
+	reqURL := fmt.Sprintf("%s/v1/orgs/%s/token-policies", c.baseURL, url.PathEscape(orgID))
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	if c.apiKey != "" {
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
+	}
+
+	resp, err := client.DoWithRetry(ctx, c.httpClient, httpReq, c.retryCfg)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("list token policies failed: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result TokenPolicyListResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	return result.Policies, nil
+}
+
+// GetTokenPolicy gets a token rate-limit policy by ID.
+func (c *Client) GetTokenPolicy(ctx context.Context, orgID, policyID string) (*TokenRateLimitPolicyResponse, error) {
+	reqURL := fmt.Sprintf("%s/v1/orgs/%s/token-policies/%s", c.baseURL, url.PathEscape(orgID), url.PathEscape(policyID))
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	if c.apiKey != "" {
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
+	}
+
+	resp, err := client.DoWithRetry(ctx, c.httpClient, httpReq, c.retryCfg)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("get token policy failed: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result TokenRateLimitPolicyResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// UpdateTokenPolicy updates a token rate-limit policy.
+func (c *Client) UpdateTokenPolicy(ctx context.Context, orgID, policyID string, req UpdateTokenPolicyRequest) (*TokenRateLimitPolicyResponse, error) {
+	reqURL := fmt.Sprintf("%s/v1/orgs/%s/token-policies/%s", c.baseURL, url.PathEscape(orgID), url.PathEscape(policyID))
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "PUT", reqURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
+	}
+
+	resp, err := client.DoWithRetry(ctx, c.httpClient, httpReq, c.retryCfg)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("update token policy failed: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result TokenRateLimitPolicyResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeleteTokenPolicy deletes a token rate-limit policy.
+func (c *Client) DeleteTokenPolicy(ctx context.Context, orgID, policyID string) error {
+	reqURL := fmt.Sprintf("%s/v1/orgs/%s/token-policies/%s", c.baseURL, url.PathEscape(orgID), url.PathEscape(policyID))
+
+	httpReq, err := http.NewRequestWithContext(ctx, "DELETE", reqURL, nil)
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+
+	if c.apiKey != "" {
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
+	}
+
+	resp, err := client.DoWithRetry(ctx, c.httpClient, httpReq, c.retryCfg)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("delete token policy failed: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
+}
+
+// GetOrgDefaultTokenPolicy gets the default token policy for an organization.
+func (c *Client) GetOrgDefaultTokenPolicy(ctx context.Context, orgID string) (*TokenRateLimitPolicyResponse, error) {
+	reqURL := fmt.Sprintf("%s/v1/orgs/%s/token-policy", c.baseURL, url.PathEscape(orgID))
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	if c.apiKey != "" {
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
+	}
+
+	resp, err := client.DoWithRetry(ctx, c.httpClient, httpReq, c.retryCfg)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("get org default token policy failed: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result TokenRateLimitPolicyResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// SetOrgDefaultTokenPolicy sets the default token policy for an organization.
+func (c *Client) SetOrgDefaultTokenPolicy(ctx context.Context, orgID, policyID string) (*TokenRateLimitPolicyResponse, error) {
+	reqURL := fmt.Sprintf("%s/v1/orgs/%s/token-policy", c.baseURL, url.PathEscape(orgID))
+
+	req := SetTokenPolicyRequest{PolicyID: policyID}
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "PUT", reqURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
+	}
+
+	resp, err := client.DoWithRetry(ctx, c.httpClient, httpReq, c.retryCfg)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("set org default token policy failed: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result TokenRateLimitPolicyResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetUserTokenPolicy gets the effective token policy for a user.
+func (c *Client) GetUserTokenPolicy(ctx context.Context, orgID, userID string) (*EffectiveTokenPolicyResponse, error) {
+	reqURL := fmt.Sprintf("%s/v1/orgs/%s/users/%s/token-policy", c.baseURL, url.PathEscape(orgID), url.PathEscape(userID))
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	if c.apiKey != "" {
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
+	}
+
+	resp, err := client.DoWithRetry(ctx, c.httpClient, httpReq, c.retryCfg)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("get user token policy failed: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result EffectiveTokenPolicyResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// SetUserTokenPolicy sets a token policy override for a user.
+func (c *Client) SetUserTokenPolicy(ctx context.Context, orgID, userID, policyID string) (*EffectiveTokenPolicyResponse, error) {
+	reqURL := fmt.Sprintf("%s/v1/orgs/%s/users/%s/token-policy", c.baseURL, url.PathEscape(orgID), url.PathEscape(userID))
+
+	req := SetTokenPolicyRequest{PolicyID: policyID}
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "PUT", reqURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
+	}
+
+	resp, err := client.DoWithRetry(ctx, c.httpClient, httpReq, c.retryCfg)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("set user token policy failed: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result EffectiveTokenPolicyResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// ClearUserTokenPolicy clears a user's token policy override (reverts to org default).
+func (c *Client) ClearUserTokenPolicy(ctx context.Context, orgID, userID string) (*EffectiveTokenPolicyResponse, error) {
+	reqURL := fmt.Sprintf("%s/v1/orgs/%s/users/%s/token-policy", c.baseURL, url.PathEscape(orgID), url.PathEscape(userID))
+
+	httpReq, err := http.NewRequestWithContext(ctx, "DELETE", reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	if c.apiKey != "" {
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
+	}
+
+	resp, err := client.DoWithRetry(ctx, c.httpClient, httpReq, c.retryCfg)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("clear user token policy failed: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result EffectiveTokenPolicyResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetUserTokenUsage gets token usage for a specific user (admin view).
+func (c *Client) GetUserTokenUsage(ctx context.Context, orgID, userID string) (*TokenUsageResponse, error) {
+	reqURL := fmt.Sprintf("%s/v1/orgs/%s/users/%s/usage/tokens", c.baseURL, url.PathEscape(orgID), url.PathEscape(userID))
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	if c.apiKey != "" {
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
+	}
+
+	resp, err := client.DoWithRetry(ctx, c.httpClient, httpReq, c.retryCfg)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("get user token usage failed: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result TokenUsageResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetOwnTokenUsage gets the current user's token usage.
+func (c *Client) GetOwnTokenUsage(ctx context.Context) (*TokenUsageResponse, error) {
+	reqURL := fmt.Sprintf("%s/v1/usage/tokens", c.baseURL)
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	if c.apiKey != "" {
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
+	}
+
+	resp, err := client.DoWithRetry(ctx, c.httpClient, httpReq, c.retryCfg)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("get own token usage failed: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result TokenUsageResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	return &result, nil
+}

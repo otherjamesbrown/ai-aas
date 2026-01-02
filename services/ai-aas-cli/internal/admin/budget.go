@@ -24,11 +24,31 @@ import (
 )
 
 // BudgetCommand creates the budget command group.
+//
+// DEPRECATED: The monetary budget system has been replaced by token rate-limit policies.
+// Use the ai-aas-org CLI for token policy management:
+//
+//	ai-aas-org token-policy list
+//	ai-aas-org token-policy create --name "Standard" --1h 10000 --24h 100000
+//	ai-aas-org token-policy set-default --policy "Standard"
 func BudgetCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "budget",
-		Short: "Manage organization budgets",
-		Long:  "View and configure organization budget limits",
+		Use:        "budget",
+		Short:      "[DEPRECATED] Manage organization budgets",
+		Long:       "View and configure organization budget limits\n\nDEPRECATED: Use 'ai-aas-org token-policy' for token rate-limit management instead.",
+		Deprecated: "The monetary budget system has been replaced by token rate-limit policies.\nUse 'ai-aas-org token-policy list|create|set-default' for rate limiting.",
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			fmt.Fprintln(cmd.ErrOrStderr(), "")
+			fmt.Fprintln(cmd.ErrOrStderr(), "╭──────────────────────────────────────────────────────────────────────────────╮")
+			fmt.Fprintln(cmd.ErrOrStderr(), "│ DEPRECATED: The 'budget' command is deprecated.                             │")
+			fmt.Fprintln(cmd.ErrOrStderr(), "│                                                                              │")
+			fmt.Fprintln(cmd.ErrOrStderr(), "│ Token rate limiting is now managed with 'ai-aas-org token-policy':          │")
+			fmt.Fprintln(cmd.ErrOrStderr(), "│   ai-aas-org token-policy list                                              │")
+			fmt.Fprintln(cmd.ErrOrStderr(), "│   ai-aas-org token-policy create --name \"Standard\" --1h 10000              │")
+			fmt.Fprintln(cmd.ErrOrStderr(), "│   ai-aas-org token-policy set-default --policy \"Standard\"                  │")
+			fmt.Fprintln(cmd.ErrOrStderr(), "╰──────────────────────────────────────────────────────────────────────────────╯")
+			fmt.Fprintln(cmd.ErrOrStderr(), "")
+		},
 	}
 
 	cmd.AddCommand(budgetListCommand())

@@ -7,22 +7,23 @@ import (
 )
 
 type Org struct {
-	ID                    uuid.UUID
-	Slug                  string
-	Name                  string
-	Status                string
-	BillingOwnerUserID    *uuid.UUID
-	BudgetPolicyID        *uuid.UUID
-	DeclarativeMode       string
-	DeclarativeRepoURL    *string
-	DeclarativeBranch     *string
-	DeclarativeLastCommit *string
-	MFARequiredRoles      []string
-	Metadata              map[string]any
-	Version               int64
-	CreatedAt             time.Time
-	UpdatedAt             time.Time
-	DeletedAt             *time.Time
+	ID                     uuid.UUID
+	Slug                   string
+	Name                   string
+	Status                 string
+	BillingOwnerUserID     *uuid.UUID
+	BudgetPolicyID         *uuid.UUID
+	DeclarativeMode        string
+	DeclarativeRepoURL     *string
+	DeclarativeBranch      *string
+	DeclarativeLastCommit  *string
+	MFARequiredRoles       []string
+	Metadata               map[string]any
+	Version                int64
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
+	DeletedAt              *time.Time
+	DefaultTokenPolicyID   *uuid.UUID
 }
 
 type CreateOrgParams struct {
@@ -56,24 +57,25 @@ type UpdateOrgParams struct {
 }
 
 type User struct {
-	ID             uuid.UUID
-	OrgID          uuid.UUID
-	Email          string
-	DisplayName    string
-	PasswordHash   string
-	Status         string
-	MFAEnrolled    bool
-	MFAMethods     []string
-	MFASecret      *string
-	LastLoginAt    *time.Time
-	LockoutUntil   *time.Time
-	RecoveryTokens []string
-	ExternalIDP    *string
-	Metadata       map[string]any
-	Version        int64
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	DeletedAt      *time.Time
+	ID                      uuid.UUID
+	OrgID                   uuid.UUID
+	Email                   string
+	DisplayName             string
+	PasswordHash            string
+	Status                  string
+	MFAEnrolled             bool
+	MFAMethods              []string
+	MFASecret               *string
+	LastLoginAt             *time.Time
+	LockoutUntil            *time.Time
+	RecoveryTokens          []string
+	ExternalIDP             *string
+	Metadata                map[string]any
+	Version                 int64
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
+	DeletedAt               *time.Time
+	TokenPolicyOverrideID   *uuid.UUID
 }
 
 type CreateUserParams struct {
@@ -326,4 +328,80 @@ type AuditLogFilters struct {
 	EndDate      *time.Time
 	Limit        int
 	Offset       int
+}
+
+// Well-known UUID for the system "No Token Rate-Limit" policy.
+var NoTokenRateLimitPolicyID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
+
+// TokenRateLimitPolicy represents a token rate-limit policy.
+type TokenRateLimitPolicy struct {
+	ID          uuid.UUID
+	OrgID       *uuid.UUID // nil for system built-in policies
+	Name        string
+	Description *string
+	Limit1h     *int64 // nil = unlimited
+	Limit24h    *int64 // nil = unlimited
+	Limit7d     *int64 // nil = unlimited
+	IsBuiltin   bool
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+// CreateTokenPolicyParams holds parameters for creating a token policy.
+type CreateTokenPolicyParams struct {
+	OrgID       uuid.UUID
+	Name        string
+	Description *string
+	Limit1h     *int64
+	Limit24h    *int64
+	Limit7d     *int64
+}
+
+// UpdateTokenPolicyParams holds parameters for updating a token policy.
+type UpdateTokenPolicyParams struct {
+	ID          uuid.UUID
+	Name        *string
+	Description *string
+	Limit1h     *int64
+	Limit24h    *int64
+	Limit7d     *int64
+	// ClearLimit1h, ClearLimit24h, ClearLimit7d allow setting limits to NULL
+	ClearLimit1h  bool
+	ClearLimit24h bool
+	ClearLimit7d  bool
+}
+
+// EffectiveTokenPolicy represents a user's effective policy with source info.
+type EffectiveTokenPolicy struct {
+	Policy TokenRateLimitPolicy
+	Source string // "override" or "inherited"
+}
+
+// WindowType represents a token usage window type.
+type WindowType string
+
+const (
+	WindowType1h  WindowType = "1h"
+	WindowType24h WindowType = "24h"
+	WindowType7d  WindowType = "7d"
+)
+
+// TokenUsageWindow represents token usage in a rolling window.
+type TokenUsageWindow struct {
+	ID          uuid.UUID
+	UserID      uuid.UUID
+	WindowType  WindowType
+	WindowStart time.Time
+	TokensUsed  int64
+	UpdatedAt   time.Time
+}
+
+// TokenUsageStatus represents current usage for a window with policy limits.
+type TokenUsageStatus struct {
+	Window     WindowType
+	Limit      int64
+	Used       int64
+	Remaining  int64
+	Percentage float64
+	ResetsAt   time.Time
 }

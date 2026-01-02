@@ -13,7 +13,8 @@ func TestBudgetCommand(t *testing.T) {
 	require.NotNil(t, cmd, "BudgetCommand() returned nil")
 
 	assert.Equal(t, "budget", cmd.Use)
-	assert.Equal(t, "Manage organization budgets", cmd.Short)
+	assert.Equal(t, "[DEPRECATED] Manage organization budgets", cmd.Short)
+	assert.NotEmpty(t, cmd.Deprecated, "budget command should have deprecation message")
 }
 
 func TestBudgetListCommand(t *testing.T) {

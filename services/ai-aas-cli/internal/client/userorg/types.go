@@ -216,3 +216,72 @@ type InspectAPIKeyResponse struct {
 	ExpiresAt     string   `json:"expiresAt,omitempty"`
 	LastUsedAt    string   `json:"lastUsedAt,omitempty"`
 }
+
+// ---- Token Rate-Limit Policy Types ----
+
+// TokenRateLimitPolicyResponse represents a token rate-limit policy in API responses.
+type TokenRateLimitPolicyResponse struct {
+	ID          string  `json:"id"`
+	OrgID       *string `json:"org_id,omitempty"`
+	Name        string  `json:"name"`
+	Description *string `json:"description,omitempty"`
+	Limit1h     *int64  `json:"limit_1h,omitempty"`
+	Limit24h    *int64  `json:"limit_24h,omitempty"`
+	Limit7d     *int64  `json:"limit_7d,omitempty"`
+	IsBuiltin   bool    `json:"is_builtin"`
+	CreatedAt   string  `json:"created_at"`
+	UpdatedAt   string  `json:"updated_at"`
+}
+
+// TokenPolicyListResponse represents the response from listing token policies.
+type TokenPolicyListResponse struct {
+	Policies []TokenRateLimitPolicyResponse `json:"policies"`
+}
+
+// CreateTokenPolicyRequest represents a request to create a token rate-limit policy.
+type CreateTokenPolicyRequest struct {
+	Name        string  `json:"name"`
+	Description *string `json:"description,omitempty"`
+	Limit1h     *int64  `json:"limit_1h,omitempty"`
+	Limit24h    *int64  `json:"limit_24h,omitempty"`
+	Limit7d     *int64  `json:"limit_7d,omitempty"`
+}
+
+// UpdateTokenPolicyRequest represents a request to update a token rate-limit policy.
+type UpdateTokenPolicyRequest struct {
+	Name        *string `json:"name,omitempty"`
+	Description *string `json:"description,omitempty"`
+	Limit1h     *int64  `json:"limit_1h,omitempty"`
+	Limit24h    *int64  `json:"limit_24h,omitempty"`
+	Limit7d     *int64  `json:"limit_7d,omitempty"`
+}
+
+// SetTokenPolicyRequest represents a request to set a default or override policy.
+type SetTokenPolicyRequest struct {
+	PolicyID string `json:"policy_id"`
+}
+
+// EffectiveTokenPolicyResponse represents a user's effective token policy.
+type EffectiveTokenPolicyResponse struct {
+	Policy TokenRateLimitPolicyResponse `json:"policy"`
+	Source string                       `json:"source"` // "override" or "inherited"
+}
+
+// TokenUsageResponse represents token usage in API responses.
+type TokenUsageResponse struct {
+	UserID     string                     `json:"user_id,omitempty"`
+	OrgID      string                     `json:"org_id,omitempty"`
+	PolicyID   string                     `json:"policy_id,omitempty"`
+	PolicyName string                     `json:"policy_name"`
+	Windows    []TokenUsageWindowResponse `json:"windows"`
+}
+
+// TokenUsageWindowResponse represents a usage window in API responses.
+type TokenUsageWindowResponse struct {
+	Window     string  `json:"window"` // "1h", "24h", "7d"
+	Limit      int64   `json:"limit"`
+	Used       int64   `json:"used"`
+	Remaining  int64   `json:"remaining"`
+	Percentage float64 `json:"percentage"`
+	ResetsAt   string  `json:"resets_at"`
+}

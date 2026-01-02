@@ -67,6 +67,8 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/modelaccess"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/orgs"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/serviceaccounts"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/tokenpolicies"
+	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/tokenusage"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/usage"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/httpapi/users"
 	"github.com/otherjamesbrown/ai-aas/services/user-org-service/internal/logging"
@@ -136,6 +138,10 @@ func main() {
 				usage.RegisterRoutes(r, runtime, logger)
 				// Register audit logs routes (UC-AUD-001)
 				auditlogs.RegisterRoutes(r, runtime, logger)
+				// Register token rate-limit policy routes (Spec 035 - Token Rate-Limits)
+				tokenpolicies.RegisterRoutes(r, runtime, logger)
+				// Register token usage routes (Spec 035 - Token Rate-Limits)
+				tokenusage.RegisterRoutes(r, runtime, logger)
 			})
 		},
 	})

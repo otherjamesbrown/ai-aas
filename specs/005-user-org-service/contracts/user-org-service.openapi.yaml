@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: >
     Contracts for interactive admin API, authentication flows, policy decisions,
-    budget enforcement, declarative reconciliation controls, and audit exports.
+    token rate-limiting, declarative reconciliation controls, and audit exports.
 servers:
   - url: https://user-org-service.{env}.platform.internal
     description: Cluster-scoped service endpoint (dev/staging/prod)
@@ -23,7 +23,7 @@ tags:
   - name: Users
   - name: ServiceAccounts
   - name: APIKeys
-  - name: Budgets
+  - name: TokenRateLimits
   - name: Policy
   - name: Declarative
   - name: Audit
@@ -263,44 +263,6 @@ paths:
                 $ref: '#/components/schemas/PolicyDecision'
         '503':
           description: PDP unavailable
-  /v1/budgets/{orgId}/status:
-    get:
-      tags: [Budgets]
-      summary: Retrieve budget status and recent alerts
-      security:
-        - bearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/OrgId'
-      responses:
-        '200':
-          description: Budget status returned
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BudgetStatus'
-  /v1/budgets/{orgId}/overrides:
-    post:
-      tags: [Budgets]
-      summary: Request a temporary budget override
-      security:
-        - bearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/OrgId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/BudgetOverrideRequest'
-      responses:
-        '202':
-          description: Override request recorded
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BudgetOverride'
-        '403':
-          $ref: '#/components/responses/Forbidden'
   /v1/declarative/config:
     post:
       tags: [Declarative]
@@ -506,8 +468,6 @@ components:
         status:
           type: string
           enum: [active, suspended, pending_delete]
-        budgets:
-          $ref: '#/components/schemas/BudgetStatus'
         declarative:
           $ref: '#/components/schemas/DeclarativeStatus'
         metadata:
@@ -521,9 +481,10 @@ components:
         status:
           type: string
           enum: [active, suspended]
-        budgetPolicyId:
+        tokenPolicyId:
           type: string
           format: uuid
+          description: Token rate-limit policy ID (see spec 035)
         declarative:
           type: object
           properties:
@@ -679,61 +640,6 @@ components:
           type: array
           items:
             type: string
-    BudgetStatus:
-      type: object
-      required: [period, spend, currency, warnThreshold, blockThreshold]
-      properties:
-        period:
-          type: string
-        spend:
-          type: number
-        currency:
-          type: string
-        warnThreshold:
-          type: number
-        blockThreshold:
-          type: number
-        status:
-          type: string
-          enum: [ok, warn, block]
-        overridesActive:
-          type: boolean
-        pendingOverride:
-          $ref: '#/components/schemas/BudgetOverride'
-    BudgetOverrideRequest:
-      type: object
-      required: [amount, reason]
-      properties:
-        amount:
-          type: number
-        reason:
-          type: string
-        expiresAt:
-          type: string
-          format: date-time
-    BudgetOverride:
-      type: object
-      required: [overrideId, status]
-      properties:
-        overrideId:
-          type: string
-          format: uuid
-        status:
-          type: string
-          enum: [pending, approved, rejected, expired]
-        amount:
-          type: number
-        requestedBy:
-          type: string
-          format: uuid
-        approvedBy:
-          type: array
-          items:
-            type: string
-          description: Approver user IDs
-        expiresAt:
-          type: string
-          format: date-time
     ManualReconcileRequest:
       type: object
       required: [orgId]

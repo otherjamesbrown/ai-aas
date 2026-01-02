@@ -1,0 +1,672 @@
+openapi: 3.1.0
+info:
+  title: Token Rate-Limit Policies API
+  version: 1.0.0
+  description: |
+    API for managing token rate-limit policies. Org admins can create policies
+    with limits for rolling time windows (1h, 24h, 7d), assign them as org defaults
+    or per-user overrides, and query usage.
+
+servers:
+  - url: https://user-org-service.{env}.platform.internal
+    description: Cluster-scoped service endpoint
+    variables:
+      env:
+        default: dev
+        enum: [dev, staging, prod]
+
+tags:
+  - name: Token Policies
+    description: Policy CRUD operations
+  - name: Policy Assignment
+    description: Org default and user override management
+  - name: Token Usage
+    description: Usage queries
+
+security:
+  - bearerAuth: []
+
+paths:
+  # Policy Management
+  /v1/orgs/{orgId}/token-policies:
+    post:
+      tags: [Token Policies]
+      summary: Create a token rate-limit policy
+      operationId: createTokenPolicy
+      security:
+        - bearerAuth: [org:admin]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTokenPolicyRequest'
+      responses:
+        '201':
+          description: Policy created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRateLimitPolicy'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    get:
+      tags: [Token Policies]
+      summary: List token rate-limit policies
+      operationId: listTokenPolicies
+      security:
+        - bearerAuth: [org:read]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: List of policies (including built-in)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  policies:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TokenRateLimitPolicy'
+
+  /v1/orgs/{orgId}/token-policies/{policyId}:
+    get:
+      tags: [Token Policies]
+      summary: Get a token rate-limit policy
+      operationId: getTokenPolicy
+      security:
+        - bearerAuth: [org:read]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/PolicyId'
+      responses:
+        '200':
+          description: Policy details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRateLimitPolicy'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Token Policies]
+      summary: Update a token rate-limit policy
+      operationId: updateTokenPolicy
+      security:
+        - bearerAuth: [org:admin]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/PolicyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTokenPolicyRequest'
+      responses:
+        '200':
+          description: Policy updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRateLimitPolicy'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Token Policies]
+      summary: Delete a token rate-limit policy
+      operationId: deleteTokenPolicy
+      security:
+        - bearerAuth: [org:admin]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/PolicyId'
+      responses:
+        '204':
+          description: Policy deleted
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  # Org Default Policy
+  /v1/orgs/{orgId}/token-policy:
+    get:
+      tags: [Policy Assignment]
+      summary: Get organization's default token policy
+      operationId: getOrgDefaultTokenPolicy
+      security:
+        - bearerAuth: [org:read]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Org's default policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRateLimitPolicy'
+
+    put:
+      tags: [Policy Assignment]
+      summary: Set organization's default token policy
+      operationId: setOrgDefaultTokenPolicy
+      security:
+        - bearerAuth: [org:admin]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetPolicyRequest'
+      responses:
+        '200':
+          description: Default policy set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRateLimitPolicy'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # User Policy Override
+  /v1/orgs/{orgId}/users/{userId}/token-policy:
+    get:
+      tags: [Policy Assignment]
+      summary: Get user's effective token policy
+      operationId: getUserTokenPolicy
+      security:
+        - bearerAuth: [org:read]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: User's effective policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EffectiveTokenPolicy'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Policy Assignment]
+      summary: Set user's token policy override
+      operationId: setUserTokenPolicyOverride
+      security:
+        - bearerAuth: [org:admin]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetPolicyRequest'
+      responses:
+        '200':
+          description: Override set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EffectiveTokenPolicy'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Policy Assignment]
+      summary: Remove user's token policy override (inherit org default)
+      operationId: clearUserTokenPolicyOverride
+      security:
+        - bearerAuth: [org:admin]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Override removed, now inherits org default
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EffectiveTokenPolicy'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # Usage Query
+  /v1/usage/tokens:
+    get:
+      tags: [Token Usage]
+      summary: Get own token usage
+      operationId: getOwnTokenUsage
+      security:
+        - bearerAuth: [user:read]
+      responses:
+        '200':
+          description: Current token usage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenUsage'
+
+  /v1/orgs/{orgId}/users/{userId}/usage/tokens:
+    get:
+      tags: [Token Usage]
+      summary: Get user's token usage (admin)
+      operationId: getUserTokenUsage
+      security:
+        - bearerAuth: [org:read]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: User's token usage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenUsage'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # Internal M2M endpoints
+  /internal/v1/users/{userId}/rate-limit:
+    get:
+      tags: [Token Usage]
+      summary: Check user's rate limit status (M2M)
+      operationId: checkRateLimit
+      security:
+        - m2mToken: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Rate limit status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitStatus'
+
+  /internal/v1/usage/tokens:
+    post:
+      tags: [Token Usage]
+      summary: Record token usage (M2M)
+      operationId: recordTokenUsage
+      security:
+        - m2mToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordUsageRequest'
+      responses:
+        '204':
+          description: Usage recorded
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    m2mToken:
+      type: http
+      scheme: bearer
+      description: Machine-to-machine service token
+
+  parameters:
+    OrgId:
+      name: orgId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Organization ID
+
+    PolicyId:
+      name: policyId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Policy ID (use 'no-limit' for built-in unlimited policy)
+
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: User ID
+
+  schemas:
+    TokenRateLimitPolicy:
+      type: object
+      required: [id, name, is_builtin, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Null for built-in policies
+        name:
+          type: string
+          example: "standard"
+        description:
+          type: string
+          nullable: true
+        limit_1h:
+          type: integer
+          format: int64
+          nullable: true
+          description: 1-hour rolling window limit (null = unlimited)
+          example: 10000
+        limit_24h:
+          type: integer
+          format: int64
+          nullable: true
+          description: 24-hour rolling window limit (null = unlimited)
+          example: 100000
+        limit_7d:
+          type: integer
+          format: int64
+          nullable: true
+          description: 7-day rolling window limit (null = unlimited)
+          example: 500000
+        is_builtin:
+          type: boolean
+          description: True for system "No Token Rate-Limit" policy
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateTokenPolicyRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        limit_1h:
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+        limit_24h:
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+        limit_7d:
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+
+    UpdateTokenPolicyRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+          nullable: true
+        limit_1h:
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+        limit_24h:
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+        limit_7d:
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+
+    SetPolicyRequest:
+      type: object
+      required: [policy_id]
+      properties:
+        policy_id:
+          type: string
+          format: uuid
+          description: Policy ID to assign (use well-known UUID for "No Token Rate-Limit")
+
+    EffectiveTokenPolicy:
+      type: object
+      required: [policy, source]
+      properties:
+        policy:
+          $ref: '#/components/schemas/TokenRateLimitPolicy'
+        source:
+          type: string
+          enum: [override, inherited]
+          description: Whether policy is user override or inherited from org
+
+    TokenUsage:
+      type: object
+      required: [policy_name, windows]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        policy_id:
+          type: string
+          format: uuid
+        policy_name:
+          type: string
+          example: "standard"
+        windows:
+          type: array
+          items:
+            $ref: '#/components/schemas/TokenUsageWindow'
+          description: Empty array if policy is "No Token Rate-Limit"
+
+    TokenUsageWindow:
+      type: object
+      required: [window, limit, used, remaining, percentage, resets_at]
+      properties:
+        window:
+          type: string
+          enum: [1h, 24h, 7d]
+        limit:
+          type: integer
+          format: int64
+        used:
+          type: integer
+          format: int64
+        remaining:
+          type: integer
+          format: int64
+          description: Can be negative if overage occurred
+        percentage:
+          type: number
+          format: float
+          minimum: 0
+          description: Percentage consumed (0-100+)
+        resets_at:
+          type: string
+          format: date-time
+          description: When this window resets
+
+    RateLimitStatus:
+      type: object
+      required: [allowed, windows]
+      properties:
+        allowed:
+          type: boolean
+          description: Whether request should be allowed
+        windows:
+          type: array
+          items:
+            $ref: '#/components/schemas/TokenUsageWindow'
+        blocking_window:
+          $ref: '#/components/schemas/TokenUsageWindow'
+          nullable: true
+          description: Which window is blocking (if not allowed)
+
+    RecordUsageRequest:
+      type: object
+      required: [user_id, tokens]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        tokens:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Total tokens (input + output)
+        idempotency_key:
+          type: string
+          description: Optional key to prevent duplicate recording
+
+    # Error responses (RFC7807)
+    ProblemDetails:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+          description: URI reference identifying the problem type
+        title:
+          type: string
+          description: Short human-readable summary
+        status:
+          type: integer
+          description: HTTP status code
+        detail:
+          type: string
+          description: Human-readable explanation
+        instance:
+          type: string
+          format: uri
+          description: URI reference to the specific occurrence
+
+    # OpenAI-compatible rate limit error
+    RateLimitError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [message, type, code]
+          properties:
+            message:
+              type: string
+              example: "Rate limit exceeded: 24h token limit (100000) reached. Resets at 2026-01-02T10:00:00Z"
+            type:
+              type: string
+              example: "tokens"
+            code:
+              type: string
+              example: "rate_limit_exceeded"
+            window:
+              type: string
+              enum: [1h, 24h, 7d]
+            limit:
+              type: integer
+              format: int64
+            used:
+              type: integer
+              format: int64
+            resets_at:
+              type: string
+              format: date-time
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+
+    Forbidden:
+      description: Operation not permitted (e.g., modifying built-in policy)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+
+    Conflict:
+      description: Conflict (e.g., duplicate name, policy in use)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+
+    RateLimitExceeded:
+      description: Token rate limit exceeded (OpenAI-compatible)
+      headers:
+        x-ratelimit-limit-tokens:
+          schema:
+            type: integer
+          description: The limit for this window
+        x-ratelimit-remaining-tokens:
+          schema:
+            type: integer
+          description: Remaining tokens (can be negative)
+        x-ratelimit-reset-tokens:
+          schema:
+            type: string
+            format: date-time
+          description: When the window resets
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds until reset
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/RateLimitError'
