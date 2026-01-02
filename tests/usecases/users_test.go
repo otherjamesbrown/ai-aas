@@ -11,12 +11,6 @@ import (
 // See: usecases/users.yaml
 // CLI helpers defined in helpers_test.go
 
-// runOrgCLIWithProfile executes an org CLI command with a profile
-func runOrgCLIWithProfile(profile string, args ...string) CLIResult {
-	fullArgs := append([]string{"--profile", profile}, args...)
-	return runOrgCLI(fullArgs...)
-}
-
 // UserJSON represents user data from JSON output
 type UserJSON struct {
 	ID          string `json:"userId"`
@@ -40,14 +34,20 @@ type ModelAccessJSON struct {
 // TestUC_USR_001_ListOrganizationUsers validates that organization admins can
 // list all users in their organization to understand who has access.
 func TestUC_USR_001_ListOrganizationUsers(t *testing.T) {
-	t.Run("AC-01: List all users in organization", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
+	skipIfNoLiveAPI(t)
 
+	// Create fresh org for test isolation
+	orgCtx := NewTestOrgContext(t)
+
+	// Create a test user so the org isn't empty
+	orgCtx.CreateUser("list-test-user", "user")
+
+	t.Run("AC-01: List all users in organization", func(t *testing.T) {
 		// Given: Organization has multiple users
 		// (precondition: org setup with users)
 
 		// When: User runs `ai-aas-org user list`
-		result := runOrgCLI("user", "list")
+		result := orgCtx.RunCLI("user", "list")
 
 		// Then: All users in the organization are listed
 		if result.ExitCode != 0 {
@@ -70,13 +70,11 @@ func TestUC_USR_001_ListOrganizationUsers(t *testing.T) {
 	})
 
 	t.Run("AC-02: List users with JSON output", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
-
 		// Given: Organization has multiple users
 		// (precondition: org setup with users)
 
 		// When: User runs `ai-aas-org user list --json`
-		result := runOrgCLI("user", "list", "--json")
+		result := orgCtx.RunCLI("user", "list", "--json")
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -112,24 +110,23 @@ func TestUC_USR_001_ListOrganizationUsers(t *testing.T) {
 	})
 
 	t.Run("AC-03: Empty organization displays helpful message", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
+		// Create a separate fresh org to test empty state
+		emptyOrgCtx := NewTestOrgContext(t)
 
 		// Given: Organization has no users (only the admin)
-		// (precondition: fresh org with only admin)
-
 		// When: User runs `ai-aas-org user list`
-		result := runOrgCLI("user", "list")
+		result := emptyOrgCtx.RunCLI("user", "list")
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
 			t.Fatalf("Expected exit code 0, got %d: %s", result.ExitCode, result.Output)
 		}
 
-		// Then: Message indicates no users found
+		// Then: Message indicates no users found or empty list
 		// Then: Suggestion to create a user is shown
 		output := strings.ToLower(result.Output)
-		if !strings.Contains(output, "no user") && !strings.Contains(output, "empty") {
-			t.Log("Warning: Expected message indicating no users found")
+		if !strings.Contains(output, "no user") && !strings.Contains(output, "empty") && !strings.Contains(output, "[]") {
+			t.Log("Warning: Expected message indicating no users found or empty list")
 		}
 
 		t.Logf("Empty org output:\n%s", result.Output)
@@ -143,14 +140,17 @@ func TestUC_USR_001_ListOrganizationUsers(t *testing.T) {
 // TestUC_USR_002_CreateUser validates that organization admins can create
 // new users who will be able to access AI models through the platform.
 func TestUC_USR_002_CreateUser(t *testing.T) {
-	t.Run("AC-01: Create user with required fields", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
+	skipIfNoLiveAPI(t)
 
+	// Create fresh org for test isolation
+	orgCtx := NewTestOrgContext(t)
+
+	t.Run("AC-01: Create user with required fields", func(t *testing.T) {
 		// Given: Admin is authenticated and email is not in use
 		testEmail := fmt.Sprintf("test-user-ac01-%s@example.com", generateUniqueID())
 
 		// When: User runs `ai-aas-org user create --user-email ... --user-display-name ...`
-		result := runOrgCLI("user", "create",
+		result := orgCtx.RunCLI("user", "create",
 			"--user-email", testEmail,
 			"--user-display-name", "Test User AC01")
 
@@ -166,7 +166,7 @@ func TestUC_USR_002_CreateUser(t *testing.T) {
 		}
 
 		// Verify: User appears in `ai-aas-org user list`
-		listResult := runOrgCLI("user", "list", "--json")
+		listResult := orgCtx.RunCLI("user", "list", "--json")
 		if !strings.Contains(listResult.Output, testEmail) {
 			t.Error("Created user should appear in user list")
 		}
@@ -178,20 +178,18 @@ func TestUC_USR_002_CreateUser(t *testing.T) {
 
 		// Register cleanup to delete the test user
 		t.Cleanup(func() {
-			runOrgCLI("user", "delete", testEmail, "--force")
+			orgCtx.RunCLI("user", "delete", testEmail, "--force")
 		})
 
 		t.Logf("Create user output:\n%s", result.Output)
 	})
 
 	t.Run("AC-02: Create user with admin role", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
-
 		// Given: Admin is authenticated
 		testEmail := fmt.Sprintf("test-admin-ac02-%s@example.com", generateUniqueID())
 
 		// When: User runs `ai-aas-org user create ... --role admin`
-		result := runOrgCLI("user", "create",
+		result := orgCtx.RunCLI("user", "create",
 			"--user-email", testEmail,
 			"--user-display-name", "Test Admin AC02",
 			"--role", "admin")
@@ -209,25 +207,23 @@ func TestUC_USR_002_CreateUser(t *testing.T) {
 
 		// Register cleanup to delete the test user
 		t.Cleanup(func() {
-			runOrgCLI("user", "delete", testEmail, "--force")
+			orgCtx.RunCLI("user", "delete", testEmail, "--force")
 		})
 
 		t.Logf("Create admin user output:\n%s", result.Output)
 	})
 
 	t.Run("AC-03: Reject duplicate email", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
-
 		// Given: Email is already registered in the organization
 		existingEmail := fmt.Sprintf("existing-user-ac03-%s@example.com", generateUniqueID())
 
 		// First create the user
-		runOrgCLI("user", "create",
+		orgCtx.RunCLI("user", "create",
 			"--user-email", existingEmail,
 			"--user-display-name", "Existing User")
 
 		// When: User runs create with same email
-		result := runOrgCLI("user", "create",
+		result := orgCtx.RunCLI("user", "create",
 			"--user-email", existingEmail,
 			"--user-display-name", "Duplicate User")
 
@@ -244,7 +240,7 @@ func TestUC_USR_002_CreateUser(t *testing.T) {
 
 		// Register cleanup to delete the test user
 		t.Cleanup(func() {
-			runOrgCLI("user", "delete", existingEmail, "--force")
+			orgCtx.RunCLI("user", "delete", existingEmail, "--force")
 		})
 
 		t.Logf("Duplicate email error:\n%s", result.Output)
@@ -270,14 +266,17 @@ func TestUC_USR_002_CreateUser(t *testing.T) {
 // TestUC_USR_003_ShowUserDetails validates that organization admins can view
 // detailed information about a specific user.
 func TestUC_USR_003_ShowUserDetails(t *testing.T) {
-	t.Run("AC-01: Show user by email", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
+	skipIfNoLiveAPI(t)
 
+	// Create fresh org for test isolation
+	orgCtx := NewTestOrgContext(t)
+
+	t.Run("AC-01: Show user by email", func(t *testing.T) {
 		// Given: User exists in the organization
-		testUser := createTestUser(t, "show-test", "user")
+		testUser := orgCtx.CreateUser("show-test", "user")
 
 		// When: User runs `ai-aas-org user show <email>`
-		result := runOrgCLI("user", "show", testUser.Email)
+		result := orgCtx.RunCLI("user", "show", testUser.Email)
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -303,13 +302,11 @@ func TestUC_USR_003_ShowUserDetails(t *testing.T) {
 	})
 
 	t.Run("AC-02: Show user by ID", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
-
 		// Given: User exists
-		testUser := createTestUser(t, "show-by-id", "user")
+		testUser := orgCtx.CreateUser("show-by-id", "user")
 
 		// When: User runs `ai-aas-org user show <id>`
-		result := runOrgCLI("user", "show", testUser.UserID)
+		result := orgCtx.RunCLI("user", "show", testUser.UserID)
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -326,13 +323,11 @@ func TestUC_USR_003_ShowUserDetails(t *testing.T) {
 	})
 
 	t.Run("AC-03: User not found", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
-
 		// Given: No user with the specified identifier exists
 		nonexistentEmail := "nonexistent-user-xyz@example.com"
 
 		// When: User runs `ai-aas-org user show <nonexistent>`
-		result := runOrgCLI("user", "show", nonexistentEmail)
+		result := orgCtx.RunCLI("user", "show", nonexistentEmail)
 
 		// Then: Command fails with exit code 5 (not found)
 		if result.ExitCode != 5 {
@@ -349,13 +344,11 @@ func TestUC_USR_003_ShowUserDetails(t *testing.T) {
 	})
 
 	t.Run("AC-04: Show user details as JSON", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
-
 		// Given: User exists in the organization
-		testUser := createTestUser(t, "json-test", "user")
+		testUser := orgCtx.CreateUser("json-test", "user")
 
 		// When: User runs `ai-aas-org user show <email> --json`
-		result := runOrgCLI("user", "show", testUser.Email, "--json")
+		result := orgCtx.RunCLI("user", "show", testUser.Email, "--json")
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -388,6 +381,11 @@ func TestUC_USR_003_ShowUserDetails(t *testing.T) {
 // TestUC_USR_004_DeleteUser validates that organization admins can remove
 // users from the organization, revoking all their API keys.
 func TestUC_USR_004_DeleteUser(t *testing.T) {
+	skipIfNoLiveAPI(t)
+
+	// Create fresh org for test isolation
+	orgCtx := NewTestOrgContext(t)
+
 	t.Run("AC-01: Delete user with confirmation", func(t *testing.T) {
 		t.Skip("requires live API and interactive terminal")
 
@@ -404,15 +402,13 @@ func TestUC_USR_004_DeleteUser(t *testing.T) {
 	})
 
 	t.Run("AC-02: Delete user with --force flag", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
-
 		// Given: User exists in the organization
 		// Use unique email to avoid conflicts from previous test runs
 		uniqueID := generateUniqueID()
 		testEmail := "delete-force-" + uniqueID + "@example.com"
 
 		// Setup: Create user to delete (check that creation succeeded)
-		createResult := runOrgCLI("user", "create",
+		createResult := orgCtx.RunCLI("user", "create",
 			"--user-email", testEmail,
 			"--user-display-name", "Delete Force User")
 		if createResult.ExitCode != 0 {
@@ -420,7 +416,7 @@ func TestUC_USR_004_DeleteUser(t *testing.T) {
 		}
 
 		// When: User runs `ai-aas-org user delete <email> --force`
-		result := runOrgCLI("user", "delete", testEmail, "--force")
+		result := orgCtx.RunCLI("user", "delete", testEmail, "--force")
 
 		// Then: No confirmation prompt is shown
 		// Then: User is deleted immediately
@@ -430,7 +426,7 @@ func TestUC_USR_004_DeleteUser(t *testing.T) {
 		}
 
 		// Verify: User no longer appears in user list
-		listResult := runOrgCLI("user", "list", "--json")
+		listResult := orgCtx.RunCLI("user", "list", "--json")
 		if strings.Contains(listResult.Output, testEmail) {
 			t.Error("Deleted user should not appear in user list")
 		}
@@ -439,13 +435,11 @@ func TestUC_USR_004_DeleteUser(t *testing.T) {
 	})
 
 	t.Run("AC-03: Delete non-existent user", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
-
 		// Given: No user with the specified identifier exists
 		nonexistentEmail := "nonexistent-delete@example.com"
 
 		// When: User runs `ai-aas-org user delete <nonexistent> --force`
-		result := runOrgCLI("user", "delete", nonexistentEmail, "--force")
+		result := orgCtx.RunCLI("user", "delete", nonexistentEmail, "--force")
 
 		// Then: Command fails with exit code 5 (not found)
 		if result.ExitCode != 5 {
@@ -482,14 +476,17 @@ func TestUC_USR_004_DeleteUser(t *testing.T) {
 // TestUC_USR_005_ListUserModelAccess validates that organization admins can
 // see which AI models a specific user has access to.
 func TestUC_USR_005_ListUserModelAccess(t *testing.T) {
-	t.Run("AC-01: List models for user with access", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
+	skipIfNoLiveAPI(t)
 
+	// Create fresh org for test isolation
+	orgCtx := NewTestOrgContext(t)
+
+	t.Run("AC-01: List models for user with access", func(t *testing.T) {
 		// Given: User has access to multiple models
-		testUser := createTestUser(t, "model-access", "user")
+		testUser := orgCtx.CreateUser("model-access", "user")
 
 		// When: User runs `ai-aas-org user models list --user <email>`
-		result := runOrgCLI("user", "models", "list", "--user", testUser.Email)
+		result := orgCtx.RunCLI("user", "models", "list", "--user", testUser.Email)
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -507,13 +504,11 @@ func TestUC_USR_005_ListUserModelAccess(t *testing.T) {
 	})
 
 	t.Run("AC-02: List models for user with no access", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
-
 		// Given: User has no model access
-		testUser := createTestUser(t, "restricted", "user")
+		testUser := orgCtx.CreateUser("restricted", "user")
 
 		// When: User runs `ai-aas-org user models list --user <email>`
-		result := runOrgCLI("user", "models", "list", "--user", testUser.Email)
+		result := orgCtx.RunCLI("user", "models", "list", "--user", testUser.Email)
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -531,13 +526,11 @@ func TestUC_USR_005_ListUserModelAccess(t *testing.T) {
 	})
 
 	t.Run("AC-03: List models with JSON output", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
-
 		// Given: User has access to models
-		testUser := createTestUser(t, "model-json", "user")
+		testUser := orgCtx.CreateUser("model-json", "user")
 
 		// When: User runs `ai-aas-org user models list --user <email> --json`
-		result := runOrgCLI("user", "models", "list", "--user", testUser.Email, "--json")
+		result := orgCtx.RunCLI("user", "models", "list", "--user", testUser.Email, "--json")
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -565,15 +558,18 @@ func TestUC_USR_005_ListUserModelAccess(t *testing.T) {
 // TestUC_USR_006_GrantUserModelAccess validates that organization admins can
 // grant users access to specific AI models.
 func TestUC_USR_006_GrantUserModelAccess(t *testing.T) {
-	t.Run("AC-01: Grant access to specific model", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
+	skipIfNoLiveAPI(t)
 
-		// Given: User exists and model "gpt-4" is available
-		testUser := createTestUser(t, "grant-access", "user")
-		testModel := "gpt-4"
+	// Create fresh org for test isolation
+	orgCtx := NewTestOrgContext(t)
+	testModel := getTestModel()
+
+	t.Run("AC-01: Grant access to specific model", func(t *testing.T) {
+		// Given: User exists and model is available
+		testUser := orgCtx.CreateUser("grant-access", "user")
 
 		// When: User runs `ai-aas-org user models add --user <email> --model <model>`
-		result := runOrgCLI("user", "models", "add",
+		result := orgCtx.RunCLI("user", "models", "add",
 			"--user", testUser.Email,
 			"--model", testModel)
 
@@ -590,7 +586,7 @@ func TestUC_USR_006_GrantUserModelAccess(t *testing.T) {
 		}
 
 		// Verify: Model appears in user's model list
-		listResult := runOrgCLI("user", "models", "list", "--user", testUser.Email, "--json")
+		listResult := orgCtx.RunCLI("user", "models", "list", "--user", testUser.Email, "--json")
 		if !strings.Contains(listResult.Output, testModel) {
 			t.Error("Granted model should appear in user's model list")
 		}
@@ -599,13 +595,11 @@ func TestUC_USR_006_GrantUserModelAccess(t *testing.T) {
 	})
 
 	t.Run("AC-02: Grant access to all models", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
-
 		// Given: User exists and organization has multiple models
-		testUser := createTestUser(t, "grant-all", "user")
+		testUser := orgCtx.CreateUser("grant-all", "user")
 
 		// When: User runs `ai-aas-org user models add --user <email> --all`
-		result := runOrgCLI("user", "models", "add",
+		result := orgCtx.RunCLI("user", "models", "add",
 			"--user", testUser.Email,
 			"--all")
 
@@ -622,19 +616,16 @@ func TestUC_USR_006_GrantUserModelAccess(t *testing.T) {
 	})
 
 	t.Run("AC-03: Grant access to model user already has", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
-
-		// Given: User already has access to "gpt-4"
-		testUser := createTestUser(t, "idempotent-grant", "user")
-		testModel := "gpt-4"
+		// Given: User already has access to model
+		testUser := orgCtx.CreateUser("idempotent-grant", "user")
 
 		// First grant
-		runOrgCLI("user", "models", "add",
+		orgCtx.RunCLI("user", "models", "add",
 			"--user", testUser.Email,
 			"--model", testModel)
 
 		// When: User runs grant again
-		result := runOrgCLI("user", "models", "add",
+		result := orgCtx.RunCLI("user", "models", "add",
 			"--user", testUser.Email,
 			"--model", testModel)
 
@@ -654,8 +645,6 @@ func TestUC_USR_006_GrantUserModelAccess(t *testing.T) {
 	})
 
 	t.Run("AC-04: Grant access to unavailable model", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
-
 		// KNOWN GAP: Backend (user-org-service) does not currently validate that models
 		// exist before granting access. This requires cross-service validation between
 		// user-org-service and admin-api-service model registry.
@@ -663,11 +652,11 @@ func TestUC_USR_006_GrantUserModelAccess(t *testing.T) {
 		t.Skip("skipping: backend model validation not yet implemented (tracked by aas-uadrw)")
 
 		// Given: Model "restricted-model" is not available to the organization
-		testUser := createTestUser(t, "unavailable-model", "user")
+		testUser := orgCtx.CreateUser("unavailable-model", "user")
 		unavailableModel := "restricted-model-xyz"
 
 		// When: User runs `ai-aas-org user models add --user <email> --model <unavailable>`
-		result := runOrgCLI("user", "models", "add",
+		result := orgCtx.RunCLI("user", "models", "add",
 			"--user", testUser.Email,
 			"--model", unavailableModel)
 
@@ -694,20 +683,23 @@ func TestUC_USR_006_GrantUserModelAccess(t *testing.T) {
 // TestUC_USR_007_RevokeUserModelAccess validates that organization admins can
 // revoke a user's access to specific AI models.
 func TestUC_USR_007_RevokeUserModelAccess(t *testing.T) {
-	t.Run("AC-01: Revoke access to specific model", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
+	skipIfNoLiveAPI(t)
 
-		// Given: User has access to model "gpt-4"
-		testUser := createTestUser(t, "revoke-access", "user")
-		testModel := "gpt-4"
+	// Create fresh org for test isolation
+	orgCtx := NewTestOrgContext(t)
+	testModel := getTestModel()
+
+	t.Run("AC-01: Revoke access to specific model", func(t *testing.T) {
+		// Given: User has access to model
+		testUser := orgCtx.CreateUser("revoke-access", "user")
 
 		// Setup: Ensure user has access
-		runOrgCLI("user", "models", "add",
+		orgCtx.RunCLI("user", "models", "add",
 			"--user", testUser.Email,
 			"--model", testModel)
 
 		// When: User runs `ai-aas-org user models remove --user <email> --model <model> --force`
-		result := runOrgCLI("user", "models", "remove",
+		result := orgCtx.RunCLI("user", "models", "remove",
 			"--user", testUser.Email,
 			"--model", testModel,
 			"--force")
@@ -725,7 +717,7 @@ func TestUC_USR_007_RevokeUserModelAccess(t *testing.T) {
 		}
 
 		// Verify: Model no longer appears in user's model list
-		listResult := runOrgCLI("user", "models", "list", "--user", testUser.Email, "--json")
+		listResult := orgCtx.RunCLI("user", "models", "list", "--user", testUser.Email, "--json")
 		if strings.Contains(listResult.Output, testModel) {
 			t.Error("Revoked model should not appear in user's model list")
 		}
@@ -734,14 +726,11 @@ func TestUC_USR_007_RevokeUserModelAccess(t *testing.T) {
 	})
 
 	t.Run("AC-02: Revoke access to model user doesn't have", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
-
-		// Given: User does not have access to "gpt-4"
-		testUser := createTestUser(t, "no-access-revoke", "user")
-		testModel := "gpt-4"
+		// Given: User does not have access to model
+		testUser := orgCtx.CreateUser("no-access-revoke", "user")
 
 		// When: User runs `ai-aas-org user models remove --user <email> --model <model> --force`
-		result := runOrgCLI("user", "models", "remove",
+		result := orgCtx.RunCLI("user", "models", "remove",
 			"--user", testUser.Email,
 			"--model", testModel,
 			"--force")
@@ -762,14 +751,11 @@ func TestUC_USR_007_RevokeUserModelAccess(t *testing.T) {
 	})
 
 	t.Run("AC-03: Revoke access for non-existent user", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
-
 		// Given: No user "nonexistent@example.com" exists
 		nonexistentEmail := "nonexistent-revoke@example.com"
-		testModel := "gpt-4"
 
 		// When: User runs `ai-aas-org user models remove --user <nonexistent> --model <model> --force`
-		result := runOrgCLI("user", "models", "remove",
+		result := orgCtx.RunCLI("user", "models", "remove",
 			"--user", nonexistentEmail,
 			"--model", testModel,
 			"--force")

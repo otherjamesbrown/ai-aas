@@ -25,6 +25,9 @@ const (
 	envAnalyticsURL    = "AI_AAS_ANALYTICS_URL"
 	envAdminAPIKey     = "AI_AAS_ADMIN_API_KEY"
 	envTestModel       = "AI_AAS_TEST_MODEL"
+	// Persistent metrics org for analytics/usage tests that need historical data
+	envMetricsOrgID  = "AI_AAS_METRICS_ORG_ID"
+	envMetricsAPIKey = "AI_AAS_METRICS_API_KEY"
 )
 
 // skipIfNoLiveAPI skips the test if the live API is not configured.
@@ -605,4 +608,302 @@ func skipIfNoVLLMBackend(t *testing.T) {
 	// Any other response (401 unauthorized, 400 bad request, 500 other error)
 	// means the endpoint exists and tests should proceed
 	// The actual tests will handle authentication and validation
+}
+
+// TestOrgContext provides a fresh organization context for CLI tests.
+// Each test gets its own isolated org, service account, and API key.
+// This prevents quota collisions between tests using the master admin org.
+type TestOrgContext struct {
+	t          *testing.T
+	OrgID      string
+	OrgName    string
+	APIKey     string
+	configPath string
+	client     *TestClient
+}
+
+// NewTestOrgContext creates a fresh org with service account and API key for testing.
+// The org and all associated resources are automatically cleaned up after the test.
+// Use this instead of runOrgCLI when you need an isolated org that won't hit quota limits.
+func NewTestOrgContext(t *testing.T) *TestOrgContext {
+	t.Helper()
+
+	adminEndpoint := getAPIEndpoint()
+	adminKey := getAdminAPIKey()
+	apiRouterURL := getAPIRouterURL()
+
+	if adminEndpoint == "" || adminKey == "" {
+		t.Skip("requires live API: set AI_AAS_API_ENDPOINT and AI_AAS_ADMIN_API_KEY")
+	}
+
+	client := NewTestClient(adminEndpoint, adminKey)
+
+	// Create a unique org name
+	uniqueID := generateUniqueID()
+	orgName := "test-org-" + uniqueID
+	orgSlug := "test-" + uniqueID
+
+	// Create organization via Admin API
+	orgResp, err := client.POST("/v1/orgs", map[string]interface{}{
+		"name": orgName,
+		"slug": orgSlug,
+	})
+	if err != nil {
+		t.Fatalf("failed to create test org: %v", err)
+	}
+	if orgResp.StatusCode != 200 && orgResp.StatusCode != 201 {
+		t.Fatalf("failed to create test org: status %d, body: %s", orgResp.StatusCode, orgResp.String())
+	}
+
+	var org struct {
+		OrgID string `json:"orgId"`
+	}
+	if err := orgResp.DecodeJSON(&org); err != nil {
+		t.Fatalf("failed to parse org response: %v", err)
+	}
+
+	// Create service account
+	saResp, err := client.POST("/v1/orgs/"+org.OrgID+"/service-accounts", map[string]interface{}{
+		"name": "test-sa-" + uniqueID,
+	})
+	if err != nil {
+		// Cleanup org before failing
+		client.DELETE("/v1/orgs/" + org.OrgID)
+		t.Fatalf("failed to create service account: %v", err)
+	}
+	if saResp.StatusCode != 200 && saResp.StatusCode != 201 {
+		client.DELETE("/v1/orgs/" + org.OrgID)
+		t.Fatalf("failed to create service account: status %d, body: %s", saResp.StatusCode, saResp.String())
+	}
+
+	var sa struct {
+		ServiceAccountID string `json:"serviceAccountId"`
+	}
+	if err := saResp.DecodeJSON(&sa); err != nil {
+		client.DELETE("/v1/orgs/" + org.OrgID)
+		t.Fatalf("failed to parse service account response: %v", err)
+	}
+
+	// Create API key with full scopes
+	keyResp, err := client.POST("/v1/orgs/"+org.OrgID+"/service-accounts/"+sa.ServiceAccountID+"/api-keys", map[string]interface{}{
+		"name":   "test-key-" + uniqueID,
+		"scopes": []string{"inference:read", "inference:write", "org:read", "org:write", "admin:read", "admin:write"},
+	})
+	if err != nil {
+		client.DELETE("/v1/orgs/" + org.OrgID)
+		t.Fatalf("failed to create API key: %v", err)
+	}
+	if keyResp.StatusCode != 200 && keyResp.StatusCode != 201 {
+		client.DELETE("/v1/orgs/" + org.OrgID)
+		t.Fatalf("failed to create API key: status %d, body: %s", keyResp.StatusCode, keyResp.String())
+	}
+
+	var apiKey struct {
+		Token string `json:"token"`
+	}
+	if err := keyResp.DecodeJSON(&apiKey); err != nil {
+		client.DELETE("/v1/orgs/" + org.OrgID)
+		t.Fatalf("failed to parse API key response: %v", err)
+	}
+
+	// Create temp config file for CLI
+	configContent := "api_endpoint: " + adminEndpoint + "\n"
+	configContent += "admin_endpoint: " + adminEndpoint + "\n"
+	configContent += "api_key: " + apiKey.Token + "\n"
+	configContent += "org_id: " + org.OrgID + "\n"
+	if apiRouterURL != "" {
+		configContent += "inference_endpoint: " + apiRouterURL + "\n"
+	}
+
+	tmpFile, err := os.CreateTemp("", "ai-aas-org-test-*.yaml")
+	if err != nil {
+		client.DELETE("/v1/orgs/" + org.OrgID)
+		t.Fatalf("failed to create temp config: %v", err)
+	}
+	tmpFile.WriteString(configContent)
+	tmpFile.Close()
+
+	ctx := &TestOrgContext{
+		t:          t,
+		OrgID:      org.OrgID,
+		OrgName:    orgName,
+		APIKey:     apiKey.Token,
+		configPath: tmpFile.Name(),
+		client:     client,
+	}
+
+	// Register cleanup
+	t.Cleanup(func() {
+		// Delete org (cascades to service accounts and API keys)
+		resp, err := client.DELETE("/v1/orgs/" + ctx.OrgID)
+		if err != nil {
+			t.Logf("Warning: failed to cleanup test org %s: %v", ctx.OrgID, err)
+		} else if resp.StatusCode != 200 && resp.StatusCode != 204 && resp.StatusCode != 404 {
+			t.Logf("Warning: cleanup returned status %d for org %s", resp.StatusCode, ctx.OrgID)
+		}
+		// Remove temp config file
+		os.Remove(ctx.configPath)
+	})
+
+	return ctx
+}
+
+// RunCLI executes an ai-aas-org command in the context of this test org.
+// The command automatically uses the test org's credentials.
+func (ctx *TestOrgContext) RunCLI(args ...string) CLIResult {
+	return runOrgCLIWithConfig(ctx.configPath, args...)
+}
+
+// TestUserInContext represents a user created within a TestOrgContext
+type TestUserInContext struct {
+	Email       string
+	DisplayName string
+	UserID      string
+	Role        string
+}
+
+// CreateUser creates a user within this test org and registers cleanup.
+// Returns the created user's details.
+func (ctx *TestOrgContext) CreateUser(emailPrefix string, role string) *TestUserInContext {
+	ctx.t.Helper()
+
+	timestamp := generateUniqueID()
+	email := emailPrefix + "-" + timestamp + "@example.com"
+	displayName := "Test User " + timestamp
+
+	args := []string{"user", "create", "--user-email", email, "--user-display-name", displayName}
+	if role != "" && role != "user" {
+		args = append(args, "--role", role)
+	}
+
+	result := ctx.RunCLI(args...)
+	if result.ExitCode != 0 {
+		ctx.t.Fatalf("Failed to create test user: %s", result.Output)
+	}
+
+	// Extract user ID from output using JSON
+	listResult := ctx.RunCLI("user", "list", "--json")
+	if listResult.ExitCode != 0 {
+		ctx.t.Fatalf("Failed to list users to find created user: %s", listResult.Output)
+	}
+
+	var users []struct {
+		ID    string `json:"userId"`
+		Email string `json:"email"`
+		Role  string `json:"role"`
+	}
+	if err := json.Unmarshal([]byte(listResult.Output), &users); err != nil {
+		ctx.t.Fatalf("Failed to parse user list: %v\nOutput: %s", err, listResult.Output)
+	}
+
+	var userID string
+	for _, u := range users {
+		if u.Email == email {
+			userID = u.ID
+			break
+		}
+	}
+
+	if userID == "" {
+		ctx.t.Fatalf("Created user %s not found in user list. Found %d users total.", email, len(users))
+	}
+
+	testUser := &TestUserInContext{
+		Email:       email,
+		DisplayName: displayName,
+		UserID:      userID,
+		Role:        role,
+	}
+
+	// Register cleanup to delete the user after the test
+	ctx.t.Cleanup(func() {
+		cleanupResult := ctx.RunCLI("user", "delete", email, "--force")
+		if cleanupResult.ExitCode != 0 && cleanupResult.ExitCode != 5 {
+			ctx.t.Logf("Warning: Failed to cleanup test user %s: %s", email, cleanupResult.Output)
+		}
+	})
+
+	return testUser
+}
+
+// GetMetricsOrgID returns the persistent metrics org ID for tests that need historical data.
+// Returns empty string if not configured (test should skip).
+func getMetricsOrgID() string {
+	return os.Getenv(envMetricsOrgID)
+}
+
+// GetMetricsAPIKey returns the API key for the persistent metrics org.
+// Returns empty string if not configured (test should skip).
+func getMetricsAPIKey() string {
+	return os.Getenv(envMetricsAPIKey)
+}
+
+// skipIfNoMetricsOrg skips the test if the persistent metrics org is not configured.
+// Use this for tests that require historical usage data.
+func skipIfNoMetricsOrg(t *testing.T) {
+	t.Helper()
+	if os.Getenv(envMetricsOrgID) == "" {
+		t.Skip("requires persistent metrics org: set AI_AAS_METRICS_ORG_ID and AI_AAS_METRICS_API_KEY")
+	}
+}
+
+// RunMetricsOrgCLI executes an ai-aas-org command against the persistent metrics org.
+// Use this for tests that need to verify historical usage/analytics data.
+func runMetricsOrgCLI(args ...string) CLIResult {
+	cmd := exec.Command("ai-aas-org", args...)
+	cmd.Env = os.Environ()
+
+	// Create temp config with metrics org credentials
+	endpoint := os.Getenv(envAPIEndpoint)
+	apiKey := os.Getenv(envMetricsAPIKey)
+	orgID := os.Getenv(envMetricsOrgID)
+	apiRouterURL := getAPIRouterURL()
+
+	if endpoint == "" || apiKey == "" || orgID == "" {
+		return CLIResult{
+			Error:    "metrics org not configured",
+			ExitCode: 1,
+		}
+	}
+
+	configContent := "api_endpoint: " + endpoint + "\n"
+	configContent += "admin_endpoint: " + endpoint + "\n"
+	configContent += "api_key: " + apiKey + "\n"
+	configContent += "org_id: " + orgID + "\n"
+	if apiRouterURL != "" {
+		configContent += "inference_endpoint: " + apiRouterURL + "\n"
+	}
+
+	tmpFile, err := os.CreateTemp("", "ai-aas-metrics-org-*.yaml")
+	if err != nil {
+		return CLIResult{
+			Error:    "failed to create temp config: " + err.Error(),
+			ExitCode: 1,
+		}
+	}
+	tmpFile.WriteString(configContent)
+	tmpFile.Close()
+	defer os.Remove(tmpFile.Name())
+
+	args = append([]string{"--config", tmpFile.Name()}, args...)
+	cmd = exec.Command("ai-aas-org", args...)
+	cmd.Env = os.Environ()
+
+	output, err := cmd.CombinedOutput()
+
+	result := CLIResult{
+		Output:   string(output),
+		ExitCode: 0,
+	}
+
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			result.ExitCode = exitErr.ExitCode()
+		} else {
+			result.ExitCode = 1
+		}
+		result.Error = err.Error()
+	}
+
+	return result
 }

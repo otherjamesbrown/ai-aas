@@ -15,12 +15,15 @@ import (
 // Use Case: UC-MDL-001 - List Available Models
 // See: usecases/models.yaml
 func TestUC_MDL_001_ListAvailableModels(t *testing.T) {
-	t.Run("AC-01: list all available models", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
+	skipIfNoLiveAPI(t)
 
+	// Create fresh org for test isolation
+	orgCtx := NewTestOrgContext(t)
+
+	t.Run("AC-01: list all available models", func(t *testing.T) {
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org model list`
-		result := runOrgCLI("model", "list")
+		result := orgCtx.RunCLI("model", "list")
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -36,11 +39,9 @@ func TestUC_MDL_001_ListAvailableModels(t *testing.T) {
 	})
 
 	t.Run("AC-02: list models with JSON output", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
-
 		// Given: User is authenticated with org admin API key
 		// When: User runs `ai-aas-org model list --json`
-		result := runOrgCLI("model", "list", "--json")
+		result := orgCtx.RunCLI("model", "list", "--json")
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -60,11 +61,11 @@ func TestUC_MDL_001_ListAvailableModels(t *testing.T) {
 	})
 
 	t.Run("AC-03: handle no models available", func(t *testing.T) {
-		skipIfNoLiveAPIWithReason(t, "with empty org")
-
+		// This test uses a fresh org which may not have models assigned
+		// The fresh org created above should return an empty list or handle gracefully
 		// Given: Organization has no models assigned
 		// When: User runs `ai-aas-org model list`
-		result := runOrgCLI("model", "list")
+		result := orgCtx.RunCLI("model", "list")
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -82,13 +83,16 @@ func TestUC_MDL_001_ListAvailableModels(t *testing.T) {
 // Use Case: UC-MDL-002 - Show Model Details
 // See: usecases/models.yaml
 func TestUC_MDL_002_ShowModelDetails(t *testing.T) {
-	t.Run("AC-01: show details for valid model", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
+	skipIfNoLiveAPI(t)
 
+	// Create fresh org for test isolation
+	orgCtx := NewTestOrgContext(t)
+	modelName := getTestModel()
+
+	t.Run("AC-01: show details for valid model", func(t *testing.T) {
 		// Given: User is authenticated and a model is available
-		modelName := getTestModel()
 		// When: User runs `ai-aas-org model show <model>`
-		result := runOrgCLI("model", "show", modelName)
+		result := orgCtx.RunCLI("model", "show", modelName)
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -102,12 +106,9 @@ func TestUC_MDL_002_ShowModelDetails(t *testing.T) {
 	})
 
 	t.Run("AC-02: show details with JSON output", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
-
 		// Given: User is authenticated and a model is available
-		modelName := getTestModel()
 		// When: User runs `ai-aas-org model show <model> --json`
-		result := runOrgCLI("model", "show", modelName, "--json")
+		result := orgCtx.RunCLI("model", "show", modelName, "--json")
 
 		// Then: Exit code is 0
 		if result.ExitCode != 0 {
@@ -127,11 +128,9 @@ func TestUC_MDL_002_ShowModelDetails(t *testing.T) {
 	})
 
 	t.Run("AC-03: reject request for non-existent model", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
-
 		// Given: User specifies a model that doesn't exist
 		// When: User runs `ai-aas-org model show nonexistent-model`
-		result := runOrgCLI("model", "show", "nonexistent-model")
+		result := orgCtx.RunCLI("model", "show", "nonexistent-model")
 
 		// Then: Command fails with exit code 5 (not found)
 		if result.ExitCode != 5 {
@@ -143,7 +142,6 @@ func TestUC_MDL_002_ShowModelDetails(t *testing.T) {
 	})
 
 	t.Run("AC-04: reject request for unauthorized model", func(t *testing.T) {
-		skipIfNoLiveAPI(t)
 		// TODO: This test requires setting up a model with restricted access
 		// which is not currently possible in the test environment.
 		// Skip until model-level authorization is implemented.
@@ -151,7 +149,7 @@ func TestUC_MDL_002_ShowModelDetails(t *testing.T) {
 
 		// Given: User specifies a model they don't have access to
 		// When: User runs `ai-aas-org model show restricted-model`
-		result := runOrgCLI("model", "show", "restricted-model")
+		result := orgCtx.RunCLI("model", "show", "restricted-model")
 
 		// Then: Command fails with exit code 4 (auth error)
 		if result.ExitCode != 4 {
