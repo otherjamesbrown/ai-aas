@@ -547,8 +547,8 @@ func skipIfNoVLLMBackend(t *testing.T) {
 		return
 	}
 
-	// Use admin API key to check if routing policies/backends are configured
-	// If no admin key is available, we cannot check backend availability
+	// Use admin API key to check if models are available via /v1/models
+	// This doesn't consume quota like an inference request would
 	adminKey := getAdminAPIKey()
 	if adminKey == "" {
 		// No credentials available - cannot verify backend availability
@@ -559,15 +559,9 @@ func skipIfNoVLLMBackend(t *testing.T) {
 
 	client := NewTestClient(apiRouterURL, adminKey)
 
-	// Try a minimal request to see if the endpoint exists
-	reqBody := map[string]interface{}{
-		"model": getTestModel(),
-		"messages": []map[string]interface{}{
-			{"role": "user", "content": "test"},
-		},
-	}
-
-	resp, err := client.POST("/v1/chat/completions", reqBody)
+	// Check /v1/models to see if any models are available
+	// This is a read-only endpoint that doesn't consume quota
+	resp, err := client.GET("/v1/models")
 
 	// If we get a network error or connection refused, backend is not available
 	if err != nil {
@@ -575,14 +569,31 @@ func skipIfNoVLLMBackend(t *testing.T) {
 		return
 	}
 
-	// Check response body for common "no backend" indicators
+	// Check response body for model availability
 	bodyStr := resp.String()
 	lowerBody := strings.ToLower(bodyStr)
 
-	// If we get a "route not found" error (404), the API router has no vLLM backends configured
-	if resp.StatusCode == 404 && strings.Contains(lowerBody, "route not found") {
-		t.Skip("Skipping: no vLLM backend available in this environment (route not found)")
+	// If we get a 404 or auth error, check if it's a "no models" situation
+	if resp.StatusCode == 404 {
+		t.Skip("Skipping: no vLLM backend available in this environment (models endpoint not found)")
 		return
+	}
+
+	// If we get a successful response, check if there are any models
+	if resp.StatusCode == 200 {
+		var modelsResp struct {
+			Data []struct {
+				ID string `json:"id"`
+			} `json:"data"`
+		}
+		if err := resp.DecodeJSON(&modelsResp); err == nil {
+			if len(modelsResp.Data) == 0 {
+				t.Skip("Skipping: no models available in this environment")
+				return
+			}
+			// Models are available, tests can proceed
+			return
+		}
 	}
 
 	// If we get a "no routing policy configured" error, there are no backends configured
@@ -591,14 +602,7 @@ func skipIfNoVLLMBackend(t *testing.T) {
 		return
 	}
 
-	// If we get a quota exceeded error, we cannot reliably check backend availability
-	// Skip the test to avoid false failures when the admin key has exceeded quota
-	if resp.StatusCode == 402 || strings.Contains(lowerBody, "quota_exceeded") || strings.Contains(lowerBody, "quota exceeded") {
-		t.Skip("Skipping: cannot verify vLLM backend availability (quota exceeded)")
-		return
-	}
-
-	// Any other response (401 unauthorized, 400 bad request, 200 success, 500 other error)
+	// Any other response (401 unauthorized, 400 bad request, 500 other error)
 	// means the endpoint exists and tests should proceed
 	// The actual tests will handle authentication and validation
 }
