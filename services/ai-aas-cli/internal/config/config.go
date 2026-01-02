@@ -108,17 +108,7 @@ func Load() (*Config, error) {
 	}
 
 	var cfg Config
-
-	// DEBUG: Log what viper sees (aas-lehh6)
-	cwd, _ := os.Getwd()
-	fmt.Fprintf(os.Stderr, "[DEBUG aas-lehh6] Viper values before unmarshal:\n")
-	fmt.Fprintf(os.Stderr, "[DEBUG aas-lehh6]   current working directory: %s\n", cwd)
-	fmt.Fprintf(os.Stderr, "[DEBUG aas-lehh6]   config file used: %s\n", viper.ConfigFileUsed())
-	fmt.Fprintf(os.Stderr, "[DEBUG aas-lehh6]   viper.GetString('api_endpoint'): %s\n", viper.GetString("api_endpoint"))
-	fmt.Fprintf(os.Stderr, "[DEBUG aas-lehh6]   viper.GetString('admin_api_endpoint'): %s\n", viper.GetString("admin_api_endpoint"))
-	fmt.Fprintf(os.Stderr, "[DEBUG aas-lehh6]   viper.GetString('user_org_endpoint'): %s\n", viper.GetString("user_org_endpoint"))
-
-	if err := viper.Unmarshal(&cfg); err != nil {
+	if err := viper.Unmarshal(&cfg); err != nil{
 		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
 

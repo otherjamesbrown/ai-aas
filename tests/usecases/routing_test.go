@@ -22,8 +22,6 @@ func uniqueModelName(prefix string) string {
 // A platform operator wants to create or update a routing policy that directs
 // traffic for a specific model to one or more backend endpoints.
 func TestUC_RTG_001_ConfigureBackendEndpoint(t *testing.T) {
-	t.Skip("UC-RTG tests skipped - infra-gap: test environment gets 404 from routing endpoints despite manual execution succeeding. See aas-lehh6 for investigation.")
-
 	t.Run("AC-01: create global routing policy with single backend", func(t *testing.T) {
 		skipIfNoPlatformCLI(t)
 
@@ -190,8 +188,6 @@ func TestUC_RTG_001_ConfigureBackendEndpoint(t *testing.T) {
 // A platform operator needs to temporarily disable traffic to a backend
 // (during maintenance or issues) or re-enable it after resolution.
 func TestUC_RTG_003_EnableDisableBackend(t *testing.T) {
-	t.Skip("UC-RTG tests skipped - infra-gap: test environment gets 404 from routing endpoints despite manual execution succeeding. See aas-lehh6 for investigation.")
-
 	t.Run("AC-01: disable backend by deleting global policy", func(t *testing.T) {
 		skipIfNoPlatformCLI(t)
 		t.Skip("UC-RTG-003/AC-01 requires interactive confirmation - CLI currently uses --policy-id instead of --global --model")
@@ -300,8 +296,6 @@ func TestUC_RTG_003_EnableDisableBackend(t *testing.T) {
 // current traffic distribution, troubleshoot routing issues, or audit
 // configuration changes.
 func TestUC_RTG_004_ViewRoutingConfiguration(t *testing.T) {
-	t.Skip("UC-RTG tests skipped - infra-gap: test environment gets 404 from routing endpoints despite manual execution succeeding. See aas-lehh6 for investigation.")
-
 	t.Run("AC-01: list all routing policies", func(t *testing.T) {
 		skipIfNoPlatformCLI(t)
 
