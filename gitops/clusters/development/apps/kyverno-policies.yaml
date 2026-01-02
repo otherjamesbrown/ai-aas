@@ -1,0 +1,43 @@
+# Kyverno Policies ArgoCD Application
+# Deploys platform-specific policies from gitops/clusters/development/policies/
+# Requires kyverno to be installed first (see kyverno.yaml)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kyverno-policies-development
+  namespace: argocd
+  labels:
+    environment: development
+    app: kyverno-policies
+  annotations:
+    # Sync wave to ensure Kyverno is installed before policies
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform-development
+  source:
+    repoURL: https://github.com/otherjamesbrown/ai-aas
+    targetRevision: develop
+    path: gitops/clusters/development/policies
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    # ClusterPolicy is cluster-scoped, namespace is just for tracking
+    namespace: kyverno
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=false
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

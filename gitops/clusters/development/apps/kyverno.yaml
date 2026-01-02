@@ -1,0 +1,112 @@
+# Kyverno Policy Engine ArgoCD Application
+# Provides Kubernetes-native policy management for admission control
+# Docs: https://kyverno.io/docs/installation/methods/
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kyverno-development
+  namespace: argocd
+  labels:
+    environment: development
+    app: kyverno
+  annotations:
+    # ServerSideDiff for ArgoCD v2.10+ - resolves OutOfSync issues
+    argocd.argoproj.io/compare-options: ServerSideDiff=true,IncludeMutationWebhook=true
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform-development
+  source:
+    repoURL: https://kyverno.github.io/kyverno
+    chart: kyverno
+    targetRevision: 3.3.4
+    helm:
+      releaseName: kyverno
+      values: |
+        # Admission controller configuration
+        admissionController:
+          replicas: 1  # Single replica for development (increase for prod)
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+        # Background controller - handles background scans and reports
+        backgroundController:
+          replicas: 1
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+
+        # Cleanup controller - handles policy cleanup tasks
+        cleanupController:
+          replicas: 1
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+
+        # Reports controller - handles policy reports
+        reportsController:
+          replicas: 1
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+
+        # Webhook configuration
+        config:
+          # Default failure policy for webhooks
+          webhooks:
+            # Use Ignore in dev to prevent blocking on Kyverno issues
+            # Change to Fail in production for strict enforcement
+            failurePolicy: Ignore
+          # Exclude system namespaces from policy enforcement
+          excludeGroups:
+            - system:nodes
+          resourceFilters:
+            - "[Event,*,*]"
+            - "[*,kube-system,*]"
+            - "[*,kube-public,*]"
+            - "[*,kube-node-lease,*]"
+
+        # Enable metrics for Prometheus
+        metricsService:
+          create: true
+          port: 8000
+          annotations:
+            prometheus.io/scrape: "true"
+            prometheus.io/port: "8000"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kyverno
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - Replace=true
+      - ServerSideApply=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

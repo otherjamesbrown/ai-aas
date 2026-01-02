@@ -463,3 +463,116 @@ jobs:
           fi
 
           echo "✅ All environments have kubeconfig files"
+
+  kyverno-policy-validation:
+    name: Kyverno Policy Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Kyverno CLI
+        run: |
+          # Install kyverno CLI for policy validation
+          curl -LO https://github.com/kyverno/kyverno/releases/download/v1.13.1/kyverno-cli_v1.13.1_linux_x86_64.tar.gz
+          tar -xzf kyverno-cli_v1.13.1_linux_x86_64.tar.gz
+          sudo mv kyverno /usr/local/bin/
+          kyverno version
+
+      - name: Validate Kyverno Policies
+        run: |
+          set -e
+          echo "Validating Kyverno ClusterPolicy files..."
+          echo ""
+
+          ERRORS=0
+
+          # Find all Kyverno policy files
+          POLICY_FILES=$(find gitops/clusters -name "*.yaml" -path "*/policies/*" -type f 2>/dev/null || true)
+
+          if [ -z "$POLICY_FILES" ]; then
+            echo "No Kyverno policy files found in gitops/clusters/*/policies/"
+            exit 0
+          fi
+
+          for policy in $POLICY_FILES; do
+            echo "Validating $policy..."
+
+            # Use kyverno CLI to validate the policy
+            if kyverno validate "$policy" 2>&1; then
+              echo "  ✅ Valid policy"
+            else
+              echo "  ❌ Invalid policy: $policy"
+              ERRORS=$((ERRORS + 1))
+            fi
+          done
+
+          echo ""
+
+          if [ $ERRORS -gt 0 ]; then
+            echo "❌ Found $ERRORS invalid Kyverno policies"
+            echo ""
+            echo "Kyverno policy validation failed. Check the policy syntax and structure."
+            echo "Reference: https://kyverno.io/docs/writing-policies/"
+            exit 1
+          fi
+
+          echo "✅ All Kyverno policies are valid"
+
+      - name: Check ClusterPolicy Structure
+        run: |
+          set -e
+          echo "Checking ClusterPolicy structure..."
+          echo ""
+
+          # Install yq
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+          ERRORS=0
+
+          POLICY_FILES=$(find gitops/clusters -name "*.yaml" -path "*/policies/*" -type f 2>/dev/null || true)
+
+          for policy in $POLICY_FILES; do
+            echo "Checking $policy..."
+
+            KIND=$(yq e '.kind' "$policy" 2>/dev/null || echo "")
+            if [ "$KIND" != "ClusterPolicy" ] && [ "$KIND" != "Policy" ]; then
+              echo "  ⚠️  Not a Kyverno policy (kind=$KIND), skipping"
+              continue
+            fi
+
+            # Check for required fields
+            NAME=$(yq e '.metadata.name' "$policy" 2>/dev/null || echo "")
+            if [ -z "$NAME" ] || [ "$NAME" = "null" ]; then
+              echo "  ❌ Missing metadata.name"
+              ERRORS=$((ERRORS + 1))
+            fi
+
+            RULES=$(yq e '.spec.rules | length' "$policy" 2>/dev/null || echo "0")
+            if [ "$RULES" = "0" ]; then
+              echo "  ❌ No rules defined in spec.rules"
+              ERRORS=$((ERRORS + 1))
+            fi
+
+            # Check validationFailureAction
+            ACTION=$(yq e '.spec.validationFailureAction' "$policy" 2>/dev/null || echo "")
+            if [ -z "$ACTION" ] || [ "$ACTION" = "null" ]; then
+              echo "  ⚠️  Missing validationFailureAction (defaults to Audit)"
+            elif [ "$ACTION" != "Enforce" ] && [ "$ACTION" != "Audit" ]; then
+              echo "  ❌ Invalid validationFailureAction: $ACTION (must be Enforce or Audit)"
+              ERRORS=$((ERRORS + 1))
+            fi
+
+            echo "  ✅ Structure OK"
+          done
+
+          echo ""
+
+          if [ $ERRORS -gt 0 ]; then
+            echo "❌ Found $ERRORS policy structure issues"
+            exit 1
+          fi
+
+          echo "✅ All Kyverno policies have valid structure"
