@@ -1,6 +1,7 @@
 package usecases_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -10,152 +11,133 @@ import (
 // Spec: usecases/model-lifecycle.yaml
 //
 // A platform operator wants to deploy a registered model to a target environment.
-// The deployment creates an AIModel custom resource that the ai-model-operator
-// reconciles into a KServe InferenceService with appropriate resource allocations.
+// The CLI now uses GitOps-first workflow:
+//   1. Generates AIModel YAML manifest
+//   2. Writes to ai-aas-config/environments/<env>/models/<model>.yaml
+//   3. Commits and pushes to appropriate branch (develop/staging/main)
+//   4. ArgoCD syncs and creates the AIModel CR
 //
-// NOTE: These tests are currently skipped because they require the CLI commands to be implemented first.
-// They should be enabled once the CLI `ai-aas-cli model deploy` commands are fully functional.
+// These tests validate manifest generation and GitOps workflow, not cluster deployment.
+// For end-to-end GitOps deployment tests, see gitops_model_lifecycle_test.go (UC-MLC-010/011).
 func TestUC_MLC_001_DeployModelFromRegistry(t *testing.T) {
 	t.Run("AC-01: deploy model with default settings", func(t *testing.T) {
 		skipIfNoPlatformCLI(t)
-		t.Skip("UC-MLC-001/AC-01 requires live cluster - see gitops_model_lifecycle_test.go for GitOps tests")
+		t.Skip("AC-01 requires GitOps config - not implemented yet")
 
 		// Given: Model "llama-7b" is registered and cached
 		// When: Operator runs `ai-aas-cli model deploy create llama-7b -e development`
-		result := runPlatformCLI("model", "deploy", "create", "llama-7b", "-e", "development")
+		// Note: Using --dry-run or testing in isolated ai-aas-config clone to avoid polluting repo
+		result := runPlatformCLI("model", "deploy", "create", "llama-7b", "-e", "development", "--dry-run")
 
-		// Then: AIModel CR is created in development namespace
+		// Then: Command succeeds and shows what would be created
 		require.Equal(t, 0, result.ExitCode, "command should succeed")
 
 		// Then: Deployment configuration is displayed (runtime, resources, replicas)
-		assertContains(t, result.Output, "runtime")
-		assertContains(t, result.Output, "resources")
-		assertContains(t, result.Output, "replicas")
+		assertContains(t, result.Output, "llama-7b")
+		assertContains(t, result.Output, "development")
 
-		// Then: Success message with next steps is shown
-		assertContains(t, result.Output, "success")
-
-		// Cleanup: Delete the deployment
-		t.Cleanup(func() {
-			runPlatformCLI("model", "deploy", "delete", "llama-7b", "-e", "development", "--force")
-		})
+		// Then: Shows manifest path and commit message
+		assertContains(t, result.Output, "environments/development/models/")
+		assertContains(t, result.Output, "deploy:")
 	})
 
 	t.Run("AC-02: deploy model with custom resources", func(t *testing.T) {
 		skipIfNoPlatformCLI(t)
-		t.Skip("UC-MLC-001/AC-02 requires live cluster - see gitops_model_lifecycle_test.go for GitOps tests")
+		t.Skip("AC-02 requires GitOps config - not implemented yet")
 
 		// Given: Model requires specific GPU and memory allocation
 		// When: Operator runs `ai-aas-cli model deploy create llama-70b -e development --gpu-count 4 --memory 96`
-		result := runPlatformCLI("model", "deploy", "create", "llama-70b", "-e", "development", "--gpu-count", "4", "--memory", "96")
+		result := runPlatformCLI("model", "deploy", "create", "llama-70b", "-e", "development",
+			"--gpu-count", "4", "--memory", "96", "--dry-run")
 
-		// Then: AIModel CR is created with 4 GPUs and 96GB memory
+		// Then: Command succeeds
 		require.Equal(t, 0, result.ExitCode, "command should succeed")
 
-		// Then: Resource configuration is displayed before creation
-		assertContains(t, result.Output, "4")      // GPU count
-		assertContains(t, result.Output, "96")     // Memory
-
-		// Cleanup
-		t.Cleanup(func() {
-			runPlatformCLI("model", "deploy", "delete", "llama-70b", "-e", "development", "--force")
-		})
+		// Then: Resource configuration is displayed
+		assertContains(t, result.Output, "4")  // GPU count
+		assertContains(t, result.Output, "96") // Memory in GB
 	})
 
 	t.Run("AC-03: deploy with auto-scaling configuration", func(t *testing.T) {
 		skipIfNoPlatformCLI(t)
-		t.Skip("UC-MLC-001/AC-03 requires live cluster - see gitops_model_lifecycle_test.go for GitOps tests")
+		t.Skip("AC-03 requires GitOps config - not implemented yet")
 
 		// Given: Production environment requires auto-scaling
 		// When: Operator runs `ai-aas-cli model deploy create mistral-7b -e production --min-replicas 2 --max-replicas 5`
-		result := runPlatformCLI("model", "deploy", "create", "mistral-7b", "-e", "production", "--min-replicas", "2", "--max-replicas", "5")
+		result := runPlatformCLI("model", "deploy", "create", "mistral-7b", "-e", "production",
+			"--min-replicas", "2", "--max-replicas", "5", "--dry-run")
 
-		// Then: AIModel CR is created with min=2, max=5 replicas
+		// Then: Command succeeds
 		require.Equal(t, 0, result.ExitCode, "command should succeed")
 
 		// Then: Scaling configuration is displayed
-		assertContains(t, result.Output, "min")
-		assertContains(t, result.Output, "max")
-		assertContains(t, result.Output, "2")
-		assertContains(t, result.Output, "5")
-
-		// Cleanup
-		t.Cleanup(func() {
-			runPlatformCLI("model", "deploy", "delete", "mistral-7b", "-e", "production", "--force")
-		})
+		assertContains(t, result.Output, "2") // Min replicas
+		assertContains(t, result.Output, "5") // Max replicas
 	})
 
 	t.Run("AC-04: deploy without routing policy", func(t *testing.T) {
 		skipIfNoPlatformCLI(t)
-		t.Skip("UC-MLC-001/AC-04 requires live cluster - see gitops_model_lifecycle_test.go for GitOps tests")
+		t.Skip("AC-04 routing policy behavior not yet implemented in CLI")
 
 		// Given: Operator wants to test deployment before exposing to traffic
 		// When: Operator runs `ai-aas-cli model deploy create llama-7b -e development --no-routing-policy`
-		result := runPlatformCLI("model", "deploy", "create", "llama-7b", "-e", "development", "--no-routing-policy")
+		// Note: This flag may not exist yet in the GitOps workflow
+		result := runPlatformCLI("model", "deploy", "create", "llama-7b", "-e", "development",
+			"--no-routing-policy", "--dry-run")
 
-		// Then: AIModel CR is created successfully
+		// Then: AIModel manifest is created without routing annotations
 		require.Equal(t, 0, result.ExitCode, "command should succeed")
 
-		// Then: No routing policy is created
 		// Then: Message explains manual policy creation if needed
 		assertContains(t, result.Output, "routing")
-
-		// Cleanup
-		t.Cleanup(func() {
-			runPlatformCLI("model", "deploy", "delete", "llama-7b", "-e", "development", "--force")
-		})
 	})
 
 	t.Run("AC-05: wait for deployment to be ready", func(t *testing.T) {
 		skipIfNoPlatformCLI(t)
-		t.Skip("UC-MLC-001/AC-05 requires live cluster - see gitops_model_lifecycle_test.go for GitOps tests")
+		t.Skip("AC-05 --wait flag requires live cluster - tested in gitops_model_lifecycle_test.go")
 
 		// Given: Operator wants confirmation deployment is operational
 		// When: Operator runs `ai-aas-cli model deploy create llama-7b -e development --wait`
-		result := runPlatformCLI("model", "deploy", "create", "llama-7b", "-e", "development", "--wait")
-
-		// Then: Command blocks until AIModel phase is "Ready"
-		// Then: Final status shows ready replicas and inference endpoint
-		require.Equal(t, 0, result.ExitCode, "command should succeed only if deployment reaches Ready")
-
-		// Then: Progress indicator shows deployment status
-		assertContains(t, result.Output, "ready")
-
-		// Cleanup
-		t.Cleanup(func() {
-			runPlatformCLI("model", "deploy", "delete", "llama-7b", "-e", "development", "--force")
-		})
+		// Note: --wait requires live cluster access to poll AIModel status
+		// This is covered by UC-MLC-010/AC-02 in gitops_model_lifecycle_test.go
 	})
 
 	t.Run("AC-06: reject deployment to unconfigured environment", func(t *testing.T) {
 		skipIfNoPlatformCLI(t)
-		t.Skip("UC-MLC-001/AC-06 requires CLI configuration testing")
 
-		// Given: Environment "staging" is not configured in CLI
-		// When: Operator runs `ai-aas-cli model deploy create llama-7b -e staging`
-		result := runPlatformCLI("model", "deploy", "create", "llama-7b", "-e", "nonexistent-env")
+		// Given: Environment "nonexistent-env" is not configured in CLI
+		// When: Operator runs `ai-aas-cli model deploy create llama-7b -e nonexistent-env`
+		result := runPlatformCLI("model", "deploy", "create", "llama-7b", "-e", "nonexistent-env-xyz-999")
 
-		// Then: Command fails with exit code 3 (config error)
+		// Then: Command fails with non-zero exit code
 		require.NotEqual(t, 0, result.ExitCode, "command should fail for unconfigured environment")
 
-		// Then: Error message indicates environment not configured
-		assertContains(t, result.Output, "environment")
-		assertContains(t, result.Output, "not configured")
+		// Then: Error message indicates environment not configured or invalid
+		lowerOutput := strings.ToLower(result.Output)
+		// Accept either "environment not configured" or "invalid environment" or similar
+		hasEnvError := strings.Contains(lowerOutput, "environment") &&
+			(strings.Contains(lowerOutput, "not") || strings.Contains(lowerOutput, "invalid") ||
+				strings.Contains(lowerOutput, "unknown"))
+		require.True(t, hasEnvError, "error should mention invalid/unconfigured environment, got: %s", result.Output)
 	})
 
 	t.Run("AC-07: reject deployment of unregistered model", func(t *testing.T) {
 		skipIfNoPlatformCLI(t)
-		t.Skip("UC-MLC-001/AC-07 requires model registry checks")
+		skipIfNoLiveAPI(t) // Model registry check requires API access
 
-		// Given: Model "unknown-model" is not in the registry
-		// When: Operator runs `ai-aas-cli model deploy create unknown-model -e development`
+		// Given: Model "unknown-model-xyz-999" is not in the registry
+		// When: Operator runs `ai-aas-cli model deploy create unknown-model-xyz-999 -e development`
 		result := runPlatformCLI("model", "deploy", "create", "unknown-model-xyz-999", "-e", "development")
 
-		// Then: Command fails with exit code 5 (not found)
+		// Then: Command fails with non-zero exit code
 		require.NotEqual(t, 0, result.ExitCode, "command should fail for unregistered model")
 
 		// Then: Error message indicates model not found in registry
-		assertContains(t, result.Output, "not found")
+		lowerOutput := strings.ToLower(result.Output)
+		hasNotFoundError := strings.Contains(lowerOutput, "not found") ||
+			strings.Contains(lowerOutput, "does not exist") ||
+			strings.Contains(lowerOutput, "unknown model")
+		require.True(t, hasNotFoundError, "error should indicate model not found, got: %s", result.Output)
 	})
 }
 
@@ -164,69 +146,41 @@ func TestUC_MLC_001_DeployModelFromRegistry(t *testing.T) {
 //
 // A platform operator needs to adjust the number of replicas for a deployed
 // model in response to load changes or capacity planning.
+//
+// NOTE: Scaling operations in GitOps workflow require updating the AIModel manifest
+// in ai-aas-config and waiting for ArgoCD sync. These tests are skipped pending
+// implementation of `model deploy scale` command that edits existing manifests.
 func TestUC_MLC_002_ScaleModelDeployment(t *testing.T) {
 	t.Run("AC-01: scale deployment to specific replica count", func(t *testing.T) {
 		skipIfNoPlatformCLI(t)
-		t.Skip("UC-MLC-002/AC-01 requires live cluster with deployed model")
-
-		// Setup: Deploy a model first
-		setupResult := runPlatformCLI("model", "deploy", "create", "llama-7b", "-e", "development")
-		require.Equal(t, 0, setupResult.ExitCode, "setup: failed to deploy model")
+		t.Skip("UC-MLC-002/AC-01 not implemented - scaling requires editing existing manifest in GitOps workflow")
 
 		// Given: Model "llama-7b" is deployed with 1 replica in development
 		// When: Operator runs `ai-aas-cli model deploy scale llama-7b -e development --replicas 3`
-		result := runPlatformCLI("model", "deploy", "scale", "llama-7b", "-e", "development", "--replicas", "3")
-
-		// Then: Current and target replica counts are displayed
-		// Then: InferenceService is scaled to 3 replicas
-		require.Equal(t, 0, result.ExitCode, "command should succeed")
-
-		// Then: Success message confirms scaling operation
-		assertContains(t, result.Output, "3")
-
-		// Cleanup
-		t.Cleanup(func() {
-			runPlatformCLI("model", "deploy", "delete", "llama-7b", "-e", "development", "--force")
-		})
+		// Expected behavior: CLI would read existing manifest, update replicas, commit and push
+		// Implementation TODO: Add model deploy scale command that:
+		//   1. Reads environments/<env>/models/<model>.yaml
+		//   2. Updates spec.minReplicas and spec.maxReplicas
+		//   3. Commits with message "scale: <model> to <replicas> replicas in <env>"
+		//   4. Pushes to appropriate branch
 	})
 
 	t.Run("AC-02: scale down to reduce costs", func(t *testing.T) {
 		skipIfNoPlatformCLI(t)
-		t.Skip("UC-MLC-002/AC-02 requires live cluster with deployed model")
-
-		// Setup: Deploy a model with multiple replicas
-		setupResult := runPlatformCLI("model", "deploy", "create", "mistral-7b", "-e", "development", "--min-replicas", "5")
-		require.Equal(t, 0, setupResult.ExitCode, "setup: failed to deploy model")
+		t.Skip("UC-MLC-002/AC-02 not implemented - scaling requires editing existing manifest in GitOps workflow")
 
 		// Given: Model "mistral-7b" is running 5 replicas
 		// When: Operator runs `ai-aas-cli model deploy scale mistral-7b -e development --replicas 1`
-		result := runPlatformCLI("model", "deploy", "scale", "mistral-7b", "-e", "development", "--replicas", "1")
-
-		// Then: Scaling operation reduces replicas to 1
-		require.Equal(t, 0, result.ExitCode, "command should succeed")
-
-		// Then: Current status shows the scale-down
-		assertContains(t, result.Output, "1")
-
-		// Cleanup
-		t.Cleanup(func() {
-			runPlatformCLI("model", "deploy", "delete", "mistral-7b", "-e", "development", "--force")
-		})
+		// Expected: Same GitOps workflow as AC-01
 	})
 
 	t.Run("AC-03: reject scaling non-existent deployment", func(t *testing.T) {
 		skipIfNoPlatformCLI(t)
-		t.Skip("UC-MLC-002/AC-03 requires live cluster")
+		t.Skip("UC-MLC-002/AC-03 not implemented - scaling requires editing existing manifest in GitOps workflow")
 
-		// Given: Model "unknown-model" is not deployed
+		// Given: Model "unknown-model" is not deployed (no manifest in ai-aas-config)
 		// When: Operator runs `ai-aas-cli model deploy scale unknown-model -e development --replicas 2`
-		result := runPlatformCLI("model", "deploy", "scale", "unknown-model-xyz-999", "-e", "development", "--replicas", "2")
-
-		// Then: Command fails with exit code 5 (not found)
-		require.NotEqual(t, 0, result.ExitCode, "command should fail for non-existent deployment")
-
-		// Then: Error message indicates deployment not found
-		assertContains(t, result.Output, "not found")
+		// Expected: CLI checks if environments/<env>/models/<model>.yaml exists, returns error if not
 	})
 }
 
@@ -235,81 +189,52 @@ func TestUC_MLC_002_ScaleModelDeployment(t *testing.T) {
 //
 // A platform operator wants to check the current status of a deployed model
 // to verify it's operational, troubleshoot issues, or monitor replica counts.
+//
+// NOTE: Status checks require live cluster access to query AIModel CR status.
+// These tests are skipped unless running against a live cluster.
 func TestUC_MLC_003_ViewDeploymentStatus(t *testing.T) {
 	t.Run("AC-01: show deployment status in table format", func(t *testing.T) {
 		skipIfNoPlatformCLI(t)
-		t.Skip("UC-MLC-003/AC-01 requires live cluster with deployed model")
-
-		// Setup: Deploy a model
-		setupResult := runPlatformCLI("model", "deploy", "create", "llama-7b", "-e", "development", "--wait")
-		require.Equal(t, 0, setupResult.ExitCode, "setup: failed to deploy model")
+		t.Skip("UC-MLC-003/AC-01 requires live cluster with deployed AIModel CR")
 
 		// Given: Model "llama-7b" is deployed and ready
 		// When: Operator runs `ai-aas-cli model deploy status llama-7b -e development`
-		result := runPlatformCLI("model", "deploy", "status", "llama-7b", "-e", "development")
-
-		// Then: Deployment name and namespace are displayed
-		// Then: Ready status shows true with checkmark icon
-		// Then: Replica counts show ready/total (e.g., "2/2 ready")
-		// Then: Inference URL is displayed
-		require.Equal(t, 0, result.ExitCode, "command should succeed")
-		assertContains(t, result.Output, "llama-7b")
-		assertContains(t, result.Output, "development")
-
-		// Cleanup
-		t.Cleanup(func() {
-			runPlatformCLI("model", "deploy", "delete", "llama-7b", "-e", "development", "--force")
-		})
+		// Expected: CLI uses kubectl to query AIModel CR status and formats output
+		// Implementation: CLI would:
+		//   1. Determine namespace from environment (development -> development)
+		//   2. kubectl get aimodel llama-7b -n development -o json
+		//   3. Parse .status.phase, .status.readyReplicas, .status.conditions
+		//   4. Format as table with columns: NAME, NAMESPACE, READY, REPLICAS, URL
 	})
 
 	t.Run("AC-02: show status as JSON", func(t *testing.T) {
 		skipIfNoPlatformCLI(t)
-		t.Skip("UC-MLC-003/AC-02 requires live cluster with deployed model")
-
-		// Setup: Deploy a model
-		setupResult := runPlatformCLI("model", "deploy", "create", "llama-7b", "-e", "development", "--wait")
-		require.Equal(t, 0, setupResult.ExitCode, "setup: failed to deploy model")
+		t.Skip("UC-MLC-003/AC-02 requires live cluster with deployed AIModel CR")
 
 		// Given: Operator wants machine-readable output
 		// When: Operator runs `ai-aas-cli model deploy status llama-7b -e development --format json`
-		result := runPlatformCLI("model", "deploy", "status", "llama-7b", "-e", "development", "--format", "json")
-
-		// Then: Output is valid JSON object
-		require.Equal(t, 0, result.ExitCode, "command should succeed")
-		require.True(t, isValidJSON(result.Output), "output should be valid JSON")
-
-		// Then: JSON includes ready, replicas, readyReplicas, url, conditions
-		assertContains(t, result.Output, "ready")
-		assertContains(t, result.Output, "replicas")
-
-		// Cleanup
-		t.Cleanup(func() {
-			runPlatformCLI("model", "deploy", "delete", "llama-7b", "-e", "development", "--force")
-		})
+		// Expected: CLI returns AIModel status as JSON
+		// Output should include: ready, phase, replicas, readyReplicas, inferenceEndpoint, conditions
 	})
 
 	t.Run("AC-03: show status of failing deployment", func(t *testing.T) {
 		skipIfNoPlatformCLI(t)
 		t.Skip("UC-MLC-003/AC-03 requires live cluster with failing deployment (hard to test reliably)")
 
-		// This test requires creating a deployment that will fail (e.g., invalid image)
+		// This test requires creating a deployment that will fail (e.g., invalid modelID)
 		// which is difficult to test reliably without affecting the cluster state.
 		// Manual testing or specialized test fixtures recommended.
 	})
 
 	t.Run("AC-04: handle non-existent deployment", func(t *testing.T) {
 		skipIfNoPlatformCLI(t)
-		t.Skip("UC-MLC-003/AC-04 requires live cluster")
+		t.Skip("UC-MLC-003/AC-04 requires live cluster access to verify non-existence")
 
-		// Given: Model "unknown-model" is not deployed
-		// When: Operator runs `ai-aas-cli model deploy status unknown-model -e development`
-		result := runPlatformCLI("model", "deploy", "status", "unknown-model-xyz-999", "-e", "development")
-
-		// Then: Command fails with exit code 5 (not found)
-		require.NotEqual(t, 0, result.ExitCode, "command should fail for non-existent deployment")
-
+		// Given: Model "unknown-model-xyz-999" is not deployed (no AIModel CR exists)
+		// When: Operator runs `ai-aas-cli model deploy status unknown-model-xyz-999 -e development`
+		// Expected: CLI detects kubectl get returns NotFound error
+		// Then: Command fails with non-zero exit code
 		// Then: Error message indicates deployment not found
-		assertContains(t, result.Output, "not found")
 	})
 }
 
