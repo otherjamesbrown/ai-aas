@@ -1,6 +1,7 @@
 package usecases_test
 
 import (
+	"encoding/hex"
 	"strings"
 	"testing"
 	"time"
@@ -57,28 +58,43 @@ func TestUC_ANL_001_UsageRecording(t *testing.T) {
 			t.Skip("Inference request failed - cannot validate usage recording")
 		}
 
-		// Wait for usage to be recorded asynchronously
-		time.Sleep(3 * time.Second)
-
-		// Then: Usage record is created in analytics database
+		// Poll for usage to be recorded asynchronously (instead of fixed sleep)
 		now := time.Now().UTC()
 		start := now.Add(-1 * time.Hour).Format(time.RFC3339)
 		end := now.Format(time.RFC3339)
-
 		usagePath := "/analytics/v1/orgs/" + org.ID + "/usage?start=" + start + "&end=" + end
-		usageResp, err := analyticsClient.GET(usagePath)
-		if err != nil || usageResp.StatusCode != 200 {
-			t.Skip("Analytics service not available")
-		}
 
 		var usage struct {
 			RequestCount int `json:"requestCount"`
 			TotalTokens  int `json:"totalTokens"`
 		}
 
-		if err := usageResp.UnmarshalJSON(&usage); err != nil {
-			t.Fatalf("Failed to parse usage response: %v", err)
+		// Poll with timeout for usage to appear
+		timeout := time.After(30 * time.Second)
+		ticker := time.NewTicker(500 * time.Millisecond)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-timeout:
+				t.Fatal("Timeout waiting for usage record to appear")
+			case <-ticker.C:
+				usageResp, err := analyticsClient.GET(usagePath)
+				if err != nil || usageResp.StatusCode != 200 {
+					continue // Retry
+				}
+
+				if err := usageResp.DecodeJSON(&usage); err != nil {
+					continue // Retry
+				}
+
+				// Check if usage has been recorded
+				if usage.RequestCount > 0 && usage.TotalTokens > 0 {
+					goto usageFound
+				}
+			}
 		}
+	usageFound:
 
 		// Then: Record includes organization_id, model, tokens, timestamp, trace_id
 		if usage.RequestCount == 0 {
@@ -113,7 +129,7 @@ func TestUC_ANL_001_UsageRecording(t *testing.T) {
 		var baselineUsage struct {
 			RequestCount int `json:"requestCount"`
 		}
-		baselineResp.UnmarshalJSON(&baselineUsage)
+		baselineResp.DecodeJSON(&baselineUsage)
 
 		// Make request
 		reqBody := map[string]interface{}{
@@ -142,7 +158,7 @@ func TestUC_ANL_001_UsageRecording(t *testing.T) {
 		var afterUsage struct {
 			RequestCount int `json:"requestCount"`
 		}
-		afterResp.UnmarshalJSON(&afterUsage)
+		afterResp.DecodeJSON(&afterUsage)
 
 		// Then: Only one usage record is created
 		if afterUsage.RequestCount != baselineUsage.RequestCount+1 {
@@ -165,20 +181,129 @@ func TestUC_ANL_002_UsageAggregation(t *testing.T) {
 		t.Skip("Analytics service not configured")
 	}
 
+	client, err := NewTestClientFromEnv()
+	if err != nil {
+		t.Fatalf("Failed to create test client: %v", err)
+	}
+
+	fm := NewFixtureManager(t, client)
+	orgFixture := NewOrganizationFixture(fm, client)
+
+	org, err := orgFixture.Create("")
+	if err != nil {
+		t.Fatalf("Failed to create organization: %v", err)
+	}
+
+	analyticsClient := NewTestClient(getAnalyticsServiceURL(), getAdminAPIKey())
+
 	t.Run("AC-01: hourly aggregation by organization and model", func(t *testing.T) {
-		t.Skip("Aggregation validation requires analytics database access")
+		// When: Query usage with hourly granularity
+		now := time.Now().UTC()
+		start := now.Add(-24 * time.Hour).Format(time.RFC3339)
+		end := now.Format(time.RFC3339)
+
+		usagePath := "/analytics/v1/orgs/" + org.ID + "/usage?start=" + start + "&end=" + end + "&granularity=hour"
+		resp, err := analyticsClient.GET(usagePath)
+		if err != nil {
+			t.Fatalf("Analytics request failed: %v", err)
+		}
+
+		if resp.StatusCode != 200 {
+			t.Fatalf("Expected status 200, got %d: %s", resp.StatusCode, resp.String())
+		}
+
+		// Then: Response contains hourly aggregated data
+		var usageResp struct {
+			OrgID       string `json:"orgId"`
+			Granularity string `json:"granularity"`
+			Series      []struct {
+				BucketStart  string  `json:"bucketStart"`
+				ModelID      *string `json:"modelId,omitempty"`
+				Invocations  int64   `json:"invocations"`
+				InputTokens  int64   `json:"inputTokens"`
+				OutputTokens int64   `json:"outputTokens"`
+			} `json:"series"`
+			Totals struct {
+				Invocations  int64 `json:"invocations"`
+				InputTokens  int64 `json:"inputTokens"`
+				OutputTokens int64 `json:"outputTokens"`
+			} `json:"totals"`
+		}
+
+		if err := resp.DecodeJSON(&usageResp); err != nil {
+			t.Fatalf("Failed to parse usage response: %v", err)
+		}
+
+		// Verify response structure
+		if usageResp.OrgID != org.ID {
+			t.Errorf("Expected orgId %s, got %s", org.ID, usageResp.OrgID)
+		}
+		if usageResp.Granularity != "hour" {
+			t.Errorf("Expected granularity 'hour', got %s", usageResp.Granularity)
+		}
+
+		// Verify bucket format if there's data
+		for _, point := range usageResp.Series {
+			// BucketStart should be RFC3339 formatted
+			if _, err := time.Parse(time.RFC3339, point.BucketStart); err != nil {
+				t.Errorf("Invalid bucketStart format: %s", point.BucketStart)
+			}
+		}
 	})
 
 	t.Run("AC-02: daily aggregation from hourly data", func(t *testing.T) {
-		t.Skip("Aggregation validation requires analytics database access")
+		// When: Query usage with daily granularity
+		now := time.Now().UTC()
+		start := now.Add(-7 * 24 * time.Hour).Format(time.RFC3339)
+		end := now.Format(time.RFC3339)
+
+		usagePath := "/analytics/v1/orgs/" + org.ID + "/usage?start=" + start + "&end=" + end + "&granularity=day"
+		resp, err := analyticsClient.GET(usagePath)
+		if err != nil {
+			t.Fatalf("Analytics request failed: %v", err)
+		}
+
+		if resp.StatusCode != 200 {
+			t.Fatalf("Expected status 200, got %d: %s", resp.StatusCode, resp.String())
+		}
+
+		// Then: Response contains daily aggregated data
+		var usageResp struct {
+			OrgID       string `json:"orgId"`
+			Granularity string `json:"granularity"`
+			Series      []struct {
+				BucketStart  string  `json:"bucketStart"`
+				ModelID      *string `json:"modelId,omitempty"`
+				Invocations  int64   `json:"invocations"`
+				InputTokens  int64   `json:"inputTokens"`
+				OutputTokens int64   `json:"outputTokens"`
+			} `json:"series"`
+			Totals struct {
+				Invocations  int64 `json:"invocations"`
+				InputTokens  int64 `json:"inputTokens"`
+				OutputTokens int64 `json:"outputTokens"`
+			} `json:"totals"`
+		}
+
+		if err := resp.DecodeJSON(&usageResp); err != nil {
+			t.Fatalf("Failed to parse usage response: %v", err)
+		}
+
+		// Verify response structure
+		if usageResp.OrgID != org.ID {
+			t.Errorf("Expected orgId %s, got %s", org.ID, usageResp.OrgID)
+		}
+		if usageResp.Granularity != "day" {
+			t.Errorf("Expected granularity 'day', got %s", usageResp.Granularity)
+		}
 	})
 
 	t.Run("AC-03: aggregation idempotency", func(t *testing.T) {
-		t.Skip("Aggregation validation requires analytics database access")
+		t.Skip("Idempotency validation requires triggering aggregation job - needs test infrastructure")
 	})
 
 	t.Run("AC-04: handle missing or late data", func(t *testing.T) {
-		t.Skip("Aggregation validation requires analytics database access")
+		t.Skip("Late data handling requires simulating delayed events - needs test infrastructure")
 	})
 }
 
@@ -261,7 +386,7 @@ func TestUC_ANL_003_AnalyticsExport(t *testing.T) {
 			Status string `json:"status"`
 		}
 
-		if err := resp.UnmarshalJSON(&exportJob); err != nil {
+		if err := resp.DecodeJSON(&exportJob); err != nil {
 			t.Fatalf("Failed to parse export job: %v", err)
 		}
 
@@ -297,7 +422,7 @@ func TestUC_ANL_003_AnalyticsExport(t *testing.T) {
 			JobID  string `json:"jobId"`
 			Status string `json:"status"`
 		}
-		createResp.UnmarshalJSON(&exportJob)
+		createResp.DecodeJSON(&exportJob)
 
 		// Poll for completion
 		getJobPath := "/analytics/v1/orgs/" + org.ID + "/exports/" + exportJob.JobID
@@ -315,7 +440,7 @@ func TestUC_ANL_003_AnalyticsExport(t *testing.T) {
 			var job struct {
 				Status string `json:"status"`
 			}
-			getResp.UnmarshalJSON(&job)
+			getResp.DecodeJSON(&job)
 
 			// Then: Job status transitions to "in_progress" then "completed"
 			if job.Status == "succeeded" || job.Status == "completed" {
@@ -470,27 +595,117 @@ func TestUC_ANL_004_CrossServiceCorrelation(t *testing.T) {
 			"messages": []map[string]interface{}{
 				{
 					"role":    "user",
-					"content": "Test",
+					"content": "Test trace ID generation",
 				},
 			},
 		}
 
 		resp, err := inferenceClient.POST("/v1/chat/completions", reqBody)
-		if err != nil || resp.StatusCode != 200 {
-			t.Skip("Inference request failed")
+		if err != nil {
+			t.Fatalf("Request failed: %v", err)
 		}
 
-		// Then: Trace ID is returned in response headers
-		traceID := resp.Headers.Get("X-Trace-ID")
-		if traceID == "" {
-			t.Log("Warning: X-Trace-ID header not present in response")
+		if resp.StatusCode != 200 {
+			t.Skipf("Inference request failed with status %d: %s", resp.StatusCode, resp.String())
+		}
+
+		// Then: Trace ID is returned in response body
+		var result map[string]interface{}
+		if err := resp.DecodeJSON(&result); err != nil {
+			t.Fatalf("Failed to parse response: %v", err)
+		}
+
+		traceID, ok := result["trace_id"].(string)
+		if !ok || traceID == "" {
+			t.Errorf("Response should include non-empty trace_id field, got: %v", result)
+		}
+
+		// Verify trace ID format - OpenTelemetry trace IDs are 32 hex characters
+		if len(traceID) != 32 {
+			t.Errorf("Trace ID should be 32 hex characters, got length %d: %s", len(traceID), traceID)
+		}
+
+		// Verify trace ID is valid hex using standard library
+		if _, err := hex.DecodeString(traceID); err != nil {
+			t.Errorf("Trace ID is not a valid hex string: %v", err)
+		}
+
+		t.Logf("Generated trace ID: %s", traceID)
+
+		// Verify each request gets a unique trace ID
+		resp2, err := inferenceClient.POST("/v1/chat/completions", reqBody)
+		if err != nil {
+			t.Fatalf("Second request failed: %v", err)
+		}
+
+		if resp2.StatusCode != 200 {
+			t.Skipf("Second request failed with status %d", resp2.StatusCode)
+		}
+
+		var result2 map[string]interface{}
+		if err := resp2.DecodeJSON(&result2); err != nil {
+			t.Fatalf("Failed to parse second response: %v", err)
+		}
+
+		traceID2, ok := result2["trace_id"].(string)
+		if !ok || traceID2 == "" {
+			t.Errorf("Second response should include trace_id")
+		}
+
+		// Verify trace IDs are different
+		if traceID == traceID2 {
+			t.Errorf("Each request should get a unique trace ID, got duplicate: %s", traceID)
 		} else {
-			t.Logf("Generated trace ID: %s", traceID)
+			t.Logf("Second request got unique trace ID: %s", traceID2)
 		}
 	})
 
 	t.Run("AC-02: propagate client trace ID", func(t *testing.T) {
-		t.Skip("Requires setting X-Trace-ID header in request and verifying propagation")
+		// Given: User provides custom trace ID in header
+		clientTraceID := "12345678901234567890123456789012" // 32 hex chars
+
+		reqBody := map[string]interface{}{
+			"model": getTestModel(),
+			"messages": []map[string]interface{}{
+				{
+					"role":    "user",
+					"content": "Test client trace ID",
+				},
+			},
+		}
+
+		// When: User sends request with X-Trace-ID header
+		resp, err := inferenceClient.POSTWithHeaders("/v1/chat/completions", reqBody, map[string]string{
+			"X-Trace-ID": clientTraceID,
+		})
+
+		if err != nil {
+			t.Fatalf("Request failed: %v", err)
+		}
+
+		if resp.StatusCode != 200 {
+			t.Skipf("Inference request failed with status %d: %s", resp.StatusCode, resp.String())
+		}
+
+		// Then: Client-provided trace ID is used
+		var result map[string]interface{}
+		if err := resp.DecodeJSON(&result); err != nil {
+			t.Fatalf("Failed to parse response: %v", err)
+		}
+
+		traceID, ok := result["trace_id"].(string)
+		if !ok || traceID == "" {
+			t.Errorf("Response should include non-empty trace_id field")
+		}
+
+		// Verify the client-provided trace ID is used (or at least present in response)
+		// NOTE: Implementation may not honor client trace ID yet - log as warning
+		if traceID != clientTraceID {
+			t.Logf("Warning: Client-provided trace ID not used. Sent: %s, Got: %s", clientTraceID, traceID)
+			t.Skip("Client trace ID propagation not yet implemented")
+		} else {
+			t.Logf("Client trace ID successfully propagated: %s", traceID)
+		}
 	})
 
 	t.Run("AC-03: usage record includes trace ID", func(t *testing.T) {
@@ -502,13 +717,13 @@ func TestUC_ANL_004_CrossServiceCorrelation(t *testing.T) {
 	})
 
 	t.Run("AC-04: error response includes trace ID", func(t *testing.T) {
-		// Make request that will fail
+		// Make request that will fail - use nonexistent model
 		reqBody := map[string]interface{}{
-			"model": "nonexistent-model",
+			"model": "nonexistent-model-12345",
 			"messages": []map[string]interface{}{
 				{
 					"role":    "user",
-					"content": "Test",
+					"content": "Test error trace ID",
 				},
 			},
 		}
@@ -518,15 +733,26 @@ func TestUC_ANL_004_CrossServiceCorrelation(t *testing.T) {
 			t.Fatalf("Request failed: %v", err)
 		}
 
-		// Then: Error body includes trace_id field
-		var errResp struct {
-			TraceID string `json:"trace_id"`
+		// Expect error response (4xx or 5xx)
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			t.Skip("Expected error response but got success - cannot validate trace ID in error")
 		}
 
-		if err := resp.UnmarshalJSON(&errResp); err == nil {
-			if errResp.TraceID == "" {
-				t.Log("Warning: trace_id field not present in error response")
+		// Then: Error body includes trace_id field
+		var errResp map[string]interface{}
+		if err := resp.DecodeJSON(&errResp); err != nil {
+			t.Fatalf("Failed to parse error response: %v", err)
+		}
+
+		traceID, ok := errResp["trace_id"].(string)
+		if !ok || traceID == "" {
+			t.Errorf("Error response should include non-empty trace_id field, got: %v", errResp)
+		} else {
+			// Verify trace ID format
+			if len(traceID) != 32 {
+				t.Errorf("Trace ID should be 32 hex characters, got length %d: %s", len(traceID), traceID)
 			}
+			t.Logf("Error response includes trace ID: %s", traceID)
 		}
 	})
 

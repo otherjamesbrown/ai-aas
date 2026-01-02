@@ -1,6 +1,11 @@
 package usecases_test
 
 import (
+	"bufio"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -76,7 +81,7 @@ func TestUC_INF_001_EndToEndChatCompletion(t *testing.T) {
 			} `json:"usage"`
 		}
 
-		if err := resp.UnmarshalJSON(&chatResp); err != nil {
+		if err := resp.DecodeJSON(&chatResp); err != nil {
 			t.Fatalf("Failed to parse response: %v", err)
 		}
 
@@ -119,7 +124,7 @@ func TestUC_INF_001_EndToEndChatCompletion(t *testing.T) {
 			} `json:"usage"`
 		}
 
-		if err := resp.UnmarshalJSON(&chatResp); err != nil {
+		if err := resp.DecodeJSON(&chatResp); err != nil {
 			t.Fatalf("Failed to parse response: %v", err)
 		}
 
@@ -170,8 +175,132 @@ func TestUC_INF_001_EndToEndChatCompletion(t *testing.T) {
 	})
 
 	t.Run("AC-04: unauthorized model access rejected", func(t *testing.T) {
-		t.Skip("Model access control not implemented - requires UC-MDL-002")
-		// TODO: Implement once model access control is in place
+		// Check if MODEL_ACCESS_ENABLED is true in the environment
+		// If not, skip this test as the feature is disabled by default
+		if os.Getenv("MODEL_ACCESS_ENABLED") != "true" {
+			t.Skip("Model access control disabled (set MODEL_ACCESS_ENABLED=true to enable)")
+		}
+
+		// Given: A second organization with a user that has restricted model access
+		org2, err := orgFixture.Create("")
+		if err != nil {
+			t.Fatalf("Failed to create second organization: %v", err)
+		}
+
+		// Create API key for the second org
+		apiKey2, err := apiKeyFixture.CreateWithServiceAccount(org2.ID, "", []string{"inference:read", "inference:write"})
+		if err != nil {
+			t.Fatalf("Failed to create API key for second org: %v", err)
+		}
+
+		// Get the user associated with the service account
+		// Service accounts create associated users, so we need to fetch the user list
+		usersResp, err := client.GET(fmt.Sprintf("/v1/orgs/%s/users", org2.ID))
+		if err != nil || usersResp.StatusCode != 200 {
+			t.Fatalf("Failed to get users for org: %v, status: %d", err, usersResp.StatusCode)
+		}
+
+		var users []struct {
+			UserID string `json:"userId"`
+		}
+		if err := usersResp.DecodeJSON(&users); err != nil || len(users) == 0 {
+			t.Fatalf("Failed to parse users or no users found: %v", err)
+		}
+
+		userID := users[0].UserID
+
+		// Set user to restricted access mode
+		setModeResp, err := client.PUT(
+			fmt.Sprintf("/v1/orgs/%s/users/%s/model-access/mode", org2.ID, userID),
+			map[string]interface{}{
+				"accessMode": "restricted",
+			},
+		)
+		if err != nil || (setModeResp.StatusCode != 200 && setModeResp.StatusCode != 204) {
+			t.Fatalf("Failed to set access mode to restricted: %v, status: %d, body: %s",
+				err, setModeResp.StatusCode, setModeResp.String())
+		}
+
+		// Verify that the user's model access is restricted
+		accessResp, err := client.GET(fmt.Sprintf("/v1/orgs/%s/users/%s/model-access", org2.ID, userID))
+		if err != nil || accessResp.StatusCode != 200 {
+			t.Fatalf("Failed to get model access config: %v, status: %d", err, accessResp.StatusCode)
+		}
+
+		var accessConfig struct {
+			AccessMode string `json:"accessMode"`
+		}
+		if err := accessResp.DecodeJSON(&accessConfig); err != nil {
+			t.Fatalf("Failed to parse access config: %v", err)
+		}
+
+		if accessConfig.AccessMode != "restricted" {
+			t.Fatalf("Expected access mode to be 'restricted', got: %s", accessConfig.AccessMode)
+		}
+
+		// When: User tries to access a model they don't have permission for
+		inferenceClient2 := NewTestClient(getAPIRouterURL(), apiKey2.Key)
+		reqBody := map[string]interface{}{
+			"model": getTestModel(),
+			"messages": []map[string]interface{}{
+				{
+					"role":    "user",
+					"content": "Test unauthorized access",
+				},
+			},
+		}
+
+		resp, err := inferenceClient2.POST("/v1/chat/completions", reqBody)
+		if err != nil {
+			t.Fatalf("Request failed: %v", err)
+		}
+
+		// Then: Request fails with 403 status
+		if resp.StatusCode != 403 {
+			t.Errorf("Expected status 403 (Forbidden), got %d: %s", resp.StatusCode, resp.String())
+		}
+
+		// Then: Error message indicates insufficient permissions
+		bodyStr := strings.ToLower(resp.String())
+		if !strings.Contains(bodyStr, "access") && !strings.Contains(bodyStr, "denied") && !strings.Contains(bodyStr, "forbidden") {
+			t.Logf("Warning: Error message should indicate access denied, got: %s", resp.String())
+		}
+
+		// Verify that granting access allows the request to succeed
+		t.Run("AC-04-GrantAccess: granting access allows request", func(t *testing.T) {
+			// Grant access to the test model
+			grantResp, err := client.POST(
+				fmt.Sprintf("/v1/orgs/%s/users/%s/model-access/grants", org2.ID, userID),
+				map[string]interface{}{
+					"modelName": getTestModel(),
+				},
+			)
+			if err != nil || (grantResp.StatusCode != 200 && grantResp.StatusCode != 201) {
+				t.Fatalf("Failed to grant model access: %v, status: %d, body: %s",
+					err, grantResp.StatusCode, grantResp.String())
+			}
+
+			// Now the request should succeed
+			reqBody := map[string]interface{}{
+				"model": getTestModel(),
+				"messages": []map[string]interface{}{
+					{
+						"role":    "user",
+						"content": "Test authorized access",
+					},
+				},
+			}
+
+			resp, err := inferenceClient2.POST("/v1/chat/completions", reqBody)
+			if err != nil {
+				t.Fatalf("Request failed after granting access: %v", err)
+			}
+
+			// Then: Request succeeds with 200 status
+			if resp.StatusCode != 200 {
+				t.Errorf("Expected status 200 after granting access, got %d: %s", resp.StatusCode, resp.String())
+			}
+		})
 	})
 }
 
@@ -207,21 +336,269 @@ func TestUC_INF_002_StreamingCompletion(t *testing.T) {
 	_ = inferenceClient // TODO: Use when streaming is implemented
 
 	t.Run("AC-01: enable streaming with request parameter", func(t *testing.T) {
-		t.Skip("Streaming not yet implemented - requires UC-INF-002 implementation")
-		// TODO: Implement streaming test once backend supports it
+		// When: User sends POST /v1/chat/completions with stream:true
+		reqBody := map[string]interface{}{
+			"model": getTestModel(),
+			"messages": []map[string]interface{}{
+				{
+					"role":    "user",
+					"content": "Say hello",
+				},
+			},
+			"stream": true,
+		}
+
+		bodyBytes, err := json.Marshal(reqBody)
+		if err != nil {
+			t.Fatalf("Failed to marshal request: %v", err)
+		}
+
+		resp, err := inferenceClient.DoStreaming("POST", "/v1/chat/completions", bodyBytes)
+		if err != nil {
+			t.Fatalf("Request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		// Then: Response status is 200
+		if resp.StatusCode != 200 {
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			t.Fatalf("Expected status 200, got %d: %s", resp.StatusCode, string(bodyBytes))
+		}
+
+		// Then: Response content-type is text/event-stream
+		contentType := resp.Header.Get("Content-Type")
+		if !strings.Contains(contentType, "text/event-stream") {
+			t.Errorf("Expected Content-Type to contain 'text/event-stream', got: %s", contentType)
+		}
+
+		// Then: Response includes SSE data chunks
+		scanner := bufio.NewScanner(resp.Body)
+		foundData := false
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.HasPrefix(line, "data: ") {
+				foundData = true
+				break
+			}
+		}
+
+		if !foundData {
+			t.Error("Expected SSE response to contain 'data:' prefix")
+		}
 	})
 
 	t.Run("AC-02: streaming chunks have valid format", func(t *testing.T) {
-		t.Skip("Streaming not yet implemented - requires UC-INF-002 implementation")
+		// When: User enables streaming
+		reqBody := map[string]interface{}{
+			"model": getTestModel(),
+			"messages": []map[string]interface{}{
+				{
+					"role":    "user",
+					"content": "Count to 3",
+				},
+			},
+			"stream": true,
+		}
+
+		bodyBytes, err := json.Marshal(reqBody)
+		if err != nil {
+			t.Fatalf("Failed to marshal request: %v", err)
+		}
+
+		resp, err := inferenceClient.DoStreaming("POST", "/v1/chat/completions", bodyBytes)
+		if err != nil {
+			t.Fatalf("Request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != 200 {
+			t.Skip("Streaming request failed - cannot validate chunk format")
+		}
+
+		// Then: Each chunk has valid JSON format
+		scanner := bufio.NewScanner(resp.Body)
+		chunkCount := 0
+		foundDone := false
+
+		for scanner.Scan() {
+			line := scanner.Text()
+
+			// Skip empty lines
+			if line == "" {
+				continue
+			}
+
+			// Check for data: prefix
+			if !strings.HasPrefix(line, "data: ") {
+				continue
+			}
+
+			// Extract JSON after "data: "
+			jsonStr := strings.TrimPrefix(line, "data: ")
+
+			// Check for [DONE] marker
+			if strings.TrimSpace(jsonStr) == "[DONE]" {
+				foundDone = true
+				break
+			}
+
+			// Then: Each chunk parses as valid JSON
+			var chunk map[string]interface{}
+			if err := json.Unmarshal([]byte(jsonStr), &chunk); err != nil {
+				t.Errorf("Failed to parse chunk JSON: %v\nChunk: %s", err, jsonStr)
+				continue
+			}
+
+			// Then: Chunk includes required fields (id, object, choices)
+			if _, ok := chunk["id"]; !ok {
+				t.Error("Chunk missing 'id' field")
+			}
+			if _, ok := chunk["object"]; !ok {
+				t.Error("Chunk missing 'object' field")
+			}
+			if _, ok := chunk["choices"]; !ok {
+				t.Error("Chunk missing 'choices' field")
+			}
+
+			chunkCount++
+		}
+
+		if chunkCount == 0 {
+			t.Error("Expected at least one data chunk")
+		}
+
+		if !foundDone {
+			t.Error("Expected stream to end with [DONE] marker")
+		}
 	})
 
 	t.Run("AC-03: final chunk includes usage data", func(t *testing.T) {
-		t.Skip("Streaming not yet implemented - requires UC-INF-002 implementation")
+		// When: User completes a streaming request
+		reqBody := map[string]interface{}{
+			"model": getTestModel(),
+			"messages": []map[string]interface{}{
+				{
+					"role":    "user",
+					"content": "Hello",
+				},
+			},
+			"stream":         true,
+			"stream_options": map[string]interface{}{"include_usage": true},
+		}
+
+		bodyBytes, err := json.Marshal(reqBody)
+		if err != nil {
+			t.Fatalf("Failed to marshal request: %v", err)
+		}
+
+		resp, err := inferenceClient.DoStreaming("POST", "/v1/chat/completions", bodyBytes)
+		if err != nil {
+			t.Fatalf("Request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != 200 {
+			t.Skip("Streaming request failed - cannot validate usage data")
+		}
+
+		// Read all chunks and find the one with usage
+		scanner := bufio.NewScanner(resp.Body)
+		foundUsage := false
+
+		for scanner.Scan() {
+			line := scanner.Text()
+
+			if !strings.HasPrefix(line, "data: ") {
+				continue
+			}
+
+			jsonStr := strings.TrimPrefix(line, "data: ")
+			if strings.TrimSpace(jsonStr) == "[DONE]" {
+				break
+			}
+
+			var chunk struct {
+				Usage struct {
+					PromptTokens     int `json:"prompt_tokens"`
+					CompletionTokens int `json:"completion_tokens"`
+					TotalTokens      int `json:"total_tokens"`
+				} `json:"usage"`
+			}
+
+			if err := json.Unmarshal([]byte(jsonStr), &chunk); err != nil {
+				continue
+			}
+
+			// Then: Final chunk includes usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
+			if chunk.Usage.TotalTokens > 0 {
+				foundUsage = true
+				if chunk.Usage.PromptTokens <= 0 {
+					t.Error("Expected prompt_tokens > 0 in usage data")
+				}
+				if chunk.Usage.CompletionTokens <= 0 {
+					t.Error("Expected completion_tokens > 0 in usage data")
+				}
+				expected := chunk.Usage.PromptTokens + chunk.Usage.CompletionTokens
+				if chunk.Usage.TotalTokens != expected {
+					t.Errorf("Expected total_tokens=%d, got %d", expected, chunk.Usage.TotalTokens)
+				}
+			}
+		}
+
+		if !foundUsage {
+			t.Log("Warning: No usage data found in streaming response - may require stream_options.include_usage=true")
+		}
 	})
 
 	t.Run("AC-04: connection interruption handling", func(t *testing.T) {
-		t.Skip("Streaming not yet implemented - requires UC-INF-002 implementation")
+		// This test validates graceful handling when connection is closed early
+		reqBody := map[string]interface{}{
+			"model": getTestModel(),
+			"messages": []map[string]interface{}{
+				{
+					"role":    "user",
+					"content": "Write a long story",
+				},
+			},
+			"stream":     true,
+			"max_tokens": 500,
+		}
+
+		bodyBytes, err := json.Marshal(reqBody)
+		if err != nil {
+			t.Fatalf("Failed to marshal request: %v", err)
+		}
+
+		resp, err := inferenceClient.DoStreaming("POST", "/v1/chat/completions", bodyBytes)
+		if err != nil {
+			t.Fatalf("Request failed: %v", err)
+		}
+
+		if resp.StatusCode != 200 {
+			resp.Body.Close()
+			t.Skip("Streaming request failed - cannot validate interruption handling")
+		}
+
+		// Read first few chunks then close connection
+		scanner := bufio.NewScanner(resp.Body)
+		chunkCount := 0
+		for scanner.Scan() && chunkCount < 3 {
+			line := scanner.Text()
+			if strings.HasPrefix(line, "data: ") {
+				chunkCount++
+			}
+		}
+
+		// Then: Connection closes without error
+		resp.Body.Close()
+
+		if chunkCount < 1 {
+			t.Error("Expected to read at least 1 chunk before closing")
+		}
+
+		// Success: Connection closed gracefully after partial read
 	})
+
 }
 
 // TestUC_INF_003_MultiModelRouting validates UC-INF-003: Multi-Model Routing.
@@ -253,13 +630,103 @@ func TestUC_INF_003_MultiModelRouting(t *testing.T) {
 
 	inferenceClient := NewTestClient(getAPIRouterURL(), apiKey.Key)
 
+	// Fetch available models dynamically
+	availableModels, modelsErr := inferenceClient.GetAvailableModels()
+	if modelsErr != nil {
+		t.Logf("Warning: could not fetch available models: %v", modelsErr)
+	}
+
 	t.Run("AC-01: route to correct backend by model name", func(t *testing.T) {
-		t.Skip("Multi-model routing validation requires multiple deployed models")
-		// TODO: Implement once we have multiple models deployed
+		if len(availableModels) < 2 {
+			t.Skipf("Multi-model routing requires 2+ models, found %d", len(availableModels))
+		}
+
+		// Test that each model routes to its correct backend
+		for _, model := range availableModels[:2] { // Test first 2 models
+			reqBody := map[string]interface{}{
+				"model": model,
+				"messages": []map[string]interface{}{
+					{"role": "user", "content": "Hello"},
+				},
+				"max_tokens": 10,
+			}
+
+			resp, err := inferenceClient.POST("/v1/chat/completions", reqBody)
+			if err != nil {
+				t.Fatalf("Request for model %s failed: %v", model, err)
+			}
+
+			if resp.StatusCode != 200 {
+				t.Errorf("Model %s: expected status 200, got %d: %s", model, resp.StatusCode, resp.String())
+				continue
+			}
+
+			var chatResp struct {
+				Model string `json:"model"`
+			}
+			if err := resp.DecodeJSON(&chatResp); err != nil {
+				t.Errorf("Model %s: failed to parse response: %v", model, err)
+				continue
+			}
+
+			// Verify the response model matches what we requested
+			if chatResp.Model != model {
+				t.Errorf("Model %s: response model mismatch, got %s", model, chatResp.Model)
+			}
+		}
 	})
 
 	t.Run("AC-02: route different models in sequence", func(t *testing.T) {
-		t.Skip("Multi-model routing validation requires multiple deployed models")
+		if len(availableModels) < 2 {
+			t.Skipf("Multi-model routing requires 2+ models, found %d", len(availableModels))
+		}
+
+		// Send requests to different models in sequence to verify routing isolation
+		model1 := availableModels[0]
+		model2 := availableModels[1]
+
+		// Request to model 1
+		resp1, err := inferenceClient.POST("/v1/chat/completions", map[string]interface{}{
+			"model":      model1,
+			"messages":   []map[string]interface{}{{"role": "user", "content": "Test 1"}},
+			"max_tokens": 5,
+		})
+		if err != nil {
+			t.Fatalf("Request to model 1 failed: %v", err)
+		}
+
+		// Request to model 2
+		resp2, err := inferenceClient.POST("/v1/chat/completions", map[string]interface{}{
+			"model":      model2,
+			"messages":   []map[string]interface{}{{"role": "user", "content": "Test 2"}},
+			"max_tokens": 5,
+		})
+		if err != nil {
+			t.Fatalf("Request to model 2 failed: %v", err)
+		}
+
+		// Both should succeed
+		if resp1.StatusCode != 200 {
+			t.Errorf("Model 1 (%s): expected 200, got %d", model1, resp1.StatusCode)
+		}
+		if resp2.StatusCode != 200 {
+			t.Errorf("Model 2 (%s): expected 200, got %d", model2, resp2.StatusCode)
+		}
+
+		// Verify each response has the correct model
+		var chatResp1, chatResp2 struct {
+			Model string `json:"model"`
+		}
+		if err := resp1.DecodeJSON(&chatResp1); err == nil {
+			if chatResp1.Model != model1 {
+				t.Errorf("Response 1 model mismatch: expected %s, got %s", model1, chatResp1.Model)
+			}
+		}
+		if err := resp2.DecodeJSON(&chatResp2); err == nil {
+			if chatResp2.Model != model2 {
+				t.Errorf("Response 2 model mismatch: expected %s, got %s", model2, chatResp2.Model)
+			}
+		}
 	})
 
 	t.Run("AC-03: handle backend unavailability", func(t *testing.T) {
@@ -313,7 +780,7 @@ func TestUC_INF_003_MultiModelRouting(t *testing.T) {
 			Model string `json:"model"`
 		}
 
-		if err := resp.UnmarshalJSON(&chatResp); err != nil {
+		if err := resp.DecodeJSON(&chatResp); err != nil {
 			t.Fatalf("Failed to parse response: %v", err)
 		}
 
@@ -394,7 +861,7 @@ func TestUC_INF_004_TokenUsageTracking(t *testing.T) {
 			TotalTokens  int `json:"totalTokens"`
 		}
 
-		if err := usageResp.UnmarshalJSON(&usage); err != nil {
+		if err := usageResp.DecodeJSON(&usage); err != nil {
 			t.Fatalf("Failed to parse usage response: %v", err)
 		}
 
@@ -428,7 +895,7 @@ func TestUC_INF_004_TokenUsageTracking(t *testing.T) {
 		var baselineUsage struct {
 			RequestCount int `json:"requestCount"`
 		}
-		baselineResp.UnmarshalJSON(&baselineUsage)
+		baselineResp.DecodeJSON(&baselineUsage)
 
 		// Make request that fails authentication
 		unauthClient := NewTestClient(getAPIRouterURL(), "invalid-api-key")
@@ -458,7 +925,7 @@ func TestUC_INF_004_TokenUsageTracking(t *testing.T) {
 		var afterUsage struct {
 			RequestCount int `json:"requestCount"`
 		}
-		afterResp.UnmarshalJSON(&afterUsage)
+		afterResp.DecodeJSON(&afterUsage)
 
 		// Then: No tokens are charged to organization
 		if afterUsage.RequestCount != baselineUsage.RequestCount {
@@ -467,10 +934,107 @@ func TestUC_INF_004_TokenUsageTracking(t *testing.T) {
 	})
 
 	t.Run("AC-04: usage recorded for streaming requests", func(t *testing.T) {
-		t.Skip("Streaming not yet implemented - requires UC-INF-002 implementation")
+		// Get baseline usage count
+		analyticsClient := NewTestClient(getAnalyticsServiceURL(), getAdminAPIKey())
+		now := time.Now().UTC()
+		start := now.Add(-1 * time.Hour).Format(time.RFC3339)
+		end := now.Format(time.RFC3339)
+
+		usagePath := "/analytics/v1/orgs/" + org.ID + "/usage?start=" + start + "&end=" + end
+		baselineResp, err := analyticsClient.GET(usagePath)
+		if err != nil || baselineResp.StatusCode != 200 {
+			t.Skip("Analytics service not available")
+		}
+
+		var baselineUsage struct {
+			TotalTokens int `json:"totalTokens"`
+		}
+		baselineResp.DecodeJSON(&baselineUsage)
+
+		// Make streaming request
+		reqBody := map[string]interface{}{
+			"model": getTestModel(),
+			"messages": []map[string]interface{}{
+				{
+					"role":    "user",
+					"content": "Test streaming usage",
+				},
+			},
+			"stream": true,
+		}
+
+		bodyBytes, _ := json.Marshal(reqBody)
+		resp, err := inferenceClient.DoStreaming("POST", "/v1/chat/completions", bodyBytes)
+		if err != nil || resp.StatusCode != 200 {
+			if resp != nil {
+				resp.Body.Close()
+			}
+			t.Skip("Streaming request failed - cannot validate usage tracking")
+		}
+
+		// Read entire stream to completion
+		scanner := bufio.NewScanner(resp.Body)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.Contains(line, "[DONE]") {
+				break
+			}
+		}
+		resp.Body.Close()
+
+		// Wait for usage to be recorded
+		time.Sleep(2 * time.Second)
+
+		// Then: Usage is recorded for streaming request
+		afterResp, err := analyticsClient.GET(usagePath)
+		if err != nil || afterResp.StatusCode != 200 {
+			t.Skip("Analytics service not available")
+		}
+
+		var afterUsage struct {
+			TotalTokens int `json:"totalTokens"`
+		}
+		afterResp.DecodeJSON(&afterUsage)
+
+		if afterUsage.TotalTokens <= baselineUsage.TotalTokens {
+			t.Error("Expected token usage to increase after streaming request")
+		}
 	})
 
 	t.Run("AC-05: correlate usage with request trace", func(t *testing.T) {
-		t.Skip("Trace ID correlation not yet validated - requires UC-ANL-004")
+		// Given: User makes inference request
+		reqBody := map[string]interface{}{
+			"model": getTestModel(),
+			"messages": []map[string]interface{}{
+				{
+					"role":    "user",
+					"content": "Test usage correlation",
+				},
+			},
+		}
+
+		// When: Request completes successfully
+		resp, err := inferenceClient.POST("/v1/chat/completions", reqBody)
+		if err != nil {
+			t.Fatalf("Request failed: %v", err)
+		}
+
+		if resp.StatusCode != 200 {
+			t.Skipf("Inference request failed with status %d", resp.StatusCode)
+		}
+
+		// Then: Response includes trace_id
+		var result map[string]interface{}
+		if err := resp.DecodeJSON(&result); err != nil {
+			t.Fatalf("Failed to parse response: %v", err)
+		}
+
+		traceID, ok := result["trace_id"].(string)
+		if !ok || traceID == "" {
+			t.Errorf("Response should include trace_id for usage correlation")
+		} else {
+			t.Logf("Trace ID for usage correlation: %s", traceID)
+			// Full correlation validation requires analytics database access (UC-ANL-004/AC-03)
+		}
 	})
 }

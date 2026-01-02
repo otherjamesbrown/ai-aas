@@ -187,6 +187,12 @@ func TestUC_RSL_002_BackendFailover(t *testing.T) {
 
 	inferenceClient := NewTestClient(getAPIRouterURL(), apiKey.Key)
 
+	// Fetch available models dynamically for multi-model tests
+	availableModels, modelsErr := inferenceClient.GetAvailableModels()
+	if modelsErr != nil {
+		t.Logf("Warning: could not fetch available models: %v", modelsErr)
+	}
+
 	t.Run("AC-01: detect backend unavailability", func(t *testing.T) {
 		// When: Backend for requested model is down
 		reqBody := map[string]interface{}{
@@ -225,7 +231,35 @@ func TestUC_RSL_002_BackendFailover(t *testing.T) {
 	})
 
 	t.Run("AC-04: other models remain available", func(t *testing.T) {
-		t.Skip("Requires multiple deployed models to validate isolation")
+		if len(availableModels) < 2 {
+			t.Skipf("Model isolation test requires 2+ models, found %d", len(availableModels))
+		}
+
+		// This test validates that when one model fails, other models remain available.
+		// We test this by sending a request to an unavailable model, then verifying
+		// other models still work.
+
+		// First, try to hit a non-existent model (simulates backend failure)
+		_, _ = inferenceClient.POST("/v1/chat/completions", map[string]interface{}{
+			"model":    "unavailable-backend-model",
+			"messages": []map[string]interface{}{{"role": "user", "content": "Test"}},
+		})
+
+		// Then verify other available models still work
+		for _, model := range availableModels[:2] {
+			resp, err := inferenceClient.POST("/v1/chat/completions", map[string]interface{}{
+				"model":      model,
+				"messages":   []map[string]interface{}{{"role": "user", "content": "Isolation test"}},
+				"max_tokens": 5,
+			})
+			if err != nil {
+				t.Errorf("Model %s request failed after unavailable model request: %v", model, err)
+				continue
+			}
+			if resp.StatusCode != 200 {
+				t.Errorf("Model %s should remain available (status %d): %s", model, resp.StatusCode, resp.String())
+			}
+		}
 	})
 }
 
@@ -309,7 +343,7 @@ func TestUC_RSL_004_ErrorResponseFormat(t *testing.T) {
 			TraceID string `json:"trace_id"`
 		}
 
-		if err := resp.UnmarshalJSON(&errResp); err == nil {
+		if err := resp.DecodeJSON(&errResp); err == nil {
 			if errResp.Error.Type == "" {
 				t.Log("Warning: error.type field missing")
 			}

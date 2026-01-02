@@ -44,6 +44,7 @@ This document defines the deployment requirements for the api-router-service. Th
 | `SERVICE_NAME` | Service identifier | `api-router-service` |
 | `ENVIRONMENT` | Environment name | `development` |
 | `LOG_LEVEL` | Logging level | `info` |
+| `MODEL_ACCESS_ENABLED` | Enable model access control | `false` |
 | `REDIS_ADDRESS` | **Redis for rate limiting + API key cache invalidation** | `redis-service:6379` |
 | `REDIS_PASSWORD` | Redis password | (empty) |
 | `REDIS_DB` | Redis database number | `0` |

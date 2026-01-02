@@ -163,6 +163,8 @@ func loadFromFile(cfg *Config, path string) error {
 
 		// Remove surrounding quotes if present
 		value = strings.Trim(value, `"'`)
+		// Trim whitespace again in case it was inside the quotes
+		value = strings.TrimSpace(value)
 
 		switch key {
 		case EnvMasterAdminAPIKey:
