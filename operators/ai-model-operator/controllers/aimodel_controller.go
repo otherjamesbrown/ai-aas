@@ -82,6 +82,11 @@ const (
 	defaultDeploymentTimeout = 30 * time.Minute // Max time for deployment before marking as Failed
 )
 
+// CrashLoopBackOff detection configuration
+const (
+	maxCrashLoopBackOffCount = 10 // Number of consecutive crash loops before marking as Failed
+)
+
 // sanitizeInferenceServiceName converts an AIModel name to a KServe-compatible name.
 // KServe InferenceService names must be DNS-compatible: lowercase alphanumeric and hyphens only,
 // must start with a letter and end with alphanumeric. Periods are not allowed.
@@ -1707,6 +1712,45 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 		}
 	}
 
+	// Check for CrashLoopBackOff and track consecutive crashes
+	if phaseMessage == "CrashLoopBackOff" {
+		latestAIModel.Status.CrashLoopBackOffCount++
+		log.Info("CrashLoopBackOff detected",
+			"name", aiModel.Name,
+			"count", latestAIModel.Status.CrashLoopBackOffCount,
+			"threshold", maxCrashLoopBackOffCount)
+
+		// If we've hit the threshold, transition to Failed
+		if latestAIModel.Status.CrashLoopBackOffCount >= maxCrashLoopBackOffCount {
+			log.Error(fmt.Errorf("max crash loops exceeded"),
+				"Container repeatedly crashing",
+				"name", aiModel.Name,
+				"crashCount", latestAIModel.Status.CrashLoopBackOffCount)
+			latestAIModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
+			latestAIModel.Status.Message = fmt.Sprintf("Container crashed %d times (CrashLoopBackOff). Manual intervention required.",
+				latestAIModel.Status.CrashLoopBackOffCount)
+			latestAIModel.Status.LastFailureReason = "CrashLoopBackOff"
+
+			// Emit failure event
+			if r.Recorder != nil {
+				r.Recorder.Event(latestAIModel, corev1.EventTypeWarning, "CrashLoopBackOff",
+					fmt.Sprintf("Container crashed %d times, deployment failed", latestAIModel.Status.CrashLoopBackOffCount))
+			}
+		} else {
+			// Update message to show crash count
+			latestAIModel.Status.Message = fmt.Sprintf("Container crashing (attempt %d/%d): CrashLoopBackOff",
+				latestAIModel.Status.CrashLoopBackOffCount, maxCrashLoopBackOffCount)
+		}
+	} else if newPhase == aimodelv1alpha1.AIModelPhaseInitializing && phaseMessage != "CrashLoopBackOff" {
+		// Reset crash counter when container successfully starts (not in CrashLoopBackOff)
+		if latestAIModel.Status.CrashLoopBackOffCount > 0 {
+			log.Info("Container started successfully, resetting crash counter",
+				"name", aiModel.Name,
+				"previousCount", latestAIModel.Status.CrashLoopBackOffCount)
+			latestAIModel.Status.CrashLoopBackOffCount = 0
+		}
+	}
+
 	// Update phase based on InferenceService status
 	if status.Ready {
 		wasNotReady := latestAIModel.Status.Phase != aimodelv1alpha1.AIModelPhaseReady
@@ -1719,6 +1763,7 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 			latestAIModel.Status.LastRetryTime = nil
 			latestAIModel.Status.NextRetryTime = nil
 			latestAIModel.Status.DeploymentStartedAt = nil // Clear deployment start time
+			latestAIModel.Status.CrashLoopBackOffCount = 0 // Reset crash counter on successful deployment
 
 			// Sync deployment state to Admin API only on transition to Ready
 			// This prevents hammering the API with PUT requests on every reconcile
@@ -2358,7 +2403,13 @@ func (r *AIModelReconciler) determineGranularPhase(
 				return aimodelv1alpha1.AIModelPhaseInitializing, "Finalizing endpoint registration"
 			}
 			if cs.State.Waiting != nil {
-				// Container waiting to start
+				// Check for CrashLoopBackOff specifically - this indicates repeated container crashes
+				if cs.State.Waiting.Reason == "CrashLoopBackOff" {
+					// Return a special marker phase that the caller can detect
+					// The caller will increment the crash counter and potentially fail the deployment
+					return aimodelv1alpha1.AIModelPhaseInitializing, "CrashLoopBackOff"
+				}
+				// Container waiting to start (normal startup)
 				return aimodelv1alpha1.AIModelPhaseInitializing, fmt.Sprintf("Starting container: %s", cs.State.Waiting.Reason)
 			}
 			if cs.State.Terminated != nil && cs.State.Terminated.ExitCode != 0 {

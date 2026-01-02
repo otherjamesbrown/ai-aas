@@ -397,6 +397,10 @@ type AIModelStatus struct {
 	// Set when transitioning to Failed phase.
 	LastFailureReason string `json:"lastFailureReason,omitempty"`
 
+	// CrashLoopBackOffCount tracks consecutive CrashLoopBackOff occurrences.
+	// Reset when container successfully starts. Used to detect stuck deployments.
+	CrashLoopBackOffCount int32 `json:"crashLoopBackOffCount,omitempty"`
+
 	// DEPRECATED: Use InferenceServiceName instead.
 	VLLMDeploymentName string `json:"vllmDeploymentName,omitempty"`
 
