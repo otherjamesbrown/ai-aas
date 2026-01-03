@@ -357,81 +357,24 @@ type CreateDeploymentRequest struct {
 }
 
 // Create creates a model deployment and registers it for cleanup
-// Uses Admin API: POST /v1/models/deployments
+// Deprecated: Direct model deployment creation is blocked by Kyverno policy.
+// Use GitOpsModelFixture.Create() instead.
 func (mdf *ModelDeploymentFixture) Create(modelName, environment string) (*ModelDeployment, error) {
-	reqBody := CreateDeploymentRequest{
-		ModelName:   modelName,
-		Environment: environment,
-		Replicas:    1,
-	}
-
-	resp, err := mdf.client.POST("/v1/models/deployments", reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("create deployment request failed: %w", err)
-	}
-
-	if resp.StatusCode != 201 && resp.StatusCode != 200 {
-		return nil, fmt.Errorf("create deployment failed: status %d, body: %s", resp.StatusCode, resp.String())
-	}
-
-	var deployment ModelDeployment
-	if err := resp.DecodeJSON(&deployment); err != nil {
-		return nil, fmt.Errorf("parse deployment response: %w", err)
-	}
-
-	// Register cleanup
-	mdf.fm.Register("model_deployment", deployment.ModelName+"-"+deployment.Environment, map[string]string{
-		"model_name":  deployment.ModelName,
-		"environment": deployment.Environment,
-	}, func() error {
-		return mdf.Delete(deployment.ModelName, deployment.Environment)
-	})
-
-	return &deployment, nil
+	return nil, fmt.Errorf("direct model deployment creation is blocked by Kyverno policy; use GitOpsModelFixture instead")
 }
 
 // CreateWithOptions creates a model deployment with custom options
+// Deprecated: Direct model deployment creation is blocked by Kyverno policy.
+// Use GitOpsModelFixture.Create() instead.
 func (mdf *ModelDeploymentFixture) CreateWithOptions(req CreateDeploymentRequest) (*ModelDeployment, error) {
-	resp, err := mdf.client.POST("/v1/models/deployments", req)
-	if err != nil {
-		return nil, fmt.Errorf("create deployment request failed: %w", err)
-	}
-
-	if resp.StatusCode != 201 && resp.StatusCode != 200 {
-		return nil, fmt.Errorf("create deployment failed: status %d, body: %s", resp.StatusCode, resp.String())
-	}
-
-	var deployment ModelDeployment
-	if err := resp.DecodeJSON(&deployment); err != nil {
-		return nil, fmt.Errorf("parse deployment response: %w", err)
-	}
-
-	// Register cleanup
-	mdf.fm.Register("model_deployment", deployment.ModelName+"-"+deployment.Environment, map[string]string{
-		"model_name":  deployment.ModelName,
-		"environment": deployment.Environment,
-	}, func() error {
-		return mdf.Delete(deployment.ModelName, deployment.Environment)
-	})
-
-	return &deployment, nil
+	return nil, fmt.Errorf("direct model deployment creation is blocked by Kyverno policy; use GitOpsModelFixture instead")
 }
 
 // Delete deletes a model deployment
-// Uses Admin API: DELETE /v1/models/deployments/{model_name}/{environment}
+// Deprecated: Direct model deployment deletion is blocked by Kyverno policy.
+// GitOps model cleanup is handled automatically by GitOpsModelFixture.Delete().
 func (mdf *ModelDeploymentFixture) Delete(modelName, environment string) error {
-	path := fmt.Sprintf("/v1/models/deployments/%s/%s", modelName, environment)
-	resp, err := mdf.client.DELETE(path)
-	if err != nil {
-		return fmt.Errorf("delete deployment request failed: %w", err)
-	}
-
-	// 204 No Content or 404 Not Found are both acceptable
-	if resp.StatusCode != 204 && resp.StatusCode != 200 && resp.StatusCode != 404 {
-		return fmt.Errorf("delete deployment failed: status %d, body: %s", resp.StatusCode, resp.String())
-	}
-
-	return nil
+	return fmt.Errorf("direct model deployment deletion is blocked by Kyverno policy; use GitOpsModelFixture instead")
 }
 
 // Get retrieves a model deployment
@@ -495,6 +438,85 @@ func (mdf *ModelDeploymentFixture) List(environment, modelName string) ([]ModelD
 	}
 
 	return deployments, nil
+}
+
+// PreExistingModelReference represents a model already deployed in the cluster
+// Used for read-only tests that don't need to create/destroy deployments
+//
+// Example usage:
+//
+//	func TestInference_WithPreExistingModel(t *testing.T) {
+//	    // Get reference to well-known model
+//	    modelRef, err := GetWellKnownModel("tinyllama")
+//	    require.NoError(t, err)
+//
+//	    // Optionally verify it exists (recommended in test setup)
+//	    client := setupTestClient(t)
+//	    err = modelRef.VerifyModelExists(client)
+//	    require.NoError(t, err)
+//
+//	    // Use the model for inference tests
+//	    resp := client.POST("/v1/chat/completions", map[string]interface{}{
+//	        "model": modelRef.ModelName,
+//	        "messages": []map[string]string{{"role": "user", "content": "Hello"}},
+//	    })
+//	    require.Equal(t, 200, resp.StatusCode)
+//	}
+type PreExistingModelReference struct {
+	ModelName   string // The model name as registered in Admin API
+	Environment string // The environment where it's deployed (e.g., "development")
+	Namespace   string // The Kubernetes namespace (e.g., "development", "system")
+}
+
+// WellKnownTestModels defines pre-deployed models that tests can rely on
+// These models MUST be deployed and maintained in the development cluster
+var WellKnownTestModels = map[string]PreExistingModelReference{
+	"tinyllama": {
+		ModelName:   "tinyllama-1.1b-chat",
+		Environment: "development",
+		Namespace:   "development",
+	},
+	"llama-3.1-8b": {
+		ModelName:   "llama-3.1-8b-instruct",
+		Environment: "development",
+		Namespace:   "system",
+	},
+}
+
+// GetWellKnownModel retrieves a pre-existing model reference by key
+// Returns an error if the model key is not found
+func GetWellKnownModel(key string) (*PreExistingModelReference, error) {
+	model, exists := WellKnownTestModels[key]
+	if !exists {
+		return nil, fmt.Errorf("well-known model %q not found; available: tinyllama, llama-3.1-8b", key)
+	}
+	return &model, nil
+}
+
+// VerifyModelExists checks if the pre-existing model is actually deployed
+// Uses the ModelDeploymentFixture to query the Admin API
+func (ref *PreExistingModelReference) VerifyModelExists(client *TestClient) error {
+	fm := &FixtureManager{
+		t:        nil, // No cleanup needed for verification
+		client:   client,
+		fixtures: []TestFixture{},
+	}
+	mdf := NewModelDeploymentFixture(fm, client)
+
+	deployment, err := mdf.Get(ref.ModelName, ref.Environment)
+	if err != nil {
+		return fmt.Errorf("failed to verify model %s in %s: %w", ref.ModelName, ref.Environment, err)
+	}
+
+	if deployment == nil {
+		return fmt.Errorf("model %s not found in environment %s", ref.ModelName, ref.Environment)
+	}
+
+	if deployment.Status != "Running" && deployment.Status != "Ready" {
+		return fmt.Errorf("model %s exists but status is %s (expected Running or Ready)", ref.ModelName, deployment.Status)
+	}
+
+	return nil
 }
 
 // GitOpsModelFixture provides GitOps-based model deployment operations for tests
