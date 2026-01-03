@@ -14,6 +14,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -523,7 +524,21 @@ func (h *Handler) forwardOpenAIRequest(ctx context.Context, backend *routing.Bac
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, nil, fmt.Errorf("backend returned status %d: %s", resp.StatusCode, string(body))
+		bodyStr := string(body)
+
+		// Detect KServe v2 / TRT-LLM backend misconfiguration
+		// These backends return 404 for /v1/chat/completions because they only serve
+		// the KServe v2 protocol at /v2/models/{model}/infer
+		if resp.StatusCode == http.StatusNotFound && isLikelyKServeV2Backend(backend.URI, bodyStr) {
+			return nil, nil, fmt.Errorf(
+				"backend returned 404: this appears to be a KServe v2 / TRT-LLM backend. "+
+					"Update the routing policy to use backend_type: 'triton-grpc' and set a tokenizer. "+
+					"See docs/platform/backend-protocols.md for details. Backend: %s",
+				backend.URI,
+			)
+		}
+
+		return nil, nil, fmt.Errorf("backend returned status %d: %s", resp.StatusCode, bodyStr)
 	}
 
 	// Parse OpenAI response based on type
@@ -1600,4 +1615,47 @@ func (h *Handler) forwardOpenAIStreamingRequest(
 		zap.String("backend_id", backend.ID),
 		zap.Duration("duration", duration),
 	)
+}
+
+// isLikelyKServeV2Backend detects if a backend is likely a KServe v2 / TRT-LLM
+// backend based on the service URL patterns and response body.
+// This helps provide actionable error messages when a routing policy is
+// misconfigured with backend_type: "openai" for a Triton/TRT-LLM backend.
+func isLikelyKServeV2Backend(backendURI, responseBody string) bool {
+	uriLower := strings.ToLower(backendURI)
+	bodyLower := strings.ToLower(responseBody)
+
+	// Check for TRT-LLM / Triton patterns in the service URL
+	// Common naming patterns: "trtllm", "tensorrt", "triton", "kserve"
+	tritonPatterns := []string{"trtllm", "tensorrt", "triton", "-trt-", "kserve"}
+	for _, pattern := range tritonPatterns {
+		if strings.Contains(uriLower, pattern) {
+			return true
+		}
+	}
+
+	// Check for KServe v2 patterns in the error response
+	// KServe v2 backends typically return specific error formats
+	kservePatterns := []string{
+		"/v2/models",         // KServe v2 endpoint pattern
+		"model_version",      // KServe v2 response field
+		"inference",          // Common in Triton responses
+		"ensemble",           // TRT-LLM uses ensemble models
+		"triton",             // Triton server name
+		"not found",          // Generic 404 with no OpenAI error format
+	}
+	for _, pattern := range kservePatterns {
+		if strings.Contains(bodyLower, pattern) {
+			return true
+		}
+	}
+
+	// Check if the response is NOT an OpenAI-format error
+	// OpenAI errors have {"error": {"message": "...", "type": "...", "code": "..."}}
+	if responseBody != "" && !strings.Contains(responseBody, `"error"`) {
+		// If it's a 404 without OpenAI error format, likely a non-OpenAI backend
+		return true
+	}
+
+	return false
 }

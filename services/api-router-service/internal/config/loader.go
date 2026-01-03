@@ -531,6 +531,15 @@ func (l *Loader) Stop() {
 	}
 }
 
+// GetAllPolicies returns all routing policies from the cache.
+// This is useful for validation and diagnostic purposes.
+func (l *Loader) GetAllPolicies(ctx context.Context) ([]*RoutingPolicy, error) {
+	if l.cache == nil {
+		return nil, fmt.Errorf("cache not initialized")
+	}
+	return l.cache.LoadPolicies(ctx)
+}
+
 // Health checks the health of the Config Service (etcd) connection.
 // Returns nil if healthy, error if unhealthy.
 // This method attempts to connect if not already connected, but does not fail

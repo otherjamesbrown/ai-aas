@@ -51,6 +51,16 @@ func (h *PolicyHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Log reminder for potential TRT-LLM backends when using openai backend_type
+	// The api-router-service has better detection since it has access to backend URIs
+	if create.BackendType == "" || create.BackendType == "openai" {
+		h.logger.Info("policy created with openai backend_type - ensure backend is OpenAI-compatible",
+			zap.String("policy_id", policy.PolicyID),
+			zap.String("model", policy.Model),
+			zap.String("hint", "If using TRT-LLM/Triton backend, update to backend_type='triton-grpc'. See docs/platform/backend-protocols.md"),
+		)
+	}
+
 	httputil.WriteJSON(w, http.StatusCreated, policy)
 }
 

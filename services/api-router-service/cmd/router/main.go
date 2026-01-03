@@ -443,6 +443,10 @@ func main() {
 	// This helps detect NetworkPolicy or routing issues early, before inference requests timeout
 	probeBackendConnectivity(backendRegistry, logger)
 
+	// Validate routing policy backend_types against actual backend URIs
+	// This helps catch misconfigurations (e.g., TRT-LLM backend with backend_type: "openai")
+	validatePolicyBackendTypes(loader, backendRegistry, logger)
+
 	// Start health monitor
 	healthMonitor.Start()
 	defer healthMonitor.Stop()
@@ -732,4 +736,52 @@ func getHealthPathForBackend(uri string) string {
 	}
 	// Default to /health for vLLM and other OpenAI-compatible backends
 	return "/health"
+}
+
+// validatePolicyBackendTypes checks routing policies against backend URIs and logs warnings
+// for potential misconfigurations (e.g., TRT-LLM backend with backend_type: "openai").
+// This helps catch configuration errors at startup rather than at runtime.
+func validatePolicyBackendTypes(loader *config.Loader, backendRegistry *config.BackendRegistry, logger *zap.Logger) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	policies, err := loader.GetAllPolicies(ctx)
+	if err != nil {
+		logger.Debug("could not load policies for backend_type validation", zap.Error(err))
+		return
+	}
+
+	// TRT-LLM / Triton patterns in service URLs
+	tritonPatterns := []string{"trtllm", "tensorrt", "triton", "-trt-", "kserve"}
+
+	for _, policy := range policies {
+		// Skip policies that are already configured for Triton
+		if policy.BackendType == "triton" || policy.BackendType == "triton-grpc" {
+			continue
+		}
+
+		// Check each backend in the policy
+		for _, backend := range policy.Backends {
+			backendCfg, err := backendRegistry.GetBackend(backend.BackendID)
+			if err != nil {
+				continue // Backend not found in registry
+			}
+
+			uriLower := strings.ToLower(backendCfg.URI)
+			for _, pattern := range tritonPatterns {
+				if strings.Contains(uriLower, pattern) {
+					logger.Warn("MISCONFIGURATION: routing policy has backend_type 'openai' but backend URL suggests KServe v2 / TRT-LLM",
+						zap.String("policy_id", policy.PolicyID),
+						zap.String("model", policy.Model),
+						zap.String("backend_id", backend.BackendID),
+						zap.String("backend_uri", backendCfg.URI),
+						zap.String("current_backend_type", policy.BackendType),
+						zap.String("suggested_backend_type", "triton-grpc"),
+						zap.String("hint", "Update routing policy via Admin API: PATCH /v1/routing/policies/{id} with backend_type='triton-grpc'"),
+					)
+					break
+				}
+			}
+		}
+	}
 }
