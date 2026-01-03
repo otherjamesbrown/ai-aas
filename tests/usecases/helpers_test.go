@@ -665,8 +665,8 @@ func NewTestOrgContext(t *testing.T) *TestOrgContext {
 	adminKey := getAdminAPIKey()
 	apiRouterURL := getAPIRouterURL()
 
-	if adminEndpoint == "" || adminKey == "" {
-		t.Skip("requires live API: set AI_AAS_API_ENDPOINT and AI_AAS_ADMIN_API_KEY")
+	if apiEndpoint == "" || adminEndpoint == "" || adminKey == "" {
+		t.Skip("requires live API: set AI_AAS_API_ENDPOINT, AI_AAS_ADMIN_API_ENDPOINT, and AI_AAS_ADMIN_API_KEY")
 	}
 
 	client := NewTestClient(adminEndpoint, adminKey)
@@ -740,7 +740,7 @@ func NewTestOrgContext(t *testing.T) *TestOrgContext {
 	}
 
 	// Create temp config file for CLI
-	configContent := "api_endpoint: " + adminEndpoint + "\n"
+	configContent := "api_endpoint: " + apiEndpoint + "\n"
 	configContent += "admin_endpoint: " + adminEndpoint + "\n"
 	configContent += "api_key: " + apiKey.Token + "\n"
 	configContent += "org_id: " + org.OrgID + "\n"
@@ -887,20 +887,21 @@ func runMetricsOrgCLI(args ...string) CLIResult {
 	cmd.Env = os.Environ()
 
 	// Create temp config with metrics org credentials
-	endpoint := os.Getenv(envAPIEndpoint)
+	apiEndpoint := getAPIEndpoint()
+	adminEndpoint := getAdminAPIEndpoint()
 	apiKey := os.Getenv(envMetricsAPIKey)
 	orgID := os.Getenv(envMetricsOrgID)
 	apiRouterURL := getAPIRouterURL()
 
-	if endpoint == "" || apiKey == "" || orgID == "" {
+	if apiEndpoint == "" || adminEndpoint == "" || apiKey == "" || orgID == "" {
 		return CLIResult{
 			Error:    "metrics org not configured",
 			ExitCode: 1,
 		}
 	}
 
-	configContent := "api_endpoint: " + endpoint + "\n"
-	configContent += "admin_endpoint: " + endpoint + "\n"
+	configContent := "api_endpoint: " + apiEndpoint + "\n"
+	configContent += "admin_endpoint: " + adminEndpoint + "\n"
 	configContent += "api_key: " + apiKey + "\n"
 	configContent += "org_id: " + orgID + "\n"
 	if apiRouterURL != "" {

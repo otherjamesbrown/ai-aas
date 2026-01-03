@@ -46,6 +46,10 @@ func setupTestConfig() {
 	if os.Getenv(envAPIEndpoint) == "" {
 		os.Setenv(envAPIEndpoint, "https://user-org.dev.otherjamesbrown.com")
 	}
+	// Set Admin API endpoint for benchmark/model tests
+	if os.Getenv(envAdminAPIEndpoint) == "" {
+		os.Setenv(envAdminAPIEndpoint, "https://admin-api.dev.otherjamesbrown.com")
+	}
 	// Set API router URL for routing tests
 	if os.Getenv(envAPIRouterURL) == "" {
 		os.Setenv(envAPIRouterURL, "https://api.dev.otherjamesbrown.com")
