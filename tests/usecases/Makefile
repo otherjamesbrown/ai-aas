@@ -26,11 +26,11 @@ STAGING_ADMIN_ENDPOINT := https://admin-api.staging.otherjamesbrown.com
 
 test-dev:
 	@echo "Running UC tests against development cluster..."
-	@AI_AAS_API_ENDPOINT=$(DEV_ENDPOINT) AI_AAS_ADMIN_API_ENDPOINT=$(DEV_ADMIN_ENDPOINT) go test -v ./... -timeout 10m
+	@AI_AAS_API_ENDPOINT=$(DEV_ENDPOINT) AI_AAS_ADMIN_API_ENDPOINT=$(DEV_ADMIN_ENDPOINT) AI_AAS_TEST_MODEL=llama-3.1-8b-instruct go test -v ./... -timeout 10m
 
 test-staging:
 	@echo "Running UC tests against staging cluster..."
-	@AI_AAS_API_ENDPOINT=$(STAGING_ENDPOINT) AI_AAS_ADMIN_API_ENDPOINT=$(STAGING_ADMIN_ENDPOINT) go test -v ./... -timeout 10m
+	@AI_AAS_API_ENDPOINT=$(STAGING_ENDPOINT) AI_AAS_ADMIN_API_ENDPOINT=$(STAGING_ADMIN_ENDPOINT) AI_AAS_TEST_MODEL=llama-3.1-8b-instruct go test -v ./... -timeout 10m
 
 test-uc:
 	@if [ -z "$(UC)" ]; then \
@@ -38,7 +38,7 @@ test-uc:
 		exit 1; \
 	fi
 	@echo "Running specific UC test: $(UC)..."
-	@AI_AAS_API_ENDPOINT=$(DEV_ENDPOINT) AI_AAS_ADMIN_API_ENDPOINT=$(DEV_ADMIN_ENDPOINT) go test -v ./... -run "$(UC)" -timeout 10m
+	@AI_AAS_API_ENDPOINT=$(DEV_ENDPOINT) AI_AAS_ADMIN_API_ENDPOINT=$(DEV_ADMIN_ENDPOINT) AI_AAS_TEST_MODEL=llama-3.1-8b-instruct go test -v ./... -run "$(UC)" -timeout 10m
 
 test:
 	@echo "Running UC tests (auto-loading credentials)..."
@@ -58,6 +58,7 @@ help:
 	@echo "  AI_AAS_API_ENDPOINT       - User-org service endpoint (set automatically by test-dev/test-staging)"
 	@echo "  AI_AAS_ADMIN_API_ENDPOINT - Admin API service endpoint (for benchmarks, models)"
 	@echo "  AI_AAS_API_KEY            - API key (auto-loaded from secrets/env/.env)"
+	@echo "  AI_AAS_TEST_MODEL         - Model to use for testing (set automatically by test-dev/test-staging)"
 	@echo "  UC                        - Use case ID to run (required for test-uc)"
 	@echo ""
 	@echo "Examples:"
