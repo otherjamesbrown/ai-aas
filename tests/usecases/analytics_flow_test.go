@@ -566,6 +566,7 @@ func TestUC_ANL_003_AnalyticsExport(t *testing.T) {
 func TestUC_ANL_004_CrossServiceCorrelation(t *testing.T) {
 	skipIfNoPlatformCLI(t)
 	skipIfNoVLLMBackend(t)
+	skipIfNoOpenAIModel(t)
 
 	client, err := NewTestClientFromEnv()
 	if err != nil {

@@ -19,6 +19,7 @@ import (
 func TestUC_INF_001_EndToEndChatCompletion(t *testing.T) {
 	skipIfNoPlatformCLI(t)
 	skipIfNoVLLMBackend(t)
+	skipIfNoOpenAIModel(t)
 
 	client, err := NewTestClientFromEnv()
 	if err != nil {
@@ -311,6 +312,7 @@ func TestUC_INF_001_EndToEndChatCompletion(t *testing.T) {
 func TestUC_INF_002_StreamingCompletion(t *testing.T) {
 	skipIfNoPlatformCLI(t)
 	skipIfNoVLLMBackend(t)
+	skipIfNoOpenAIModel(t)
 
 	client, err := NewTestClientFromEnv()
 	if err != nil {

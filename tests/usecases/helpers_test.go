@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -560,14 +561,189 @@ func getAdminAPIKey() string {
 	return adminKey
 }
 
+// cachedTestModel stores the dynamically discovered test model to avoid repeated lookups
+var cachedTestModel string
+var cachedTestModelOnce sync.Once
+
 // getTestModel returns the model name to use for testing.
-// Defaults to "gpt-4" if not specified.
+// Priority:
+// 1. AI_AAS_TEST_MODEL environment variable (explicit override)
+// 2. Dynamically discovered OpenAI-compatible model from /v1/models
+// 3. Empty string if no OpenAI-compatible model is available
 func getTestModel() string {
+	// First priority: explicit environment variable
 	model := os.Getenv(envTestModel)
-	if model == "" {
-		return "gpt-4" // Default test model
+	if model != "" {
+		return model
 	}
-	return model
+
+	// Second priority: dynamically discover an OpenAI-compatible model
+	cachedTestModelOnce.Do(func() {
+		discovered := discoverOpenAICompatibleModel()
+		if discovered != "" {
+			cachedTestModel = discovered
+		}
+	})
+
+	return cachedTestModel
+}
+
+// skipIfNoOpenAIModel skips the test if no OpenAI-compatible model is available.
+// This handles the case where only KServe v2 / TRT-LLM backends are deployed.
+func skipIfNoOpenAIModel(t *testing.T) {
+	t.Helper()
+
+	model := getTestModel()
+	if model == "" {
+		t.Skip("Skipping: no OpenAI-compatible model available (only KServe v2 / TRT-LLM backends found)")
+	}
+}
+
+// discoverOpenAICompatibleModel queries /v1/models and returns the first model
+// that uses an OpenAI-compatible backend (not KServe v2 / TRT-LLM).
+// It uses a combination of name pattern matching and probing to detect compatibility.
+func discoverOpenAICompatibleModel() string {
+	apiRouterURL := getAPIRouterURL()
+	if apiRouterURL == "" {
+		return ""
+	}
+
+	adminKey := getAdminAPIKey()
+	if adminKey == "" {
+		return ""
+	}
+
+	client := NewTestClient(apiRouterURL, adminKey)
+	models, err := client.GetAvailableModels()
+	if err != nil || len(models) == 0 {
+		return ""
+	}
+
+	// Known patterns that indicate KServe v2 / TRT-LLM backends
+	kservePatterns := []string{
+		"trtllm",
+		"tensorrt",
+		"triton",
+		"kserve",
+	}
+
+	// Known patterns that indicate OpenAI-compatible backends (vLLM)
+	openaiPatterns := []string{
+		"vllm",
+		"gpt-oss",
+		"unsloth",
+	}
+
+	var likelyOpenAI []string
+	var likelyKServe []string
+	var unknown []string
+
+	for _, model := range models {
+		modelLower := strings.ToLower(model)
+
+		// Check for OpenAI patterns first
+		isOpenAI := false
+		for _, pattern := range openaiPatterns {
+			if strings.Contains(modelLower, pattern) {
+				isOpenAI = true
+				break
+			}
+		}
+		if isOpenAI {
+			likelyOpenAI = append(likelyOpenAI, model)
+			continue
+		}
+
+		// Check for KServe patterns
+		isKServe := false
+		for _, pattern := range kservePatterns {
+			if strings.Contains(modelLower, pattern) {
+				isKServe = true
+				break
+			}
+		}
+		if isKServe {
+			likelyKServe = append(likelyKServe, model)
+			continue
+		}
+
+		// Unknown - need to probe
+		unknown = append(unknown, model)
+	}
+
+	// Priority 1: Return first likely OpenAI-compatible model
+	if len(likelyOpenAI) > 0 {
+		return likelyOpenAI[0]
+	}
+
+	// Priority 2: Probe unknown models to find an OpenAI-compatible one
+	for _, model := range unknown {
+		if probeOpenAICompatibility(client, model) {
+			return model
+		}
+	}
+
+	// Priority 3: If no OpenAI-compatible found, return empty
+	// Tests should skip gracefully rather than fail with protocol mismatch
+	return ""
+}
+
+// probeOpenAICompatibility sends a minimal request to check if a model
+// responds with OpenAI-compatible format or returns a KServe v2 404.
+// Returns: true if OpenAI-compatible, false if KServe v2 or indeterminate.
+func probeOpenAICompatibility(client *TestClient, model string) bool {
+	reqBody := map[string]interface{}{
+		"model": model,
+		"messages": []map[string]string{
+			{"role": "user", "content": "test"},
+		},
+		"max_tokens": 1, // Minimal tokens to reduce cost/latency
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return false
+	}
+
+	resp, err := client.POST("/v1/chat/completions", bodyBytes)
+	if err != nil {
+		return false
+	}
+
+	bodyStr := resp.String()
+
+	// Status codes that indicate we can't determine compatibility:
+	// 402 = Quota exceeded - can't test the backend
+	// 401/403 = Auth issues - can't test the backend
+	// These are treated as "not compatible" to be safe (skip the model)
+	if resp.StatusCode == 402 || resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return false
+	}
+
+	// KServe v2 backends return 404 because they don't serve /v1/chat/completions
+	if resp.StatusCode == 404 {
+		return false
+	}
+
+	// Check if response contains backend 404 error (backend returned but wrong protocol)
+	if strings.Contains(bodyStr, "backend returned status 404") ||
+		strings.Contains(bodyStr, "\"error\":\"Not Found\"") {
+		return false
+	}
+
+	// 200 = Success - definitely OpenAI-compatible
+	if resp.StatusCode == 200 {
+		return true
+	}
+
+	// Other 5xx errors could be transient - assume compatible if not 404
+	// 429 rate limit also suggests the model exists and is OpenAI-compatible
+	if resp.StatusCode == 429 || (resp.StatusCode >= 500 && !strings.Contains(bodyStr, "404")) {
+		return true
+	}
+
+	// Unknown status - be conservative and return false
+	return false
 }
 
 // skipIfNoVLLMBackend skips the test if vLLM backend is not available.
