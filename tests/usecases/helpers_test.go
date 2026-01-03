@@ -18,13 +18,14 @@ import (
 
 // Environment variable names for API configuration
 const (
-	envAPIEndpoint     = "AI_AAS_API_ENDPOINT"
-	envAPIKey          = "AI_AAS_API_KEY"
-	envOrgID           = "AI_AAS_ORG_ID"
-	envAPIRouterURL    = "AI_AAS_API_ROUTER_URL"
-	envAnalyticsURL    = "AI_AAS_ANALYTICS_URL"
-	envAdminAPIKey     = "AI_AAS_ADMIN_API_KEY"
-	envTestModel       = "AI_AAS_TEST_MODEL"
+	envAPIEndpoint      = "AI_AAS_API_ENDPOINT"      // User-org service endpoint
+	envAdminAPIEndpoint = "AI_AAS_ADMIN_API_ENDPOINT" // Admin API service endpoint (for benchmarks, models)
+	envAPIKey           = "AI_AAS_API_KEY"
+	envOrgID            = "AI_AAS_ORG_ID"
+	envAPIRouterURL     = "AI_AAS_API_ROUTER_URL"
+	envAnalyticsURL     = "AI_AAS_ANALYTICS_URL"
+	envAdminAPIKey      = "AI_AAS_ADMIN_API_KEY"
+	envTestModel        = "AI_AAS_TEST_MODEL"
 	// Persistent metrics org for analytics/usage tests that need historical data
 	envMetricsOrgID  = "AI_AAS_METRICS_ORG_ID"
 	envMetricsAPIKey = "AI_AAS_METRICS_API_KEY"
@@ -72,9 +73,20 @@ func skipIfNoGitOpsConfig(t *testing.T) {
 	}
 }
 
-// getAPIEndpoint returns the configured API endpoint
+// getAPIEndpoint returns the configured API endpoint (user-org service)
 func getAPIEndpoint() string {
 	return os.Getenv(envAPIEndpoint)
+}
+
+// getAdminAPIEndpoint returns the configured Admin API endpoint (admin-api-service).
+// Defaults to AI_AAS_API_ENDPOINT if AI_AAS_ADMIN_API_ENDPOINT not set.
+func getAdminAPIEndpoint() string {
+	adminEndpoint := os.Getenv(envAdminAPIEndpoint)
+	if adminEndpoint == "" {
+		// Fallback to main API endpoint
+		return os.Getenv(envAPIEndpoint)
+	}
+	return adminEndpoint
 }
 
 // getAPIKey returns the configured API key
@@ -233,11 +245,12 @@ func runOrgCLI(args ...string) CLIResult {
 	if endpoint := os.Getenv(envAPIEndpoint); endpoint != "" {
 		apiKey := os.Getenv(envAPIKey)
 		orgID := os.Getenv(envOrgID)
+		adminEndpoint := getAdminAPIEndpoint()
 		apiRouterURL := getAPIRouterURL()
 
 		// Build config with all required endpoints
 		configContent := "api_endpoint: " + endpoint + "\n"
-		configContent += "admin_endpoint: " + endpoint + "\n" // Use same endpoint for admin operations
+		configContent += "admin_endpoint: " + adminEndpoint + "\n" // Admin API service (for benchmarks, models)
 		configContent += "api_key: " + apiKey + "\n"
 		if orgID != "" {
 			configContent += "org_id: " + orgID + "\n"
@@ -647,7 +660,8 @@ type TestOrgContext struct {
 func NewTestOrgContext(t *testing.T) *TestOrgContext {
 	t.Helper()
 
-	adminEndpoint := getAPIEndpoint()
+	apiEndpoint := getAPIEndpoint()
+	adminEndpoint := getAdminAPIEndpoint()
 	adminKey := getAdminAPIKey()
 	apiRouterURL := getAPIRouterURL()
 

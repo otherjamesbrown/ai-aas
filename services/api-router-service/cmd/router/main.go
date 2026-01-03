@@ -57,6 +57,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
 
@@ -245,6 +246,13 @@ func main() {
 
 	// Request context middleware (for request IDs and correlation)
 	router.Use(observability.RequestContextMiddleware)
+
+	// OpenTelemetry HTTP tracing middleware (must come after request context)
+	// This creates spans for all incoming HTTP requests, enabling trace_id extraction in error responses
+	router.Use(func(next http.Handler) http.Handler {
+		return otelhttp.NewHandler(next, "api-router-service",
+			otelhttp.WithTracerProvider(otel.GetTracerProvider()))
+	})
 
 	// Request logger middleware (structured logging for all requests)
 	requestLoggerConfig := sharedMiddleware.DefaultRequestLoggerConfig()

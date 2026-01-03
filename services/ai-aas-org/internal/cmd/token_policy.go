@@ -145,13 +145,13 @@ func formatTokenCount(n int64) string {
 
 // findPolicyByNameOrID looks up a policy by name or ID
 func findPolicyByNameOrID(ctx context.Context, client *api.Client, nameOrID string) (*api.TokenRateLimitPolicy, error) {
-	// Try direct lookup by ID first
+	// Try direct lookup by ID first (silently fails for invalid ID format)
 	policy, err := client.GetTokenPolicy(ctx, config.GetOrgID(), nameOrID)
 	if err == nil {
 		return policy, nil
 	}
 
-	// If not found, search by name
+	// If the ID lookup fails (either invalid format or not found), search by name
 	policies, listErr := client.ListTokenPolicies(ctx, config.GetOrgID())
 	if listErr != nil {
 		return nil, listErr
@@ -192,14 +192,13 @@ func runTokenPolicyShow(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	policyID := args[0]
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	client := newAPIClient()
 
-	policy, err := client.GetTokenPolicy(ctx, config.GetOrgID(), policyID)
+	// Resolve policy name or ID
+	policy, err := findPolicyByNameOrID(ctx, client, args[0])
 	if err != nil {
 		return wrapAPIError(err, "failed to get token policy")
 	}
@@ -442,7 +441,17 @@ func runTokenPolicyUpdate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	policyID := args[0]
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	client := newAPIClient()
+
+	// Resolve policy name or ID
+	policy, err := findPolicyByNameOrID(ctx, client, args[0])
+	if err != nil {
+		return wrapAPIError(err, "failed to find token policy")
+	}
+	policyID := policy.ID
 
 	// Build request - only include changed fields
 	req := &api.UpdateTokenPolicyRequest{}
@@ -477,28 +486,23 @@ func runTokenPolicyUpdate(cmd *cobra.Command, args []string) error {
 		return errors.NewUsageError("no changes specified")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	client := newAPIClient()
-
-	policy, err := client.UpdateTokenPolicy(ctx, config.GetOrgID(), policyID, req)
+	updated, err := client.UpdateTokenPolicy(ctx, config.GetOrgID(), policyID, req)
 	if err != nil {
 		return wrapAPIError(err, "failed to update token policy")
 	}
 
 	if IsJSONOutput() {
-		return output.PrintJSON(policy)
+		return output.PrintJSON(updated)
 	}
 
 	output.SuccessMsg("Token policy updated successfully!")
 	fmt.Println()
 
-	output.KeyValue("ID", policy.ID)
-	output.KeyValue("Name", policy.Name)
-	output.KeyValue("1 Hour Limit", formatLimit(policy.Limit1h))
-	output.KeyValue("24 Hour Limit", formatLimit(policy.Limit24h))
-	output.KeyValue("7 Day Limit", formatLimit(policy.Limit7d))
+	output.KeyValue("ID", updated.ID)
+	output.KeyValue("Name", updated.Name)
+	output.KeyValue("1 Hour Limit", formatLimit(updated.Limit1h))
+	output.KeyValue("24 Hour Limit", formatLimit(updated.Limit24h))
+	output.KeyValue("7 Day Limit", formatLimit(updated.Limit7d))
 
 	return nil
 }
@@ -533,18 +537,17 @@ func runTokenPolicyDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	policyID := args[0]
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	client := newAPIClient()
 
-	// Get policy details for confirmation
-	policy, err := client.GetTokenPolicy(ctx, config.GetOrgID(), policyID)
+	// Resolve policy name or ID
+	policy, err := findPolicyByNameOrID(ctx, client, args[0])
 	if err != nil {
 		return wrapAPIError(err, "failed to find token policy")
 	}
+	policyID := policy.ID
 
 	if policy.IsBuiltin {
 		return errors.NewUsageError("built-in policies cannot be deleted")
@@ -618,21 +621,27 @@ func runTokenPolicyDefault(cmd *cobra.Command, args []string) error {
 
 	// If --set is provided, update the default
 	if tokenPolicyDefaultSet != "" {
-		policy, err := client.SetOrgDefaultTokenPolicy(ctx, config.GetOrgID(), tokenPolicyDefaultSet)
+		// Resolve policy name or ID
+		policy, err := findPolicyByNameOrID(ctx, client, tokenPolicyDefaultSet)
+		if err != nil {
+			return wrapAPIError(err, "failed to find token policy")
+		}
+
+		result, err := client.SetOrgDefaultTokenPolicy(ctx, config.GetOrgID(), policy.ID)
 		if err != nil {
 			return wrapAPIError(err, "failed to set default token policy")
 		}
 
 		if IsJSONOutput() {
-			return output.PrintJSON(policy)
+			return output.PrintJSON(result)
 		}
 
 		output.SuccessMsg("Organization default token policy updated!")
 		fmt.Println()
-		output.KeyValue("Policy", policy.Name)
-		output.KeyValue("1 Hour Limit", formatLimit(policy.Limit1h))
-		output.KeyValue("24 Hour Limit", formatLimit(policy.Limit24h))
-		output.KeyValue("7 Day Limit", formatLimit(policy.Limit7d))
+		output.KeyValue("Policy", result.Name)
+		output.KeyValue("1 Hour Limit", formatLimit(result.Limit1h))
+		output.KeyValue("24 Hour Limit", formatLimit(result.Limit24h))
+		output.KeyValue("7 Day Limit", formatLimit(result.Limit7d))
 		return nil
 	}
 
@@ -744,7 +753,13 @@ func runTokenPolicyUser(cmd *cobra.Command, args []string) error {
 
 	// Handle --set
 	if tokenPolicyUserSet != "" {
-		effective, err := client.SetUserTokenPolicy(ctx, config.GetOrgID(), userID, tokenPolicyUserSet)
+		// Resolve policy name or ID
+		policy, err := findPolicyByNameOrID(ctx, client, tokenPolicyUserSet)
+		if err != nil {
+			return wrapAPIError(err, "failed to find token policy")
+		}
+
+		effective, err := client.SetUserTokenPolicy(ctx, config.GetOrgID(), userID, policy.ID)
 		if err != nil {
 			return wrapAPIError(err, "failed to set user token policy")
 		}
