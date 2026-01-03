@@ -1,0 +1,161 @@
+feature: Security
+description: |
+  Security use cases validate access control, authentication requirements, and
+  organizational isolation across the platform. These tests ensure that:
+
+  - All public endpoints require valid API keys
+  - Organizations cannot access each other's resources
+  - Authentication failures provide appropriate error responses
+
+  Security tests are critical for compliance and should be run as part of CI.
+
+dependencies:
+  - usecases/authentication.yaml
+  - usecases/organization.yaml
+
+usecases:
+  - id: UC-SEC-001
+    title: API Key Required on All Endpoints
+    interface: api
+    status: active
+    bead: aas-1iffu
+
+    description: |
+      The platform must enforce authentication on all public API endpoints.
+      Requests without a valid API key should receive a 401 Unauthorized response.
+
+      This use case performs a sweep test across all known public endpoints to
+      ensure none are accidentally left open without authentication.
+
+    actor: Security Auditor
+
+    preconditions:
+      - Platform services are deployed and accessible
+      - Test knows the list of public endpoints to verify
+
+    depends_on: []
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Admin API endpoints require authentication
+        given: No API key is provided
+        when: Request is made to each admin API endpoint
+        then:
+          - Response status is 401 Unauthorized
+          - Response body contains error message about missing/invalid key
+          - No sensitive data is leaked in error response
+
+      - id: AC-02
+        criterion: API Router endpoints require authentication
+        given: No API key is provided
+        when: Request is made to /v1/chat/completions
+        then:
+          - Response status is 401 Unauthorized
+          - Response body indicates authentication required
+
+      - id: AC-03
+        criterion: Invalid API key is rejected
+        given: An invalid API key format is provided
+        when: Request is made with Authorization header containing invalid key
+        then:
+          - Response status is 401 Unauthorized
+          - Response body indicates invalid credentials
+
+    in_scope:
+      - Verifying all public admin API endpoints require auth
+      - Verifying API router inference endpoints require auth
+      - Testing with missing Authorization header
+      - Testing with invalid API key format
+
+    out_of_scope:
+      - Health check endpoints (/health, /ready, /metrics)
+      - Internal service-to-service communication
+      - Testing rate limiting (covered in UC-RSL)
+      - Testing permission levels (covered in UC-INF-001)
+
+    must_not:
+      - Allow any public endpoint to return 200 without valid auth
+      - Expose stack traces or internal errors in auth failures
+      - Return different error formats for different endpoints
+
+  - id: UC-SEC-002
+    title: Organization Resource Isolation
+    interface: api
+    status: active
+    bead: aas-v3klh
+
+    description: |
+      Organizations must be completely isolated from each other. An API key
+      belonging to Organization A must not be able to access, view, or modify
+      any resources belonging to Organization B.
+
+      This includes users, API keys, usage data, audit logs, and any other
+      organization-scoped resources.
+
+    actor: Security Auditor
+
+    preconditions:
+      - Two test organizations exist (Org A and Org B)
+      - Each organization has valid API credentials
+      - Org A has created some resources (users, API keys)
+
+    depends_on:
+      - UC-AUTH-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Cannot list other organization's users
+        given: Org A has created users, Org B has valid credentials
+        when: Org B requests user list via CLI or API
+        then:
+          - Only Org B's users are returned
+          - Org A's users are not visible
+          - No error about access denied (just empty or own data)
+
+      - id: AC-02
+        criterion: Cannot view other organization's user details
+        given: Org A has user with known ID
+        when: Org B attempts to get user details for Org A's user ID
+        then:
+          - Response is 404 Not Found (not 403 Forbidden)
+          - No information about user existence is leaked
+
+      - id: AC-03
+        criterion: Cannot list other organization's API keys
+        given: Org A has created API keys
+        when: Org B requests API key list
+        then:
+          - Only Org B's API keys are returned
+          - Org A's keys are not visible
+
+      - id: AC-04
+        criterion: Cannot view other organization's usage data
+        given: Org A has usage records
+        when: Org B requests usage report
+        then:
+          - Only Org B's usage data is returned
+          - Org A's usage is not visible
+
+      - id: AC-05
+        criterion: Cannot view other organization's audit logs
+        given: Org A has audit events
+        when: Org B requests audit logs
+        then:
+          - Only Org B's audit events are returned
+          - Org A's audit events are not visible
+
+    in_scope:
+      - Testing isolation for users, API keys, usage, audit logs
+      - Creating two real organizations for testing
+      - Verifying 404 (not 403) for cross-org access attempts
+      - Testing both CLI and API access paths
+
+    out_of_scope:
+      - Platform admin cross-org access (admins may have visibility)
+      - Inference request isolation (tested in inference flow)
+      - Model access permissions (tested in UC-INF-001)
+
+    must_not:
+      - Return 403 Forbidden (leaks that resource exists)
+      - Include any Org A data in Org B responses
+      - Log Org B's access attempts in Org A's audit log

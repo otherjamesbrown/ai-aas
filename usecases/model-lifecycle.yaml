@@ -591,3 +591,83 @@ usecases:
       - Leave orphaned pods or services
       - Affect other model deployments
       - Delete resources outside test scope
+
+  - id: UC-MLC-012
+    title: Model Visibility Lifecycle (Enable/Disable)
+    interface: gitops
+    status: active
+    bead: aas-ufk6w
+
+    description: |
+      Platform operators can control model visibility by toggling the `enabled` field
+      in the AIModel configuration. When a model is disabled, it should no longer
+      appear in the /v1/models endpoint and inference requests should fail.
+
+      Re-enabling the model should restore visibility and allow inference requests
+      to succeed again.
+
+      This use case validates the full enable/disable lifecycle via GitOps.
+
+    actor: Platform Operator
+
+    preconditions:
+      - Model is deployed via GitOps and in Ready phase
+      - Model is currently enabled and visible in /v1/models
+      - ArgoCD is syncing the ai-aas-config repository
+
+    depends_on:
+      - UC-MLC-010
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Enabled model appears in /v1/models
+        given: Model is deployed with enabled=true
+        when: Client requests GET /v1/models
+        then:
+          - Model appears in the models list
+          - Model ID matches the configured external name
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: Disabling model removes it from /v1/models
+        given: Model is currently enabled and visible
+        when: Operator updates config to enabled=false and ArgoCD syncs
+        then:
+          - AIModel CR is updated with enabled=false
+          - Model no longer appears in GET /v1/models
+          - Routing policy is updated or removed
+
+      - id: AC-03
+        criterion: Disabled model rejects inference requests
+        given: Model is disabled (enabled=false)
+        when: Client sends inference request for the model
+        then:
+          - Request fails with 404 or model not found error
+          - Error message indicates model is not available
+
+      - id: AC-04
+        criterion: Re-enabling model restores visibility
+        given: Model is currently disabled
+        when: Operator updates config to enabled=true and ArgoCD syncs
+        then:
+          - AIModel CR is updated with enabled=true
+          - Model reappears in GET /v1/models
+          - Inference requests succeed again
+
+    in_scope:
+      - Testing enable/disable via GitOps config changes
+      - Verifying /v1/models visibility changes
+      - Verifying inference request behavior changes
+      - Waiting for ArgoCD sync after config changes
+
+    out_of_scope:
+      - Direct kubectl patching of enabled field
+      - Admin API enable/disable (if available)
+      - Scaling to 0 replicas (different from disable)
+      - Routing policy manual management
+
+    must_not:
+      - Delete the AIModel CR when disabling
+      - Delete the InferenceService when disabling
+      - Affect other enabled models
+      - Leave model in inconsistent state

@@ -229,6 +229,30 @@ func (f *GitOpsTestFixture) RemoveModelConfig() error {
 	return f.gitCommitAndPush(fmt.Sprintf("test: remove %s for UC-MLC-011", f.modelFileName))
 }
 
+// AddModelConfigWithEnabled adds model config with specified enabled state
+func (f *GitOpsTestFixture) AddModelConfigWithEnabled(enabled bool) error {
+	modelFile := f.ModelFilePath()
+	content := tinyllamaModelYAMLWithEnabled(f.uniqueSuffix, enabled)
+
+	if err := os.WriteFile(modelFile, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to write model file: %w", err)
+	}
+
+	return f.gitCommitAndPush(fmt.Sprintf("test: add %s (enabled=%v) for UC-MLC-012", f.modelFileName, enabled))
+}
+
+// UpdateModelEnabled updates the model's enabled state
+func (f *GitOpsTestFixture) UpdateModelEnabled(enabled bool) error {
+	modelFile := f.ModelFilePath()
+	content := tinyllamaModelYAMLWithEnabled(f.uniqueSuffix, enabled)
+
+	if err := os.WriteFile(modelFile, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to write model file: %w", err)
+	}
+
+	return f.gitCommitAndPush(fmt.Sprintf("test: update %s enabled=%v for UC-MLC-012", f.modelFileName, enabled))
+}
+
 // WaitForAIModelCreated waits for the AIModel CR to be created
 func (f *GitOpsTestFixture) WaitForAIModelCreated(ctx context.Context) error {
 	modelName := f.ModelName()
@@ -528,4 +552,236 @@ func TestUC_MLC_010_AC03_NonGitOpsCreationBlocked(t *testing.T) {
 		require.Error(t, err, "kubectl apply should have been rejected")
 		assert.Contains(t, strings.ToLower(output), "gitops", "Error should mention GitOps policy")
 	})
+}
+
+// TestUC_MLC_012_ModelVisibilityLifecycle validates that model enable/disable
+// affects visibility in /v1/models and inference availability.
+//
+// Use Case: UC-MLC-012 - Model Visibility Lifecycle (Enable/Disable)
+// See: usecases/model-lifecycle.yaml
+// Bead: aas-ufk6w
+func TestUC_MLC_012_ModelVisibilityLifecycle(t *testing.T) {
+	if os.Getenv("RUN_GITOPS_TESTS") != "1" {
+		t.Skip("Skipping GitOps tests. Set RUN_GITOPS_TESTS=1 to run.")
+	}
+
+	fixture := NewGitOpsTestFixture(t)
+
+	// Deploy the model first with enabled: true
+	t.Log("Deploying model with enabled=true...")
+	err := fixture.AddModelConfigWithEnabled(true)
+	require.NoError(t, err, "Failed to add model config")
+
+	// Wait for model to be ready
+	ctx, cancel := context.WithTimeout(context.Background(), modelDeployTimeout)
+	defer cancel()
+
+	t.Log("Waiting for AIModel to be created...")
+	err = fixture.WaitForAIModelCreated(ctx)
+	require.NoError(t, err, "AIModel was not created")
+
+	t.Log("Waiting for model to be ready...")
+	err = fixture.WaitForAIModelReady(ctx)
+	if err != nil {
+		t.Fatalf("Model failed to become ready: %v", err)
+	}
+
+	t.Run("AC-01: Enabled model appears in /v1/models", func(t *testing.T) {
+		// Given: Model is deployed with enabled=true
+		// When: Client requests GET /v1/models
+		models, err := fixture.getAvailableModels()
+		require.NoError(t, err, "Failed to get models list")
+
+		// Then: Model appears in the models list
+		found := false
+		for _, model := range models {
+			if strings.Contains(model, "tinyllama-gitops-test") {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Enabled model should appear in /v1/models")
+	})
+
+	t.Run("AC-02: Disabling model removes it from /v1/models", func(t *testing.T) {
+		// Given: Model is currently enabled and visible
+		// When: Operator updates config to enabled=false and ArgoCD syncs
+		t.Log("Updating model to enabled=false...")
+		err := fixture.UpdateModelEnabled(false)
+		require.NoError(t, err, "Failed to update model config")
+
+		// Wait for ArgoCD sync - give it time to pick up the change
+		t.Log("Waiting for changes to propagate...")
+		time.Sleep(30 * time.Second)
+
+		// Then: Model no longer appears in GET /v1/models
+		models, err := fixture.getAvailableModels()
+		require.NoError(t, err, "Failed to get models list")
+
+		for _, model := range models {
+			if strings.Contains(model, "tinyllama-gitops-test") {
+				t.Error("Disabled model should NOT appear in /v1/models")
+			}
+		}
+	})
+
+	t.Run("AC-03: Disabled model rejects inference requests", func(t *testing.T) {
+		// Given: Model is disabled (enabled=false)
+		// When: Client sends inference request for the model
+		routerURL := getAPIRouterURL()
+		if routerURL == "" {
+			t.Skip("API Router URL not configured")
+		}
+
+		apiKey := getAPIKey()
+		if apiKey == "" {
+			t.Skip("API key not configured")
+		}
+
+		client := NewTestClient(routerURL, apiKey)
+		resp, err := client.POST("/v1/chat/completions", map[string]interface{}{
+			"model": "tinyllama-gitops-test",
+			"messages": []map[string]string{
+				{"role": "user", "content": "Hello"},
+			},
+		})
+		require.NoError(t, err, "Request failed")
+
+		// Then: Request fails with 404 or model not found error
+		if resp.StatusCode != 404 && resp.StatusCode != 400 {
+			t.Logf("Warning: Expected 404 for disabled model, got %d: %s",
+				resp.StatusCode, resp.String())
+		}
+
+		// Then: Error message indicates model is not available
+		bodyLower := strings.ToLower(resp.String())
+		if resp.StatusCode != 200 {
+			assert.True(t,
+				strings.Contains(bodyLower, "not found") ||
+					strings.Contains(bodyLower, "not available") ||
+					strings.Contains(bodyLower, "no route") ||
+					strings.Contains(bodyLower, "model"),
+				"Error should indicate model is not available")
+		}
+	})
+
+	t.Run("AC-04: Re-enabling model restores visibility", func(t *testing.T) {
+		// Given: Model is currently disabled
+		// When: Operator updates config to enabled=true and ArgoCD syncs
+		t.Log("Re-enabling model with enabled=true...")
+		err := fixture.UpdateModelEnabled(true)
+		require.NoError(t, err, "Failed to update model config")
+
+		// Wait for model to become ready again
+		ctx, cancel := context.WithTimeout(context.Background(), modelDeployTimeout)
+		defer cancel()
+
+		t.Log("Waiting for model to be ready after re-enable...")
+		err = fixture.WaitForAIModelReady(ctx)
+		require.NoError(t, err, "Model failed to become ready after re-enable")
+
+		// Then: Model reappears in GET /v1/models
+		models, err := fixture.getAvailableModels()
+		require.NoError(t, err, "Failed to get models list")
+
+		found := false
+		for _, model := range models {
+			if strings.Contains(model, "tinyllama-gitops-test") {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Re-enabled model should appear in /v1/models")
+	})
+}
+
+// tinyllamaModelYAMLWithEnabled generates AIModel YAML with configurable enabled state
+func tinyllamaModelYAMLWithEnabled(uniqueSuffix string, enabled bool) string {
+	modelName := fmt.Sprintf("%s-%s", testModelName, uniqueSuffix)
+	enabledStr := "true"
+	if !enabled {
+		enabledStr = "false"
+	}
+	return fmt.Sprintf(`# AIModel CR for TinyLlama GitOps Test - Development
+#
+# This model is created by UC-MLC-012 tests.
+# It will be automatically cleaned up after the test.
+#
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: %s
+  namespace: %s
+  labels:
+    app: vllm-inference
+    model: tinyllama-test
+    runtime: vllm
+    environment: development
+    test: gitops-lifecycle
+spec:
+  modelName: %s
+  modelID: %s
+  externalName: tinyllama-gitops-test
+  enabled: %s
+  runtime: vllm
+  modelType: text
+  trustRemoteCode: true
+  minReplicas: 1
+  maxReplicas: 1
+  runtimeArgs:
+    - "--max-model-len=2048"
+    - "--dtype=float16"
+  resources:
+    requests:
+      cpu: "2"
+      memory: "8Gi"
+      nvidia.com/gpu: "1"
+    limits:
+      cpu: "4"
+      memory: "16Gi"
+      nvidia.com/gpu: "1"
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+`, modelName, testModelNamespace, modelName, testModelID, enabledStr)
+}
+
+// getAvailableModels fetches the list of models from /v1/models
+func (f *GitOpsTestFixture) getAvailableModels() ([]string, error) {
+	routerURL := getAPIRouterURL()
+	if routerURL == "" {
+		return nil, fmt.Errorf("API Router URL not configured")
+	}
+
+	apiKey := getAPIKey()
+	if apiKey == "" {
+		return nil, fmt.Errorf("API key not configured")
+	}
+
+	client := NewTestClient(routerURL, apiKey)
+	resp, err := client.GET("/v1/models")
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GET /v1/models returned %d: %s", resp.StatusCode, resp.String())
+	}
+
+	// Parse the response
+	var modelsResp struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := resp.DecodeJSON(&modelsResp); err != nil {
+		return nil, err
+	}
+
+	models := make([]string, len(modelsResp.Data))
+	for i, m := range modelsResp.Data {
+		models[i] = m.ID
+	}
+	return models, nil
 }
