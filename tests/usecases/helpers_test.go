@@ -28,6 +28,9 @@ const (
 	// Persistent metrics org for analytics/usage tests that need historical data
 	envMetricsOrgID  = "AI_AAS_METRICS_ORG_ID"
 	envMetricsAPIKey = "AI_AAS_METRICS_API_KEY"
+	// GitOps test configuration
+	EnvGitOpsConfigPath = "AI_AAS_CONFIG_PATH"
+	EnvRunGitOpsTests   = "RUN_GITOPS_TESTS"
 )
 
 // skipIfNoLiveAPI skips the test if the live API is not configured.
@@ -51,6 +54,22 @@ func skipIfNoLiveAPIWithReason(t *testing.T, reason string) {
 // Use this when you need to check availability without skipping.
 func requireLiveAPI() bool {
 	return os.Getenv(envAPIEndpoint) != ""
+}
+
+// GitOpsTestConfig holds configuration for GitOps integration tests.
+type GitOpsTestConfig struct {
+	ConfigRepoPath string
+	Environment    string
+	Kubeconfig     string
+}
+
+// skipIfNoGitOpsConfig skips the test if GitOps testing is not enabled.
+// GitOps tests require RUN_GITOPS_TESTS=1 to be set.
+func skipIfNoGitOpsConfig(t *testing.T) {
+	t.Helper()
+	if os.Getenv(EnvRunGitOpsTests) != "1" {
+		t.Skip("GitOps tests require RUN_GITOPS_TESTS=1")
+	}
 }
 
 // getAPIEndpoint returns the configured API endpoint
