@@ -1,8 +1,13 @@
 package usecases_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -490,4 +495,355 @@ func (mdf *ModelDeploymentFixture) List(environment, modelName string) ([]ModelD
 	}
 
 	return deployments, nil
+}
+
+// GitOpsModelFixture provides GitOps-based model deployment operations for tests
+type GitOpsModelFixture struct {
+	fm             *FixtureManager
+	configRepoPath string
+	kubeconfig     string
+	environment    string
+	modelsCreated  []string
+}
+
+// ModelConfig defines the configuration for creating a GitOps model
+type ModelConfig struct {
+	// Model identification
+	ModelName    string
+	ModelID      string
+	ExternalName string
+
+	// Runtime configuration
+	Runtime      string   // e.g., "vllm"
+	ModelType    string   // e.g., "text"
+	RuntimeArgs  []string // e.g., ["--max-model-len=2048"]
+
+	// Resource allocation
+	MinReplicas int
+	MaxReplicas int
+	CPURequest  string
+	MemoryRequest string
+	GPUCount    int
+	CPULimit    string
+	MemoryLimit string
+
+	// Advanced options
+	TrustRemoteCode bool
+	Tolerations     []map[string]interface{}
+	Labels          map[string]string
+}
+
+// DeployedModel represents a successfully deployed GitOps model
+type DeployedModel struct {
+	ModelName    string
+	AIModelName  string // Kubernetes resource name
+	Namespace    string
+	Status       string
+	ConfigPath   string // Path to the YAML file in ai-aas-config
+}
+
+// NewGitOpsModelFixture creates a new GitOps model fixture manager
+func NewGitOpsModelFixture(fm *FixtureManager, cfg GitOpsTestConfig) (*GitOpsModelFixture, error) {
+	fixture := &GitOpsModelFixture{
+		fm:             fm,
+		configRepoPath: cfg.ConfigRepoPath,
+		kubeconfig:     cfg.Kubeconfig,
+		environment:    cfg.Environment,
+		modelsCreated:  []string{},
+	}
+
+	// Validate ai-aas-config repo path exists
+	if _, err := os.Stat(cfg.ConfigRepoPath); err != nil {
+		return nil, fmt.Errorf("ai-aas-config repo not found at %s: %w", cfg.ConfigRepoPath, err)
+	}
+
+	// Validate kubeconfig exists
+	if _, err := os.Stat(cfg.Kubeconfig); err != nil {
+		return nil, fmt.Errorf("kubeconfig not found at %s: %w", cfg.Kubeconfig, err)
+	}
+
+	return fixture, nil
+}
+
+// Create creates a GitOps model deployment
+// Returns the deployed model information or an error
+func (f *GitOpsModelFixture) Create(cfg ModelConfig) (*DeployedModel, error) {
+	// Generate unique model name if not provided
+	if cfg.ModelName == "" {
+		cfg.ModelName = fmt.Sprintf("test-model-%s", generateUniqueID())
+	}
+
+	// Set defaults
+	if cfg.Runtime == "" {
+		cfg.Runtime = "vllm"
+	}
+	if cfg.ModelType == "" {
+		cfg.ModelType = "text"
+	}
+	if cfg.MinReplicas == 0 {
+		cfg.MinReplicas = 1
+	}
+	if cfg.MaxReplicas == 0 {
+		cfg.MaxReplicas = 1
+	}
+
+	// Generate AIModel YAML manifest
+	yamlContent := f.generateAIModelYAML(cfg)
+
+	// Determine file path in ai-aas-config
+	modelsDir := filepath.Join(f.configRepoPath, "environments", f.environment, "models")
+	modelFileName := fmt.Sprintf("%s.yaml", cfg.ModelName)
+	modelFilePath := filepath.Join(modelsDir, modelFileName)
+
+	// Ensure models directory exists
+	if err := os.MkdirAll(modelsDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create models directory: %w", err)
+	}
+
+	// Write model YAML file
+	if err := os.WriteFile(modelFilePath, []byte(yamlContent), 0644); err != nil {
+		return nil, fmt.Errorf("failed to write model file: %w", err)
+	}
+
+	// Commit to ai-aas-config
+	commitMessage := fmt.Sprintf("test: add GitOps model %s for UC testing", cfg.ModelName)
+	if err := f.gitCommitAndPush(commitMessage); err != nil {
+		// Clean up file on failure
+		os.Remove(modelFilePath)
+		return nil, fmt.Errorf("failed to commit model config: %w", err)
+	}
+
+	// Track model for cleanup
+	f.modelsCreated = append(f.modelsCreated, cfg.ModelName)
+
+	// Register cleanup with FixtureManager
+	f.fm.Register("gitops_model", cfg.ModelName, map[string]string{
+		"environment": f.environment,
+		"config_path": modelFilePath,
+	}, func() error {
+		return f.Delete(cfg.ModelName)
+	})
+
+	deployed := &DeployedModel{
+		ModelName:   cfg.ModelName,
+		AIModelName: cfg.ModelName,
+		Namespace:   f.environment,
+		Status:      "Pending",
+		ConfigPath:  modelFilePath,
+	}
+
+	return deployed, nil
+}
+
+// Delete removes a GitOps model deployment
+func (f *GitOpsModelFixture) Delete(modelName string) error {
+	// Determine file path
+	modelFilePath := filepath.Join(f.configRepoPath, "environments", f.environment, "models", fmt.Sprintf("%s.yaml", modelName))
+
+	// Check if file exists
+	if _, err := os.Stat(modelFilePath); os.IsNotExist(err) {
+		// File already deleted, return nil (idempotent)
+		return nil
+	}
+
+	// Remove file
+	if err := os.Remove(modelFilePath); err != nil {
+		return fmt.Errorf("failed to remove model file: %w", err)
+	}
+
+	// Commit and push removal
+	commitMessage := fmt.Sprintf("test: remove GitOps model %s (UC test cleanup)", modelName)
+	if err := f.gitCommitAndPush(commitMessage); err != nil {
+		return fmt.Errorf("failed to commit model removal: %w", err)
+	}
+
+	return nil
+}
+
+// WaitForReady waits for an AIModel to reach Ready phase
+func (f *GitOpsModelFixture) WaitForReady(ctx context.Context, modelName string) error {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			// Get current status for debugging
+			status, _ := f.kubectlExec("get", "aimodel", modelName, "-n", f.environment,
+				"-o", "jsonpath={.status.phase} - {.status.message}")
+			return fmt.Errorf("timeout waiting for AIModel %s to be Ready, current status: %s", modelName, status)
+		case <-ticker.C:
+			output, err := f.kubectlExec("get", "aimodel", modelName, "-n", f.environment,
+				"-o", "jsonpath={.status.phase}")
+			if err == nil {
+				phase := strings.TrimSpace(output)
+				if phase == "Ready" {
+					return nil
+				}
+				if phase == "Failed" {
+					msg, _ := f.kubectlExec("get", "aimodel", modelName, "-n", f.environment,
+						"-o", "jsonpath={.status.message}")
+					return fmt.Errorf("AIModel %s failed: %s", modelName, msg)
+				}
+			}
+		}
+	}
+}
+
+// generateAIModelYAML generates the AIModel YAML manifest
+func (f *GitOpsModelFixture) generateAIModelYAML(cfg ModelConfig) string {
+	var buf strings.Builder
+
+	buf.WriteString(fmt.Sprintf(`# AIModel CR for GitOps Test - %s
+#
+# This model is created by UC tests and will be automatically cleaned up.
+#
+apiVersion: aimodel.ai-aas.io/v1alpha1
+kind: AIModel
+metadata:
+  name: %s
+  namespace: %s
+  labels:
+    app: vllm-inference
+    runtime: %s
+    environment: %s
+    test: gitops-uc
+`, f.environment, cfg.ModelName, f.environment, cfg.Runtime, f.environment))
+
+	// Add custom labels if provided
+	for k, v := range cfg.Labels {
+		buf.WriteString(fmt.Sprintf("    %s: %s\n", k, v))
+	}
+
+	buf.WriteString("spec:\n")
+	buf.WriteString(fmt.Sprintf("  modelName: %s\n", cfg.ModelName))
+	buf.WriteString(fmt.Sprintf("  modelID: %s\n", cfg.ModelID))
+
+	if cfg.ExternalName != "" {
+		buf.WriteString(fmt.Sprintf("  externalName: %s\n", cfg.ExternalName))
+	}
+
+	buf.WriteString("  enabled: true\n")
+	buf.WriteString(fmt.Sprintf("  runtime: %s\n", cfg.Runtime))
+	buf.WriteString(fmt.Sprintf("  modelType: %s\n", cfg.ModelType))
+
+	if cfg.TrustRemoteCode {
+		buf.WriteString("  trustRemoteCode: true\n")
+	}
+
+	buf.WriteString(fmt.Sprintf("  minReplicas: %d\n", cfg.MinReplicas))
+	buf.WriteString(fmt.Sprintf("  maxReplicas: %d\n", cfg.MaxReplicas))
+
+	// Runtime args
+	if len(cfg.RuntimeArgs) > 0 {
+		buf.WriteString("  runtimeArgs:\n")
+		for _, arg := range cfg.RuntimeArgs {
+			buf.WriteString(fmt.Sprintf("    - %q\n", arg))
+		}
+	}
+
+	// Resources
+	buf.WriteString("  resources:\n")
+	buf.WriteString("    requests:\n")
+	if cfg.CPURequest != "" {
+		buf.WriteString(fmt.Sprintf("      cpu: %q\n", cfg.CPURequest))
+	} else {
+		buf.WriteString("      cpu: \"2\"\n")
+	}
+	if cfg.MemoryRequest != "" {
+		buf.WriteString(fmt.Sprintf("      memory: %q\n", cfg.MemoryRequest))
+	} else {
+		buf.WriteString("      memory: \"8Gi\"\n")
+	}
+	if cfg.GPUCount > 0 {
+		buf.WriteString(fmt.Sprintf("      nvidia.com/gpu: \"%d\"\n", cfg.GPUCount))
+	}
+
+	buf.WriteString("    limits:\n")
+	if cfg.CPULimit != "" {
+		buf.WriteString(fmt.Sprintf("      cpu: %q\n", cfg.CPULimit))
+	} else {
+		buf.WriteString("      cpu: \"4\"\n")
+	}
+	if cfg.MemoryLimit != "" {
+		buf.WriteString(fmt.Sprintf("      memory: %q\n", cfg.MemoryLimit))
+	} else {
+		buf.WriteString("      memory: \"16Gi\"\n")
+	}
+	if cfg.GPUCount > 0 {
+		buf.WriteString(fmt.Sprintf("      nvidia.com/gpu: \"%d\"\n", cfg.GPUCount))
+	}
+
+	// Tolerations
+	if len(cfg.Tolerations) > 0 {
+		buf.WriteString("  tolerations:\n")
+		for _, toleration := range cfg.Tolerations {
+			buf.WriteString("    - ")
+			first := true
+			for k, v := range toleration {
+				if !first {
+					buf.WriteString("\n      ")
+				}
+				buf.WriteString(fmt.Sprintf("%s: %v\n", k, v))
+				first = false
+			}
+		}
+	} else {
+		// Default GPU toleration
+		buf.WriteString("  tolerations:\n")
+		buf.WriteString("    - key: nvidia.com/gpu\n")
+		buf.WriteString("      operator: Exists\n")
+		buf.WriteString("      effect: NoSchedule\n")
+	}
+
+	return buf.String()
+}
+
+// gitExec runs a git command in the config repo
+func (f *GitOpsModelFixture) gitExec(args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = f.configRepoPath
+	output, err := cmd.CombinedOutput()
+	return string(output), err
+}
+
+// gitCommitAndPush commits and pushes changes to the config repo
+func (f *GitOpsModelFixture) gitCommitAndPush(message string) error {
+	// Pull latest first to avoid conflicts
+	if _, err := f.gitExec("pull", "--rebase", "origin", "develop"); err != nil {
+		// Log warning but continue - may be ok if no remote changes
+		fmt.Printf("Warning: git pull failed (may be ok): %v\n", err)
+	}
+
+	// Add all changes
+	if _, err := f.gitExec("add", "-A"); err != nil {
+		return fmt.Errorf("git add failed: %w", err)
+	}
+
+	// Check if there are changes to commit
+	status, _ := f.gitExec("status", "--porcelain")
+	if strings.TrimSpace(status) == "" {
+		// No changes to commit
+		return nil
+	}
+
+	// Commit
+	if _, err := f.gitExec("commit", "-m", message); err != nil {
+		return fmt.Errorf("git commit failed: %w", err)
+	}
+
+	// Push
+	if output, err := f.gitExec("push", "origin", "develop"); err != nil {
+		return fmt.Errorf("git push failed: %s: %w", output, err)
+	}
+
+	return nil
+}
+
+// kubectlExec runs a kubectl command
+func (f *GitOpsModelFixture) kubectlExec(args ...string) (string, error) {
+	fullArgs := append([]string{"--kubeconfig=" + f.kubeconfig}, args...)
+	cmd := exec.Command("kubectl", fullArgs...)
+	output, err := cmd.CombinedOutput()
+	return string(output), err
 }
