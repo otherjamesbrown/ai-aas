@@ -669,15 +669,17 @@ func NewTestOrgContext(t *testing.T) *TestOrgContext {
 		t.Skip("requires live API: set AI_AAS_API_ENDPOINT, AI_AAS_ADMIN_API_ENDPOINT, and AI_AAS_ADMIN_API_KEY")
 	}
 
-	client := NewTestClient(adminEndpoint, adminKey)
+	// Use apiEndpoint (user-org-service) for org/user management
+	// Use adminEndpoint (admin-api-service) for models/benchmarks/routing
+	orgClient := NewTestClient(apiEndpoint, adminKey)
 
 	// Create a unique org name
 	uniqueID := generateUniqueID()
 	orgName := "test-org-" + uniqueID
 	orgSlug := "test-" + uniqueID
 
-	// Create organization via Admin API
-	orgResp, err := client.POST("/v1/orgs", map[string]interface{}{
+	// Create organization via user-org API
+	orgResp, err := orgClient.POST("/v1/orgs", map[string]interface{}{
 		"name": orgName,
 		"slug": orgSlug,
 	})
@@ -696,16 +698,16 @@ func NewTestOrgContext(t *testing.T) *TestOrgContext {
 	}
 
 	// Create service account
-	saResp, err := client.POST("/v1/orgs/"+org.OrgID+"/service-accounts", map[string]interface{}{
+	saResp, err := orgClient.POST("/v1/orgs/"+org.OrgID+"/service-accounts", map[string]interface{}{
 		"name": "test-sa-" + uniqueID,
 	})
 	if err != nil {
 		// Cleanup org before failing
-		client.DELETE("/v1/orgs/" + org.OrgID)
+		orgClient.DELETE("/v1/orgs/" + org.OrgID)
 		t.Fatalf("failed to create service account: %v", err)
 	}
 	if saResp.StatusCode != 200 && saResp.StatusCode != 201 {
-		client.DELETE("/v1/orgs/" + org.OrgID)
+		orgClient.DELETE("/v1/orgs/" + org.OrgID)
 		t.Fatalf("failed to create service account: status %d, body: %s", saResp.StatusCode, saResp.String())
 	}
 
@@ -713,21 +715,21 @@ func NewTestOrgContext(t *testing.T) *TestOrgContext {
 		ServiceAccountID string `json:"serviceAccountId"`
 	}
 	if err := saResp.DecodeJSON(&sa); err != nil {
-		client.DELETE("/v1/orgs/" + org.OrgID)
+		orgClient.DELETE("/v1/orgs/" + org.OrgID)
 		t.Fatalf("failed to parse service account response: %v", err)
 	}
 
 	// Create API key with full scopes
-	keyResp, err := client.POST("/v1/orgs/"+org.OrgID+"/service-accounts/"+sa.ServiceAccountID+"/api-keys", map[string]interface{}{
+	keyResp, err := orgClient.POST("/v1/orgs/"+org.OrgID+"/service-accounts/"+sa.ServiceAccountID+"/api-keys", map[string]interface{}{
 		"name":   "test-key-" + uniqueID,
 		"scopes": []string{"inference:read", "inference:write", "org:read", "org:write", "admin:read", "admin:write", "user:manage", "org:admin"},
 	})
 	if err != nil {
-		client.DELETE("/v1/orgs/" + org.OrgID)
+		orgClient.DELETE("/v1/orgs/" + org.OrgID)
 		t.Fatalf("failed to create API key: %v", err)
 	}
 	if keyResp.StatusCode != 200 && keyResp.StatusCode != 201 {
-		client.DELETE("/v1/orgs/" + org.OrgID)
+		orgClient.DELETE("/v1/orgs/" + org.OrgID)
 		t.Fatalf("failed to create API key: status %d, body: %s", keyResp.StatusCode, keyResp.String())
 	}
 
@@ -735,7 +737,7 @@ func NewTestOrgContext(t *testing.T) *TestOrgContext {
 		Token string `json:"token"`
 	}
 	if err := keyResp.DecodeJSON(&apiKey); err != nil {
-		client.DELETE("/v1/orgs/" + org.OrgID)
+		orgClient.DELETE("/v1/orgs/" + org.OrgID)
 		t.Fatalf("failed to parse API key response: %v", err)
 	}
 
@@ -750,7 +752,7 @@ func NewTestOrgContext(t *testing.T) *TestOrgContext {
 
 	tmpFile, err := os.CreateTemp("", "ai-aas-org-test-*.yaml")
 	if err != nil {
-		client.DELETE("/v1/orgs/" + org.OrgID)
+		orgClient.DELETE("/v1/orgs/" + org.OrgID)
 		t.Fatalf("failed to create temp config: %v", err)
 	}
 	tmpFile.WriteString(configContent)
@@ -762,13 +764,13 @@ func NewTestOrgContext(t *testing.T) *TestOrgContext {
 		OrgName:    orgName,
 		APIKey:     apiKey.Token,
 		configPath: tmpFile.Name(),
-		client:     client,
+		client:     orgClient,
 	}
 
 	// Register cleanup
 	t.Cleanup(func() {
 		// Delete org (cascades to service accounts and API keys)
-		resp, err := client.DELETE("/v1/orgs/" + ctx.OrgID)
+		resp, err := orgClient.DELETE("/v1/orgs/" + ctx.OrgID)
 		if err != nil {
 			t.Logf("Warning: failed to cleanup test org %s: %v", ctx.OrgID, err)
 		} else if resp.StatusCode != 200 && resp.StatusCode != 204 && resp.StatusCode != 404 {
