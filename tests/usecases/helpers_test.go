@@ -706,7 +706,7 @@ func NewTestOrgContext(t *testing.T) *TestOrgContext {
 	// Create API key with full scopes
 	keyResp, err := client.POST("/v1/orgs/"+org.OrgID+"/service-accounts/"+sa.ServiceAccountID+"/api-keys", map[string]interface{}{
 		"name":   "test-key-" + uniqueID,
-		"scopes": []string{"inference:read", "inference:write", "org:read", "org:write", "admin:read", "admin:write"},
+		"scopes": []string{"inference:read", "inference:write", "org:read", "org:write", "admin:read", "admin:write", "user:manage", "org:admin"},
 	})
 	if err != nil {
 		client.DELETE("/v1/orgs/" + org.OrgID)
