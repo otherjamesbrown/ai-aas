@@ -333,11 +333,25 @@ func (h *Handler) GrantModelAccess(w http.ResponseWriter, r *http.Request) {
 	// Get the actor (admin granting access)
 	actorID := middleware.GetUserID(ctx)
 
+	// Check if actorID is a user (exists in users table) or a service account
+	// Service accounts can't be used in granted_by FK, so set to NULL
+	var grantedBy *uuid.UUID
+	_, userErr := h.runtime.Postgres.GetUserByID(ctx, orgID, actorID)
+	if userErr == nil {
+		// Actor is a user, use their ID
+		grantedBy = &actorID
+	} else {
+		// Actor is likely a service account, set granted_by to NULL
+		grantedBy = nil
+		h.logger.Debug("actor is not a user (likely service account), setting granted_by to NULL",
+			zap.String("actor_id", actorID.String()))
+	}
+
 	params := postgres.CreateModelGrantParams{
 		OrgID:     orgID,
 		UserID:    targetUserID,
 		ModelName: req.ModelName,
-		GrantedBy: &actorID,
+		GrantedBy: grantedBy,
 		ExpiresAt: expiresAt,
 	}
 
@@ -701,11 +715,25 @@ func (h *Handler) GrantModelAccessSimple(w http.ResponseWriter, r *http.Request)
 	// Get the actor (admin granting access)
 	actorID := middleware.GetUserID(ctx)
 
+	// Check if actorID is a user (exists in users table) or a service account
+	// Service accounts can't be used in granted_by FK, so set to NULL
+	var grantedBy *uuid.UUID
+	_, userErr := h.runtime.Postgres.GetUserByID(ctx, orgID, actorID)
+	if userErr == nil {
+		// Actor is a user, use their ID
+		grantedBy = &actorID
+	} else {
+		// Actor is likely a service account, set granted_by to NULL
+		grantedBy = nil
+		h.logger.Debug("actor is not a user (likely service account), setting granted_by to NULL",
+			zap.String("actor_id", actorID.String()))
+	}
+
 	params := postgres.CreateModelGrantParams{
 		OrgID:     orgID,
 		UserID:    targetUserID,
 		ModelName: req.ModelID, // Use model_id as model_name
-		GrantedBy: &actorID,
+		GrantedBy: grantedBy,
 		ExpiresAt: nil,
 	}
 
