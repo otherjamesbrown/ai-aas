@@ -99,3 +99,10 @@ configMapGenerator:
     options:
       labels:
         grafana_dashboard: "1"
+
+  - name: grafana-dashboard-routing-policy-health
+    files:
+      - routing-policy-health.json
+    options:
+      labels:
+        grafana_dashboard: "1"
