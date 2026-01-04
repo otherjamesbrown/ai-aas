@@ -245,14 +245,15 @@ jobs:
       - name: Update all service image tags
         run: |
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          IMAGE_TAG="sha-${SHORT_SHA}"
           SERVICES=(admin-api-service analytics-service api-router-service model-downloader user-org-service)
           UPDATED=()
 
           for service in "${SERVICES[@]}"; do
             VALUES_FILE="services/${service}/deployments/helm/${service}/values-development.yaml"
             if [ -f "$VALUES_FILE" ]; then
-              yq eval ".image.tag = \"${SHORT_SHA}\"" -i "$VALUES_FILE"
-              echo "Updated $VALUES_FILE with image tag: ${SHORT_SHA}"
+              yq eval ".image.tag = \"${IMAGE_TAG}\"" -i "$VALUES_FILE"
+              echo "Updated $VALUES_FILE with image tag: ${IMAGE_TAG}"
               UPDATED+=("$service")
             fi
           done
@@ -265,6 +266,7 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          IMAGE_TAG="sha-${SHORT_SHA}"
 
           # Check if there are any changes
           if git diff --quiet; then
@@ -273,6 +275,6 @@ jobs:
           fi
 
           git add services/*/deployments/helm/*/values-development.yaml
-          git commit -m "ci(images): update all service image tags to ${SHORT_SHA} [skip ci]"
+          git commit -m "ci(images): update all service image tags to ${IMAGE_TAG} [skip ci]"
           git push origin develop
 
