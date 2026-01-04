@@ -23,6 +23,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -187,6 +188,13 @@ var (
 		},
 		[]string{"model_name", "namespace"},
 	)
+	routingPolicyHealingSkippedTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "routing_policy_healing_skipped_total",
+			Help: "Total number of routing policy healing attempts skipped",
+		},
+		[]string{"model_name", "namespace", "reason"},
+	)
 )
 
 func init() {
@@ -197,6 +205,7 @@ func init() {
 		routingPolicyDriftDuration,
 		routingPolicyHealAttemptsTotal,
 		routingPolicyHealDuration,
+		routingPolicyHealingSkippedTotal,
 	)
 }
 
@@ -228,6 +237,11 @@ type AIModelReconciler struct {
 	// Recipe resolution and validation
 	RecipeResolver  *recipe.Resolver
 	RecipeValidator *recipe.Validator
+
+	// Routing policy healing rate limiting
+	lastHealTime      map[string]time.Time // Key: namespace/name
+	lastHealTimeMutex sync.Mutex
+	HealCooldown      time.Duration // Default: 5 minutes
 }
 
 // AdminAPIClient defines the interface for syncing deployment state with the Admin API
@@ -2388,6 +2402,38 @@ func (r *AIModelReconciler) healRoutingPolicy(ctx context.Context, aiModel *aimo
 			"inferenceServiceName", aiModel.Status.InferenceServiceName)
 		return nil
 	}
+
+	// Rate limiting: Check if we've healed this AIModel recently
+	healCooldown := r.HealCooldown
+	if healCooldown == 0 {
+		healCooldown = 5 * time.Minute // Default cooldown
+	}
+
+	// Initialize the map if needed
+	r.lastHealTimeMutex.Lock()
+	if r.lastHealTime == nil {
+		r.lastHealTime = make(map[string]time.Time)
+	}
+
+	// Check last heal time
+	key := fmt.Sprintf("%s/%s", aiModel.Namespace, aiModel.Name)
+	lastHeal, exists := r.lastHealTime[key]
+	now := time.Now()
+
+	if exists && now.Sub(lastHeal) < healCooldown {
+		r.lastHealTimeMutex.Unlock()
+		log.V(1).Info("Skipping routing policy healing - rate limited",
+			"name", aiModel.Name,
+			"lastHeal", lastHeal,
+			"cooldown", healCooldown,
+			"timeRemaining", healCooldown-now.Sub(lastHeal))
+		routingPolicyHealingSkippedTotal.WithLabelValues(aiModel.Name, aiModel.Namespace, "rate_limited").Inc()
+		return nil
+	}
+
+	// Update last heal time before attempting
+	r.lastHealTime[key] = now
+	r.lastHealTimeMutex.Unlock()
 
 	// Derive the external name (model name exposed in OpenAI-compatible API)
 	externalName := deriveExternalName(aiModel)

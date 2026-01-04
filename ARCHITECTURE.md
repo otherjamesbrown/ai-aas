@@ -69,6 +69,58 @@ crd_spec: "context/operator-developer/agents.md (aimodel_crd_spec)"
 
 ---
 
+## Routing Policy Management
+
+```yaml
+source_of_truth_chain:
+  1_source: "AIModel CRD (Kubernetes)"
+  2_database: "Routing Policy (PostgreSQL via Admin API)"
+  3_runtime: "api-router cache (Redis)"
+  flow: "Operator syncs AIModel → Admin API → api-router refreshes cache"
+
+drift_detection:
+  what: "AIModel.Status.InferenceServiceName vs routing policy backends"
+  when: "Every reconciliation loop (30s default)"
+  triggers:
+    - AIModel status changes
+    - Periodic reconciliation
+    - Manual sync request
+
+auto_healing:
+  enabled: true
+  actions:
+    - Update routing policy backend URL to match InferenceService
+    - Log healing event with before/after state
+  limitations:
+    - Only heals backend URL drift
+    - Does not create missing routing policies (manual setup required)
+    - Does not delete orphaned policies
+
+validation_layer:
+  admin_api:
+    - Rejects localhost/internal URLs in backend configurations
+    - Validates URL format before persisting
+  purpose: "Prevent misconfigurations at write time"
+
+metrics:
+  aimodel_operator_drift_detected_total:
+    type: counter
+    labels: [model_name, environment]
+    purpose: "Track drift frequency per model"
+  aimodel_operator_drift_healed_total:
+    type: counter
+    labels: [model_name, environment, success]
+    purpose: "Track healing success/failure"
+
+manual_intervention_required:
+  - Initial routing policy creation for new models
+  - Routing policy deletion when model removed
+  - Complex routing configurations (multiple backends, weights)
+  - Policy disabled by admin (operator won't re-enable)
+```
+
+---
+
 ## Services
 
 ```yaml

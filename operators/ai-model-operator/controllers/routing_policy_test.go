@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/ai-aas/ai-model-operator/internal/adminapi"
 	aimodelv1alpha1 "github.com/ai-aas/ai-model-operator/api/v1alpha1"
@@ -1071,4 +1072,264 @@ func TestHealRoutingPolicy_NilAdminAPIClient(t *testing.T) {
 
 	err := reconciler.healRoutingPolicy(context.Background(), aiModel)
 	require.NoError(t, err, "Should not error when AdminAPIClient is nil")
+}
+
+func TestHealRoutingPolicy_RateLimiting(t *testing.T) {
+	t.Run("heals on first attempt", func(t *testing.T) {
+		aiModel := &aimodelv1alpha1.AIModel{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "llama-7b",
+				Namespace: "system",
+			},
+			Spec: aimodelv1alpha1.AIModelSpec{
+				ModelID:      "meta-llama/Llama-2-7b-hf",
+				ExternalName: "llama-7b",
+			},
+			Status: aimodelv1alpha1.AIModelStatus{
+				Phase:                aimodelv1alpha1.AIModelPhaseReady,
+				InferenceServiceName: "llama-7b-new",
+			},
+		}
+
+		mockClient := &mockAdminAPIClient{
+			listRoutingPoliciesResponse: &adminapi.RoutingPolicyListResponse{
+				Policies: []adminapi.RoutingPolicy{
+					{
+						PolicyID:       "policy-123",
+						OrganizationID: "*",
+						Model:          "llama-7b",
+						Backends: []adminapi.Backend{
+							{BackendID: "llama-7b-old", Weight: 100},
+						},
+						Enabled: true,
+					},
+				},
+			},
+			updateRoutingPolicyResponse: &adminapi.RoutingPolicy{
+				PolicyID:       "policy-123",
+				OrganizationID: "*",
+				Model:          "llama-7b",
+				Backends: []adminapi.Backend{
+					{BackendID: "llama-7b-new", Weight: 100},
+				},
+				Enabled: true,
+			},
+		}
+
+		reconciler := &AIModelReconciler{
+			AdminAPIClient: mockClient,
+			HealCooldown:   1 * time.Minute,
+		}
+
+		// First heal should succeed
+		err := reconciler.healRoutingPolicy(context.Background(), aiModel)
+		require.NoError(t, err)
+		assert.True(t, mockClient.updateRoutingPolicyCalled, "First heal should call update")
+	})
+
+	t.Run("skips healing within cooldown period", func(t *testing.T) {
+		aiModel := &aimodelv1alpha1.AIModel{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "llama-7b",
+				Namespace: "system",
+			},
+			Spec: aimodelv1alpha1.AIModelSpec{
+				ModelID:      "meta-llama/Llama-2-7b-hf",
+				ExternalName: "llama-7b",
+			},
+			Status: aimodelv1alpha1.AIModelStatus{
+				Phase:                aimodelv1alpha1.AIModelPhaseReady,
+				InferenceServiceName: "llama-7b-new",
+			},
+		}
+
+		mockClient := &mockAdminAPIClient{
+			listRoutingPoliciesResponse: &adminapi.RoutingPolicyListResponse{
+				Policies: []adminapi.RoutingPolicy{
+					{
+						PolicyID:       "policy-123",
+						OrganizationID: "*",
+						Model:          "llama-7b",
+						Backends: []adminapi.Backend{
+							{BackendID: "llama-7b-old", Weight: 100},
+						},
+						Enabled: true,
+					},
+				},
+			},
+			updateRoutingPolicyResponse: &adminapi.RoutingPolicy{
+				PolicyID:       "policy-123",
+				OrganizationID: "*",
+				Model:          "llama-7b",
+				Backends: []adminapi.Backend{
+					{BackendID: "llama-7b-new", Weight: 100},
+				},
+				Enabled: true,
+			},
+		}
+
+		reconciler := &AIModelReconciler{
+			AdminAPIClient: mockClient,
+			HealCooldown:   1 * time.Minute,
+		}
+
+		// First heal
+		err := reconciler.healRoutingPolicy(context.Background(), aiModel)
+		require.NoError(t, err)
+		assert.True(t, mockClient.updateRoutingPolicyCalled, "First heal should call update")
+
+		// Reset mock state
+		mockClient.updateRoutingPolicyCalled = false
+
+		// Second heal immediately after should be skipped
+		err = reconciler.healRoutingPolicy(context.Background(), aiModel)
+		require.NoError(t, err)
+		assert.False(t, mockClient.updateRoutingPolicyCalled, "Second heal should be skipped due to rate limiting")
+	})
+
+	t.Run("heals after cooldown expires", func(t *testing.T) {
+		aiModel := &aimodelv1alpha1.AIModel{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "llama-7b",
+				Namespace: "system",
+			},
+			Spec: aimodelv1alpha1.AIModelSpec{
+				ModelID:      "meta-llama/Llama-2-7b-hf",
+				ExternalName: "llama-7b",
+			},
+			Status: aimodelv1alpha1.AIModelStatus{
+				Phase:                aimodelv1alpha1.AIModelPhaseReady,
+				InferenceServiceName: "llama-7b-new",
+			},
+		}
+
+		mockClient := &mockAdminAPIClient{
+			listRoutingPoliciesResponse: &adminapi.RoutingPolicyListResponse{
+				Policies: []adminapi.RoutingPolicy{
+					{
+						PolicyID:       "policy-123",
+						OrganizationID: "*",
+						Model:          "llama-7b",
+						Backends: []adminapi.Backend{
+							{BackendID: "llama-7b-old", Weight: 100},
+						},
+						Enabled: true,
+					},
+				},
+			},
+			updateRoutingPolicyResponse: &adminapi.RoutingPolicy{
+				PolicyID:       "policy-123",
+				OrganizationID: "*",
+				Model:          "llama-7b",
+				Backends: []adminapi.Backend{
+					{BackendID: "llama-7b-new", Weight: 100},
+				},
+				Enabled: true,
+			},
+		}
+
+		reconciler := &AIModelReconciler{
+			AdminAPIClient: mockClient,
+			HealCooldown:   100 * time.Millisecond, // Short cooldown for test
+		}
+
+		// First heal
+		err := reconciler.healRoutingPolicy(context.Background(), aiModel)
+		require.NoError(t, err)
+		assert.True(t, mockClient.updateRoutingPolicyCalled, "First heal should call update")
+
+		// Reset mock state
+		mockClient.updateRoutingPolicyCalled = false
+
+		// Wait for cooldown to expire
+		time.Sleep(150 * time.Millisecond)
+
+		// Second heal after cooldown should succeed
+		err = reconciler.healRoutingPolicy(context.Background(), aiModel)
+		require.NoError(t, err)
+		assert.True(t, mockClient.updateRoutingPolicyCalled, "Second heal should call update after cooldown expires")
+	})
+
+	t.Run("different AIModels are rate limited independently", func(t *testing.T) {
+		aiModel1 := &aimodelv1alpha1.AIModel{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "llama-7b",
+				Namespace: "system",
+			},
+			Spec: aimodelv1alpha1.AIModelSpec{
+				ModelID:      "meta-llama/Llama-2-7b-hf",
+				ExternalName: "llama-7b",
+			},
+			Status: aimodelv1alpha1.AIModelStatus{
+				Phase:                aimodelv1alpha1.AIModelPhaseReady,
+				InferenceServiceName: "llama-7b-new",
+			},
+		}
+
+		aiModel2 := &aimodelv1alpha1.AIModel{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "gpt-13b",
+				Namespace: "system",
+			},
+			Spec: aimodelv1alpha1.AIModelSpec{
+				ModelID:      "gpt/gpt-13b",
+				ExternalName: "gpt-13b",
+			},
+			Status: aimodelv1alpha1.AIModelStatus{
+				Phase:                aimodelv1alpha1.AIModelPhaseReady,
+				InferenceServiceName: "gpt-13b-new",
+			},
+		}
+
+		mockClient := &mockAdminAPIClient{
+			listRoutingPoliciesResponse: &adminapi.RoutingPolicyListResponse{
+				Policies: []adminapi.RoutingPolicy{
+					{
+						PolicyID:       "policy-123",
+						OrganizationID: "*",
+						Model:          "test-model",
+						Backends: []adminapi.Backend{
+							{BackendID: "old-backend", Weight: 100},
+						},
+						Enabled: true,
+					},
+				},
+			},
+			updateRoutingPolicyResponse: &adminapi.RoutingPolicy{
+				PolicyID:       "policy-123",
+				OrganizationID: "*",
+				Model:          "test-model",
+				Backends: []adminapi.Backend{
+					{BackendID: "new-backend", Weight: 100},
+				},
+				Enabled: true,
+			},
+		}
+
+		reconciler := &AIModelReconciler{
+			AdminAPIClient: mockClient,
+			HealCooldown:   1 * time.Minute,
+		}
+
+		// Heal aiModel1
+		err := reconciler.healRoutingPolicy(context.Background(), aiModel1)
+		require.NoError(t, err)
+		assert.True(t, mockClient.updateRoutingPolicyCalled, "First model heal should call update")
+
+		// Reset mock state
+		mockClient.updateRoutingPolicyCalled = false
+
+		// Heal aiModel2 immediately - should succeed (different model)
+		err = reconciler.healRoutingPolicy(context.Background(), aiModel2)
+		require.NoError(t, err)
+		assert.True(t, mockClient.updateRoutingPolicyCalled, "Second model heal should call update (different model)")
+
+		// Reset mock state
+		mockClient.updateRoutingPolicyCalled = false
+
+		// Heal aiModel1 again - should be rate limited
+		err = reconciler.healRoutingPolicy(context.Background(), aiModel1)
+		require.NoError(t, err)
+		assert.False(t, mockClient.updateRoutingPolicyCalled, "First model second heal should be rate limited")
+	})
 }
