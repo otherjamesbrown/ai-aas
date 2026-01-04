@@ -19,9 +19,9 @@ CREATE TABLE IF NOT EXISTS model_cache (
 );
 
 -- Indexes for common queries
-CREATE INDEX idx_model_cache_model_id ON model_cache(model_id);
-CREATE INDEX idx_model_cache_status ON model_cache(status);
-CREATE INDEX idx_model_cache_version ON model_cache(version);
+CREATE INDEX IF NOT EXISTS idx_model_cache_model_id ON model_cache(model_id);
+CREATE INDEX IF NOT EXISTS idx_model_cache_status ON model_cache(status);
+CREATE INDEX IF NOT EXISTS idx_model_cache_version ON model_cache(version);
 
 -- Constraint for valid status values (idempotent)
 -- +goose StatementBegin
