@@ -300,7 +300,9 @@ func (h *Handler) HandleInference(w http.ResponseWriter, r *http.Request) {
 			zap.String("model", req.Model),
 			zap.Error(err),
 		)
-		h.writeError(w, r, err, api.ErrCodeRoutingError)
+		// Use MapError to determine appropriate error code (aas-wya1h)
+		code, _ := api.MapError(err)
+		h.writeError(w, r, err, code)
 		return
 	}
 

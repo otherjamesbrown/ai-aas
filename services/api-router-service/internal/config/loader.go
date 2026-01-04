@@ -585,7 +585,7 @@ func (l *Loader) GetPolicyWithFallback(ctx context.Context, organizationID, mode
 	}
 
 	// 4. No policy found and no deployment found
-	return nil, "", fmt.Errorf("model %q is not deployed or not accessible", model)
+	return nil, "", fmt.Errorf("model %q not found: not deployed or not accessible", model)
 }
 
 // stringOrEmpty returns the string value or "unknown" if nil

@@ -231,6 +231,9 @@ func (h *Handler) HandleOpenAIChatCompletions(w http.ResponseWriter, r *http.Req
 	// Backend returns HuggingFace ID, but client expects the alias they requested
 	openAIResp.Model = originalModel
 
+	// Add trace_id to response (aas-vx8rb)
+	openAIResp.TraceID = span.SpanContext().TraceID().String()
+
 	// Add routing headers
 	if routingDecision != nil {
 		w.Header().Set("X-Routing-Backend", routingDecision.BackendID)
@@ -778,6 +781,9 @@ func (h *Handler) handleTritonChatCompletion(
 		return
 	}
 
+	// Add trace_id to response (aas-vx8rb)
+	openAIResp.TraceID = span.SpanContext().TraceID().String()
+
 	// Create routing decision for metrics
 	routingDecision := &routing.RoutingDecision{
 		BackendID:     backendID,
@@ -1103,6 +1109,7 @@ func (h *Handler) handleTritonNonStreamingGRPC(
 			CompletionTokens: completionTokens,
 			TotalTokens:      promptTokens + completionTokens,
 		},
+		TraceID: span.SpanContext().TraceID().String(), // aas-vx8rb
 	}
 
 	// Create routing decision for metrics
