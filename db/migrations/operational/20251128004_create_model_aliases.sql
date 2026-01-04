@@ -13,8 +13,8 @@ CREATE TABLE IF NOT EXISTS model_aliases (
 );
 
 -- Indexes
-CREATE INDEX idx_model_aliases_model_id ON model_aliases(model_id);
-CREATE INDEX idx_model_aliases_alias_name ON model_aliases(alias_name);
+CREATE INDEX IF NOT EXISTS idx_model_aliases_model_id ON model_aliases(model_id);
+CREATE INDEX IF NOT EXISTS idx_model_aliases_alias_name ON model_aliases(alias_name);
 
 -- Trigger to update updated_at
 -- +goose StatementBegin

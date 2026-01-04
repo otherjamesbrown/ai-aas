@@ -17,8 +17,8 @@ CREATE TABLE IF NOT EXISTS recipes (
 );
 
 -- Indexes for common queries
-CREATE INDEX idx_recipes_runtime ON recipes(runtime);
-CREATE INDEX idx_recipes_model_id ON recipes(model_id);
+CREATE INDEX IF NOT EXISTS idx_recipes_runtime ON recipes(runtime);
+CREATE INDEX IF NOT EXISTS idx_recipes_model_id ON recipes(model_id);
 
 -- Trigger to update updated_at
 -- +goose StatementBegin

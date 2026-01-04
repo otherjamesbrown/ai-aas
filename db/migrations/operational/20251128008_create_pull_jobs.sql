@@ -18,9 +18,9 @@ CREATE TABLE IF NOT EXISTS pull_jobs (
 );
 
 -- Indexes for common queries
-CREATE INDEX idx_pull_jobs_model_id ON pull_jobs(model_id);
-CREATE INDEX idx_pull_jobs_status ON pull_jobs(status);
-CREATE INDEX idx_pull_jobs_started_at ON pull_jobs(started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_pull_jobs_model_id ON pull_jobs(model_id);
+CREATE INDEX IF NOT EXISTS idx_pull_jobs_status ON pull_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_pull_jobs_started_at ON pull_jobs(started_at DESC);
 
 -- Partial unique index: Ensures only one active pull job can exist per model/revision.
 -- This prevents race conditions and redundant downloads by constraining uniqueness

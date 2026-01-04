@@ -16,11 +16,11 @@ CREATE TABLE IF NOT EXISTS model_validations (
 );
 
 -- Indexes for queries
-CREATE INDEX idx_model_validations_model_id ON model_validations(model_id);
-CREATE INDEX idx_model_validations_environment ON model_validations(environment);
-CREATE INDEX idx_model_validations_status ON model_validations(status);
-CREATE INDEX idx_model_validations_validated_at ON model_validations(validated_at);
-CREATE INDEX idx_model_validations_validation_type ON model_validations(validation_type);
+CREATE INDEX IF NOT EXISTS idx_model_validations_model_id ON model_validations(model_id);
+CREATE INDEX IF NOT EXISTS idx_model_validations_environment ON model_validations(environment);
+CREATE INDEX IF NOT EXISTS idx_model_validations_status ON model_validations(status);
+CREATE INDEX IF NOT EXISTS idx_model_validations_validated_at ON model_validations(validated_at);
+CREATE INDEX IF NOT EXISTS idx_model_validations_validation_type ON model_validations(validation_type);
 
 -- Constraints (idempotent)
 -- +goose StatementBegin

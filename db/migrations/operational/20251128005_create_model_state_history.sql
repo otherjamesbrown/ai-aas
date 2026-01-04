@@ -14,10 +14,10 @@ CREATE TABLE IF NOT EXISTS model_state_history (
 );
 
 -- Indexes for audit queries
-CREATE INDEX idx_model_state_history_deployment_id ON model_state_history(deployment_id);
-CREATE INDEX idx_model_state_history_executed_at ON model_state_history(executed_at);
-CREATE INDEX idx_model_state_history_action ON model_state_history(action);
-CREATE INDEX idx_model_state_history_performed_by ON model_state_history(performed_by);
+CREATE INDEX IF NOT EXISTS idx_model_state_history_deployment_id ON model_state_history(deployment_id);
+CREATE INDEX IF NOT EXISTS idx_model_state_history_executed_at ON model_state_history(executed_at);
+CREATE INDEX IF NOT EXISTS idx_model_state_history_action ON model_state_history(action);
+CREATE INDEX IF NOT EXISTS idx_model_state_history_performed_by ON model_state_history(performed_by);
 
 -- Constraint for valid actions (idempotent)
 -- +goose StatementBegin

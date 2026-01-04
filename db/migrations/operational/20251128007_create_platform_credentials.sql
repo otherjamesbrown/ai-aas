@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS platform_credentials (
 );
 
 -- Index for lookups
-CREATE INDEX idx_platform_credentials_type ON platform_credentials(credential_type);
+CREATE INDEX IF NOT EXISTS idx_platform_credentials_type ON platform_credentials(credential_type);
 
 -- Constraint for known credential types (idempotent)
 -- +goose StatementBegin

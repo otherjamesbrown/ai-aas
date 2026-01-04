@@ -23,8 +23,8 @@ CREATE TABLE IF NOT EXISTS model_registry (
 );
 
 -- Indexes for common queries
-CREATE INDEX idx_model_registry_name ON model_registry(name);
-CREATE INDEX idx_model_registry_hf_model_id ON model_registry(hf_model_id);
+CREATE INDEX IF NOT EXISTS idx_model_registry_name ON model_registry(name);
+CREATE INDEX IF NOT EXISTS idx_model_registry_hf_model_id ON model_registry(hf_model_id);
 
 -- Trigger to update updated_at
 -- +goose StatementBegin

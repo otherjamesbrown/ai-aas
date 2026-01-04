@@ -153,3 +153,8 @@ affinity:
               operator: In
               values:
                 - "770211" # CPU node pool
+
+# Migrations disabled - tables already exist from previous deployment
+# TimescaleDB extension is not available on shared database
+migrations:
+  enabled: false

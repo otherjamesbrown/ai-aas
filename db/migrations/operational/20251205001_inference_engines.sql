@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS inference_engines (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_inference_engines_name ON inference_engines(name);
+CREATE INDEX IF NOT EXISTS idx_inference_engines_name ON inference_engines(name);
 
 -- Trigger to update updated_at
 -- +goose StatementBegin
@@ -56,8 +56,8 @@ CREATE TABLE IF NOT EXISTS inference_engine_versions (
     UNIQUE(engine_id, version)
 );
 
-CREATE INDEX idx_inference_engine_versions_engine_id ON inference_engine_versions(engine_id);
-CREATE INDEX idx_inference_engine_versions_is_default ON inference_engine_versions(is_default) WHERE is_default = true;
+CREATE INDEX IF NOT EXISTS idx_inference_engine_versions_engine_id ON inference_engine_versions(engine_id);
+CREATE INDEX IF NOT EXISTS idx_inference_engine_versions_is_default ON inference_engine_versions(is_default) WHERE is_default = true;
 
 COMMENT ON TABLE inference_engine_versions IS 'Version history for inference engines with container images';
 COMMENT ON COLUMN inference_engine_versions.is_default IS 'Only one version per engine should be default';
@@ -94,9 +94,9 @@ CREATE TABLE IF NOT EXISTS inference_engine_configs (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_inference_engine_configs_engine_id ON inference_engine_configs(engine_id);
-CREATE INDEX idx_inference_engine_configs_name ON inference_engine_configs(name);
-CREATE INDEX idx_inference_engine_configs_is_default ON inference_engine_configs(is_default) WHERE is_default = true;
+CREATE INDEX IF NOT EXISTS idx_inference_engine_configs_engine_id ON inference_engine_configs(engine_id);
+CREATE INDEX IF NOT EXISTS idx_inference_engine_configs_name ON inference_engine_configs(name);
+CREATE INDEX IF NOT EXISTS idx_inference_engine_configs_is_default ON inference_engine_configs(is_default) WHERE is_default = true;
 
 -- Trigger to update updated_at
 -- +goose StatementBegin
@@ -124,7 +124,7 @@ COMMENT ON COLUMN inference_engine_configs.is_default IS 'One config per engine 
 ALTER TABLE model_deployments
     ADD COLUMN engine_config_id UUID REFERENCES inference_engine_configs(id);
 
-CREATE INDEX idx_model_deployments_engine_config_id ON model_deployments(engine_config_id);
+CREATE INDEX IF NOT EXISTS idx_model_deployments_engine_config_id ON model_deployments(engine_config_id);
 
 COMMENT ON COLUMN model_deployments.engine_config_id IS 'Reference to the inference engine config used for this deployment';
 
