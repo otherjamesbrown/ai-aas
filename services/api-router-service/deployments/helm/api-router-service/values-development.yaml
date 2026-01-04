@@ -11,7 +11,7 @@
 replicaCount: 2 # Multiple replicas for resilience
 image:
   repository: ghcr.io/otherjamesbrown/ai-aas/api-router-service
-  tag: "sha-0c0f761"
+  tag: "sha-cc24e33"
   pullPolicy: Always # Pull from GHCR
   pullSecrets:
     - ghcr-pull-secret
