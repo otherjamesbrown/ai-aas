@@ -2,6 +2,8 @@ package usecases_test
 
 import (
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -69,49 +71,66 @@ func TestUC_RSL_001_RateLimitEnforcement(t *testing.T) {
 	})
 
 	t.Run("AC-02: reject requests exceeding rate limit", func(t *testing.T) {
-		// Given: Organization has rate limit of 100 requests per minute (development config)
-		// When: User sends 250 requests rapidly
-		reqBody := map[string]interface{}{
-			"model": getTestModel(),
-			"messages": []map[string]interface{}{
-				{
-					"role":    "user",
-					"content": "Test",
-				},
-			},
-		}
+		// Given: Organization has rate limit of 100 requests per second (development config)
+		// When: User sends 150 requests concurrently to exceed the limit
+		//
+		// Note: Using concurrent requests to trigger rate limit quickly.
+		// Sequential requests would take too long (~5s per inference request * 150 = 12.5 min).
+		// Using /v1/models endpoint which is fast and doesn't consume inference resources.
 
-		rateLimitHit := false
-		for i := 0; i < 250; i++ {
-			resp, err := inferenceClient.POST("/v1/chat/completions", reqBody)
-			if err != nil {
-				continue
-			}
+		var wg sync.WaitGroup
+		var rateLimitHit atomic.Bool
+		var retryAfterValue atomic.Value
+		var errorMessage atomic.Value
 
-			// Then: Request fails with 429 status
-			if resp.StatusCode == 429 {
-				rateLimitHit = true
+		// Send requests concurrently to exceed rate limit quickly
+		for i := 0; i < 150; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
 
-				// Then: Error message indicates rate limit exceeded
-				bodyStr := strings.ToLower(resp.String())
-				if !strings.Contains(bodyStr, "rate") && !strings.Contains(bodyStr, "limit") {
-					t.Error("429 response should mention rate limit")
+				// Use /v1/models endpoint - fast, doesn't consume inference resources
+				resp, err := inferenceClient.GET("/v1/models")
+				if err != nil {
+					return
 				}
 
-				// Then: Error includes retry-after time or reset timestamp
-				retryAfter := resp.Headers.Get("Retry-After")
-				if retryAfter == "" {
-					t.Error("Expected Retry-After header in 429 response")
+				// Then: Request fails with 429 status when rate limit exceeded
+				if resp.StatusCode == 429 {
+					rateLimitHit.Store(true)
+
+					// Then: Error message indicates rate limit exceeded
+					bodyStr := strings.ToLower(resp.String())
+					if strings.Contains(bodyStr, "rate") || strings.Contains(bodyStr, "limit") {
+						errorMessage.Store(bodyStr)
+					}
+
+					// Then: Error includes retry-after time or reset timestamp
+					retryAfter := resp.Headers.Get("Retry-After")
+					if retryAfter != "" {
+						retryAfterValue.Store(retryAfter)
+					}
 				}
+			}()
 
-				break
-			}
-
+			// Small delay to avoid overwhelming the system
 			time.Sleep(5 * time.Millisecond)
 		}
 
-		if !rateLimitHit {
-			t.Log("Warning: Rate limit not hit after 250 requests - may be disabled or limit is very high")
+		wg.Wait()
+
+		if !rateLimitHit.Load() {
+			t.Log("Warning: Rate limit not hit after 150 concurrent requests - may be disabled or limit is very high")
+			return
+		}
+
+		// Verify rate limit response format
+		if errorMessage.Load() == nil {
+			t.Error("429 response should mention rate limit")
+		}
+
+		if retryAfterValue.Load() == nil {
+			t.Error("Expected Retry-After header in 429 response")
 		}
 	})
 
