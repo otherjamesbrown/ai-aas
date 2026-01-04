@@ -3,12 +3,15 @@ package models
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"go.uber.org/zap"
 )
 
 // ErrDeploymentNotFound indicates the requested deployment was not found
@@ -275,6 +278,23 @@ func (s *Service) CreateDeployment(ctx context.Context, req CreateDeploymentRequ
 		return nil, fmt.Errorf("insert deployment: %w", err)
 	}
 
+	// Auto-create routing policy if this is the first deployment for this model
+	// This ensures the model is immediately accessible via the API router
+	if !s.policyExists(ctx, req.ModelName) {
+		if err := s.createDefaultRoutingPolicy(ctx, req.ModelName); err != nil {
+			// Log warning but don't fail the deployment
+			// Policy can be created manually if needed
+			s.logger.Warn("failed to auto-create routing policy",
+				zap.String("model", req.ModelName),
+				zap.Error(err),
+			)
+		} else {
+			s.logger.Info("auto-created routing policy",
+				zap.String("model", req.ModelName),
+			)
+		}
+	}
+
 	return &d, nil
 }
 
@@ -493,4 +513,88 @@ func (s *Service) GetAllDeploymentSummaries(ctx context.Context, environment str
 	}
 
 	return summaries, rows.Err()
+}
+
+// policyExists checks if a routing policy exists for a given model
+func (s *Service) policyExists(ctx context.Context, modelName string) bool {
+	query := `
+		SELECT EXISTS(
+			SELECT 1 FROM routing_policies
+			WHERE model = $1 AND organization_id = '*' AND deleted_at IS NULL
+		)
+	`
+
+	var exists bool
+	err := s.pool.QueryRow(ctx, query, modelName).Scan(&exists)
+	if err != nil {
+		// If query fails, return true to avoid creating duplicate policies
+		return true
+	}
+	return exists
+}
+
+// createDefaultRoutingPolicy creates a global routing policy for the model
+func (s *Service) createDefaultRoutingPolicy(ctx context.Context, modelName string) error {
+	// Build the backend ID from model name (matches deployment naming convention)
+	backendID := modelName
+
+	// Create backend JSON
+	backend := map[string]interface{}{
+		"backend_id": backendID,
+		"weight":     100,
+	}
+	backends := []map[string]interface{}{backend}
+	backendsJSON, err := json.Marshal(backends)
+	if err != nil {
+		return fmt.Errorf("marshal backends: %w", err)
+	}
+
+	// Create metadata JSON
+	metadata := map[string]interface{}{
+		"auto_created":   true,
+		"created_reason": "auto-created on deployment",
+	}
+	metadataJSON, err := json.Marshal(metadata)
+	if err != nil {
+		return fmt.Errorf("marshal metadata: %w", err)
+	}
+
+	now := time.Now().UTC()
+	query := `
+		INSERT INTO routing_policies (
+			policy_id, organization_id, model, backends,
+			failover_threshold, enabled, version, metadata, backend_type,
+			created_at, updated_at, created_by, updated_by
+		) VALUES ($1, $2, $3, $4, $5, $6, 1, $7, $8, $9, $9, $10, $10)
+	`
+
+	policyID := uuid.New().String()
+	_, err = s.pool.Exec(ctx, query,
+		policyID, "*", modelName, backendsJSON,
+		3, true, metadataJSON, "openai",
+		now, "system",
+	)
+
+	if err != nil {
+		// Check if error is due to unique constraint (policy already exists)
+		if isPolicyAlreadyExistsError(err) {
+			// This is expected and not an error
+			return nil
+		}
+		return fmt.Errorf("insert routing policy: %w", err)
+	}
+
+	return nil
+}
+
+// isPolicyAlreadyExistsError checks if the error is due to unique constraint violation
+func isPolicyAlreadyExistsError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := strings.ToLower(err.Error())
+	// Check for PostgreSQL unique constraint violation
+	return strings.Contains(errStr, "unique") ||
+		strings.Contains(errStr, "duplicate") ||
+		strings.Contains(errStr, "idx_routing_policies_unique_org_model")
 }

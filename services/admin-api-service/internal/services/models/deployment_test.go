@@ -141,3 +141,140 @@ func (e *noopEncryptor) Encrypt(plaintext string) (string, error) {
 func (e *noopEncryptor) Decrypt(ciphertext string) (string, error) {
 	return ciphertext, nil
 }
+
+// TestCreateDeployment_AutoCreatesRoutingPolicy verifies that CreateDeployment
+// automatically creates a routing policy if one doesn't exist
+func TestCreateDeployment_AutoCreatesRoutingPolicy(t *testing.T) {
+	// This test requires a database connection - skip if DB_URL not set
+	dbURL := getTestDBURL(t)
+	if dbURL == "" {
+		t.Skip("Skipping test - DB_URL not set")
+	}
+
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dbURL)
+	require.NoError(t, err, "failed to connect to test database")
+	defer pool.Close()
+
+	// Create service with test database
+	encryptor := &noopEncryptor{}
+	svc := NewService(pool, encryptor)
+
+	// Clean up test data
+	testModelName := "test-routing-policy-" + uuid.New().String()[:8]
+	defer func() {
+		// Clean up routing policy
+		_, _ = pool.Exec(ctx, "DELETE FROM routing_policies WHERE model = $1", testModelName)
+		// Clean up model
+		_ = svc.RemoveModel(ctx, testModelName, true)
+	}()
+
+	// Verify no routing policy exists
+	var policyCount int
+	err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM routing_policies WHERE model = $1 AND organization_id = '*'", testModelName).Scan(&policyCount)
+	require.NoError(t, err)
+	assert.Equal(t, 0, policyCount, "routing policy should not exist before test")
+
+	// Create deployment - should auto-create routing policy
+	req := CreateDeploymentRequest{
+		ModelName:   testModelName,
+		Environment: "development",
+		Namespace:   "system",
+		GPUCount:    1,
+		MemoryGB:    16,
+		Replicas:    1,
+	}
+
+	deployment, err := svc.CreateDeployment(ctx, req)
+	require.NoError(t, err, "CreateDeployment should succeed")
+	require.NotNil(t, deployment, "deployment should be created")
+
+	// Verify routing policy was auto-created
+	err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM routing_policies WHERE model = $1 AND organization_id = '*'", testModelName).Scan(&policyCount)
+	require.NoError(t, err)
+	assert.Equal(t, 1, policyCount, "routing policy should be auto-created")
+
+	// Verify policy details
+	var backends, metadata []byte
+	var enabled bool
+	err = pool.QueryRow(ctx, `
+		SELECT backends, enabled, metadata
+		FROM routing_policies
+		WHERE model = $1 AND organization_id = '*'
+	`, testModelName).Scan(&backends, &enabled, &metadata)
+	require.NoError(t, err, "should retrieve policy details")
+
+	// Verify policy is enabled
+	assert.True(t, enabled, "policy should be enabled by default")
+
+	// Verify backends contain the model
+	assert.Contains(t, string(backends), testModelName, "backends should reference the model")
+
+	// Verify metadata indicates auto-creation
+	assert.Contains(t, string(metadata), "auto_created", "metadata should indicate auto-creation")
+}
+
+// TestCreateDeployment_IdempotentPolicyCreation verifies that creating multiple
+// deployments for the same model doesn't create duplicate policies
+func TestCreateDeployment_IdempotentPolicyCreation(t *testing.T) {
+	// This test requires a database connection - skip if DB_URL not set
+	dbURL := getTestDBURL(t)
+	if dbURL == "" {
+		t.Skip("Skipping test - DB_URL not set")
+	}
+
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dbURL)
+	require.NoError(t, err, "failed to connect to test database")
+	defer pool.Close()
+
+	// Create service with test database
+	encryptor := &noopEncryptor{}
+	svc := NewService(pool, encryptor)
+
+	// Clean up test data
+	testModelName := "test-idempotent-policy-" + uuid.New().String()[:8]
+	defer func() {
+		// Clean up routing policy
+		_, _ = pool.Exec(ctx, "DELETE FROM routing_policies WHERE model = $1", testModelName)
+		// Clean up model
+		_ = svc.RemoveModel(ctx, testModelName, true)
+	}()
+
+	// Create first deployment
+	req1 := CreateDeploymentRequest{
+		ModelName:   testModelName,
+		Environment: "development",
+		Namespace:   "system",
+		GPUCount:    1,
+		MemoryGB:    16,
+		Replicas:    1,
+	}
+
+	_, err = svc.CreateDeployment(ctx, req1)
+	require.NoError(t, err, "first CreateDeployment should succeed")
+
+	// Verify one policy exists
+	var policyCount int
+	err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM routing_policies WHERE model = $1 AND organization_id = '*'", testModelName).Scan(&policyCount)
+	require.NoError(t, err)
+	assert.Equal(t, 1, policyCount, "one routing policy should exist after first deployment")
+
+	// Create second deployment (different environment)
+	req2 := CreateDeploymentRequest{
+		ModelName:   testModelName,
+		Environment: "staging",
+		Namespace:   "system",
+		GPUCount:    1,
+		MemoryGB:    16,
+		Replicas:    1,
+	}
+
+	_, err = svc.CreateDeployment(ctx, req2)
+	require.NoError(t, err, "second CreateDeployment should succeed")
+
+	// Verify still only one policy exists (idempotent)
+	err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM routing_policies WHERE model = $1 AND organization_id = '*'", testModelName).Scan(&policyCount)
+	require.NoError(t, err)
+	assert.Equal(t, 1, policyCount, "should still have only one routing policy after second deployment")
+}

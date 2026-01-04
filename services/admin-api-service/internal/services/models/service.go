@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
 )
 
 // ErrModelNotFound indicates the requested model was not found
@@ -24,6 +25,7 @@ type Service struct {
 	pool            *pgxpool.Pool
 	encryptor       Encryptor
 	s3ClientFactory S3ClientFactory
+	logger          *zap.Logger
 }
 
 // Encryptor provides encryption/decryption for credentials
@@ -34,9 +36,19 @@ type Encryptor interface {
 
 // NewService creates a new model management service
 func NewService(pool *pgxpool.Pool, encryptor Encryptor) *Service {
+	// Create a no-op logger by default
+	logger, _ := zap.NewProduction()
 	return &Service{
 		pool:      pool,
 		encryptor: encryptor,
+		logger:    logger,
+	}
+}
+
+// SetLogger sets the logger for the service
+func (s *Service) SetLogger(logger *zap.Logger) {
+	if logger != nil {
+		s.logger = logger
 	}
 }
 
