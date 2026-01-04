@@ -137,7 +137,9 @@ func (h *Handler) HandleOpenAIChatCompletions(w http.ResponseWriter, r *http.Req
 			zap.String("model", openAIReq.Model),
 			zap.Error(err),
 		)
-		h.writeError(w, r, err, api.ErrCodeRoutingError)
+		// Use MapError to determine appropriate error code (aas-wya1h)
+		code, _ := api.MapError(err)
+		h.writeError(w, r, err, code)
 		return
 	}
 
@@ -224,6 +226,10 @@ func (h *Handler) HandleOpenAIChatCompletions(w http.ResponseWriter, r *http.Req
 		h.writeError(w, r, fmt.Errorf("invalid response type"), api.ErrCodeBackendError)
 		return
 	}
+
+	// Rewrite model field back to original alias (user-facing name)
+	// Backend returns HuggingFace ID, but client expects the alias they requested
+	openAIResp.Model = originalModel
 
 	// Add routing headers
 	if routingDecision != nil {
@@ -366,7 +372,9 @@ func (h *Handler) HandleOpenAICompletions(w http.ResponseWriter, r *http.Request
 			zap.String("model", openAIReq.Model),
 			zap.Error(err),
 		)
-		h.writeError(w, r, err, api.ErrCodeRoutingError)
+		// Use MapError to determine appropriate error code (aas-wya1h)
+		code, _ := api.MapError(err)
+		h.writeError(w, r, err, code)
 		return
 	}
 
@@ -439,6 +447,10 @@ func (h *Handler) HandleOpenAICompletions(w http.ResponseWriter, r *http.Request
 		h.writeError(w, r, fmt.Errorf("invalid response type"), api.ErrCodeBackendError)
 		return
 	}
+
+	// Rewrite model field back to original alias (user-facing name)
+	// Backend returns HuggingFace ID, but client expects the alias they requested
+	openAIResp.Model = originalModel
 
 	// Add routing headers
 	if routingDecision != nil {
