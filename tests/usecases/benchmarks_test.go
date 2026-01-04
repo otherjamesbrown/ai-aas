@@ -155,26 +155,6 @@ func TestUC_BM_001_CreateBenchmarkTarget(t *testing.T) {
 	})
 
 	t.Run("AC-02: reject unauthorized model", func(t *testing.T) {
-		t.Skip("Feature not implemented - benchmark service doesn't validate routing policies during target creation (see bead aas-7g50m)")
-
-		// IMPLEMENTATION GAP DISCOVERED:
-		// The benchmark service allows target creation for any model name, regardless of:
-		// 1. Whether a routing policy exists for that model+org
-		// 2. Whether the model deployment actually exists
-		//
-		// Expected behavior (per UC-BM-001 AC-02):
-		// - Target creation should check if org has a routing policy for the model
-		// - If no routing policy exists, return 403/404 with "model not accessible" error
-		//
-		// Current behavior:
-		// - Target creation succeeds for any model name
-		// - Authorization is only checked during run trigger (UC-BM-002 AC-03)
-		//
-		// This test validates the EXPECTED behavior. It will fail until the service
-		// implements routing policy validation during target creation.
-		//
-		// Test code below is correct and ready to use once implementation is fixed:
-
 		skipIfNoLiveAPI(t)
 
 		// Create isolated test org with controlled routing policies
@@ -382,27 +362,6 @@ func TestUC_BM_002_TriggerBenchmarkRun(t *testing.T) {
 	})
 
 	t.Run("AC-03: reject run when model unavailable", func(t *testing.T) {
-		t.Skip("Feature not implemented - benchmark service doesn't validate model availability during run trigger (see bead aas-7g50m)")
-
-		// IMPLEMENTATION GAP DISCOVERED:
-		// The benchmark service allows run triggers for targets with non-existent models.
-		// Even when a routing policy exists but the actual model deployment is offline/missing,
-		// the trigger succeeds and creates a "pending" run.
-		//
-		// Expected behavior (per UC-BM-002 AC-03):
-		// - Run trigger should check if the model deployment actually exists and is healthy
-		// - If model is offline/non-existent, return error with "model unavailable" message
-		// - Suggestion to check model status should be included
-		//
-		// Current behavior:
-		// - Run trigger succeeds regardless of model availability
-		// - Run is queued as "pending" and may fail later during execution
-		//
-		// This test validates the EXPECTED behavior. It will fail until the service
-		// implements model availability validation during run trigger.
-		//
-		// Test code below is correct and ready to use once implementation is fixed:
-
 		skipIfNoLiveAPI(t)
 
 		// Create isolated test org with controlled routing policies
