@@ -102,6 +102,35 @@ type DeploymentStatus struct {
 	ReplicasReady        int
 }
 
+// Backend represents a backend in a routing policy
+type Backend struct {
+	BackendID string `json:"backend_id"`
+	Weight    int    `json:"weight"`
+}
+
+// RoutingPolicyCreate represents a request to create a routing policy
+type RoutingPolicyCreate struct {
+	PolicyID       string    `json:"policy_id,omitempty"`
+	OrganizationID string    `json:"organization_id,omitempty"`
+	Model          string    `json:"model"`
+	Backends       []Backend `json:"backends"`
+	Enabled        *bool     `json:"enabled,omitempty"`
+}
+
+// RoutingPolicy represents a routing policy response
+type RoutingPolicy struct {
+	PolicyID       string    `json:"policy_id"`
+	OrganizationID string    `json:"organization_id"`
+	Model          string    `json:"model"`
+	Backends       []Backend `json:"backends"`
+	Enabled        bool      `json:"enabled"`
+}
+
+// RoutingPolicyListResponse represents a paginated list of routing policies
+type RoutingPolicyListResponse struct {
+	Policies []RoutingPolicy `json:"policies"`
+}
+
 // CreateDeployment creates a new deployment record
 func (c *Client) CreateDeployment(ctx context.Context, req CreateDeploymentRequest) error {
 	dto := createDeploymentRequestDTO{
@@ -134,6 +163,25 @@ func (c *Client) UpdateDeploymentStatus(ctx context.Context, modelName, environm
 func (c *Client) DeleteDeployment(ctx context.Context, modelName, environment string) error {
 	path := fmt.Sprintf("/v1/deployments/%s/%s", modelName, environment)
 	return c.request(ctx, http.MethodDelete, path, nil, nil)
+}
+
+// ListRoutingPolicies retrieves routing policies for a specific model and organization
+func (c *Client) ListRoutingPolicies(ctx context.Context, model, organizationID string) (*RoutingPolicyListResponse, error) {
+	path := fmt.Sprintf("/v1/routing/policies?model=%s&organization_id=%s", model, organizationID)
+	var result RoutingPolicyListResponse
+	if err := c.request(ctx, http.MethodGet, path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateRoutingPolicy creates a new routing policy
+func (c *Client) CreateRoutingPolicy(ctx context.Context, policy RoutingPolicyCreate) (*RoutingPolicy, error) {
+	var result RoutingPolicy
+	if err := c.request(ctx, http.MethodPost, "/v1/routing/policies", policy, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // request performs an HTTP request to the Admin API with retry logic for rate limiting

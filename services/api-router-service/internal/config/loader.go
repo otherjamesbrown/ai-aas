@@ -467,6 +467,148 @@ func (l *Loader) GetPolicy(organizationID, model string) (*RoutingPolicy, error)
 	return nil, fmt.Errorf("policy not found for org=%s model=%s", organizationID, model)
 }
 
+// getExactPolicy retrieves a policy for an exact org/model combination WITHOUT fallback.
+// This is used internally by GetPolicyWithFallback to determine the source accurately.
+func (l *Loader) getExactPolicy(organizationID, model string) (*RoutingPolicy, error) {
+	// Check cache first with exact match
+	if l.cache != nil {
+		policy, err := l.cache.GetPolicy(organizationID, model)
+		if err == nil && policy != nil {
+			return policy, nil
+		}
+
+		// External name lookup: if model has no "/", try finding a policy by external_name
+		if !strings.Contains(model, "/") {
+			// Try external name match
+			policy, err := l.cache.GetPolicyByExternalName(organizationID, model)
+			if err == nil && policy != nil {
+				return policy, nil
+			}
+
+			// Fall back to alias lookup
+			policy, err = l.cache.GetPolicyByAlias(organizationID, model)
+			if err == nil && policy != nil {
+				return policy, nil
+			}
+		}
+	}
+
+	// Cache miss - try etcd if available
+	if l.client != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		// Try exact org/model policy
+		policy, err := l.getPolicyFromEtcd(ctx, organizationID, model)
+		if err == nil && policy != nil {
+			// Store in cache for future lookups
+			if l.cache != nil {
+				_ = l.cache.StorePolicy(ctx, policy)
+			}
+			return policy, nil
+		}
+
+		// Alias lookup from etcd if model has no "/"
+		if !strings.Contains(model, "/") {
+			policy, err := l.getPolicyByAliasFromEtcd(ctx, organizationID, model)
+			if err == nil && policy != nil {
+				if l.cache != nil {
+					_ = l.cache.StorePolicy(ctx, policy)
+				}
+				return policy, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("exact policy not found for org=%s model=%s", organizationID, model)
+}
+
+// GetPolicyWithFallback retrieves a routing policy with intelligent fallback.
+// This method provides a more robust policy resolution chain:
+//   1. Try explicit org policy (organizationID, model)
+//   2. Try global policy (*, model)
+//   3. Try registry lookup (check if model is deployed)
+//
+// Returns:
+//   - policy: the routing policy if found (may be ephemeral for registry-discovered models)
+//   - source: where the policy came from ("org_policy", "global_policy", "registry_discovery")
+//   - error: error describing why the model is not accessible
+//
+// This implements aas-q34ls: fallback to default backend when no explicit policy exists.
+func (l *Loader) GetPolicyWithFallback(ctx context.Context, organizationID, model string, adminAPIClient AdminAPIClient) (*RoutingPolicy, string, error) {
+	// 1. Try explicit org policy first (skip global fallback in GetPolicy for now)
+	policy, err := l.getExactPolicy(organizationID, model)
+	if err == nil && policy != nil {
+		return policy, "org_policy", nil
+	}
+
+	// 2. Try global policy if org policy not found
+	if organizationID != etcdGlobalOrgID {
+		policy, err := l.getExactPolicy(etcdGlobalOrgID, model)
+		if err == nil && policy != nil {
+			return policy, "global_policy", nil
+		}
+	}
+
+	// 3. Try to discover from model registry via Admin API
+	if adminAPIClient != nil {
+		modelInfo, err := adminAPIClient.GetModelDeployment(ctx, model)
+		if err == nil && modelInfo != nil {
+			// Check if model is deployed and ready
+			if modelInfo.DeploymentStatus != nil && *modelInfo.DeploymentStatus == "ready" {
+				// Create ephemeral policy for this request
+				// Use the model's inference service as the backend
+				backendID := modelInfo.InferenceService
+				if backendID == "" {
+					backendID = model // Fallback to model name
+				}
+
+				ephemeralPolicy := &RoutingPolicy{
+					PolicyID:       fmt.Sprintf("ephemeral-%s", model),
+					OrganizationID: "*", // Global (available to all orgs)
+					Model:          model,
+					ExternalName:   model,
+					Backends: []BackendWeight{{
+						BackendID: backendID,
+						Weight:    100,
+					}},
+					BackendType: "openai", // Default to OpenAI/vLLM protocol
+					UpdatedAt:   time.Now(),
+				}
+
+				return ephemeralPolicy, "registry_discovery", nil
+			}
+
+			// Model exists but not ready
+			return nil, "", fmt.Errorf("model %q is not ready (status: %s)", model, stringOrEmpty(modelInfo.DeploymentStatus))
+		}
+	}
+
+	// 4. No policy found and no deployment found
+	return nil, "", fmt.Errorf("model %q is not deployed or not accessible", model)
+}
+
+// stringOrEmpty returns the string value or "unknown" if nil
+func stringOrEmpty(s *string) string {
+	if s == nil {
+		return "unknown"
+	}
+	return *s
+}
+
+// AdminAPIClient interface for Admin API operations.
+// This allows the Loader to query model deployments without tight coupling.
+type AdminAPIClient interface {
+	GetModelDeployment(ctx context.Context, modelName string) (*ModelDeploymentInfo, error)
+}
+
+// ModelDeploymentInfo represents deployment information for a model.
+type ModelDeploymentInfo struct {
+	Name             string
+	DeploymentStatus *string // "ready", "pending", "deploying", "failed", etc.
+	InferenceService string  // Kubernetes service name for the inference endpoint
+}
+
 // getPolicyFromEtcd retrieves a single policy from etcd.
 func (l *Loader) getPolicyFromEtcd(ctx context.Context, organizationID, model string) (*RoutingPolicy, error) {
 	key := etcdPolicyKey(organizationID, model)

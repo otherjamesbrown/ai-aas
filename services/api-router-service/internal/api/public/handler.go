@@ -49,6 +49,7 @@ type Handler struct {
 	userOrgServiceURL string            // URL for user-org-service (for auth proxy)
 	adminAPIEndpoint  string            // URL for admin-api-service (for models endpoint)
 	adminAPIKey       string            // API key for admin-api-service
+	adminAPIClient    config.AdminAPIClient // Admin API client for policy fallback (aas-q34ls)
 	defaultTimeout    time.Duration     // Default backend timeout
 
 	// Triton protocol translation support (spec032)
@@ -87,6 +88,13 @@ func NewHandler(
 	modelsCacheTTL time.Duration,
 ) *Handler {
 	tracer := otel.Tracer("api-router-service")
+
+	// Initialize admin API client for policy fallback (aas-q34ls)
+	var adminAPIClient config.AdminAPIClient
+	if adminAPIEndpoint != "" {
+		adminAPIClient = config.NewHTTPAdminAPIClient(adminAPIEndpoint, adminAPIKey, logger)
+	}
+
 	return &Handler{
 		logger:              logger,
 		authenticator:       authenticator,
@@ -103,6 +111,7 @@ func NewHandler(
 		backendURIs:         make(map[string]string),
 		adminAPIEndpoint:    adminAPIEndpoint,
 		adminAPIKey:         adminAPIKey,
+		adminAPIClient:      adminAPIClient,
 		defaultTimeout:      defaultTimeout,
 		tritonTranslators:   make(map[string]*triton.Translator),
 		grpcClients:         newGRPCClientManager(logger),
@@ -283,16 +292,28 @@ func (h *Handler) HandleInference(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get routing policy
-	policy, err := h.configLoader.GetPolicy(authCtx.OrganizationID, req.Model)
+	// Get routing policy with intelligent fallback (aas-q34ls)
+	policy, source, err := h.configLoader.GetPolicyWithFallback(ctx, authCtx.OrganizationID, req.Model, h.adminAPIClient)
 	if err != nil {
-		h.logger.Warn("no routing policy found, using default",
+		h.logger.Warn("no routing policy or deployment found",
 			zap.String("org_id", authCtx.OrganizationID),
 			zap.String("model", req.Model),
+			zap.Error(err),
 		)
-		// TODO: Use default routing policy
-		h.writeError(w, r, fmt.Errorf("no routing policy configured"), api.ErrCodeRoutingError)
+		h.writeError(w, r, err, api.ErrCodeRoutingError)
 		return
+	}
+
+	h.logger.Debug("routing policy resolved",
+		zap.String("org_id", authCtx.OrganizationID),
+		zap.String("model", req.Model),
+		zap.String("source", source),
+		zap.String("policy_id", policy.PolicyID),
+	)
+
+	// Record policy source metric (aas-q34ls)
+	if h.routingMetrics != nil {
+		h.routingMetrics.RecordPolicySource(authCtx.OrganizationID, req.Model, source)
 	}
 
 	// Prepare backend request

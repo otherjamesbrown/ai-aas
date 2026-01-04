@@ -175,6 +175,8 @@ type AdminAPIClient interface {
 	CreateDeployment(ctx context.Context, req adminapi.CreateDeploymentRequest) error
 	UpdateDeploymentStatus(ctx context.Context, modelName, environment string, status adminapi.DeploymentStatus) error
 	DeleteDeployment(ctx context.Context, modelName, environment string) error
+	ListRoutingPolicies(ctx context.Context, model, organizationID string) (*adminapi.RoutingPolicyListResponse, error)
+	CreateRoutingPolicy(ctx context.Context, policy adminapi.RoutingPolicyCreate) (*adminapi.RoutingPolicy, error)
 }
 
 //+kubebuilder:rbac:groups=aimodel.ai-aas.io,resources=aimodels,verbs=get;list;watch;create;update;patch;delete
@@ -1786,6 +1788,15 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 				}
 			}
 		}
+
+		// Ensure routing policy exists when transitioning to Ready
+		// This creates a default global routing policy with 100% traffic to this backend
+		if wasNotReady {
+			if err := r.ensureRoutingPolicy(ctx, latestAIModel); err != nil {
+				// Log error but don't fail reconciliation - routing policy creation is best-effort
+				log.Error(err, "Failed to ensure routing policy", "name", aiModel.Name)
+			}
+		}
 	} else {
 		// InferenceService is not ready - determine if it's a transient or permanent failure
 
@@ -2072,6 +2083,79 @@ func (r *AIModelReconciler) deleteDeploymentFromAdminAPI(ctx context.Context, ai
 	}
 
 	return r.AdminAPIClient.DeleteDeployment(ctx, aiModel.Name, environment)
+}
+
+// ensureRoutingPolicy creates a default routing policy for the model if one doesn't exist.
+// This is called when an InferenceService transitions to Ready state.
+// The routing policy is created with global access (organization_id = "*") and 100% weight to the InferenceService.
+func (r *AIModelReconciler) ensureRoutingPolicy(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) error {
+	log := log.FromContext(ctx)
+
+	// Skip if Admin API client is not configured
+	if r.AdminAPIClient == nil {
+		return nil
+	}
+
+	// Derive the external name (model name exposed in OpenAI-compatible API)
+	externalName := deriveExternalName(aiModel)
+	if externalName == "" {
+		log.Info("Skipping routing policy creation - no external name", "name", aiModel.Name)
+		return nil
+	}
+
+	// Check if a routing policy already exists for this model
+	// We query for global policies (organization_id = "*") for this model
+	existingPolicies, err := r.AdminAPIClient.ListRoutingPolicies(ctx, externalName, "*")
+	if err != nil {
+		// If listing fails, log but don't fail reconciliation - this is best-effort
+		log.Error(err, "Failed to list routing policies", "model", externalName)
+		return nil
+	}
+
+	// If a policy already exists, skip creation (idempotent)
+	if existingPolicies != nil && len(existingPolicies.Policies) > 0 {
+		log.Info("Routing policy already exists, skipping creation",
+			"model", externalName,
+			"policyCount", len(existingPolicies.Policies))
+		return nil
+	}
+
+	// Get the InferenceService name to use as backend ID
+	inferenceServiceName := sanitizeInferenceServiceName(aiModel.Name)
+	if aiModel.Status.InferenceServiceName != "" {
+		inferenceServiceName = aiModel.Status.InferenceServiceName
+	}
+
+	// Create default routing policy
+	enabled := true
+	policy := adminapi.RoutingPolicyCreate{
+		OrganizationID: "*", // Global access - all organizations can use this model
+		Model:          externalName,
+		Backends: []adminapi.Backend{
+			{
+				BackendID: inferenceServiceName,
+				Weight:    100, // 100% traffic to this backend
+			},
+		},
+		Enabled: &enabled,
+	}
+
+	createdPolicy, err := r.AdminAPIClient.CreateRoutingPolicy(ctx, policy)
+	if err != nil {
+		// Log error but don't fail reconciliation - routing policy creation is best-effort
+		log.Error(err, "Failed to create routing policy",
+			"model", externalName,
+			"backendID", inferenceServiceName)
+		return nil
+	}
+
+	log.Info("Created routing policy for model",
+		"model", externalName,
+		"policyID", createdPolicy.PolicyID,
+		"backendID", inferenceServiceName,
+		"organizationID", "*")
+
+	return nil
 }
 
 // contains is a helper function to check if a string contains a substring

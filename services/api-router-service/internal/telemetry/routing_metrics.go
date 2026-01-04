@@ -41,6 +41,7 @@ type RoutingMetrics struct {
 	backendLatency         metric.Float64Histogram
 	routingDecisionLatency metric.Float64Histogram
 	backendErrorsTotal     metric.Int64Counter // Tracks backend errors from error_message field
+	policySourceTotal      metric.Int64Counter // Tracks routing policy source (aas-q34ls)
 
 	// Alert thresholds
 	failoverThreshold  int
@@ -120,6 +121,14 @@ func NewRoutingMetrics(logger *zap.Logger) (*RoutingMetrics, error) {
 		return nil, err
 	}
 
+	policySourceTotal, err := meter.Int64Counter(
+		"router_policy_source_total",
+		metric.WithDescription("Total routing requests by policy source (org_policy, global_policy, registry_discovery)"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	return &RoutingMetrics{
 		logger:                 logger,
 		requestsTotal:          requestsTotal,
@@ -130,6 +139,7 @@ func NewRoutingMetrics(logger *zap.Logger) (*RoutingMetrics, error) {
 		backendLatency:         backendLatency,
 		routingDecisionLatency: routingDecisionLatency,
 		backendErrorsTotal:     backendErrorsTotal,
+		policySourceTotal:      policySourceTotal,
 		failoverThreshold:      3,
 		errorRateThreshold:     0.1, // 10%
 		latencyThreshold:       3 * time.Second,
@@ -325,4 +335,31 @@ func (m *RoutingMetrics) RecordBackendError(
 		zap.String("request_id", requestID),
 		zap.String("error_message", errorMessage),
 	)
+}
+
+// RecordPolicySource records the source of the routing policy.
+// This metric tracks whether policies came from org-specific config,
+// global config, or were discovered from the registry.
+// Added as part of aas-q34ls to track policy fallback behavior.
+func (m *RoutingMetrics) RecordPolicySource(
+	organizationID string,
+	model string,
+	source string,
+) {
+	attrs := []attribute.KeyValue{
+		attribute.String("organization_id", organizationID),
+		attribute.String("model", model),
+		attribute.String("source", source),
+	}
+
+	ctx := context.Background()
+	m.policySourceTotal.Add(ctx, 1, metric.WithAttributes(attrs...))
+
+	// Log registry discoveries for visibility (these are ephemeral policies)
+	if source == "registry_discovery" {
+		m.logger.Info("policy discovered from registry",
+			zap.String("organization_id", organizationID),
+			zap.String("model", model),
+		)
+	}
 }

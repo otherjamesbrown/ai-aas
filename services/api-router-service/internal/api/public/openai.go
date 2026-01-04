@@ -129,15 +129,28 @@ func (h *Handler) HandleOpenAIChatCompletions(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Get routing policy
-	policy, err := h.configLoader.GetPolicy(authCtx.OrganizationID, openAIReq.Model)
+	// Get routing policy with intelligent fallback (aas-q34ls)
+	policy, source, err := h.configLoader.GetPolicyWithFallback(ctx, authCtx.OrganizationID, openAIReq.Model, h.adminAPIClient)
 	if err != nil {
-		h.logger.Warn("no routing policy found",
+		h.logger.Warn("no routing policy or deployment found",
 			zap.String("org_id", authCtx.OrganizationID),
 			zap.String("model", openAIReq.Model),
+			zap.Error(err),
 		)
-		h.writeError(w, r, fmt.Errorf("no routing policy configured"), api.ErrCodeRoutingError)
+		h.writeError(w, r, err, api.ErrCodeRoutingError)
 		return
+	}
+
+	h.logger.Debug("routing policy resolved",
+		zap.String("org_id", authCtx.OrganizationID),
+		zap.String("model", openAIReq.Model),
+		zap.String("source", source),
+		zap.String("policy_id", policy.PolicyID),
+	)
+
+	// Record policy source metric (aas-q34ls)
+	if h.routingMetrics != nil {
+		h.routingMetrics.RecordPolicySource(authCtx.OrganizationID, openAIReq.Model, source)
 	}
 
 	// Validate that at least one backend is configured (PR#16 Issue#1)
@@ -335,15 +348,28 @@ func (h *Handler) HandleOpenAICompletions(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Get routing policy
-	policy, err := h.configLoader.GetPolicy(authCtx.OrganizationID, openAIReq.Model)
+	// Get routing policy with intelligent fallback (aas-q34ls)
+	policy, source, err := h.configLoader.GetPolicyWithFallback(ctx, authCtx.OrganizationID, openAIReq.Model, h.adminAPIClient)
 	if err != nil {
-		h.logger.Warn("no routing policy found",
+		h.logger.Warn("no routing policy or deployment found",
 			zap.String("org_id", authCtx.OrganizationID),
 			zap.String("model", openAIReq.Model),
+			zap.Error(err),
 		)
-		h.writeError(w, r, fmt.Errorf("no routing policy configured"), api.ErrCodeRoutingError)
+		h.writeError(w, r, err, api.ErrCodeRoutingError)
 		return
+	}
+
+	h.logger.Debug("routing policy resolved",
+		zap.String("org_id", authCtx.OrganizationID),
+		zap.String("model", openAIReq.Model),
+		zap.String("source", source),
+		zap.String("policy_id", policy.PolicyID),
+	)
+
+	// Record policy source metric (aas-q34ls)
+	if h.routingMetrics != nil {
+		h.routingMetrics.RecordPolicySource(authCtx.OrganizationID, openAIReq.Model, source)
 	}
 
 	// Validate that at least one backend is configured (PR#16 Issue#2)
