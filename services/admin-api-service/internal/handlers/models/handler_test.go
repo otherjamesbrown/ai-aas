@@ -248,7 +248,7 @@ func TestListModels(t *testing.T) {
 	}
 	r := setupRouter(svc)
 
-	req := httptest.NewRequest("GET", "/models", nil)
+	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -270,7 +270,7 @@ func TestListModelsWithFilters(t *testing.T) {
 	svc := &mockService{models: []Model{}}
 	r := setupRouter(svc)
 
-	req := httptest.NewRequest("GET", "/models?cached=true&deployed=true&environment=development", nil)
+	req := httptest.NewRequest("GET", "/?cached=true&deployed=true&environment=development", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -287,7 +287,7 @@ func TestGetModel(t *testing.T) {
 	}
 	r := setupRouter(svc)
 
-	req := httptest.NewRequest("GET", "/models/llama-3-8b", nil)
+	req := httptest.NewRequest("GET", "/llama-3-8b", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -309,7 +309,7 @@ func TestGetModelNotFound(t *testing.T) {
 	svc := &mockService{models: []Model{}}
 	r := setupRouter(svc)
 
-	req := httptest.NewRequest("GET", "/models/nonexistent", nil)
+	req := httptest.NewRequest("GET", "/nonexistent", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -323,7 +323,7 @@ func TestAddModel(t *testing.T) {
 	r := setupRouter(svc)
 
 	body := `{"name": "test-model", "hf_model_id": "test/model", "requires_auth": true}`
-	req := httptest.NewRequest("POST", "/models", bytes.NewBufferString(body))
+	req := httptest.NewRequest("POST", "/", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -346,7 +346,7 @@ func TestAddModelInvalidBody(t *testing.T) {
 	svc := &mockService{}
 	r := setupRouter(svc)
 
-	req := httptest.NewRequest("POST", "/models", bytes.NewBufferString("invalid json"))
+	req := httptest.NewRequest("POST", "/", bytes.NewBufferString("invalid json"))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -364,7 +364,7 @@ func TestDeleteModel(t *testing.T) {
 	}
 	r := setupRouter(svc)
 
-	req := httptest.NewRequest("DELETE", "/models/llama-3-8b", nil)
+	req := httptest.NewRequest("DELETE", "/llama-3-8b", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -381,7 +381,7 @@ func TestDeleteModelWithForce(t *testing.T) {
 	}
 	r := setupRouter(svc)
 
-	req := httptest.NewRequest("DELETE", "/models/llama-3-8b?force=true", nil)
+	req := httptest.NewRequest("DELETE", "/llama-3-8b?force=true", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -400,7 +400,7 @@ func TestGetModelCache(t *testing.T) {
 	}
 	r := setupRouter(svc)
 
-	req := httptest.NewRequest("GET", "/models/llama-3-8b/cache", nil)
+	req := httptest.NewRequest("GET", "/llama-3-8b/cache", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -423,7 +423,7 @@ func TestPullModel(t *testing.T) {
 	r := setupRouter(svc)
 
 	body := `{"revision": "main"}`
-	req := httptest.NewRequest("POST", "/models/llama-3-8b/pull", bytes.NewBufferString(body))
+	req := httptest.NewRequest("POST", "/llama-3-8b/pull", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -446,7 +446,7 @@ func TestPullModelEmptyBody(t *testing.T) {
 	svc := &mockService{}
 	r := setupRouter(svc)
 
-	req := httptest.NewRequest("POST", "/models/llama-3-8b/pull", nil)
+	req := httptest.NewRequest("POST", "/llama-3-8b/pull", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -459,7 +459,7 @@ func TestVerifyCache(t *testing.T) {
 	svc := &mockService{}
 	r := setupRouter(svc)
 
-	req := httptest.NewRequest("POST", "/models/llama-3-8b/cache/verify?version=abc123", nil)
+	req := httptest.NewRequest("POST", "/llama-3-8b/cache/verify?version=abc123", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -580,7 +580,7 @@ func TestResponseContentType(t *testing.T) {
 	svc := &mockService{models: []Model{}}
 	r := setupRouter(svc)
 
-	req := httptest.NewRequest("GET", "/models", nil)
+	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 

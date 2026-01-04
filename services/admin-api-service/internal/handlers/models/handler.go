@@ -63,29 +63,30 @@ func NewHandler(service Service) *Handler {
 }
 
 // RegisterRoutes registers the model management routes
+// Note: This handler is mounted at /v1/models, so paths here are relative to that
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	// Model registry endpoints
-	r.Get("/models", h.ListModels)
-	r.Post("/models", h.AddModel)
-	r.Get("/models/{name}", h.GetModel)
-	r.Delete("/models/{name}", h.DeleteModel)
-	r.Post("/models/{name}/rename", h.RenameModel)
+	r.Get("/", h.ListModels)
+	r.Post("/", h.AddModel)
+	r.Get("/{name}", h.GetModel)
+	r.Delete("/{name}", h.DeleteModel)
+	r.Post("/{name}/rename", h.RenameModel)
 
 	// Cache endpoints
-	r.Get("/models/{name}/cache", h.GetModelCache)
-	r.Post("/models/{name}/pull", h.PullModel)
-	r.Get("/models/{name}/pull", h.ListPullJobs)
-	r.Get("/models/{name}/pull/{job_id}", h.GetPullJob)
-	r.Delete("/models/{name}/pull/{job_id}", h.CancelPullJob)
-	r.Post("/models/{name}/cache/verify", h.VerifyCache)
+	r.Get("/{name}/cache", h.GetModelCache)
+	r.Post("/{name}/pull", h.PullModel)
+	r.Get("/{name}/pull", h.ListPullJobs)
+	r.Get("/{name}/pull/{job_id}", h.GetPullJob)
+	r.Delete("/{name}/pull/{job_id}", h.CancelPullJob)
+	r.Post("/{name}/cache/verify", h.VerifyCache)
 
-	// Credentials endpoints
+	// Credentials endpoints (mounted under /v1/models but logically separate)
 	r.Get("/credentials", h.ListCredentials)
 	r.Post("/credentials", h.SetCredential)
 	r.Post("/credentials/{type}/test", h.TestCredential)
 	r.Delete("/credentials/{type}", h.DeleteCredential)
 
-	// Deployment endpoints
+	// Deployment endpoints (mounted under /v1/models but logically separate)
 	r.Get("/deployments", h.ListDeployments)
 	r.Post("/deployments", h.CreateDeployment)
 	r.Get("/deployments/{model_name}/{environment}", h.GetDeployment)
