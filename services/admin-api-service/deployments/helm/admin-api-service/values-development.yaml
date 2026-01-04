@@ -21,8 +21,10 @@ secrets:
   apiKeyHashSaltSecretKey: api-key-hash-salt
   masterAdminApiKeySecretName: admin-api-secrets
   masterAdminApiKeySecretKey: master-admin-api-key
+# Migrations disabled - tables already exist and goose version table is inconsistent
+# TODO: aas-kzuqa - Reset goose_db_version table to match actual database state
 migrations:
-  enabled: true
+  enabled: false
 # Higher rate limit for development/testing
 config:
   rateLimitPerMin: "500"
