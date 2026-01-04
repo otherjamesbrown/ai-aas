@@ -31,6 +31,11 @@ spec:
       jsonPath: .status.readyReplicas
       name: Ready
       type: integer
+    - description: Routing policy exists
+      jsonPath: .status.conditions[?(@.type=='RoutingReady')].status
+      name: RoutingReady
+      priority: 1
+      type: string
     - description: Current phase of the AI Model deployment
       jsonPath: .status.phase
       name: Phase
