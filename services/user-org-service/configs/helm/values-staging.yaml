@@ -7,7 +7,7 @@ global:
     local: "staging.otherjamesbrown.com"
   tls:
     enabled: true
-    clusterIssuer: letsencrypt-staging
+    clusterIssuer: letsencrypt-prod
 
 replicaCount: 2
 
