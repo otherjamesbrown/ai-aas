@@ -17,7 +17,7 @@
 
 image:
   repository: ghcr.io/otherjamesbrown/ai-aas/analytics-service
-  tag: "sha-c9d1002"
+  tag: "sha-932b082"
   pullPolicy: Always
   pullSecrets:
     - ghcr-pull-secret
