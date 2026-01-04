@@ -133,6 +133,11 @@ type RoutingPolicyListResponse struct {
 	Policies []RoutingPolicy `json:"policies"`
 }
 
+// RoutingPolicyUpdate represents a partial update to a routing policy
+type RoutingPolicyUpdate struct {
+	Backends []Backend `json:"backends,omitempty"`
+}
+
 // CreateDeployment creates a new deployment record
 func (c *Client) CreateDeployment(ctx context.Context, req CreateDeploymentRequest) error {
 	dto := createDeploymentRequestDTO{
@@ -181,6 +186,16 @@ func (c *Client) ListRoutingPolicies(ctx context.Context, model, organizationID 
 func (c *Client) CreateRoutingPolicy(ctx context.Context, policy RoutingPolicyCreate) (*RoutingPolicy, error) {
 	var result RoutingPolicy
 	if err := c.request(ctx, http.MethodPost, "/v1/routing/policies", policy, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// UpdateRoutingPolicy updates an existing routing policy
+func (c *Client) UpdateRoutingPolicy(ctx context.Context, policyID string, update RoutingPolicyUpdate) (*RoutingPolicy, error) {
+	path := fmt.Sprintf("/v1/routing/policies/%s", policyID)
+	var result RoutingPolicy
+	if err := c.request(ctx, http.MethodPatch, path, update, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil

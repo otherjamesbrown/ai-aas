@@ -19,11 +19,16 @@ type mockAdminAPIClient struct {
 	deleteDeploymentCalled      bool
 	listRoutingPoliciesCalled   bool
 	createRoutingPolicyCalled   bool
+	updateRoutingPolicyCalled   bool
 	listRoutingPoliciesResponse *adminapi.RoutingPolicyListResponse
 	listRoutingPoliciesError    error
 	createRoutingPolicyResponse *adminapi.RoutingPolicy
 	createRoutingPolicyError    error
 	createRoutingPolicyRequest  *adminapi.RoutingPolicyCreate
+	updateRoutingPolicyResponse *adminapi.RoutingPolicy
+	updateRoutingPolicyError    error
+	updateRoutingPolicyID       string
+	updateRoutingPolicyRequest  *adminapi.RoutingPolicyUpdate
 }
 
 func (m *mockAdminAPIClient) CreateDeployment(ctx context.Context, req adminapi.CreateDeploymentRequest) error {
@@ -50,6 +55,13 @@ func (m *mockAdminAPIClient) CreateRoutingPolicy(ctx context.Context, policy adm
 	m.createRoutingPolicyCalled = true
 	m.createRoutingPolicyRequest = &policy
 	return m.createRoutingPolicyResponse, m.createRoutingPolicyError
+}
+
+func (m *mockAdminAPIClient) UpdateRoutingPolicy(ctx context.Context, policyID string, update adminapi.RoutingPolicyUpdate) (*adminapi.RoutingPolicy, error) {
+	m.updateRoutingPolicyCalled = true
+	m.updateRoutingPolicyID = policyID
+	m.updateRoutingPolicyRequest = &update
+	return m.updateRoutingPolicyResponse, m.updateRoutingPolicyError
 }
 
 func TestEnsureRoutingPolicy(t *testing.T) {
@@ -704,4 +716,359 @@ func TestDetectRoutingPolicyDrift(t *testing.T) {
 				"Drift detection result mismatch")
 		})
 	}
+}
+
+func TestHealRoutingPolicy(t *testing.T) {
+	tests := []struct {
+		name                     string
+		aiModel                  *aimodelv1alpha1.AIModel
+		mockListResponse         *adminapi.RoutingPolicyListResponse
+		mockListError            error
+		mockUpdateResponse       *adminapi.RoutingPolicy
+		mockUpdateError          error
+		expectUpdateCalled       bool
+		expectedUpdatePolicyID   string
+		expectedUpdateBackendID  string
+		expectedError            bool
+	}{
+		{
+			name: "heals drift when AIModel is Ready",
+			aiModel: &aimodelv1alpha1.AIModel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "llama-7b",
+					Namespace: "system",
+				},
+				Spec: aimodelv1alpha1.AIModelSpec{
+					ModelID:      "meta-llama/Llama-2-7b-hf",
+					ExternalName: "llama-7b",
+				},
+				Status: aimodelv1alpha1.AIModelStatus{
+					Phase:                aimodelv1alpha1.AIModelPhaseReady,
+					InferenceServiceName: "llama-7b-new",
+				},
+			},
+			mockListResponse: &adminapi.RoutingPolicyListResponse{
+				Policies: []adminapi.RoutingPolicy{
+					{
+						PolicyID:       "policy-123",
+						OrganizationID: "*",
+						Model:          "llama-7b",
+						Backends: []adminapi.Backend{
+							{BackendID: "llama-7b-old", Weight: 100},
+						},
+						Enabled: true,
+					},
+				},
+			},
+			mockListError: nil,
+			mockUpdateResponse: &adminapi.RoutingPolicy{
+				PolicyID:       "policy-123",
+				OrganizationID: "*",
+				Model:          "llama-7b",
+				Backends: []adminapi.Backend{
+					{BackendID: "llama-7b-new", Weight: 100},
+				},
+				Enabled: true,
+			},
+			mockUpdateError:          nil,
+			expectUpdateCalled:       true,
+			expectedUpdatePolicyID:   "policy-123",
+			expectedUpdateBackendID:  "llama-7b-new",
+			expectedError:            false,
+		},
+		{
+			name: "skips healing when AIModel is not Ready",
+			aiModel: &aimodelv1alpha1.AIModel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "llama-7b",
+					Namespace: "system",
+				},
+				Spec: aimodelv1alpha1.AIModelSpec{
+					ModelID:      "meta-llama/Llama-2-7b-hf",
+					ExternalName: "llama-7b",
+				},
+				Status: aimodelv1alpha1.AIModelStatus{
+					Phase:                aimodelv1alpha1.AIModelPhaseDeploying,
+					InferenceServiceName: "llama-7b",
+				},
+			},
+			mockListResponse:         nil,
+			mockListError:            nil,
+			mockUpdateResponse:       nil,
+			mockUpdateError:          nil,
+			expectUpdateCalled:       false,
+			expectedUpdatePolicyID:   "",
+			expectedUpdateBackendID:  "",
+			expectedError:            false,
+		},
+		{
+			name: "skips healing when InferenceServiceName is empty",
+			aiModel: &aimodelv1alpha1.AIModel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "llama-7b",
+					Namespace: "system",
+				},
+				Spec: aimodelv1alpha1.AIModelSpec{
+					ModelID:      "meta-llama/Llama-2-7b-hf",
+					ExternalName: "llama-7b",
+				},
+				Status: aimodelv1alpha1.AIModelStatus{
+					Phase:                aimodelv1alpha1.AIModelPhaseReady,
+					InferenceServiceName: "",
+				},
+			},
+			mockListResponse:         nil,
+			mockListError:            nil,
+			mockUpdateResponse:       nil,
+			mockUpdateError:          nil,
+			expectUpdateCalled:       false,
+			expectedUpdatePolicyID:   "",
+			expectedUpdateBackendID:  "",
+			expectedError:            false,
+		},
+		{
+			name: "skips healing when no policies exist",
+			aiModel: &aimodelv1alpha1.AIModel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "llama-7b",
+					Namespace: "system",
+				},
+				Spec: aimodelv1alpha1.AIModelSpec{
+					ModelID:      "meta-llama/Llama-2-7b-hf",
+					ExternalName: "llama-7b",
+				},
+				Status: aimodelv1alpha1.AIModelStatus{
+					Phase:                aimodelv1alpha1.AIModelPhaseReady,
+					InferenceServiceName: "llama-7b",
+				},
+			},
+			mockListResponse: &adminapi.RoutingPolicyListResponse{
+				Policies: []adminapi.RoutingPolicy{},
+			},
+			mockListError:            nil,
+			mockUpdateResponse:       nil,
+			mockUpdateError:          nil,
+			expectUpdateCalled:       false,
+			expectedUpdatePolicyID:   "",
+			expectedUpdateBackendID:  "",
+			expectedError:            false,
+		},
+		{
+			name: "skips healing when no drift exists",
+			aiModel: &aimodelv1alpha1.AIModel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "llama-7b",
+					Namespace: "system",
+				},
+				Spec: aimodelv1alpha1.AIModelSpec{
+					ModelID:      "meta-llama/Llama-2-7b-hf",
+					ExternalName: "llama-7b",
+				},
+				Status: aimodelv1alpha1.AIModelStatus{
+					Phase:                aimodelv1alpha1.AIModelPhaseReady,
+					InferenceServiceName: "llama-7b",
+				},
+			},
+			mockListResponse: &adminapi.RoutingPolicyListResponse{
+				Policies: []adminapi.RoutingPolicy{
+					{
+						PolicyID:       "policy-123",
+						OrganizationID: "*",
+						Model:          "llama-7b",
+						Backends: []adminapi.Backend{
+							{BackendID: "llama-7b", Weight: 100},
+						},
+						Enabled: true,
+					},
+				},
+			},
+			mockListError:            nil,
+			mockUpdateResponse:       nil,
+			mockUpdateError:          nil,
+			expectUpdateCalled:       false,
+			expectedUpdatePolicyID:   "",
+			expectedUpdateBackendID:  "",
+			expectedError:            false,
+		},
+		{
+			name: "returns error when listing fails",
+			aiModel: &aimodelv1alpha1.AIModel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "llama-7b",
+					Namespace: "system",
+				},
+				Spec: aimodelv1alpha1.AIModelSpec{
+					ModelID:      "meta-llama/Llama-2-7b-hf",
+					ExternalName: "llama-7b",
+				},
+				Status: aimodelv1alpha1.AIModelStatus{
+					Phase:                aimodelv1alpha1.AIModelPhaseReady,
+					InferenceServiceName: "llama-7b",
+				},
+			},
+			mockListResponse:         nil,
+			mockListError:            fmt.Errorf("API unavailable"),
+			mockUpdateResponse:       nil,
+			mockUpdateError:          nil,
+			expectUpdateCalled:       false,
+			expectedUpdatePolicyID:   "",
+			expectedUpdateBackendID:  "",
+			expectedError:            true,
+		},
+		{
+			name: "returns error when update fails",
+			aiModel: &aimodelv1alpha1.AIModel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "llama-7b",
+					Namespace: "system",
+				},
+				Spec: aimodelv1alpha1.AIModelSpec{
+					ModelID:      "meta-llama/Llama-2-7b-hf",
+					ExternalName: "llama-7b",
+				},
+				Status: aimodelv1alpha1.AIModelStatus{
+					Phase:                aimodelv1alpha1.AIModelPhaseReady,
+					InferenceServiceName: "llama-7b-new",
+				},
+			},
+			mockListResponse: &adminapi.RoutingPolicyListResponse{
+				Policies: []adminapi.RoutingPolicy{
+					{
+						PolicyID:       "policy-123",
+						OrganizationID: "*",
+						Model:          "llama-7b",
+						Backends: []adminapi.Backend{
+							{BackendID: "llama-7b-old", Weight: 100},
+						},
+						Enabled: true,
+					},
+				},
+			},
+			mockListError:            nil,
+			mockUpdateResponse:       nil,
+			mockUpdateError:          fmt.Errorf("update failed"),
+			expectUpdateCalled:       true,
+			expectedUpdatePolicyID:   "policy-123",
+			expectedUpdateBackendID:  "llama-7b-new",
+			expectedError:            true,
+		},
+		{
+			name: "heals multiple backends preserving weights",
+			aiModel: &aimodelv1alpha1.AIModel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "llama-7b",
+					Namespace: "system",
+				},
+				Spec: aimodelv1alpha1.AIModelSpec{
+					ModelID:      "meta-llama/Llama-2-7b-hf",
+					ExternalName: "llama-7b",
+				},
+				Status: aimodelv1alpha1.AIModelStatus{
+					Phase:                aimodelv1alpha1.AIModelPhaseReady,
+					InferenceServiceName: "llama-7b-new",
+				},
+			},
+			mockListResponse: &adminapi.RoutingPolicyListResponse{
+				Policies: []adminapi.RoutingPolicy{
+					{
+						PolicyID:       "policy-123",
+						OrganizationID: "*",
+						Model:          "llama-7b",
+						Backends: []adminapi.Backend{
+							{BackendID: "llama-7b-old-1", Weight: 70},
+							{BackendID: "llama-7b-old-2", Weight: 30},
+						},
+						Enabled: true,
+					},
+				},
+			},
+			mockListError: nil,
+			mockUpdateResponse: &adminapi.RoutingPolicy{
+				PolicyID:       "policy-123",
+				OrganizationID: "*",
+				Model:          "llama-7b",
+				Backends: []adminapi.Backend{
+					{BackendID: "llama-7b-new", Weight: 70},
+					{BackendID: "llama-7b-new", Weight: 30},
+				},
+				Enabled: true,
+			},
+			mockUpdateError:          nil,
+			expectUpdateCalled:       true,
+			expectedUpdatePolicyID:   "policy-123",
+			expectedUpdateBackendID:  "llama-7b-new",
+			expectedError:            false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup mock Admin API client
+			mockClient := &mockAdminAPIClient{
+				listRoutingPoliciesResponse: tt.mockListResponse,
+				listRoutingPoliciesError:    tt.mockListError,
+				updateRoutingPolicyResponse: tt.mockUpdateResponse,
+				updateRoutingPolicyError:    tt.mockUpdateError,
+			}
+
+			reconciler := &AIModelReconciler{
+				AdminAPIClient: mockClient,
+			}
+
+			// Execute
+			err := reconciler.healRoutingPolicy(context.Background(), tt.aiModel)
+
+			// Verify error expectation
+			if tt.expectedError {
+				require.Error(t, err, "Expected error but got none")
+			} else {
+				require.NoError(t, err, "Expected no error but got: %v", err)
+			}
+
+			// Verify update was called (or not)
+			assert.Equal(t, tt.expectUpdateCalled, mockClient.updateRoutingPolicyCalled,
+				"UpdateRoutingPolicy call expectation mismatch")
+
+			if tt.expectUpdateCalled {
+				// Verify update policy ID
+				assert.Equal(t, tt.expectedUpdatePolicyID, mockClient.updateRoutingPolicyID,
+					"Update policy ID mismatch")
+
+				// Verify update backends
+				require.NotNil(t, mockClient.updateRoutingPolicyRequest, "Update request should not be nil")
+				require.Greater(t, len(mockClient.updateRoutingPolicyRequest.Backends), 0,
+					"Update request should have backends")
+
+				// Verify all backends have the expected backend ID
+				for _, backend := range mockClient.updateRoutingPolicyRequest.Backends {
+					assert.Equal(t, tt.expectedUpdateBackendID, backend.BackendID,
+						"Backend ID mismatch in update request")
+				}
+			}
+		})
+	}
+}
+
+func TestHealRoutingPolicy_NilAdminAPIClient(t *testing.T) {
+	aiModel := &aimodelv1alpha1.AIModel{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "llama-7b",
+			Namespace: "system",
+		},
+		Spec: aimodelv1alpha1.AIModelSpec{
+			ModelID:      "meta-llama/Llama-2-7b-hf",
+			ExternalName: "llama-7b",
+		},
+		Status: aimodelv1alpha1.AIModelStatus{
+			Phase:                aimodelv1alpha1.AIModelPhaseReady,
+			InferenceServiceName: "llama-7b",
+		},
+	}
+
+	reconciler := &AIModelReconciler{
+		AdminAPIClient: nil,
+	}
+
+	err := reconciler.healRoutingPolicy(context.Background(), aiModel)
+	require.NoError(t, err, "Should not error when AdminAPIClient is nil")
 }
