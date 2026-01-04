@@ -39,7 +39,7 @@ spec:
             - |
               set -e
               echo "Running database migrations..."
-              goose -dir /app/migrations/sql -table goose_db_version_analytics postgres "$DATABASE_URL" up
+              goose -dir /app/migrations/sql postgres "$DATABASE_URL" up
               echo "Migrations completed successfully"
           env:
             {{- range .Values.env }}
