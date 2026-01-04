@@ -42,24 +42,24 @@ usecases:
     acceptance_criteria:
       - id: AC-01
         criterion: Allow requests within rate limit
-        given: Organization has rate limit of 10 requests per minute
-        when: User sends 10 requests within one minute
+        given: Organization has rate limit of 100 requests per second
+        when: User sends requests within rate limit
         then:
-          - All 10 requests succeed
+          - All requests within limit succeed
           - No rate limit errors are returned
           - Requests are processed normally
           - Usage is tracked for all requests
 
       - id: AC-02
         criterion: Reject requests exceeding rate limit
-        given: Organization has rate limit of 10 requests per minute
-        when: User sends 11th request within same minute
+        given: Organization has rate limit of 100 requests per second
+        when: User exceeds rate limit (burst > 200 concurrent requests)
         then:
-          - 11th request fails with 429 status
+          - Excess requests fail with 429 status
           - Error message indicates rate limit exceeded
           - Error includes retry-after time or reset timestamp
-          - No inference is performed
-          - No usage is recorded
+          - No inference is performed for rate-limited requests
+          - No usage is recorded for rate-limited requests
 
       - id: AC-03
         criterion: Rate limit resets after window
