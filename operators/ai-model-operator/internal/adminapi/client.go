@@ -115,6 +115,8 @@ type RoutingPolicyCreate struct {
 	Model          string    `json:"model"`
 	Backends       []Backend `json:"backends"`
 	Enabled        *bool     `json:"enabled,omitempty"`
+	BackendType    string    `json:"backend_type,omitempty"` // "openai" (default) | "triton" | "triton-grpc"
+	Tokenizer      string    `json:"tokenizer,omitempty"`    // tiktoken encoding name (e.g., cl100k_base, llama3)
 }
 
 // RoutingPolicy represents a routing policy response

@@ -1,7 +1,7 @@
 # CI/CD Pipeline
 
 ---
-last_updated: 2025-12-09
+last_updated: 2026-01-04
 document_type: overview
 ---
 
@@ -64,31 +64,60 @@ Stages:
 
 #### Docker Image Tagging Strategy
 
-CI automatically tags Docker images based on the branch being built:
+CI automatically tags Docker images with multiple tags for flexibility:
 
-| Branch | Image Tag | Environment | Example |
-|--------|-----------|-------------|---------|
-| `develop` | `dev` | development | `ghcr.io/otherjamesbrown/ai-aas/admin-api-service:dev` |
-| `staging` | `staging` | staging | `ghcr.io/otherjamesbrown/ai-aas/admin-api-service:staging` |
-| `main` | `latest` | production | `ghcr.io/otherjamesbrown/ai-aas/admin-api-service:latest` |
+| Tag Type | Format | Example | Purpose |
+|----------|--------|---------|---------|
+| **Commit SHA** (immutable) | `abc1234` (short) | `ghcr.io/.../admin-api-service:abc1234` | **Primary tag** - immutable, traceable |
+| Branch + SHA | `develop-abc1234` | `ghcr.io/.../admin-api-service:develop-abc1234` | Debugging, rollback reference |
+| Branch alias | `dev`, `staging`, `latest` | `ghcr.io/.../admin-api-service:dev` | Fallback for manual operations |
 
-**Helm values files MUST match these tags:**
+**Immutable Deployment Flow (Development)**:
+
+1. **CI builds and pushes** image with commit SHA tag (e.g., `abc1234`)
+2. **CI updates** `values-development.yaml` with new SHA: `image.tag: abc1234`
+3. **CI commits** updated values file back to `develop` branch with `[skip ci]`
+4. **ArgoCD detects** change in Git and syncs automatically
+5. **Kubernetes restarts** pods with new image (tag changed in Git)
+
+**Benefits**:
+- ✅ Automatic deployments - no manual intervention needed
+- ✅ Immutable tags - each commit gets unique image
+- ✅ Easy rollback - change `image.tag` to previous SHA
+- ✅ Full traceability - image tag = commit hash
+
+**Helm Values Files**:
 
 ```yaml
 # services/<name>/deployments/helm/<name>/values-development.yaml
+# Updated automatically by CI with commit SHA
 image:
-  tag: dev  # NOT 'latest'
+  tag: abc1234  # Auto-updated by CI on each build
 
 # services/<name>/deployments/helm/<name>/values-staging.yaml
+# Updated manually or via promotion workflow
 image:
-  tag: staging
+  tag: staging  # OR specific SHA for controlled rollout
 
 # services/<name>/deployments/helm/<name>/values.yaml (production default)
+# Updated manually during production promotion
 image:
-  tag: latest
+  tag: latest  # OR specific SHA for production
 ```
 
-See `.github/workflows/service-ci.yml` (lines 182-187) for the exact tagging configuration.
+**Manual Rollback**:
+
+```bash
+# Roll back to previous commit
+cd services/api-router-service/deployments/helm/api-router-service
+yq eval '.image.tag = "xyz9876"' -i values-development.yaml
+git add values-development.yaml
+git commit -m "rollback(api-router): revert to xyz9876"
+git push origin develop
+# ArgoCD will sync automatically
+```
+
+See `.github/workflows/service-ci.yml` (lines 199-274) for the complete implementation.
 
 ### Web Portal CI (`web-portal.yml`)
 

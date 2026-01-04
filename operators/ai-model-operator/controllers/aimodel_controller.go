@@ -120,6 +120,26 @@ func deriveExternalName(aiModel *aimodelv1alpha1.AIModel) string {
 	return modelID
 }
 
+// determineBackendType maps the AIModel runtime to the appropriate backend_type for routing policies.
+// TensorRT-LLM uses Triton server which requires "triton" backend type.
+// vLLM and TGI use OpenAI-compatible APIs which use "openai" backend type (default).
+func determineBackendType(aiModel *aimodelv1alpha1.AIModel) string {
+	runtime := aiModel.Spec.Runtime
+	if runtime == "" {
+		runtime = "vllm" // Default runtime
+	}
+
+	switch runtime {
+	case "tensorrt-llm", "triton":
+		return "triton"
+	case "vllm", "tgi":
+		return "openai"
+	default:
+		// Default to openai for unknown runtimes (most compatible)
+		return "openai"
+	}
+}
+
 var (
 	reconcileTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -2186,6 +2206,9 @@ func (r *AIModelReconciler) ensureRoutingPolicy(ctx context.Context, aiModel *ai
 		inferenceServiceName = aiModel.Status.InferenceServiceName
 	}
 
+	// Determine backend type from runtime
+	backendType := determineBackendType(aiModel)
+
 	// Create default routing policy
 	enabled := true
 	policy := adminapi.RoutingPolicyCreate{
@@ -2197,7 +2220,8 @@ func (r *AIModelReconciler) ensureRoutingPolicy(ctx context.Context, aiModel *ai
 				Weight:    100, // 100% traffic to this backend
 			},
 		},
-		Enabled: &enabled,
+		Enabled:     &enabled,
+		BackendType: backendType,
 	}
 
 	createdPolicy, err := r.AdminAPIClient.CreateRoutingPolicy(ctx, policy)
@@ -2213,6 +2237,7 @@ func (r *AIModelReconciler) ensureRoutingPolicy(ctx context.Context, aiModel *ai
 		"model", externalName,
 		"policyID", createdPolicy.PolicyID,
 		"backendID", inferenceServiceName,
+		"backendType", backendType,
 		"organizationID", "*")
 
 	return nil
