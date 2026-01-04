@@ -291,3 +291,132 @@ func TestEnsureRoutingPolicy_NoExternalName(t *testing.T) {
 	assert.False(t, mockClient.listRoutingPoliciesCalled, "Should skip policy operations when no external name")
 	assert.False(t, mockClient.createRoutingPolicyCalled, "Should skip policy operations when no external name")
 }
+
+func TestCheckRoutingPolicyExists(t *testing.T) {
+	tests := []struct {
+		name             string
+		aiModel          *aimodelv1alpha1.AIModel
+		adminAPIClient   AdminAPIClient
+		mockListResponse *adminapi.RoutingPolicyListResponse
+		mockListError    error
+		expectedResult   bool
+	}{
+		{
+			name: "returns true when routing policy exists",
+			aiModel: &aimodelv1alpha1.AIModel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "llama-7b",
+					Namespace: "system",
+				},
+				Spec: aimodelv1alpha1.AIModelSpec{
+					ModelID:      "meta-llama/Llama-2-7b-hf",
+					ExternalName: "llama-7b",
+				},
+			},
+			mockListResponse: &adminapi.RoutingPolicyListResponse{
+				Policies: []adminapi.RoutingPolicy{
+					{
+						PolicyID:       "policy-123",
+						OrganizationID: "*",
+						Model:          "llama-7b",
+						Enabled:        true,
+					},
+				},
+			},
+			mockListError:  nil,
+			expectedResult: true,
+		},
+		{
+			name: "returns false when no routing policy exists",
+			aiModel: &aimodelv1alpha1.AIModel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "llama-7b",
+					Namespace: "system",
+				},
+				Spec: aimodelv1alpha1.AIModelSpec{
+					ModelID:      "meta-llama/Llama-2-7b-hf",
+					ExternalName: "llama-7b",
+				},
+			},
+			mockListResponse: &adminapi.RoutingPolicyListResponse{
+				Policies: []adminapi.RoutingPolicy{},
+			},
+			mockListError:  nil,
+			expectedResult: false,
+		},
+		{
+			name: "returns false when API call fails",
+			aiModel: &aimodelv1alpha1.AIModel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "llama-7b",
+					Namespace: "system",
+				},
+				Spec: aimodelv1alpha1.AIModelSpec{
+					ModelID:      "meta-llama/Llama-2-7b-hf",
+					ExternalName: "llama-7b",
+				},
+			},
+			mockListResponse: nil,
+			mockListError:    fmt.Errorf("API error"),
+			expectedResult:   false,
+		},
+		{
+			name: "returns false when external name is empty",
+			aiModel: &aimodelv1alpha1.AIModel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "llama-7b",
+					Namespace: "system",
+				},
+				Spec: aimodelv1alpha1.AIModelSpec{
+					ModelID: "meta-llama/Llama-2-7b-hf",
+					// ExternalName is empty
+				},
+			},
+			mockListResponse: nil,
+			mockListError:    nil,
+			expectedResult:   false,
+		},
+		{
+			name: "returns true when Admin API client is nil (no validation possible)",
+			aiModel: &aimodelv1alpha1.AIModel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "llama-7b",
+					Namespace: "system",
+				},
+				Spec: aimodelv1alpha1.AIModelSpec{
+					ModelID:      "meta-llama/Llama-2-7b-hf",
+					ExternalName: "llama-7b",
+				},
+			},
+			adminAPIClient: nil, // No Admin API client configured
+			mockListResponse: nil,
+			mockListError:    nil,
+			expectedResult:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var reconciler *AIModelReconciler
+
+			if tt.adminAPIClient == nil && tt.name == "returns true when Admin API client is nil (no validation possible)" {
+				// Test case with nil Admin API client
+				reconciler = &AIModelReconciler{
+					AdminAPIClient: nil,
+				}
+			} else {
+				// Setup mock Admin API client
+				mockClient := &mockAdminAPIClient{
+					listRoutingPoliciesResponse: tt.mockListResponse,
+					listRoutingPoliciesError:    tt.mockListError,
+				}
+				reconciler = &AIModelReconciler{
+					AdminAPIClient: mockClient,
+				}
+			}
+
+			result := reconciler.checkRoutingPolicyExists(context.Background(), tt.aiModel)
+			assert.Equal(t, tt.expectedResult, result, "checkRoutingPolicyExists result should match expected")
+		})
+	}
+}

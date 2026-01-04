@@ -43,6 +43,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -1797,8 +1798,37 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 				log.Error(err, "Failed to ensure routing policy", "name", aiModel.Name)
 			}
 		}
+
+		// Update RoutingReady condition based on routing policy existence
+		routingPolicyExists := r.checkRoutingPolicyExists(ctx, latestAIModel)
+		if routingPolicyExists {
+			meta.SetStatusCondition(&latestAIModel.Status.Conditions, metav1.Condition{
+				Type:               aimodelv1alpha1.ConditionTypeRoutingReady,
+				Status:             metav1.ConditionTrue,
+				ObservedGeneration: latestAIModel.Generation,
+				Reason:             "RoutingPolicyExists",
+				Message:            "Routing policy exists and model is accessible via API",
+			})
+		} else {
+			meta.SetStatusCondition(&latestAIModel.Status.Conditions, metav1.Condition{
+				Type:               aimodelv1alpha1.ConditionTypeRoutingReady,
+				Status:             metav1.ConditionFalse,
+				ObservedGeneration: latestAIModel.Generation,
+				Reason:             "RoutingPolicyMissing",
+				Message:            "No routing policy found for this model",
+			})
+		}
 	} else {
 		// InferenceService is not ready - determine if it's a transient or permanent failure
+
+		// Set RoutingReady to False when InferenceService is not ready
+		meta.SetStatusCondition(&latestAIModel.Status.Conditions, metav1.Condition{
+			Type:               aimodelv1alpha1.ConditionTypeRoutingReady,
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: latestAIModel.Generation,
+			Reason:             "InferenceServiceNotReady",
+			Message:            "InferenceService is not ready yet",
+		})
 
 		// Check for transient failures (retryable)
 		if status.IsTransientFailure() {
@@ -2083,6 +2113,36 @@ func (r *AIModelReconciler) deleteDeploymentFromAdminAPI(ctx context.Context, ai
 	}
 
 	return r.AdminAPIClient.DeleteDeployment(ctx, aiModel.Name, environment)
+}
+
+// checkRoutingPolicyExists checks if a routing policy exists for the given model.
+// Returns true if a policy exists, false otherwise.
+// This is used to set the RoutingReady condition status.
+func (r *AIModelReconciler) checkRoutingPolicyExists(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) bool {
+	log := log.FromContext(ctx)
+
+	// If Admin API client is not configured, assume routing is ready (no validation possible)
+	if r.AdminAPIClient == nil {
+		return true
+	}
+
+	// Derive the external name (model name exposed in OpenAI-compatible API)
+	externalName := deriveExternalName(aiModel)
+	if externalName == "" {
+		return false
+	}
+
+	// Check if a routing policy exists for this model
+	// We query for global policies (organization_id = "*") for this model
+	existingPolicies, err := r.AdminAPIClient.ListRoutingPolicies(ctx, externalName, "*")
+	if err != nil {
+		// If listing fails, log and return false (routing not ready)
+		log.Error(err, "Failed to list routing policies", "model", externalName)
+		return false
+	}
+
+	// Return true if at least one policy exists
+	return existingPolicies != nil && len(existingPolicies.Policies) > 0
 }
 
 // ensureRoutingPolicy creates a default routing policy for the model if one doesn't exist.

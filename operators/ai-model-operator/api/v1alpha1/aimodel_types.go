@@ -245,6 +245,13 @@ const (
 	AIModelPhaseRetryPending AIModelPhase = "RetryPending"
 )
 
+// Condition type constants for AIModel
+const (
+	// ConditionTypeRoutingReady indicates whether a routing policy exists for this model,
+	// making it accessible via the API router.
+	ConditionTypeRoutingReady = "RoutingReady"
+)
+
 // PhaseProgress tracks progress within a specific phase.
 type PhaseProgress struct {
 	// Percentage indicates overall progress (0-100).
@@ -420,6 +427,7 @@ type AIModelStatus struct {
 //+kubebuilder:printcolumn:name="Runtime",type="string",JSONPath=".spec.runtime",description="Inference runtime (vllm, triton, tgi)"
 //+kubebuilder:printcolumn:name="Enabled",type="boolean",JSONPath=".spec.enabled",description="Is the model deployment enabled?"
 //+kubebuilder:printcolumn:name="Ready",type="integer",JSONPath=".status.readyReplicas",description="Number of ready replicas"
+//+kubebuilder:printcolumn:name="RoutingReady",type="string",JSONPath=".status.conditions[?(@.type=='RoutingReady')].status",description="Routing policy exists",priority=1
 //+kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase",description="Current phase of the AI Model deployment"
 //+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
