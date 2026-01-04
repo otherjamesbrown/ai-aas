@@ -26,7 +26,7 @@ CREATE INDEX IF NOT EXISTS idx_pull_jobs_started_at ON pull_jobs(started_at DESC
 -- This prevents race conditions and redundant downloads by constraining uniqueness
 -- only for in-progress statuses (pending, downloading, uploading).
 -- Completed/failed/cancelled jobs are not constrained, allowing historical records.
-CREATE UNIQUE INDEX idx_pull_jobs_active_unique
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pull_jobs_active_unique
     ON pull_jobs(model_id, revision)
     WHERE status IN ('pending', 'downloading', 'uploading');
 
