@@ -113,7 +113,7 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 		r.Route("/routing/policies", func(r chi.Router) {
 			policyRepo := repository.NewPolicyRepository(db)
 			modelRepo := repository.NewModelRepository(db)
-			policySvc := service.NewPolicyService(policyRepo, modelRepo, logger)
+			policySvc := service.NewPolicyService(policyRepo, modelRepo, cfg.Environment, logger)
 			policyHandler := handlers.NewPolicyHandler(policySvc, logger)
 
 			r.Post("/", policyHandler.Create)

@@ -11,17 +11,19 @@ import (
 
 // PolicyService handles routing policy business logic
 type PolicyService struct {
-	repo      *repository.PolicyRepository
-	modelRepo *repository.ModelRepository
-	logger    *zap.Logger
+	repo        *repository.PolicyRepository
+	modelRepo   *repository.ModelRepository
+	logger      *zap.Logger
+	environment string // Environment name for validation (local allows localhost)
 }
 
 // NewPolicyService creates a new policy service
-func NewPolicyService(repo *repository.PolicyRepository, modelRepo *repository.ModelRepository, logger *zap.Logger) *PolicyService {
+func NewPolicyService(repo *repository.PolicyRepository, modelRepo *repository.ModelRepository, environment string, logger *zap.Logger) *PolicyService {
 	return &PolicyService{
-		repo:      repo,
-		modelRepo: modelRepo,
-		logger:    logger,
+		repo:        repo,
+		modelRepo:   modelRepo,
+		logger:      logger,
+		environment: environment,
 	}
 }
 
@@ -215,7 +217,124 @@ func (s *PolicyService) validateBackends(ctx context.Context, backends []domain.
 		if b.Weight < 1 || b.Weight > 100 {
 			return fmt.Errorf("backend weight must be between 1 and 100")
 		}
+
+		// Validate backend URL if Endpoint is provided
+		if b.Endpoint != nil && *b.Endpoint != "" {
+			if err := s.validateBackendURL(*b.Endpoint); err != nil {
+				return fmt.Errorf("invalid backend endpoint for %s: %w", b.BackendID, err)
+			}
+		}
 	}
 
 	return nil
+}
+
+// validateBackendURL validates a backend URL according to environment rules
+func (s *PolicyService) validateBackendURL(urlStr string) error {
+	// Only enforce restrictions in non-local environments
+	if s.environment == "local" {
+		return nil // Allow any URL in local environment
+	}
+
+	// Parse the URL
+	// Note: We don't use net/url here to keep validation simple and avoid import
+	// Just check for localhost patterns in the string
+
+	// Check for localhost patterns
+	if containsLocalhost(urlStr) {
+		return fmt.Errorf("localhost URLs not allowed in '%s' environment. Use Kubernetes DNS format: http://<service>.<namespace>.svc.cluster.local:<port>", s.environment)
+	}
+
+	// Warn on raw IP addresses (log warning but don't reject)
+	if containsRawIP(urlStr) {
+		s.logger.Warn("backend URL uses raw IP address - prefer Kubernetes DNS names",
+			zap.String("url", urlStr),
+			zap.String("suggestion", "Use format: http://<service>.<namespace>.svc.cluster.local:<port>"),
+		)
+	}
+
+	return nil
+}
+
+// containsLocalhost checks if a URL contains localhost patterns
+func containsLocalhost(urlStr string) bool {
+	// Check for common localhost patterns
+	localhostPatterns := []string{
+		"localhost",
+		"127.0.0.1",
+		"::1",
+	}
+
+	for _, pattern := range localhostPatterns {
+		if urlContains(urlStr, pattern) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// containsRawIP checks if a URL appears to contain a raw IP address
+func containsRawIP(urlStr string) bool {
+	// Simple heuristic: contains :// followed by digits and dots
+	// This is not perfect but catches common cases like http://10.0.0.1:8080
+
+	// Skip if it's a Kubernetes DNS name (contains .svc.cluster.local)
+	if urlContains(urlStr, ".svc.cluster.local") {
+		return false
+	}
+
+	// Check for IPv4-like patterns after ://
+	afterScheme := urlStr
+	if idx := urlIndexOf(urlStr, "://"); idx != -1 {
+		afterScheme = urlStr[idx+3:]
+	}
+
+	// Extract hostname (before : or / or end)
+	hostname := afterScheme
+	for i, c := range hostname {
+		if c == ':' || c == '/' {
+			hostname = hostname[:i]
+			break
+		}
+	}
+
+	// Check if it looks like an IPv4 address
+	// IPv4 pattern: starts with digit, contains 3 dots, only digits and dots, length < 16
+	if len(hostname) == 0 || !urlIsDigit(hostname[0]) {
+		return false
+	}
+
+	// Count dots and check for non-digit/non-dot characters
+	dotCount := 0
+	for i := 0; i < len(hostname); i++ {
+		c := hostname[i]
+		if c == '.' {
+			dotCount++
+		} else if !urlIsDigit(c) {
+			// Contains a letter or other char - likely a domain name
+			return false
+		}
+	}
+
+	// IPv4 has exactly 3 dots (though we'll be lenient and accept 1-3)
+	return dotCount >= 1 && dotCount <= 3 && len(hostname) <= 15
+}
+
+// Helper functions for URL validation (prefix with url to avoid package conflicts)
+func urlContains(s, substr string) bool {
+	return urlIndexOf(s, substr) != -1
+}
+
+func urlIndexOf(s, substr string) int {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
+}
+
+func urlIsDigit(c byte) bool {
+	return c >= '0' && c <= '9'
 }

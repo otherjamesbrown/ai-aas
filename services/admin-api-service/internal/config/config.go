@@ -10,8 +10,9 @@ import (
 // Config holds all configuration for the admin-api-service
 type Config struct {
 	// Server settings
-	Port    int
-	Version string
+	Port        int
+	Version     string
+	Environment string // Environment name (development, staging, production, local)
 
 	// Database settings
 	DatabaseURL   string
@@ -52,6 +53,7 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		Port:              getEnvInt("PORT", 8080),
 		Version:           getEnv("VERSION", "v1.0.0"),
+		Environment:       getEnv("ENVIRONMENT", "development"),
 		DatabaseURL:       getEnv("DATABASE_URL", ""),
 		DBMaxConns:        getEnvInt("DB_MAX_CONNS", 50),
 		DBMinConns:        getEnvInt("DB_MIN_CONNS", 10),
