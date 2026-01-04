@@ -1606,7 +1606,7 @@ func (s *Store) ListAuditLogs(ctx context.Context, filters AuditLogFilters) ([]A
 	whereClause := strings.Join(whereClauses, " AND ")
 
 	// Get total count
-	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM audit_logs WHERE %s", whereClause)
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM user_org_audit_logs WHERE %s", whereClause)
 	var totalCount int
 	if err := s.pool.QueryRow(ctx, countQuery, args...).Scan(&totalCount); err != nil {
 		return nil, 0, fmt.Errorf("count audit logs: %w", err)
@@ -1619,7 +1619,7 @@ func (s *Store) ListAuditLogs(ctx context.Context, filters AuditLogFilters) ([]A
 			target_id, target_type, action, resource, policy_id,
 			ip_address, user_agent, metadata, hash, signature,
 			delivered_at, created_at
-		FROM audit_logs
+		FROM user_org_audit_logs
 		WHERE %s
 		ORDER BY created_at DESC
 		LIMIT $%d OFFSET $%d
