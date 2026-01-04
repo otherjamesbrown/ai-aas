@@ -606,8 +606,6 @@ func TestUC_BM_005_WaitForRunCompletion_MustNot(t *testing.T) {
 // See: usecases/benchmarks.yaml
 func TestUC_BM_006_CancelRunningBenchmarks(t *testing.T) {
 	t.Run("AC-01: cancel running benchmark", func(t *testing.T) {
-		t.Skip("Feature not implemented - benchmark run cancel command does not exist")
-
 		// Given: Benchmark run is in running state
 		// When: User runs `ai-aas-org benchmark run cancel <run-id>`
 		// Then: Exit code is 0
@@ -616,8 +614,6 @@ func TestUC_BM_006_CancelRunningBenchmarks(t *testing.T) {
 	})
 
 	t.Run("AC-02: cancel pending benchmark", func(t *testing.T) {
-		t.Skip("Feature not implemented - benchmark run cancel command does not exist")
-
 		// Given: Benchmark run is in pending state (queued)
 		// When: User runs `ai-aas-org benchmark run cancel <run-id>`
 		// Then: Benchmark run is removed from queue
@@ -626,8 +622,6 @@ func TestUC_BM_006_CancelRunningBenchmarks(t *testing.T) {
 	})
 
 	t.Run("AC-03: reject cancel on completed run", func(t *testing.T) {
-		t.Skip("Feature not implemented - benchmark run cancel command does not exist")
-
 		// Given: Benchmark run has already completed
 		// When: User runs `ai-aas-org benchmark run cancel <run-id>`
 		// Then: Command fails with non-zero exit code
