@@ -873,29 +873,41 @@ func newModelCommand() *cobra.Command {
 		Short: "Model lifecycle management",
 		Long: `Comprehensive AI model management for the AI-AAS platform.
 
-The model command provides nested subcommands organized by lifecycle stage:
+Quick Commands:
+  enable        Deploy models (simple, uses defaults)
+  disable       Undeploy models (preserves cache)
+  swap          Atomically swap models
+  list          List all models
+  history       View deployment history
 
+Advanced Commands:
   registry      Discover and register models from HuggingFace Hub
   cache         Download and manage local model files in S3 storage
-  deploy        Create and manage KServe InferenceService deployments
+  deploy        Create and manage KServe InferenceService deployments (advanced options)
   recipe        Manage model deployment recipes (known-good configurations)
   troubleshoot  Debug deployment issues with logs, events, and diagnostics
   version       Manage model versions, updates, and pinning
-  library       Manage organization's enabled model library
+  library       View model library status and history
 
 Quick Deploy (recommended):
   ai-aas-cli model hf-deploy https://huggingface.co/unsloth/gpt-oss-20b
 
-Manual Workflow:
+Simple Workflow:
   1. ai-aas-cli model registry add meta-llama/Llama-2-7b-hf
   2. ai-aas-cli model cache pull meta-llama/Llama-2-7b-hf
-  3. ai-aas-cli model deploy create meta-llama/Llama-2-7b-hf
+  3. ai-aas-cli model enable meta-llama/Llama-2-7b-hf -e development
+  4. ai-aas-cli model library list -e development
+
+Advanced Workflow:
+  1. ai-aas-cli model registry add meta-llama/Llama-2-7b-hf
+  2. ai-aas-cli model cache pull meta-llama/Llama-2-7b-hf
+  3. ai-aas-cli model deploy create meta-llama/Llama-2-7b-hf --gpu-count 2 --memory 48
   4. ai-aas-cli model deploy status meta-llama/Llama-2-7b-hf
 
 Getting Help:
   ai-aas-cli model --help                    Show this help
-  ai-aas-cli model registry --help           Show registry commands
-  ai-aas-cli model deploy create --help      Show deploy create options
+  ai-aas-cli model enable --help             Show enable options
+  ai-aas-cli model deploy create --help      Show advanced deploy options
 
 For more information, see: https://docs.ai-aas.io/cli/model`,
 	}
@@ -910,6 +922,12 @@ For more information, see: https://docs.ai-aas.io/cli/model`,
 	cmd.AddCommand(model.NewTroubleshootParentCommand())
 	cmd.AddCommand(model.NewVersionParentCommand())
 	cmd.AddCommand(model.NewLibraryParentCommand())
+
+	// Add top-level convenience commands
+	cmd.AddCommand(model.NewEnableCommand())
+	cmd.AddCommand(model.NewDisableCommand())
+	cmd.AddCommand(model.NewSwapCommand())
+	cmd.AddCommand(model.NewHistoryCommand())
 
 	return cmd
 }

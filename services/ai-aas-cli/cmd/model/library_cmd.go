@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/cli"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/client/inference"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/kubernetes"
@@ -21,11 +20,16 @@ import (
 func NewLibraryParentCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "library",
-		Short: "Quick model enable/disable operations",
-		Long: `Quick operations for enabling and disabling models in the library.
+		Short: "View model library status and history",
+		Long: `View model library status, deployment history, and manage aliases.
 
-The library provides simplified commands for quickly enabling (deploying) and
-disabling (undeploying) models that are already registered and cached.
+The library provides read-only views of model status across environments
+and audit logs of deployment operations.
+
+For deployment operations, use the top-level commands:
+  ai-aas-cli model enable <model>       Deploy models
+  ai-aas-cli model disable <model>      Undeploy models
+  ai-aas-cli model swap <old> <new>     Swap models atomically
 
 MODEL LIFECYCLE
 ───────────────
@@ -43,39 +47,33 @@ Models progress through these stages:
 STATUS REFERENCE
 ────────────────
   registered  Model is in registry, weights not cached    → model cache pull
-  cached      Model weights stored in object storage      → model library enable
+  cached      Model weights stored in object storage      → model enable
   deploying   InferenceService is starting up             → wait or check status
   ready       Model is serving inference requests         ✓ Ready to use
   failed      Deployment failed                           → model troubleshoot
-  disabled    Model manually disabled/scaled to 0         → model library enable
+  disabled    Model manually disabled/scaled to 0         → model enable
 
 Examples:
   # View library overview with next steps
-  ai-aas model library list -e development
+  ai-aas-cli model library list -e development
 
-  # Quick enable a model
-  ai-aas model library enable mistral-7b -e development
+  # View deployment history
+  ai-aas-cli model library history mistral-7b
 
-  # Quick disable a model
-  ai-aas model library disable mistral-7b -e development
-
-  # Swap models atomically
-  ai-aas model library swap old-model new-model -e development
+  # Manage model aliases
+  ai-aas-cli model library alias set prod-llm llama-3-8b
 
 Use Cases:
-  - Quickly enable/disable models without specifying resources
-  - Swap models atomically for capacity management
-  - View library status at a glance`,
+  - View model status across environments
+  - Audit deployment history
+  - Manage model aliases for stable references`,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmd.Help()
 		},
 	}
 
-	// Add subcommands
+	// Add subcommands - view-only operations
 	cmd.AddCommand(newLibraryListCommand())
-	cmd.AddCommand(newLibraryEnableCommand())
-	cmd.AddCommand(newLibraryDisableCommand())
-	cmd.AddCommand(newLibrarySwapCommand())
 	cmd.AddCommand(newLibraryHistoryCommand())
 	cmd.AddCommand(newLibraryAliasCommand())
 
@@ -133,9 +131,9 @@ Examples:
   ai-aas model library list -e development
 
 See Also:
-  ai-aas model library --help     View full lifecycle diagram
-  ai-aas model registry list      View registry details
-  ai-aas model library enable     Enable a model`,
+  ai-aas-cli model library --help     View full lifecycle diagram
+  ai-aas-cli model registry list      View registry details
+  ai-aas-cli model enable             Enable a model`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
@@ -274,13 +272,13 @@ See Also:
 						} else if isCached {
 							status = "cached"
 							statusColor = info
-							nextStep = muted.Sprintf("→ model library enable %s -e %s", m.Name, environment)
+							nextStep = muted.Sprintf("→ model enable %s -e %s", m.Name, environment)
 						}
 					}
 				} else if isCached {
 					status = "cached"
 					statusColor = info
-					nextStep = muted.Sprintf("→ model library enable %s -e <env>", m.Name)
+					nextStep = muted.Sprintf("→ model enable %s -e <env>", m.Name)
 				}
 
 				// Check if available via API Router
@@ -321,499 +319,6 @@ See Also:
 	}
 
 	cmd.Flags().StringVarP(&environment, "environment", "e", "", "filter by environment")
-
-	return cmd
-}
-
-// newLibraryEnableCommand creates the library enable subcommand
-func newLibraryEnableCommand() *cobra.Command {
-	var (
-		environment string
-		gpuCount    int
-		memoryGB    int
-		wait        bool
-	)
-
-	cmd := &cobra.Command{
-		Use:   "enable <model-name> [model-name...]",
-		Short: "Quick enable (deploy) models",
-		Long: `Enable one or more models by deploying them to the target environment.
-
-This is a convenience command for quickly enabling models that are already
-registered and cached. Uses default resource settings.
-
-Examples:
-  # Enable a single model
-  ai-aas model library enable mistral-7b -e development
-
-  # Enable multiple models
-  ai-aas model library enable mistral-7b llama-3-8b -e development
-
-  # Enable with custom resources
-  ai-aas model library enable mistral-7b -e development --gpu-count 2 --memory 48
-
-  # Enable and wait for ready
-  ai-aas model library enable mistral-7b -e development --wait
-
-See Also:
-  ai-aas model library disable    Disable a model
-  ai-aas model deploy create      Full deploy with all options`,
-		Args: cobra.MinimumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-			defer cancel()
-
-			// Get profile flag and load config with profile support
-			profileName, _ := cmd.Flags().GetString("profile")
-			cfg, _, err := config.GetEffectiveConfig(profileName)
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			// If no environment specified, try to get from active profile
-			if environment == "" {
-				if profile, _, err := config.GetActiveProfile(); err == nil && profile != nil && profile.Environment != "" {
-					environment = profile.Environment
-				}
-			}
-			if environment == "" {
-				return fmt.Errorf("environment is required. Use -e <environment> or set a profile")
-			}
-
-			s3Bucket := viper.GetString("s3.bucket")
-
-			adminEndpoint := cfg.GetAdminEndpoint()
-
-			if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
-				return fmt.Errorf("Admin API endpoint not configured. Run 'ai-aas-cli --init' first")
-			}
-
-			apiClient := cfg.NewAPIClient(adminEndpoint)
-			regClient := registry.NewClient(apiClient)
-
-			kubeconfig := viper.GetString(fmt.Sprintf("environments.%s.kubeconfig", environment))
-			kubecontext := viper.GetString(fmt.Sprintf("environments.%s.context", environment))
-
-			k8sClient, err := kubernetes.NewClient(kubernetes.ClientConfig{
-				Kubeconfig: kubeconfig,
-				Context:    kubecontext,
-				Namespace:  environment,
-			})
-			if err != nil {
-				return fmt.Errorf("create k8s client: %w", err)
-			}
-
-			fmt.Printf("Enabling %d model(s) in %s\n\n", len(args), environment)
-
-			var failed []string
-			for _, modelName := range args {
-				fmt.Printf("Enabling %s...\n", modelName)
-
-				model, err := regClient.Get(ctx, modelName)
-				if err != nil {
-					fmt.Printf("  ERROR: %v\n", err)
-					failed = append(failed, modelName)
-					continue
-				}
-
-				// Get cached revision instead of hardcoding "main"
-				revision, err := getCachedRevision(ctx, regClient, modelName)
-				if err != nil {
-					fmt.Printf("  ERROR: %v\n", err)
-					failed = append(failed, modelName)
-					continue
-				}
-
-				storageURI := fmt.Sprintf("s3://%s/models/%s/%s/", s3Bucket, modelName, revision)
-
-				// Resolve actual InferenceService name (for checking existing)
-				isvcName, resolvedNs, _ := k8sClient.ResolveInferenceServiceName(ctx, modelName, environment)
-
-				existing, err := k8sClient.GetInferenceService(ctx, isvcName, resolvedNs)
-				if err == nil && existing != nil {
-					fmt.Printf("  Already enabled (ready: %v)\n", existing.Ready)
-					continue
-				}
-
-				isvcCfg := kubernetes.InferenceServiceConfig{
-					Name:        isvcName,
-					Namespace:   environment,
-					ModelName:   modelName,
-					StorageURI:  storageURI,
-					GPUCount:    gpuCount,
-					MemoryGB:    memoryGB,
-					MinReplicas: 1,
-					MaxReplicas: 1,
-					Environment: environment,
-					Labels: map[string]string{
-						"ai-aas.io/model":       modelName,
-						"ai-aas.io/environment": environment,
-					},
-					Annotations: map[string]string{
-						"ai-aas.io/hf-model-id": model.HFModelID,
-					},
-				}
-
-				if err := k8sClient.CreateInferenceService(ctx, isvcCfg); err != nil {
-					fmt.Printf("  ERROR: %v\n", err)
-					failed = append(failed, modelName)
-					continue
-				}
-
-				fmt.Printf("  Created InferenceService\n")
-
-				if wait {
-					fmt.Printf("  Waiting for ready...")
-					waitOpts := kubernetes.WaitOptions{
-						Timeout:      10 * time.Minute,
-						PollInterval: 5 * time.Second,
-					}
-					if err := k8sClient.WaitForReady(ctx, isvcName, environment, waitOpts); err != nil {
-						fmt.Printf(" TIMEOUT\n")
-						failed = append(failed, modelName)
-						continue
-					}
-					fmt.Printf(" READY\n")
-				}
-			}
-
-			fmt.Println()
-			if len(failed) == 0 {
-				cli.PrintSuccess(fmt.Sprintf("Enabled %d model(s)", len(args)))
-			} else {
-				fmt.Printf("Enabled %d/%d model(s), %d failed\n", len(args)-len(failed), len(args), len(failed))
-				return fmt.Errorf("some models failed to enable: %v", failed)
-			}
-
-			return nil
-		},
-	}
-
-	cmd.Flags().StringVarP(&environment, "environment", "e", "", "target environment (uses profile if not specified)")
-	cmd.Flags().IntVar(&gpuCount, "gpu-count", 1, "number of GPUs")
-	cmd.Flags().IntVar(&memoryGB, "memory", 24, "memory allocation in GB")
-	cmd.Flags().BoolVar(&wait, "wait", false, "wait for models to be ready")
-
-	return cmd
-}
-
-// newLibraryDisableCommand creates the library disable subcommand
-func newLibraryDisableCommand() *cobra.Command {
-	var (
-		environment string
-		force       bool
-		reason      string
-	)
-
-	cmd := &cobra.Command{
-		Use:   "disable <model-name>",
-		Short: "Quick disable (undeploy) model",
-		Long: `Disable a model by removing its deployment while preserving the cache.
-
-This allows quick re-enable without re-downloading the model files.
-
-Examples:
-  # Disable a model
-  ai-aas model library disable mistral-7b -e development
-
-  # Disable with reason for audit
-  ai-aas model library disable mistral-7b -e development --reason "maintenance"
-
-  # Force disable without confirmation
-  ai-aas model library disable mistral-7b -e development --force
-
-See Also:
-  ai-aas model library enable     Re-enable a model
-  ai-aas model deploy delete      Full delete with options`,
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			modelName := args[0]
-
-			// If no environment specified, try to get from active profile
-			if environment == "" {
-				if profile, _, err := config.GetActiveProfile(); err == nil && profile != nil && profile.Environment != "" {
-					environment = profile.Environment
-				}
-			}
-			if environment == "" {
-				return fmt.Errorf("environment is required. Use -e <environment> or set a profile")
-			}
-
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-			defer cancel()
-
-			kubeconfig := viper.GetString(fmt.Sprintf("environments.%s.kubeconfig", environment))
-			kubecontext := viper.GetString(fmt.Sprintf("environments.%s.context", environment))
-
-			k8sClient, err := kubernetes.NewClient(kubernetes.ClientConfig{
-				Kubeconfig: kubeconfig,
-				Context:    kubecontext,
-				Namespace:  environment,
-			})
-			if err != nil {
-				return fmt.Errorf("create k8s client: %w", err)
-			}
-
-			// Resolve actual InferenceService name
-			isvcName, resolvedNs, _ := k8sClient.ResolveInferenceServiceName(ctx, modelName, environment)
-
-			status, err := k8sClient.GetInferenceService(ctx, isvcName, resolvedNs)
-			if err != nil {
-				fmt.Printf("Model %s is not enabled in %s\n", modelName, environment)
-				return nil
-			}
-
-			fmt.Printf("Disabling %s in %s\n", modelName, environment)
-			fmt.Printf("  Ready: %v\n", status.Ready)
-			if status.URL != "" {
-				fmt.Printf("  URL: %s\n", status.URL)
-			}
-			if reason != "" {
-				fmt.Printf("  Reason: %s\n", reason)
-			}
-
-			if !force {
-				fmt.Print("\nConfirm disable? [y/N]: ")
-				var response string
-				fmt.Scanln(&response)
-				if response != "y" && response != "Y" {
-					fmt.Println("Cancelled.")
-					return nil
-				}
-			}
-
-			if err := k8sClient.DeleteInferenceService(ctx, isvcName, resolvedNs); err != nil {
-				return fmt.Errorf("delete inferenceservice: %w", err)
-			}
-
-			fmt.Println()
-			cli.PrintSuccess(fmt.Sprintf("Disabled %s", modelName))
-			cli.PrintNote("Model cache is preserved. Use 'ai-aas model library enable' to re-deploy.")
-
-			return nil
-		},
-	}
-
-	cmd.Flags().StringVarP(&environment, "environment", "e", "", "target environment (uses profile if not specified)")
-	cmd.Flags().BoolVar(&force, "force", false, "skip confirmation")
-	cmd.Flags().StringVar(&reason, "reason", "", "reason for disabling")
-
-	return cmd
-}
-
-// newLibrarySwapCommand creates the library swap subcommand
-func newLibrarySwapCommand() *cobra.Command {
-	var (
-		environment string
-		force       bool
-		reason      string
-	)
-
-	cmd := &cobra.Command{
-		Use:   "swap <disable-model> <enable-model>",
-		Short: "Atomically swap models",
-		Long: `Atomically disable one model and enable another.
-
-Performs a graceful swap: the first model is disabled, then the second
-is enabled. Useful for capacity management when you can't run both
-models simultaneously.
-
-Examples:
-  # Swap models
-  ai-aas model library swap old-model new-model -e production
-
-  # Swap with reason for audit
-  ai-aas model library swap old-model new-model -e production --reason "Upgrading"
-
-  # Force swap without confirmation
-  ai-aas model library swap old-model new-model -e production --force
-
-See Also:
-  ai-aas model library enable     Enable a model
-  ai-aas model library disable    Disable a model
-  ai-aas model library history    View swap history`,
-		Args: cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			disableModel := args[0]
-			enableModel := args[1]
-
-			// If no environment specified, try to get from active profile
-			if environment == "" {
-				if profile, _, err := config.GetActiveProfile(); err == nil && profile != nil && profile.Environment != "" {
-					environment = profile.Environment
-				}
-			}
-			if environment == "" {
-				return fmt.Errorf("environment is required. Use -e <environment> or set a profile")
-			}
-
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-			defer cancel()
-
-			// Get profile flag and load config with profile support
-			profileName, _ := cmd.Flags().GetString("profile")
-			cfg, _, err := config.GetEffectiveConfig(profileName)
-			if err != nil {
-				return fmt.Errorf("load config: %w", err)
-			}
-
-			kubeconfig := viper.GetString(fmt.Sprintf("environments.%s.kubeconfig", environment))
-			kubecontext := viper.GetString(fmt.Sprintf("environments.%s.context", environment))
-			s3Bucket := viper.GetString("s3.bucket")
-
-			k8sClient, err := kubernetes.NewClient(kubernetes.ClientConfig{
-				Kubeconfig: kubeconfig,
-				Context:    kubecontext,
-				Namespace:  environment,
-			})
-			if err != nil {
-				return fmt.Errorf("create k8s client: %w", err)
-			}
-
-			disableIsvc := fmt.Sprintf("%s-%s", disableModel, environment)
-			enableIsvc := fmt.Sprintf("%s-%s", enableModel, environment)
-
-			// Create API client and registry client early so we can get cached revisions
-			apiClient, apiErr := getAPIClient(cfg)
-			var regClient *registry.Client
-			if apiErr != nil {
-				return fmt.Errorf("get API client: %w", apiErr)
-			}
-			regClient = registry.NewClient(apiClient)
-
-			// Get cached revisions for both models
-			enableRevision, err := getCachedRevision(ctx, regClient, enableModel)
-			if err != nil {
-				return fmt.Errorf("get cached revision for %s: %w", enableModel, err)
-			}
-
-			disableRevision, err := getCachedRevision(ctx, regClient, disableModel)
-			if err != nil {
-				return fmt.Errorf("get cached revision for %s: %w", disableModel, err)
-			}
-
-			disableStatus, err := k8sClient.GetInferenceService(ctx, disableIsvc, environment)
-			if err != nil {
-				return fmt.Errorf("model %s is not deployed in %s", disableModel, environment)
-			}
-
-			fmt.Printf("Swapping models in %s:\n", environment)
-			fmt.Printf("  Disable: %s (ready: %v)\n", disableModel, disableStatus.Ready)
-			fmt.Printf("  Enable:  %s\n", enableModel)
-			if reason != "" {
-				fmt.Printf("  Reason:  %s\n", reason)
-			}
-
-			if !force {
-				fmt.Print("\nConfirm swap? [y/N]: ")
-				var response string
-				fmt.Scanln(&response)
-				if response != "y" && response != "Y" {
-					fmt.Println("Cancelled.")
-					return nil
-				}
-			}
-
-			fmt.Println()
-
-			// Step 1: Disable
-			fmt.Printf("Step 1: Disabling %s...\n", disableModel)
-			if err := k8sClient.DeleteInferenceService(ctx, disableIsvc, environment); err != nil {
-				return fmt.Errorf("disable %s: %w", disableModel, err)
-			}
-
-			if regClient != nil {
-				if err := regClient.RecordState(ctx, disableModel, registry.RecordStateRequest{
-					Environment: environment,
-					Action:      "swapped_out",
-					Reason:      reason,
-				}); err != nil {
-					fmt.Printf("  Warning: could not record history: %v\n", err)
-				}
-			}
-
-			cli.PrintSuccess(fmt.Sprintf("Disabled %s", disableModel))
-
-			fmt.Print("  Waiting for resources to be released...")
-			if err := k8sClient.WaitForDelete(ctx, disableIsvc, environment, 30*time.Second); err != nil {
-				fmt.Println(" FAILED")
-				return fmt.Errorf("failed waiting for old model '%s' to be deleted: %w", disableModel, err)
-			}
-			fmt.Println(" done")
-
-			// Step 2: Enable
-			fmt.Printf("Step 2: Enabling %s...\n", enableModel)
-
-			storageURI := fmt.Sprintf("s3://%s/models/%s/%s/", s3Bucket, enableModel, enableRevision)
-
-			isvcCfg := kubernetes.InferenceServiceConfig{
-				Name:        enableIsvc,
-				Namespace:   environment,
-				ModelName:   enableModel,
-				StorageURI:  storageURI,
-				GPUCount:    1,
-				MemoryGB:    24,
-				MinReplicas: 1,
-				MaxReplicas: 1,
-				Environment: environment,
-				Labels: map[string]string{
-					"ai-aas.io/model":       enableModel,
-					"ai-aas.io/environment": environment,
-				},
-			}
-
-			if err := k8sClient.CreateInferenceService(ctx, isvcCfg); err != nil {
-				fmt.Printf("  ERROR: %v\n", err)
-				fmt.Printf("  Attempting rollback: re-enabling %s...\n", disableModel)
-
-				rollbackCfg := isvcCfg
-				rollbackCfg.Name = disableIsvc
-				rollbackCfg.ModelName = disableModel
-				rollbackCfg.StorageURI = fmt.Sprintf("s3://%s/models/%s/%s/", s3Bucket, disableModel, disableRevision)
-				rollbackCfg.Labels["ai-aas.io/model"] = disableModel
-
-				if rollbackErr := k8sClient.CreateInferenceService(ctx, rollbackCfg); rollbackErr != nil {
-					return fmt.Errorf("enable %s failed and rollback also failed: %v (rollback: %v)",
-						enableModel, err, rollbackErr)
-				}
-				cli.PrintSuccess(fmt.Sprintf("Rollback successful, %s re-enabled", disableModel))
-				return fmt.Errorf("enable %s: %w", enableModel, err)
-			}
-
-			if regClient != nil {
-				if err := regClient.RecordState(ctx, enableModel, registry.RecordStateRequest{
-					Environment: environment,
-					Action:      "swapped_in",
-					Reason:      reason,
-				}); err != nil {
-					fmt.Printf("  Warning: could not record history: %v\n", err)
-				}
-			}
-
-			cli.PrintSuccess(fmt.Sprintf("Created InferenceService for %s", enableModel))
-
-			fmt.Print("  Waiting for ready...")
-			waitOpts := kubernetes.WaitOptions{
-				Timeout:      10 * time.Minute,
-				PollInterval: 5 * time.Second,
-			}
-			if err := k8sClient.WaitForReady(ctx, enableIsvc, environment, waitOpts); err != nil {
-				fmt.Printf(" TIMEOUT\n")
-				fmt.Printf("  Warning: %s did not become ready in time\n", enableModel)
-			} else {
-				fmt.Printf(" READY\n")
-			}
-
-			fmt.Println()
-			cli.PrintSuccess(fmt.Sprintf("Swap complete: %s -> %s", disableModel, enableModel))
-
-			return nil
-		},
-	}
-
-	cmd.Flags().StringVarP(&environment, "environment", "e", "", "target environment (uses profile if not specified)")
-	cmd.Flags().BoolVar(&force, "force", false, "skip confirmation")
-	cmd.Flags().StringVar(&reason, "reason", "", "reason for swap (for audit)")
 
 	return cmd
 }
