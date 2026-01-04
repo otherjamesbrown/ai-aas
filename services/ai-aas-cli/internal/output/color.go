@@ -21,6 +21,7 @@ var (
 	Value     = color.New(color.FgWhite)
 	Muted     = color.New(color.FgHiBlack)
 	Highlight = color.New(color.FgMagenta, color.Bold)
+	Bold      = color.New(color.Bold)
 
 	// Status indicators
 	CheckMark = Success.Sprint("✓")

@@ -928,6 +928,7 @@ For more information, see: https://docs.ai-aas.io/cli/model`,
 	cmd.AddCommand(model.NewDisableCommand())
 	cmd.AddCommand(model.NewSwapCommand())
 	cmd.AddCommand(model.NewHistoryCommand())
+	cmd.AddCommand(model.NewPipelineCommand())
 
 	return cmd
 }
