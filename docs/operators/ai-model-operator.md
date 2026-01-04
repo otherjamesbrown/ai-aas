@@ -40,6 +40,11 @@ spec:
   # Required: Enable/disable the model
   enabled: true
 
+  # Optional: External name for OpenAI-compatible API
+  # This is the name exposed in /v1/models. Must be unique across all models.
+  # If not specified, derived from modelName.
+  externalName: gpt-2
+
   # Required: S3 storage location
   s3Bucket: ai-aas
   s3Key: models/gpt2
@@ -106,6 +111,7 @@ status:
   retryCount: 0             # Number of retry attempts
   lastRetryTime: null       # Timestamp of last retry
   nextRetryTime: null       # Scheduled next retry time
+  lastAdminAPISyncTime: "2025-12-26T10:30:00Z"  # Last successful Admin API sync
 ```
 
 ## Source Code Structure
