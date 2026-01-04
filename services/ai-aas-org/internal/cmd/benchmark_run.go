@@ -315,6 +315,201 @@ func runBenchmarkRunTrigger(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println("Check the run status with:")
 	fmt.Printf("  ai-aas-org benchmark run show %s\n", run.ID)
+	fmt.Println("Or wait for completion with:")
+	fmt.Printf("  ai-aas-org benchmark run wait %s\n", run.ID)
 
 	return nil
+}
+
+// --- benchmark run cancel ---
+
+var benchmarkRunCancelCmd = &cobra.Command{
+	Use:   "cancel <run-id>",
+	Short: "Cancel a pending or running benchmark",
+	Long: `Cancel a pending or running benchmark run.
+
+Once cancelled, the run cannot be restarted. Only pending or running
+benchmarks can be cancelled - completed or failed runs cannot be cancelled.
+
+Examples:
+  ai-aas-org benchmark run cancel <run-id>
+  ai-aas-org benchmark run cancel <run-id> --json`,
+	Args: cobra.ExactArgs(1),
+	RunE: runBenchmarkRunCancel,
+}
+
+func init() {
+	benchmarkRunCmd.AddCommand(benchmarkRunCancelCmd)
+}
+
+func runBenchmarkRunCancel(cmd *cobra.Command, args []string) error {
+	if err := requireConfig(); err != nil {
+		return err
+	}
+
+	runID := args[0]
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	client := newAdminAPIClient()
+	run, err := client.CancelBenchmarkRun(ctx, runID)
+	if err != nil {
+		return errors.NewOperationError("failed to cancel run", err.Error())
+	}
+
+	if IsJSONOutput() {
+		return output.PrintJSON(run)
+	}
+
+	output.SuccessMsg("Benchmark run cancelled")
+	fmt.Println()
+	output.KeyValue("Run ID", run.ID)
+	output.KeyValue("Target ID", run.TargetID)
+	output.KeyValue("Scenario", run.ScenarioName)
+	output.KeyValue("Status", output.StatusBadge(run.Status))
+	fmt.Println()
+	fmt.Println("The run has been cancelled and will not complete.")
+
+	return nil
+}
+
+// --- benchmark run wait ---
+
+var benchmarkRunWaitCmd = &cobra.Command{
+	Use:   "wait <run-id>",
+	Short: "Wait for a benchmark run to complete",
+	Long: `Wait for a benchmark run to reach a terminal state (completed, failed, or cancelled).
+
+This command blocks until the run completes or the timeout expires. It polls the
+run status periodically and displays the final result when complete.
+
+This is useful for scripting and automation where subsequent steps depend on
+benchmark completion.
+
+Examples:
+  ai-aas-org benchmark run wait <run-id>
+  ai-aas-org benchmark run wait <run-id> --timeout 5m
+  ai-aas-org benchmark run wait <run-id> --timeout 60s`,
+	Args: cobra.ExactArgs(1),
+	RunE: runBenchmarkRunWait,
+}
+
+var (
+	runWaitTimeout time.Duration
+)
+
+func init() {
+	benchmarkRunCmd.AddCommand(benchmarkRunWaitCmd)
+	benchmarkRunWaitCmd.Flags().DurationVar(&runWaitTimeout, "timeout", 30*time.Minute, "Maximum time to wait for completion (e.g., 30m, 60s)")
+}
+
+func runBenchmarkRunWait(cmd *cobra.Command, args []string) error {
+	if err := requireConfig(); err != nil {
+		return err
+	}
+
+	runID := args[0]
+
+	ctx, cancel := context.WithTimeout(context.Background(), runWaitTimeout+10*time.Second)
+	defer cancel()
+
+	client := newAdminAPIClient()
+
+	// Poll interval
+	pollInterval := 5 * time.Second
+	deadline := time.Now().Add(runWaitTimeout)
+
+	// Display initial message
+	if !IsJSONOutput() {
+		fmt.Printf("Waiting for benchmark run %s to complete (timeout: %s)...\n", runID, runWaitTimeout)
+	}
+
+	// Poll loop
+	for {
+		run, err := client.GetBenchmarkRun(ctx, runID)
+		if err != nil {
+			return errors.NewOperationError("failed to get run status", err.Error())
+		}
+
+		// Check if run is in terminal state
+		status := run.Status
+		if status == "completed" || status == "failed" || status == "cancelled" {
+			// Run has reached terminal state
+			if IsJSONOutput() {
+				return output.PrintJSON(run)
+			}
+
+			fmt.Println()
+			output.Header("Benchmark Run Complete")
+			output.KeyValue("ID", run.ID)
+			output.KeyValue("Status", output.StatusBadge(status))
+			if run.DurationSeconds != nil {
+				output.KeyValue("Duration", fmt.Sprintf("%d seconds", *run.DurationSeconds))
+			}
+
+			if status == "completed" {
+				// Display key metrics
+				if run.Results != nil {
+					fmt.Println()
+					output.Header("Results Summary")
+					output.KeyValue("Throughput", fmt.Sprintf("%.2f req/s", run.Results.RequestsPerSecond))
+					output.KeyValue("Latency P50", fmt.Sprintf("%.2f ms", run.Results.LatencyP50))
+					output.KeyValue("Latency P99", fmt.Sprintf("%.2f ms", run.Results.LatencyP99))
+					if run.Results.ErrorRate > 0 {
+						output.KeyValue("Error Rate", fmt.Sprintf("%.2f%%", run.Results.ErrorRate*100))
+					}
+				}
+				fmt.Println()
+				fmt.Println("View full results with:")
+				fmt.Printf("  ai-aas-org benchmark run show %s\n", run.ID)
+				return nil
+			} else if status == "failed" {
+				// Display error message
+				if run.ErrorMessage != nil && *run.ErrorMessage != "" {
+					fmt.Println()
+					output.Header("Error")
+					fmt.Println(*run.ErrorMessage)
+				}
+				fmt.Println()
+				fmt.Println("View full details with:")
+				fmt.Printf("  ai-aas-org benchmark run show %s\n", run.ID)
+				// Return exit code 2 for failed runs (per UC-BM-005 AC-04)
+				return &errors.CLIError{
+					Code:     errors.ErrCodeOperationFailed,
+					Message:  "Benchmark run failed",
+					ExitCode: 2,
+				}
+			} else if status == "cancelled" {
+				fmt.Println()
+				fmt.Println("View details with:")
+				fmt.Printf("  ai-aas-org benchmark run show %s\n", run.ID)
+				return errors.NewOperationError("benchmark run was cancelled", "")
+			}
+		}
+
+		// Check if timeout has been reached
+		if time.Now().After(deadline) {
+			if IsJSONOutput() {
+				return output.PrintJSON(map[string]string{
+					"error":  "timeout waiting for run completion",
+					"run_id": runID,
+					"status": status,
+				})
+			}
+			// Return exit code 1 for timeout (per UC-BM-005 AC-02)
+			return errors.NewOperationError(
+				fmt.Sprintf("timeout waiting for run completion (status: %s)", status),
+				"Increase the timeout with --timeout flag or check run status separately",
+			)
+		}
+
+		// Wait before next poll
+		select {
+		case <-time.After(pollInterval):
+			// Continue polling
+		case <-ctx.Done():
+			return errors.NewOperationError("context deadline exceeded", "")
+		}
+	}
 }

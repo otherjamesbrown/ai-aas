@@ -178,6 +178,15 @@ func (c *Client) GetBenchmarkRun(ctx context.Context, id string) (*BenchmarkRun,
 	return &result, nil
 }
 
+// CancelBenchmarkRun cancels a pending or running benchmark run (UC-BM-006).
+func (c *Client) CancelBenchmarkRun(ctx context.Context, id string) (*BenchmarkRun, error) {
+	var result BenchmarkRun
+	if err := c.doRequest(ctx, http.MethodPost, "/v1/benchmarks/runs/"+url.PathEscape(id)+"/cancel", nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // GetBenchmarkTargetByName finds a target by name among the user's targets.
 // Returns nil if not found (no error).
 func (c *Client) GetBenchmarkTargetByName(ctx context.Context, name string) (*BenchmarkTarget, error) {

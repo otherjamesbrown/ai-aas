@@ -869,3 +869,225 @@ func (f *GitOpsModelFixture) kubectlExec(args ...string) (string, error) {
 	output, err := cmd.CombinedOutput()
 	return string(output), err
 }
+
+// BenchmarkRunFixture provides benchmark run lifecycle operations for tests
+type BenchmarkRunFixture struct {
+	fm        *FixtureManager
+	t         *testing.T
+	orgCtx    *TestOrgContext
+	runsCreated []string
+}
+
+// BenchmarkTarget represents a benchmark target
+type BenchmarkTarget struct {
+	Name     string
+	Model    string
+	Scenario string
+}
+
+// BenchmarkRun represents a benchmark run
+type BenchmarkRun struct {
+	ID       string
+	TargetID string
+	Status   string
+	Results  map[string]interface{}
+}
+
+// NewBenchmarkRunFixture creates a new benchmark run fixture manager
+func NewBenchmarkRunFixture(fm *FixtureManager, t *testing.T, orgCtx *TestOrgContext) *BenchmarkRunFixture {
+	return &BenchmarkRunFixture{
+		fm:          fm,
+		t:           t,
+		orgCtx:      orgCtx,
+		runsCreated: []string{},
+	}
+}
+
+// CreateTarget creates a benchmark target and registers it for cleanup
+func (brf *BenchmarkRunFixture) CreateTarget(targetName, model, scenario string) (*BenchmarkTarget, error) {
+	if targetName == "" {
+		targetName = fmt.Sprintf("test-target-%s", generateUniqueID())
+	}
+	if model == "" {
+		model = "llama-7b"
+	}
+	if scenario == "" {
+		scenario = "standard"
+	}
+
+	// Create target using CLI
+	result := brf.orgCtx.RunCLI("benchmark", "target", "add", targetName, "--model", model, "--scenario", scenario)
+	if result.ExitCode != 0 {
+		return nil, fmt.Errorf("failed to create benchmark target: %s", result.Output)
+	}
+
+	target := &BenchmarkTarget{
+		Name:     targetName,
+		Model:    model,
+		Scenario: scenario,
+	}
+
+	// Register for cleanup
+	brf.fm.Register("benchmark_target", targetName, map[string]string{
+		"model":    model,
+		"scenario": scenario,
+	}, func() error {
+		return brf.DeleteTarget(targetName)
+	})
+
+	return target, nil
+}
+
+// DeleteTarget deletes a benchmark target
+func (brf *BenchmarkRunFixture) DeleteTarget(targetName string) error {
+	result := brf.orgCtx.RunCLI("benchmark", "target", "remove", targetName, "--force")
+	if result.ExitCode != 0 && !strings.Contains(result.Output, "not found") {
+		return fmt.Errorf("failed to delete benchmark target: %s", result.Output)
+	}
+	return nil
+}
+
+// TriggerRun triggers a benchmark run and returns the run information
+func (brf *BenchmarkRunFixture) TriggerRun(targetName string) (*BenchmarkRun, error) {
+	result := brf.orgCtx.RunCLI("benchmark", "run", "trigger", targetName)
+	if result.ExitCode != 0 {
+		return nil, fmt.Errorf("failed to trigger benchmark run: %s", result.Output)
+	}
+
+	// Extract run ID from output (assuming format: "Run ID: <id>" or similar)
+	// For now, we'll try to parse the JSON output if --json is supported,
+	// or extract from text output
+	var runID string
+
+	// Try JSON output first
+	jsonResult := brf.orgCtx.RunCLI("benchmark", "run", "trigger", targetName, "--json")
+	if jsonResult.ExitCode == 0 && isValidJSON(jsonResult.Output) {
+		var runData map[string]interface{}
+		if err := json.Unmarshal([]byte(jsonResult.Output), &runData); err == nil {
+			if id, ok := runData["id"].(string); ok {
+				runID = id
+			} else if id, ok := runData["runId"].(string); ok {
+				runID = id
+			}
+		}
+	}
+
+	// Fallback: try to extract from text output
+	if runID == "" {
+		// Look for patterns like "Run ID: xyz" or "ID: xyz"
+		lines := strings.Split(result.Output, "\n")
+		for _, line := range lines {
+			if strings.Contains(strings.ToLower(line), "run") && strings.Contains(strings.ToLower(line), "id") {
+				// Simple extraction - assumes format "... ID: <value>"
+				parts := strings.Split(line, ":")
+				if len(parts) >= 2 {
+					runID = strings.TrimSpace(parts[len(parts)-1])
+					break
+				}
+			}
+		}
+	}
+
+	if runID == "" {
+		return nil, fmt.Errorf("failed to extract run ID from output: %s", result.Output)
+	}
+
+	run := &BenchmarkRun{
+		ID:       runID,
+		TargetID: targetName,
+		Status:   "pending",
+	}
+
+	// Track run for cleanup (optional - runs may auto-cleanup)
+	brf.runsCreated = append(brf.runsCreated, runID)
+
+	return run, nil
+}
+
+// WaitForCompletion waits for a benchmark run to complete or fail
+// Returns the final run status and any error
+// timeout: maximum time to wait (e.g., 5*time.Minute)
+func (brf *BenchmarkRunFixture) WaitForCompletion(ctx context.Context, runID string, timeout time.Duration) (*BenchmarkRun, error) {
+	// NOTE: This implementation uses polling with `benchmark run show` since
+	// `benchmark run wait` command doesn't exist yet (see UC-BM-005)
+
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("timeout waiting for benchmark run %s to complete", runID)
+		case <-ticker.C:
+			// Check run status
+			result := brf.orgCtx.RunCLI("benchmark", "run", "show", runID, "--json")
+			if result.ExitCode != 0 {
+				// Run might not exist yet or API error - continue polling
+				continue
+			}
+
+			var runData map[string]interface{}
+			if err := json.Unmarshal([]byte(result.Output), &runData); err != nil {
+				// Parse error - continue polling
+				continue
+			}
+
+			status, ok := runData["status"].(string)
+			if !ok {
+				// No status field - continue polling
+				continue
+			}
+
+			// Check for terminal states
+			status = strings.ToLower(status)
+			switch status {
+			case "completed", "success", "succeeded":
+				return &BenchmarkRun{
+					ID:      runID,
+					Status:  status,
+					Results: runData,
+				}, nil
+			case "failed", "error":
+				return &BenchmarkRun{
+					ID:      runID,
+					Status:  status,
+					Results: runData,
+				}, fmt.Errorf("benchmark run failed: %s", status)
+			case "cancelled", "canceled":
+				return &BenchmarkRun{
+					ID:      runID,
+					Status:  status,
+					Results: runData,
+				}, fmt.Errorf("benchmark run was cancelled")
+			// Non-terminal states: pending, running, queued, etc.
+			default:
+				// Continue polling
+				continue
+			}
+		}
+	}
+}
+
+// GetRunStatus retrieves the current status of a benchmark run
+func (brf *BenchmarkRunFixture) GetRunStatus(runID string) (*BenchmarkRun, error) {
+	result := brf.orgCtx.RunCLI("benchmark", "run", "show", runID, "--json")
+	if result.ExitCode != 0 {
+		return nil, fmt.Errorf("failed to get run status: %s", result.Output)
+	}
+
+	var runData map[string]interface{}
+	if err := json.Unmarshal([]byte(result.Output), &runData); err != nil {
+		return nil, fmt.Errorf("failed to parse run data: %w", err)
+	}
+
+	status, _ := runData["status"].(string)
+
+	return &BenchmarkRun{
+		ID:      runID,
+		Status:  status,
+		Results: runData,
+	}, nil
+}

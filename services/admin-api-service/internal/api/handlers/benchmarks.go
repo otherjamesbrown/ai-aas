@@ -158,6 +158,10 @@ func (h *BenchmarkHandler) CreateTarget(w http.ResponseWriter, r *http.Request) 
 			httputil.WriteConflict(w, r, ce.Message)
 			return
 		}
+		if mae, ok := err.(*service.ModelAccessError); ok {
+			httputil.WriteForbidden(w, r, mae.Message)
+			return
+		}
 		if ve, ok := err.(*service.BenchmarkValidationError); ok {
 			httputil.WriteValidationError(w, r, []httputil.ValidationError{
 				{Field: "scenario_name", Message: ve.Message},
@@ -572,6 +576,66 @@ func (h *BenchmarkHandler) GetRun(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteForbidden(w, r, "You do not have access to this run")
 			return
 		}
+	}
+
+	httputil.WriteJSON(w, http.StatusOK, run)
+}
+
+// CancelRun handles POST /v1/benchmarks/runs/{id}/cancel (UC-BM-006)
+func (h *BenchmarkHandler) CancelRun(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	idStr := chi.URLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		httputil.WriteValidationError(w, r, []httputil.ValidationError{
+			{Field: "id", Message: "Invalid run ID format"},
+		})
+		return
+	}
+
+	// Verify org ownership for org API keys (via target)
+	if orgID := middleware.GetOrgID(ctx); orgID != nil {
+		run, err := h.svc.GetRun(ctx, id)
+		if err != nil {
+			h.logger.Error("failed to get run for ownership check", zap.Error(err))
+			httputil.WriteInternalError(w, r)
+			return
+		}
+		if run == nil {
+			httputil.WriteNotFound(w, r, "Run", idStr)
+			return
+		}
+
+		target, err := h.svc.GetTarget(ctx, run.TargetID)
+		if err != nil {
+			h.logger.Error("failed to get target for ownership check", zap.Error(err))
+			httputil.WriteInternalError(w, r)
+			return
+		}
+		if target == nil || !h.verifyTargetOwnership(target, orgID) {
+			httputil.WriteForbidden(w, r, "You do not have access to this run")
+			return
+		}
+	}
+
+	run, err := h.svc.CancelRun(ctx, id)
+	if err != nil {
+		// Check if it's a validation error (UC-BM-006/AC-03: completed/failed runs)
+		if validationErr, ok := err.(*service.BenchmarkValidationError); ok {
+			httputil.WriteError(w, r, http.StatusBadRequest, httputil.ErrorTypeValidation,
+				"Invalid Operation", validationErr.Message)
+			return
+		}
+
+		h.logger.Error("failed to cancel run", zap.Error(err))
+		httputil.WriteInternalError(w, r)
+		return
+	}
+
+	if run == nil {
+		httputil.WriteNotFound(w, r, "Run", idStr)
+		return
 	}
 
 	httputil.WriteJSON(w, http.StatusOK, run)

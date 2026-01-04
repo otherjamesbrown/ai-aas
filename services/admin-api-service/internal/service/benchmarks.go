@@ -21,7 +21,8 @@ const defaultGuideLLMRunnerURL = "http://guidellm-runner-development.development
 
 // BenchmarkService handles benchmark business logic
 type BenchmarkService struct {
-	repo        *repository.BenchmarkRepository
+	repo       *repository.BenchmarkRepository
+	policyRepo *repository.PolicyRepository
 	guidellmURL string
 	httpClient  *http.Client
 	logger      *zap.Logger
@@ -34,12 +35,12 @@ type BenchmarkServiceConfig struct {
 }
 
 // NewBenchmarkService creates a new benchmark service
-func NewBenchmarkService(repo *repository.BenchmarkRepository, logger *zap.Logger) *BenchmarkService {
-	return NewBenchmarkServiceWithConfig(repo, logger, BenchmarkServiceConfig{})
+func NewBenchmarkService(repo *repository.BenchmarkRepository, policyRepo *repository.PolicyRepository, logger *zap.Logger) *BenchmarkService {
+	return NewBenchmarkServiceWithConfig(repo, policyRepo, logger, BenchmarkServiceConfig{})
 }
 
 // NewBenchmarkServiceWithConfig creates a new benchmark service with configuration
-func NewBenchmarkServiceWithConfig(repo *repository.BenchmarkRepository, logger *zap.Logger, cfg BenchmarkServiceConfig) *BenchmarkService {
+func NewBenchmarkServiceWithConfig(repo *repository.BenchmarkRepository, policyRepo *repository.PolicyRepository, logger *zap.Logger, cfg BenchmarkServiceConfig) *BenchmarkService {
 	guidellmURL := cfg.GuideLLMRunnerURL
 	if guidellmURL == "" {
 		guidellmURL = defaultGuideLLMRunnerURL
@@ -52,6 +53,7 @@ func NewBenchmarkServiceWithConfig(repo *repository.BenchmarkRepository, logger 
 
 	return &BenchmarkService{
 		repo:        repo,
+		policyRepo:  policyRepo,
 		guidellmURL: guidellmURL,
 		httpClient: &http.Client{
 			Timeout: timeout,
@@ -157,6 +159,20 @@ func (s *BenchmarkService) CreateTarget(ctx context.Context, create *domain.Benc
 	}
 	if existing != nil {
 		return nil, &ConflictError{Message: fmt.Sprintf("target with name '%s' already exists in environment '%s'", create.Name, create.Environment)}
+	}
+
+	// Verify organization has access to the model (UC-BM-001/AC-02)
+	if create.OrgID != nil {
+		hasAccess, err := s.policyRepo.HasModelAccess(ctx, *create.OrgID, create.ModelName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check model access: %w", err)
+		}
+		if !hasAccess {
+			return nil, &ModelAccessError{
+				ModelName: create.ModelName,
+				Message:   fmt.Sprintf("organization does not have access to model '%s'. Please check routing policies or contact your administrator.", create.ModelName),
+			}
+		}
 	}
 
 	// Verify scenario exists
@@ -354,6 +370,50 @@ func (s *BenchmarkService) GetRun(ctx context.Context, id uuid.UUID) (*domain.Be
 	return s.repo.GetRunByID(ctx, id)
 }
 
+// CancelRun cancels a pending or running benchmark run (UC-BM-006)
+func (s *BenchmarkService) CancelRun(ctx context.Context, id uuid.UUID) (*domain.BenchmarkRun, error) {
+	// Get the run
+	run, err := s.repo.GetRunByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get run: %w", err)
+	}
+	if run == nil {
+		return nil, nil
+	}
+
+	// UC-BM-006/AC-03: Cannot cancel already completed or failed runs
+	if run.Status == "completed" || run.Status == "failed" {
+		return nil, &BenchmarkValidationError{
+			Message: fmt.Sprintf("cannot cancel run in status '%s' - only pending or running runs can be cancelled", run.Status),
+		}
+	}
+
+	// UC-BM-006/AC-04: Run already cancelled is idempotent
+	if run.Status == "cancelled" {
+		return run, nil
+	}
+
+	// Update status to cancelled
+	statusCancelled := "cancelled"
+	now := time.Now()
+	update := &domain.BenchmarkRunUpdate{
+		Status:      &statusCancelled,
+		CompletedAt: &now,
+	}
+
+	run, err = s.repo.UpdateRun(ctx, id, update)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update run status: %w", err)
+	}
+
+	s.logger.Info("benchmark run cancelled",
+		zap.String("run_id", id.String()),
+		zap.String("target_id", run.TargetID.String()),
+	)
+
+	return run, nil
+}
+
 // TriggerRun triggers a manual benchmark run for a target
 func (s *BenchmarkService) TriggerRun(ctx context.Context, targetID uuid.UUID, triggeredByUser *string) (*domain.BenchmarkRun, error) {
 	// Get target
@@ -368,6 +428,11 @@ func (s *BenchmarkService) TriggerRun(ctx context.Context, targetID uuid.UUID, t
 	// Check target is not disabled
 	if target.Status == "disabled" {
 		return nil, &BenchmarkValidationError{Message: "cannot trigger run on a disabled target"}
+	}
+
+	// Check model is available before starting run (UC-BM-002/AC-03)
+	if err := s.checkModelAvailability(ctx, target); err != nil {
+		return nil, err
 	}
 
 	// Create run record
@@ -860,11 +925,95 @@ func sortFloat64s(a []float64) {
 	sort.Float64s(a)
 }
 
+// checkModelAvailability verifies that the model is available and healthy
+// by querying the API router's /v1/models endpoint.
+// This implements UC-BM-002/AC-03: Reject run when model unavailable
+func (s *BenchmarkService) checkModelAvailability(ctx context.Context, target *domain.BenchmarkTarget) error {
+	// Determine endpoint URL - use target's override or default to API router
+	endpointURL := "https://api.dev.otherjamesbrown.com"
+	if target.EndpointURL != nil && *target.EndpointURL != "" {
+		endpointURL = *target.EndpointURL
+	}
+
+	// Query the /v1/models endpoint to check if the model is available
+	modelsURL := fmt.Sprintf("%s/v1/models", endpointURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, modelsURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create model availability check request: %w", err)
+	}
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return &BenchmarkValidationError{
+			Message: fmt.Sprintf("model '%s' is unavailable: cannot reach API endpoint. Check model status with: ai-aas-cli model cache list", target.ModelName),
+		}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return &BenchmarkValidationError{
+			Message: fmt.Sprintf("model '%s' is unavailable: API endpoint returned status %d: %s. Check model status with: ai-aas-cli model cache list", target.ModelName, resp.StatusCode, string(bodyBytes)),
+		}
+	}
+
+	// Parse response to verify the specific model exists
+	var modelsResp struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		s.logger.Warn("failed to read models response",
+			zap.String("target", target.Name),
+			zap.Error(err))
+		// Don't fail - if we got 200 OK, the API is healthy
+		return nil
+	}
+
+	if err := json.Unmarshal(bodyBytes, &modelsResp); err != nil {
+		s.logger.Warn("failed to parse models response",
+			zap.String("target", target.Name),
+			zap.Error(err))
+		// Don't fail - if we got 200 OK, the API is healthy
+		return nil
+	}
+
+	// Check if the specific model exists in the list
+	modelFound := false
+	for _, model := range modelsResp.Data {
+		if model.ID == target.ModelName {
+			modelFound = true
+			break
+		}
+	}
+
+	if !modelFound {
+		return &BenchmarkValidationError{
+			Message: fmt.Sprintf("model '%s' is not available in the model list. Check model status with: ai-aas-cli model cache list", target.ModelName),
+		}
+	}
+
+	return nil
+}
+
 // BenchmarkValidationError represents a validation error in the benchmark service layer
 type BenchmarkValidationError struct {
 	Message string
 }
 
 func (e *BenchmarkValidationError) Error() string {
+	return e.Message
+}
+
+// ModelAccessError represents a model access denial error
+type ModelAccessError struct {
+	ModelName string
+	Message   string
+}
+
+func (e *ModelAccessError) Error() string {
 	return e.Message
 }

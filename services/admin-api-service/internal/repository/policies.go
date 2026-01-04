@@ -453,6 +453,27 @@ func (r *PolicyRepository) GetForSync(ctx context.Context, sinceVersion int, env
 	}, nil
 }
 
+// HasModelAccess checks if an organization has access to a model via routing policies
+// Returns true if there is an active (non-deleted) routing policy for the org and model
+func (r *PolicyRepository) HasModelAccess(ctx context.Context, orgID uuid.UUID, modelName string) (bool, error) {
+	query := `
+		SELECT EXISTS(
+			SELECT 1 FROM routing_policies
+			WHERE (organization_id = $1 OR organization_id = '*')
+			AND model = $2
+			AND deleted_at IS NULL
+		)
+	`
+
+	var hasAccess bool
+	err := r.db.Pool().QueryRow(ctx, query, orgID.String(), modelName).Scan(&hasAccess)
+	if err != nil {
+		return false, fmt.Errorf("failed to check model access: %w", err)
+	}
+
+	return hasAccess, nil
+}
+
 // nilIfEmpty returns nil if s is empty, otherwise returns a pointer to s
 func nilIfEmpty(s string) *string {
 	if s == "" {

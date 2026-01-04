@@ -188,7 +188,8 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 		r.Use(middleware.RateLimit(rateLimiter))
 
 		benchmarkRepo := repository.NewBenchmarkRepository(db)
-		benchmarkSvc := service.NewBenchmarkService(benchmarkRepo, logger)
+		policyRepo := repository.NewPolicyRepository(db)
+		benchmarkSvc := service.NewBenchmarkService(benchmarkRepo, policyRepo, logger)
 		benchmarkHandler := handlers.NewBenchmarkHandler(benchmarkSvc, logger)
 
 		// Scenario routes (read-only, available to all authenticated users)
@@ -209,6 +210,7 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 		// Run routes (org-scoped)
 		r.Get("/runs", benchmarkHandler.ListRuns)
 		r.Get("/runs/{id}", benchmarkHandler.GetRun)
+		r.Post("/runs/{id}/cancel", benchmarkHandler.CancelRun)
 	})
 
 	return r
