@@ -5,7 +5,7 @@
 -- +goose Up
 CREATE TABLE IF NOT EXISTS platform_credentials (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    credential_type VARCHAR(100) UNIQUE NOT NULL,   -- hf-token, s3-access, s3-secret, s3-endpoint, s3-bucket
+    credential_type VARCHAR(100) UNIQUE NOT NULL,   -- hf-token, s3-access, s3-secret, s3-endpoint, s3-bucket, s3-access-key, s3-secret-key
     encrypted_value TEXT NOT NULL,                  -- AES-256 encrypted value
     metadata JSONB DEFAULT '{}',                    -- Additional metadata (e.g., endpoint URL)
     created_at TIMESTAMP DEFAULT NOW(),
@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS platform_credentials (
 CREATE INDEX IF NOT EXISTS idx_platform_credentials_type ON platform_credentials(credential_type);
 
 -- Constraint for known credential types (idempotent)
+-- Note: Includes both legacy (s3-access-key, s3-secret-key) and new (s3-access, s3-secret) names
 -- +goose StatementBegin
 DO $$
 BEGIN
@@ -25,7 +26,7 @@ BEGIN
         AND table_name = 'platform_credentials'
     ) THEN
         ALTER TABLE platform_credentials ADD CONSTRAINT chk_platform_credentials_type
-            CHECK (credential_type IN ('hf-token', 's3-access', 's3-secret', 's3-endpoint', 's3-bucket'));
+            CHECK (credential_type IN ('hf-token', 's3-access', 's3-secret', 's3-endpoint', 's3-bucket', 's3-access-key', 's3-secret-key'));
     END IF;
 END $$;
 -- +goose StatementEnd
@@ -48,7 +49,7 @@ CREATE TRIGGER trigger_platform_credentials_updated_at
 
 COMMENT ON TABLE platform_credentials IS 'Encrypted storage for platform credentials';
 COMMENT ON COLUMN platform_credentials.encrypted_value IS 'AES-256 encrypted credential value - NEVER log or expose';
-COMMENT ON COLUMN platform_credentials.credential_type IS 'Credential type: hf-token, s3-access, s3-secret, s3-endpoint, s3-bucket';
+COMMENT ON COLUMN platform_credentials.credential_type IS 'Credential type: hf-token, s3-access, s3-secret, s3-endpoint, s3-bucket, s3-access-key, s3-secret-key';
 
 -- +goose Down
 DROP TRIGGER IF EXISTS trigger_platform_credentials_updated_at ON platform_credentials;
