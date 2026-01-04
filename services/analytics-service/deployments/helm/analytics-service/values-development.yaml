@@ -17,7 +17,7 @@
 
 image:
   repository: ghcr.io/otherjamesbrown/ai-aas/analytics-service
-  tag: "sha-02f16e9"
+  tag: "sha-2e6819f"
   pullPolicy: Always
   pullSecrets:
     - ghcr-pull-secret
@@ -153,7 +153,6 @@ affinity:
               operator: In
               values:
                 - "770211" # CPU node pool
-
 # Migrations disabled - tables already exist from previous deployment
 # TimescaleDB extension is not available on shared database
 migrations:
