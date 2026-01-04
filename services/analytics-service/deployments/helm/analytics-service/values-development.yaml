@@ -17,13 +17,11 @@
 
 image:
   repository: ghcr.io/otherjamesbrown/ai-aas/analytics-service
-  tag: dev
+  tag: "5443141"
   pullPolicy: Always
   pullSecrets:
     - ghcr-pull-secret
-
 replicaCount: 1
-
 env:
   - name: SERVICE_NAME
     value: analytics-service
@@ -67,11 +65,9 @@ env:
       secretKeyRef:
         name: analytics-service-secrets
         key: master-admin-api-key
-
 service:
   type: ClusterIP
   port: 8084
-
 # Ingress configuration - hosts computed from global.domain.base
 ingress:
   enabled: true
@@ -86,7 +82,6 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
-
 resources:
   requests:
     cpu: 100m
@@ -94,56 +89,47 @@ resources:
   limits:
     cpu: 500m
     memory: 512Mi
-
 autoscaling:
   enabled: true
   minReplicas: 1
   maxReplicas: 5
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
-
 livenessProbe:
   path: /analytics/v1/status/healthz
   initialDelaySeconds: 10
   periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 3
-
 readinessProbe:
   path: /analytics/v1/status/readyz
   initialDelaySeconds: 15
   periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 3
-
 # Telemetry configuration
 # Note: OTEL_* env vars are set directly in env: list above
 otel:
-  enabled: false  # Disabled to avoid duplicate env vars
-
+  enabled: false # Disabled to avoid duplicate env vars
 # Prometheus metrics
 prometheus:
   enabled: true
   port: 8084
   path: /metrics
-
 # Database configuration
 # Note: DATABASE_URL is set directly in env: list above
 database:
-  urlSecretName: ""  # Disabled to avoid duplicate env var
-
+  urlSecretName: "" # Disabled to avoid duplicate env var
 # Redis configuration
 # Note: REDIS_URL is set directly in env: list above
 redis:
-  url: ""  # Disabled to avoid duplicate env var
-
+  url: "" # Disabled to avoid duplicate env var
 # RabbitMQ configuration
 # Note: RABBITMQ_* env vars are set directly in env: list above
 rabbitmq:
-  urlSecretName: ""  # Disabled to avoid duplicate env var
+  urlSecretName: "" # Disabled to avoid duplicate env var
   stream: ""
   consumer: ""
-
 # S3 configuration - enabled for analytics exports
 # Uses Linode Object Storage bucket 'ai-aas' in fr-par-1 region
 # Credentials stored in analytics-service-s3 secret (created imperatively)
@@ -154,7 +140,6 @@ s3:
   secretKeySecretName: analytics-service-s3
   bucket: ai-aas
   region: fr-par-1
-
 # Node scheduling - prefer CPU nodes (avoid GPU nodes)
 # GPU nodes have taint nvidia.com/gpu=true:NoSchedule
 # CPU nodes are in pool 770211, GPU nodes are in pool 776664
@@ -167,4 +152,4 @@ affinity:
             - key: lke.linode.com/pool-id
               operator: In
               values:
-                - "770211"  # CPU node pool
+                - "770211" # CPU node pool

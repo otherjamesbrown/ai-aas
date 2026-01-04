@@ -11,7 +11,7 @@
 replicaCount: 2 # Multiple replicas for resilience
 image:
   repository: ghcr.io/otherjamesbrown/ai-aas/api-router-service
-  tag: df6690e
+  tag: "5443141"
   pullPolicy: Always # Pull from GHCR
   pullSecrets:
     - ghcr-pull-secret
