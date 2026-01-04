@@ -1821,6 +1821,11 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 
 		// Update RoutingReady condition based on routing policy existence
 		routingPolicyExists := r.checkRoutingPolicyExists(ctx, latestAIModel)
+
+		// Detect routing policy drift (database backend_id vs InferenceServiceName)
+		// This returns true if drift is detected, and logs structured events
+		_ = r.detectRoutingPolicyDrift(ctx, latestAIModel)
+
 		if routingPolicyExists {
 			meta.SetStatusCondition(&latestAIModel.Status.Conditions, metav1.Condition{
 				Type:               aimodelv1alpha1.ConditionTypeRoutingReady,
@@ -2241,6 +2246,73 @@ func (r *AIModelReconciler) ensureRoutingPolicy(ctx context.Context, aiModel *ai
 		"organizationID", "*")
 
 	return nil
+}
+
+// detectRoutingPolicyDrift detects configuration drift between the database routing policy
+// and the AIModel's InferenceService. Returns true if drift is detected.
+// Drift occurs when the routing policy's backend_id doesn't match the InferenceServiceName.
+func (r *AIModelReconciler) detectRoutingPolicyDrift(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) bool {
+	log := log.FromContext(ctx)
+
+	// Skip if Admin API client is not configured
+	if r.AdminAPIClient == nil {
+		return false
+	}
+
+	// Skip if InferenceServiceName is not set yet
+	if aiModel.Status.InferenceServiceName == "" {
+		return false
+	}
+
+	// Derive the external name (model name exposed in OpenAI-compatible API)
+	externalName := deriveExternalName(aiModel)
+	if externalName == "" {
+		return false
+	}
+
+	// Get routing policies for this model
+	existingPolicies, err := r.AdminAPIClient.ListRoutingPolicies(ctx, externalName, "*")
+	if err != nil {
+		// If listing fails, log but don't consider it drift (could be API unavailable)
+		log.Error(err, "Failed to list routing policies for drift detection",
+			"model", externalName)
+		return false
+	}
+
+	// No policies exist - not drift, just missing configuration
+	if existingPolicies == nil || len(existingPolicies.Policies) == 0 {
+		return false
+	}
+
+	// Expected backend ID should match the InferenceServiceName
+	expectedBackendID := aiModel.Status.InferenceServiceName
+
+	// Check each policy's backends for drift
+	driftDetected := false
+	for _, policy := range existingPolicies.Policies {
+		for _, backend := range policy.Backends {
+			if backend.BackendID != expectedBackendID {
+				// Drift detected - backend_id doesn't match InferenceServiceName
+				log.Info("Routing policy drift detected",
+					"model", externalName,
+					"policyID", policy.PolicyID,
+					"expectedBackendID", expectedBackendID,
+					"actualBackendID", backend.BackendID,
+					"driftDetected", true)
+				driftDetected = true
+			}
+		}
+	}
+
+	// Log if no drift detected (for visibility)
+	if !driftDetected {
+		log.V(1).Info("No routing policy drift detected",
+			"model", externalName,
+			"expectedBackendID", expectedBackendID,
+			"driftDetected", false)
+	}
+
+	return driftDetected
 }
 
 // contains is a helper function to check if a string contains a substring

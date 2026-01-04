@@ -420,3 +420,288 @@ func TestCheckRoutingPolicyExists(t *testing.T) {
 		})
 	}
 }
+
+func TestDetectRoutingPolicyDrift(t *testing.T) {
+	tests := []struct {
+		name             string
+		aiModel          *aimodelv1alpha1.AIModel
+		mockListResponse *adminapi.RoutingPolicyListResponse
+		mockListError    error
+		expectedDrift    bool
+	}{
+		{
+			name: "detects drift when backend_id differs from InferenceServiceName",
+			aiModel: &aimodelv1alpha1.AIModel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "llama-7b",
+					Namespace: "system",
+				},
+				Spec: aimodelv1alpha1.AIModelSpec{
+					ModelID:      "meta-llama/Llama-2-7b-hf",
+					ExternalName: "llama-7b",
+				},
+				Status: aimodelv1alpha1.AIModelStatus{
+					InferenceServiceName: "llama-7b-v2", // Expected backend ID
+				},
+			},
+			mockListResponse: &adminapi.RoutingPolicyListResponse{
+				Policies: []adminapi.RoutingPolicy{
+					{
+						PolicyID:       "policy-123",
+						OrganizationID: "*",
+						Model:          "llama-7b",
+						Backends: []adminapi.Backend{
+							{
+								BackendID: "llama-7b-v1", // Actual backend ID (drift!)
+								Weight:    100,
+							},
+						},
+						Enabled: true,
+					},
+				},
+			},
+			mockListError: nil,
+			expectedDrift: true,
+		},
+		{
+			name: "no drift when backend_id matches InferenceServiceName",
+			aiModel: &aimodelv1alpha1.AIModel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "llama-7b",
+					Namespace: "system",
+				},
+				Spec: aimodelv1alpha1.AIModelSpec{
+					ModelID:      "meta-llama/Llama-2-7b-hf",
+					ExternalName: "llama-7b",
+				},
+				Status: aimodelv1alpha1.AIModelStatus{
+					InferenceServiceName: "llama-7b",
+				},
+			},
+			mockListResponse: &adminapi.RoutingPolicyListResponse{
+				Policies: []adminapi.RoutingPolicy{
+					{
+						PolicyID:       "policy-123",
+						OrganizationID: "*",
+						Model:          "llama-7b",
+						Backends: []adminapi.Backend{
+							{
+								BackendID: "llama-7b", // Matches!
+								Weight:    100,
+							},
+						},
+						Enabled: true,
+					},
+				},
+			},
+			mockListError: nil,
+			expectedDrift: false,
+		},
+		{
+			name: "no drift when no routing policies exist",
+			aiModel: &aimodelv1alpha1.AIModel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "llama-7b",
+					Namespace: "system",
+				},
+				Spec: aimodelv1alpha1.AIModelSpec{
+					ModelID:      "meta-llama/Llama-2-7b-hf",
+					ExternalName: "llama-7b",
+				},
+				Status: aimodelv1alpha1.AIModelStatus{
+					InferenceServiceName: "llama-7b",
+				},
+			},
+			mockListResponse: &adminapi.RoutingPolicyListResponse{
+				Policies: []adminapi.RoutingPolicy{},
+			},
+			mockListError: nil,
+			expectedDrift: false,
+		},
+		{
+			name: "no drift when InferenceServiceName is not set",
+			aiModel: &aimodelv1alpha1.AIModel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "llama-7b",
+					Namespace: "system",
+				},
+				Spec: aimodelv1alpha1.AIModelSpec{
+					ModelID:      "meta-llama/Llama-2-7b-hf",
+					ExternalName: "llama-7b",
+				},
+				Status: aimodelv1alpha1.AIModelStatus{
+					InferenceServiceName: "", // Not set yet
+				},
+			},
+			mockListResponse: &adminapi.RoutingPolicyListResponse{
+				Policies: []adminapi.RoutingPolicy{
+					{
+						PolicyID:       "policy-123",
+						OrganizationID: "*",
+						Model:          "llama-7b",
+						Backends: []adminapi.Backend{
+							{
+								BackendID: "some-backend",
+								Weight:    100,
+							},
+						},
+						Enabled: true,
+					},
+				},
+			},
+			mockListError: nil,
+			expectedDrift: false, // Not drift - just not ready yet
+		},
+		{
+			name: "no drift when Admin API client is nil",
+			aiModel: &aimodelv1alpha1.AIModel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "llama-7b",
+					Namespace: "system",
+				},
+				Spec: aimodelv1alpha1.AIModelSpec{
+					ModelID:      "meta-llama/Llama-2-7b-hf",
+					ExternalName: "llama-7b",
+				},
+				Status: aimodelv1alpha1.AIModelStatus{
+					InferenceServiceName: "llama-7b",
+				},
+			},
+			mockListResponse: nil,
+			mockListError:    nil,
+			expectedDrift:    false,
+		},
+		{
+			name: "no drift when API call fails",
+			aiModel: &aimodelv1alpha1.AIModel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "llama-7b",
+					Namespace: "system",
+				},
+				Spec: aimodelv1alpha1.AIModelSpec{
+					ModelID:      "meta-llama/Llama-2-7b-hf",
+					ExternalName: "llama-7b",
+				},
+				Status: aimodelv1alpha1.AIModelStatus{
+					InferenceServiceName: "llama-7b",
+				},
+			},
+			mockListResponse: nil,
+			mockListError:    fmt.Errorf("API error"),
+			expectedDrift:    false,
+		},
+		{
+			name: "detects drift with multiple backends (one mismatched)",
+			aiModel: &aimodelv1alpha1.AIModel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "llama-7b",
+					Namespace: "system",
+				},
+				Spec: aimodelv1alpha1.AIModelSpec{
+					ModelID:      "meta-llama/Llama-2-7b-hf",
+					ExternalName: "llama-7b",
+				},
+				Status: aimodelv1alpha1.AIModelStatus{
+					InferenceServiceName: "llama-7b-v2",
+				},
+			},
+			mockListResponse: &adminapi.RoutingPolicyListResponse{
+				Policies: []adminapi.RoutingPolicy{
+					{
+						PolicyID:       "policy-123",
+						OrganizationID: "*",
+						Model:          "llama-7b",
+						Backends: []adminapi.Backend{
+							{
+								BackendID: "llama-7b-v1", // Drift!
+								Weight:    50,
+							},
+							{
+								BackendID: "llama-7b-v2", // Matches
+								Weight:    50,
+							},
+						},
+						Enabled: true,
+					},
+				},
+			},
+			mockListError: nil,
+			expectedDrift: true,
+		},
+		{
+			name: "detects drift across multiple policies",
+			aiModel: &aimodelv1alpha1.AIModel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "llama-7b",
+					Namespace: "system",
+				},
+				Spec: aimodelv1alpha1.AIModelSpec{
+					ModelID:      "meta-llama/Llama-2-7b-hf",
+					ExternalName: "llama-7b",
+				},
+				Status: aimodelv1alpha1.AIModelStatus{
+					InferenceServiceName: "llama-7b-current",
+				},
+			},
+			mockListResponse: &adminapi.RoutingPolicyListResponse{
+				Policies: []adminapi.RoutingPolicy{
+					{
+						PolicyID:       "policy-org1",
+						OrganizationID: "org1",
+						Model:          "llama-7b",
+						Backends: []adminapi.Backend{
+							{
+								BackendID: "llama-7b-current", // Matches
+								Weight:    100,
+							},
+						},
+						Enabled: true,
+					},
+					{
+						PolicyID:       "policy-org2",
+						OrganizationID: "org2",
+						Model:          "llama-7b",
+						Backends: []adminapi.Backend{
+							{
+								BackendID: "llama-7b-old", // Drift!
+								Weight:    100,
+							},
+						},
+						Enabled: true,
+					},
+				},
+			},
+			mockListError: nil,
+			expectedDrift: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var reconciler *AIModelReconciler
+
+			if tt.name == "no drift when Admin API client is nil" {
+				// Test case with nil Admin API client
+				reconciler = &AIModelReconciler{
+					AdminAPIClient: nil,
+				}
+			} else {
+				// Setup mock Admin API client
+				mockClient := &mockAdminAPIClient{
+					listRoutingPoliciesResponse: tt.mockListResponse,
+					listRoutingPoliciesError:    tt.mockListError,
+				}
+				reconciler = &AIModelReconciler{
+					AdminAPIClient: mockClient,
+				}
+			}
+
+			// Execute
+			driftDetected := reconciler.detectRoutingPolicyDrift(context.Background(), tt.aiModel)
+
+			// Verify
+			assert.Equal(t, tt.expectedDrift, driftDetected,
+				"Drift detection result mismatch")
+		})
+	}
+}
