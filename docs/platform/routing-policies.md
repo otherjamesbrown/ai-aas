@@ -25,6 +25,25 @@ Organization-specific policies override global policies for particular organizat
 
 **Precedence:** Organization-specific policies take precedence over global policies.
 
+### Policy Resolution Fallback Chain
+
+The API Router uses a three-level fallback chain when resolving policies:
+
+1. **Organization Policy**: Check for org-specific policy (`organization_id: <org-uuid>`)
+2. **Global Policy**: Check for global policy (`organization_id: "*"`)
+3. **Registry Discovery**: Query Admin API for deployed models (ephemeral policy)
+
+This fallback chain ensures that:
+- Organizations with custom policies get their specific routing
+- Models without custom policies fall back to global routing
+- Newly deployed models are accessible even before policies sync to etcd
+
+The source of the resolved policy is tracked internally as `org_policy`, `global_policy`, or `registry_discovery`.
+
+**Registry Discovery (Fallback):**
+
+When no explicit policy exists but the model is deployed and Ready, the API Router creates an ephemeral policy pointing to the InferenceService. This provides a safety net for models that failed auto-policy creation.
+
 ## Policy Structure
 
 Policies are stored in etcd at `/ai-aas/routing/policies/` with the following structure:
@@ -157,13 +176,49 @@ curl -X POST https://api.dev.otherjamesbrown.com/v1/chat/completions \
   }'
 ```
 
-### Future Enhancement: Auto-Policy Creation
+### Auto-Policy Creation (Implemented)
 
-In future versions, `admin-cli registry register` will automatically create global routing policies when registering new models. This will simplify the workflow to:
+Routing policies are now automatically created at two points in the deployment pipeline:
 
-1. Deploy vLLM model
-2. Register model (creates policy automatically)
-3. Test via API
+1. **Operator Auto-Creation**: When an InferenceService transitions to Ready state, the ai-model-operator automatically creates a global routing policy.
+
+2. **Admin API Auto-Creation**: When `CreateDeployment` is called and no policy exists for the model, Admin API creates one.
+
+This means the typical workflow is now:
+
+1. Deploy model via GitOps (AIModel CR in ai-aas-config)
+2. Wait for Ready status
+3. Test via API (policy created automatically)
+
+**Auto-Created Policy Structure:**
+
+```json
+{
+  "policy_id": "<uuid>",
+  "organization_id": "*",
+  "model": "<model-external-name>",
+  "backends": [
+    {
+      "backend_id": "<inferenceservice-name>",
+      "weight": 100
+    }
+  ],
+  "failover_threshold": 3,
+  "enabled": true,
+  "metadata": {
+    "auto_created": true,
+    "created_reason": "auto-created on deployment"
+  }
+}
+```
+
+**Why Auto-Creation Might Fail:**
+
+- Admin API unreachable during Ready transition
+- External name cannot be derived from AIModel spec
+- Database connectivity issues
+
+Auto-creation is **best-effort** - failures are logged but don't block deployment. If auto-creation fails, create the policy manually (see commands above).
 
 ## Load Balancing
 
@@ -269,6 +324,8 @@ failed to connect to etcd: context deadline exceeded
 
 ## Related Documentation
 
+- [Model Deployment Pipeline](./model-deployment-pipeline.md) - Complete pipeline architecture
+- [Model Not Accessible Runbook](../runbooks/model-not-accessible.md) - Troubleshooting guide
 - [vLLM Deployment Workflow](./deployment-workflow.md)
 - [API Router Architecture](../services/api-router-service/docs/router-architecture.md)
 - [Admin CLI Guide](../services/admin-cli/README.md)
