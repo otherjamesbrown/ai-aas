@@ -401,6 +401,11 @@ type AIModelStatus struct {
 	// Reset when container successfully starts. Used to detect stuck deployments.
 	CrashLoopBackOffCount int32 `json:"crashLoopBackOffCount,omitempty"`
 
+	// LastAdminAPISyncTime tracks when deployment record was last synced to Admin API.
+	// Used to implement periodic sync to handle Admin API downtime or database resets.
+	// +optional
+	LastAdminAPISyncTime *metav1.Time `json:"lastAdminAPISyncTime,omitempty"`
+
 	// DEPRECATED: Use InferenceServiceName instead.
 	VLLMDeploymentName string `json:"vllmDeploymentName,omitempty"`
 

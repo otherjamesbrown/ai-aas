@@ -1764,12 +1764,26 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 			latestAIModel.Status.NextRetryTime = nil
 			latestAIModel.Status.DeploymentStartedAt = nil // Clear deployment start time
 			latestAIModel.Status.CrashLoopBackOffCount = 0 // Reset crash counter on successful deployment
+		}
 
-			// Sync deployment state to Admin API only on transition to Ready
-			// This prevents hammering the API with PUT requests on every reconcile
+		// Sync deployment to Admin API when:
+		// 1. Just transitioned to Ready (wasNotReady == true), OR
+		// 2. Been Ready for a while and last sync was >5 minutes ago (periodic sync)
+		shouldSync := wasNotReady || r.shouldPeriodicSync(latestAIModel)
+
+		if shouldSync {
 			if err := r.syncDeploymentToAdminAPI(ctx, latestAIModel, status); err != nil {
 				// Log error but don't fail reconciliation - Admin API sync is best-effort
 				log.Error(err, "Failed to sync deployment to Admin API", "name", aiModel.Name)
+			} else {
+				// Update last sync time on success
+				now := metav1.Now()
+				latestAIModel.Status.LastAdminAPISyncTime = &now
+				if wasNotReady {
+					log.Info("Synced deployment to Admin API on Ready transition", "name", aiModel.Name)
+				} else {
+					log.Info("Periodic sync to Admin API successful", "name", aiModel.Name)
+				}
 			}
 		}
 	} else {
@@ -1945,6 +1959,25 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 	aiModel.Status = latestAIModel.Status
 
 	return nil
+}
+
+// shouldPeriodicSync determines if a Ready model should be periodically synced to Admin API.
+// Returns true if the model has never been synced or last sync was more than 5 minutes ago.
+func (r *AIModelReconciler) shouldPeriodicSync(aiModel *aimodelv1alpha1.AIModel) bool {
+	// Skip if Admin API client is not configured
+	if r.AdminAPIClient == nil {
+		return false
+	}
+
+	// If never synced, sync now
+	if aiModel.Status.LastAdminAPISyncTime == nil {
+		return true
+	}
+
+	// Sync if last sync was more than 5 minutes ago
+	const syncInterval = 5 * time.Minute
+	timeSinceLastSync := time.Since(aiModel.Status.LastAdminAPISyncTime.Time)
+	return timeSinceLastSync > syncInterval
 }
 
 // syncDeploymentToAdminAPI syncs the deployment state to the Admin API database.

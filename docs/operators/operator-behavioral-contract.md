@@ -311,6 +311,7 @@ source:
 | Phase=Failed (deployment) | 1. Check InferenceService events<br>2. Check pod logs and events<br>3. Fix root cause (image, resources, tolerations)<br>4. Update AIModel to trigger reconcile |
 | Crash loop | 1. Check pod logs for crash reason<br>2. Check resource limits<br>3. Check for OOM or GPU errors<br>4. Update AIModel with fixed configuration |
 | Stuck in Deploying | 1. Check if InferenceService exists<br>2. Check Knative pods<br>3. Check for GPU scheduling issues<br>4. May need to delete/recreate InferenceService |
+| Model Ready but not in /v1/models | 1. Check if deployment record exists in Admin API<br>2. Verify operator has Admin API client configured<br>3. Force reconcile (periodic sync will recreate record)<br>4. Or wait for next 5-minute periodic sync |
 
 ### Force Reconciliation
 

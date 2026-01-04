@@ -341,6 +341,40 @@ This prevents scenarios where multiple revisions hold GPUs unnecessarily. For ex
 
 Configuration: `/infra/k8s/knative-serving/config-gc.yaml`
 
+## Admin API Integration
+
+The operator syncs deployment records to the Admin API's `model_deployments` table. This enables models to appear in the `/v1/models` endpoint for OpenAI-compatible clients.
+
+### Sync Behavior
+
+**When sync happens:**
+- **On transition to Ready**: Immediate sync when model first becomes ready
+- **Periodic sync**: Every 5 minutes for models that remain Ready
+- **Best-effort**: Sync failures are logged but don't fail reconciliation
+
+**What is synced:**
+- Model name, ID, and external name
+- Environment (derived from namespace)
+- Deployment status (ready/deploying/failed/disabled)
+- InferenceService name and endpoint URL
+- Number of ready replicas
+
+### Recovery from Sync Failures
+
+If the Admin API is unavailable during the Ready transition, or if deployment records are manually deleted from the database, the periodic sync (every 5 minutes) will automatically recreate the record.
+
+**Manual recovery:**
+```bash
+# Force immediate reconcile to trigger sync
+kubectl annotate aimodel <name> -n <namespace> \
+  ai-aas.io/reconcile-at="$(date +%s)" --overwrite
+
+# Or wait up to 5 minutes for automatic periodic sync
+```
+
+**Status field:**
+- `status.lastAdminAPISyncTime`: Tracks when the deployment was last successfully synced to Admin API
+
 ## Configuration
 
 ### Environment Variables (Operator)

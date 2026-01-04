@@ -1789,6 +1789,12 @@ spec:
                 description: InferenceServiceName is the name of the associated KServe
                   InferenceService.
                 type: string
+              lastAdminAPISyncTime:
+                description: |-
+                  LastAdminAPISyncTime tracks when deployment record was last synced to Admin API.
+                  Used to implement periodic sync to handle Admin API downtime or database resets.
+                format: date-time
+                type: string
               lastFailureReason:
                 description: |-
                   LastFailureReason provides the reason for the last failure.

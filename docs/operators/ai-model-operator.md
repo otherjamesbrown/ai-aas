@@ -208,6 +208,11 @@ Key functions:
 │  7. Update status from InferenceService                         │
 │     └─ InferenceService ready? → phase=Ready                   │
 │                                                                  │
+│  8. Sync deployment to Admin API (if Ready)                    │
+│     ├─ On transition to Ready: sync immediately                │
+│     ├─ Already Ready: sync every 5 minutes                     │
+│     └─ Update model_deployments table for /v1/models          │
+│                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
