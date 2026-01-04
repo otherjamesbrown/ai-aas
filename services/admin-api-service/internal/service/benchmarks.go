@@ -966,19 +966,15 @@ func (s *BenchmarkService) checkModelAvailability(ctx context.Context, target *d
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		s.logger.Warn("failed to read models response",
-			zap.String("target", target.Name),
-			zap.Error(err))
-		// Don't fail - if we got 200 OK, the API is healthy
-		return nil
+		return &BenchmarkValidationError{
+			Message: fmt.Sprintf("model '%s' is unavailable: failed to read API response. Check model status with: ai-aas-cli model cache list", target.ModelName),
+		}
 	}
 
 	if err := json.Unmarshal(bodyBytes, &modelsResp); err != nil {
-		s.logger.Warn("failed to parse models response",
-			zap.String("target", target.Name),
-			zap.Error(err))
-		// Don't fail - if we got 200 OK, the API is healthy
-		return nil
+		return &BenchmarkValidationError{
+			Message: fmt.Sprintf("model '%s' is unavailable: failed to parse API response. Check model status with: ai-aas-cli model cache list", target.ModelName),
+		}
 	}
 
 	// Check if the specific model exists in the list
