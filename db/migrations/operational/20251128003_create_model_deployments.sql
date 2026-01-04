@@ -29,10 +29,10 @@ CREATE TABLE IF NOT EXISTS model_deployments (
 );
 
 -- Indexes for common queries
-CREATE INDEX idx_model_deployments_model_id ON model_deployments(model_id);
-CREATE INDEX idx_model_deployments_environment ON model_deployments(environment);
-CREATE INDEX idx_model_deployments_status ON model_deployments(status);
-CREATE INDEX idx_model_deployments_enabled ON model_deployments(enabled);
+CREATE INDEX IF NOT EXISTS idx_model_deployments_model_id ON model_deployments(model_id);
+CREATE INDEX IF NOT EXISTS idx_model_deployments_environment ON model_deployments(environment);
+CREATE INDEX IF NOT EXISTS idx_model_deployments_status ON model_deployments(status);
+CREATE INDEX IF NOT EXISTS idx_model_deployments_enabled ON model_deployments(enabled);
 
 -- Constraints (idempotent)
 -- +goose StatementBegin
