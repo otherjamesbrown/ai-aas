@@ -160,7 +160,7 @@ jobs:
     if: github.event_name == 'push'  # Only build on push, not PRs
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Changed from 'read' to allow committing image tag updates
+      contents: read
       packages: write
     strategy:
       fail-fast: false
@@ -224,46 +224,55 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: ${{ steps.platforms.outputs.platforms }}
 
+  # Update Helm values with new image tags (single consolidated commit)
+  update-helm-values:
+    name: Update Helm Values
+    needs: [build-images]
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+
       - name: Install yq
-        if: github.ref == 'refs/heads/develop'  # Only auto-update development environment
         uses: mikefarah/yq@v4.44.3
 
-      - name: Update Helm values with new image tag
-        if: github.ref == 'refs/heads/develop'  # Only auto-update development environment
+      - name: Update all service image tags
         run: |
-          # Extract short SHA from metadata
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          SERVICES=(admin-api-service analytics-service api-router-service model-downloader user-org-service)
+          UPDATED=()
 
-          # Path to values file
-          VALUES_FILE="services/${{ matrix.service }}/deployments/helm/${{ matrix.service }}/values-development.yaml"
+          for service in "${SERVICES[@]}"; do
+            VALUES_FILE="services/${service}/deployments/helm/${service}/values-development.yaml"
+            if [ -f "$VALUES_FILE" ]; then
+              yq eval ".image.tag = \"${SHORT_SHA}\"" -i "$VALUES_FILE"
+              echo "Updated $VALUES_FILE with image tag: ${SHORT_SHA}"
+              UPDATED+=("$service")
+            fi
+          done
 
-          if [ ! -f "$VALUES_FILE" ]; then
-            echo "Values file not found: $VALUES_FILE"
-            exit 0  # Not all services have Helm charts
-          fi
+          echo "Updated services: ${UPDATED[*]}"
 
-          # Update image.tag using yq
-          yq eval ".image.tag = \"${SHORT_SHA}\"" -i "$VALUES_FILE"
-
-          echo "Updated $VALUES_FILE with image tag: ${SHORT_SHA}"
-          cat "$VALUES_FILE" | grep -A 3 "^image:"
-
-      - name: Commit updated image tag
-        if: github.ref == 'refs/heads/develop'  # Only auto-update development environment
+      - name: Commit and push updated image tags
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          VALUES_FILE="services/${{ matrix.service }}/deployments/helm/${{ matrix.service }}/values-development.yaml"
 
-          # Check if there are changes
-          if git diff --quiet "$VALUES_FILE"; then
-            echo "No changes to commit for $VALUES_FILE"
+          # Check if there are any changes
+          if git diff --quiet; then
+            echo "No changes to commit"
             exit 0
           fi
 
-          git add "$VALUES_FILE"
-          git commit -m "ci(images): update ${{ matrix.service }} to ${SHORT_SHA} [skip ci]"
-
+          git add services/*/deployments/helm/*/values-development.yaml
+          git commit -m "ci(images): update all service image tags to ${SHORT_SHA} [skip ci]"
           git push origin develop
+
