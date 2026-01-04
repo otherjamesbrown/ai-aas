@@ -293,3 +293,16 @@ spec:
           annotations:
             summary: "All GPU resources allocated"
             description: "No GPU capacity available. New model deployments will be blocked until resources are freed or the node pool is scaled. Consider scaling up GPU nodes or terminating unused models."
+
+        # Routing policy drift detected
+        - alert: AIModelRoutingPolicyDrift
+          expr: aimodel_routing_policy_drift_detected == 1
+          for: 5m
+          labels:
+            severity: warning
+            service: ai-model-operator
+            category: drift-detection
+          annotations:
+            summary: "Routing policy drift detected for model {{ $labels.name }}"
+            description: "Model {{ $labels.name }} in {{ $labels.namespace }} has routing policy drift detected. The desired routing policy (weight distribution) does not match the actual InferenceService routing. Auto-healing is enabled and will attempt to reconcile. Check operator logs if drift persists."
+            runbook_url: "https://docs.ai-aas.io/runbooks/routing-policy-drift"
