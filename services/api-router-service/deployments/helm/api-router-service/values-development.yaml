@@ -8,28 +8,25 @@
 #
 # See docs/platform/ingress-best-practices.md for complete documentation
 
-replicaCount: 2  # Multiple replicas for resilience
-
+replicaCount: 2 # Multiple replicas for resilience
 image:
   repository: ghcr.io/otherjamesbrown/ai-aas/api-router-service
-  tag: dev
-  pullPolicy: Always  # Pull from GHCR
+  tag: df6690e
+  pullPolicy: Always # Pull from GHCR
   pullSecrets:
     - ghcr-pull-secret
-
 service:
   type: ClusterIP
   port: 8080
-
 ingress:
   enabled: true
   className: nginx
   annotations:
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"  # Force HTTPS
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true" # Force HTTPS
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
-    cert-manager.io/cluster-issuer: letsencrypt-prod  # Auto-provision TLS cert
+    cert-manager.io/cluster-issuer: letsencrypt-prod # Auto-provision TLS cert
     # CORS is now handled at the application layer (see env vars below)
     # This provides better logging, flexibility, and single source of truth
   hosts:
@@ -46,7 +43,6 @@ ingress:
     - secretName: api-router-tls
       hosts:
         - api.dev.otherjamesbrown.com
-
 resources:
   limits:
     cpu: 500m
@@ -54,34 +50,29 @@ resources:
   requests:
     cpu: 100m
     memory: 128Mi
-
 autoscaling:
   enabled: true
   minReplicas: 2
   maxReplicas: 5
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
-
 startupProbe:
   path: /v1/status/healthz
-  failureThreshold: 60  # Increased to allow for database connection during startup
+  failureThreshold: 60 # Increased to allow for database connection during startup
   periodSeconds: 2
   timeoutSeconds: 5
-
 livenessProbe:
   path: /v1/status/healthz
   initialDelaySeconds: 5
   periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 3
-
 readinessProbe:
   path: /v1/status/readyz
-  initialDelaySeconds: 5  # Reduced since startupProbe handles initial startup
-  periodSeconds: 5  # Check more frequently for faster recovery
-  timeoutSeconds: 10  # Increased for parallel health checks
-  failureThreshold: 3  # Faster detection of issues (15s to unready)
-
+  initialDelaySeconds: 5 # Reduced since startupProbe handles initial startup
+  periodSeconds: 5 # Check more frequently for faster recovery
+  timeoutSeconds: 10 # Increased for parallel health checks
+  failureThreshold: 3 # Faster detection of issues (15s to unready)
 env:
   - name: SERVICE_NAME
     value: api-router-service
@@ -90,7 +81,7 @@ env:
   - name: ENVIRONMENT
     value: development
   - name: LOG_LEVEL
-    value: debug  # Debug logging in dev
+    value: debug # Debug logging in dev
   - name: USER_ORG_SERVICE_URL
     value: "http://user-org-service-development-user-org-service.user-org-service.svc.cluster.local:8081"
   - name: USER_ORG_SERVICE_TIMEOUT
@@ -112,7 +103,6 @@ env:
     value: "3600"
   - name: CORS_ALLOW_CREDENTIALS
     value: "true"
-
 # Backend endpoints - configure vLLM service
 # Format: backend-id:http://service-name.namespace.svc.cluster.local:port
 #
@@ -126,25 +116,21 @@ env:
 # Note: Don't include path - it's added by the router based on request type
 backends:
   endpoints: "unsloth/gpt-oss-20b:http://unsloth-gpt-oss-20b-predictor.development.svc.cluster.local:80,meta-llama/Llama-3.1-8B-Instruct:http://llama-3-1-8b-instruct-trtllm-predictor.development.svc.cluster.local:80,Qwen/Qwen2-VL-7B-Instruct:http://qwen2-vl-7b-instruct-predictor.development.svc.cluster.local:80"
-
 # Redis configuration
 redis:
   address: "redis.development.svc.cluster.local:6379"
   password: ""
   db: 0
-
 # Kafka configuration - enabled for usage tracking pipeline
 kafka:
-  brokers: "kafka.kafka.svc.cluster.local:9092"  # Kafka service in kafka namespace
+  brokers: "kafka.kafka.svc.cluster.local:9092" # Kafka service in kafka namespace
   topic: usage.records.v1
   auditTopic: audit.router
-
 # Config service (optional for dev - use static config)
 configService:
-  endpoint: ""  # Empty = use static config
+  endpoint: "" # Empty = use static config
   watchEnabled: false
   cachePath: /tmp/api-router-config.db
-
 # Admin API sync for routing policies (alternative to etcd)
 adminApi:
   endpoint: "http://admin-api-service-development.admin-api-service.svc.cluster.local:8080"
@@ -152,32 +138,27 @@ adminApi:
   # Use the admin API key from local secret (copied from admin-api-service)
   apiKeySecretName: "admin-api-sync-secrets"
   apiKeySecretKey: "api-key"
-
 # Rate limiting configuration
 rateLimit:
   defaultRPS: 100
   burstSize: 200
-  tokensDaily: 0  # 0 disables quota enforcement in development
+  tokensDaily: 0 # 0 disables quota enforcement in development
   tokensHourly: 0
   tokensWeekly: 0
-
 # Budget service (optional for dev)
 budget:
-  endpoint: ""  # Empty = allow all requests
+  endpoint: "" # Empty = allow all requests
   timeout: 2s
-
 # Telemetry
 otel:
-  enabled: false  # Disable telemetry in dev
+  enabled: false # Disable telemetry in dev
   collectorEndpoint: ""
   protocol: grpc
   insecure: true
-
 prometheus:
-  enabled: true  # Enable Prometheus monitoring (ServiceMonitor CRDs are installed)
+  enabled: true # Enable Prometheus monitoring (ServiceMonitor CRDs are installed)
   port: 8080
   path: /metrics
-
 # Node scheduling - prefer CPU nodes (avoid GPU nodes)
 # GPU nodes have taint nvidia.com/gpu=true:NoSchedule
 # CPU nodes are in pool 770211, GPU nodes are in pool 776664
@@ -190,4 +171,4 @@ affinity:
             - key: lke.linode.com/pool-id
               operator: In
               values:
-                - "770211"  # CPU node pool
+                - "770211" # CPU node pool
