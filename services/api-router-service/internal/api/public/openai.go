@@ -202,6 +202,16 @@ func (h *Handler) HandleOpenAIChatCompletions(w http.ResponseWriter, r *http.Req
 		zap.String("backend_model", backendID),
 	)
 
+	// Handle streaming requests (aas-a2x84)
+	if openAIReq.Stream {
+		h.logger.Debug("handling streaming chat completion request",
+			zap.String("model", originalModel),
+			zap.String("backend_id", backendID),
+		)
+		h.forwardOpenAIStreamingRequest(ctx, w, r, backendEndpoint, openAIReq, authCtx, startTime, originalModel)
+		return
+	}
+
 	// Forward the OpenAI request to the backend
 	openAIRespInterface, routingDecision, err := h.forwardOpenAIRequest(ctx, backendEndpoint, openAIReq, "chat")
 	if err != nil {
