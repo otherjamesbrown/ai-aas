@@ -21,8 +21,23 @@ import (
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/cli"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/config"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/kubernetes"
+	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/output"
 	"github.com/otherjamesbrown/ai-aas/services/ai-aas-cli/internal/registry"
 )
+
+// DescribeOutput represents the JSON output format for troubleshoot describe
+type DescribeOutput struct {
+	InferenceService *kubernetes.InferenceServiceStatus `json:"inference_service"`
+	Pods             []kubernetes.PodStatus              `json:"pods"`
+	Containers       []ContainerResources                `json:"containers"`
+}
+
+// ContainerResources represents resource requests and limits for a container
+type ContainerResources struct {
+	Name     string            `json:"name"`
+	Requests map[string]string `json:"requests,omitempty"`
+	Limits   map[string]string `json:"limits,omitempty"`
+}
 
 // NewTroubleshootParentCommand creates the model troubleshoot parent command
 func NewTroubleshootParentCommand() *cobra.Command {
@@ -307,7 +322,10 @@ See Also:
 
 // newTroubleshootDescribeCommand creates the troubleshoot describe subcommand
 func newTroubleshootDescribeCommand() *cobra.Command {
-	var environment string
+	var (
+		environment string
+		format      string
+	)
 
 	cmd := &cobra.Command{
 		Use:   "describe <model-name>",
@@ -354,6 +372,61 @@ See Also:
 				return fmt.Errorf("deployment not found: %s in %s\n\nTo deploy:\n  ai-aas model deploy create %s -e %s", isvcName, namespace, modelName, environment)
 			}
 
+			pods, err := k8sClient.GetPodStatus(ctx, isvcName, namespace)
+			if err != nil {
+				return fmt.Errorf("get pods: %w", err)
+			}
+
+			// Build resource details
+			var containers []ContainerResources
+			podList, err := k8sClient.Clientset().CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+				LabelSelector: fmt.Sprintf("serving.kserve.io/inferenceservice=%s", isvcName),
+			})
+			if err == nil && len(podList.Items) > 0 {
+				pod := podList.Items[0]
+				for _, container := range pod.Spec.Containers {
+					cr := ContainerResources{
+						Name: container.Name,
+					}
+					if container.Resources.Requests != nil {
+						cr.Requests = make(map[string]string)
+						if cpu := container.Resources.Requests.Cpu(); cpu != nil {
+							cr.Requests["cpu"] = cpu.String()
+						}
+						if mem := container.Resources.Requests.Memory(); mem != nil {
+							cr.Requests["memory"] = mem.String()
+						}
+						if gpu, ok := container.Resources.Requests["nvidia.com/gpu"]; ok {
+							cr.Requests["gpu"] = gpu.String()
+						}
+					}
+					if container.Resources.Limits != nil {
+						cr.Limits = make(map[string]string)
+						if cpu := container.Resources.Limits.Cpu(); cpu != nil {
+							cr.Limits["cpu"] = cpu.String()
+						}
+						if mem := container.Resources.Limits.Memory(); mem != nil {
+							cr.Limits["memory"] = mem.String()
+						}
+						if gpu, ok := container.Resources.Limits["nvidia.com/gpu"]; ok {
+							cr.Limits["gpu"] = gpu.String()
+						}
+					}
+					containers = append(containers, cr)
+				}
+			}
+
+			// Handle JSON output
+			if format == "json" {
+				describeOutput := DescribeOutput{
+					InferenceService: isvc,
+					Pods:             pods,
+					Containers:       containers,
+				}
+				return output.PrintJSON(describeOutput, true)
+			}
+
+			// Table output
 			fmt.Printf("=== InferenceService: %s ===\n\n", isvcName)
 			fmt.Printf("Name:      %s\n", isvc.Name)
 			fmt.Printf("Namespace: %s\n", isvc.Namespace)
@@ -374,11 +447,6 @@ See Also:
 				fmt.Println()
 			}
 
-			pods, err := k8sClient.GetPodStatus(ctx, isvcName, namespace)
-			if err != nil {
-				return fmt.Errorf("get pods: %w", err)
-			}
-
 			fmt.Printf("\n=== Pods (%d) ===\n\n", len(pods))
 			for _, pod := range pods {
 				fmt.Printf("Name:     %s\n", pod.Name)
@@ -389,37 +457,32 @@ See Also:
 				fmt.Println()
 			}
 
-			podList, err := k8sClient.Clientset().CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
-				LabelSelector: fmt.Sprintf("serving.kserve.io/inferenceservice=%s", isvcName),
-			})
-			if err == nil && len(podList.Items) > 0 {
-				pod := podList.Items[0]
-				fmt.Printf("=== Resource Details (from %s) ===\n\n", pod.Name)
-
-				for _, container := range pod.Spec.Containers {
+			if len(containers) > 0 {
+				fmt.Printf("=== Resource Details ===\n\n")
+				for _, container := range containers {
 					fmt.Printf("Container: %s\n", container.Name)
-					if container.Resources.Requests != nil {
+					if len(container.Requests) > 0 {
 						fmt.Printf("  Requests:\n")
-						if cpu := container.Resources.Requests.Cpu(); cpu != nil {
-							fmt.Printf("    CPU: %s\n", cpu.String())
+						if cpu, ok := container.Requests["cpu"]; ok {
+							fmt.Printf("    CPU: %s\n", cpu)
 						}
-						if mem := container.Resources.Requests.Memory(); mem != nil {
-							fmt.Printf("    Memory: %s\n", mem.String())
+						if mem, ok := container.Requests["memory"]; ok {
+							fmt.Printf("    Memory: %s\n", mem)
 						}
-						if gpu, ok := container.Resources.Requests["nvidia.com/gpu"]; ok {
-							fmt.Printf("    GPU: %s\n", gpu.String())
+						if gpu, ok := container.Requests["gpu"]; ok {
+							fmt.Printf("    GPU: %s\n", gpu)
 						}
 					}
-					if container.Resources.Limits != nil {
+					if len(container.Limits) > 0 {
 						fmt.Printf("  Limits:\n")
-						if cpu := container.Resources.Limits.Cpu(); cpu != nil {
-							fmt.Printf("    CPU: %s\n", cpu.String())
+						if cpu, ok := container.Limits["cpu"]; ok {
+							fmt.Printf("    CPU: %s\n", cpu)
 						}
-						if mem := container.Resources.Limits.Memory(); mem != nil {
-							fmt.Printf("    Memory: %s\n", mem.String())
+						if mem, ok := container.Limits["memory"]; ok {
+							fmt.Printf("    Memory: %s\n", mem)
 						}
-						if gpu, ok := container.Resources.Limits["nvidia.com/gpu"]; ok {
-							fmt.Printf("    GPU: %s\n", gpu.String())
+						if gpu, ok := container.Limits["gpu"]; ok {
+							fmt.Printf("    GPU: %s\n", gpu)
 						}
 					}
 					fmt.Println()
@@ -431,6 +494,7 @@ See Also:
 	}
 
 	cmd.Flags().StringVarP(&environment, "environment", "e", "", "target environment (required)")
+	cmd.Flags().StringVarP(&format, "format", "f", "table", "output format (table, json)")
 	_ = cmd.MarkFlagRequired("environment")
 
 	return cmd
