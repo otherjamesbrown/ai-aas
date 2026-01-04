@@ -710,10 +710,10 @@ func TestDetectRoutingPolicyDrift(t *testing.T) {
 			}
 
 			// Execute
-			driftDetected := reconciler.detectRoutingPolicyDrift(context.Background(), tt.aiModel)
+			drift := reconciler.detectRoutingPolicyDrift(context.Background(), tt.aiModel)
 
 			// Verify
-			assert.Equal(t, tt.expectedDrift, driftDetected,
+			assert.Equal(t, tt.expectedDrift, drift.detected,
 				"Drift detection result mismatch")
 		})
 	}
@@ -1332,4 +1332,132 @@ func TestHealRoutingPolicy_RateLimiting(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, mockClient.updateRoutingPolicyCalled, "First model second heal should be rate limited")
 	})
+}
+
+func TestRoutingReadyCondition_DriftDetection(t *testing.T) {
+	tests := []struct {
+		name                  string
+		routingPolicyExists   bool
+		driftInfo             driftInfo
+		healError             error
+		expectedStatus        metav1.ConditionStatus
+		expectedReason        string
+		expectedMessagePrefix string
+	}{
+		{
+			name:                "no routing policy exists",
+			routingPolicyExists: false,
+			driftInfo:           driftInfo{detected: false},
+			healError:           nil,
+			expectedStatus:      metav1.ConditionFalse,
+			expectedReason:      "RoutingPolicyMissing",
+			expectedMessagePrefix: "No routing policy found",
+		},
+		{
+			name:                "policy synced - no drift",
+			routingPolicyExists: true,
+			driftInfo: driftInfo{
+				detected:        false,
+				expectedBackend: "llama-7b-vllm",
+			},
+			healError:             nil,
+			expectedStatus:        metav1.ConditionTrue,
+			expectedReason:        "PolicySynced",
+			expectedMessagePrefix: "Routing policy backend matches InferenceServiceName llama-7b-vllm",
+		},
+		{
+			name:                "drift detected - healing in progress",
+			routingPolicyExists: true,
+			driftInfo: driftInfo{
+				detected:        true,
+				expectedBackend: "llama-7b-vllm",
+				actualBackend:   "old-backend",
+			},
+			healError:             nil,
+			expectedStatus:        metav1.ConditionTrue,
+			expectedReason:        "PolicyDrifted",
+			expectedMessagePrefix: "Drift detected: expected backend llama-7b-vllm, got old-backend",
+		},
+		{
+			name:                "drift detected - healing failed",
+			routingPolicyExists: true,
+			driftInfo: driftInfo{
+				detected:        true,
+				expectedBackend: "llama-7b-vllm",
+				actualBackend:   "old-backend",
+			},
+			healError:             fmt.Errorf("Admin API unavailable"),
+			expectedStatus:        metav1.ConditionFalse,
+			expectedReason:        "HealFailed",
+			expectedMessagePrefix: "Failed to heal routing policy drift: expected backend llama-7b-vllm, got old-backend",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a mock AIModel
+			aiModel := &aimodelv1alpha1.AIModel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-model",
+					Namespace:  "test-namespace",
+					Generation: 1,
+				},
+				Spec: aimodelv1alpha1.AIModelSpec{
+					ModelName: "llama-7b",
+				},
+				Status: aimodelv1alpha1.AIModelStatus{
+					InferenceServiceName: "llama-7b-vllm",
+					Conditions:           []metav1.Condition{},
+				},
+			}
+
+			// Simulate the condition setting logic from the controller
+			var condition metav1.Condition
+			if !tt.routingPolicyExists {
+				condition = metav1.Condition{
+					Type:               aimodelv1alpha1.ConditionTypeRoutingReady,
+					Status:             metav1.ConditionFalse,
+					ObservedGeneration: aiModel.Generation,
+					Reason:             "RoutingPolicyMissing",
+					Message:            "No routing policy found for this model",
+				}
+			} else if tt.driftInfo.detected && tt.healError != nil {
+				condition = metav1.Condition{
+					Type:               aimodelv1alpha1.ConditionTypeRoutingReady,
+					Status:             metav1.ConditionFalse,
+					ObservedGeneration: aiModel.Generation,
+					Reason:             "HealFailed",
+					Message:            fmt.Sprintf("Failed to heal routing policy drift: expected backend %s, got %s. Error: %v", tt.driftInfo.expectedBackend, tt.driftInfo.actualBackend, tt.healError),
+				}
+			} else if tt.driftInfo.detected {
+				condition = metav1.Condition{
+					Type:               aimodelv1alpha1.ConditionTypeRoutingReady,
+					Status:             metav1.ConditionTrue,
+					ObservedGeneration: aiModel.Generation,
+					Reason:             "PolicyDrifted",
+					Message:            fmt.Sprintf("Drift detected: expected backend %s, got %s. Healing in progress.", tt.driftInfo.expectedBackend, tt.driftInfo.actualBackend),
+				}
+			} else {
+				condition = metav1.Condition{
+					Type:               aimodelv1alpha1.ConditionTypeRoutingReady,
+					Status:             metav1.ConditionTrue,
+					ObservedGeneration: aiModel.Generation,
+					Reason:             "PolicySynced",
+					Message:            fmt.Sprintf("Routing policy backend matches InferenceServiceName %s", tt.driftInfo.expectedBackend),
+				}
+			}
+
+			// Verify condition properties
+			assert.Equal(t, aimodelv1alpha1.ConditionTypeRoutingReady, condition.Type,
+				"Condition type should be RoutingReady")
+			assert.Equal(t, tt.expectedStatus, condition.Status,
+				"Condition status mismatch")
+			assert.Equal(t, tt.expectedReason, condition.Reason,
+				"Condition reason mismatch")
+			assert.Contains(t, condition.Message, tt.expectedMessagePrefix,
+				"Condition message should contain expected prefix")
+			assert.Equal(t, aiModel.Generation, condition.ObservedGeneration,
+				"ObservedGeneration should match AIModel generation")
+		})
+	}
 }

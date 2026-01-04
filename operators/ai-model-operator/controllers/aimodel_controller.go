@@ -1877,32 +1877,56 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 		routingPolicyExists := r.checkRoutingPolicyExists(ctx, latestAIModel)
 
 		// Detect routing policy drift (database backend_id vs InferenceServiceName)
-		// This returns true if drift is detected, and logs structured events
-		driftDetected := r.detectRoutingPolicyDrift(ctx, latestAIModel)
+		// This returns drift information including expected vs actual backend
+		drift := r.detectRoutingPolicyDrift(ctx, latestAIModel)
 
-		// If drift is detected, attempt to heal it
-		if driftDetected {
-			if err := r.healRoutingPolicy(ctx, latestAIModel); err != nil {
+		// Determine condition based on routing policy status and drift
+		var healErr error
+		if drift.detected {
+			// If drift is detected, attempt to heal it
+			healErr = r.healRoutingPolicy(ctx, latestAIModel)
+			if healErr != nil {
 				// Log error but don't fail reconciliation - healing is best-effort
-				log.Error(err, "Failed to heal routing policy drift", "name", aiModel.Name)
+				log.Error(healErr, "Failed to heal routing policy drift", "name", aiModel.Name)
 			}
 		}
 
-		if routingPolicyExists {
-			meta.SetStatusCondition(&latestAIModel.Status.Conditions, metav1.Condition{
-				Type:               aimodelv1alpha1.ConditionTypeRoutingReady,
-				Status:             metav1.ConditionTrue,
-				ObservedGeneration: latestAIModel.Generation,
-				Reason:             "RoutingPolicyExists",
-				Message:            "Routing policy exists and model is accessible via API",
-			})
-		} else {
+		// Set RoutingReady condition based on policy existence, drift, and healing status
+		if !routingPolicyExists {
+			// No routing policy exists
 			meta.SetStatusCondition(&latestAIModel.Status.Conditions, metav1.Condition{
 				Type:               aimodelv1alpha1.ConditionTypeRoutingReady,
 				Status:             metav1.ConditionFalse,
 				ObservedGeneration: latestAIModel.Generation,
 				Reason:             "RoutingPolicyMissing",
 				Message:            "No routing policy found for this model",
+			})
+		} else if drift.detected && healErr != nil {
+			// Drift detected but healing failed
+			meta.SetStatusCondition(&latestAIModel.Status.Conditions, metav1.Condition{
+				Type:               aimodelv1alpha1.ConditionTypeRoutingReady,
+				Status:             metav1.ConditionFalse,
+				ObservedGeneration: latestAIModel.Generation,
+				Reason:             "HealFailed",
+				Message:            fmt.Sprintf("Failed to heal routing policy drift: expected backend %s, got %s. Error: %v", drift.expectedBackend, drift.actualBackend, healErr),
+			})
+		} else if drift.detected {
+			// Drift detected, healing in progress or succeeded
+			meta.SetStatusCondition(&latestAIModel.Status.Conditions, metav1.Condition{
+				Type:               aimodelv1alpha1.ConditionTypeRoutingReady,
+				Status:             metav1.ConditionTrue,
+				ObservedGeneration: latestAIModel.Generation,
+				Reason:             "PolicyDrifted",
+				Message:            fmt.Sprintf("Drift detected: expected backend %s, got %s. Healing in progress.", drift.expectedBackend, drift.actualBackend),
+			})
+		} else {
+			// No drift - policy is synced correctly
+			meta.SetStatusCondition(&latestAIModel.Status.Conditions, metav1.Condition{
+				Type:               aimodelv1alpha1.ConditionTypeRoutingReady,
+				Status:             metav1.ConditionTrue,
+				ObservedGeneration: latestAIModel.Generation,
+				Reason:             "PolicySynced",
+				Message:            fmt.Sprintf("Routing policy backend matches InferenceServiceName %s", drift.expectedBackend),
 			})
 		}
 	} else {
@@ -2310,26 +2334,33 @@ func (r *AIModelReconciler) ensureRoutingPolicy(ctx context.Context, aiModel *ai
 	return nil
 }
 
+// driftInfo contains details about routing policy drift
+type driftInfo struct {
+	detected        bool
+	expectedBackend string
+	actualBackend   string
+}
+
 // detectRoutingPolicyDrift detects configuration drift between the database routing policy
-// and the AIModel's InferenceService. Returns true if drift is detected.
+// and the AIModel's InferenceService. Returns drift information.
 // Drift occurs when the routing policy's backend_id doesn't match the InferenceServiceName.
-func (r *AIModelReconciler) detectRoutingPolicyDrift(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) bool {
+func (r *AIModelReconciler) detectRoutingPolicyDrift(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) driftInfo {
 	log := log.FromContext(ctx)
 
 	// Skip if Admin API client is not configured
 	if r.AdminAPIClient == nil {
-		return false
+		return driftInfo{detected: false}
 	}
 
 	// Skip if InferenceServiceName is not set yet
 	if aiModel.Status.InferenceServiceName == "" {
-		return false
+		return driftInfo{detected: false}
 	}
 
 	// Derive the external name (model name exposed in OpenAI-compatible API)
 	externalName := deriveExternalName(aiModel)
 	if externalName == "" {
-		return false
+		return driftInfo{detected: false}
 	}
 
 	// Get routing policies for this model
@@ -2338,19 +2369,21 @@ func (r *AIModelReconciler) detectRoutingPolicyDrift(ctx context.Context, aiMode
 		// If listing fails, log but don't consider it drift (could be API unavailable)
 		log.Error(err, "Failed to list routing policies for drift detection",
 			"model", externalName)
-		return false
+		return driftInfo{detected: false}
 	}
 
 	// No policies exist - not drift, just missing configuration
 	if existingPolicies == nil || len(existingPolicies.Policies) == 0 {
-		return false
+		return driftInfo{detected: false}
 	}
 
 	// Expected backend ID should match the InferenceServiceName
 	expectedBackendID := aiModel.Status.InferenceServiceName
 
 	// Check each policy's backends for drift
-	driftDetected := false
+	var drift driftInfo
+	drift.expectedBackend = expectedBackendID
+
 	for _, policy := range existingPolicies.Policies {
 		for _, backend := range policy.Backends {
 			if backend.BackendID != expectedBackendID {
@@ -2361,26 +2394,28 @@ func (r *AIModelReconciler) detectRoutingPolicyDrift(ctx context.Context, aiMode
 					"expectedBackendID", expectedBackendID,
 					"actualBackendID", backend.BackendID,
 					"driftDetected", true)
-				driftDetected = true
+				drift.detected = true
+				drift.actualBackend = backend.BackendID
 
 				// Increment drift detection counter
 				routingPolicyDriftDetectedTotal.WithLabelValues(
 					externalName,
 					aiModel.Namespace,
 				).Inc()
+
+				// Return early with first detected drift
+				return drift
 			}
 		}
 	}
 
 	// Log if no drift detected (for visibility)
-	if !driftDetected {
-		log.V(1).Info("No routing policy drift detected",
-			"model", externalName,
-			"expectedBackendID", expectedBackendID,
-			"driftDetected", false)
-	}
+	log.V(1).Info("No routing policy drift detected",
+		"model", externalName,
+		"expectedBackendID", expectedBackendID,
+		"driftDetected", false)
 
-	return driftDetected
+	return drift
 }
 
 // healRoutingPolicy heals routing policy drift by updating the policy's backend_id

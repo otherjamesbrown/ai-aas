@@ -124,10 +124,10 @@ func TestRoutingPolicyDriftMetrics(t *testing.T) {
 			require.NoError(t, err)
 
 			// Execute
-			driftDetected := reconciler.detectRoutingPolicyDrift(context.Background(), tt.aiModel)
+			drift := reconciler.detectRoutingPolicyDrift(context.Background(), tt.aiModel)
 
 			// Verify drift detection result
-			assert.Equal(t, tt.expectedDrift, driftDetected,
+			assert.Equal(t, tt.expectedDrift, drift.detected,
 				"Drift detection result mismatch")
 
 			// Get final counter value
