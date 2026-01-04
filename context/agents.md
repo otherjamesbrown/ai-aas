@@ -1,6 +1,6 @@
 # AI-AAS Agent Rules
 
-> **Last verified**: 2025-12-24 | **Commit**: c3afae5c
+> **Last verified**: 2026-01-04 | **Commit**: 0c0f761b
 
 ---
 
@@ -231,6 +231,90 @@ spec:
 | RawDeployment | ClusterIP | `http://<model>-predictor.<ns>.svc.cluster.local:80` |
 | Serverless | ExternalName → Istio | Times out (don't use) |
 
+
+---
+
+## Config Drift Anti-patterns
+
+**Config drift** occurs when database/runtime configuration overrides GitOps-managed configuration, causing unexpected behavior.
+
+### Source of Truth Hierarchy
+
+| Priority | Source | Example |
+|----------|--------|---------|
+| 1 (highest) | GitOps Helm values | `values-development.yaml` |
+| 2 | Environment variables | `BACKEND_ENDPOINTS` |
+| 3 (lowest) | Database runtime config | Routing policies in Admin API |
+
+**Problem**: When services sync configuration from the database, stale entries can override correct GitOps values.
+
+### Symptoms
+
+- Tests pass locally but fail in cluster
+- "Connection refused" errors to `localhost` from cluster pods
+- GitOps shows correct config, but runtime behavior differs
+- Works after pod restart, fails after policy sync
+
+### Real Incident (aas-88yt0)
+
+**What happened**: UC tests failed with `dial tcp [::1]:8001: connect: connection refused`
+
+**Root cause**: Routing policies in Admin API database contained `localhost:8001` URLs. The api-router-service synced these policies, overriding the correct cluster DNS names from Helm chart.
+
+**Fix**: Updated routing policies to use cluster DNS (`<service>.<namespace>.svc.cluster.local`)
+
+### Prevention Rules
+
+**NEVER:**
+- Store `localhost` URLs in database for cluster environments
+- Store raw IP addresses in routing policies
+- Allow database config to override GitOps without validation
+
+**ALWAYS:**
+- Use Kubernetes DNS pattern: `<service>.<namespace>.svc.cluster.local`
+- Validate URLs at API layer (reject localhost for non-local environments)
+- Prefer GitOps-only configuration over database-synced config
+- Add startup validation that backend endpoints are reachable
+
+### URL Validation Pattern
+
+```go
+// WRONG: Accept any URL
+func (s *PolicyService) Create(ctx context.Context, p *Policy) error {
+    return s.db.Create(p)
+}
+
+// CORRECT: Validate backend URLs
+func (s *PolicyService) Create(ctx context.Context, p *Policy) error {
+    if err := validateBackendURL(p.BackendURL, s.environment); err != nil {
+        return err
+    }
+    return s.db.Create(p)
+}
+
+func validateBackendURL(url, env string) error {
+    if env != "local" && strings.Contains(url, "localhost") {
+        return fmt.Errorf("localhost URLs not allowed in %s environment", env)
+    }
+    // Warn on IP addresses, suggest DNS
+    return nil
+}
+```
+
+### Debugging Config Drift
+
+```bash
+# 1. Check GitOps config (Helm values)
+cat services/<service>/deployments/helm/<service>/values-development.yaml
+
+# 2. Check deployed config (env vars)
+kubectl get deployment <name> -n <ns> -o jsonpath='{.spec.template.spec.containers[0].env}'
+
+# 3. Check runtime config (database)
+# Query Admin API for routing policies, compare to GitOps
+
+# 4. If mismatch found: database is drifted, update via API
+```
 ---
 
 ## Quick Commands
