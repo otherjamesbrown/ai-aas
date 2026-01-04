@@ -17,17 +17,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_model_registry_external_name
 ON model_registry(external_name)
 WHERE external_name IS NOT NULL;
 
--- Auto-migrate existing models: derive external_name from hf_model_id
--- If hf_model_id contains "/", take the part after the last "/"
--- Otherwise, use the existing name field
+-- Auto-migrate existing models: use name as external_name
+-- The name field is already unique so this guarantees no collisions.
+-- Operators can later update external_name to friendlier values if desired.
 -- +goose StatementBegin
 DO $$
 BEGIN
     UPDATE model_registry
-    SET external_name = CASE
-        WHEN hf_model_id LIKE '%/%' THEN regexp_replace(hf_model_id, '.*/', '')
-        ELSE name
-    END
+    SET external_name = name
     WHERE external_name IS NULL;
 END $$;
 -- +goose StatementEnd
