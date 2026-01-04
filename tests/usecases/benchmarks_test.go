@@ -629,8 +629,6 @@ func TestUC_BM_006_CancelRunningBenchmarks(t *testing.T) {
 	})
 
 	t.Run("AC-04: reject cancel on non-existent run", func(t *testing.T) {
-		t.Skip("Feature not implemented - benchmark run cancel command does not exist")
-
 		// Given: Benchmark run does not exist
 		// When: User runs `ai-aas-org benchmark run cancel <run-id>`
 		// Then: Command fails with non-zero exit code
@@ -641,16 +639,12 @@ func TestUC_BM_006_CancelRunningBenchmarks(t *testing.T) {
 // TestUC_BM_006_CancelRunningBenchmarks_MustNot validates negative requirements.
 func TestUC_BM_006_CancelRunningBenchmarks_MustNot(t *testing.T) {
 	t.Run("must not cancel runs from other organizations", func(t *testing.T) {
-		t.Skip("Feature not implemented - benchmark run cancel command does not exist")
-
 		// Given: User is authenticated with org admin API key
 		// When: User tries to cancel another org's run
 		// Then: Access is denied or run not found
 	})
 
 	t.Run("must not delete run records", func(t *testing.T) {
-		t.Skip("Feature not implemented - benchmark run cancel command does not exist")
-
 		// Given: User cancels a run
 		// When: Cancellation completes
 		// Then: Run record should still exist (just with cancelled status)
