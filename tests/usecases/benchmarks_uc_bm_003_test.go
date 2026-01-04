@@ -33,11 +33,15 @@ func TestUC_BM_003_ViewBenchmarkResults_New(t *testing.T) {
 
 		// Setup test org and benchmark fixture
 		orgCtx := NewTestOrgContext(t)
+
+		// Setup routing policies to grant test org access to models
+		setupRoutingPoliciesForBenchmarkTests(t, orgCtx.OrgID)
+
 		fm := NewFixtureManager(t, NewTestClient(getAdminAPIEndpoint(), getAdminAPIKey()))
 		benchmarkFixture := NewBenchmarkRunFixture(fm, t, orgCtx)
 
 		// Given: Create a benchmark target
-		target, err := benchmarkFixture.CreateTarget("", "llama-7b", "standard")
+		target, err := benchmarkFixture.CreateTarget("", "unsloth-gpt-oss-20b", "standard")
 		if err != nil {
 			t.Fatalf("failed to create benchmark target: %v", err)
 		}
@@ -77,11 +81,15 @@ func TestUC_BM_003_ViewBenchmarkResults_New(t *testing.T) {
 
 		// Setup test org and benchmark fixture
 		orgCtx := NewTestOrgContext(t)
+
+		// Setup routing policies to grant test org access to models
+		setupRoutingPoliciesForBenchmarkTests(t, orgCtx.OrgID)
+
 		fm := NewFixtureManager(t, NewTestClient(getAdminAPIEndpoint(), getAdminAPIKey()))
 		benchmarkFixture := NewBenchmarkRunFixture(fm, t, orgCtx)
 
 		// Given: Create a benchmark target
-		target, err := benchmarkFixture.CreateTarget("", "llama-7b", "standard")
+		target, err := benchmarkFixture.CreateTarget("", "unsloth-gpt-oss-20b", "standard")
 		if err != nil {
 			t.Fatalf("failed to create benchmark target: %v", err)
 		}
@@ -137,11 +145,15 @@ func TestUC_BM_003_ViewBenchmarkResults_New(t *testing.T) {
 
 		// Setup test org and benchmark fixture
 		orgCtx := NewTestOrgContext(t)
+
+		// Setup routing policies to grant test org access to models
+		setupRoutingPoliciesForBenchmarkTests(t, orgCtx.OrgID)
+
 		fm := NewFixtureManager(t, NewTestClient(getAdminAPIEndpoint(), getAdminAPIKey()))
 		benchmarkFixture := NewBenchmarkRunFixture(fm, t, orgCtx)
 
 		// Given: Create a benchmark target and trigger run
-		target, err := benchmarkFixture.CreateTarget("", "llama-7b", "standard")
+		target, err := benchmarkFixture.CreateTarget("", "unsloth-gpt-oss-20b", "standard")
 		if err != nil {
 			t.Fatalf("failed to create benchmark target: %v", err)
 		}

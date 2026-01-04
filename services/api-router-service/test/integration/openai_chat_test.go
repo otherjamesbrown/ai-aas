@@ -241,6 +241,14 @@ func TestOpenAIChatCompletions(t *testing.T) {
 	if decision := w.Header().Get("X-Routing-Decision"); decision == "" {
 		t.Error("expected X-Routing-Decision header")
 	}
+
+	// Validate trace_id is present (aas-vx8rb)
+	if response.TraceID == "" {
+		t.Error("expected trace_id to be set in response")
+	}
+	if len(response.TraceID) != 32 {
+		t.Errorf("expected trace_id to be 32 hex characters, got length %d: %s", len(response.TraceID), response.TraceID)
+	}
 }
 
 // TestOpenAIChatCompletionsValidation tests request validation for OpenAI chat endpoint.

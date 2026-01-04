@@ -171,6 +171,7 @@ type OpenAIChatCompletionResponse struct {
 	Model   string                 `json:"model"`
 	Choices []ChatCompletionChoice `json:"choices"`
 	Usage   UsageInfo              `json:"usage"`
+	TraceID string                 `json:"trace_id,omitempty"`
 }
 
 // ChatCompletionChoice represents a completion choice in the OpenAI response.
