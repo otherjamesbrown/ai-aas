@@ -48,7 +48,7 @@ func setupRoutingPoliciesForBenchmarkTests(t *testing.T, orgID string) {
 	}
 
 	// Delete wildcard policies AND policies for other orgs for test models
-	testModels := []string{"llama-7b", "restricted-model", "nonexistent-model-xyz"}
+	testModels := []string{"unsloth-gpt-oss-20b", "restricted-model", "nonexistent-model-xyz"}
 	for _, policy := range policiesResp.Policies {
 		// Delete policies that:
 		// 1. Are for test models
@@ -72,28 +72,28 @@ func setupRoutingPoliciesForBenchmarkTests(t *testing.T, orgID string) {
 		}
 	}
 
-	// Create routing policy for llama-7b ONLY for test org
-	// This ensures the test org has access to llama-7b but not other models
-	createLlama7bPolicy := map[string]interface{}{
+	// Create routing policy for unsloth-gpt-oss-20b ONLY for test org
+	// This ensures the test org has access to unsloth-gpt-oss-20b but not other models
+	createGptOss20bPolicy := map[string]interface{}{
 		"organization_id": orgID,
-		"model":           "llama-7b",
+		"model":           "unsloth-gpt-oss-20b",
 		"backends": []map[string]interface{}{
 			{
-				"backend_id": "llama-7b-backend",
+				"backend_id": "unsloth-gpt-oss-20b-backend",
 				"weight":     100,
 			},
 		},
 		"enabled": true,
 	}
 
-	createResp, err := client.POST("/v1/routing/policies", createLlama7bPolicy)
+	createResp, err := client.POST("/v1/routing/policies", createGptOss20bPolicy)
 	if err != nil {
-		t.Logf("Warning: failed to create llama-7b routing policy: %v", err)
+		t.Logf("Warning: failed to create unsloth-gpt-oss-20b routing policy: %v", err)
 	} else if createResp.StatusCode != 201 && createResp.StatusCode != 200 {
 		// Policy might already exist, log but continue
-		t.Logf("Warning: create llama-7b policy returned status %d: %s", createResp.StatusCode, createResp.String())
+		t.Logf("Warning: create unsloth-gpt-oss-20b policy returned status %d: %s", createResp.StatusCode, createResp.String())
 	} else {
-		t.Logf("Created routing policy for llama-7b for test org %s", orgID)
+		t.Logf("Created routing policy for unsloth-gpt-oss-20b for test org %s", orgID)
 
 		// Register cleanup
 		var createdPolicy struct {
@@ -127,9 +127,9 @@ func TestUC_BM_001_CreateBenchmarkTarget(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
-		// When: User runs `ai-aas-org benchmark target add test-target-01 --model llama-7b --scenario standard`
+		// When: User runs `ai-aas-org benchmark target add test-target-01 --model unsloth-gpt-oss-20b --scenario standard`
 		targetName := "test-target-" + generateUniqueID()
-		result := runOrgCLI("benchmark", "target", "add", targetName, "--model", "llama-7b", "--scenario", "standard")
+		result := runOrgCLI("benchmark", "target", "add", targetName, "--model", "unsloth-gpt-oss-20b", "--scenario", "standard")
 
 		// Cleanup: Delete target after test
 		t.Cleanup(func() {
@@ -160,7 +160,7 @@ func TestUC_BM_001_CreateBenchmarkTarget(t *testing.T) {
 		// Create isolated test org with controlled routing policies
 		orgCtx := NewTestOrgContext(t)
 
-		// Setup routing policies: llama-7b allowed, restricted-model NOT allowed
+		// Setup routing policies: unsloth-gpt-oss-20b allowed, restricted-model NOT allowed
 		setupRoutingPoliciesForBenchmarkTests(t, orgCtx.OrgID)
 
 		// Given: User specifies a model they don't have access to
@@ -192,9 +192,9 @@ func TestUC_BM_001_CreateBenchmarkTarget(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
 		// Given: User specifies a non-existent scenario
-		// When: User runs `ai-aas-org benchmark target add test-invalid-scenario --model llama-7b --scenario nonexistent`
+		// When: User runs `ai-aas-org benchmark target add test-invalid-scenario --model unsloth-gpt-oss-20b --scenario nonexistent`
 		targetName := "test-invalid-scenario-" + generateUniqueID()
-		result := runOrgCLI("benchmark", "target", "add", targetName, "--model", "llama-7b", "--scenario", "nonexistent")
+		result := runOrgCLI("benchmark", "target", "add", targetName, "--model", "unsloth-gpt-oss-20b", "--scenario", "nonexistent")
 
 		// Cleanup: Delete target if it was created (shouldn't happen, but be safe)
 		t.Cleanup(func() {
@@ -215,12 +215,12 @@ func TestUC_BM_001_CreateBenchmarkTarget(t *testing.T) {
 		skipIfNoLiveAPI(t)
 
 		// Given: User is authenticated with org admin API key
-		// When: User runs `ai-aas-org benchmark target add test-target-04 --model llama-7b --scenario throughput --interval 120`
+		// When: User runs `ai-aas-org benchmark target add test-target-04 --model unsloth-gpt-oss-20b --scenario throughput --interval 120`
 		// Note: CLI supports --interval for scheduled runs, not --concurrency/--duration
 		targetName := "test-target-" + generateUniqueID()
 		result := runOrgCLI("benchmark", "target", "add",
 			targetName,
-			"--model", "llama-7b",
+			"--model", "unsloth-gpt-oss-20b",
 			"--scenario", "throughput",
 			"--schedule",
 			"--interval", "120")
@@ -249,7 +249,7 @@ func TestUC_BM_001_CreateBenchmarkTarget_MustNot(t *testing.T) {
 		// Given: User creates a benchmark target
 		// When: Target creation completes
 		targetName := "test-no-autostart-" + generateUniqueID()
-		result := runOrgCLI("benchmark", "target", "add", targetName, "--model", "llama-7b", "--scenario", "standard")
+		result := runOrgCLI("benchmark", "target", "add", targetName, "--model", "unsloth-gpt-oss-20b", "--scenario", "standard")
 
 		// Cleanup: Delete target after test
 		t.Cleanup(func() {
@@ -281,7 +281,7 @@ func TestUC_BM_001_CreateBenchmarkTarget_MustNot(t *testing.T) {
 
 		// Given: User creates a benchmark target
 		targetName := "test-no-internals-" + generateUniqueID()
-		result := runOrgCLI("benchmark", "target", "add", targetName, "--model", "llama-7b", "--scenario", "standard")
+		result := runOrgCLI("benchmark", "target", "add", targetName, "--model", "unsloth-gpt-oss-20b", "--scenario", "standard")
 
 		// Cleanup: Delete target after test
 		t.Cleanup(func() {
@@ -315,7 +315,7 @@ func TestUC_BM_002_TriggerBenchmarkRun(t *testing.T) {
 
 		// Given: User has created benchmark target
 		targetName := "test-trigger-" + generateUniqueID()
-		createResult := runOrgCLI("benchmark", "target", "add", targetName, "--model", "llama-7b", "--scenario", "standard")
+		createResult := runOrgCLI("benchmark", "target", "add", targetName, "--model", "unsloth-gpt-oss-20b", "--scenario", "standard")
 
 		// Cleanup: Delete target after test
 		t.Cleanup(func() {
@@ -367,7 +367,7 @@ func TestUC_BM_002_TriggerBenchmarkRun(t *testing.T) {
 		// Create isolated test org with controlled routing policies
 		orgCtx := NewTestOrgContext(t)
 
-		// Setup routing policies: llama-7b allowed, nonexistent-model-xyz NOT allowed
+		// Setup routing policies: unsloth-gpt-oss-20b allowed, nonexistent-model-xyz NOT allowed
 		// Note: AC-03 expects target creation to SUCCEED (model exists in routing but no deployment)
 		// but trigger should FAIL because the actual model deployment doesn't exist
 		setupRoutingPoliciesForBenchmarkTests(t, orgCtx.OrgID)
