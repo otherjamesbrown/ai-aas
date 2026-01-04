@@ -155,10 +155,49 @@ var (
 			Buckets: prometheus.DefBuckets,
 		},
 	)
+
+	// Routing policy drift detection metrics
+	routingPolicyDriftDetectedTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "routing_policy_drift_detected_total",
+			Help: "Total number of routing policy drift events detected",
+		},
+		[]string{"model_name", "namespace"},
+	)
+	routingPolicyDriftDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "routing_policy_drift_duration_seconds",
+			Help:    "Duration between drift detection and resolution",
+			Buckets: []float64{1, 5, 10, 30, 60, 300, 600, 1800, 3600}, // 1s to 1h
+		},
+		[]string{"model_name", "namespace"},
+	)
+	routingPolicyHealAttemptsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "routing_policy_heal_attempts_total",
+			Help: "Total number of routing policy healing attempts",
+		},
+		[]string{"model_name", "namespace", "result"},
+	)
+	routingPolicyHealDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "routing_policy_heal_duration_seconds",
+			Help:    "Duration of routing policy healing operations",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"model_name", "namespace"},
+	)
 )
 
 func init() {
-	metrics.Registry.MustRegister(reconcileTotal, reconcileDuration)
+	metrics.Registry.MustRegister(
+		reconcileTotal,
+		reconcileDuration,
+		routingPolicyDriftDetectedTotal,
+		routingPolicyDriftDuration,
+		routingPolicyHealAttemptsTotal,
+		routingPolicyHealDuration,
+	)
 }
 
 // AIModelReconciler reconciles an AIModel object
@@ -198,6 +237,7 @@ type AdminAPIClient interface {
 	DeleteDeployment(ctx context.Context, modelName, environment string) error
 	ListRoutingPolicies(ctx context.Context, model, organizationID string) (*adminapi.RoutingPolicyListResponse, error)
 	CreateRoutingPolicy(ctx context.Context, policy adminapi.RoutingPolicyCreate) (*adminapi.RoutingPolicy, error)
+	UpdateRoutingPolicy(ctx context.Context, policyID string, update adminapi.RoutingPolicyUpdate) (*adminapi.RoutingPolicy, error)
 }
 
 //+kubebuilder:rbac:groups=aimodel.ai-aas.io,resources=aimodels,verbs=get;list;watch;create;update;patch;delete
@@ -1824,7 +1864,15 @@ func (r *AIModelReconciler) updateStatusFromInferenceService(ctx context.Context
 
 		// Detect routing policy drift (database backend_id vs InferenceServiceName)
 		// This returns true if drift is detected, and logs structured events
-		_ = r.detectRoutingPolicyDrift(ctx, latestAIModel)
+		driftDetected := r.detectRoutingPolicyDrift(ctx, latestAIModel)
+
+		// If drift is detected, attempt to heal it
+		if driftDetected {
+			if err := r.healRoutingPolicy(ctx, latestAIModel); err != nil {
+				// Log error but don't fail reconciliation - healing is best-effort
+				log.Error(err, "Failed to heal routing policy drift", "name", aiModel.Name)
+			}
+		}
 
 		if routingPolicyExists {
 			meta.SetStatusCondition(&latestAIModel.Status.Conditions, metav1.Condition{
@@ -2300,6 +2348,12 @@ func (r *AIModelReconciler) detectRoutingPolicyDrift(ctx context.Context, aiMode
 					"actualBackendID", backend.BackendID,
 					"driftDetected", true)
 				driftDetected = true
+
+				// Increment drift detection counter
+				routingPolicyDriftDetectedTotal.WithLabelValues(
+					externalName,
+					aiModel.Namespace,
+				).Inc()
 			}
 		}
 	}
@@ -2313,6 +2367,95 @@ func (r *AIModelReconciler) detectRoutingPolicyDrift(ctx context.Context, aiMode
 	}
 
 	return driftDetected
+}
+
+// healRoutingPolicy heals routing policy drift by updating the policy's backend_id
+// to match the AIModel's InferenceServiceName. Only heals if the AIModel is Ready.
+// Returns an error if healing fails, nil otherwise.
+func (r *AIModelReconciler) healRoutingPolicy(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) error {
+	log := log.FromContext(ctx)
+
+	// Skip if Admin API client is not configured
+	if r.AdminAPIClient == nil {
+		return nil
+	}
+
+	// Only heal if AIModel is Ready and has a valid InferenceServiceName
+	if aiModel.Status.Phase != aimodelv1alpha1.AIModelPhaseReady || aiModel.Status.InferenceServiceName == "" {
+		log.V(1).Info("Skipping routing policy healing - AIModel not Ready or InferenceServiceName missing",
+			"name", aiModel.Name,
+			"phase", aiModel.Status.Phase,
+			"inferenceServiceName", aiModel.Status.InferenceServiceName)
+		return nil
+	}
+
+	// Derive the external name (model name exposed in OpenAI-compatible API)
+	externalName := deriveExternalName(aiModel)
+	if externalName == "" {
+		return nil
+	}
+
+	// Get routing policies for this model
+	existingPolicies, err := r.AdminAPIClient.ListRoutingPolicies(ctx, externalName, "*")
+	if err != nil {
+		log.Error(err, "Failed to list routing policies for healing",
+			"model", externalName)
+		return err
+	}
+
+	// No policies exist - nothing to heal
+	if existingPolicies == nil || len(existingPolicies.Policies) == 0 {
+		return nil
+	}
+
+	// Expected backend ID should match the InferenceServiceName
+	expectedBackendID := aiModel.Status.InferenceServiceName
+
+	// Heal each policy that has drift
+	for _, policy := range existingPolicies.Policies {
+		needsHealing := false
+		for _, backend := range policy.Backends {
+			if backend.BackendID != expectedBackendID {
+				needsHealing = true
+				break
+			}
+		}
+
+		if !needsHealing {
+			continue
+		}
+
+		// Update all backends to use the correct backend ID
+		updatedBackends := make([]adminapi.Backend, len(policy.Backends))
+		for i, backend := range policy.Backends {
+			updatedBackends[i] = adminapi.Backend{
+				BackendID: expectedBackendID,
+				Weight:    backend.Weight,
+			}
+		}
+
+		// Update the routing policy via Admin API
+		update := adminapi.RoutingPolicyUpdate{
+			Backends: updatedBackends,
+		}
+
+		updatedPolicy, err := r.AdminAPIClient.UpdateRoutingPolicy(ctx, policy.PolicyID, update)
+		if err != nil {
+			log.Error(err, "Failed to heal routing policy",
+				"model", externalName,
+				"policyID", policy.PolicyID,
+				"expectedBackendID", expectedBackendID)
+			return err
+		}
+
+		log.Info("Successfully healed routing policy drift",
+			"model", externalName,
+			"policyID", updatedPolicy.PolicyID,
+			"oldBackendID", policy.Backends[0].BackendID,
+			"newBackendID", expectedBackendID)
+	}
+
+	return nil
 }
 
 // contains is a helper function to check if a string contains a substring
