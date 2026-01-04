@@ -53,7 +53,7 @@ func (r *AuditRepository) Create(ctx context.Context, create *domain.AuditLogCre
 	}
 
 	query := `
-		INSERT INTO audit_logs (
+		INSERT INTO admin_api_audit_logs (
 			timestamp, actor, action, resource_type, resource_id,
 			outcome, changes, error_detail, client_ip, user_agent, request_id
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
@@ -74,7 +74,7 @@ func (r *AuditRepository) Create(ctx context.Context, create *domain.AuditLogCre
 
 // List retrieves audit logs with filtering and pagination
 func (r *AuditRepository) List(ctx context.Context, params domain.AuditLogListParams) (*domain.AuditLogListResponse, error) {
-	baseQuery := `FROM audit_logs WHERE 1=1`
+	baseQuery := `FROM admin_api_audit_logs WHERE 1=1`
 	args := []interface{}{}
 	argNum := 1
 

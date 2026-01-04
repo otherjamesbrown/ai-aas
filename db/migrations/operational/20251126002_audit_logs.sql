@@ -1,8 +1,8 @@
 -- +goose Up
--- Migration: Create audit_logs table for admin-api-service
+-- Migration: Create admin_api_audit_logs table for admin-api-service
 -- Feature: 017-admin-api-service
 
-CREATE TABLE IF NOT EXISTS audit_logs (
+CREATE TABLE IF NOT EXISTS admin_api_audit_logs (
     id BIGSERIAL PRIMARY KEY,
     timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
     actor VARCHAR(255) NOT NULL,
@@ -17,10 +17,10 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     request_id UUID
 );
 
-CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor, timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_resource ON audit_logs(resource_type, resource_id, timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_api_audit_logs_actor ON admin_api_audit_logs(actor, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_api_audit_logs_resource ON admin_api_audit_logs(resource_type, resource_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_api_audit_logs_timestamp ON admin_api_audit_logs(timestamp DESC);
 
 -- +goose Down
--- Rollback: Drop audit_logs table
-DROP TABLE IF EXISTS audit_logs;
+-- Rollback: Drop admin_api_audit_logs table
+DROP TABLE IF EXISTS admin_api_audit_logs;
