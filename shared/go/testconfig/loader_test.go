@@ -39,7 +39,7 @@ func TestLoadFromFile(t *testing.T) {
 	envPath := filepath.Join(tmpDir, ".env")
 
 	content := `# Test env file
-MASTER_ADMIN_API_KEY=file-api-key
+DEVELOP_MASTER_ADMIN_API_KEY=file-api-key
 MASTER_ADMIN_ORG_ID=file-org-id
 STAGING_MASTER_ADMIN_API_KEY=staging-api-key
 HF_TOKEN=hf_test_token
@@ -76,7 +76,7 @@ func TestEnvPrecedenceOverFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	envPath := filepath.Join(tmpDir, ".env")
 
-	content := `MASTER_ADMIN_API_KEY=file-api-key`
+	content := `DEVELOP_MASTER_ADMIN_API_KEY=file-api-key`
 	if err := os.WriteFile(envPath, []byte(content), 0644); err != nil {
 		t.Fatalf("Failed to write test .env file: %v", err)
 	}
@@ -205,7 +205,7 @@ func TestParseQuotedValues(t *testing.T) {
 	tmpDir := t.TempDir()
 	envPath := filepath.Join(tmpDir, ".env")
 
-	content := `MASTER_ADMIN_API_KEY="quoted-key"
+	content := `DEVELOP_MASTER_ADMIN_API_KEY="quoted-key"
 MASTER_ADMIN_ORG_ID='single-quoted'
 HF_TOKEN=unquoted
 `

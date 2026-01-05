@@ -43,7 +43,7 @@ echo
 
 # Define required secrets
 declare -A CRITICAL_SECRETS=(
-    ["MASTER_ADMIN_API_KEY"]="E2E test authentication (development)"
+    ["DEVELOP_MASTER_ADMIN_API_KEY"]="E2E test authentication (development)"
     ["STAGING_MASTER_ADMIN_API_KEY"]="E2E test authentication (staging)"
     ["LINODE_OBJECT_STORAGE_ACCESS_KEY"]="Upload E2E test results"
     ["LINODE_OBJECT_STORAGE_SECRET_KEY"]="Upload E2E test results"

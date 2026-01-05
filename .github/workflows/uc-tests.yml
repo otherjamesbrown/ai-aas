@@ -70,7 +70,7 @@ jobs:
 
           if [ "$ENV" = "development" ]; then
             echo "AI_AAS_API_ENDPOINT=https://user-org.dev.otherjamesbrown.com" >> $GITHUB_ENV
-            echo "AI_AAS_API_KEY=${{ secrets.MASTER_ADMIN_API_KEY }}" >> $GITHUB_ENV
+            echo "AI_AAS_API_KEY=${{ secrets.DEVELOP_MASTER_ADMIN_API_KEY }}" >> $GITHUB_ENV
           elif [ "$ENV" = "staging" ]; then
             echo "AI_AAS_API_ENDPOINT=https://user-org.staging.otherjamesbrown.com" >> $GITHUB_ENV
             echo "AI_AAS_API_KEY=${{ secrets.STAGING_MASTER_ADMIN_API_KEY }}" >> $GITHUB_ENV
@@ -81,7 +81,7 @@ jobs:
           if [[ ! "$AI_AAS_API_KEY" =~ ^ai-aas__ ]]; then
             echo "::error::AI_AAS_API_KEY has invalid format. Expected format: ai-aas__*"
             if [ "${{ matrix.environment }}" = "development" ]; then
-              echo "::error::Please update the GitHub secret MASTER_ADMIN_API_KEY"
+              echo "::error::Please update the GitHub secret DEVELOP_MASTER_ADMIN_API_KEY"
             elif [ "${{ matrix.environment }}" = "staging" ]; then
               echo "::error::Please update the GitHub secret STAGING_MASTER_ADMIN_API_KEY"
             fi

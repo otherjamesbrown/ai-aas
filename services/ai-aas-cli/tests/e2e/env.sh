@@ -15,8 +15,8 @@ if [[ ! -f "$SECRETS_FILE" ]]; then
     exit 1
 fi
 
-# Load master admin API key from secrets
-export AI_AAS_API_KEY=$(grep '^MASTER_ADMIN_API_KEY=' "$SECRETS_FILE" | cut -d'=' -f2)
+# Load master admin API key from secrets (development environment)
+export AI_AAS_API_KEY=$(grep '^DEVELOP_MASTER_ADMIN_API_KEY=' "$SECRETS_FILE" | cut -d'=' -f2)
 export AI_AAS_MASTER_ORG_ID=$(grep '^MASTER_ADMIN_ORG_ID=' "$SECRETS_FILE" | cut -d'=' -f2)
 export AI_AAS_MASTER_USER_ID=$(grep '^MASTER_ADMIN_USER_ID=' "$SECRETS_FILE" | cut -d'=' -f2)
 
@@ -36,7 +36,7 @@ export E2E_TEST_USER_EMAIL_DOMAIN="test.ai-aas.dev"
 
 # Validation
 if [[ -z "$AI_AAS_API_KEY" ]]; then
-    echo "ERROR: Failed to load MASTER_ADMIN_API_KEY from secrets"
+    echo "ERROR: Failed to load DEVELOP_MASTER_ADMIN_API_KEY from secrets"
     exit 1
 fi
 

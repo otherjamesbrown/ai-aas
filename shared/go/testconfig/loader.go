@@ -49,7 +49,7 @@ type Config struct {
 
 // Environment variable names for test configuration.
 const (
-	EnvMasterAdminAPIKey            = "MASTER_ADMIN_API_KEY"
+	EnvMasterAdminAPIKey            = "DEVELOP_MASTER_ADMIN_API_KEY"
 	EnvMasterAdminOrgID             = "MASTER_ADMIN_ORG_ID"
 	EnvStagingMasterAdminAPIKey     = "STAGING_MASTER_ADMIN_API_KEY"
 	EnvStagingMasterAdminOrgID      = "STAGING_MASTER_ADMIN_ORG_ID"
@@ -213,7 +213,7 @@ func (c *Config) SetEnvFromConfig() error {
 // Validate checks that required configuration is present.
 func (c *Config) Validate() error {
 	if c.MasterAdminAPIKey == "" {
-		return errors.New("MASTER_ADMIN_API_KEY is required")
+		return errors.New("DEVELOP_MASTER_ADMIN_API_KEY is required")
 	}
 	return nil
 }
