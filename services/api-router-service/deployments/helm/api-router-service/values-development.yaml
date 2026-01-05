@@ -115,7 +115,9 @@ env:
 #
 # Note: Don't include path - it's added by the router based on request type
 backends:
-  endpoints: "unsloth/gpt-oss-20b:http://unsloth-gpt-oss-20b-predictor.development.svc.cluster.local:80,meta-llama/Llama-3.1-8B-Instruct:http://llama-3-1-8b-instruct-trtllm-predictor.development.svc.cluster.local:80,Qwen/Qwen2-VL-7B-Instruct:http://qwen2-vl-7b-instruct-predictor.development.svc.cluster.local:80"
+  # Standard model names (backward compatible)
+  # Engine-specific names for benchmarking: llama-3-1-8b-instruct-trtllm, llama-3-1-8b-instruct-vllm
+  endpoints: "unsloth/gpt-oss-20b:http://unsloth-gpt-oss-20b-predictor.development.svc.cluster.local:80,meta-llama/Llama-3.1-8B-Instruct:http://llama-3-1-8b-instruct-trtllm-predictor.development.svc.cluster.local:80,Qwen/Qwen2-VL-7B-Instruct:http://qwen2-vl-7b-instruct-predictor.development.svc.cluster.local:80,llama-3-1-8b-instruct-trtllm:http://llama-3-1-8b-instruct-trtllm-predictor.development.svc.cluster.local:80,llama-3-1-8b-instruct-vllm:http://llama-3-1-8b-instruct-vllm-predictor.development.svc.cluster.local:80"
 # Redis configuration
 redis:
   address: "redis.development.svc.cluster.local:6379"
