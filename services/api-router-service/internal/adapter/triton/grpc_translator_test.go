@@ -1,6 +1,7 @@
 package triton
 
 import (
+	"encoding/binary"
 	"strings"
 	"testing"
 
@@ -403,9 +404,15 @@ func TestExtractTextFromGRPCResponse_RawOutputContents(t *testing.T) {
 							Contents: nil,
 						},
 					},
-					// TRT-LLM puts the text here for performance
+					// TRT-LLM puts the text in raw_output_contents with length prefix
+					// Format: [4-byte length] [text bytes]
 					RawOutputContents: [][]byte{
-						[]byte("Hello, world!"),
+						func() []byte {
+							text := "Hello, world!"
+							lengthPrefix := make([]byte, 4)
+							binary.LittleEndian.PutUint32(lengthPrefix, uint32(len(text)))
+							return append(lengthPrefix, []byte(text)...)
+						}(),
 					},
 				},
 			},
@@ -491,9 +498,20 @@ func TestExtractTextFromGRPCResponse_RawOutputContents(t *testing.T) {
 							Datatype: DatatypeBYTES,
 						},
 					},
+					// Both outputs use length-prefixed format
 					RawOutputContents: [][]byte{
-						[]byte("other data"),
-						[]byte("text output data"),
+						func() []byte {
+							text := "other data"
+							lengthPrefix := make([]byte, 4)
+							binary.LittleEndian.PutUint32(lengthPrefix, uint32(len(text)))
+							return append(lengthPrefix, []byte(text)...)
+						}(),
+						func() []byte {
+							text := "text output data"
+							lengthPrefix := make([]byte, 4)
+							binary.LittleEndian.PutUint32(lengthPrefix, uint32(len(text)))
+							return append(lengthPrefix, []byte(text)...)
+						}(),
 					},
 				},
 			},
@@ -513,5 +531,107 @@ func TestExtractTextFromGRPCResponse_RawOutputContents(t *testing.T) {
 				t.Errorf("ExtractTextFromGRPCResponse() = %q, want %q", text, tt.expected)
 			}
 		})
+	}
+}
+
+// TestParseBytesRawOutput tests the length-prefixed BYTES format parser.
+func TestParseBytesRawOutput(t *testing.T) {
+	tests := []struct {
+		name     string
+		rawBytes []byte
+		expected string
+	}{
+		{
+			name: "simple string with length prefix",
+			// Length: 5 (0x05000000 in little-endian), Content: "Hello"
+			rawBytes: []byte{0x05, 0x00, 0x00, 0x00, 'H', 'e', 'l', 'l', 'o'},
+			expected: "Hello",
+		},
+		{
+			name: "longer string with length prefix",
+			// Length: 13, Content: "Hello, world!"
+			rawBytes: []byte{0x0d, 0x00, 0x00, 0x00, 'H', 'e', 'l', 'l', 'o', ',', ' ', 'w', 'o', 'r', 'l', 'd', '!'},
+			expected: "Hello, world!",
+		},
+		{
+			name: "empty string with zero length",
+			// Length: 0
+			rawBytes: []byte{0x00, 0x00, 0x00, 0x00},
+			expected: "",
+		},
+		{
+			name: "real TRT-LLM response example",
+			// This mimics the corrupted output: length byte 'b' (98) followed by content
+			// Length: 98 (0x62), but we only have partial content after
+			rawBytes: []byte{0x62, 0x00, 0x00, 0x00, 'H', 'e', 'l', 'l', 'o', '!'},
+			// Should extract only the available 6 bytes after prefix
+			expected: "Hello!",
+		},
+		{
+			name: "multi-byte unicode with length prefix",
+			// UTF-8 "你好" = 6 bytes (e4 bd a0 e5 a5 bd)
+			rawBytes: []byte{0x06, 0x00, 0x00, 0x00, 0xe4, 0xbd, 0xa0, 0xe5, 0xa5, 0xbd},
+			expected: "你好",
+		},
+		{
+			name: "length prefix too short",
+			// Only 3 bytes - not enough for a valid length prefix
+			rawBytes: []byte{0x01, 0x02, 0x03},
+			expected: "\x01\x02\x03", // Return as-is
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parseBytesRawOutput(tt.rawBytes)
+			if result != tt.expected {
+				t.Errorf("parseBytesRawOutput() = %q, want %q", result, tt.expected)
+				t.Logf("Input bytes: % x", tt.rawBytes)
+				t.Logf("Result bytes: % x", []byte(result))
+			}
+		})
+	}
+}
+
+// TestExtractTextFromGRPCResponse_LengthPrefixedRaw tests extraction from length-prefixed raw format.
+func TestExtractTextFromGRPCResponse_LengthPrefixedRaw(t *testing.T) {
+	translator, err := NewGRPCTranslator("cl100k_base")
+	if err != nil {
+		t.Fatalf("failed to create translator: %v", err)
+	}
+
+	// Simulate a TRT-LLM response with length-prefixed raw output
+	responseText := "Hello from TensorRT-LLM!"
+	textBytes := []byte(responseText)
+	lengthPrefix := make([]byte, 4)
+	binary.LittleEndian.PutUint32(lengthPrefix, uint32(len(textBytes)))
+	rawBytes := append(lengthPrefix, textBytes...)
+
+	resp := &pb.ModelStreamInferResponse{
+		InferResponse: &pb.ModelInferResponse{
+			Outputs: []*pb.ModelInferResponse_InferOutputTensor{
+				{
+					Name:     TensorOutputTextOutput,
+					Datatype: DatatypeBYTES,
+					Shape:    []int64{1, 1},
+					// TRT-LLM doesn't use Contents for performance
+					Contents: nil,
+				},
+			},
+			// TRT-LLM puts the text in raw_output_contents with length prefix
+			RawOutputContents: [][]byte{rawBytes},
+		},
+	}
+
+	text, err := translator.ExtractTextFromGRPCResponse(resp)
+	if err != nil {
+		t.Fatalf("ExtractTextFromGRPCResponse() error = %v", err)
+	}
+
+	if text != responseText {
+		t.Errorf("ExtractTextFromGRPCResponse() = %q, want %q", text, responseText)
+		t.Logf("Raw bytes: % x", rawBytes)
+		t.Logf("Expected: %q (% x)", responseText, textBytes)
+		t.Logf("Got: %q (% x)", text, []byte(text))
 	}
 }

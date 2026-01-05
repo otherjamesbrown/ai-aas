@@ -5,6 +5,7 @@
 package triton
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -255,11 +256,55 @@ func (t *GRPCTranslator) extractTextFromOutput(
 	if resp != nil && len(resp.RawOutputContents) > outputIndex {
 		rawBytes := resp.RawOutputContents[outputIndex]
 		if len(rawBytes) > 0 {
+			// For BYTES datatype tensors, Triton's raw format uses length-prefixed strings
+			// Format: [4-byte length (little-endian)] [string bytes]
+			// This applies when output.Datatype == "BYTES" and raw_output_contents is used
+			if output.Datatype == DatatypeBYTES && len(rawBytes) >= 4 {
+				return parseBytesRawOutput(rawBytes), nil
+			}
+			// Fallback for other datatypes or invalid data
 			return string(rawBytes), nil
 		}
 	}
 
 	return "", nil
+}
+
+// parseBytesRawOutput parses a BYTES tensor from Triton's raw_output_contents format.
+//
+// Triton's raw format for BYTES tensors uses length-prefixed strings:
+// - For each string element in the tensor, the format is:
+//   [4-byte length (little-endian)] [string bytes]
+// - For a tensor with shape [1, 1] (single string), the raw bytes contain:
+//   [4 bytes: length N] [N bytes: actual string]
+//
+// This function extracts the string by:
+// 1. Reading the first 4 bytes as a little-endian uint32 (string length)
+// 2. Reading the next N bytes as the actual string content
+//
+// Example:
+//   Input: [0x05, 0x00, 0x00, 0x00, 'H', 'e', 'l', 'l', 'o']
+//   Length: 5 (from bytes 0-3)
+//   Output: "Hello"
+func parseBytesRawOutput(rawBytes []byte) string {
+	if len(rawBytes) < 4 {
+		// Not enough bytes for length prefix - return as-is (shouldn't happen)
+		return string(rawBytes)
+	}
+
+	// Read the 4-byte little-endian length prefix
+	length := binary.LittleEndian.Uint32(rawBytes[0:4])
+
+	// Validate length doesn't exceed available data
+	if int(length) > len(rawBytes)-4 {
+		// Length prefix is larger than available data
+		// This indicates corrupted data or wrong format
+		// Return the data after the length prefix as-is
+		return string(rawBytes[4:])
+	}
+
+	// Extract the string content (skip the 4-byte length prefix)
+	return string(rawBytes[4 : 4+length])
 }
 
 // createStringInput creates a string/BYTES input tensor for gRPC.
