@@ -1,6 +1,6 @@
 # Deploy to Environments - Runbook
 
-**Last Updated**: 2025-11-16  
+**Last Updated**: 2026-01-05  
 **Owner**: Platform Engineering
 
 ## Overview
@@ -160,6 +160,72 @@ argocd app list
 # Test endpoints
 curl -k https://api.dev.otherjamesbrown.com/healthz
 curl -k https://portal.dev.otherjamesbrown.com
+```
+
+### Step 8: Verify Operator Health
+
+After deploying to an environment, verify the ai-model-operator is healthy:
+
+```bash
+# Check operator pod status
+kubectl get pods -n ai-model-operator-system -l control-plane=controller-manager
+
+# Expected: 1/1 Running, 0 restarts (or low restart count)
+
+# Check for errors in operator logs
+kubectl logs -n ai-model-operator-system -l control-plane=controller-manager --tail=100 | grep -i error
+
+# Verify AIModel CRDs are being processed
+kubectl get aimodels -A
+```
+
+**Common Issues**:
+
+| Issue | Symptom | Solution |
+|-------|---------|----------|
+| CrashLoopBackOff (TLS) | Webhook certificates missing | Check cert-manager is running and webhook certs are provisioned: `kubectl get certificates -n ai-model-operator-system` |
+| CrashLoopBackOff (connection) | Admin API not reachable | Verify Admin API is deployed and service endpoint is correct: `kubectl get svc -n development admin-api-service` |
+| High restart count | Operator repeatedly crashing | Check logs for root cause: `kubectl logs -n ai-model-operator-system -l control-plane=controller-manager --previous` |
+| AIModel stuck in Pending | Operator not processing CRDs | Verify operator is running and check operator logs for reconciliation errors |
+
+**Operator Health Checklist**:
+- [ ] Operator pod is Running with 1/1 ready
+- [ ] Restart count is 0 (or low for recent deployment)
+- [ ] No ERROR level messages in recent logs
+- [ ] AIModel resources show expected status (not stuck in Pending)
+
+## Environment Config Validation Checklist
+
+Before deploying to staging or production, verify the following to prevent configuration drift and runtime errors:
+
+- [ ] All service URLs use FQDN format for cross-namespace communication
+- [ ] Port numbers match the actual service definitions
+- [ ] Required environment variables from development are present in staging/production
+- [ ] Database connection strings point to correct environment
+- [ ] External service endpoints (Redis, analytics, etc.) are accessible from target namespace
+
+### Cross-Namespace Service URL Pattern
+
+Services communicating across namespaces must use fully-qualified domain names:
+
+```
+http://{service-name}.{namespace}.svc.cluster.local:{port}
+```
+
+**Example**: `http://analytics-service-staging-analytics-service.analytics-service.svc.cluster.local:8084`
+
+### Validation Commands
+
+```bash
+# Compare environment variables between environments
+diff <(kubectl get deployment <service> -n <dev-ns> -o jsonpath='{.spec.template.spec.containers[0].env[*].name}' | tr ' ' '\n' | sort) \
+     <(kubectl get deployment <service> -n <staging-ns> -o jsonpath='{.spec.template.spec.containers[0].env[*].name}' | tr ' ' '\n' | sort)
+
+# Verify service DNS resolution from within a pod
+kubectl exec -n <namespace> <pod> -- nslookup <service-fqdn>
+
+# Check if service endpoint is reachable
+kubectl exec -n <namespace> <pod> -- curl -s <service-url>/health
 ```
 
 ## Environment-Specific Steps
