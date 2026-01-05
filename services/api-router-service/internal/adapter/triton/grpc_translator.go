@@ -5,6 +5,7 @@
 package triton
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -206,8 +207,17 @@ func (t *GRPCTranslator) TranslateFinalChunk(
 
 // ExtractTextFromGRPCResponse extracts the generated text from a Triton gRPC response.
 // This is the public API for non-streaming gRPC inference.
+//
+// Note: TensorRT-LLM ensemble models may echo the input prompt when
+// exclude_input_from_output is not configured. This method automatically
+// cleans the output by stripping any echoed prompt content.
 func (t *GRPCTranslator) ExtractTextFromGRPCResponse(resp *pb.ModelStreamInferResponse) (string, error) {
-	return t.extractTextFromGRPCResponse(resp)
+	text, err := t.extractTextFromGRPCResponse(resp)
+	if err != nil {
+		return "", err
+	}
+	// Clean TRT-LLM output that may contain echoed prompt
+	return cleanTRTLLMOutput(text), nil
 }
 
 // extractTextFromGRPCResponse extracts the generated text from a Triton gRPC response.
@@ -255,11 +265,126 @@ func (t *GRPCTranslator) extractTextFromOutput(
 	if resp != nil && len(resp.RawOutputContents) > outputIndex {
 		rawBytes := resp.RawOutputContents[outputIndex]
 		if len(rawBytes) > 0 {
+			// For BYTES datatype tensors, Triton's raw format uses length-prefixed strings
+			// Format: [4-byte length (little-endian)] [string bytes]
+			// This applies when output.Datatype == "BYTES" and raw_output_contents is used
+			if output.Datatype == DatatypeBYTES && len(rawBytes) >= 4 {
+				return parseBytesRawOutput(rawBytes), nil
+			}
+			// Fallback for other datatypes or invalid data
 			return string(rawBytes), nil
 		}
 	}
 
 	return "", nil
+}
+
+// cleanTRTLLMOutput cleans TensorRT-LLM output by stripping echoed input.
+//
+// TensorRT-LLM ensemble models return the full sequence (input + output) when
+// exclude_input_from_output is not set. After postprocessing decodes with
+// skip_special_tokens=True, the output looks like:
+//
+//	"user\n\n<user_msg>assistant\n\n<response>assistant\n\n<hallucinated>..."
+//
+// This function extracts just the actual assistant response by:
+// 1. Finding the "user\n\n" marker that is followed by "assistant\n\n" (priming point)
+// 2. Returning content after that assistant marker up to the next role marker
+// 3. Trimming trailing role markers that the model may hallucinate
+func cleanTRTLLMOutput(output string) string {
+	const userMarker = "user\n\n"
+	const assistantMarker = "assistant\n\n"
+
+	// Find the priming point: the user message that's followed by an assistant marker
+	// This handles cases where the model hallucinates additional user messages after the response
+	primingIdx := -1
+	searchStart := 0
+
+	for {
+		// Find next user marker
+		userIdx := strings.Index(output[searchStart:], userMarker)
+		if userIdx == -1 {
+			break
+		}
+		absoluteUserIdx := searchStart + userIdx
+
+		// Check if there's an assistant marker after this user marker
+		afterUser := output[absoluteUserIdx:]
+		assistantIdx := strings.Index(afterUser, assistantMarker)
+		if assistantIdx != -1 {
+			// This user message is followed by an assistant - update priming point
+			primingIdx = absoluteUserIdx + assistantIdx
+		}
+
+		// Move search forward
+		searchStart = absoluteUserIdx + len(userMarker)
+	}
+
+	// If no user marker found, look for first assistant marker
+	if primingIdx == -1 {
+		primingIdx = strings.Index(output, assistantMarker)
+	}
+
+	if primingIdx == -1 {
+		// No marker found - return as-is (maybe it's already clean)
+		return output
+	}
+
+	// Extract content after the priming marker
+	response := output[primingIdx+len(assistantMarker):]
+
+	// Check if there are additional role markers in the response (hallucinated continuations)
+	// Common patterns: "assistant\n\n", "user\n\n", "assistant" at end
+	for _, marker := range []string{"assistant\n\n", "user\n\n"} {
+		if nextIdx := strings.Index(response, marker); nextIdx != -1 {
+			// Truncate at the next role marker
+			response = response[:nextIdx]
+			break
+		}
+	}
+
+	// Trim trailing "assistant" markers (model sometimes appends role at end)
+	response = strings.TrimSuffix(response, "assistant")
+	response = strings.TrimSpace(response)
+
+	return response
+}
+
+// parseBytesRawOutput parses a BYTES tensor from Triton's raw_output_contents format.
+//
+// Triton's raw format for BYTES tensors uses length-prefixed strings:
+// - For each string element in the tensor, the format is:
+//   [4-byte length (little-endian)] [string bytes]
+// - For a tensor with shape [1, 1] (single string), the raw bytes contain:
+//   [4 bytes: length N] [N bytes: actual string]
+//
+// This function extracts the string by:
+// 1. Reading the first 4 bytes as a little-endian uint32 (string length)
+// 2. Reading the next N bytes as the actual string content
+//
+// Example:
+//   Input: [0x05, 0x00, 0x00, 0x00, 'H', 'e', 'l', 'l', 'o']
+//   Length: 5 (from bytes 0-3)
+//   Output: "Hello"
+func parseBytesRawOutput(rawBytes []byte) string {
+	if len(rawBytes) < 4 {
+		// Not enough bytes for length prefix - return as-is (shouldn't happen)
+		return string(rawBytes)
+	}
+
+	// Read the 4-byte little-endian length prefix
+	length := binary.LittleEndian.Uint32(rawBytes[0:4])
+
+	// Validate length doesn't exceed available data
+	if int(length) > len(rawBytes)-4 {
+		// Length prefix is larger than available data
+		// This indicates corrupted data or wrong format
+		// Return the data after the length prefix as-is
+		return string(rawBytes[4:])
+	}
+
+	// Extract the string content (skip the 4-byte length prefix)
+	return string(rawBytes[4 : 4+length])
 }
 
 // createStringInput creates a string/BYTES input tensor for gRPC.

@@ -109,6 +109,11 @@ func (in *AIModelSpec) DeepCopyInto(out *AIModelSpec) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.HFTokenSecretRef != nil {
+		in, out := &in.HFTokenSecretRef, &out.HFTokenSecretRef
+		*out = new(v1.SecretKeySelector)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.RecipeRef != nil {
 		in, out := &in.RecipeRef, &out.RecipeRef
 		*out = new(RecipeReference)

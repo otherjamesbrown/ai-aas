@@ -126,6 +126,12 @@ type AIModelSpec struct {
 	// +optional
 	TrustRemoteCode bool `json:"trustRemoteCode"`
 
+	// HFTokenSecretRef references a Kubernetes secret containing a HuggingFace API token.
+	// Required for accessing gated models (e.g., meta-llama/Llama-3.1-8B-Instruct) when using TrustRemoteCode.
+	// The token is injected as the HF_TOKEN environment variable in the predictor container.
+	// +optional
+	HFTokenSecretRef *corev1.SecretKeySelector `json:"hfTokenSecretRef,omitempty"`
+
 	// RecipeRef references a ModelRecipe to use as the base configuration
 	// +optional
 	RecipeRef *RecipeReference `json:"recipeRef,omitempty"`

@@ -107,6 +107,13 @@ spec:
               value: {{ .Values.rateLimit.defaultRPS | toString | quote }}
             - name: RATE_LIMIT_BURST_SIZE
               value: {{ .Values.rateLimit.burstSize | toString | quote }}
+            # Token quota (0 disables quota enforcement)
+            - name: RATE_LIMIT_TOKENS_HOURLY
+              value: {{ .Values.rateLimit.tokensHourly | default 0 | int | quote }}
+            - name: RATE_LIMIT_TOKENS_DAILY
+              value: {{ .Values.rateLimit.tokensDaily | default 0 | int | quote }}
+            - name: RATE_LIMIT_TOKENS_WEEKLY
+              value: {{ .Values.rateLimit.tokensWeekly | default 0 | int | quote }}
             # Budget service
             {{- if .Values.budget.endpoint }}
             - name: BUDGET_SERVICE_ENDPOINT
