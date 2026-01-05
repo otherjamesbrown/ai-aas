@@ -7,7 +7,7 @@ image:
   repository: ghcr.io/otherjamesbrown/ai-aas/admin-api-service
   # Using 'dev' tag to match CI build output for develop branch.
   # Staging uses 'staging' tag, production uses 'latest' tag.
-  tag: "sha-d66e0d7"
+  tag: "sha-80f4d71"
   pullPolicy: Always
 env:
   - name: PORT
