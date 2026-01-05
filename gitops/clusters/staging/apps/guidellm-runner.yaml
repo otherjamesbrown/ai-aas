@@ -12,7 +12,7 @@ spec:
   project: platform-staging
   source:
     repoURL: https://github.com/otherjamesbrown/guidellm-runner
-    targetRevision: staging
+    targetRevision: master
     path: deployments/helm/guidellm-runner
     helm:
       valueFiles:
