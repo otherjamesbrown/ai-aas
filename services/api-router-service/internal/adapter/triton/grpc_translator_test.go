@@ -593,6 +593,75 @@ func TestParseBytesRawOutput(t *testing.T) {
 	}
 }
 
+// TestCleanTRTLLMOutput tests cleaning of TRT-LLM output that echoes input prompts.
+func TestCleanTRTLLMOutput(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "simple echoed prompt",
+			input:    "user\n\nWhat is 2+2?assistant\n\n2 + 2 = 4",
+			expected: "2 + 2 = 4",
+		},
+		{
+			name:     "echoed prompt with trailing assistant marker",
+			input:    "user\n\nWhat is 2+2?assistant\n\n2 + 2 = 4assistant",
+			expected: "2 + 2 = 4",
+		},
+		{
+			name:     "echoed prompt with hallucinated continuation",
+			input:    "user\n\nWhat is 2+2?assistant\n\n2 + 2 = 4assistant\n\nWould you like more?",
+			expected: "2 + 2 = 4",
+		},
+		{
+			name:     "echoed prompt with user continuation hallucinated",
+			input:    "user\n\nWhat is 2+2?assistant\n\n2 + 2 = 4user\n\nThanks!",
+			expected: "2 + 2 = 4",
+		},
+		{
+			name:     "clean output no markers",
+			input:    "The answer is 42.",
+			expected: "The answer is 42.",
+		},
+		{
+			name:     "already clean output after assistant marker",
+			input:    "assistant\n\nHere is the answer.",
+			expected: "Here is the answer.",
+		},
+		{
+			name:     "multi-turn conversation echo",
+			input:    "user\n\nHello!assistant\n\nHi there!user\n\nHow are you?assistant\n\nI'm doing well, thank you!",
+			expected: "I'm doing well, thank you!", // Should be the LAST assistant response
+		},
+		{
+			name:     "empty after marker",
+			input:    "user\n\nQuestion?assistant\n\n",
+			expected: "",
+		},
+		{
+			name:     "only user marker no response",
+			input:    "user\n\nQuestion?",
+			expected: "user\n\nQuestion?",
+		},
+		{
+			name:     "system prompt included",
+			input:    "system\n\nYou are helpful.user\n\nHello!assistant\n\nHi, how can I help?",
+			expected: "Hi, how can I help?",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := cleanTRTLLMOutput(tt.input)
+			if result != tt.expected {
+				t.Errorf("cleanTRTLLMOutput(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
 // TestExtractTextFromGRPCResponse_LengthPrefixedRaw tests extraction from length-prefixed raw format.
 func TestExtractTextFromGRPCResponse_LengthPrefixedRaw(t *testing.T) {
 	translator, err := NewGRPCTranslator("cl100k_base")
