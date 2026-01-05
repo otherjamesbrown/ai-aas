@@ -76,6 +76,20 @@ jobs:
             echo "AI_AAS_API_KEY=${{ secrets.STAGING_MASTER_ADMIN_API_KEY }}" >> $GITHUB_ENV
           fi
 
+      - name: Validate secrets configuration
+        run: |
+          if [[ ! "$AI_AAS_API_KEY" =~ ^ai-aas__ ]]; then
+            echo "::error::AI_AAS_API_KEY has invalid format. Expected format: ai-aas__*"
+            if [ "${{ matrix.environment }}" = "development" ]; then
+              echo "::error::Please update the GitHub secret MASTER_ADMIN_API_KEY"
+            elif [ "${{ matrix.environment }}" = "staging" ]; then
+              echo "::error::Please update the GitHub secret STAGING_MASTER_ADMIN_API_KEY"
+            fi
+            echo "::error::Secret may have drifted from secrets/env/.env"
+            exit 1
+          fi
+          echo "✓ API key format validated"
+
       - name: Run UC tests
         working-directory: tests/usecases
         run: |
