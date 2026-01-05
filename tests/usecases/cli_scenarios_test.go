@@ -401,10 +401,12 @@ func TestScenario_TokenPolicyManagement(t *testing.T) {
 // 3. List existing targets
 // 4. Create a benchmark target
 // 5. Show target details
-// 6. Trigger a benchmark run
-// 7. List runs
-// 8. Show run status
-// 9. Remove the target
+// 6. Start the target
+// 7. Stop the target
+// 8. Trigger a benchmark run
+// 9. List runs
+// 10. Show run status
+// 11. Remove the target
 func TestScenario_BenchmarkWorkflow(t *testing.T) {
 	skipIfNoLiveAPI(t)
 
@@ -483,9 +485,27 @@ func TestScenario_BenchmarkWorkflow(t *testing.T) {
 		}
 	})
 
-	// Step 6: Trigger a benchmark run
+	// Step 6: Start the target
+	t.Run("6-start-target", func(t *testing.T) {
+		result := runOrgCLI("benchmark", "target", "start", targetName)
+		if result.ExitCode != 0 {
+			t.Fatalf("benchmark target start failed: %s", result.Output)
+		}
+		t.Logf("Started target: %s", targetName)
+	})
+
+	// Step 7: Stop the target
+	t.Run("7-stop-target", func(t *testing.T) {
+		result := runOrgCLI("benchmark", "target", "stop", targetName)
+		if result.ExitCode != 0 {
+			t.Fatalf("benchmark target stop failed: %s", result.Output)
+		}
+		t.Logf("Stopped target: %s", targetName)
+	})
+
+	// Step 8: Trigger a benchmark run
 	var runID string
-	t.Run("6-trigger-run", func(t *testing.T) {
+	t.Run("8-trigger-run", func(t *testing.T) {
 		result := runOrgCLI("benchmark", "run", "trigger", targetName, "--json")
 		if result.ExitCode != 0 {
 			t.Fatalf("benchmark run trigger failed: %s", result.Output)
@@ -502,8 +522,8 @@ func TestScenario_BenchmarkWorkflow(t *testing.T) {
 		}
 	})
 
-	// Step 7: List runs
-	t.Run("7-list-runs", func(t *testing.T) {
+	// Step 9: List runs
+	t.Run("9-list-runs", func(t *testing.T) {
 		result := runOrgCLI("benchmark", "run", "list", "--target", targetName)
 		if result.ExitCode != 0 {
 			t.Fatalf("benchmark run list failed: %s", result.Output)
@@ -511,8 +531,8 @@ func TestScenario_BenchmarkWorkflow(t *testing.T) {
 		t.Logf("Runs for target: %s", result.Output)
 	})
 
-	// Step 8: Show run status
-	t.Run("8-show-run", func(t *testing.T) {
+	// Step 10: Show run status
+	t.Run("10-show-run", func(t *testing.T) {
 		if runID == "" {
 			t.Skip("no run ID from trigger")
 		}
@@ -526,8 +546,8 @@ func TestScenario_BenchmarkWorkflow(t *testing.T) {
 		}
 	})
 
-	// Step 9: Remove the target
-	t.Run("9-remove-target", func(t *testing.T) {
+	// Step 11: Remove the target
+	t.Run("11-remove-target", func(t *testing.T) {
 		result := runOrgCLI("benchmark", "target", "remove", targetName, "--force")
 		if result.ExitCode != 0 {
 			t.Fatalf("benchmark target remove failed: %s", result.Output)
