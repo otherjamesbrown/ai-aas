@@ -91,6 +91,32 @@ spec:
                   with different external names (e.g., "gpt-oss-20b-unsloth" vs "gpt-oss-20b-openai").
                   Must be unique per environment.
                 type: string
+              hfTokenSecretRef:
+                description: |-
+                  HFTokenSecretRef references a Kubernetes secret containing a HuggingFace API token.
+                  Required for accessing gated models (e.g., meta-llama/Llama-3.1-8B-Instruct) when using TrustRemoteCode.
+                  The token is injected as the HF_TOKEN environment variable in the predictor container.
+                properties:
+                  key:
+                    description: The key of the secret to select from.  Must be a
+                      valid secret key.
+                    type: string
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                  optional:
+                    description: Specify whether the Secret or its key must be defined
+                    type: boolean
+                required:
+                - key
+                type: object
+                x-kubernetes-map-type: atomic
               maxReplicas:
                 default: 1
                 description: MaxReplicas is the maximum number of replicas for autoscaling.

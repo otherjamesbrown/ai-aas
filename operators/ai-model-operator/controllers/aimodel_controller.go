@@ -1324,6 +1324,16 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		},
 	)
 
+	// Add HuggingFace token if specified (required for gated models when using TrustRemoteCode)
+	if aiModel.Spec.HFTokenSecretRef != nil {
+		runtimeEnv = append(runtimeEnv, corev1.EnvVar{
+			Name: "HF_TOKEN",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: aiModel.Spec.HFTokenSecretRef,
+			},
+		})
+	}
+
 	// Build the S3 storage URI
 	storageUri := fmt.Sprintf("s3://%s/%s", aiModel.Spec.S3Bucket, aiModel.Spec.S3Key)
 
