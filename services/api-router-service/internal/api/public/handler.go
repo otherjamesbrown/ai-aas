@@ -444,7 +444,16 @@ func (h *Handler) fallbackRouting(
 
 	// Try backends in order
 	for i, backendWeight := range policy.Backends {
-		backend := h.buildBackendEndpoint(backendWeight.BackendID, policy.Model)
+		backend, err := h.buildBackendEndpoint(backendWeight.BackendID, policy.Model)
+		if err != nil {
+			h.logger.Warn("backend not configured in fallback routing",
+				zap.String("backend_id", backendWeight.BackendID),
+				zap.Int("attempt", i+1),
+				zap.Error(err),
+			)
+			continue // Try next backend
+		}
+
 		decisionType := "PRIMARY"
 		if i > 0 {
 			decisionType = "FAILOVER"
@@ -473,7 +482,8 @@ func (h *Handler) fallbackRouting(
 }
 
 // buildBackendEndpoint constructs a BackendEndpoint from a backend ID.
-func (h *Handler) buildBackendEndpoint(backendID, model string) *routing.BackendEndpoint {
+// Returns an error if the backend is not configured in registry or test overrides.
+func (h *Handler) buildBackendEndpoint(backendID, model string) (*routing.BackendEndpoint, error) {
 	var uri string
 	timeout := h.defaultTimeout
 
@@ -494,12 +504,12 @@ func (h *Handler) buildBackendEndpoint(backendID, model string) *routing.Backend
 		}
 	}
 
-	// Fallback to default (for backward compatibility)
+	// Fail fast if backend is not configured
 	if uri == "" {
-		h.logger.Warn("backend not found in registry, using default",
+		h.logger.Error("backend not configured",
 			zap.String("backend_id", backendID),
 		)
-		uri = "http://localhost:8001/v1/completions"
+		return nil, fmt.Errorf("backend %q not found in BACKEND_ENDPOINTS configuration", backendID)
 	}
 
 	return &routing.BackendEndpoint{
@@ -507,7 +517,7 @@ func (h *Handler) buildBackendEndpoint(backendID, model string) *routing.Backend
 		URI:          uri,
 		ModelVariant: model,
 		Timeout:      timeout,
-	}
+	}, nil
 }
 
 // writeError writes an error response using the error catalog.

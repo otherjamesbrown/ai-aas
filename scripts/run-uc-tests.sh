@@ -54,6 +54,24 @@ declare -A ENDPOINTS=(
     [staging]="https://user-org.staging.otherjamesbrown.com"
 )
 
+# API Router endpoints (for inference tests)
+declare -A API_ROUTER_ENDPOINTS=(
+    [development]="https://api.dev.otherjamesbrown.com"
+    [staging]="https://api.staging.otherjamesbrown.com"
+)
+
+# Admin API endpoints
+declare -A ADMIN_API_ENDPOINTS=(
+    [development]="https://admin-api.dev.otherjamesbrown.com"
+    [staging]="https://admin-api.staging.otherjamesbrown.com"
+)
+
+# Analytics endpoints
+declare -A ANALYTICS_ENDPOINTS=(
+    [development]="https://analytics.dev.otherjamesbrown.com"
+    [staging]="https://analytics.staging.otherjamesbrown.com"
+)
+
 # Print usage
 usage() {
     cat << EOF
@@ -84,6 +102,9 @@ Examples:
 Environment Variables:
     AI_AAS_API_KEY          API key (auto-loaded from secrets/env/.env)
     AI_AAS_ORG_ID           Organization ID (auto-loaded from secrets/env/.env)
+    AI_AAS_API_ROUTER_URL   API Router endpoint (auto-set based on environment)
+    AI_AAS_ADMIN_API_ENDPOINT Admin API endpoint (auto-set based on environment)
+    AI_AAS_ANALYTICS_URL    Analytics endpoint (auto-set based on environment)
     RUN_GITOPS_TESTS        Set to 1 to enable GitOps tests (set automatically with -g)
     AI_AAS_CONFIG_PATH      Path to ai-aas-config repo (default: ~/ai-aas-config)
     KUBECONFIG              Kubeconfig path (default: secrets/kubeconfigs/kubeconfig-development.yaml)
@@ -283,6 +304,9 @@ run_tests() {
     # Build environment variables
     local env_vars=(
         "AI_AAS_API_ENDPOINT=$endpoint"
+        "AI_AAS_API_ROUTER_URL=${API_ROUTER_ENDPOINTS[$ENV]}"
+        "AI_AAS_ADMIN_API_ENDPOINT=${ADMIN_API_ENDPOINTS[$ENV]}"
+        "AI_AAS_ANALYTICS_URL=${ANALYTICS_ENDPOINTS[$ENV]}"
     )
 
     if $INCLUDE_GITOPS; then

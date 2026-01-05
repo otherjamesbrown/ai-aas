@@ -1,6 +1,6 @@
 # Test Developer Context
 
-> **Inherits**: context/agents.md | **Verified**: 2026-01-01 | **Commit**: phase-4-cleanup
+> **Inherits**: context/agents.md | **Verified**: 2026-01-05 | **Commit**: d3d031af
 
 ---
 
@@ -269,6 +269,78 @@ func TestContract_ListUsers(t *testing.T) {
 ```
 
 ---
+
+## Inference Test Environment
+
+**UC Prefixes**: UC-INF-*, UC-RSL-*, UC-ANL-*
+
+Integration domain tests require additional endpoint configuration beyond basic API access.
+
+### Required Environment Variables
+
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `AI_AAS_API_ENDPOINT` | User-org service (auth, orgs) | `https://user-org.dev.otherjamesbrown.com` |
+| `AI_AAS_API_KEY` | Master admin API key | From `secrets/env/.env` |
+| `AI_AAS_API_ROUTER_URL` | Inference endpoint (chat completions) | `https://api.dev.otherjamesbrown.com` |
+| `AI_AAS_ADMIN_API_ENDPOINT` | Admin API (models, policies) | `https://admin-api.dev.otherjamesbrown.com` |
+| `AI_AAS_ANALYTICS_URL` | Analytics service | `https://analytics.dev.otherjamesbrown.com` |
+
+### Environment-Specific Values
+
+```yaml
+development:
+  API_ENDPOINT: https://user-org.dev.otherjamesbrown.com
+  API_ROUTER_URL: https://api.dev.otherjamesbrown.com
+  ADMIN_API_ENDPOINT: https://admin-api.dev.otherjamesbrown.com
+  ANALYTICS_URL: https://analytics.dev.otherjamesbrown.com
+
+staging:
+  API_ENDPOINT: https://user-org.staging.otherjamesbrown.com
+  API_ROUTER_URL: https://api.staging.otherjamesbrown.com
+  ADMIN_API_ENDPOINT: https://admin-api.staging.otherjamesbrown.com
+  ANALYTICS_URL: https://analytics.staging.otherjamesbrown.com
+```
+
+### Common Failure: Missing API Router URL
+
+**Symptom**: `dial tcp [::1]:8001: connect: connection refused`
+
+**Cause**: `AI_AAS_API_ROUTER_URL` not set. Tests fall back to localhost:8001 which is unreachable in cluster.
+
+**Fix**: Set `AI_AAS_API_ROUTER_URL` before running inference tests:
+```bash
+export AI_AAS_API_ROUTER_URL=https://api.dev.otherjamesbrown.com
+./scripts/run-uc-tests.sh -p INF
+```
+
+### Running Inference Tests
+
+```bash
+# Via run-uc-tests.sh (recommended - sets all env vars)
+./scripts/run-uc-tests.sh -p INF              # All inference tests
+./scripts/run-uc-tests.sh -u UC-INF-001       # Specific test
+
+# Manual execution (must set env vars first)
+export AI_AAS_API_ROUTER_URL=https://api.dev.otherjamesbrown.com
+export AI_AAS_ADMIN_API_ENDPOINT=https://admin-api.dev.otherjamesbrown.com
+go test -v ./... -run "TestUC_INF"
+```
+
+### Skip Helpers
+
+Tests skip gracefully when endpoints not configured:
+
+```go
+// In test file
+if getAPIRouterURL() == "" {
+    t.Skip("Skipping: AI_AAS_API_ROUTER_URL not configured")
+}
+
+if getAnalyticsServiceURL() == "" {
+    t.Skip("Analytics service not configured")
+}
+```
 
 ## Running Tests
 

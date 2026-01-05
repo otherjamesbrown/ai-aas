@@ -183,6 +183,79 @@ The testconfig loader (`shared/go/testconfig`) parses `secrets/env/.env` and:
 
 This configuration is handled by `config_test.go` init() function and runs automatically when tests are loaded.
 
+
+## Inference Tests (UC-INF-*, UC-RSL-*, UC-ANL-*)
+
+Integration domain tests require additional configuration beyond basic API access.
+
+### Additional Environment Variables
+
+| Variable | Required For | Example |
+|----------|--------------|---------|
+| `AI_AAS_API_ROUTER_URL` | UC-INF-*, UC-RSL-* | `https://api.dev.otherjamesbrown.com` |
+| `AI_AAS_ADMIN_API_ENDPOINT` | UC-INF-*, UC-RSL-* | `https://admin-api.dev.otherjamesbrown.com` |
+| `AI_AAS_ANALYTICS_URL` | UC-ANL-* | `https://analytics.dev.otherjamesbrown.com` |
+
+### Environment-Specific Endpoints
+
+| Environment | API Router | Admin API | Analytics |
+|-------------|------------|-----------|-----------|
+| Development | `https://api.dev.otherjamesbrown.com` | `https://admin-api.dev.otherjamesbrown.com` | `https://analytics.dev.otherjamesbrown.com` |
+| Staging | `https://api.staging.otherjamesbrown.com` | `https://admin-api.staging.otherjamesbrown.com` | `https://analytics.staging.otherjamesbrown.com` |
+
+### Running Inference Tests
+
+**Recommended: Use `run-uc-tests.sh`** (auto-configures all endpoints):
+
+```bash
+./scripts/run-uc-tests.sh -p INF              # All inference tests (development)
+./scripts/run-uc-tests.sh -p INF -e staging   # Against staging
+./scripts/run-uc-tests.sh -u UC-INF-001       # Specific test
+./scripts/run-uc-tests.sh -p ANL              # Analytics tests
+./scripts/run-uc-tests.sh -p RSL              # Resilience tests
+```
+
+**Manual execution** (requires setting env vars):
+
+```bash
+export AI_AAS_API_ROUTER_URL=https://api.dev.otherjamesbrown.com
+export AI_AAS_ADMIN_API_ENDPOINT=https://admin-api.dev.otherjamesbrown.com
+export AI_AAS_ANALYTICS_URL=https://analytics.dev.otherjamesbrown.com
+go test -v ./... -run "TestUC_INF"
+```
+
+### CI Configuration
+
+The GitHub workflow `.github/workflows/uc-tests.yml` validates these secrets exist before running inference tests:
+- `UC_API_ROUTER_URL_DEV` / `UC_API_ROUTER_URL_STAGING`
+- `UC_ADMIN_API_ENDPOINT_DEV` / `UC_ADMIN_API_ENDPOINT_STAGING`
+- `UC_ANALYTICS_URL_DEV` / `UC_ANALYTICS_URL_STAGING`
+
+### Troubleshooting
+
+#### Error: `dial tcp [::1]:8001: connect: connection refused`
+
+**Cause**: `AI_AAS_API_ROUTER_URL` not set. Tests fall back to localhost:8001 which is unreachable.
+
+**Fix**:
+1. Use `./scripts/run-uc-tests.sh` (recommended - auto-sets endpoints)
+2. Or manually set: `export AI_AAS_API_ROUTER_URL=https://api.dev.otherjamesbrown.com`
+
+#### Error: Tests skip with "API router URL not configured"
+
+**Cause**: Environment variable not set and testconfig couldn't determine environment.
+
+**Fix**: Explicitly set `AI_AAS_API_ROUTER_URL` or ensure you're running from the repo root.
+
+#### Error: `401 Unauthorized` on inference requests
+
+**Cause**: API key doesn't have access to the model or routing policy.
+
+**Fix**: 
+1. Use master admin API key from `secrets/env/.env`
+2. Verify model is deployed: `ai-aas-cli model deploy list -e development`
+3. Check routing policy exists for the model
+
 ## Coverage Analysis
 
 Use the coverage script to see which UCs have tests:
