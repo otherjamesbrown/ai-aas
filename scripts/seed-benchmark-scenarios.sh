@@ -7,16 +7,16 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Load master API key from secrets
+# Load master API key from secrets (development environment)
 if [ -f "$REPO_ROOT/secrets/env/.env" ]; then
-    MASTER_API_KEY=$(grep "^MASTER_ADMIN_API_KEY=" "$REPO_ROOT/secrets/env/.env" | cut -d'=' -f2)
+    MASTER_API_KEY=$(grep "^DEVELOP_MASTER_ADMIN_API_KEY=" "$REPO_ROOT/secrets/env/.env" | cut -d'=' -f2)
 else
     echo "Error: secrets/env/.env not found"
     exit 1
 fi
 
 if [ -z "$MASTER_API_KEY" ]; then
-    echo "Error: MASTER_ADMIN_API_KEY not found in secrets/env/.env"
+    echo "Error: DEVELOP_MASTER_ADMIN_API_KEY not found in secrets/env/.env"
     exit 1
 fi
 
