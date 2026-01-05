@@ -3,6 +3,7 @@ package usecases_test
 import (
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/ai-aas/shared-go/testconfig"
@@ -32,27 +33,47 @@ func setupTestConfig() {
 		return
 	}
 
+	// Detect environment from endpoint (staging vs development)
+	endpoint := os.Getenv(envAPIEndpoint)
+	isStaging := strings.Contains(endpoint, ".staging.")
+
 	// Set environment variables for CLI subprocesses
-	// UC tests use AI_AAS_API_KEY which maps to MASTER_ADMIN_API_KEY
-	if cfg.MasterAdminAPIKey != "" && os.Getenv(envAPIKey) == "" {
-		os.Setenv(envAPIKey, cfg.MasterAdminAPIKey)
+	// Use staging or development key based on detected environment
+	if os.Getenv(envAPIKey) == "" {
+		if isStaging && cfg.StagingMasterAdminAPIKey != "" {
+			os.Setenv(envAPIKey, cfg.StagingMasterAdminAPIKey)
+		} else if cfg.MasterAdminAPIKey != "" {
+			os.Setenv(envAPIKey, cfg.MasterAdminAPIKey)
+		}
 	}
 	// Also set org ID if available
-	if cfg.MasterAdminOrgID != "" && os.Getenv(envOrgID) == "" {
-		os.Setenv(envOrgID, cfg.MasterAdminOrgID)
+	if os.Getenv(envOrgID) == "" {
+		if isStaging && cfg.StagingMasterAdminOrgID != "" {
+			os.Setenv(envOrgID, cfg.StagingMasterAdminOrgID)
+		} else if cfg.MasterAdminOrgID != "" {
+			os.Setenv(envOrgID, cfg.MasterAdminOrgID)
+		}
 	}
-	// Set API endpoint for development environment
+	// Set API endpoint for development environment (default)
 	// This is required for NewTestClientFromEnv() to work
 	if os.Getenv(envAPIEndpoint) == "" {
 		os.Setenv(envAPIEndpoint, "https://user-org.dev.otherjamesbrown.com")
 	}
 	// Set Admin API endpoint for benchmark/model tests
 	if os.Getenv(envAdminAPIEndpoint) == "" {
-		os.Setenv(envAdminAPIEndpoint, "https://admin-api.dev.otherjamesbrown.com")
+		if isStaging {
+			os.Setenv(envAdminAPIEndpoint, "https://admin-api.staging.otherjamesbrown.com")
+		} else {
+			os.Setenv(envAdminAPIEndpoint, "https://admin-api.dev.otherjamesbrown.com")
+		}
 	}
 	// Set API router URL for routing tests
 	if os.Getenv(envAPIRouterURL) == "" {
-		os.Setenv(envAPIRouterURL, "https://api.dev.otherjamesbrown.com")
+		if isStaging {
+			os.Setenv(envAPIRouterURL, "https://api.staging.otherjamesbrown.com")
+		} else {
+			os.Setenv(envAPIRouterURL, "https://api.dev.otherjamesbrown.com")
+		}
 	}
 }
 

@@ -1,0 +1,48 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cloud-firewall-controller
+  namespace: argocd
+  labels:
+    app: cloud-firewall-controller
+    environment: staging
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    # CRD chart (must be installed first)
+    - repoURL: https://linode.github.io/cloud-firewall-controller
+      chart: cloud-firewall-crd
+      targetRevision: "*"
+      helm:
+        releaseName: cloud-firewall-crd
+    # Controller chart with custom values
+    - repoURL: https://linode.github.io/cloud-firewall-controller
+      chart: cloud-firewall-controller
+      targetRevision: "*"
+      helm:
+        releaseName: cloud-firewall
+        valueFiles:
+          - $values/gitops/shared/cloud-firewall-controller-values.yaml
+    # Values from git repo
+    - repoURL: https://github.com/otherjamesbrown/ai-aas
+      targetRevision: staging
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

@@ -547,3 +547,73 @@ usecases:
       - Compare runs from different organizations
       - Modify any run data
       - Show results from other organizations' runs
+
+  - id: UC-BM-008
+    title: List Benchmark Scenarios
+    interface: cli
+    status: active
+    bead: null
+
+    description: |
+      Organization admins need to view available benchmark scenarios before
+      creating targets. Scenarios are platform-defined configurations that
+      specify request patterns, token distributions, and load profiles.
+
+      This is a prerequisite for UC-BM-001 (Create Benchmark Target) as users
+      need to know valid scenario names.
+
+    actor: Organization Admin
+
+    preconditions:
+      - User has valid org admin API key
+      - Platform has configured benchmark scenarios
+
+    depends_on:
+      - UC-AUTH-001
+      - UC-KEY-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: List available scenarios
+        given: User is authenticated with org admin API key
+        when: User runs `ai-aas-org benchmark scenario list`
+        then:
+          - All available scenarios are listed
+          - Each scenario shows name, profile, rate, duration, and description
+          - Output is formatted as a table
+          - Exit code is 0
+
+      - id: AC-02
+        criterion: List scenarios as JSON
+        given: User is authenticated with org admin API key
+        when: User runs `ai-aas-org benchmark scenario list --json`
+        then:
+          - Scenarios are output as valid JSON array
+          - Each scenario includes full configuration details
+          - Exit code is 0
+
+      - id: AC-03
+        criterion: Handle empty scenario list gracefully
+        given: No benchmark scenarios are configured in the platform
+        when: User runs `ai-aas-org benchmark scenario list`
+        then:
+          - Message indicates no scenarios available
+          - Suggestion to contact platform administrator is shown
+          - Exit code is 0
+
+    in_scope:
+      - Listing all available scenarios
+      - Table and JSON output formats
+      - Displaying scenario metadata (name, description, config summary)
+      - Graceful handling of empty scenario list
+
+    out_of_scope:
+      - Creating new scenarios (admin-only via ai-aas-cli)
+      - Modifying scenarios
+      - Filtering scenarios by type
+      - Pagination for large scenario lists
+
+    must_not:
+      - Modify any scenario data
+      - Expose internal implementation details
+      - Return non-zero exit code for empty list

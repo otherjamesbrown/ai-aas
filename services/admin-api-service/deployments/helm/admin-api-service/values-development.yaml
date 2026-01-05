@@ -7,13 +7,15 @@ image:
   repository: ghcr.io/otherjamesbrown/ai-aas/admin-api-service
   # Using 'dev' tag to match CI build output for develop branch.
   # Staging uses 'staging' tag, production uses 'latest' tag.
-  tag: "sha-80f4d71"
+  tag: "sha-5ea45ae"
   pullPolicy: Always
 env:
   - name: PORT
     value: "8080"
   - name: ENVIRONMENT
     value: development
+  - name: GUIDELLM_RUNNER_URL
+    value: "http://guidellm-runner-development.development.svc.cluster.local:8080"
 secrets:
   databaseUrlSecretName: admin-api-secrets
   databaseUrlSecretKey: database-url

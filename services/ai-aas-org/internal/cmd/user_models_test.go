@@ -66,8 +66,8 @@ func TestUserModelsListCommand_Flags(t *testing.T) {
 	}
 	require.NotNil(t, listCmd)
 
-	userFlag := listCmd.Flags().Lookup("user-id")
-	assert.NotNil(t, userFlag, "user-id flag should exist")
+	userFlag := listCmd.Flags().Lookup("user")
+	assert.NotNil(t, userFlag, "user flag should exist")
 }
 
 // TestUserModelsAddCommand verifies user models add command structure
@@ -98,7 +98,7 @@ func TestUserModelsAddCommand_Flags(t *testing.T) {
 	}
 	require.NotNil(t, addCmd)
 
-	flagTests := []string{"user-id", "model"}
+	flagTests := []string{"user", "model"}
 	for _, flagName := range flagTests {
 		flag := addCmd.Flags().Lookup(flagName)
 		assert.NotNil(t, flag, "flag %q should exist", flagName)
@@ -133,7 +133,7 @@ func TestUserModelsRemoveCommand_Flags(t *testing.T) {
 	}
 	require.NotNil(t, removeCmd)
 
-	flagTests := []string{"user-id", "model"}
+	flagTests := []string{"user", "model"}
 	for _, flagName := range flagTests {
 		flag := removeCmd.Flags().Lookup(flagName)
 		assert.NotNil(t, flag, "flag %q should exist", flagName)

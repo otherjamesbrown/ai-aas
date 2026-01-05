@@ -70,9 +70,9 @@ func TestAPIKeyListCommand_Flags(t *testing.T) {
 	}
 	require.NotNil(t, listCmd)
 
-	userFlag := listCmd.Flags().Lookup("user-id")
-	assert.NotNil(t, userFlag, "user-id flag should exist")
-	assert.Equal(t, "", userFlag.DefValue, "user-id flag should default to empty string")
+	userFlag := listCmd.Flags().Lookup("user")
+	require.NotNil(t, userFlag, "user flag should exist")
+	assert.Equal(t, "", userFlag.DefValue, "user flag should default to empty string")
 }
 
 // TestAPIKeyListCommand_Examples verifies list command examples
@@ -88,7 +88,7 @@ func TestAPIKeyListCommand_Examples(t *testing.T) {
 
 	assert.Contains(t, listCmd.Long, "Examples:", "Long description should contain examples")
 	assert.Contains(t, listCmd.Long, "apikey list", "Examples should show basic list usage")
-	assert.Contains(t, listCmd.Long, "--user-id", "Examples should show user-id filter flag")
+	assert.Contains(t, listCmd.Long, "--user", "Examples should show user filter flag")
 }
 
 // TestAPIKeyCreateCommand verifies apikey create command structure
@@ -313,7 +313,7 @@ func TestAPIKeyRotateCommand_Args(t *testing.T) {
 	assert.NotNil(t, rotateCmd.Args, "Args validator should be set")
 }
 
-// TestAPIKeyListCommand_FilterFlag verifies list command user-id filter flag
+// TestAPIKeyListCommand_FilterFlag verifies list command user filter flag
 func TestAPIKeyListCommand_FilterFlag(t *testing.T) {
 	var listCmd *cobra.Command
 	for _, cmd := range apikeyCmd.Commands() {
@@ -324,11 +324,11 @@ func TestAPIKeyListCommand_FilterFlag(t *testing.T) {
 	}
 	require.NotNil(t, listCmd)
 
-	userFlag := listCmd.Flags().Lookup("user-id")
-	require.NotNil(t, userFlag, "user-id flag should exist")
+	userFlag := listCmd.Flags().Lookup("user")
+	require.NotNil(t, userFlag, "user flag should exist")
 
 	// Should be optional (default empty means show all)
-	assert.Equal(t, "", userFlag.DefValue, "user-id filter should default to empty string")
+	assert.Equal(t, "", userFlag.DefValue, "user filter should default to empty string")
 }
 
 // TestAPIKeyCommand_Aliases verifies command aliases

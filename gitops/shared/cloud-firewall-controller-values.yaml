@@ -1,0 +1,46 @@
+# Cloud Firewall Controller Helm Values
+# https://github.com/linode/cloud-firewall-controller
+#
+# Custom inbound rules added ON TOP OF the controller's default LKE rules
+# (control plane, Calico, health checks, etc.)
+#
+# IP reference: See firewall-allowed-ips.yaml
+
+firewall:
+  inbound:
+    # Home - Full access (TCP + UDP for Mosh)
+    - label: "home"
+      action: "ACCEPT"
+      protocol: "TCP"
+      ports: "1-65535"
+      addresses:
+        ipv4:
+          - "185.154.144.233/32"
+
+    - label: "home-udp"
+      action: "ACCEPT"
+      protocol: "UDP"
+      ports: "60000-61000"
+      addresses:
+        ipv4:
+          - "185.154.144.233/32"
+
+    # Office - Full TCP access
+    - label: "office"
+      action: "ACCEPT"
+      protocol: "TCP"
+      ports: "1-65535"
+      addresses:
+        ipv4:
+          - "162.120.187.19/32"
+          - "2.16.37.29/32"
+          - "2.16.37.10/32"
+
+    # Dev Box - Full TCP access
+    - label: "dev-box"
+      action: "ACCEPT"
+      protocol: "TCP"
+      ports: "1-65535"
+      addresses:
+        ipv4:
+          - "172.236.2.128/32"

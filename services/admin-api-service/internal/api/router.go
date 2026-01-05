@@ -189,7 +189,9 @@ func NewRouter(cfg *config.Config, db *repository.DB, logger *zap.Logger) http.H
 
 		benchmarkRepo := repository.NewBenchmarkRepository(db)
 		policyRepo := repository.NewPolicyRepository(db)
-		benchmarkSvc := service.NewBenchmarkService(benchmarkRepo, policyRepo, logger)
+		benchmarkSvc := service.NewBenchmarkServiceWithConfig(benchmarkRepo, policyRepo, logger, service.BenchmarkServiceConfig{
+			GuideLLMRunnerURL: cfg.GuideLLMRunnerURL,
+		})
 		benchmarkHandler := handlers.NewBenchmarkHandler(benchmarkSvc, logger)
 
 		// Scenario routes (read-only, available to all authenticated users)
