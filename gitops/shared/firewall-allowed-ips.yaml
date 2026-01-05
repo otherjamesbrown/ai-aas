@@ -1,0 +1,21 @@
+# Firewall Allowed IP Addresses
+# These IPs are allowed inbound access to LKE cluster nodes
+# Used by: cloud-firewall-controller Helm values
+#
+# To update: Edit cloud-firewall-controller-values.yaml, commit, and sync ArgoCD
+
+home:
+  - ip: "185.154.144.233/32"
+    description: "Home"
+
+office:
+  - ip: "162.120.187.19/32"
+    description: "Office 1"
+  - ip: "2.16.37.29/32"
+    description: "Office 2"
+  - ip: "2.16.37.10/32"
+    description: "Office 3"
+
+infrastructure:
+  - ip: "172.236.2.128/32"
+    description: "Dev Box (gb-lon)"
