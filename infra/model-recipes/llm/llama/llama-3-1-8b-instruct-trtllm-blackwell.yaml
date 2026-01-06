@@ -20,7 +20,7 @@ spec:
   modelID: meta-llama/Llama-3.1-8B-Instruct
   displayName: "Llama 3.1 8B Instruct (TensorRT-LLM, Blackwell)"
   description: "Meta's Llama 3.1 8B Instruct optimized with TensorRT-LLM on Triton for Blackwell GPUs (sm_120)"
-  runtime: tensorrt-llm
+  runtime: tensorrt-llm-blackwell
   image: nvcr.io/nvidia/tritonserver:25.06-trtllm-python-py3
   resources:
     gpu:
