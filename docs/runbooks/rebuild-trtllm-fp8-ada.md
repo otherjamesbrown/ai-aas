@@ -48,8 +48,9 @@ cd ~/trtllm-fp8-build
 # Set HuggingFace token
 export HF_TOKEN="hf_xxxxxxxxxxxxxxxxxxxxxxxxxx"
 
-# Pull TensorRT-LLM container for Ada (24.08)
-docker pull nvcr.io/nvidia/tritonserver:24.08-trtllm-python-py3
+# Pull TensorRT-LLM container for Ada (24.10 - required for FP8)
+# NOTE: 24.08 has transformers too old for Llama 3.1, 24.12 is broken
+docker pull nvcr.io/nvidia/tritonserver:24.10-trtllm-python-py3
 
 # Run container with GPU access
 docker run --gpus all --rm -it \
@@ -57,7 +58,7 @@ docker run --gpus all --rm -it \
   -v ~/.cache/huggingface:/root/.cache/huggingface \
   -e HF_TOKEN=$HF_TOKEN \
   --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 \
-  nvcr.io/nvidia/tritonserver:24.08-trtllm-python-py3 \
+  nvcr.io/nvidia/tritonserver:24.10-trtllm-python-py3 \
   /bin/bash
 ```
 
@@ -87,11 +88,13 @@ This script:
 2. Calibrates FP8 quantization scales
 3. Builds optimized TensorRT engine
 4. Saves engine to /workspace/engine_output
+
+NOTE: Requires setuptools (pip install setuptools) in the container
 """
 
 import os
-from tensorrt_llm import LLM, BuildConfig
-from tensorrt_llm.llmapi import QuantConfig, QuantAlgo, CalibConfig
+from tensorrt_llm.hlapi import LLM, BuildConfig, QuantConfig
+from tensorrt_llm.quantization import QuantAlgo
 
 def main():
     output_dir = "/workspace/engine_output"
@@ -103,16 +106,10 @@ def main():
     print("=" * 60)
 
     # FP8 Quantization Configuration
-    # Uses tensor-wise FP8 for weights and activations
-    quant_config = QuantConfig(quant_algo=QuantAlgo.FP8)
-
-    # Calibration Configuration
-    # Determines optimal FP8 quantization scales
-    calib_config = CalibConfig(
-        calib_batches=128,        # Number of calibration batches
-        calib_batch_size=1,       # Batch size during calibration
-        calib_max_seq_length=512, # Max sequence length for calibration
-        tokenizer_max_seq_length=2048,
+    # Uses tensor-wise FP8 for weights and KV cache
+    quant_config = QuantConfig(
+        quant_algo=QuantAlgo.FP8,
+        kv_cache_quant_algo=QuantAlgo.FP8,  # FP8 KV cache for memory efficiency
     )
 
     # Build Configuration - optimized for RTX 4000 Ada (20GB VRAM)
@@ -123,23 +120,14 @@ def main():
         max_num_tokens=4096,      # Tokens per batch
     )
 
-    # Enable performance optimizations
-    build_config.plugin_config.use_paged_context_fmha = True
-    build_config.plugin_config.multiple_profiles = True
-    build_config.plugin_config.paged_kv_cache = True
-    build_config.plugin_config.context_fmha = True
-    build_config.plugin_config.use_fp8_context_fmha = True  # FP8 flash attention
-
     print("\nConfiguration:")
-    print(f"  Quantization: FP8")
+    print(f"  Quantization: FP8 (weights + KV cache)")
     print(f"  Max Batch Size: {build_config.max_batch_size}")
     print(f"  Max Input Length: {build_config.max_input_len}")
     print(f"  Max Sequence Length: {build_config.max_seq_len}")
-    print(f"  FP8 Context FMHA: Enabled")
-    print(f"  Paged KV Cache: Enabled")
     print()
 
-    print("Building engine (this may take 15-30 minutes)...")
+    print("Building engine (this may take 5-15 minutes)...")
     print("  - Downloading model from HuggingFace")
     print("  - Calibrating FP8 scales")
     print("  - Compiling TensorRT engine")
@@ -150,7 +138,6 @@ def main():
         model="meta-llama/Llama-3.1-8B-Instruct",
         build_config=build_config,
         quant_config=quant_config,
-        calib_config=calib_config,
     )
 
     # Save the compiled engine
@@ -180,9 +167,14 @@ chmod +x /workspace/build_fp8_engine.py
 
 ```bash
 cd /workspace
+
+# Install setuptools (required for modelopt)
+pip install setuptools
+
+# Run the build
 python3 build_fp8_engine.py 2>&1 | tee build.log
 
-# Build time: ~15-30 minutes on RTX 4000 Ada
+# Build time: ~5-15 minutes on RTX 4000 Ada
 # Monitor GPU usage: watch -n 1 nvidia-smi
 ```
 
