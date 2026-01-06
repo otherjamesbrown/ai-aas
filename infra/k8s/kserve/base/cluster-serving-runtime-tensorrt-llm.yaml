@@ -3,16 +3,18 @@
 # Uses Triton server's v2 protocol for inference
 #
 # VERSION COMPATIBILITY:
-# - Triton 24.08 includes TensorRT-LLM 0.12.x
+# - Triton 24.10 includes TensorRT-LLM 0.14.x
 # - Engine files must be built with matching TRT-LLM version
 # - See: https://github.com/triton-inference-server/tensorrtllm_backend
+#
+# UPDATE 2026-01-06: Upgraded from 24.08 to 24.10 for FP8 engine support
 apiVersion: serving.kserve.io/v1alpha1
 kind: ClusterServingRuntime
 metadata:
   name: kserve-tensorrt-llm
   annotations:
-    ai.ai-aas.io/trtllm-version: "0.12.0"
-    ai.ai-aas.io/triton-version: "24.08"
+    ai.ai-aas.io/trtllm-version: "0.14.0"
+    ai.ai-aas.io/triton-version: "24.10"
 spec:
   annotations:
     prometheus.kserve.io/port: "8002"
@@ -24,7 +26,7 @@ spec:
   protocolVersions: [v2, grpc-v2]
   containers:
     - name: kserve-container
-      image: nvcr.io/nvidia/tritonserver:24.08-trtllm-python-py3
+      image: nvcr.io/nvidia/tritonserver:24.10-trtllm-python-py3
       args:
         - tritonserver
         - --model-store=/mnt/models

@@ -1,0 +1,63 @@
+# ClusterServingRuntime for TensorRT-LLM on Blackwell GPUs
+# Uses trtllm-serve for direct OpenAI-compatible API serving
+# Requires container 25.06+ for Blackwell (sm_120) support
+#
+# VERSION COMPATIBILITY:
+# - Triton 25.06 includes TensorRT-LLM 0.20.x with Blackwell support
+# - Engine files must be built on Blackwell GPU with matching container
+# - Uses trtllm-serve instead of tritonserver for high-level API engines
+apiVersion: serving.kserve.io/v1alpha1
+kind: ClusterServingRuntime
+metadata:
+  name: kserve-tensorrt-llm-blackwell
+  annotations:
+    ai.ai-aas.io/trtllm-version: "0.20.0"
+    ai.ai-aas.io/triton-version: "25.06"
+    ai.ai-aas.io/gpu-architecture: "sm_120"
+    ai.ai-aas.io/serving-mode: "trtllm-serve"
+spec:
+  annotations:
+    prometheus.kserve.io/port: "8080"
+    prometheus.kserve.io/path: /metrics
+  supportedModelFormats:
+    - name: tensorrt-llm-blackwell
+      version: "1"
+      autoSelect: true
+  protocolVersions: [v1]
+  containers:
+    - name: kserve-container
+      image: nvcr.io/nvidia/tritonserver:25.06-trtllm-python-py3
+      command: ["trtllm-serve"]
+      args:
+        - serve
+        - /mnt/models
+        - --tokenizer=/mnt/models
+        - --host=0.0.0.0
+        - --port=8080
+        - --log_level=info
+      ports:
+        - containerPort: 8080
+          name: http
+      resources:
+        requests:
+          cpu: "4"
+          memory: "24Gi"
+        limits:
+          cpu: "8"
+          memory: "48Gi"
+      livenessProbe:
+        httpGet:
+          path: /v1/models
+          port: 8080
+        initialDelaySeconds: 600
+        periodSeconds: 30
+        timeoutSeconds: 10
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /v1/models
+          port: 8080
+        initialDelaySeconds: 60
+        periodSeconds: 10
+        timeoutSeconds: 10
+        failureThreshold: 3
