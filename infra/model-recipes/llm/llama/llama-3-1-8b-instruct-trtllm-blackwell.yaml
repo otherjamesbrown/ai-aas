@@ -36,7 +36,7 @@ spec:
   runtimeArgs:
     triton:
       backend: tensorrt
-      modelRepository: "s3://ai-aas/models/llama-3.1-8b-instruct-trtllm-blackwell"
+      modelRepository: "s3://ai-aas/models/trtllm-blackwell-llama-3.1-8b-instruct"
       instanceGroup:
         - kind: KIND_GPU
           count: 1
