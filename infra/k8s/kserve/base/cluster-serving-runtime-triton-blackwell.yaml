@@ -1,0 +1,76 @@
+# ClusterServingRuntime for Triton Inference Server on Blackwell GPUs
+# Uses tritonserver with TRT-LLM backend (ensemble structure)
+# Container 25.06+ required for Blackwell (sm_120) support
+#
+# COMPARISON:
+# - kserve-tensorrt-llm-blackwell: Uses trtllm-serve (simple structure, OpenAI API)
+# - kserve-triton-blackwell: Uses tritonserver (ensemble structure, Triton v2 API)
+#
+# BENEFITS OF TRITON:
+# - Full /v1/chat/completions support (via ensemble)
+# - Dynamic batching with tunable parameters
+# - Triton v2 protocol with gRPC support
+# - Better production observability
+#
+# VERSION COMPATIBILITY:
+# - Triton 25.06 includes TensorRT-LLM 0.20.x with Blackwell support
+# - Engine files must be built on Blackwell GPU with matching container
+# - Requires Triton ensemble model repository structure
+apiVersion: serving.kserve.io/v1alpha1
+kind: ClusterServingRuntime
+metadata:
+  name: kserve-triton-blackwell
+  annotations:
+    ai.ai-aas.io/trtllm-version: "0.20.0"
+    ai.ai-aas.io/triton-version: "25.06"
+    ai.ai-aas.io/gpu-architecture: "sm_120"
+    ai.ai-aas.io/serving-mode: "triton"
+spec:
+  annotations:
+    prometheus.kserve.io/port: "8002"
+    prometheus.kserve.io/path: /metrics
+  supportedModelFormats:
+    - name: triton-blackwell
+      version: "1"
+      autoSelect: true
+  protocolVersions: [v2, grpc-v2]
+  containers:
+    - name: kserve-container
+      image: nvcr.io/nvidia/tritonserver:25.06-trtllm-python-py3
+      args:
+        - tritonserver
+        - --model-store=/mnt/models
+        - --http-port=8080
+        - --grpc-port=9000
+        - --allow-http=true
+        - --allow-grpc=true
+      ports:
+        - containerPort: 8080
+          name: http
+        - containerPort: 9000
+          name: grpc
+        - containerPort: 8002
+          name: metrics
+      resources:
+        requests:
+          cpu: "4"
+          memory: "24Gi"
+        limits:
+          cpu: "8"
+          memory: "48Gi"
+      livenessProbe:
+        httpGet:
+          path: /v2/health/live
+          port: 8080
+        initialDelaySeconds: 600
+        periodSeconds: 30
+        timeoutSeconds: 10
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /v2/health/ready
+          port: 8080
+        initialDelaySeconds: 600
+        periodSeconds: 10
+        timeoutSeconds: 10
+        failureThreshold: 3
