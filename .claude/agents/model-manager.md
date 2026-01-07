@@ -300,6 +300,22 @@ ai-aas-cli routing policy list --model <model>
 | Blackwell | RTX PRO 6000 | sm_120 | 96GB | 25.06+ | 0.20.0+ | BF16 |
 | Hopper | H100 | sm_90 | 80GB | 25.06+ | 0.20.0+ | FP8/BF16 |
 
+## Available GPU Hardware by Environment
+
+**CRITICAL**: These are the ONLY GPUs available to this platform. Do NOT reference L40S, B200, A100, or other GPU models.
+
+| Environment | GPU | Architecture | VRAM |
+|-------------|-----|--------------|------|
+| Development | RTX 4000 Ada | Ada (sm_89) | 20GB |
+| Staging | RTX 4000 Ada | Ada (sm_89) | 20GB |
+| Staging | RTX 6000 Blackwell | Blackwell (sm_120) | 96GB |
+
+**Common Mistakes to Avoid**:
+- L40S is NOT available - use "RTX 4000 Ada" for Ada architecture
+- B200 is NOT available - use "RTX 6000 Blackwell" for Blackwell architecture
+- H100 is NOT available in any environment
+- When benchmarking or reporting, always use the correct GPU names above
+
 ## Serving Mode Selection
 
 | Mode | Structure | Protocol | Best For |
