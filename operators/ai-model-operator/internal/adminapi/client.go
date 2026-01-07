@@ -149,7 +149,7 @@ func (c *Client) CreateDeployment(ctx context.Context, req CreateDeploymentReque
 		Replicas:     req.Replicas,
 		ModelType:    req.ModelType,
 	}
-	return c.request(ctx, http.MethodPost, "/v1/deployments", dto, nil)
+	return c.request(ctx, http.MethodPost, "/v1/models/deployments", dto, nil)
 }
 
 // UpdateDeploymentStatus updates a deployment's status
@@ -162,13 +162,13 @@ func (c *Client) UpdateDeploymentStatus(ctx context.Context, modelName, environm
 		Endpoint:             status.Endpoint,
 		ReplicasReady:        status.ReplicasReady,
 	}
-	path := fmt.Sprintf("/v1/deployments/%s/%s", modelName, environment)
+	path := fmt.Sprintf("/v1/models/deployments/%s/%s", modelName, environment)
 	return c.request(ctx, http.MethodPut, path, dto, nil)
 }
 
 // DeleteDeployment removes a deployment record
 func (c *Client) DeleteDeployment(ctx context.Context, modelName, environment string) error {
-	path := fmt.Sprintf("/v1/deployments/%s/%s", modelName, environment)
+	path := fmt.Sprintf("/v1/models/deployments/%s/%s", modelName, environment)
 	return c.request(ctx, http.MethodDelete, path, nil, nil)
 }
 

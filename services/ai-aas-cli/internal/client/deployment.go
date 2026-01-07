@@ -56,7 +56,7 @@ type ListOptions struct {
 
 // List returns deployments matching the given options
 func (c *DeploymentClient) List(ctx context.Context, opts ListOptions) ([]Deployment, error) {
-	path := "/v1/deployments"
+	path := "/v1/models/deployments"
 	params := make([]string, 0)
 
 	if opts.Environment != "" {
@@ -90,7 +90,7 @@ func (c *DeploymentClient) List(ctx context.Context, opts ListOptions) ([]Deploy
 // Get retrieves a deployment by model name and environment
 func (c *DeploymentClient) Get(ctx context.Context, modelName, environment string) (*Deployment, error) {
 	var deployment Deployment
-	path := fmt.Sprintf("/v1/deployments/%s/%s", modelName, environment)
+	path := fmt.Sprintf("/v1/models/deployments/%s/%s", modelName, environment)
 	if err := c.api.Get(ctx, path, &deployment); err != nil {
 		return nil, fmt.Errorf("get deployment %s/%s: %w", modelName, environment, err)
 	}

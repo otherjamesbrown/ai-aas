@@ -82,6 +82,15 @@ patterns:
     rule: Errors must be actionable
     format: "what failed: why. suggestion to fix"
     example: 'model "x" not found. Run ai-aas-cli model list to see available'
+
+  api_key_scopes:
+    reference: context/go-services-developer/agents.md#api-scope-authorization-patterns
+    key_distinction:
+      admin: "Platform-wide access (can access any org)"
+      org:admin: "Org-scoped access (can only access own org)"
+    when_creating_keys:
+      bootstrap: "Use 'admin' scope for cross-org operations"
+      tenant: "Use 'org:admin' scope for org-specific admin keys"
 ```
 
 ---

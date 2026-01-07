@@ -1,6 +1,6 @@
 # Go Services Developer Context
 
-> **Inherits**: context/agents.md | **Verified**: 2025-12-30 | **Commit**: e58c8053
+> **Inherits**: context/agents.md | **Verified**: 2025-12-14 | **Commit**: 5b8479c4
 
 ---
 
@@ -53,6 +53,16 @@ patterns:
       - Manual SQL in code (use migrations)
       - Hardcoded connection strings
 
+    postgresql_enums:
+      rule: ALWAYS cast strings when inserting into ENUM columns
+      pattern: "$1::schema.enum_type"
+      example:
+        wrong: "INSERT INTO exports (status) VALUES ($1)"
+        correct: "INSERT INTO exports (status) VALUES ($1::analytics.export_status)"
+      why: "Go strings don't auto-cast to PostgreSQL ENUMs - causes 500 errors"
+      testing: "Test against real PostgreSQL, not just mocks"
+      related: aas-4xqk
+
   deployment_contract:
     rule: Update DEPLOYMENT.md when changing
     triggers:
@@ -70,59 +80,87 @@ patterns:
       - Integration tests for API endpoints
     coverage: go test ./... -coverprofile=coverage.out
 
-  model_registration:
-    rule: Always validate model names for KServe compatibility BEFORE storing
-    validation_function: ValidateKServeName from models package
-    location: services/admin-api-service/internal/services/models/validation.go
+  auth_middleware:
+    location: "services/user-org-service/internal/httpapi/middleware/auth.go"
+    context_keys:
+      UserIDKey: "auth.user_id"
+      OrgIDKey: "auth.org_id"
+      SessionKey: "auth.session"
+    middleware:
+      RequireAuth:
+        purpose: "Validates Bearer tokens (API key or OAuth)"
+        returns_401: "Missing, invalid, or expired token"
+        extracts: "UserID, OrgID, Scopes into context"
+    usage_pattern: |
+      // In route registration:
+      router.With(middleware.RequireAuth(rt, logger)).Get("/protected", handler)
 
-    pattern: |
-      import "github.com/otherjamesbrown/ai-aas/services/admin-api-service/internal/services/models"
+      // In handler - extract authenticated user:
+      userID := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
+      orgID := r.Context().Value(middleware.OrgIDKey).(uuid.UUID)
+    auth_types:
+      api_key: "Hashed and validated against api_keys table"
+      oauth: "Fosite token validation against oauth_sessions"
+    multi_tenant:
+      rule: "Always use orgID from context for data isolation"
+      pattern: "WHERE org_id = $orgID"
 
-      // In registration validation
-      if err := models.ValidateKServeName(reg.ModelName); err != nil {
-          return fmt.Errorf("invalid model name %q: %w", reg.ModelName, err)
-      }
+model_registration_flow:
+  description: "How models flow from AIModel CRs to api-router"
+  diagram: |
+    AIModel CR (ai-aas-config repo)
+        ↓ ai-model-operator watches
+    InferenceService (KServe creates)
+        ↓ operator syncs status to Admin API
+    Admin API deployment record (database)
+        ↓ api-router queries on startup/refresh
+    Backend routing (in-memory registry)
 
-    why: |
-      - KServe requires names matching: ^[a-z]([-a-z0-9]*[a-z0-9])?$
-      - Invalid names cause deployment failures AFTER cache download
-      - Model operator sanitizes names (converts periods to hyphens), creating name mismatch
-      - Validation at registration time prevents waste and errors
+  steps:
+    1_aimodel_created:
+      trigger: "AIModel CR applied to cluster"
+      actor: "ai-model-operator"
+      action: "Creates InferenceService, syncs to Admin API"
+      files:
+        - "operators/ai-model-operator/controllers/aimodel_controller.go"
 
-    kserve_requirements:
-      - Must start with lowercase letter
-      - Can contain lowercase letters, numbers, hyphens
-      - Cannot contain: periods, underscores, uppercase letters
-      - Cannot start or end with hyphen
-      - Max length: 253 characters
+    2_deployment_synced:
+      trigger: "InferenceService becomes Ready"
+      actor: "ai-model-operator"
+      action: "POST /v1/deployments to Admin API"
+      data: "model name, endpoint URL, status, environment"
+      files:
+        - "operators/ai-model-operator/internal/adminapi/client.go"
 
-    valid_examples: ["llama-7b", "gpt-4o-mini", "meta-llama-3-8b"]
-    invalid_examples: ["model-v0.3", "Model_Name", "-hyphen-start", "has_underscore"]
+    3_router_discovers:
+      trigger: "api-router startup or refresh interval"
+      actor: "api-router ModelRegistry"
+      action: "GET /v1/deployments?status=ready from Admin API"
+      files:
+        - "services/api-router-service/internal/registry/model_registry.go"
 
-  triton_tensorrt_llm:
-    model_name: "Always use 'ensemble' as model name"
-    why: "TRT-LLM pipeline uses ensemble (preprocessing → inference → postprocessing)"
-    applies_to:
-      http: "/v2/models/ensemble/infer"
-      grpc: "ModelInferRequest.ModelName = 'ensemble'"
-    routing: "Service selection (which pod) determines which model, not model name"
-    input_tensors:
-      required: ["text_input", "max_tokens"]
-      optional: ["temperature", "top_p", "stop_words"]
-      note: "TRT-LLM ensemble rejects requests with unexpected inputs"
-    grpc_error_handling:
-      rule: "Always check ModelStreamInferResponse.ErrorMessage"
-      why: "Backend errors appear in error_message, not gRPC status"
-      symptom: "Empty completions (0 tokens) = likely error_message ignored"
-      pattern: |
-        if resp.ErrorMessage != "" {
-          return fmt.Errorf("backend error: %s", resp.ErrorMessage)
-        }
-    never:
-      - "Use policy.Model or user-facing model name for TRT-LLM"
-      - "Vary model name based on which model is being called"
-      - "Add 'stream' input tensor (streaming is via gRPC StreamInfer, not input)"
-      - "Ignore error_message field (causes silent empty responses)"
+    4_request_routed:
+      trigger: "Client request to /v1/chat/completions"
+      actor: "api-router"
+      action: "Look up model in registry, proxy to InferenceService"
+      files:
+        - "services/api-router-service/internal/api/public/openai.go"
+
+  error_scenarios:
+    model_not_found:
+      cause: "Model not in Admin API deployment records"
+      check: "GET /v1/deployments?model=<name>"
+      fix: "Verify AIModel exists and InferenceService is Ready"
+
+    stale_registry:
+      cause: "api-router hasn't refreshed since deployment"
+      check: "kubectl logs api-router | grep 'registry refresh'"
+      fix: "Wait for refresh interval or restart api-router"
+
+    endpoint_mismatch:
+      cause: "Deployment record has wrong endpoint URL"
+      check: "Compare InferenceService URL with deployment record"
+      fix: "Operator should sync - check operator logs"
 
 api_endpoints:
   admin-api-service:  # /v1 prefix
@@ -169,28 +207,12 @@ api_endpoints:
       - "POST   /routing/policies/{id}/activate"
 
   user-org-service:  # /v1 prefix
-    response_format_note: |
-      IMPORTANT: user-org-service list endpoints return raw arrays, NOT wrapper objects.
-      This differs from admin-api-service which uses {data: [...], meta: {...}}.
-      CLI clients must decode directly into []Type slices.
-      Exception: /v1/bootstrap-keys uses {keys: [...]} wrapper.
-    users:
-      - "GET    /orgs/{orgId}/users → []User (raw array)"
-      - "POST   /orgs/{orgId}/users"
-      - "GET    /orgs/{orgId}/users/{userId}"
-      - "GET    /orgs/{orgId}/users/by-email/{email}"
-      - "PATCH  /orgs/{orgId}/users/{userId}"
-      - "DELETE /orgs/{orgId}/users/{userId}"
-      - "PUT    /orgs/{orgId}/users/{userId}/roles"
     api_keys:
       - "POST   /orgs/{orgId}/api-keys"
-      - "GET    /orgs/{orgId}/api-keys → []APIKey (raw array)"
-      - "GET    /orgs/{orgId}/users/{userId}/api-keys → []APIKey (raw array)"
+      - "GET    /orgs/{orgId}/api-keys"
       - "PATCH  /orgs/{orgId}/api-keys/{id}"
       - "POST   /orgs/{orgId}/api-keys/{id}/rotate"
       - "DELETE /orgs/{orgId}/api-keys/{id}"
-    orgs:
-      - "GET    /orgs → []Organization (raw array)"
     self:
       - "POST   /organizations/me/api-keys"
       - "GET    /organizations/me/api-keys"
@@ -278,30 +300,72 @@ module_naming:
 
 ---
 
+## API Scope Authorization Patterns
+
+**CRITICAL**: Distinguish between org-scoped and platform-scoped admin keys.
+
+```yaml
+scope_types:
+  org:admin:
+    use_case: "Org-specific admin operations"
+    behavior: "Can only access resources in key's own organization"
+    example: "Org dashboard, tenant-specific management"
+
+  admin:
+    use_case: "Platform-wide admin operations"
+    behavior: "Can access ANY organization (bypasses org membership)"
+    example: "Bootstrap keys, cross-tenant tools, platform administration"
+
+  "*":
+    use_case: "Wildcard admin (same as admin)"
+    behavior: "Platform-wide access"
+
+two_layer_authorization:
+  description: "Handlers implement two authorization checks"
+  layer_1: "Middleware checks scopes (RequireAdminScope)"
+  layer_2: "Handler checks org access (requireOrgAccess)"
+  logic:
+    - "admin/* scope → bypass org membership check"
+    - "org:admin scope → require authOrgID == targetOrgID"
+```
+
+**Anti-pattern**:
+```go
+// WRONG: Bootstrap key with org-scoped admin
+// This key can only manage its own org, not perform cross-org operations
+apiKey := &APIKey{
+    Scopes: []string{"org:admin"},  // TOO RESTRICTIVE for bootstrap
+}
+
+// CORRECT: Bootstrap key with platform admin
+apiKey := &APIKey{
+    Scopes: []string{"admin"},  // Can access any org
+}
+```
+
+**Handler pattern**:
+```go
+// In handlers after RequireAdminScope middleware:
+func (h *Handler) CreateAPIKey(c echo.Context) error {
+    authOrgID := c.Get("orgID").(string)
+    targetOrgID := c.Param("orgId")
+    scopes := c.Get("scopes").([]string)
+
+    // Platform admin can access any org
+    if !hasAdminScope(scopes) && authOrgID != targetOrgID {
+        return c.JSON(403, map[string]string{"error": "forbidden"})
+    }
+    // ... proceed with operation
+}
+```
+
+Related: aas-q02h investigation
+
+---
+
 ## Anti-patterns
 
 ```go
-// WRONG: Registering models without KServe name validation
-// Models with invalid names (periods, underscores) get registered but fail at deployment
-func validateRegistration(reg *ModelRegistration) error {
-    if reg.ModelName == "" { return errors.New("model name required") }
-    // ❌ Missing: ValidateKServeName check
-    return nil
-}
-// Impact: Name mismatch between registry and InferenceService
-// - Model registered as: "model-v0.3" (contains period)
-// - InferenceService created as: "model-v0-3" (period → hyphen by sanitizer)
-// - Result: Status updates fail, routing breaks, cache wasted
-
-// CORRECT: Call ValidateKServeName before storing in registry
-func validateRegistration(reg *ModelRegistration) error {
-    if reg.ModelName == "" { return errors.New("model name required") }
-    if err := models.ValidateKServeName(reg.ModelName); err != nil {
-        return fmt.Errorf("invalid model name %q: %w", reg.ModelName, err)
-    }
-    return nil
-}
-
 // WRONG: Swallow errors
 result, _ := doSomething()
 
@@ -375,30 +439,127 @@ tiktoken.SetBpeLoader(loader.NewOfflineLoader())
 // - License validation that phones home
 // All will fail in network-isolated pods!
 
-// WRONG: Using user-facing model name for TensorRT-LLM backends
-// Triton returns "model not found" because TRT-LLM only exposes "ensemble"
-grpcReq.ModelName = policy.Model  // e.g., "meta-llama/Llama-3.1-8B-Instruct"
-httpPath := fmt.Sprintf("/v2/models/%s/infer", policy.Model)
+// WRONG: Changing field type from string to interface{} without nil-safety
+// JSON unmarshaling behavior changes: string never nil, interface{} can be nil
+type Message struct {
+    Content interface{} `json:"content"`  // Was string before multimodal
+}
 
-// CORRECT: Always use "ensemble" for TRT-LLM Triton backends
-// The pod selection (routing) determines which model, not the model name param
-grpcReq.ModelName = "ensemble"
-httpPath := "/v2/models/ensemble/infer"
-// TRT-LLM uses "ensemble" because it chains: preprocessing → inference → postprocessing
+func processContent(msg Message) string {
+    return msg.Content.(string)  // PANIC if content is nil!
+}
 
-// WRONG: Pushing code without verifying CI workflow triggered
-git add services/admin-api-service/
-git commit -m "fix: update API handler"
-git push origin develop
-# No verification step - deployment may use stale Docker image!
+// CORRECT: Normalize nil after unmarshal OR check before type assertion
+func processContent(msg Message) string {
+    if msg.Content == nil {
+        return ""
+    }
+    if s, ok := msg.Content.(string); ok {
+        return s
+    }
+    // Handle other types (array for multimodal)
+    return ""
+}
 
-// CORRECT: Verify CI workflow triggered after push
-git add services/admin-api-service/
-git commit -m "fix: update API handler"
-git push origin develop
-./scripts/ci/verify-workflow-triggered.sh develop CI
-# Or manually check:
-# gh run list --limit 1 --branch develop --workflow "CI" | grep $(git rev-parse --short HEAD)
+// BETTER: Normalize immediately after JSON unmarshal
+func normalizeMessage(msg *Message) {
+    if msg.Content == nil {
+        msg.Content = ""  // Normalize nil to empty string
+    }
+}
+
+// WHY: string fields get "" (empty string) from JSON null
+//      interface{} fields get nil from JSON null
+// Related: aas-88gl investigation (P1 bug)
+
+// WRONG: Using BackendRegistry for user-facing model lists
+// BackendRegistry is static config from BACKEND_ENDPOINTS env var
+// It shows ALL configured backends, not just deployed/enabled ones
+func (h *Handler) ListModels(c echo.Context) error {
+    backends := h.backendRegistry.List()  // Returns static config!
+    return c.JSON(200, backends)  // Exposes disabled/undeployed models
+}
+
+// CORRECT: Use ModelRegistry for user-facing model lists
+// ModelRegistry reflects actual deployment state from Admin API
+func (h *Handler) ListModels(c echo.Context) error {
+    models, err := h.modelRegistry.ListEnabled(ctx)  // Only enabled + ready
+    if err != nil {
+        return h.handleError(c, err)
+    }
+    return c.JSON(200, models)
+}
+
+// CONTEXT:
+// - BackendRegistry: Static configuration, set at startup from env vars
+// - ModelRegistry: Dynamic state from Admin API, reflects actual deployments
+// - User-facing endpoints (/v1/models) should ONLY show models users can use
+// Related: aas-e80 investigation
+
+// WRONG: Authorization denial without logging
+func RequireAdminScope(next echo.HandlerFunc) echo.HandlerFunc {
+    return func(c echo.Context) error {
+        scopes := c.Get("scopes").([]string)
+        if !hasAdminScope(scopes) {
+            return c.JSON(403, map[string]string{"error": "forbidden"})
+            // No logging! Silent failures are impossible to debug
+        }
+        return next(c)
+    }
+}
+
+// CORRECT: Log authorization denials for audit trail
+func RequireAdminScope(next echo.HandlerFunc) echo.HandlerFunc {
+    return func(c echo.Context) error {
+        scopes := c.Get("scopes").([]string)
+        orgID := c.Get("orgID")
+        keyID := c.Get("keyID")
+
+        if !hasAdminScope(scopes) {
+            log.Warn().
+                Str("keyID", keyID.(string)).
+                Str("orgID", orgID.(string)).
+                Strs("scopes", scopes).
+                Str("required", "admin").
+                Str("path", c.Path()).
+                Msg("authorization denied: insufficient scope")
+            return c.JSON(403, map[string]string{"error": "forbidden"})
+        }
+        return next(c)
+    }
+}
+
+// WHY LOGGING MATTERS:
+// - Debug E2E test failures: "did the middleware even run?"
+// - Security audit: track who tried to access what
+// - Root cause analysis: correlate with API key creation
+// Related: aas-k25w investigation
+
+// WRONG: Chi router.Route() subrouter with nested routes
+// Subrouter captures ALL requests matching prefix, preventing child routes from working
+func RegisterRoutes(router chi.Router) {
+    router.Route("/v1/orgs", func(r chi.Router) {
+        r.Post("/", handler.CreateOrg)
+        r.Get("/", handler.ListOrgs)
+        r.Get("/{orgId}", handler.GetOrg)
+    })
+    // This DELETE will return 405! Subrouter above captures /v1/orgs/*
+    router.Delete("/v1/orgs/{orgId}/users/{userId}", handler.DeleteUser)
+}
+
+// CORRECT: Register routes directly on parent router (no subrouter)
+func RegisterRoutes(router chi.Router) {
+    // Direct registration allows Chi to route to most specific match
+    router.Post("/v1/orgs", handler.CreateOrg)
+    router.Get("/v1/orgs", handler.ListOrgs)
+    router.Get("/v1/orgs/{orgId}", handler.GetOrg)
+    // Now this works! No subrouter to capture the request first
+    router.Delete("/v1/orgs/{orgId}/users/{userId}", handler.DeleteUser)
+}
+
+// RULE: Avoid router.Route() when you have nested paths registered elsewhere
+// Chi subrouters capture based on prefix, not specific path matching
+// Related: aas-fa9g investigation
 ```
 
 ---
@@ -425,11 +586,6 @@ go list -f '{{.ImportPath}}' ./...  # List all packages
 go mod tidy  # Clean up go.mod and go.sum
 go build ./...  # Ensure all packages compile
 go list -m github.com/ai-aas/shared-go  # Verify replace works
-
-# CI verification (after git push)
-./scripts/ci/verify-workflow-triggered.sh [branch] [workflow-name]
-gh run list --limit 1 --branch develop --workflow "CI" | grep $(git rev-parse --short HEAD)
-gh run watch  # Watch current workflow run
 ```
 
 ---
@@ -438,7 +594,7 @@ gh run watch  # Watch current workflow run
 
 | Service | Key Code |
 |---------|----------|
-| admin-api | `internal/api/handlers/models.go`, `internal/repository/`, `internal/services/models/validation.go` |
+| admin-api | `internal/api/handlers/models.go`, `internal/repository/` |
 | api-router | `internal/api/public/openai.go`, `internal/adapter/triton/` |
 | user-org | `internal/api/handlers/auth.go`, `internal/services/auth_service.go` |
 | analytics | `internal/api/handlers/usage.go`, `internal/aggregation/` |
@@ -462,4 +618,3 @@ Before completing work:
 - [ ] DEPLOYMENT.md updated if changed env/ports/health
 - [ ] Module path matches import paths
 - [ ] Shared module has replace directive in go.mod
-- [ ] After `git push`, verify CI workflow triggered with `./scripts/ci/verify-workflow-triggered.sh`

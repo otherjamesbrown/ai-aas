@@ -1,7 +1,7 @@
 # Build TensorRT-LLM Engine - Runbook
 
-**Last Updated**: 2026-01-06
-**Owner**: AI Platform Engineering
+**Last Updated**: 2025-12-15  
+**Owner**: AI Platform Engineering  
 **Related Spec**: [specs/029-triton-tensorrt-llm](../../specs/029-triton-tensorrt-llm/)
 
 ## Overview
@@ -14,16 +14,11 @@ TensorRT-LLM provides optimized inference kernels for NVIDIA GPUs, delivering:
 - Better GPU memory utilization
 - Faster time-to-first-token
 
-**IMPORTANT**: TensorRT engines are GPU-architecture specific. You must rebuild engines for each GPU architecture (e.g., Ada sm_89, Blackwell sm_120).
-
 ## Prerequisites
 
 ### Hardware Requirements
 
-- **GPU**: NVIDIA GPU with Compute Capability 8.0+
-  - Ada Lovelace (RTX 4090, L40S): sm_89
-  - Hopper (H100): sm_90
-  - **Blackwell (RTX 6000 Blackwell)**: sm_120 - requires container 25.06+
+- **GPU**: NVIDIA GPU with Compute Capability 8.0+ (A100, H100, L40S, RTX 4090)
   - Minimum 24GB VRAM for Llama 3.1 8B
   - Minimum 48GB VRAM for larger models (13B+)
 - **CPU**: 8+ cores recommended
@@ -32,22 +27,12 @@ TensorRT-LLM provides optimized inference kernels for NVIDIA GPUs, delivering:
 
 ### Software Requirements
 
-- **Operating System**: Ubuntu 22.04 or 24.04 LTS
-- **CUDA**: 12.4 or later (13.0 for Blackwell)
+- **Operating System**: Ubuntu 22.04 LTS (recommended)
+- **CUDA**: 12.2 or later
 - **cuDNN**: 8.9.x or later
-- **Docker**: 24.0+ with NVIDIA Container Toolkit
-- **Python**: 3.10+
-- **TensorRT-LLM**: 0.20.0+ (via NGC container)
-
-### Container Version by GPU Architecture
-
-| GPU Architecture | Compute Capability | Minimum Container | Recommended |
-|------------------|-------------------|-------------------|-------------|
-| Ada Lovelace | sm_89 | 24.04 | 24.08 |
-| Hopper | sm_90 | 24.04 | 24.08 |
-| **Blackwell** | sm_120 | **25.06** | **25.06+** |
-
-**Note**: Containers before 25.06 will show "Blackwell not supported" warnings and fail to build engines.
+- **Docker**: 24.0+ (optional, for containerized builds)
+- **Python**: 3.10
+- **TensorRT-LLM**: 0.8.0 (via NGC container or pip)
 
 ### Access Requirements
 
@@ -78,28 +63,22 @@ nvidia-smi --query-gpu=compute_cap --format=csv
 
 ```bash
 # Pull the official TensorRT-LLM container
-# For Ada/Hopper:
-docker pull nvcr.io/nvidia/tritonserver:24.08-trtllm-python-py3
-
-# For Blackwell (REQUIRED - older containers don't support sm_120):
-docker pull nvcr.io/nvidia/tritonserver:25.06-trtllm-python-py3
+docker pull nvcr.io/nvidia/tritonserver:24.04-trtllm-python-py3
 
 # Create workspace directory
 mkdir -p ~/tensorrt-llm-workspace
 cd ~/tensorrt-llm-workspace
 
-# Run container with GPU access (use appropriate tag for your GPU)
-# For Blackwell:
+# Run container with GPU access
 docker run --gpus all --rm -it \
   -v $(pwd):/workspace \
   -v ~/.cache/huggingface:/root/.cache/huggingface \
   --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 \
-  nvcr.io/nvidia/tritonserver:25.06-trtllm-python-py3 \
+  nvcr.io/nvidia/tritonserver:24.04-trtllm-python-py3 \
   /bin/bash
 
 # Inside container, verify TensorRT-LLM installation
 python3 -c "import tensorrt_llm; print(tensorrt_llm.__version__)"
-# Expected: 0.20.0 or later for 25.06 container
 ```
 
 ### Option B: Native Installation
@@ -119,117 +98,31 @@ python3 -c "import tensorrt_llm; print(tensorrt_llm.__version__)"
 
 This section uses **Llama 3.1 8B Instruct** as a complete example.
 
-### API Version Note
-
-**TRT-LLM 0.20.0+ (container 25.06+)** uses a new high-level Python API. The old `convert_checkpoint.py` + `trtllm-build` workflow is deprecated. This runbook documents the new API.
-
-### Step 1: Set Up HuggingFace Authentication
+### Step 1: Download HuggingFace Checkpoint
 
 ```bash
-# Set HuggingFace token (required for gated models like Llama)
+# Set HuggingFace token
 export HF_TOKEN="hf_xxxxxxxxxxxxxxxxxxxxxxxxxx"
 
-# Login to HuggingFace
+# Create workspace
+mkdir -p /workspace/llama-3.1-8b
+cd /workspace/llama-3.1-8b
+
+# Download model from HuggingFace
 huggingface-cli login --token $HF_TOKEN
-```
-
-### Step 2: Build and Save TensorRT Engine (New API)
-
-Create a build script inside the container:
-
-```bash
-cat > /workspace/build_engine.py << 'EOF'
-from tensorrt_llm import LLM, SamplingParams, BuildConfig
-import os
-
-def main():
-    os.makedirs("/workspace/engine_output", exist_ok=True)
-
-    print("Building TensorRT-LLM engine...", flush=True)
-    print("This will download the model and compile for the current GPU architecture.", flush=True)
-
-    # Configure build parameters
-    bc = BuildConfig()
-    bc.max_batch_size = 64
-    bc.max_input_len = 8192
-    bc.max_seq_len = 10240  # max_input_len + max_output_len
-
-    # Build engine - uses HuggingFace model ID directly
-    # The LLM class handles checkpoint download, conversion, and engine building
-    llm = LLM(model="meta-llama/Llama-3.1-8B-Instruct", build_config=bc)
-
-    # Save the compiled engine to disk
-    print("Saving engine to /workspace/engine_output...", flush=True)
-    llm.save("/workspace/engine_output")
-
-    print("Done! Engine saved to /workspace/engine_output", flush=True)
-
-if __name__ == "__main__":
-    main()
-EOF
-```
-
-Run the build:
-
-```bash
-cd /workspace
-python3 build_engine.py
-
-# Build time: ~30 seconds on RTX 6000 Blackwell (sm_120)
-# Build time: ~10-15 minutes on A100 (sm_80)
-
-# Verify engine build
-ls -lh /workspace/engine_output/
-# Should contain:
-# - rank0.engine (~16GB for Llama 3.1 8B)
-# - config.json
-# - tokenizer.json
-# - tokenizer_config.json
-# - special_tokens_map.json
-```
-
-### Step 3: Test the Saved Engine (Optional)
-
-Verify the engine loads and runs correctly:
-
-```bash
-cat > /workspace/test_engine.py << 'EOF'
-from tensorrt_llm import LLM, SamplingParams
-
-def main():
-    print("Loading saved engine...", flush=True)
-    llm = LLM(model="/workspace/engine_output")
-
-    print("Running inference test...", flush=True)
-    prompts = ["What is the capital of France?"]
-    sampling_params = SamplingParams(temperature=0.7, max_tokens=100)
-
-    outputs = llm.generate(prompts, sampling_params)
-    for output in outputs:
-        print(f"Prompt: {output.prompt}")
-        print(f"Generated: {output.outputs[0].text}")
-
-if __name__ == "__main__":
-    main()
-EOF
-
-python3 test_engine.py
-```
-
-### Legacy Build Method (TRT-LLM < 0.16.0)
-
-<details>
-<summary>Click to expand legacy build instructions for older containers (24.04-24.08)</summary>
-
-For containers using TRT-LLM < 0.16.0, use the old checkpoint conversion workflow:
-
-```bash
-# Step 1: Download checkpoint
 huggingface-cli download meta-llama/Llama-3.1-8B-Instruct \
   --local-dir ./hf_checkpoint \
   --local-dir-use-symlinks False
 
-# Step 2: Convert checkpoint
+# Verify download
+ls -lh ./hf_checkpoint/
+# Should contain: config.json, tokenizer.json, model-*.safetensors, etc.
+```
+
+### Step 2: Convert Checkpoint to TensorRT-LLM Format
+
+```bash
+# Convert HuggingFace checkpoint to TensorRT-LLM format
 python3 /opt/tritonserver/backends/tensorrtllm/examples/llama/convert_checkpoint.py \
   --model_dir ./hf_checkpoint \
   --output_dir ./trtllm_checkpoint \
@@ -237,7 +130,24 @@ python3 /opt/tritonserver/backends/tensorrtllm/examples/llama/convert_checkpoint
   --tp_size 1 \
   --pp_size 1
 
-# Step 3: Build engine
+# Parameters explained:
+# --dtype float16        : Use FP16 precision (faster, less memory)
+# --tp_size 1            : Tensor parallelism size (1 GPU)
+# --pp_size 1            : Pipeline parallelism size (no pipelining)
+
+# For multi-GPU setups:
+# --tp_size 2            : Use 2 GPUs with tensor parallelism
+# --tp_size 4            : Use 4 GPUs with tensor parallelism
+
+# Verify conversion
+ls -lh ./trtllm_checkpoint/
+# Should contain: config.json, rank0.safetensors
+```
+
+### Step 3: Build TensorRT Engine
+
+```bash
+# Build the optimized TensorRT engine
 trtllm-build \
   --checkpoint_dir ./trtllm_checkpoint \
   --output_dir ./trtllm_engine \
@@ -252,9 +162,25 @@ trtllm-build \
   --paged_kv_cache enable \
   --use_fused_mlp \
   --multiple_profiles enable
-```
 
-</details>
+# Parameters explained:
+# --max_batch_size 64         : Maximum concurrent requests
+# --max_input_len 8192        : Maximum input tokens
+# --max_output_len 2048       : Maximum output tokens
+# --max_beam_width 1          : Greedy decoding (no beam search)
+# --remove_input_padding      : Remove padding for efficiency
+# --context_fmha              : Use Flash Attention for context phase
+# --paged_kv_cache            : Enable paged KV cache (like vLLM's PagedAttention)
+# --use_fused_mlp             : Fuse MLP operations for speed
+# --multiple_profiles         : Support variable batch sizes
+
+# Build time: ~10-15 minutes on A100
+# Engine is GPU-architecture specific - must rebuild for different GPUs!
+
+# Verify engine build
+ls -lh ./trtllm_engine/
+# Should contain: rank0.engine (large binary file, ~8-16GB)
+```
 
 ### Step 4: Create Triton Model Repository Structure
 
@@ -674,73 +600,75 @@ parameters: {
 }
 ```
 
-### Step 6: Upload to Object Storage
+### Step 6: Validate Model Repository (CRITICAL)
 
-#### Using rclone (Recommended for Linode Object Storage)
-
-**Why rclone?** AWS CLI has checksum compatibility issues with Linode Object Storage. rclone handles this correctly and supports large file uploads reliably.
+**CRITICAL**: Before uploading, validate that no hardcoded build-time paths exist in model files. Hardcoded paths cause pod crashes when deployed to different environments.
 
 ```bash
-# Install rclone
-curl https://rclone.org/install.sh | bash
+cd /workspace/llama-3.1-8b/model_repository
 
-# Configure rclone for Linode Object Storage
-mkdir -p ~/.config/rclone
-cat > ~/.config/rclone/rclone.conf << 'EOF'
-[linode]
-type = s3
-provider = Ceph
-access_key_id = YOUR_ACCESS_KEY
-secret_access_key = YOUR_SECRET_KEY
-endpoint = https://fr-par-1.linodeobjects.com
-acl = private
-EOF
+# Check for hardcoded absolute paths in config files
+echo "=== Checking for hardcoded paths ==="
+grep -r "/workspace\|/home\|/tmp\|/opt" --include="*.pbtxt" --include="*.json" --include="*.py" .
 
-# Upload engine files
-# For new high-level API output (engine_output directory):
-rclone copy /workspace/engine_output \
-  linode:ai-aas/models/llama-3.1-8b-instruct-trtllm-blackwell/ \
-  --progress
+# If any matches found, they MUST be fixed before upload!
+# Common issues:
+# - tokenizer_dir pointing to build machine path
+# - model_path using absolute paths
+# - Python scripts with hardcoded imports
 
-# For traditional Triton ensemble structure:
-rclone copy /workspace/model_repository \
-  linode:ai-aas/models/llama-3.1-8b-instruct-trtllm/ \
-  --progress \
-  --exclude "*.pyc" \
-  --exclude "__pycache__/**"
+# Validate tokenizer paths in config.pbtxt files
+echo "=== Checking tokenizer_dir settings ==="
+grep -r "tokenizer_dir\|tokenizer_path" --include="*.pbtxt" .
 
-# Verify upload
-rclone ls linode:ai-aas/models/llama-3.1-8b-instruct-trtllm-blackwell/
+# The tokenizer_dir should be RELATIVE, e.g.:
+#   string_value: "${model_repository}/tensorrt_llm/1/tokenizer"
+# NOT absolute, e.g.:
+#   string_value: "/workspace/llama-3.1-8b/tokenizer"  # WRONG!
+
+# If hardcoded paths found, fix them:
+# 1. Edit config.pbtxt files to use relative paths
+# 2. Use ${model_repository} variable for Triton paths
+# 3. Re-run this validation
 ```
 
-#### Using AWS CLI (for AWS S3 or compatible services)
+**Expected output**: No matches (empty output) means validation passed.
 
-**Note**: AWS CLI may have issues with Linode Object Storage due to checksum headers. Use rclone instead for Linode.
+Related bug: aas-p8n (hardcoded paths caused pod crashes)
+
+### Step 7: Upload to S3
 
 ```bash
 # Set S3 bucket and path
 export S3_BUCKET="ai-aas-models"
 export MODEL_PATH="triton/llama-3.1-8b-instruct-trtllm"
 
-# Configure AWS CLI
+# Configure AWS CLI (if not already configured)
 aws configure
-# Enter AWS Access Key ID, Secret Access Key, and region
+# Enter:
+# - AWS Access Key ID
+# - AWS Secret Access Key
+# - Default region (e.g., us-east-1)
 
 # Upload model repository to S3
+cd /workspace/llama-3.1-8b
 aws s3 sync ./model_repository s3://${S3_BUCKET}/${MODEL_PATH}/ \
   --exclude "*.pyc" \
   --exclude "__pycache__/*"
 
 # Verify upload
 aws s3 ls s3://${S3_BUCKET}/${MODEL_PATH}/ --recursive
+
+# Expected output:
+# ensemble/config.pbtxt
+# preprocessing/1/model.py
+# preprocessing/config.pbtxt
+# postprocessing/1/model.py
+# postprocessing/config.pbtxt
+# tensorrt_llm/1/rank0.engine
+# tensorrt_llm/1/tokenizer/tokenizer.json
+# tensorrt_llm/config.pbtxt
 ```
-
-#### Storage Paths
-
-| GPU Architecture | Storage Path |
-|------------------|--------------|
-| Ada (sm_89) | `ai-aas/models/llama-3.1-8b-instruct-trtllm/` |
-| Blackwell (sm_120) | `ai-aas/models/llama-3.1-8b-instruct-trtllm-blackwell/` |
 
 ## Verification
 
@@ -886,32 +814,17 @@ dynamic_batching {
 
 ### Llama 3.1 8B Instruct
 
-#### On Ada (RTX 4090, L40S) - sm_89
 - **GPU Memory**: ~16GB VRAM (FP16), ~22GB with KV cache overhead
-- **Build Time**: 10-15 minutes
+- **Build Time**: 10-15 minutes on A100
 - **Startup Time**: 5-8 minutes to load engine
-- **Throughput**: ~2000-3000 tokens/sec
-- **Container**: 24.08-trtllm-python-py3
-
-#### On Blackwell (RTX 6000 Blackwell) - sm_120
-- **GPU Memory**: ~16GB VRAM of 96GB available
-- **Build Time**: ~30 seconds (significantly faster than Ada/Hopper)
-- **Engine Size**: ~16GB
-- **Container**: 25.06-trtllm-python-py3 (REQUIRED)
-- **Driver**: 580.x+ with CUDA 13.0
-- **Storage Path**: `ai-aas/models/llama-3.1-8b-instruct-trtllm-blackwell/`
+- **Throughput**: ~2000-3000 tokens/sec on A100
 
 ### Llama 3.1 70B Instruct
 
 - **GPU Memory**: ~140GB VRAM (requires 2x A100 80GB or 4x A100 40GB)
-- **Build Command** (new API):
-  ```python
-  bc = BuildConfig()
-  bc.max_batch_size = 32
-  # For tensor parallelism, set tp_size in LLM constructor
-  llm = LLM(model="meta-llama/Llama-3.1-70B-Instruct",
-            build_config=bc,
-            tensor_parallel_size=2)
+- **Build Command**:
+  ```bash
+  trtllm-build --tp_size 2 --max_batch_size 32 ...  # For 2 GPUs
   ```
 - **Build Time**: 30-45 minutes
 - **Startup Time**: 15-20 minutes
@@ -932,27 +845,7 @@ dynamic_batching {
 
 ## Appendix: Quick Reference
 
-### Build Script Template (TRT-LLM 0.20.0+)
-
-```python
-from tensorrt_llm import LLM, SamplingParams, BuildConfig
-import os
-
-def main():
-    os.makedirs("/workspace/engine_output", exist_ok=True)
-    bc = BuildConfig()
-    bc.max_batch_size = 64
-    bc.max_input_len = 8192
-    bc.max_seq_len = 10240
-
-    llm = LLM(model="<MODEL_ID>", build_config=bc)
-    llm.save("/workspace/engine_output")
-
-if __name__ == "__main__":
-    main()
-```
-
-### Legacy Build Command (TRT-LLM < 0.16.0)
+### Build Command Template
 
 ```bash
 trtllm-build \
@@ -971,18 +864,7 @@ trtllm-build \
   --multiple_profiles enable
 ```
 
-### Engine Output Structure (New API)
-
-```
-engine_output/
-├── config.json               # Engine configuration
-├── rank0.engine              # TensorRT engine (~16GB)
-├── tokenizer.json            # Tokenizer
-├── tokenizer_config.json     # Tokenizer config
-└── special_tokens_map.json   # Special tokens
-```
-
-### Triton Ensemble Structure (Legacy)
+### Directory Structure Template
 
 ```
 model_repository/
@@ -1006,38 +888,9 @@ model_repository/
     └── config.pbtxt
 ```
 
-### Upload Commands
-
-#### rclone (Recommended for Linode)
-
-```bash
-# Install
-curl https://rclone.org/install.sh | bash
-
-# Configure (~/.config/rclone/rclone.conf)
-[linode]
-type = s3
-provider = Ceph
-access_key_id = YOUR_KEY
-secret_access_key = YOUR_SECRET
-endpoint = https://fr-par-1.linodeobjects.com
-acl = private
-
-# Upload
-rclone copy /workspace/engine_output linode:ai-aas/models/<model-name>/ --progress
-```
-
-#### AWS CLI (for AWS S3)
+### S3 Upload Command
 
 ```bash
 aws s3 sync ./model_repository s3://ai-aas-models/triton/<model-name>/ \
   --exclude "*.pyc" --exclude "__pycache__/*"
 ```
-
-### Container Quick Reference
-
-| GPU | Container Tag |
-|-----|---------------|
-| Ada (sm_89) | `nvcr.io/nvidia/tritonserver:24.08-trtllm-python-py3` |
-| Hopper (sm_90) | `nvcr.io/nvidia/tritonserver:24.08-trtllm-python-py3` |
-| **Blackwell (sm_120)** | `nvcr.io/nvidia/tritonserver:25.06-trtllm-python-py3` |

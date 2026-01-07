@@ -154,13 +154,58 @@ func (r *Repository) BulkInsertUsageRecords(ctx context.Context, records []*Usag
 
 We use [goose](https://github.com/pressly/goose) v3 for database migrations.
 
-### File Structure
+### Migration Directory Structure
+
+**CRITICAL**: Database migrations MUST be placed in the correct subdirectory.
+
+The platform uses a two-database architecture:
+- **Operational database**: Core platform tables (organizations, users, models, routing, deployments, etc.)
+- **Analytics database**: Usage metrics, rollups, and reporting tables
+
+```
+db/migrations/
+├── operational/     ← Operational database migrations (MOST COMMON)
+│   └── YYYYMMDDHHMMSS_description.up.sql
+│   └── YYYYMMDDHHMMSS_description.down.sql
+└── analytics/       ← Analytics database migrations
+    └── YYYYMMDDHHMMSS_description.up.sql
+    └── YYYYMMDDHHMMSS_description.down.sql
+```
+
+### Where to Place Your Migration
+
+| Migration Creates/Modifies | Directory |
+|----------------------------|-----------|
+| Organizations, Users, API Keys | `operational/` |
+| Models, Deployments, Routing Policies | `operational/` |
+| Inference Engines, Platform Credentials | `operational/` |
+| Pull Jobs, Recipes, Audit Logs | `operational/` |
+| Usage events, rollups, aggregations | `analytics/` |
+| Export jobs, reporting tables | `analytics/` |
+
+### Anti-pattern
+
+```bash
+# ❌ WRONG - Do not create migrations in root directory
+db/migrations/20251205_001_my_migration.sql
+
+# ✅ CORRECT - Place in operational or analytics subdirectory
+db/migrations/operational/20251205_001_my_migration.up.sql
+db/migrations/operational/20251205_001_my_migration.down.sql
+```
+
+> **Note**: Some legacy migrations exist in `db/migrations/` root. New migrations MUST go in subdirectories.
+
+### File Structure (Goose v3 Split Format)
+
+We use separate `.up.sql` and `.down.sql` files:
 
 ```
 db/migrations/operational/
-├── 20251115001_core_entities.sql
-├── 20251115002_usage_events.sql
-└── 20251126001_routing_policies.sql
+├── 20251115001_core_entities.up.sql
+├── 20251115001_core_entities.down.sql
+├── 20251126001_routing_policies.up.sql
+└── 20251126001_routing_policies.down.sql
 ```
 
 ### Migration Format (Goose v3)

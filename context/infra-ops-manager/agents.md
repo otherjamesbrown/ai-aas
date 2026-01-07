@@ -66,6 +66,21 @@ patterns:
     rawdeployment: "Internal only - external returns 404, route via API Router"
     serverless: "Gets external VirtualService via Istio"
 
+  kserve_service_naming:
+    rule: ALWAYS use revision-independent service names
+    pattern: "<model>-predictor.<namespace>.svc.cluster.local:80"
+    examples:
+      rawdeployment: "unsloth-gpt-oss-20b-predictor.development.svc.cluster.local:80"
+      serverless: "mistral-7b-instruct-v03-predictor.staging.svc.cluster.local:80"
+    never:
+      - "-00001-private:8012 (revision-specific, breaks on update)"
+      - "-00002:80 (revision-specific)"
+    why:
+      - "Revision-dependent services break when KServe creates new revisions"
+      - "Revision-independent services automatically route to active revision"
+      - "Wrong service type requires manual config updates on every deployment"
+    related: aas-uh8
+
   environment_access:
     reference: docs/platform/environment-access.md
     kubeconfig: "~/kubeconfigs/kubeconfig-development.yaml"
@@ -230,74 +245,56 @@ kubectl get applications -n argocd -o json | \
 
 ---
 
-## Infrastructure Prerequisites
+## System Verification Commands
 
-**CRITICAL**: These cluster components MUST be installed before deploying services that depend on them.
+Use these commands to verify system health and debug issues:
 
-### Required Components
+```yaml
+verification:
+  inference_health:
+    description: "Verify model inference is working"
+    guidellm_runner:
+      command: "kubectl logs -n monitoring deployment/guidellm-runner --tail=50"
+      healthy_indicators:
+        - "Completed benchmark"
+        - "successful_requests"
+        - "requests_per_second"
+      unhealthy_indicators:
+        - "ConnectionError"
+        - "TimeoutError"
+        - "HTTPError 5xx"
+      frequency: "Runs every 5 minutes"
 
-| Component | Purpose | Required By |
-|-----------|---------|-------------|
-| **metrics-server** | HPA CPU/memory metrics | Any service with HPA |
-| **CSI driver** | PersistentVolumeClaims | Model cache, databases |
-| **GPU Operator** | nvidia.com/gpu resources | vLLM, TensorRT-LLM workloads |
-| **cert-manager** | TLS certificate automation | All HTTPS endpoints |
-| **Istio** | Service mesh, ingress | KServe serverless mode |
-| **KServe** | Model inference | AIModel operator |
+    direct_model_test:
+      command: |
+        curl -X POST https://api.dev.otherjamesbrown.com/v1/chat/completions \
+          -H "Authorization: Bearer $API_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{"model": "gpt-oss-20b", "messages": [{"role": "user", "content": "Hello"}], "max_tokens": 10}'
 
-### Validation Checklist
+  service_health:
+    api_router:
+      command: "kubectl logs -n development deployment/api-router-service --tail=50"
+      check: "Look for 'listening on' and no error spam"
+    admin_api:
+      command: "kubectl logs -n development deployment/admin-api-service --tail=50"
+    user_org:
+      command: "kubectl logs -n development deployment/user-org-service --tail=50"
 
-Before deploying workloads that depend on these components:
+  model_deployment:
+    list_models:
+      command: "kubectl get inferenceservices -A"
+    check_model_status:
+      command: "kubectl get aimodel -A -o wide"
+    model_pods:
+      command: "kubectl get pods -n development -l serving.kserve.io/inferenceservice"
 
-```bash
-# Check metrics-server (required for HPA)
-kubectl get apiservice v1beta1.metrics.k8s.io
-kubectl top nodes  # Should show CPU/memory, not "error: metrics not available"
-
-# Check CSI driver (required for PVCs)
-kubectl get csidrivers
-kubectl get storageclass  # Should show at least one default class
-
-# Check GPU Operator (required for GPU workloads)
-kubectl get pods -n gpu-operator-resources -l app=nvidia-device-plugin-daemonset
-kubectl describe nodes | grep "nvidia.com/gpu"  # Should show GPU capacity
-
-# Check cert-manager
-kubectl get pods -n cert-manager
-kubectl get clusterissuer  # Should show letsencrypt-prod
-
-# Check Istio
-kubectl get pods -n istio-system
-kubectl get gateway -A  # Should show istio-ingressgateway
-
-# Check KServe
-kubectl get pods -n kserve
-kubectl get clusterservingruntimes  # Should list available runtimes
+  gpu_status:
+    node_gpus:
+      command: "kubectl describe nodes | grep -A5 'nvidia.com/gpu'"
+    gpu_pods:
+      command: "kubectl get pods -A -o wide | grep -E 'nvidia|gpu'"
 ```
-
-### Failure Symptoms Without Prerequisites
-
-| Missing Component | Symptom |
-|-------------------|---------|
-| metrics-server | `HorizontalPodAutoscaler: unable to fetch metrics from resource metrics API: the server is currently unable to handle the request` |
-| CSI driver | `PersistentVolumeClaim "model-cache" pending: no persistent volumes available` |
-| GPU Operator | `Insufficient nvidia.com/gpu` even with GPU nodes |
-| cert-manager | `Certificate "tls-secret" not ready` or expired certificates |
-| Istio | `VirtualService: no matches for kind` or `503 Service Unavailable` |
-| KServe | `InferenceService: no matches for kind "InferenceService"` |
-
-### Installation Order
-
-Some components have dependencies:
-
-1. **cert-manager** (no dependencies)
-2. **Istio** (requires cert-manager for webhook certs)
-3. **KServe** (requires Istio and cert-manager)
-4. **GPU Operator** (no dependencies, but install before GPU workloads)
-5. **metrics-server** (no dependencies)
-6. **CSI driver** (cloud-provider specific)
-
-**Related**: See investigation aas-f3x for metrics-server missing symptoms.
 
 ---
 

@@ -34,6 +34,35 @@ patterns:
     commands:
       - "make generate   # Regenerate deepcopy"
       - "make manifests  # Regenerate CRD YAML"
+    workflow:
+      1: "Modify api/v1alpha1/aimodel_types.go"
+      2: "Run: make generate"
+      3: "Run: make manifests"
+      4: "Commit BOTH types.go AND generated CRD YAML"
+      5: "ArgoCD syncs CRD to cluster"
+    versioning:
+      current: "v1alpha1"
+      upgrade_path: "v1alpha1 → v1beta1 → v1"
+      when_to_bump:
+        - "Breaking schema changes"
+        - "Field type changes"
+        - "Required field additions"
+    anti_patterns:
+      - "Commit types.go without running make generate/manifests"
+      - "Modify CRD YAML directly (will be overwritten)"
+      - "Add required fields without default values (breaks existing CRs)"
+      - "Remove fields without deprecation period"
+    schema_conflict_prevention:
+      rule: "CRD schema must be backward compatible within a version"
+      safe_changes:
+        - "Add optional fields with defaults"
+        - "Add new enum values"
+        - "Increase maxLength/maxItems"
+      breaking_changes:
+        - "Remove fields"
+        - "Change field types"
+        - "Add required fields without defaults"
+        - "Rename fields"
 
   status_updates:
     rule: Status subresource requires separate call
@@ -49,6 +78,45 @@ patterns:
     rule: Never block reconciliation queue
     do: Create Job, requeue to check status
     pattern: "return ctrl.Result{RequeueAfter: 30 * time.Second}, nil"
+
+  knative_revision_management:
+    description: "How Knative creates and manages revisions for KServe"
+    triggers_new_revision:
+      - "Container spec changes (image, args, env)"
+      - "Resource limit/request changes"
+      - "Annotation changes on PodTemplateSpec"
+      - "Label changes on PodTemplateSpec"
+    does_not_trigger:
+      - "metadata.annotations on InferenceService"
+      - "Status updates"
+      - "Owner reference changes"
+    gpu_constraints:
+      problem: "Rolling update needs surge capacity (extra GPU)"
+      solutions:
+        - "Use Recreate strategy (brief downtime)"
+        - "Reserve spare GPU for updates"
+        - "Schedule updates during low-traffic periods"
+    conflict_prevention:
+      rule: "Compare specs before calling Update()"
+      methods:
+        - "semantic.DeepEqual for struct comparison"
+        - "reflect.DeepEqual for raw comparison"
+        - "Hash-based change detection"
+      pattern: |
+        existing := &kservev1.InferenceService{}
+        if err := r.Get(ctx, key, existing); err == nil {
+            if reflect.DeepEqual(existing.Spec, desired.Spec) {
+                return nil  // No update needed
+            }
+        }
+    stuck_revision_recovery:
+      symptoms:
+        - "Multiple revisions in 'Activating' state"
+        - "Old revision not scaling down"
+        - "New revision never becomes Ready"
+      commands:
+        - "kubectl get revisions -n <ns> -o wide"
+        - "kubectl delete revision <name>-predictor-00002 -n <ns>"
 
   aimodel_phases:
     - Pending: Initial state
@@ -173,59 +241,51 @@ r.Create(ctx, deployment)  // Missing ctrl.SetControllerReference()
 r.Create(ctx, inferenceService)  // Will error if exists!
 // Should: Get() first, then Create() or Update()
 
-// WRONG: Re-fetch resource immediately after status update (aas-lhx0)
-err := r.Status().Update(ctx, latestAIModel)  // Status persisted to etcd
-if err != nil { return err }
-// Re-fetch to "get latest" - but cache may be stale!
-if err := r.Get(ctx, namespacedName, aiModel); err != nil {
-    return err
+// WRONG: Unconditional status updates (causes infinite reconcile loops!)
+func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+    aiModel.Status.LastUpdated = time.Now()  // Changes every reconcile
+    r.Status().Update(ctx, aiModel)          // Triggers new reconcile!
+    // Result: Infinite loop, high API server load
 }
-// aiModel may have stale Deploying phase even though we just updated to Ready!
-if aiModel.Status.Phase != Ready {
-    return ctrl.Result{Requeue: true}, nil  // Infinite loop!
+
+// CORRECT: Only update status when changed
+if aiModel.Status.Phase != newPhase {
+    aiModel.Status.Phase = newPhase
+    aiModel.Status.LastUpdated = time.Now()
+    if err := r.Status().Update(ctx, aiModel); err != nil {
+        return ctrl.Result{}, err
+    }
 }
-// CORRECT: Sync status back to caller's object directly
-err := r.Status().Update(ctx, latestAIModel)
-if err != nil { return err }
-callerAIModel.Status = latestAIModel.Status  // No cache lag
+
+// WRONG: No retry/backoff for external API calls
+func (r *Reconciler) syncWithAdminAPI(ctx context.Context, model *v1alpha1.AIModel) error {
+    resp, err := r.adminClient.CreateDeployment(model)  // May fail transiently!
+    if err != nil {
+        return err  // Reconcile will retry immediately
+    }
+    // Result: Rapid retry storm when Admin API is down
+}
+
+// CORRECT: Use exponential backoff for external calls
+func (r *Reconciler) syncWithAdminAPI(ctx context.Context, model *v1alpha1.AIModel) error {
+    var lastErr error
+    backoff := wait.Backoff{Duration: 1 * time.Second, Factor: 2.0, Steps: 5}
+    err := wait.ExponentialBackoff(backoff, func() (bool, error) {
+        resp, err := r.adminClient.CreateDeployment(model)
+        if err != nil {
+            lastErr = err
+            return false, nil  // Retry with backoff
+        }
+        return true, nil  // Success
+    })
+    if err != nil {
+        return fmt.Errorf("failed after retries: %w", lastErr)
+    }
+    return nil
+}
+
+// Related: aas-kto2
 ```
-
-### Status Update Cache Race Condition (aas-lhx0)
-
-**CRITICAL**: Never re-fetch a resource immediately after updating its status to check the new state. The Kubernetes client cache may return stale data.
-
-**The Bug Pattern**:
-```go
-// In helper function:
-latestAIModel.Status.Phase = Ready
-r.Status().Update(ctx, latestAIModel)  // Persists to etcd
-
-// Back in caller:
-r.Get(ctx, name, aiModel)  // Gets STALE cached copy
-if aiModel.Status.Phase == Deploying {  // Still shows old phase!
-    return ctrl.Result{Requeue: true}   // Infinite requeue loop
-}
-```
-
-**Why It Happens**:
-- `r.Status().Update()` writes directly to etcd
-- `r.Get()` reads from the controller-runtime informer cache
-- Cache invalidation is asynchronous - may lag by seconds
-- Same-millisecond re-fetch almost always returns pre-update state
-
-**The Fix**:
-After `Status().Update()` succeeds, sync the updated status back to the caller's object:
-```go
-// In helper function:
-if err := r.Status().Update(ctx, latestObj); err != nil {
-    return err
-}
-// Sync back to caller's object - no cache lookup needed
-callerObj.Status = latestObj.Status
-return nil
-```
-
-**Test Coverage**: `TestAIModelReconciler_StatusSyncBackToCaller` verifies this behavior.
 
 ### Knative Serving Probe Configuration
 
@@ -337,84 +397,6 @@ kubectl get pod <predictor-pod> -n <namespace> -o yaml | grep -A 10 livenessProb
 kubectl get events -n <namespace> | grep "failed liveness probe"
 ```
 
-### Concurrent Resource Update Patterns
-
-Controllers often encounter "the object has been modified" errors when multiple reconciliations try to update the same resource simultaneously. Use these patterns to handle concurrent updates gracefully.
-
-**Pattern 1: Retry with Backoff (Recommended for most cases)**
-
-```go
-import "k8s.io/client-go/util/retry"
-
-func (r *Reconciler) updateResource(ctx context.Context, key types.NamespacedName, mutateFn func(*v1alpha1.AIModel)) error {
-    return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-        // Always fetch latest version inside retry loop
-        latest := &v1alpha1.AIModel{}
-        if err := r.Get(ctx, key, latest); err != nil {
-            return err
-        }
-
-        // Apply mutations to latest version
-        mutateFn(latest)
-
-        // Update - will fail with conflict if another reconcile beat us
-        return r.Update(ctx, latest)
-    })
-}
-
-// Usage:
-err := r.updateResource(ctx, req.NamespacedName, func(m *v1alpha1.AIModel) {
-    m.Spec.Enabled = false
-})
-```
-
-**Pattern 2: Server-Side Apply (Best for complex/partial updates)**
-
-```go
-import "sigs.k8s.io/controller-runtime/pkg/client"
-
-func (r *Reconciler) applyResourcePatch(ctx context.Context, obj client.Object) error {
-    // Server-Side Apply handles merges and conflicts automatically
-    return r.Patch(ctx, obj, client.Apply, client.FieldOwner("ai-model-operator"))
-}
-```
-
-**When to use each pattern:**
-
-| Pattern | Use When |
-|---------|----------|
-| Retry with Backoff | Simple field updates, status transitions, most common case |
-| Server-Side Apply | Multiple controllers managing different fields, complex merges |
-
-**Anti-pattern: Raw Update without retry**
-
-```go
-// WRONG: Will fail intermittently with "object modified" errors
-func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-    aiModel := &v1alpha1.AIModel{}
-    r.Get(ctx, req.NamespacedName, aiModel)
-
-    aiModel.Spec.MinReplicas = 2
-    r.Update(ctx, aiModel)  // May fail if another reconcile updated it!
-    // Result: Intermittent failures, dropped updates
-}
-
-// CORRECT: Always use retry pattern
-func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-    err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-        aiModel := &v1alpha1.AIModel{}
-        if err := r.Get(ctx, req.NamespacedName, aiModel); err != nil {
-            return err
-        }
-        aiModel.Spec.MinReplicas = 2
-        return r.Update(ctx, aiModel)
-    })
-    // ...
-}
-```
-
-**Related**: See investigation aas-kaj for root cause analysis of concurrent update failures.
-
 ---
 
 ## Commands
@@ -447,8 +429,6 @@ make docker-build docker-push IMG=ghcr.io/ai-aas/ai-model-operator:dev
 | Admin API client | `operators/ai-model-operator/internal/adminapi/client.go` |
 | AIModel examples | `infra/k8s/aimodels/development/` |
 | CRD reference | `docs/operators/ai-model-operator.md` |
-| Behavioral contract | `docs/operators/operator-behavioral-contract.md` |
-| Code patterns | `docs/operators/operator-patterns.md` |
 
 ---
 
