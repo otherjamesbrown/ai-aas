@@ -664,6 +664,270 @@ func addSpecHash(obj *unstructured.Unstructured) error {
 	return nil
 }
 
+// TritonMultiModelBuilder provides a builder for multi-model Triton deployments.
+// This creates an InferenceService that hosts multiple TRT-LLM models on a single GPU
+// using Triton's --model-control-mode=explicit and --load-model flags.
+type TritonMultiModelBuilder struct {
+	name         string
+	namespace    string
+	s3Bucket     string
+	models       []MultiModelEntry
+	resources    corev1.ResourceRequirements
+	tolerations  []corev1.Toleration
+	nodeSelector map[string]string
+	runtimeEnv   []corev1.EnvVar
+	ownerRef     *metav1.OwnerReference
+	environment  string
+	runtimeName  string // ClusterServingRuntime name (e.g., "kserve-triton-multi-model-blackwell")
+}
+
+// MultiModelEntry represents a single model in a multi-model deployment
+type MultiModelEntry struct {
+	Name           string
+	S3Key          string
+	KVCacheFraction string
+	MaxBatchSize   *int32
+}
+
+// NewTritonMultiModelBuilder creates a new builder for Triton multi-model deployments
+func NewTritonMultiModelBuilder(name, namespace string) *TritonMultiModelBuilder {
+	return &TritonMultiModelBuilder{
+		name:      name,
+		namespace: namespace,
+		// Default resources for multi-model (higher than single model)
+		resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("8"),
+				corev1.ResourceMemory: resource.MustParse("48Gi"),
+				"nvidia.com/gpu":      resource.MustParse("1"),
+			},
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("16"),
+				corev1.ResourceMemory: resource.MustParse("96Gi"),
+				"nvidia.com/gpu":      resource.MustParse("1"),
+			},
+		},
+		tolerations: []corev1.Toleration{
+			{
+				Key:      "gpu-workload",
+				Operator: corev1.TolerationOpEqual,
+				Value:    "true",
+				Effect:   corev1.TaintEffectNoSchedule,
+			},
+			{
+				Key:      "nvidia.com/gpu",
+				Operator: corev1.TolerationOpExists,
+				Effect:   corev1.TaintEffectNoSchedule,
+			},
+		},
+		environment: "development",
+		runtimeName: "kserve-triton-multi-model-blackwell", // Default runtime
+	}
+}
+
+// WithS3Bucket sets the S3 bucket for model storage
+func (b *TritonMultiModelBuilder) WithS3Bucket(bucket string) *TritonMultiModelBuilder {
+	b.s3Bucket = bucket
+	return b
+}
+
+// WithModels sets the models to deploy
+func (b *TritonMultiModelBuilder) WithModels(models []MultiModelEntry) *TritonMultiModelBuilder {
+	b.models = models
+	return b
+}
+
+// WithResources sets the resource requirements
+func (b *TritonMultiModelBuilder) WithResources(r corev1.ResourceRequirements) *TritonMultiModelBuilder {
+	b.resources = r
+	return b
+}
+
+// WithTolerations sets the pod tolerations
+func (b *TritonMultiModelBuilder) WithTolerations(t []corev1.Toleration) *TritonMultiModelBuilder {
+	b.tolerations = t
+	return b
+}
+
+// WithNodeSelector sets the node selector
+func (b *TritonMultiModelBuilder) WithNodeSelector(ns map[string]string) *TritonMultiModelBuilder {
+	b.nodeSelector = ns
+	return b
+}
+
+// WithRuntimeEnv sets the container environment variables
+func (b *TritonMultiModelBuilder) WithRuntimeEnv(env []corev1.EnvVar) *TritonMultiModelBuilder {
+	b.runtimeEnv = env
+	return b
+}
+
+// WithOwnerReference sets the owner reference for garbage collection
+func (b *TritonMultiModelBuilder) WithOwnerReference(ref *metav1.OwnerReference) *TritonMultiModelBuilder {
+	b.ownerRef = ref
+	return b
+}
+
+// WithEnvironment sets the environment label
+func (b *TritonMultiModelBuilder) WithEnvironment(env string) *TritonMultiModelBuilder {
+	b.environment = env
+	return b
+}
+
+// WithRuntimeName sets the ClusterServingRuntime name to use
+func (b *TritonMultiModelBuilder) WithRuntimeName(name string) *TritonMultiModelBuilder {
+	b.runtimeName = name
+	return b
+}
+
+// Build constructs the InferenceService for multi-model Triton deployment.
+// Uses RawDeployment mode because:
+// 1. Triton requires multiple ports (HTTP, gRPC, metrics)
+// 2. Knative Serverless only supports single port containers
+// 3. We need nodeSelector support for GPU pinning
+func (b *TritonMultiModelBuilder) Build() (*unstructured.Unstructured, error) {
+	// Validate required fields
+	if len(b.models) < 2 {
+		return nil, fmt.Errorf("at least 2 models required for multi-model deployment")
+	}
+	if b.s3Bucket == "" {
+		return nil, fmt.Errorf("s3Bucket is required for multi-model deployment")
+	}
+
+	// Build the storage URI pointing to the model repository root
+	// Each model's S3Key is relative to this bucket
+	storageUri := fmt.Sprintf("s3://%s/", b.s3Bucket)
+
+	// Build model format name - matches supportedModelFormats in ClusterServingRuntime
+	modelFormat := "triton-multi-model-blackwell"
+
+	// Build labels
+	labels := map[string]interface{}{
+		"app":         "triton-multi-model",
+		"environment": b.environment,
+		"managed-by":  "ai-model-operator",
+	}
+
+	// Build annotations
+	// RawDeployment is required for multi-port Triton
+	annotations := map[string]interface{}{
+		"serving.kserve.io/deploymentMode": "RawDeployment",
+		"ai-aas.io/probe-config-version":   probeConfigVersion,
+		"ai-aas.io/multi-model":            "true",
+	}
+
+	// Build --load-model args for each model
+	// Format: --load-model=<model-name>
+	// The model name must match the directory name in the model repository
+	args := make([]interface{}, 0, len(b.models))
+	for _, model := range b.models {
+		args = append(args, fmt.Sprintf("--load-model=%s", model.Name))
+	}
+
+	// Build environment variables
+	env := make([]interface{}, 0, len(b.runtimeEnv))
+	for _, e := range b.runtimeEnv {
+		envVar := map[string]interface{}{
+			"name": e.Name,
+		}
+		if e.Value != "" {
+			envVar["value"] = e.Value
+		}
+		if e.ValueFrom != nil {
+			envVar["valueFrom"] = convertValueFrom(e.ValueFrom)
+		}
+		env = append(env, envVar)
+	}
+
+	// Build resources
+	resources := map[string]interface{}{
+		"requests": convertResourceList(b.resources.Requests),
+		"limits":   convertResourceList(b.resources.Limits),
+	}
+
+	// Build tolerations
+	tolerations := make([]interface{}, 0, len(b.tolerations))
+	for _, t := range b.tolerations {
+		toleration := map[string]interface{}{
+			"key":      t.Key,
+			"operator": string(t.Operator),
+			"effect":   string(t.Effect),
+		}
+		if t.Value != "" {
+			toleration["value"] = t.Value
+		}
+		tolerations = append(tolerations, toleration)
+	}
+
+	// Build model spec using KServe native model serving with args
+	// The ClusterServingRuntime handles the Triton server configuration
+	model := map[string]interface{}{
+		"storageUri": storageUri,
+		"runtime":    b.runtimeName,
+		"modelFormat": map[string]interface{}{
+			"name": modelFormat,
+		},
+		"resources": resources,
+		"args":      args,
+	}
+
+	// Add environment variables if specified
+	if len(env) > 0 {
+		model["env"] = env
+	}
+
+	// Build predictor spec
+	// minReplicas=1 because multi-model deployments should stay running
+	// (scale-to-zero would require re-loading all models)
+	predictor := map[string]interface{}{
+		"minReplicas": int64(1),
+		"maxReplicas": int64(1), // No autoscaling for multi-model (single GPU)
+		"model":       model,
+	}
+
+	// Add tolerations if specified
+	if len(tolerations) > 0 {
+		predictor["tolerations"] = tolerations
+	}
+
+	// Add node selector if provided
+	if len(b.nodeSelector) > 0 {
+		nodeSelector := make(map[string]interface{})
+		for k, v := range b.nodeSelector {
+			nodeSelector[k] = v
+		}
+		predictor["nodeSelector"] = nodeSelector
+	}
+
+	// Build the unstructured object
+	obj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": InferenceServiceGVK.GroupVersion().String(),
+			"kind":       InferenceServiceGVK.Kind,
+			"metadata": map[string]interface{}{
+				"name":        b.name,
+				"namespace":   b.namespace,
+				"labels":      labels,
+				"annotations": annotations,
+			},
+			"spec": map[string]interface{}{
+				"predictor": predictor,
+			},
+		},
+	}
+
+	// Add owner reference if provided
+	if b.ownerRef != nil {
+		obj.SetOwnerReferences([]metav1.OwnerReference{*b.ownerRef})
+	}
+
+	// Compute and store spec hash for change detection
+	if err := addSpecHash(obj); err != nil {
+		return nil, fmt.Errorf("failed to compute spec hash: %w", err)
+	}
+
+	return obj, nil
+}
+
 // GetSpecHash returns the spec hash from an InferenceService's annotations.
 func GetSpecHash(obj *unstructured.Unstructured) string {
 	annotations := obj.GetAnnotations()

@@ -95,10 +95,11 @@ def main():
     print("=" * 60)
 
     # Build Configuration - optimized for Blackwell (96GB VRAM)
+    # Single-model deployment: maximize batch size for full KV cache utilization
     build_config = BuildConfig()
-    build_config.max_batch_size = 64
+    build_config.max_batch_size = 128  # 2x Ada - Blackwell has 4x VRAM headroom
     build_config.max_input_len = 8192
-    build_config.max_seq_len = 10240
+    build_config.max_seq_len = 12288   # Allow longer outputs
     build_config.max_num_tokens = 8192
 
     print("\nConfiguration:")
@@ -251,9 +252,11 @@ docker run --rm --gpus all <container> python3 -c 'import tensorrt_llm; print(te
 | Metric | Blackwell | Ada (for comparison) |
 |--------|-----------|---------------------|
 | Build Time | ~30 seconds | ~5-15 minutes |
-| Engine Size | ~15 GB (BF16) | ~8.5 GB (FP8) |
-| VRAM Available | 96 GB | 20 GB |
-| Max Batch Size | 64+ | 32 |
+| Engine Size | ~16 GB (BF16) | ~8.5 GB (FP8) |
+| VRAM Available | 96 GB | 24 GB |
+| Max Batch Size | 128 | 64 |
+| KV Cache Budget | ~75 GB | ~12 GB |
+| Concurrent Sequences | High (hundreds) | Medium (dozens) |
 
 ## References
 

@@ -707,7 +707,8 @@ func (h *Handler) handleTritonChatCompletion(
 
 	// Build Triton backend endpoint
 	backendID := policy.Backends[0].BackendID
-	tritonEndpoint := h.buildTritonEndpoint(backendID, policy.Model, policy.BackendType)
+	tritonModelName := policy.Backends[0].TritonModelName // Empty string defaults to "ensemble" in buildTritonEndpoint
+	tritonEndpoint := h.buildTritonEndpoint(backendID, policy.Model, policy.BackendType, tritonModelName)
 	if tritonEndpoint == "" {
 		h.writeError(w, r, fmt.Errorf("backend %q not configured", backendID), api.ErrCodeBackendUnavailable)
 		return
@@ -717,6 +718,7 @@ func (h *Handler) handleTritonChatCompletion(
 		zap.String("backend_id", backendID),
 		zap.String("endpoint", tritonEndpoint),
 		zap.String("model", policy.Model),
+		zap.String("triton_model_name", tritonModelName),
 		zap.String("backend_type", "triton"),
 	)
 
@@ -852,9 +854,13 @@ func (h *Handler) handleTritonChatCompletion(
 }
 
 // buildTritonEndpoint constructs the Triton V2 inference endpoint URL.
-// Format: http://{backend_host}/v2/models/{model}/infer
+// Format: http://{backend_host}/v2/models/{tritonModelName}/infer
+// The tritonModelName parameter specifies the model within Triton:
+//   - For single-model deployments, use "ensemble" (default TRT-LLM structure)
+//   - For multi-model deployments, use the specific model name (e.g., "llama-8b-ensemble")
+//
 // Returns empty string on error (caller should check).
-func (h *Handler) buildTritonEndpoint(backendID, model, backendType string) string {
+func (h *Handler) buildTritonEndpoint(backendID, model, backendType, tritonModelName string) string {
 	backend, err := h.buildBackendEndpoint(backendID, model, backendType)
 	if err != nil {
 		h.logger.Error("backend not configured for triton",
@@ -874,10 +880,13 @@ func (h *Handler) buildTritonEndpoint(backendID, model, backendType string) stri
 		return backend.URI // Fallback to original
 	}
 
-	// Build Triton V2 inference path: /v2/models/{model}/infer
-	// TRT-LLM always uses "ensemble" as the model name (standard pipeline structure)
-	// Each deployment is a separate service, so routing to the correct service handles model selection
-	parsedURI.Path = "/v2/models/ensemble/infer"
+	// Default to "ensemble" for backward compatibility with single-model TRT-LLM deployments
+	if tritonModelName == "" {
+		tritonModelName = "ensemble"
+	}
+
+	// Build Triton V2 inference path: /v2/models/{tritonModelName}/infer
+	parsedURI.Path = fmt.Sprintf("/v2/models/%s/infer", tritonModelName)
 	// Use Opaque to prevent URL parsing from re-encoding the path
 	return parsedURI.Scheme + "://" + parsedURI.Host + parsedURI.Path
 }
@@ -937,8 +946,13 @@ func (h *Handler) handleTritonNonStreamingGRPC(
 	}
 
 	// Translate OpenAI request to gRPC format
-	// TRT-LLM always uses "ensemble" as the model name (standard pipeline structure)
-	grpcReq, requestID, err := translator.TranslateOpenAIToGRPC(req, "ensemble")
+	// For multi-model Triton servers, use the model name from the routing policy
+	// For single-model deployments, default to "ensemble" (standard TRT-LLM pipeline)
+	tritonModelName := "ensemble"
+	if len(policy.Backends) > 0 && policy.Backends[0].TritonModelName != "" {
+		tritonModelName = policy.Backends[0].TritonModelName
+	}
+	grpcReq, requestID, err := translator.TranslateOpenAIToGRPC(req, tritonModelName)
 	if err != nil {
 		h.logger.Error("failed to translate request",
 			zap.Error(err),
@@ -1282,7 +1296,8 @@ func (h *Handler) handleTritonCompletion(
 
 	// Build Triton backend endpoint
 	backendID := policy.Backends[0].BackendID
-	tritonEndpoint := h.buildTritonEndpoint(backendID, policy.Model, policy.BackendType)
+	tritonModelName := policy.Backends[0].TritonModelName // Empty string defaults to "ensemble" in buildTritonEndpoint
+	tritonEndpoint := h.buildTritonEndpoint(backendID, policy.Model, policy.BackendType, tritonModelName)
 	if tritonEndpoint == "" {
 		h.writeError(w, r, fmt.Errorf("backend %q not configured", backendID), api.ErrCodeBackendUnavailable)
 		return
@@ -1292,6 +1307,7 @@ func (h *Handler) handleTritonCompletion(
 		zap.String("backend_id", backendID),
 		zap.String("endpoint", tritonEndpoint),
 		zap.String("model", policy.Model),
+		zap.String("triton_model_name", tritonModelName),
 		zap.String("backend_type", policy.BackendType),
 	)
 
