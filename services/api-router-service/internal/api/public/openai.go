@@ -193,7 +193,7 @@ func (h *Handler) HandleOpenAIChatCompletions(w http.ResponseWriter, r *http.Req
 
 	// Forward OpenAI request directly to backend's OpenAI endpoint
 	backendID := policy.Backends[0].BackendID
-	backendEndpoint, err := h.buildBackendEndpointForOpenAI(backendID, openAIReq.Model, "/v1/chat/completions")
+	backendEndpoint, err := h.buildBackendEndpointForOpenAI(backendID, openAIReq.Model, "/v1/chat/completions", policy.BackendType)
 	if err != nil {
 		h.writeError(w, r, err, api.ErrCodeBackendUnavailable)
 		return
@@ -415,7 +415,7 @@ func (h *Handler) HandleOpenAICompletions(w http.ResponseWriter, r *http.Request
 
 	// Forward OpenAI request directly to backend's OpenAI endpoint
 	backendID := policy.Backends[0].BackendID
-	backendEndpoint, err := h.buildBackendEndpointForOpenAI(backendID, openAIReq.Model, "/v1/completions")
+	backendEndpoint, err := h.buildBackendEndpointForOpenAI(backendID, openAIReq.Model, "/v1/completions", policy.BackendType)
 	if err != nil {
 		h.writeError(w, r, err, api.ErrCodeBackendUnavailable)
 		return
@@ -536,8 +536,8 @@ func (h *Handler) HandleOpenAICompletions(w http.ResponseWriter, r *http.Request
 
 // buildBackendEndpointForOpenAI constructs a backend endpoint for OpenAI-compatible requests
 // Uses net/url for safe URL manipulation (PR#16 Issue#3)
-func (h *Handler) buildBackendEndpointForOpenAI(backendID, model, path string) (*routing.BackendEndpoint, error) {
-	baseEndpoint, err := h.buildBackendEndpoint(backendID, model)
+func (h *Handler) buildBackendEndpointForOpenAI(backendID, model, path, backendType string) (*routing.BackendEndpoint, error) {
+	baseEndpoint, err := h.buildBackendEndpoint(backendID, model, backendType)
 	if err != nil {
 		return nil, err
 	}
@@ -707,7 +707,7 @@ func (h *Handler) handleTritonChatCompletion(
 
 	// Build Triton backend endpoint
 	backendID := policy.Backends[0].BackendID
-	tritonEndpoint := h.buildTritonEndpoint(backendID, policy.Model)
+	tritonEndpoint := h.buildTritonEndpoint(backendID, policy.Model, policy.BackendType)
 	if tritonEndpoint == "" {
 		h.writeError(w, r, fmt.Errorf("backend %q not configured", backendID), api.ErrCodeBackendUnavailable)
 		return
@@ -736,7 +736,7 @@ func (h *Handler) handleTritonChatCompletion(
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	// Get timeout from backend config
-	backend, err := h.buildBackendEndpoint(backendID, policy.Model)
+	backend, err := h.buildBackendEndpoint(backendID, policy.Model, policy.BackendType)
 	if err != nil {
 		h.writeError(w, r, err, api.ErrCodeBackendUnavailable)
 		return
@@ -854,8 +854,8 @@ func (h *Handler) handleTritonChatCompletion(
 // buildTritonEndpoint constructs the Triton V2 inference endpoint URL.
 // Format: http://{backend_host}/v2/models/{model}/infer
 // Returns empty string on error (caller should check).
-func (h *Handler) buildTritonEndpoint(backendID, model string) string {
-	backend, err := h.buildBackendEndpoint(backendID, model)
+func (h *Handler) buildTritonEndpoint(backendID, model, backendType string) string {
+	backend, err := h.buildBackendEndpoint(backendID, model, backendType)
 	if err != nil {
 		h.logger.Error("backend not configured for triton",
 			zap.String("backend_id", backendID),
@@ -1282,7 +1282,7 @@ func (h *Handler) handleTritonCompletion(
 
 	// Build Triton backend endpoint
 	backendID := policy.Backends[0].BackendID
-	tritonEndpoint := h.buildTritonEndpoint(backendID, policy.Model)
+	tritonEndpoint := h.buildTritonEndpoint(backendID, policy.Model, policy.BackendType)
 	if tritonEndpoint == "" {
 		h.writeError(w, r, fmt.Errorf("backend %q not configured", backendID), api.ErrCodeBackendUnavailable)
 		return
@@ -1311,7 +1311,7 @@ func (h *Handler) handleTritonCompletion(
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	// Get timeout from backend config
-	backend, err := h.buildBackendEndpoint(backendID, policy.Model)
+	backend, err := h.buildBackendEndpoint(backendID, policy.Model, policy.BackendType)
 	if err != nil {
 		h.writeError(w, r, err, api.ErrCodeBackendUnavailable)
 		return

@@ -26,7 +26,7 @@ func TestBuildBackendEndpoint_NotConfigured(t *testing.T) {
 	}
 
 	// Should return error when backend not found
-	_, err := handler.buildBackendEndpoint("non-existent-backend", "test-model")
+	_, err := handler.buildBackendEndpoint("non-existent-backend", "test-model", "")
 	if err == nil {
 		t.Fatal("expected error when backend not configured, got nil")
 	}
@@ -54,7 +54,7 @@ func TestBuildBackendEndpoint_WithTestOverride(t *testing.T) {
 	}
 
 	// Should succeed when backend is in test overrides
-	backend, err := handler.buildBackendEndpoint("test-backend", "test-model")
+	backend, err := handler.buildBackendEndpoint("test-backend", "test-model", "")
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestBuildBackendEndpoint_WithRegistry(t *testing.T) {
 	}
 
 	// Should succeed when backend is in registry
-	backend, err := handler.buildBackendEndpoint("registry-backend", "test-model")
+	backend, err := handler.buildBackendEndpoint("registry-backend", "test-model", "")
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -140,7 +140,7 @@ func TestBuildBackendEndpoint_TestOverrideTakesPrecedence(t *testing.T) {
 	}
 
 	// Test override should take precedence over registry
-	backend, err := handler.buildBackendEndpoint("backend", "test-model")
+	backend, err := handler.buildBackendEndpoint("backend", "test-model", "")
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
