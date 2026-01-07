@@ -45,6 +45,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -1169,6 +1170,81 @@ func (r *AIModelReconciler) checkS3ArtifactExists(ctx context.Context, aiModel *
 	return true, nil
 }
 
+// getModelFormatFromRuntime looks up a ClusterServingRuntime and extracts the modelFormat
+// from its supportedModelFormats field. Returns the first modelFormat with autoSelect=true,
+// or the first entry if none have autoSelect=true. Returns empty string if not found.
+func (r *AIModelReconciler) getModelFormatFromRuntime(ctx context.Context, runtimeName string) (string, error) {
+	log := log.FromContext(ctx)
+
+	// Fetch the ClusterServingRuntime
+	runtime := &unstructured.Unstructured{}
+	runtime.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "serving.kserve.io",
+		Version: "v1alpha1",
+		Kind:    "ClusterServingRuntime",
+	})
+
+	err := r.Get(ctx, types.NamespacedName{Name: runtimeName}, runtime)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			log.Info("ClusterServingRuntime not found", "runtimeName", runtimeName)
+			return "", nil // Not found is not an error - caller will use default
+		}
+		return "", fmt.Errorf("failed to get ClusterServingRuntime %s: %w", runtimeName, err)
+	}
+
+	// Extract supportedModelFormats from spec
+	supportedFormats, found, err := unstructured.NestedSlice(runtime.Object, "spec", "supportedModelFormats")
+	if err != nil {
+		return "", fmt.Errorf("failed to extract supportedModelFormats from ClusterServingRuntime %s: %w", runtimeName, err)
+	}
+	if !found || len(supportedFormats) == 0 {
+		log.Info("ClusterServingRuntime has no supportedModelFormats", "runtimeName", runtimeName)
+		return "", nil
+	}
+
+	// Find the format with autoSelect=true, or use the first one
+	var firstFormat string
+	for _, format := range supportedFormats {
+		formatMap, ok := format.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		name, ok := formatMap["name"].(string)
+		if !ok || name == "" {
+			continue
+		}
+
+		// Save first valid format
+		if firstFormat == "" {
+			firstFormat = name
+		}
+
+		// Check for autoSelect
+		autoSelect, _ := formatMap["autoSelect"].(bool)
+		if autoSelect {
+			log.Info("Found modelFormat from ClusterServingRuntime",
+				"runtimeName", runtimeName,
+				"modelFormat", name,
+				"autoSelect", true)
+			return name, nil
+		}
+	}
+
+	// No autoSelect found, use first format
+	if firstFormat != "" {
+		log.Info("Found modelFormat from ClusterServingRuntime",
+			"runtimeName", runtimeName,
+			"modelFormat", firstFormat,
+			"autoSelect", false)
+		return firstFormat, nil
+	}
+
+	log.Info("ClusterServingRuntime has supportedModelFormats but no valid name fields", "runtimeName", runtimeName)
+	return "", nil
+}
+
 // createOrUpdateInferenceService creates or updates a KServe InferenceService for the AIModel
 // If recipeSpec is provided, it uses the recipe configuration; otherwise uses inline AIModel spec
 func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, aiModel *aimodelv1alpha1.AIModel, recipeSpec *aimodelv1alpha1.ModelRecipeSpec) error {
@@ -1344,8 +1420,37 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 	// Check if a custom runtime name is specified
 	if aiModel.Spec.RuntimeName != "" {
 		runtimeName = aiModel.Spec.RuntimeName
-		// For custom runtime names, use default vllm modelFormat unless specified otherwise
-		// Users can override this by explicitly setting the runtime field
+		// Look up the ClusterServingRuntime to get the correct modelFormat
+		// from its supportedModelFormats field
+		detectedFormat, err := r.getModelFormatFromRuntime(ctx, runtimeName)
+		if err != nil {
+			return fmt.Errorf("failed to get modelFormat from ClusterServingRuntime %s: %w", runtimeName, err)
+		}
+		if detectedFormat != "" {
+			modelFormat = detectedFormat
+			log.Info("Using modelFormat from ClusterServingRuntime",
+				"runtimeName", runtimeName,
+				"modelFormat", modelFormat)
+		} else {
+			// ClusterServingRuntime not found or has no supportedModelFormats
+			// Fall back to runtime-based default
+			log.Info("ClusterServingRuntime not found or missing supportedModelFormats, using runtime-based default",
+				"runtimeName", runtimeName,
+				"runtime", runtime)
+			switch runtime {
+			case "vllm":
+				modelFormat = "vllm"
+			case "tgi":
+				modelFormat = "huggingface"
+			case "triton":
+				modelFormat = "tensorrt"
+			case "tensorrt-llm":
+				modelFormat = "tensorrt-llm"
+			default:
+				// Keep default "vllm" for unknown runtimes
+				modelFormat = "vllm"
+			}
+		}
 	} else {
 		// Map runtime to appropriate KServe ClusterServingRuntime name
 		switch runtime {

@@ -2064,3 +2064,155 @@ Progress: 35% complete`,
 		})
 	}
 }
+
+func TestGetModelFormatFromRuntime(t *testing.T) {
+	s := setupScheme()
+	ctx := context.Background()
+
+	tests := []struct {
+		name            string
+		runtimeName     string
+		setupRuntime    *unstructured.Unstructured
+		expectedFormat  string
+		expectedError   bool
+	}{
+		{
+			name:        "ClusterServingRuntime with autoSelect modelFormat",
+			runtimeName: "kserve-triton-blackwell",
+			setupRuntime: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "serving.kserve.io/v1alpha1",
+					"kind":       "ClusterServingRuntime",
+					"metadata": map[string]interface{}{
+						"name": "kserve-triton-blackwell",
+					},
+					"spec": map[string]interface{}{
+						"supportedModelFormats": []interface{}{
+							map[string]interface{}{
+								"name":       "triton-blackwell",
+								"autoSelect": true,
+								"version":    "1",
+							},
+						},
+					},
+				},
+			},
+			expectedFormat: "triton-blackwell",
+			expectedError:  false,
+		},
+		{
+			name:        "ClusterServingRuntime with multiple formats, first has autoSelect",
+			runtimeName: "custom-runtime",
+			setupRuntime: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "serving.kserve.io/v1alpha1",
+					"kind":       "ClusterServingRuntime",
+					"metadata": map[string]interface{}{
+						"name": "custom-runtime",
+					},
+					"spec": map[string]interface{}{
+						"supportedModelFormats": []interface{}{
+							map[string]interface{}{
+								"name":    "format-one",
+								"version": "1",
+							},
+							map[string]interface{}{
+								"name":       "format-two",
+								"autoSelect": true,
+								"version":    "1",
+							},
+						},
+					},
+				},
+			},
+			expectedFormat: "format-two",
+			expectedError:  false,
+		},
+		{
+			name:        "ClusterServingRuntime with no autoSelect (uses first)",
+			runtimeName: "no-autoselect-runtime",
+			setupRuntime: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "serving.kserve.io/v1alpha1",
+					"kind":       "ClusterServingRuntime",
+					"metadata": map[string]interface{}{
+						"name": "no-autoselect-runtime",
+					},
+					"spec": map[string]interface{}{
+						"supportedModelFormats": []interface{}{
+							map[string]interface{}{
+								"name":    "format-first",
+								"version": "1",
+							},
+							map[string]interface{}{
+								"name":    "format-second",
+								"version": "1",
+							},
+						},
+					},
+				},
+			},
+			expectedFormat: "format-first",
+			expectedError:  false,
+		},
+		{
+			name:           "ClusterServingRuntime not found",
+			runtimeName:    "nonexistent-runtime",
+			setupRuntime:   nil,
+			expectedFormat: "",
+			expectedError:  false, // Not found is not an error - caller uses default
+		},
+		{
+			name:        "ClusterServingRuntime with no supportedModelFormats",
+			runtimeName: "empty-formats-runtime",
+			setupRuntime: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "serving.kserve.io/v1alpha1",
+					"kind":       "ClusterServingRuntime",
+					"metadata": map[string]interface{}{
+						"name": "empty-formats-runtime",
+					},
+					"spec": map[string]interface{}{},
+				},
+			},
+			expectedFormat: "",
+			expectedError:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create fake client with or without the runtime
+			objects := []runtime.Object{}
+			if tt.setupRuntime != nil {
+				objects = append(objects, tt.setupRuntime)
+			}
+
+			cl := fake.NewClientBuilder().
+				WithScheme(s).
+				WithRuntimeObjects(objects...).
+				Build()
+
+			r := &AIModelReconciler{
+				Client: cl,
+				Scheme: s,
+			}
+
+			// Call the function
+			format, err := r.getModelFormatFromRuntime(ctx, tt.runtimeName)
+
+			// Check error expectation
+			if tt.expectedError && err == nil {
+				t.Errorf("getModelFormatFromRuntime() expected error but got none")
+			}
+			if !tt.expectedError && err != nil {
+				t.Errorf("getModelFormatFromRuntime() unexpected error: %v", err)
+			}
+
+			// Check format
+			if format != tt.expectedFormat {
+				t.Errorf("getModelFormatFromRuntime() = %q, want %q", format, tt.expectedFormat)
+			}
+		})
+	}
+}
