@@ -2,7 +2,7 @@
 replicaCount: 3
 
 image:
-  tag: staging
+  tag: sha-7e170e6  # Triton fix commit
   pullPolicy: Always  # Force pull latest staging image
   pullSecrets:
     - ghcr-pull-secret
