@@ -315,8 +315,11 @@ backend: "tensorrtllm"
 max_batch_size: 32
 
 model_transaction_policy {
-  decoupled: True
+  decoupled: False
 }
+
+# NOTE: decoupled: False is required for HTTP endpoint compatibility.
+# Set to True only if using gRPC streaming exclusively.
 
 input [
   {
@@ -455,6 +458,42 @@ parameters: {
   key: "use_custom_all_reduce"
   value: {
     string_value: "0"
+  }
+}
+
+# Required for TRT-LLM 0.20.0+ (container 25.06+)
+parameters: {
+  key: "tokenizer_dir"
+  value: {
+    string_value: "/mnt/models/tensorrt_llm/1"
+  }
+}
+
+parameters: {
+  key: "xgrammar_tokenizer_info_path"
+  value: {
+    string_value: ""
+  }
+}
+
+parameters: {
+  key: "guided_decoding_backend"
+  value: {
+    string_value: "xgrammar"
+  }
+}
+
+parameters: {
+  key: "xgrammar_data_dir"
+  value: {
+    string_value: ""
+  }
+}
+
+parameters: {
+  key: "executor_worker_path"
+  value: {
+    string_value: ""
   }
 }
 CONFIG
