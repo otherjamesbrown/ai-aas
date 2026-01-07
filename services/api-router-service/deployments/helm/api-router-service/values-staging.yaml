@@ -2,8 +2,9 @@
 replicaCount: 3
 
 image:
+  repository: ghcr.io/otherjamesbrown/ai-aas/api-router-service  # Full path with ai-aas
   tag: sha-7e170e6  # Triton fix commit
-  pullPolicy: Always  # Force pull latest staging image
+  pullPolicy: Always
   pullSecrets:
     - ghcr-pull-secret
 
