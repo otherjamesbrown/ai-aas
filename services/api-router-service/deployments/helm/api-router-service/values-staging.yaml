@@ -3,6 +3,7 @@ replicaCount: 3
 
 image:
   tag: staging
+  pullPolicy: Always  # Force pull latest staging image
   pullSecrets:
     - ghcr-pull-secret
 
