@@ -158,6 +158,12 @@ type AIModelSpec struct {
 	// +kubebuilder:default=RollingUpdate
 	// +optional
 	UpdateStrategy UpdateStrategyType `json:"updateStrategy,omitempty"`
+
+	// MultiModel configures multi-model deployment on a single GPU.
+	// When enabled, multiple TRT-LLM models are served by a single Triton server.
+	// Requires runtime=triton and uses the kserve-triton-multi-model-* ClusterServingRuntime.
+	// +optional
+	MultiModel *MultiModelConfig `json:"multiModel,omitempty"`
 }
 
 // RecipeReference identifies a ModelRecipe
@@ -223,6 +229,74 @@ const (
 	// UpdateStrategyRecreate terminates old pods before creating new ones, freeing GPU resources
 	UpdateStrategyRecreate UpdateStrategyType = "Recreate"
 )
+
+// MultiModelConfig defines configuration for multi-model deployment on a single GPU.
+// When enabled, multiple TRT-LLM models are served by a single Triton server instance.
+type MultiModelConfig struct {
+	// Enabled activates multi-model deployment mode.
+	// When true, the Models array must be populated and runtime must be triton/tensorrt-llm.
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+
+	// Models defines the list of models to deploy on this single GPU.
+	// Each model gets its own TRT-LLM engine and KV cache allocation.
+	// +kubebuilder:validation:MinItems=2
+	// +optional
+	Models []MultiModelEntry `json:"models,omitempty"`
+}
+
+// MultiModelEntry defines a single model within a multi-model deployment.
+type MultiModelEntry struct {
+	// Name is the model name within Triton (used for routing and inference endpoint).
+	// Must be DNS-compatible and unique within this AIModel.
+	// Example: "llama-8b" will be accessible as /v2/models/llama-8b/infer
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^[a-z]([a-z0-9-]*[a-z0-9])?$`
+	Name string `json:"name"`
+
+	// ModelID is the HuggingFace model identifier (for metadata/display).
+	// Example: "meta-llama/Llama-3.1-8B-Instruct"
+	// +optional
+	ModelID string `json:"modelID,omitempty"`
+
+	// S3Key is the path to this model's TRT-LLM ensemble in S3.
+	// Path is relative to the AIModel's S3Bucket.
+	// Example: "models/blackwell/llama-8b-ensemble/"
+	S3Key string `json:"s3Key"`
+
+	// KVCacheFraction is the fraction of remaining GPU memory allocated for this model's KV cache.
+	// All models' fractions should sum to < 0.95 to prevent OOM.
+	// Example: "0.30" allocates 30% of available GPU memory for KV cache.
+	// If not specified, Triton uses its default allocation.
+	// Valid range: "0.05" to "0.90". Value is parsed as a decimal fraction.
+	// +kubebuilder:validation:Pattern=`^0\.[0-9]{1,2}$`
+	// +optional
+	KVCacheFraction string `json:"kvCacheFraction,omitempty"`
+
+	// MaxBatchSize limits concurrent requests to this model to prevent memory overflow.
+	// Lower values reduce peak memory usage but may impact throughput.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=256
+	// +optional
+	MaxBatchSize *int32 `json:"maxBatchSize,omitempty"`
+}
+
+// MultiModelEntryStatus tracks the status of a single model in multi-model deployment.
+type MultiModelEntryStatus struct {
+	// Name matches the spec.multiModel.models[].name
+	Name string `json:"name"`
+
+	// Ready indicates if this specific model is loaded and serving.
+	Ready bool `json:"ready"`
+
+	// Message provides model-specific status information or error details.
+	// +optional
+	Message string `json:"message,omitempty"`
+
+	// LoadedAt is when this model finished loading and became ready.
+	// +optional
+	LoadedAt *metav1.Time `json:"loadedAt,omitempty"`
+}
 
 // AIModelPhase represents the current phase of the AIModel deployment.
 type AIModelPhase string
@@ -418,6 +492,11 @@ type AIModelStatus struct {
 	// Used to implement periodic sync to handle Admin API downtime or database resets.
 	// +optional
 	LastAdminAPISyncTime *metav1.Time `json:"lastAdminAPISyncTime,omitempty"`
+
+	// MultiModelStatuses tracks individual model status in multi-model deployments.
+	// Only populated when spec.multiModel.enabled is true.
+	// +optional
+	MultiModelStatuses []MultiModelEntryStatus `json:"multiModelStatuses,omitempty"`
 
 	// DEPRECATED: Use InferenceServiceName instead.
 	VLLMDeploymentName string `json:"vllmDeploymentName,omitempty"`
