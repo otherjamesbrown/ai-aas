@@ -23,7 +23,39 @@ This runbook documents rebuilding the Llama 3.1 8B Instruct TensorRT-LLM engine 
 ### SSH Access
 ```bash
 # SSH to RTX 4000 Ada build server
-ssh user@<rtx4000-ada-server>
+ssh root@<rtx4000-ada-server>
+```
+
+### Fresh Server Setup (if needed)
+
+If the server is freshly provisioned, install NVIDIA drivers and Docker:
+
+```bash
+# Install NVIDIA drivers
+apt-get update
+apt-get install -y nvidia-driver-550  # Or latest available
+reboot
+
+# After reboot, verify GPU
+nvidia-smi --query-gpu=name,compute_cap,memory.total --format=csv
+# Expected: NVIDIA RTX 4000 Ada Generation, 8.9, 20480 MiB
+
+# Install Docker
+curl -fsSL https://get.docker.com | sh
+
+# Install NVIDIA Container Toolkit
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | \
+  gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+  sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+  tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+apt-get update
+apt-get install -y nvidia-container-toolkit
+nvidia-ctk runtime configure --runtime=docker
+systemctl restart docker
+
+# Verify Docker can see GPU
+docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi
 ```
 
 ### Verify GPU
@@ -33,8 +65,20 @@ nvidia-smi --query-gpu=name,compute_cap,memory.total --format=csv
 ```
 
 ### Required Credentials
-- HuggingFace token with Llama access: `$HF_TOKEN`
-- S3/Linode credentials for upload (already configured in rclone)
+- HuggingFace token with Llama access: `$HF_TOKEN` (find in `secrets/env/.env`)
+- S3/Linode credentials for upload
+
+## Container Version Compatibility
+
+**CRITICAL**: Container version must match the TRT-LLM version for the engine format.
+
+| Container | TRT-LLM | Llama 3.1 Support | Status |
+|-----------|---------|-------------------|--------|
+| 24.08 | 0.12.0 | ❌ transformers too old | Won't build |
+| 24.10 | 0.14.0 | ✅ Works | **Use this** |
+| 24.12 | 0.16.0 | ❌ Missing triton/functorch | Broken |
+
+The 24.10 container requires `pip install setuptools` before building.
 
 ## Step-by-Step Build Process
 

@@ -122,6 +122,7 @@ maintenance:
 | `context/debugger/agents.md` | 120 | ✅ NEW | Read-only investigation agent |
 | `context/test-developer/agents.md` | 200 | ✅ NEW | E2E, contract, integration tests |
 | `context/e2e-testing/agents.md` | 180 | ✅ NEW | E2E test harness, fixtures, tiers |
+| `context/model-manager/agents.md` | 148 | ✅ NEW | Model lifecycle, TRT-LLM, benchmarking |
 | `context/compliance-reviewer-agent.md` | 280 | ✅ NEW | Drift detection, read-only auditor |
 
 ### Level 2: Use Cases
@@ -267,6 +268,16 @@ hierarchy:
           - usecases/SCHEMA.md (reference)
           - ARCHITECTURE.md (reference)
           - .claude/commands/review-compliance.md (skill)
+
+      context/model-manager/agents.md:
+        type: rules
+        purpose: Model lifecycle management (TRT-LLM, vLLM, benchmarking)
+        read_when: Working with models, TensorRT-LLM engines, benchmarks
+        inherits: context/agents.md
+        links_to:
+          - ai-aas-config/library/ (source)
+          - infra/k8s/kserve/base/ (source)
+          - docs/runbooks/build-tensorrt-*.md (operational)
 
     usecases:
       usecases/SCHEMA.md:
