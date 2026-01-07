@@ -90,24 +90,10 @@ func (t *GRPCTranslator) TranslateOpenAIToGRPC(req *OpenAIChatCompletionRequest,
 	}
 	inputs = append(inputs, t.createInt32Input(TensorInputMaxTokens, maxTokens))
 
-	// Add optional parameters as input tensors
-	if req.Temperature != nil {
-		inputs = append(inputs, t.createFloat32Input(TensorInputTemperature, float32(*req.Temperature)))
-	}
-
-	if req.TopP != nil {
-		inputs = append(inputs, t.createFloat32Input(TensorInputTopP, float32(*req.TopP)))
-	}
-
-	// Add stop words if provided
-	if len(req.Stop) > 0 {
-		stopWordsJSON, _ := json.Marshal(req.Stop)
-		inputs = append(inputs, t.createStringInput(TensorInputStopWords, string(stopWordsJSON)))
-	}
-
-	// Note: We intentionally do NOT add a "stream" input tensor here.
+	// Note: We intentionally do NOT add optional parameters like temperature, top_p, or stop_words.
 	// TensorRT-LLM ensemble models only accept required inputs (text_input, max_tokens).
 	// Adding extra inputs causes "expected N inputs but got N+1" errors.
+	// Optional parameters like temperature are configured at model deployment time, not per-request.
 	// Streaming is controlled at the gRPC level via StreamInfer(), not via input tensors.
 
 	// Request the text_output tensor
