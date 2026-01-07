@@ -126,4 +126,15 @@ backends:
   # - KServe creates revision-specific services (predictor-00001-private) that break when new revisions are created
   # - The predictor service without revision suffix always points to the latest active revision
   # - Port 80 is the standard KServe predictor service port
-  endpoints: "mistralai/Mistral-7B-Instruct-v0.3:http://mistral-7b-instruct-v03-predictor.staging.svc.cluster.local:80,unsloth/gpt-oss-20b:http://unsloth-gpt-oss-20b-predictor.staging.svc.cluster.local:80,openai/gpt-oss-20b:http://openai-gpt-oss-20b-predictor.staging.svc.cluster.local:80,openai/gpt-oss-120b:http://openai-gpt-oss-120b-predictor.staging.svc.cluster.local:80,llama-3.1-8b-instruct:http://llama-3-1-8b-instruct-trtllm-predictor.staging.svc.cluster.local:80,qwen2-vl-7b-instruct:http://qwen2-vl-7b-instruct-predictor.staging.svc.cluster.local:80"
+  # Format: backend-id:http://service.namespace.svc.cluster.local:port
+  # Backend IDs must match routing policy backend_id and model's served-model-name
+  endpoints: >-
+    mistralai/Mistral-7B-Instruct-v0.3:http://mistral-7b-instruct-v03-predictor.staging.svc.cluster.local:80,
+    unsloth/gpt-oss-20b:http://unsloth-gpt-oss-20b-predictor.staging.svc.cluster.local:80,
+    openai/gpt-oss-20b:http://openai-gpt-oss-20b-predictor.staging.svc.cluster.local:80,
+    openai/gpt-oss-120b:http://openai-gpt-oss-120b-predictor.staging.svc.cluster.local:80,
+    qwen2-vl-7b-instruct:http://qwen2-vl-7b-instruct-predictor.staging.svc.cluster.local:80,
+    llama-3-1-8b-instruct-vllm-ada:http://llama-3-1-8b-instruct-vllm-ada-predictor.staging.svc.cluster.local:80,
+    llama-3-1-8b-instruct-vllm-blackwell:http://llama-3-1-8b-instruct-vllm-blackwell-predictor.staging.svc.cluster.local:80,
+    llama-3-1-8b-instruct-trtllm-ada:http://llama-3-1-8b-instruct-trtllm-ada-predictor.staging.svc.cluster.local:80,
+    llama-3-1-8b-instruct-trtllm-blackwell:http://llama-3-1-8b-instruct-trtllm-blackwell-predictor.staging.svc.cluster.local:80

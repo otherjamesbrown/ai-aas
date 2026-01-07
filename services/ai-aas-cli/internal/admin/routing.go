@@ -58,6 +58,8 @@ type PolicyCreateRequest struct {
 	Model             string          `json:"model"`
 	Backends          []BackendWeight `json:"backends"`
 	FailoverThreshold int             `json:"failover_threshold,omitempty"`
+	BackendType       string          `json:"backend_type,omitempty"` // "openai" (default) | "triton" | "triton-grpc"
+	Tokenizer         string          `json:"tokenizer,omitempty"`    // Required for triton: cl100k_base, llama3, o200k_base
 }
 
 // PolicyListResponse is the response from listing policies
@@ -111,6 +113,8 @@ func routingPolicyCreateCommand() *cobra.Command {
 	var flagFormat string
 	var flagQuiet bool
 	var flagDryRun bool
+	var flagBackendType string
+	var flagTokenizer string
 
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -119,6 +123,11 @@ func routingPolicyCreateCommand() *cobra.Command {
 
 By default, creates an organization-specific policy. Use --global to create a policy
 that applies to all organizations (organization_id: "*").
+
+Backend Types:
+  - openai (default): For vLLM, trtllm-serve, and other OpenAI-compatible backends
+  - triton: For TensorRT-LLM with Triton Inference Server (requires --tokenizer)
+  - triton-grpc: For Triton gRPC protocol (requires --tokenizer)
 
 This command calls the Admin API Service at /v1/routing/policies.`,
 		Example: `  # Create a global policy for qwen2-7b-instruct
@@ -131,9 +140,17 @@ This command calls the Admin API Service at /v1/routing/policies.`,
   admin-cli routing policy create \
     --org-id aa6f9015-132a-4694-8b10-7d4d4550faed \
     --model gpt-4 \
-    --backends "backend-1:70,backend-2:30"`,
+    --backends "backend-1:70,backend-2:30"
+
+  # Create a Triton backend policy (e.g., TRT-LLM with Triton)
+  admin-cli routing policy create \
+    --global \
+    --model llama-3-1-8b-instruct-trtllm-ada \
+    --backends llama-3-1-8b-instruct-trtllm-ada:100 \
+    --backend-type triton \
+    --tokenizer llama3`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runRoutingPolicyCreate(flagOrgID, flagModel, flagBackends, flagGlobal, flagFormat, flagQuiet, flagDryRun)
+			return runRoutingPolicyCreate(flagOrgID, flagModel, flagBackends, flagGlobal, flagFormat, flagQuiet, flagDryRun, flagBackendType, flagTokenizer)
 		},
 	}
 
@@ -144,6 +161,8 @@ This command calls the Admin API Service at /v1/routing/policies.`,
 	cmd.Flags().StringVar(&flagFormat, "format", "table", "Output format: table, json")
 	cmd.Flags().BoolVar(&flagQuiet, "quiet", false, "Suppress non-error output")
 	cmd.Flags().BoolVar(&flagDryRun, "dry-run", false, "Simulate creation without applying changes")
+	cmd.Flags().StringVar(&flagBackendType, "backend-type", "", "Backend protocol: openai (default), triton, triton-grpc")
+	cmd.Flags().StringVar(&flagTokenizer, "tokenizer", "", "Tokenizer for Triton backends: cl100k_base, llama3, o200k_base")
 
 	cmd.MarkFlagRequired("model")
 	cmd.MarkFlagRequired("backends")
@@ -151,7 +170,7 @@ This command calls the Admin API Service at /v1/routing/policies.`,
 	return cmd
 }
 
-func runRoutingPolicyCreate(orgID, model, backends string, global bool, flagFormat string, quiet, dryRun bool) error {
+func runRoutingPolicyCreate(orgID, model, backends string, global bool, flagFormat string, quiet, dryRun bool, backendType, tokenizer string) error {
 	// Determine organization ID
 	if global {
 		orgID = globalOrgID
@@ -180,6 +199,32 @@ func runRoutingPolicyCreate(orgID, model, backends string, global bool, flagForm
 		)
 	}
 
+	// Validate backend_type
+	validBackendTypes := map[string]bool{"": true, "openai": true, "triton": true, "triton-grpc": true}
+	if !validBackendTypes[backendType] {
+		return errors.NewValidationError(
+			fmt.Sprintf("invalid backend-type: %s", backendType),
+			"Use one of: openai, triton, triton-grpc",
+		)
+	}
+
+	// Validate tokenizer requirement for triton backends
+	if (backendType == "triton" || backendType == "triton-grpc") && tokenizer == "" {
+		return errors.NewValidationError(
+			"tokenizer is required for triton backends",
+			"Use --tokenizer with one of: cl100k_base, llama3, o200k_base",
+		)
+	}
+
+	// Validate tokenizer value
+	validTokenizers := map[string]bool{"": true, "cl100k_base": true, "llama3": true, "o200k_base": true}
+	if !validTokenizers[tokenizer] {
+		return errors.NewValidationError(
+			fmt.Sprintf("invalid tokenizer: %s", tokenizer),
+			"Use one of: cl100k_base, llama3, o200k_base",
+		)
+	}
+
 	if !quiet {
 		fmt.Fprintf(os.Stderr, "Creating routing policy via Admin API Service...\n")
 		fmt.Fprintf(os.Stderr, "  Organization: %s\n", orgID)
@@ -187,6 +232,12 @@ func runRoutingPolicyCreate(orgID, model, backends string, global bool, flagForm
 		fmt.Fprintf(os.Stderr, "  Backends: %d configured\n", len(backendWeights))
 		for _, bw := range backendWeights {
 			fmt.Fprintf(os.Stderr, "    - %s: %d%%\n", bw.BackendID, bw.Weight)
+		}
+		if backendType != "" {
+			fmt.Fprintf(os.Stderr, "  Backend Type: %s\n", backendType)
+		}
+		if tokenizer != "" {
+			fmt.Fprintf(os.Stderr, "  Tokenizer: %s\n", tokenizer)
 		}
 		if dryRun {
 			fmt.Fprintf(os.Stderr, "  Mode: DRY RUN (no changes will be made)\n")
@@ -230,6 +281,8 @@ func runRoutingPolicyCreate(orgID, model, backends string, global bool, flagForm
 		Model:             model,
 		Backends:          backendWeights,
 		FailoverThreshold: 3, // Default failover threshold
+		BackendType:       backendType,
+		Tokenizer:         tokenizer,
 	}
 
 	reqJSON, err := json.Marshal(reqBody)
