@@ -1480,8 +1480,8 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 	} else {
 		// Use inline spec runtime args
 		runtimeArgs = aiModel.Spec.RuntimeArgs
-		if len(runtimeArgs) == 0 {
-			// Use default vLLM args if none specified
+		if len(runtimeArgs) == 0 && runtime == "vllm" {
+			// Use default vLLM args if none specified (only for vLLM runtime)
 			// Note: max-model-len is intentionally omitted to allow vLLM to auto-detect
 			// from the model's config.json (max_position_embeddings). This prevents
 			// errors when deploying models with smaller context windows (e.g., TinyLlama=2048).

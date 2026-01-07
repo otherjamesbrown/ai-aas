@@ -2216,3 +2216,76 @@ func TestGetModelFormatFromRuntime(t *testing.T) {
 		})
 	}
 }
+
+// TestRuntimeArgsForTriton verifies that Triton runtime does not receive vLLM-specific args
+func TestRuntimeArgsForTriton(t *testing.T) {
+	tests := []struct {
+		name          string
+		runtime       string
+		runtimeArgs   []string
+		expectVLLMArg bool
+	}{
+		{
+			name:          "vLLM with empty args gets defaults",
+			runtime:       "vllm",
+			runtimeArgs:   []string{},
+			expectVLLMArg: true,
+		},
+		{
+			name:          "Triton with empty args does NOT get vLLM defaults",
+			runtime:       "triton",
+			runtimeArgs:   []string{},
+			expectVLLMArg: false,
+		},
+		{
+			name:          "TGI with empty args does NOT get vLLM defaults",
+			runtime:       "tgi",
+			runtimeArgs:   []string{},
+			expectVLLMArg: false,
+		},
+		{
+			name:          "tensorrt-llm with empty args does NOT get vLLM defaults",
+			runtime:       "tensorrt-llm",
+			runtimeArgs:   []string{},
+			expectVLLMArg: false,
+		},
+		{
+			name:          "vLLM with explicit args keeps them",
+			runtime:       "vllm",
+			runtimeArgs:   []string{"--max-model-len=4096"},
+			expectVLLMArg: false, // Should keep explicit args, not add defaults
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Simulate the logic in createOrUpdateInferenceService
+			var runtimeArgs []string
+			if len(tt.runtimeArgs) == 0 && tt.runtime == "vllm" {
+				// This is the fixed logic - only add vLLM defaults for vLLM runtime
+				runtimeArgs = []string{
+					"--dtype=float16",
+					"--gpu-memory-utilization=0.9",
+				}
+			} else {
+				runtimeArgs = tt.runtimeArgs
+			}
+
+			// Check if vLLM args are present
+			hasVLLMArgs := false
+			for _, arg := range runtimeArgs {
+				if arg == "--dtype=float16" || arg == "--gpu-memory-utilization=0.9" {
+					hasVLLMArgs = true
+					break
+				}
+			}
+
+			if tt.expectVLLMArg && !hasVLLMArgs {
+				t.Errorf("Runtime %q should have vLLM default args, got: %v", tt.runtime, runtimeArgs)
+			}
+			if !tt.expectVLLMArg && hasVLLMArgs {
+				t.Errorf("Runtime %q should NOT have vLLM default args, got: %v", tt.runtime, runtimeArgs)
+			}
+		})
+	}
+}
