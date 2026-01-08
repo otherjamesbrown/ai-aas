@@ -5,16 +5,13 @@ global:
   domain:
     base: "staging.otherjamesbrown.com"
     local: "staging.otherjamesbrown.com"
-
 replicaCount: 2
-
 image:
   repository: ghcr.io/otherjamesbrown/ai-aas/analytics-service
-  tag: sha-923f2ed
+  tag: sha-3aba661
   pullPolicy: Always
   pullSecrets:
     - ghcr-pull-secret
-
 env:
   - name: SERVICE_NAME
     value: analytics-service
@@ -29,7 +26,6 @@ env:
       secretKeyRef:
         name: analytics-service-secrets
         key: master-admin-api-key
-
 resources:
   requests:
     cpu: 200m
@@ -37,17 +33,14 @@ resources:
   limits:
     cpu: 1000m
     memory: 1Gi
-
 autoscaling:
   enabled: true
   minReplicas: 2
   maxReplicas: 6
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
-
 ingress:
   enabled: true
-
 # Increase startup time for database connection to remote Linode Postgres
 livenessProbe:
   path: /analytics/v1/status/healthz
@@ -55,29 +48,24 @@ livenessProbe:
   periodSeconds: 15
   timeoutSeconds: 10
   failureThreshold: 5
-
 readinessProbe:
   path: /analytics/v1/status/readyz
   initialDelaySeconds: 30
   periodSeconds: 10
   timeoutSeconds: 10
   failureThreshold: 5
-
 # Telemetry configuration
 otel:
   enabled: true
   collectorEndpoint: otel-collector.observability.svc.cluster.local:4317
   protocol: grpc
   insecure: true
-
 # Database configuration - reference staging secret
 database:
   urlSecretName: analytics-service-secrets
-
 # Redis configuration - uses staging Redis
 redis:
   url: "redis://redis-master.staging.svc.cluster.local:6379"
-
 # RabbitMQ configuration (optional for staging - using stub endpoint)
 rabbitmq:
   url: "amqp://guest:guest@localhost:5672/"
