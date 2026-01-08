@@ -3,7 +3,7 @@ replicaCount: 3
 
 image:
   repository: ghcr.io/otherjamesbrown/ai-aas/api-router-service  # Full path with ai-aas
-  tag: sha-af0f3a0  # Triton ensemble input fix (2 inputs only)
+  tag: sha-923f2ed  # Standardized SHA-based tag
   pullPolicy: Always
   pullSecrets:
     - ghcr-pull-secret
