@@ -14,6 +14,22 @@ This document provides Claude-specific configuration for the AI-AAS Platform rep
 
 > **Note**: Rules in `context/agents.md` apply to ALL AI agents. This file contains Claude-specific extensions.
 
+## Required Reading Before Discussions
+
+**CRITICAL**: Before discussing or making changes to these topics, you MUST read the relevant architecture docs:
+
+| Topic | Required Reading | Key Info |
+|-------|------------------|----------|
+| **Routing, backends, protocols** | [docs/architecture/inference-routing.md](docs/architecture/inference-routing.md) | Backend types (openai, triton, triton-grpc), protocol translation, routing policies |
+| **Model access control** | [docs/architecture/routing-policies.md](docs/architecture/routing-policies.md) | Wildcard policies, org-specific access |
+| **Observability** | [docs/architecture/observability-architecture.md](docs/architecture/observability-architecture.md) | Metrics, logging, tracing |
+| **Model naming** | [docs/architecture/model-naming-guide.md](docs/architecture/model-naming-guide.md) | Model ID conventions |
+
+**Why this matters:**
+- Prevents incorrect assumptions from being carried across sessions
+- Ensures recommendations are based on actual capabilities, not guesses
+- The API Router has significant translation capabilities (e.g., OpenAI → Triton v2) that are easy to overlook
+
 ## Issue Tracking with Beads
 
 **IMPORTANT**: We use beads for issue tracking. All tasks, bugs, and features are tracked as beads issues.
