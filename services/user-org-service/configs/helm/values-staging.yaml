@@ -13,7 +13,7 @@ replicaCount: 2
 
 image:
   repository: ghcr.io/otherjamesbrown/ai-aas/user-org-service
-  tag: sha-923f2ed
+  tag: sha-3aba661
   pullPolicy: Always
   pullSecrets:
     - ghcr-pull-secret
