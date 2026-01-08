@@ -35,6 +35,7 @@ Workflow:
   2. Create a benchmark target:    ai-aas-cli benchmark target add <name> --model <model> --scenario <scenario>
   3. Start benchmarking:           ai-aas-cli benchmark target start <name>
   4. View run results:             ai-aas-cli benchmark run list --target <name>
+  5. View latest metrics:          ai-aas-cli benchmark results
 
 Examples:
   # List all benchmark scenarios
@@ -45,6 +46,9 @@ Examples:
 
   # Start benchmarking
   ai-aas-cli benchmark target start llama-7b-qa
+
+  # View latest benchmark results from Prometheus
+  ai-aas-cli benchmark results
 
   # View benchmark status
   ai-aas-cli benchmark status`,
@@ -58,6 +62,7 @@ Examples:
 	cmd.AddCommand(newTargetCommand())
 	cmd.AddCommand(newRunCommand())
 	cmd.AddCommand(newStatusCommand())
+	cmd.AddCommand(newResultsCommand())
 
 	// Add scheduler control commands
 	cmd.AddCommand(newPauseCommand())
