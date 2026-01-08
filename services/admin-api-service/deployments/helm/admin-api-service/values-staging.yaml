@@ -8,7 +8,7 @@ global:
 replicaCount: 2
 image:
   repository: ghcr.io/otherjamesbrown/ai-aas/admin-api-service
-  tag: sha-3aba661
+  tag: sha-8727275
   pullPolicy: Always
   pullSecrets:
     - ghcr-pull-secret
