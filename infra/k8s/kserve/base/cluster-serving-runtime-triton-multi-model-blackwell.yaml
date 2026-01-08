@@ -1,0 +1,89 @@
+# ClusterServingRuntime for Triton Multi-Model on single Blackwell GPU
+# Hosts multiple TRT-LLM models on one GPU using Triton's multi-model orchestration
+# Container 25.06+ required for Blackwell (sm_120) support
+#
+# MULTI-MODEL ARCHITECTURE:
+# - Single Triton server process hosts multiple TRT-LLM engines
+# - Each model gets separate KV cache allocation (configured in config.pbtxt)
+# - Uses --model-control-mode=explicit for deterministic model loading
+# - AIModel operator adds --load-model flags dynamically per deployment
+#
+# MEMORY REQUIREMENTS (RTX 6000 Blackwell 96GB):
+# - 3x 7-8B models: ~66GB total (weights + KV cache)
+# - System overhead: ~6GB
+# - Safety buffer: ~24GB
+#
+# USE CASE:
+# - Cost optimization: multiple models on single expensive GPU
+# - Benchmarking: compare multi-model single-GPU vs distributed deployment
+# - Development: test multiple models without multiple GPU allocations
+#
+# COMPARISON:
+# - kserve-triton-blackwell: Single model, auto-loads from /mnt/models
+# - kserve-triton-multi-model-blackwell: Multiple models, explicit loading
+apiVersion: serving.kserve.io/v1alpha1
+kind: ClusterServingRuntime
+metadata:
+  name: kserve-triton-multi-model-blackwell
+  annotations:
+    ai.ai-aas.io/trtllm-version: "0.20.0"
+    ai.ai-aas.io/triton-version: "25.06"
+    ai.ai-aas.io/gpu-architecture: "sm_120"
+    ai.ai-aas.io/serving-mode: "triton-multi-model"
+spec:
+  annotations:
+    prometheus.kserve.io/port: "8002"
+    prometheus.kserve.io/path: /metrics
+  supportedModelFormats:
+    - name: triton-multi-model-blackwell
+      version: "1"
+      autoSelect: true
+  protocolVersions: [v2, grpc-v2]
+  containers:
+    - name: kserve-container
+      image: nvcr.io/nvidia/tritonserver:25.06-trtllm-python-py3
+      args:
+        - tritonserver
+        - --model-repository=/mnt/models
+        - --model-control-mode=explicit
+        # NOTE: --load-model flags are added dynamically by the AIModel operator
+        # based on spec.models[] configuration
+        - --http-port=8080
+        - --grpc-port=9000
+        - --metrics-port=8002
+        - --allow-http=true
+        - --allow-grpc=true
+        - --log-verbose=1
+      ports:
+        - containerPort: 8080
+          name: http
+        - containerPort: 9000
+          name: grpc
+        - containerPort: 8002
+          name: metrics
+      resources:
+        # Increased resources for multi-model deployment
+        requests:
+          cpu: "8"
+          memory: "48Gi"
+        limits:
+          cpu: "16"
+          memory: "96Gi"
+      livenessProbe:
+        httpGet:
+          path: /v2/health/live
+          port: 8080
+        # Extended delay for loading multiple models (15 min)
+        initialDelaySeconds: 900
+        periodSeconds: 30
+        timeoutSeconds: 10
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /v2/health/ready
+          port: 8080
+        # Extended delay for loading multiple models (15 min)
+        initialDelaySeconds: 900
+        periodSeconds: 10
+        timeoutSeconds: 10
+        failureThreshold: 3

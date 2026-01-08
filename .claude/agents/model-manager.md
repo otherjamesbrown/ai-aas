@@ -300,17 +300,44 @@ ai-aas-cli routing policy list --model <model>
 | Blackwell | RTX PRO 6000 | sm_120 | 96GB | 25.06+ | 0.20.0+ | BF16 |
 | Hopper | H100 | sm_90 | 80GB | 25.06+ | 0.20.0+ | FP8/BF16 |
 
+## Available GPU Hardware by Environment
+
+**CRITICAL**: These are the ONLY GPUs available to this platform. Do NOT reference L40S, B200, A100, or other GPU models.
+
+| Environment | GPU | Architecture | VRAM |
+|-------------|-----|--------------|------|
+| Development | RTX 4000 Ada | Ada (sm_89) | 20GB |
+| Staging | RTX 4000 Ada | Ada (sm_89) | 20GB |
+| Staging | RTX 6000 Blackwell | Blackwell (sm_120) | 96GB |
+
+**Common Mistakes to Avoid**:
+- L40S is NOT available - use "RTX 4000 Ada" for Ada architecture
+- B200 is NOT available - use "RTX 6000 Blackwell" for Blackwell architecture
+- H100 is NOT available in any environment
+- When benchmarking or reporting, always use the correct GPU names above
+
 ## Serving Mode Selection
 
-| Mode | Structure | Protocol | Best For |
-|------|-----------|----------|----------|
-| Triton | ensemble dirs | v2 | Production, full features |
-| trtllm-serve | simple files | OpenAI | Quick testing, simpler setup |
-| vLLM | HF weights | OpenAI | No compilation, portability |
+| Mode | Structure | Protocol | Endpoint Path | Best For |
+|------|-----------|----------|---------------|----------|
+| Triton | ensemble dirs | v2 | `/v2/models/ensemble/infer` | Production TRT-LLM models |
+| trtllm-serve | simple files | OpenAI | `/v1/chat/completions` | Quick testing (broken - avoid) |
+| vLLM | HF weights | OpenAI | `/v1/chat/completions` | No compilation, portability |
+
+**Backend Type Configuration**:
+- **vLLM models**: Use `backend_type: openai` (or omit - it's the default)
+- **TRT-LLM/Triton models**: Use `backend_type: triton-grpc` (required for TRT-LLM)
+- **Tokenizer**: Always set tokenizer for Triton backends (e.g., `tokenizer: cl100k_base`)
+
+**Endpoint Path Reference**:
+- **vLLM/OpenAI**: API Router hits `/v1/chat/completions` on the backend
+- **Triton/TRT-LLM**: API Router hits `/v2/models/ensemble/infer` (gRPC or HTTP)
+- TRT-LLM models use "ensemble" as the model name in the Triton repository structure
 
 **Known Issues:**
 - trtllm-serve `/v1/chat/completions` is broken (GitHub #5648)
 - Use Triton or vLLM for chat completions
+- Missing routing policies cause HTTP 502 - create policies via CLI or Admin API
 
 ---
 

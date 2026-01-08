@@ -295,3 +295,44 @@ func (c *Client) GetStatus(ctx context.Context, environment string) (*StatusSumm
 
 	return &summary, nil
 }
+
+// ============================================================================
+// Scheduler Control Operations (guidellm-runner daemon)
+// ============================================================================
+
+// PauseScheduler pauses the benchmark scheduler
+func (c *Client) PauseScheduler(ctx context.Context) error {
+	if err := c.api.Post(ctx, "/v1/benchmark/pause", nil, nil); err != nil {
+		return fmt.Errorf("pause scheduler: %w", err)
+	}
+	return nil
+}
+
+// ResumeScheduler resumes the benchmark scheduler
+func (c *Client) ResumeScheduler(ctx context.Context) error {
+	if err := c.api.Post(ctx, "/v1/benchmark/resume", nil, nil); err != nil {
+		return fmt.Errorf("resume scheduler: %w", err)
+	}
+	return nil
+}
+
+// TriggerManualRun triggers a manual benchmark run (auto-pauses scheduler)
+func (c *Client) TriggerManualRun(ctx context.Context, model string) error {
+	req := map[string]interface{}{}
+	if model != "" {
+		req["model"] = model
+	}
+	if err := c.api.Post(ctx, "/v1/benchmark/run", req, nil); err != nil {
+		return fmt.Errorf("trigger manual run: %w", err)
+	}
+	return nil
+}
+
+// GetSchedulerStatus returns the scheduler status
+func (c *Client) GetSchedulerStatus(ctx context.Context) (*SchedulerStatus, error) {
+	var status SchedulerStatus
+	if err := c.api.Get(ctx, "/v1/benchmark/status", &status); err != nil {
+		return nil, fmt.Errorf("get scheduler status: %w", err)
+	}
+	return &status, nil
+}

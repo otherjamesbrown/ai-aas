@@ -7,10 +7,14 @@ This document describes the branch promotion workflow used in the AI-AAS platfor
 ```
 develop (fast iteration, ArgoCD: development)
     ↓ PR with code review
+    ↓ CI auto-promotes images from develop
 staging (integration testing, ArgoCD: staging)
     ↓ PR with approval
+    ↓ CI auto-promotes images from staging
 main (production-ready, ArgoCD: production)
 ```
+
+**Key Feature (as of 2026-01-08)**: Image promotion is now fully automated by CI/CD. When code is merged to `staging` or `main`, the pipeline automatically updates Helm values with the latest SHA from the source environment.
 
 ## Branch Purposes
 
@@ -33,7 +37,10 @@ git commit -m "feat: your feature"
 git push origin develop
 ```
 
-ArgoCD will automatically sync to the development cluster.
+**What happens**:
+1. CI builds new images with SHA tag (e.g., `sha-abc123f`)
+2. CI automatically updates `values-development.yaml` files
+3. ArgoCD automatically syncs to development cluster
 
 ### 2. Promoting to Staging (Code Review)
 
@@ -49,6 +56,14 @@ The PR will:
 - Run the branch flow enforcement check
 - Allow you to review all changes since last staging release
 
+**After merge**:
+1. CI builds backup images (for emergency hotfixes)
+2. **CI automatically promotes images** from development:
+   - Reads latest SHA from `values-development.yaml`
+   - Updates `values-staging.yaml` with same SHA
+   - Commits and pushes with `[skip ci]`
+3. ArgoCD automatically syncs to staging cluster
+
 ### 3. Promoting to Production
 
 After staging testing is complete:
@@ -61,7 +76,14 @@ gh pr create --base main --head staging --title "Production Release: description
 The PR will:
 - Require at least 1 approval
 - Run the branch flow enforcement check
-- Production ArgoCD requires manual sync after merge
+
+**After merge**:
+1. CI builds backup images (for emergency hotfixes)
+2. **CI automatically promotes images** from staging:
+   - Reads latest SHA from `values-staging.yaml`
+   - Updates `values-production.yaml` with same SHA
+   - Commits and pushes with `[skip ci]`
+3. **Manual ArgoCD sync required** for production deployment
 
 ## Branch Protection Rules
 

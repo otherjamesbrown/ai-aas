@@ -156,6 +156,10 @@ type BackendWeight struct {
 	Weight    int // Percentage (0-100)
 	AllowList []string
 	DenyList  []string
+	// TritonModelName is the model name within a Triton server for multi-model deployments.
+	// For multi-model Triton servers, this specifies which model to route to (e.g., "llama-8b-ensemble").
+	// If empty, defaults to "ensemble" for backward compatibility with single-model deployments.
+	TritonModelName string
 }
 
 // NewLoader creates a new configuration loader.

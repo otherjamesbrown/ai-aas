@@ -4,7 +4,7 @@ replicaCount: 1
 image:
   repository: ghcr.io/otherjamesbrown/ai-aas/ai-model-operator
   pullPolicy: Always
-  tag: "staging"  # Use staging branch builds
+  tag: "sha-923f2ed"  # Standardized SHA-based tag
   pullSecrets:
     - ghcr-pull-secret
 

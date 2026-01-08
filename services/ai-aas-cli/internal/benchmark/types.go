@@ -200,3 +200,11 @@ type SyncScenariosResponse struct {
 	Updated []string `json:"updated"`
 	Deleted []string `json:"deleted"`
 }
+
+// SchedulerStatus represents the benchmark scheduler status from guidellm-runner
+type SchedulerStatus struct {
+	State         string     `json:"state"` // "running" or "paused"
+	NextScheduled *time.Time `json:"next_scheduled,omitempty"`
+	CurrentRun    *string    `json:"current_run,omitempty"`
+	LastRun       *time.Time `json:"last_run,omitempty"`
+}

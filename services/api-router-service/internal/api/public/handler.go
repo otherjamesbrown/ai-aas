@@ -444,7 +444,7 @@ func (h *Handler) fallbackRouting(
 
 	// Try backends in order
 	for i, backendWeight := range policy.Backends {
-		backend, err := h.buildBackendEndpoint(backendWeight.BackendID, policy.Model)
+		backend, err := h.buildBackendEndpoint(backendWeight.BackendID, policy.Model, policy.BackendType)
 		if err != nil {
 			h.logger.Warn("backend not configured in fallback routing",
 				zap.String("backend_id", backendWeight.BackendID),
@@ -483,7 +483,8 @@ func (h *Handler) fallbackRouting(
 
 // buildBackendEndpoint constructs a BackendEndpoint from a backend ID.
 // Returns an error if the backend is not configured in registry or test overrides.
-func (h *Handler) buildBackendEndpoint(backendID, model string) (*routing.BackendEndpoint, error) {
+// The backendType parameter is used to determine the appropriate health check path.
+func (h *Handler) buildBackendEndpoint(backendID, model, backendType string) (*routing.BackendEndpoint, error) {
 	var uri string
 	timeout := h.defaultTimeout
 
@@ -512,11 +513,20 @@ func (h *Handler) buildBackendEndpoint(backendID, model string) (*routing.Backen
 		return nil, fmt.Errorf("backend %q not found in BACKEND_ENDPOINTS configuration", backendID)
 	}
 
+	// Determine health check path based on backend type (aas-7t8fv)
+	// Triton/TRT-LLM backends use KServe V2 protocol: /v2/health/ready
+	// vLLM and other OpenAI-compatible backends use: /health
+	healthPath := "/health" // default for vLLM, OpenAI-compatible
+	if backendType == "triton" || backendType == "triton-grpc" {
+		healthPath = "/v2/health/ready"
+	}
+
 	return &routing.BackendEndpoint{
 		ID:           backendID,
 		URI:          uri,
 		ModelVariant: model,
 		Timeout:      timeout,
+		HealthPath:   healthPath,
 	}, nil
 }
 

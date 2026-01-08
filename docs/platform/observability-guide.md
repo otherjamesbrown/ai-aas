@@ -1,14 +1,14 @@
 # Observability Guide
 
 ---
-last_updated: 2025-12-12
+last_updated: 2026-01-08
 document_type: guide
 spec: 024-logging-observability-improvements
 ---
 
 ## Stack Components
 
-The AI-AAS platform uses a comprehensive observability stack deployed in the `system` namespace:
+The AI-AAS platform uses a comprehensive observability stack deployed in the `monitoring` and `observability` namespaces:
 
 ### Logging Stack (Loki + Promtail)
 
@@ -17,7 +17,7 @@ The AI-AAS platform uses a comprehensive observability stack deployed in the `sy
   - 14-day retention (development), 30-day retention (production)
   - 50Gi PersistentVolume storage
   - Deployment: `infra/k8s/monitoring/loki/`
-  - API: `http://loki.system.svc.cluster.local:3100`
+  - API: `http://loki-gateway.observability.svc.cluster.local` (via gateway)
 
 - **Promtail** (DaemonSet):
   - Runs on every node to collect container logs
@@ -33,7 +33,7 @@ The AI-AAS platform uses a comprehensive observability stack deployed in the `sy
   - OTLP protocol for trace ingestion
   - 10Gi PersistentVolume storage
   - Deployment: `infra/k8s/monitoring/tempo/`
-  - API: `http://tempo.system.svc.cluster.local:3100`
+  - API: `http://tempo.observability.svc.cluster.local:3100`
 
 - **OTEL Collector** (Deployment):
   - Routes telemetry from services to backends
@@ -57,6 +57,11 @@ The AI-AAS platform uses a comprehensive observability stack deployed in the `sy
   - Scrapes cluster metrics, Kubernetes components, ingress, services
   - Retention: 15 days (disk provisioned per environment)
   - Service graph metrics from OTEL Collector (port 8889)
+  - Deployment: ArgoCD Application at `gitops/clusters/<env>/apps/kube-prometheus-stack.yaml`
+  - Namespace: `monitoring`
+  - ServiceMonitor discovery: Discovers ALL ServiceMonitors (no label filtering)
+  - Scrape interval: 15s
+  - Storage: 50Gi PVC (development/staging), configurable for production
 
 ### Frontend Observability
 

@@ -63,20 +63,32 @@ patterns:
       structure: ensemble (preprocessing/ tensorrt_llm/ postprocessing/ ensemble/)
       protocol: v2 (Triton inference protocol)
       model_name: "always 'ensemble' for TRT-LLM"
-      chat_api: "/v2/models/ensemble/generate"
+      inference_endpoint: "/v2/models/ensemble/infer"
       health: "/v2/health/ready"
       features: ["dynamic batching", "gRPC", "metrics"]
+      api_router_config:
+        backend_type: "triton-grpc"
+        tokenizer: "required (e.g., cl100k_base)"
+        why: "TRT-LLM uses decoupled transaction policy, requires gRPC"
     trtllm_serve:
       structure: simple (rank0.engine, config.json, tokenizer files)
       protocol: openai (/v1/completions)
+      inference_endpoint: "/v1/chat/completions"
       known_issues:
         - "/v1/chat/completions broken (GitHub #5648)"
       health: "/v1/models"
+      api_router_config:
+        backend_type: "openai"
+        note: "Avoid - use Triton or vLLM instead"
     vllm:
       structure: HuggingFace model weights
       protocol: openai (/v1/chat/completions works)
+      inference_endpoint: "/v1/chat/completions"
       benefits: ["no compilation", "portable"]
       tradeoffs: ["slower", "no TensorRT optimization"]
+      api_router_config:
+        backend_type: "openai (default)"
+        tokenizer: "not required"
 
   container_version:
     rule: Engine must match container TRT-LLM version
@@ -98,6 +110,11 @@ patterns:
     backends:
       triton: "requires tokenizer for token counting"
       openai: "default, no tokenizer needed"
+    critical_note: "Missing routing policies cause HTTP 502 - models deploy but cannot receive traffic"
+    endpoint_routing:
+      vllm_models: "API Router → /v1/chat/completions on backend"
+      trtllm_models: "API Router → /v2/models/ensemble/infer on backend (gRPC)"
+      why_different: "TRT-LLM uses Triton V2 protocol, not OpenAI protocol"
 ```
 
 ---

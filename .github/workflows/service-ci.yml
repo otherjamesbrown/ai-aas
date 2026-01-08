@@ -278,3 +278,103 @@ jobs:
           git commit -m "ci(images): update all service image tags to ${IMAGE_TAG} [skip ci]"
           git push origin develop
 
+  # Promote images from develop to staging/production
+  promote-images:
+    name: Promote Images
+    if: (github.event_name == 'push') && (github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout target branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Install yq
+        uses: mikefarah/yq@v4.44.3
+
+      - name: Determine environment
+        id: env
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/staging" ]]; then
+            echo "environment=staging" >> $GITHUB_OUTPUT
+            echo "source_environment=development" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "source_environment=staging" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get latest SHA from source environment
+        id: get_sha
+        run: |
+          SOURCE_ENV="${{ steps.env.outputs.source_environment }}"
+          SERVICES=(admin-api-service analytics-service api-router-service model-downloader user-org-service)
+
+          # Get SHA from first service's development/staging values file
+          FIRST_SERVICE="${SERVICES[0]}"
+          SOURCE_VALUES="services/${FIRST_SERVICE}/deployments/helm/${FIRST_SERVICE}/values-${SOURCE_ENV}.yaml"
+
+          if [[ ! -f "$SOURCE_VALUES" ]]; then
+            echo "Error: Source values file not found: $SOURCE_VALUES"
+            exit 1
+          fi
+
+          SHA_TAG=$(yq eval '.image.tag' "$SOURCE_VALUES")
+          echo "source_sha=$SHA_TAG" >> $GITHUB_OUTPUT
+          echo "Promoting SHA from $SOURCE_ENV: $SHA_TAG"
+
+      - name: Update target environment image tags
+        run: |
+          TARGET_ENV="${{ steps.env.outputs.environment }}"
+          SHA_TAG="${{ steps.get_sha.outputs.source_sha }}"
+          SERVICES=(admin-api-service analytics-service api-router-service model-downloader user-org-service)
+          UPDATED=()
+
+          echo "Promoting $TARGET_ENV to $SHA_TAG from ${{ steps.env.outputs.source_environment }}"
+
+          for service in "${SERVICES[@]}"; do
+            VALUES_FILE="services/${service}/deployments/helm/${service}/values-${TARGET_ENV}.yaml"
+            if [ -f "$VALUES_FILE" ]; then
+              # Get current tag
+              CURRENT_TAG=$(yq eval '.image.tag' "$VALUES_FILE")
+
+              if [[ "$CURRENT_TAG" == "$SHA_TAG" ]]; then
+                echo "  ⏭ $service already at $SHA_TAG"
+                continue
+              fi
+
+              yq eval ".image.tag = \"${SHA_TAG}\"" -i "$VALUES_FILE"
+              echo "  ✓ Updated $service: $CURRENT_TAG → $SHA_TAG"
+              UPDATED+=("$service")
+            else
+              echo "  ⚠ Values file not found: $VALUES_FILE"
+            fi
+          done
+
+          if [[ ${#UPDATED[@]} -eq 0 ]]; then
+            echo "No services needed updating"
+          else
+            echo "Updated services: ${UPDATED[*]}"
+          fi
+
+      - name: Commit and push promoted image tags
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          TARGET_ENV="${{ steps.env.outputs.environment }}"
+          SHA_TAG="${{ steps.get_sha.outputs.source_sha }}"
+          SOURCE_ENV="${{ steps.env.outputs.source_environment }}"
+
+          # Check if there are any changes
+          if git diff --quiet; then
+            echo "No changes to commit - all services already at $SHA_TAG"
+            exit 0
+          fi
+
+          git add services/*/deployments/helm/*/values-${TARGET_ENV}.yaml
+          git commit -m "ci(images): promote $TARGET_ENV to ${SHA_TAG} from $SOURCE_ENV [skip ci]"
+          git push origin ${{ github.ref_name }}
+

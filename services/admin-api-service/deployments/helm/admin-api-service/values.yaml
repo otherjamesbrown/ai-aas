@@ -61,6 +61,11 @@ podAnnotations:
   prometheus.io/path: "/metrics"
   logging.enabled: "true"
 
+prometheus:
+  enabled: true
+  port: 8080
+  path: /metrics
+
 service:
   type: ClusterIP
   port: 8080

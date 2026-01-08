@@ -1,9 +1,8 @@
 # Development environment overrides
 image:
   repository: ghcr.io/otherjamesbrown/ai-aas/user-org-service
-  # Using 'dev' tag to match CI build output for develop branch.
-  # Staging uses 'staging' tag, production uses 'latest' tag.
-  tag: dev
+  # Using SHA-based tag for consistency and traceability
+  tag: sha-923f2ed
   pullPolicy: Always
 
 env:

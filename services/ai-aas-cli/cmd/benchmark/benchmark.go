@@ -35,6 +35,7 @@ Workflow:
   2. Create a benchmark target:    ai-aas-cli benchmark target add <name> --model <model> --scenario <scenario>
   3. Start benchmarking:           ai-aas-cli benchmark target start <name>
   4. View run results:             ai-aas-cli benchmark run list --target <name>
+  5. View latest metrics:          ai-aas-cli benchmark results
 
 Examples:
   # List all benchmark scenarios
@@ -45,6 +46,9 @@ Examples:
 
   # Start benchmarking
   ai-aas-cli benchmark target start llama-7b-qa
+
+  # View latest benchmark results from Prometheus
+  ai-aas-cli benchmark results
 
   # View benchmark status
   ai-aas-cli benchmark status`,
@@ -58,6 +62,13 @@ Examples:
 	cmd.AddCommand(newTargetCommand())
 	cmd.AddCommand(newRunCommand())
 	cmd.AddCommand(newStatusCommand())
+	cmd.AddCommand(newResultsCommand())
+
+	// Add scheduler control commands
+	cmd.AddCommand(newPauseCommand())
+	cmd.AddCommand(newResumeCommand())
+	cmd.AddCommand(newRunManualCommand())
+	cmd.AddCommand(newSchedulerStatusCommand())
 
 	return cmd
 }
@@ -1432,6 +1443,233 @@ Examples:
 
 	cmd.Flags().StringVarP(&format, "format", "f", "table", "output format (table, json)")
 	cmd.Flags().StringVarP(&environment, "environment", "e", "", "filter by environment")
+
+	return cmd
+}
+
+// ============================================================================
+// Scheduler Control Commands
+// ============================================================================
+
+func newPauseCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "pause",
+		Short: "Pause benchmark scheduler",
+		Long: `Pause the guidellm-runner benchmark scheduler.
+
+This stops scheduled background runs. Manual runs can still be triggered.
+
+Examples:
+  ai-aas-cli benchmark pause`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			adminEndpoint := cfg.GetAdminEndpoint()
+			if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
+				return fmt.Errorf("Admin API endpoint not configured. Run 'ai-aas-cli --init' first")
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			apiClient := cfg.NewAPIClient(adminEndpoint)
+			bmClient := benchmark.NewClient(apiClient)
+
+			if err := bmClient.PauseScheduler(ctx); err != nil {
+				return fmt.Errorf("failed to pause scheduler: %w", err)
+			}
+
+			fmt.Println("✓ Benchmark scheduler paused")
+			fmt.Println("\nScheduled background runs are now paused.")
+			fmt.Println("Run 'ai-aas-cli benchmark resume' to resume scheduled runs.")
+
+			return nil
+		},
+	}
+
+	return cmd
+}
+
+func newResumeCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "resume",
+		Short: "Resume benchmark scheduler",
+		Long: `Resume the guidellm-runner benchmark scheduler.
+
+This re-enables scheduled background runs.
+
+Examples:
+  ai-aas-cli benchmark resume`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			adminEndpoint := cfg.GetAdminEndpoint()
+			if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
+				return fmt.Errorf("Admin API endpoint not configured. Run 'ai-aas-cli --init' first")
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			apiClient := cfg.NewAPIClient(adminEndpoint)
+			bmClient := benchmark.NewClient(apiClient)
+
+			if err := bmClient.ResumeScheduler(ctx); err != nil {
+				return fmt.Errorf("failed to resume scheduler: %w", err)
+			}
+
+			fmt.Println("✓ Benchmark scheduler resumed")
+			fmt.Println("\nScheduled background runs have been re-enabled.")
+
+			return nil
+		},
+	}
+
+	return cmd
+}
+
+func newRunManualCommand() *cobra.Command {
+	var model string
+
+	cmd := &cobra.Command{
+		Use:   "run-manual",
+		Short: "Trigger manual benchmark run",
+		Long: `Trigger a manual benchmark run immediately.
+
+This automatically pauses the background schedule and resumes after 60 minutes.
+
+Examples:
+  ai-aas-cli benchmark run-manual
+  ai-aas-cli benchmark run-manual --model llama-7b`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			adminEndpoint := cfg.GetAdminEndpoint()
+			if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
+				return fmt.Errorf("Admin API endpoint not configured. Run 'ai-aas-cli --init' first")
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+
+			apiClient := cfg.NewAPIClient(adminEndpoint)
+			bmClient := benchmark.NewClient(apiClient)
+
+			fmt.Println("Triggering manual benchmark run...")
+			if model != "" {
+				fmt.Printf("  Model: %s\n", model)
+			}
+
+			if err := bmClient.TriggerManualRun(ctx, model); err != nil {
+				return fmt.Errorf("failed to trigger manual run: %w", err)
+			}
+
+			fmt.Println("\n✓ Manual benchmark run triggered")
+			fmt.Println("\nNote: Background schedule is paused during manual run.")
+			fmt.Println("      Schedule will auto-resume after 60 minutes.")
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&model, "model", "", "target specific model (optional)")
+
+	return cmd
+}
+
+func newSchedulerStatusCommand() *cobra.Command {
+	var format string
+
+	cmd := &cobra.Command{
+		Use:   "scheduler-status",
+		Short: "Show scheduler status",
+		Long: `Display the current benchmark scheduler status.
+
+Shows whether the scheduler is running or paused, and when the next run is scheduled.
+
+Examples:
+  ai-aas-cli benchmark scheduler-status
+  ai-aas-cli benchmark scheduler-status --format json`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			profileName, _ := cmd.Flags().GetString("profile")
+			cfg, _, err := config.GetEffectiveConfig(profileName)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			adminEndpoint := cfg.GetAdminEndpoint()
+			if adminEndpoint == "" || adminEndpoint == "http://localhost:8080" {
+				return fmt.Errorf("Admin API endpoint not configured. Run 'ai-aas-cli --init' first")
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			apiClient := cfg.NewAPIClient(adminEndpoint)
+			bmClient := benchmark.NewClient(apiClient)
+
+			status, err := bmClient.GetSchedulerStatus(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to get scheduler status: %w", err)
+			}
+
+			if format == "json" {
+				return output.PrintJSON(status, true)
+			}
+
+			// Table output
+			fmt.Println("Benchmark Scheduler Status")
+			fmt.Println(strings.Repeat("=", 50))
+			fmt.Println()
+
+			// State with emoji
+			stateIcon := "✓"
+			stateColor := "running"
+			if status.State == "paused" {
+				stateIcon = "⏸"
+				stateColor = "paused"
+			}
+			fmt.Printf("  State: %s %s\n", stateIcon, stateColor)
+
+			// Next scheduled run
+			if status.NextScheduled != nil {
+				fmt.Printf("  Next Run: %s\n", status.NextScheduled.Format("2006-01-02 15:04:05"))
+			} else {
+				fmt.Println("  Next Run: (none scheduled)")
+			}
+
+			// Current run
+			if status.CurrentRun != nil {
+				fmt.Printf("  Current Run: %s\n", *status.CurrentRun)
+			}
+
+			// Last run
+			if status.LastRun != nil {
+				fmt.Printf("  Last Run: %s\n", status.LastRun.Format("2006-01-02 15:04:05"))
+			}
+
+			fmt.Println()
+			if status.State == "paused" {
+				fmt.Println("Run 'ai-aas-cli benchmark resume' to resume scheduled runs.")
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVarP(&format, "format", "f", "table", "output format (table, json)")
 
 	return cmd
 }

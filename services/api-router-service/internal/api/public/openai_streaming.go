@@ -179,8 +179,13 @@ func (h *Handler) handleTritonStreamingChatCompletion(
 	}
 
 	// Translate OpenAI request to gRPC format
-	// TRT-LLM always uses "ensemble" as the model name (standard pipeline structure)
-	grpcReq, requestID, err := translator.TranslateOpenAIToGRPC(req, "ensemble")
+	// For multi-model Triton servers, use the model name from the routing policy
+	// For single-model deployments, default to "ensemble" (standard TRT-LLM pipeline)
+	tritonModelName := "ensemble"
+	if len(policy.Backends) > 0 && policy.Backends[0].TritonModelName != "" {
+		tritonModelName = policy.Backends[0].TritonModelName
+	}
+	grpcReq, requestID, err := translator.TranslateOpenAIToGRPC(req, tritonModelName)
 	if err != nil {
 		h.logger.Error("failed to translate request",
 			zap.Error(err),

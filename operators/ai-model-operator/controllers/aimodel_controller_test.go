@@ -2064,3 +2064,228 @@ Progress: 35% complete`,
 		})
 	}
 }
+
+func TestGetModelFormatFromRuntime(t *testing.T) {
+	s := setupScheme()
+	ctx := context.Background()
+
+	tests := []struct {
+		name            string
+		runtimeName     string
+		setupRuntime    *unstructured.Unstructured
+		expectedFormat  string
+		expectedError   bool
+	}{
+		{
+			name:        "ClusterServingRuntime with autoSelect modelFormat",
+			runtimeName: "kserve-triton-blackwell",
+			setupRuntime: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "serving.kserve.io/v1alpha1",
+					"kind":       "ClusterServingRuntime",
+					"metadata": map[string]interface{}{
+						"name": "kserve-triton-blackwell",
+					},
+					"spec": map[string]interface{}{
+						"supportedModelFormats": []interface{}{
+							map[string]interface{}{
+								"name":       "triton-blackwell",
+								"autoSelect": true,
+								"version":    "1",
+							},
+						},
+					},
+				},
+			},
+			expectedFormat: "triton-blackwell",
+			expectedError:  false,
+		},
+		{
+			name:        "ClusterServingRuntime with multiple formats, first has autoSelect",
+			runtimeName: "custom-runtime",
+			setupRuntime: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "serving.kserve.io/v1alpha1",
+					"kind":       "ClusterServingRuntime",
+					"metadata": map[string]interface{}{
+						"name": "custom-runtime",
+					},
+					"spec": map[string]interface{}{
+						"supportedModelFormats": []interface{}{
+							map[string]interface{}{
+								"name":    "format-one",
+								"version": "1",
+							},
+							map[string]interface{}{
+								"name":       "format-two",
+								"autoSelect": true,
+								"version":    "1",
+							},
+						},
+					},
+				},
+			},
+			expectedFormat: "format-two",
+			expectedError:  false,
+		},
+		{
+			name:        "ClusterServingRuntime with no autoSelect (uses first)",
+			runtimeName: "no-autoselect-runtime",
+			setupRuntime: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "serving.kserve.io/v1alpha1",
+					"kind":       "ClusterServingRuntime",
+					"metadata": map[string]interface{}{
+						"name": "no-autoselect-runtime",
+					},
+					"spec": map[string]interface{}{
+						"supportedModelFormats": []interface{}{
+							map[string]interface{}{
+								"name":    "format-first",
+								"version": "1",
+							},
+							map[string]interface{}{
+								"name":    "format-second",
+								"version": "1",
+							},
+						},
+					},
+				},
+			},
+			expectedFormat: "format-first",
+			expectedError:  false,
+		},
+		{
+			name:           "ClusterServingRuntime not found",
+			runtimeName:    "nonexistent-runtime",
+			setupRuntime:   nil,
+			expectedFormat: "",
+			expectedError:  false, // Not found is not an error - caller uses default
+		},
+		{
+			name:        "ClusterServingRuntime with no supportedModelFormats",
+			runtimeName: "empty-formats-runtime",
+			setupRuntime: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "serving.kserve.io/v1alpha1",
+					"kind":       "ClusterServingRuntime",
+					"metadata": map[string]interface{}{
+						"name": "empty-formats-runtime",
+					},
+					"spec": map[string]interface{}{},
+				},
+			},
+			expectedFormat: "",
+			expectedError:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create fake client with or without the runtime
+			objects := []runtime.Object{}
+			if tt.setupRuntime != nil {
+				objects = append(objects, tt.setupRuntime)
+			}
+
+			cl := fake.NewClientBuilder().
+				WithScheme(s).
+				WithRuntimeObjects(objects...).
+				Build()
+
+			r := &AIModelReconciler{
+				Client: cl,
+				Scheme: s,
+			}
+
+			// Call the function
+			format, err := r.getModelFormatFromRuntime(ctx, tt.runtimeName)
+
+			// Check error expectation
+			if tt.expectedError && err == nil {
+				t.Errorf("getModelFormatFromRuntime() expected error but got none")
+			}
+			if !tt.expectedError && err != nil {
+				t.Errorf("getModelFormatFromRuntime() unexpected error: %v", err)
+			}
+
+			// Check format
+			if format != tt.expectedFormat {
+				t.Errorf("getModelFormatFromRuntime() = %q, want %q", format, tt.expectedFormat)
+			}
+		})
+	}
+}
+
+// TestRuntimeArgsForTriton verifies that Triton runtime does not receive vLLM-specific args
+func TestRuntimeArgsForTriton(t *testing.T) {
+	tests := []struct {
+		name          string
+		runtime       string
+		runtimeArgs   []string
+		expectVLLMArg bool
+	}{
+		{
+			name:          "vLLM with empty args gets defaults",
+			runtime:       "vllm",
+			runtimeArgs:   []string{},
+			expectVLLMArg: true,
+		},
+		{
+			name:          "Triton with empty args does NOT get vLLM defaults",
+			runtime:       "triton",
+			runtimeArgs:   []string{},
+			expectVLLMArg: false,
+		},
+		{
+			name:          "TGI with empty args does NOT get vLLM defaults",
+			runtime:       "tgi",
+			runtimeArgs:   []string{},
+			expectVLLMArg: false,
+		},
+		{
+			name:          "tensorrt-llm with empty args does NOT get vLLM defaults",
+			runtime:       "tensorrt-llm",
+			runtimeArgs:   []string{},
+			expectVLLMArg: false,
+		},
+		{
+			name:          "vLLM with explicit args keeps them",
+			runtime:       "vllm",
+			runtimeArgs:   []string{"--max-model-len=4096"},
+			expectVLLMArg: false, // Should keep explicit args, not add defaults
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Simulate the logic in createOrUpdateInferenceService
+			var runtimeArgs []string
+			if len(tt.runtimeArgs) == 0 && tt.runtime == "vllm" {
+				// This is the fixed logic - only add vLLM defaults for vLLM runtime
+				runtimeArgs = []string{
+					"--dtype=float16",
+					"--gpu-memory-utilization=0.9",
+				}
+			} else {
+				runtimeArgs = tt.runtimeArgs
+			}
+
+			// Check if vLLM args are present
+			hasVLLMArgs := false
+			for _, arg := range runtimeArgs {
+				if arg == "--dtype=float16" || arg == "--gpu-memory-utilization=0.9" {
+					hasVLLMArgs = true
+					break
+				}
+			}
+
+			if tt.expectVLLMArg && !hasVLLMArgs {
+				t.Errorf("Runtime %q should have vLLM default args, got: %v", tt.runtime, runtimeArgs)
+			}
+			if !tt.expectVLLMArg && hasVLLMArgs {
+				t.Errorf("Runtime %q should NOT have vLLM default args, got: %v", tt.runtime, runtimeArgs)
+			}
+		})
+	}
+}

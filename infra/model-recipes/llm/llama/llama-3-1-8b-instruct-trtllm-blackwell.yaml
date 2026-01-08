@@ -26,13 +26,13 @@ spec:
     gpu:
       vendor: nvidia
       count: 1
-      minMemoryGB: 24
+      minMemoryGB: 80  # Blackwell has 96GB, require 80GB minimum
     cpu:
-      requests: "8"
-      limits: "16"
+      requests: "16"
+      limits: "32"
     memory:
-      requests: "32Gi"
-      limits: "48Gi"
+      requests: "64Gi"
+      limits: "128Gi"
   runtimeArgs:
     triton:
       backend: tensorrt
@@ -41,8 +41,10 @@ spec:
         - kind: KIND_GPU
           count: 1
       dynamicBatching:
-        maxBatchSize: 64
-        maxQueueDelayMicroseconds: 100000
+        maxBatchSize: 128  # 2x Ada - Blackwell has 4x VRAM for KV cache
+        maxQueueDelayMicroseconds: 50000  # Lower delay for higher throughput
+      # KV cache - use 90% of free VRAM after engine loading
+      kvCacheFreeFraction: "0.90"
   scheduling:
     tolerations:
       - key: nvidia.com/gpu

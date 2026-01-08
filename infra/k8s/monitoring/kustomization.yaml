@@ -13,5 +13,8 @@ namespace: monitoring
 # - promtail/
 # - dashboards/
 
-commonLabels:
+resources:
+  - servicemonitors/nvidia-dcgm-exporter.yaml
+
+commonAnnotations:
   app.kubernetes.io/part-of: observability

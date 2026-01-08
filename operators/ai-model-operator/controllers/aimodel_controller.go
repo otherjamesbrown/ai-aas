@@ -45,6 +45,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -350,15 +351,30 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 	}
 
-	// Validate spec: either S3 fields OR trustRemoteCode must be provided
+	// Validate spec: either S3 fields OR trustRemoteCode must be provided (unless multi-model)
+	isMultiModel := aiModel.Spec.MultiModel != nil && aiModel.Spec.MultiModel.Enabled
 	hasS3Config := aiModel.Spec.S3Bucket != "" && aiModel.Spec.S3Key != ""
 	hasTrustRemoteCode := aiModel.Spec.TrustRemoteCode && aiModel.Spec.ModelID != ""
-	if !hasS3Config && !hasTrustRemoteCode {
+	if !isMultiModel && !hasS3Config && !hasTrustRemoteCode {
 		log.Error(nil, "Invalid AIModel spec: must provide either S3Bucket+S3Key or TrustRemoteCode=true with ModelID",
 			"name", aiModel.Name, "s3Bucket", aiModel.Spec.S3Bucket, "s3Key", aiModel.Spec.S3Key,
 			"trustRemoteCode", aiModel.Spec.TrustRemoteCode, "modelID", aiModel.Spec.ModelID)
 		aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
 		aiModel.Status.Message = "Invalid spec: must provide either S3Bucket+S3Key for S3-based deployment, or TrustRemoteCode=true with ModelID for HuggingFace-based deployment"
+		if err := r.Status().Update(ctx, aiModel); err != nil {
+			log.Error(err, "unable to update AIModel status")
+			reconcileTotal.WithLabelValues("error").Inc()
+			return ctrl.Result{}, err
+		}
+		reconcileTotal.WithLabelValues("error").Inc()
+		return ctrl.Result{}, nil // Don't requeue - user must fix the spec
+	}
+
+	// Validate multi-model configuration if enabled
+	if multiModelErr := validateMultiModelSpec(aiModel); multiModelErr != "" {
+		log.Error(nil, "Invalid AIModel multi-model spec", "name", aiModel.Name, "error", multiModelErr)
+		aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseFailed
+		aiModel.Status.Message = "Invalid multi-model spec: " + multiModelErr
 		if err := r.Status().Update(ctx, aiModel); err != nil {
 			log.Error(err, "unable to update AIModel status")
 			reconcileTotal.WithLabelValues("error").Inc()
@@ -407,12 +423,23 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, nil
 	}
 
-	// 1. Reconcile Model Artifact Downloader Job (only for S3-based deployments)
+	// 1. Reconcile Model Artifact Downloader Job (only for S3-based single-model deployments)
 	// For trustRemoteCode models, skip the downloader as they load directly from HuggingFace
+	// For multi-model deployments, skip the downloader as TRT-LLM engines are pre-built in S3
+	skipDownloader := false
 	if aiModel.Spec.TrustRemoteCode && aiModel.Spec.ModelID != "" {
 		// Skip downloader job - model will be loaded directly from HuggingFace
 		log.Info("Skipping downloader job for trustRemoteCode model",
 			"name", aiModel.Name, "modelID", aiModel.Spec.ModelID)
+		skipDownloader = true
+	} else if aiModel.Spec.MultiModel != nil && aiModel.Spec.MultiModel.Enabled {
+		// Skip downloader job - multi-model deployments use pre-built TRT-LLM engines in S3
+		log.Info("Skipping downloader job for multi-model deployment",
+			"name", aiModel.Name, "modelCount", len(aiModel.Spec.MultiModel.Models))
+		skipDownloader = true
+	}
+
+	if skipDownloader {
 		// Set phase to Deploying to proceed to InferenceService creation
 		if aiModel.Status.Phase != aimodelv1alpha1.AIModelPhaseDeploying &&
 			aiModel.Status.Phase != aimodelv1alpha1.AIModelPhaseReady {
@@ -1169,6 +1196,81 @@ func (r *AIModelReconciler) checkS3ArtifactExists(ctx context.Context, aiModel *
 	return true, nil
 }
 
+// getModelFormatFromRuntime looks up a ClusterServingRuntime and extracts the modelFormat
+// from its supportedModelFormats field. Returns the first modelFormat with autoSelect=true,
+// or the first entry if none have autoSelect=true. Returns empty string if not found.
+func (r *AIModelReconciler) getModelFormatFromRuntime(ctx context.Context, runtimeName string) (string, error) {
+	log := log.FromContext(ctx)
+
+	// Fetch the ClusterServingRuntime
+	runtime := &unstructured.Unstructured{}
+	runtime.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "serving.kserve.io",
+		Version: "v1alpha1",
+		Kind:    "ClusterServingRuntime",
+	})
+
+	err := r.Get(ctx, types.NamespacedName{Name: runtimeName}, runtime)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			log.Info("ClusterServingRuntime not found", "runtimeName", runtimeName)
+			return "", nil // Not found is not an error - caller will use default
+		}
+		return "", fmt.Errorf("failed to get ClusterServingRuntime %s: %w", runtimeName, err)
+	}
+
+	// Extract supportedModelFormats from spec
+	supportedFormats, found, err := unstructured.NestedSlice(runtime.Object, "spec", "supportedModelFormats")
+	if err != nil {
+		return "", fmt.Errorf("failed to extract supportedModelFormats from ClusterServingRuntime %s: %w", runtimeName, err)
+	}
+	if !found || len(supportedFormats) == 0 {
+		log.Info("ClusterServingRuntime has no supportedModelFormats", "runtimeName", runtimeName)
+		return "", nil
+	}
+
+	// Find the format with autoSelect=true, or use the first one
+	var firstFormat string
+	for _, format := range supportedFormats {
+		formatMap, ok := format.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		name, ok := formatMap["name"].(string)
+		if !ok || name == "" {
+			continue
+		}
+
+		// Save first valid format
+		if firstFormat == "" {
+			firstFormat = name
+		}
+
+		// Check for autoSelect
+		autoSelect, _ := formatMap["autoSelect"].(bool)
+		if autoSelect {
+			log.Info("Found modelFormat from ClusterServingRuntime",
+				"runtimeName", runtimeName,
+				"modelFormat", name,
+				"autoSelect", true)
+			return name, nil
+		}
+	}
+
+	// No autoSelect found, use first format
+	if firstFormat != "" {
+		log.Info("Found modelFormat from ClusterServingRuntime",
+			"runtimeName", runtimeName,
+			"modelFormat", firstFormat,
+			"autoSelect", false)
+		return firstFormat, nil
+	}
+
+	log.Info("ClusterServingRuntime has supportedModelFormats but no valid name fields", "runtimeName", runtimeName)
+	return "", nil
+}
+
 // createOrUpdateInferenceService creates or updates a KServe InferenceService for the AIModel
 // If recipeSpec is provided, it uses the recipe configuration; otherwise uses inline AIModel spec
 func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, aiModel *aimodelv1alpha1.AIModel, recipeSpec *aimodelv1alpha1.ModelRecipeSpec) error {
@@ -1344,8 +1446,37 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 	// Check if a custom runtime name is specified
 	if aiModel.Spec.RuntimeName != "" {
 		runtimeName = aiModel.Spec.RuntimeName
-		// For custom runtime names, use default vllm modelFormat unless specified otherwise
-		// Users can override this by explicitly setting the runtime field
+		// Look up the ClusterServingRuntime to get the correct modelFormat
+		// from its supportedModelFormats field
+		detectedFormat, err := r.getModelFormatFromRuntime(ctx, runtimeName)
+		if err != nil {
+			return fmt.Errorf("failed to get modelFormat from ClusterServingRuntime %s: %w", runtimeName, err)
+		}
+		if detectedFormat != "" {
+			modelFormat = detectedFormat
+			log.Info("Using modelFormat from ClusterServingRuntime",
+				"runtimeName", runtimeName,
+				"modelFormat", modelFormat)
+		} else {
+			// ClusterServingRuntime not found or has no supportedModelFormats
+			// Fall back to runtime-based default
+			log.Info("ClusterServingRuntime not found or missing supportedModelFormats, using runtime-based default",
+				"runtimeName", runtimeName,
+				"runtime", runtime)
+			switch runtime {
+			case "vllm":
+				modelFormat = "vllm"
+			case "tgi":
+				modelFormat = "huggingface"
+			case "triton":
+				modelFormat = "tensorrt"
+			case "tensorrt-llm":
+				modelFormat = "tensorrt-llm"
+			default:
+				// Keep default "vllm" for unknown runtimes
+				modelFormat = "vllm"
+			}
+		}
 	} else {
 		// Map runtime to appropriate KServe ClusterServingRuntime name
 		switch runtime {
@@ -1375,8 +1506,8 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 	} else {
 		// Use inline spec runtime args
 		runtimeArgs = aiModel.Spec.RuntimeArgs
-		if len(runtimeArgs) == 0 {
-			// Use default vLLM args if none specified
+		if len(runtimeArgs) == 0 && runtime == "vllm" {
+			// Use default vLLM args if none specified (only for vLLM runtime)
 			// Note: max-model-len is intentionally omitted to allow vLLM to auto-detect
 			// from the model's config.json (max_position_embeddings). This prevents
 			// errors when deploying models with smaller context windows (e.g., TinyLlama=2048).
@@ -1457,8 +1588,46 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 		"aimodel", aiModel.Name,
 		"runtime", runtime)
 
-	// from the HuggingFace repo, which isn't preserved in S3 storage.
-	if aiModel.Spec.TrustRemoteCode && aiModel.Spec.ModelID != "" {
+	// Check for multi-model deployment first - this is a special path for hosting
+	// multiple TRT-LLM models on a single GPU using Triton's model orchestration.
+	if aiModel.Spec.MultiModel != nil && aiModel.Spec.MultiModel.Enabled {
+		log.Info("Using multi-model deployment for Triton",
+			"name", aiModel.Name,
+			"modelCount", len(aiModel.Spec.MultiModel.Models))
+
+		// Convert AIModel MultiModelEntry to kserve.MultiModelEntry
+		models := make([]kserve.MultiModelEntry, 0, len(aiModel.Spec.MultiModel.Models))
+		for _, m := range aiModel.Spec.MultiModel.Models {
+			models = append(models, kserve.MultiModelEntry{
+				Name:            m.Name,
+				S3Key:           m.S3Key,
+				KVCacheFraction: m.KVCacheFraction,
+				MaxBatchSize:    m.MaxBatchSize,
+			})
+		}
+
+		// Determine runtime name (use spec.runtimeName if specified, otherwise default)
+		multiModelRuntime := aiModel.Spec.RuntimeName
+		if multiModelRuntime == "" {
+			multiModelRuntime = "kserve-triton-multi-model-blackwell"
+		}
+
+		isvc, err = kserve.NewTritonMultiModelBuilder(sanitizeInferenceServiceName(aiModel.Name), aiModel.Namespace).
+			WithS3Bucket(aiModel.Spec.S3Bucket).
+			WithModels(models).
+			WithResources(resources).
+			WithTolerations(tolerations).
+			WithNodeSelector(nodeSelector).
+			WithRuntimeEnv(runtimeEnv).
+			WithRuntimeName(multiModelRuntime).
+			WithOwnerReference(ownerRef).
+			Build()
+		if err != nil {
+			return fmt.Errorf("failed to build multi-model InferenceService: %w", err)
+		}
+	} else if aiModel.Spec.TrustRemoteCode && aiModel.Spec.ModelID != "" {
+		// Container-based deployment for trust_remote_code models
+		// from the HuggingFace repo, which isn't preserved in S3 storage.
 		log.Info("Using container-based deployment for trust_remote_code model",
 			"name", aiModel.Name, "modelID", aiModel.Spec.ModelID, "runtime", runtime)
 
@@ -3062,6 +3231,68 @@ func (r *AIModelReconciler) getPodLogs(ctx context.Context, pod *corev1.Pod, con
 	}
 
 	return buf.String()
+}
+
+// validateMultiModelSpec validates the multi-model configuration.
+// Returns an error message if validation fails, empty string if valid.
+func validateMultiModelSpec(aiModel *aimodelv1alpha1.AIModel) string {
+	mm := aiModel.Spec.MultiModel
+	if mm == nil || !mm.Enabled {
+		return "" // Multi-model not enabled, skip validation
+	}
+
+	// Multi-model requires triton runtime
+	if aiModel.Spec.Runtime != "triton" {
+		return "multiModel.enabled requires runtime=triton"
+	}
+
+	// Must have at least 2 models
+	if len(mm.Models) < 2 {
+		return "multiModel requires at least 2 models when enabled"
+	}
+
+	// Validate individual models and check for duplicates
+	seenNames := make(map[string]bool)
+	var totalKVCacheFraction float64 = 0.0
+	var hasKVCache bool
+
+	for i, model := range mm.Models {
+		// Name is required
+		if model.Name == "" {
+			return fmt.Sprintf("multiModel.models[%d].name is required", i)
+		}
+
+		// S3Key is required
+		if model.S3Key == "" {
+			return fmt.Sprintf("multiModel.models[%d].s3Key is required", i)
+		}
+
+		// Check for duplicate names
+		if seenNames[model.Name] {
+			return fmt.Sprintf("duplicate model name in multiModel.models: %s", model.Name)
+		}
+		seenNames[model.Name] = true
+
+		// Validate and sum KV cache fractions
+		if model.KVCacheFraction != "" {
+			hasKVCache = true
+			fraction, err := strconv.ParseFloat(model.KVCacheFraction, 64)
+			if err != nil {
+				return fmt.Sprintf("multiModel.models[%d].kvCacheFraction is invalid: %v", i, err)
+			}
+			if fraction < 0.05 || fraction > 0.90 {
+				return fmt.Sprintf("multiModel.models[%d].kvCacheFraction must be between 0.05 and 0.90", i)
+			}
+			totalKVCacheFraction += fraction
+		}
+	}
+
+	// Warn if total KV cache exceeds 95%
+	if hasKVCache && totalKVCacheFraction > 0.95 {
+		return fmt.Sprintf("total kvCacheFraction across all models (%.2f) exceeds 0.95; this will likely cause OOM", totalKVCacheFraction)
+	}
+
+	return ""
 }
 
 // SetupWithManager sets up the controller with the Manager.

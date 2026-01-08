@@ -95,6 +95,8 @@ All vLLM metrics use the `vllm:` prefix format (with colon).
 | Metric | Description | Type |
 |--------|-------------|------|
 | `vllm:time_to_first_token_seconds` | Time to first token (p50, p95, p99) | Histogram |
+| `vllm:inter_token_latency_seconds` | Inter-token latency during generation (streaming performance) | Histogram |
+| `vllm:time_per_output_token_seconds` | DEPRECATED: Use vllm:inter_token_latency_seconds instead | Histogram |
 | `vllm:e2e_request_latency_seconds` | End-to-end request latency | Histogram |
 
 #### Resource Utilization

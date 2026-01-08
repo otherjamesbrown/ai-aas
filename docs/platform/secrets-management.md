@@ -13,21 +13,57 @@ The platform uses multiple secret management approaches depending on the compone
 
 ### Authentication Model
 
-The Admin API uses a **master admin API key** (`MASTER_ADMIN_API_KEY`) for authentication:
+The Admin API uses a **master admin API key** for authentication:
 - This is the primary administrative credential with full platform access
-- All Admin API requests must include this key in the `X-API-Key` header
-- The key is a cryptographically secure random string with SHA-256 fingerprint
+- All Admin API requests must include this key in the `Authorization: Bearer` header
+- The key is a cryptographically secure random string
 
-### Location
+### Key Naming Convention
 
-The `MASTER_ADMIN_API_KEY` is stored in:
-- **File**: `secrets/env/.env` (git-crypt encrypted)
-- **Variable**: `MASTER_ADMIN_API_KEY=<secret-value>`
+**Format**: `aas-master-<environment>-<random>`
+
+| Environment | Key Prefix | Example |
+|-------------|------------|---------|
+| Development | `aas-master-develop-` | `aas-master-develop-r4AlY7rJmt...` |
+| Staging | `aas-master-staging-` | `aas-master-staging-aHkHICeg...` |
+| Production | `aas-master-prod-` | `aas-master-prod-xxxxx...` |
+
+### Storage Locations
+
+Each environment has its master key stored in multiple places:
+
+| Location | Development | Staging |
+|----------|-------------|---------|
+| **Dedicated env file** | `secrets/env/.env.develop-master` | `secrets/env/.env.staging-master` |
+| **Combined env file** | `secrets/env/.env` (`DEVELOP_MASTER_ADMIN_API_KEY`) | `secrets/env/.env` (`STAGING_MASTER_ADMIN_API_KEY`) |
+| **GitHub Secret** | `DEVELOP_MASTER_ADMIN_API_KEY` | `STAGING_MASTER_ADMIN_API_KEY` |
+| **K8s Secret (admin-api)** | `admin-api-secrets.master-admin-api-key` | `admin-api-secrets.master-admin-api-key` |
+| **K8s Secret (analytics)** | N/A | `analytics-service-secrets.master-admin-api-key` |
+| **CLI Config** | `~/.ai-aas-cli.yaml` profiles | `~/.ai-aas-cli.yaml` profiles |
+
+### Quick Reference
+
+```bash
+# Load development master key
+source secrets/env/.env.develop-master
+curl -H "Authorization: Bearer $DEVELOP_MASTER_ADMIN_API_KEY" \
+     https://admin-api.dev.otherjamesbrown.com/v1/organizations
+
+# Load staging master key
+source secrets/env/.env.staging-master
+curl -k -H "Authorization: Bearer $STAGING_MASTER_ADMIN_API_KEY" \
+     https://admin-api.staging.otherjamesbrown.com/v1/organizations
+
+# Use CLI with profile
+ai-aas-cli --profile dev-admin org list
+ai-aas-cli --profile staging-master org list
+```
+
 - **See also**: `docs/admin/MASTER_ADMIN_SETUP.md` for complete details
 
 ### Operator Requirements
 
-**CRITICAL**: All operators that need to communicate with the Admin API must have their `ADMIN_API_KEY` secret configured to match the `MASTER_ADMIN_API_KEY` value.
+**CRITICAL**: All operators that need to communicate with the Admin API must have their `ADMIN_API_KEY` secret configured to match the environment's master admin API key.
 
 This includes:
 - **AI Model Operator** (`operators/ai-model-operator/`)
@@ -39,17 +75,29 @@ This includes:
 
 When deploying an operator that needs Admin API access:
 
-1. **Get the master admin API key**:
+1. **Get the master admin API key for the environment**:
    ```bash
-   # Load from encrypted secrets file
-   source secrets/env/.env
-   echo $MASTER_ADMIN_API_KEY
+   # For development
+   source secrets/env/.env.develop-master
+   echo $DEVELOP_MASTER_ADMIN_API_KEY
+
+   # For staging
+   source secrets/env/.env.staging-master
+   echo $STAGING_MASTER_ADMIN_API_KEY
    ```
 
 2. **Create Kubernetes Secret in operator namespace**:
    ```bash
-   kubectl create secret generic ai-model-operator-secrets \
-     --from-literal=ADMIN_API_KEY=$MASTER_ADMIN_API_KEY \
+   # Development
+   kubectl --kubeconfig=$HOME/kubeconfigs/kubeconfig-development.yaml \
+     create secret generic ai-model-operator-secrets \
+     --from-literal=ADMIN_API_KEY=$DEVELOP_MASTER_ADMIN_API_KEY \
+     -n ai-model-operator-system
+
+   # Staging
+   kubectl --kubeconfig=$HOME/kubeconfigs/kubeconfig-staging.yaml \
+     create secret generic ai-model-operator-secrets \
+     --from-literal=ADMIN_API_KEY=$STAGING_MASTER_ADMIN_API_KEY \
      -n ai-model-operator-system
    ```
 

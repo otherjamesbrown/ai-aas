@@ -127,29 +127,49 @@ func TestGRPCTranslator_TranslateOpenAIToGRPC(t *testing.T) {
 			return
 		}
 
-		// Verify inputs: text_input, max_tokens, temperature, top_p, stop_words
-		// Note: stream is NOT included - TensorRT-LLM ensemble models reject extra inputs
-		expectedInputs := 5
+		// Verify inputs: ONLY text_input and max_tokens
+		// TensorRT-LLM ensemble models reject optional inputs like temperature, top_p, stop_words
+		// These parameters are configured at model deployment time, not per-request
+		// See: aas-scen9 - "expected 2 inputs but got 3" error
+		expectedInputs := 2
 		if len(grpcReq.Inputs) != expectedInputs {
 			t.Errorf("expected %d inputs, got %d", expectedInputs, len(grpcReq.Inputs))
 		}
 
-		// Check input names
+		// Check input names - should only have required inputs
 		inputNames := make(map[string]bool)
 		for _, input := range grpcReq.Inputs {
 			inputNames[input.Name] = true
 		}
 
-		expected := []string{TensorInputTextInput, TensorInputMaxTokens, TensorInputTemperature, TensorInputTopP, TensorInputStopWords}
-		for _, name := range expected {
+		// Only these two inputs should be present
+		requiredInputs := []string{TensorInputTextInput, TensorInputMaxTokens}
+		for _, name := range requiredInputs {
 			if !inputNames[name] {
-				t.Errorf("missing expected input: %s", name)
+				t.Errorf("missing required input: %s", name)
 			}
 		}
 
-		// Verify stream is NOT included (causes TensorRT-LLM ensemble errors)
-		if inputNames[TensorInputStream] {
-			t.Error("stream input should NOT be included - causes TensorRT-LLM ensemble model errors")
+		// Verify optional parameters are NOT included (they cause ensemble errors)
+		optionalInputs := []string{TensorInputTemperature, TensorInputTopP, TensorInputStopWords, TensorInputStream}
+		for _, name := range optionalInputs {
+			if inputNames[name] {
+				t.Errorf("optional input %s should NOT be included - causes TensorRT-LLM ensemble model errors", name)
+			}
+		}
+
+		// Verify max_tokens has the specified value
+		foundMaxTokens := false
+		for _, input := range grpcReq.Inputs {
+			if input.Name == TensorInputMaxTokens {
+				foundMaxTokens = true
+				if len(input.Contents.IntContents) == 0 || input.Contents.IntContents[0] != int32(maxTokens) {
+					t.Errorf("expected max_tokens of %d, got %v", maxTokens, input.Contents.IntContents)
+				}
+			}
+		}
+		if !foundMaxTokens {
+			t.Error("expected max_tokens input to be present")
 		}
 	})
 
