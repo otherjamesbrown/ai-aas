@@ -33,10 +33,11 @@ type RoutingPolicy struct {
 
 // Backend represents a backend in a routing policy
 type Backend struct {
-	BackendID    string  `json:"backend_id"`
-	Weight       int     `json:"weight"`
-	HealthStatus *string `json:"health_status,omitempty"`
-	Endpoint     *string `json:"endpoint,omitempty"`
+	BackendID       string  `json:"backend_id"`
+	Weight          int     `json:"weight"`
+	HealthStatus    *string `json:"health_status,omitempty"`
+	Endpoint        *string `json:"endpoint,omitempty"`
+	TritonModelName string  `json:"triton_model_name,omitempty"` // Model name for multi-model Triton servers (e.g., "llama_ensemble")
 }
 
 // PolicyCreate represents a request to create a routing policy

@@ -69,8 +69,9 @@ type AdminPolicy struct {
 
 // AdminBackend represents a backend in Admin API response.
 type AdminBackend struct {
-	BackendID string `json:"backend_id"`
-	Weight    int    `json:"weight"`
+	BackendID       string `json:"backend_id"`
+	Weight          int    `json:"weight"`
+	TritonModelName string `json:"triton_model_name,omitempty"` // Model name for multi-model Triton servers
 }
 
 // AdminSyncMetadata contains sync metadata from Admin API.
@@ -224,8 +225,9 @@ func (c *AdminSyncClient) convertPolicy(admin *AdminPolicy) *RoutingPolicy {
 	backends := make([]BackendWeight, len(admin.Backends))
 	for i, b := range admin.Backends {
 		backends[i] = BackendWeight{
-			BackendID: b.BackendID,
-			Weight:    b.Weight,
+			BackendID:       b.BackendID,
+			Weight:          b.Weight,
+			TritonModelName: b.TritonModelName,
 		}
 	}
 
