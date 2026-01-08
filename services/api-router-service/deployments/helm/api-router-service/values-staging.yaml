@@ -140,4 +140,7 @@ backends:
     llama-3.1-8b-instruct-ada:http://llama-3-1-8b-instruct-vllm-ada-predictor.staging.svc.cluster.local:80,
     llama-3.1-8b-instruct-blackwell:http://llama-3-1-8b-instruct-vllm-blackwell-predictor.staging.svc.cluster.local:80,
     llama-3-1-8b-instruct-trtllm-ada:http://llama-3-1-8b-instruct-trtllm-ada-predictor.staging.svc.cluster.local:80,
-    llama-3-1-8b-instruct-trtllm-blackwell:http://llama-3-1-8b-instruct-trtllm-blackwell-predictor.staging.svc.cluster.local:80
+    llama-3-1-8b-instruct-trtllm-blackwell:http://llama-3-1-8b-instruct-trtllm-blackwell-predictor.staging.svc.cluster.local:80,
+    mm-blackwell-1-llama:http://multi-model-3x8b-blackwell-predictor.staging.svc.cluster.local:80,
+    mm-blackwell-1-mistral:http://multi-model-3x8b-blackwell-predictor.staging.svc.cluster.local:80,
+    mm-blackwell-1-qwen:http://multi-model-3x8b-blackwell-predictor.staging.svc.cluster.local:80

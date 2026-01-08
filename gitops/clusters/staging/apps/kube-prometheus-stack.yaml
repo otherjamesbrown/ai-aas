@@ -1,0 +1,169 @@
+# kube-prometheus-stack ArgoCD Application for Staging
+# ====================================================
+# Deploys Prometheus, Grafana, Alertmanager, and exporters to the monitoring namespace
+# This is the core metrics collection and visualization stack
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack-staging
+  namespace: argocd
+  labels:
+    environment: staging
+    app: kube-prometheus-stack
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform-staging
+
+  source:
+    # Use the official kube-prometheus-stack Helm chart
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: 80.4.1  # Match development version
+
+    helm:
+      # Use staging-specific values
+      values: |
+        # Load values from our values file
+        # We inline them here since we can't reference files from the ai-aas repo
+        # when using a chart from a different Helm repo
+
+        prometheusOperator:
+          enabled: true
+          resources:
+            limits:
+              cpu: 200m
+              memory: 256Mi
+            requests:
+              cpu: 50m
+              memory: 128Mi
+
+        prometheus:
+          enabled: true
+          prometheusSpec:
+            resources:
+              limits:
+                cpu: 2000m
+                memory: 4Gi
+              requests:
+                cpu: 500m
+                memory: 2Gi
+            retention: 15d
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 50Gi
+            # CRITICAL: Discover ALL ServiceMonitors without label filtering
+            serviceMonitorSelectorNilUsesHelmValues: false
+            podMonitorSelectorNilUsesHelmValues: false
+            ruleSelectorNilUsesHelmValues: false
+            scrapeInterval: 15s
+
+        grafana:
+          enabled: true
+          adminPassword: admin123
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          persistence:
+            enabled: true
+            size: 10Gi
+          datasources:
+            datasources.yaml:
+              apiVersion: 1
+              datasources:
+                - name: Prometheus
+                  type: prometheus
+                  url: http://kube-prometheus-stack-prometheus:9090
+                  access: proxy
+                  isDefault: true
+                - name: Loki
+                  type: loki
+                  url: http://loki-gateway.observability.svc.cluster.local
+                  access: proxy
+                - name: Tempo
+                  type: tempo
+                  url: http://tempo.observability.svc.cluster.local:3100
+                  access: proxy
+          sidecar:
+            dashboards:
+              enabled: true
+              label: grafana_dashboard
+              labelValue: "1"
+              folder: /tmp/dashboards
+              provider:
+                foldersFromFilesStructure: true
+            datasources:
+              enabled: true
+          ingress:
+            enabled: false  # Managed separately
+
+        alertmanager:
+          enabled: true
+          alertmanagerSpec:
+            resources:
+              limits:
+                cpu: 200m
+                memory: 256Mi
+              requests:
+                cpu: 50m
+                memory: 128Mi
+            storage:
+              volumeClaimTemplate:
+                spec:
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 5Gi
+
+        nodeExporter:
+          enabled: true
+
+        kubeStateMetrics:
+          enabled: true
+
+        defaultRules:
+          create: true
+          rules:
+            alertmanager: true
+            etcd: false
+            kubeApiserver: true
+            kubeApiserverAvailability: true
+            kubeApiserverSlos: true
+            kubeProxy: false
+            kubelet: true
+            kubernetesApps: true
+            kubernetesResources: true
+            kubernetesStorage: true
+            kubernetesSystem: true
+            node: true
+            prometheus: true
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - ServerSideApply=true  # Required for CRDs
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
