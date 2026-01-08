@@ -281,8 +281,7 @@ jobs:
   # Promote images from develop to staging/production
   promote-images:
     name: Promote Images
-    needs: [build-images]
-    if: github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push') && (github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     permissions:
       contents: write
