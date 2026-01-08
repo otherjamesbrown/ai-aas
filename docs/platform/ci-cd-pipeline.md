@@ -1,8 +1,9 @@
 # CI/CD Pipeline
 
 ---
-last_updated: 2026-01-04
+last_updated: 2026-01-08
 document_type: overview
+changes: "Updated image tagging strategy with build-once-promote-everywhere workflow"
 ---
 
 This document provides an overview of the CI/CD pipeline, Git strategy, and automated testing for the AI-as-a-Service platform.
@@ -62,62 +63,81 @@ Stages:
 5. **Metrics Upload** - Archives build metrics
 6. **Build & Push Images** - Builds and pushes Docker images with branch-specific tags (push events only)
 
-#### Docker Image Tagging Strategy
+#### Docker Image Tagging Strategy (Build-Once-Promote-Everywhere)
 
-CI automatically tags Docker images with multiple tags for flexibility:
+**As of 2026-01-08**: CI implements a build-once-promote-everywhere workflow using SHA-based tags.
 
-| Tag Type | Format | Example | Purpose |
-|----------|--------|---------|---------|
-| **Commit SHA** (immutable) | `abc1234` (short) | `ghcr.io/.../admin-api-service:abc1234` | **Primary tag** - immutable, traceable |
-| Branch + SHA | `develop-abc1234` | `ghcr.io/.../admin-api-service:develop-abc1234` | Debugging, rollback reference |
-| Branch alias | `dev`, `staging`, `latest` | `ghcr.io/.../admin-api-service:dev` | Fallback for manual operations |
+**Image Tag Format**: `sha-abc123f` (standardized, immutable)
 
-**Immutable Deployment Flow (Development)**:
+**Build Phase (develop branch)**:
 
-1. **CI builds and pushes** image with commit SHA tag (e.g., `abc1234`)
-2. **CI updates** `values-development.yaml` with new SHA: `image.tag: abc1234`
-3. **CI commits** updated values file back to `develop` branch with `[skip ci]`
-4. **ArgoCD detects** change in Git and syncs automatically
-5. **Kubernetes restarts** pods with new image (tag changed in Git)
+1. **CI builds and pushes** image with SHA tag (e.g., `sha-abc123f`)
+2. **CI updates** `values-development.yaml` with new SHA
+3. **CI commits** updated values file to `develop` with `[skip ci]`
+4. **ArgoCD detects** change and syncs to development cluster
+
+**Promotion Phase (staging/main branches)**:
+
+1. **Code merged** to `staging` or `main` via PR
+2. **CI reads** latest SHA from source environment values file:
+   - Staging: reads from `values-development.yaml`
+   - Production: reads from `values-staging.yaml`
+3. **CI updates** target environment values with same SHA
+4. **CI commits** promotion to target branch with `[skip ci]`
+5. **ArgoCD syncs** promoted images to target cluster
 
 **Benefits**:
-- ✅ Automatic deployments - no manual intervention needed
-- ✅ Immutable tags - each commit gets unique image
-- ✅ Easy rollback - change `image.tag` to previous SHA
-- ✅ Full traceability - image tag = commit hash
+- ✅ Build once, promote everywhere - no rebuild on staging/main
+- ✅ Immutable tags - same image tested in dev/staging/production
+- ✅ Automatic promotions - no manual Helm values updates
+- ✅ Full traceability - SHA tag = commit hash
+- ✅ Emergency hotfixes - can still build on staging/main if needed
 
 **Helm Values Files**:
 
 ```yaml
 # services/<name>/deployments/helm/<name>/values-development.yaml
-# Updated automatically by CI with commit SHA
+# Auto-updated by CI on develop push
 image:
-  tag: abc1234  # Auto-updated by CI on each build
+  tag: "sha-abc123f"  # CI updates automatically
 
 # services/<name>/deployments/helm/<name>/values-staging.yaml
-# Updated manually or via promotion workflow
+# Auto-promoted by CI on staging merge
 image:
-  tag: staging  # OR specific SHA for controlled rollout
+  tag: "sha-abc123f"  # Same SHA as development (promoted)
 
-# services/<name>/deployments/helm/<name>/values.yaml (production default)
-# Updated manually during production promotion
+# services/<name>/deployments/helm/<name>/values-production.yaml
+# Auto-promoted by CI on main merge
 image:
-  tag: latest  # OR specific SHA for production
+  tag: "sha-abc123f"  # Same SHA as staging (promoted)
 ```
 
 **Manual Rollback**:
 
 ```bash
-# Roll back to previous commit
+# Roll back to previous SHA
 cd services/api-router-service/deployments/helm/api-router-service
-yq eval '.image.tag = "xyz9876"' -i values-development.yaml
+yq eval '.image.tag = "sha-xyz9876"' -i values-development.yaml
 git add values-development.yaml
-git commit -m "rollback(api-router): revert to xyz9876"
+git commit -m "rollback(api-router): revert to sha-xyz9876 [skip ci]"
 git push origin develop
 # ArgoCD will sync automatically
 ```
 
-See `.github/workflows/service-ci.yml` (lines 199-274) for the complete implementation.
+**Manual Promotion Override**:
+
+```bash
+# Promote specific SHA to staging (override automated promotion)
+./scripts/promote-images.sh sha-abc123f staging
+git add services/*/deployments/helm/*/values-staging.yaml
+git commit -m "chore: promote staging to sha-abc123f [skip ci]"
+git push origin staging
+```
+
+See:
+- `.github/workflows/service-ci.yml` for complete CI implementation
+- `docs/platform/image-tagging-strategy.md` for detailed tagging strategy
+- `scripts/promote-images.sh` for manual promotion tool
 
 ### Web Portal CI (`web-portal.yml`)
 

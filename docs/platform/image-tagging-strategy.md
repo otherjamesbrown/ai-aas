@@ -2,6 +2,7 @@
 title: Image Tagging Strategy
 status: active
 last_updated: 2026-01-08
+changes: "Added automated build-once-promote-everywhere CI/CD workflow"
 ---
 
 # Image Tagging Strategy
@@ -26,23 +27,35 @@ This corresponds to git commit `923f2ed...` in the repository.
 
 ## Automated Tagging (CI/CD)
 
-GitHub Actions automatically builds and tags images on every push to `develop`, `staging`, or `main`:
+GitHub Actions implements a **build-once-promote-everywhere** workflow:
 
-```yaml
-# .github/workflows/build-images.yml
-- name: Build and push
-  run: |
-    SHORT_SHA=$(git rev-parse --short=7 HEAD)
-    docker build -t ghcr.io/otherjamesbrown/ai-aas/service:sha-$SHORT_SHA .
-    docker push ghcr.io/otherjamesbrown/ai-aas/service:sha-$SHORT_SHA
-```
+### Build Phase (develop branch)
+
+When code is pushed to `develop`:
+1. CI builds and pushes images with SHA tags (`sha-abc123f`)
+2. CI automatically updates `values-development.yaml` with the new SHA
+3. ArgoCD syncs the new images to the development cluster
+
+### Promotion Phase (staging/main branches)
+
+When code is merged to `staging` or `main`:
+1. CI builds images as backup (for emergency hotfixes)
+2. **CI automatically promotes images** from the source environment:
+   - Staging: Reads SHA from `values-development.yaml` and updates `values-staging.yaml`
+   - Production: Reads SHA from `values-staging.yaml` and updates `values-production.yaml`
+3. ArgoCD syncs the promoted images
 
 **Key points**:
-- Images are built once per commit
-- Same SHA tag is available in all environments
-- No environment-specific tags (`dev`, `staging`, `latest`) are used
+- Images are built once on develop, promoted to staging/production
+- No manual Helm values updates needed for staging/production
+- Emergency hotfixes can build fresh images on staging/main if needed
+- All commits use `[skip ci]` to prevent infinite loops
 
-## Manual Promotion Workflow
+## Manual Promotion Workflow (Legacy/Override)
+
+**Note**: As of 2026-01-08, CI/CD automatically promotes images. Manual promotion is only needed for:
+- Overriding automated promotion (e.g., rollback to older SHA)
+- Emergency scenarios where CI is unavailable
 
 Use the `promote-images.sh` script to update all services to a specific SHA:
 
@@ -93,27 +106,49 @@ All platform services follow this strategy:
 
 ## Deployment Workflow
 
-### Standard Promotion Flow
+### Standard Promotion Flow (Automated)
 
 ```
 1. Code merged to develop
    ↓
 2. CI builds image with sha-XXXXXXX
    ↓
-3. Update development values: sha-XXXXXXX
+3. CI updates development values: sha-XXXXXXX (automatic)
    ↓
-4. Test in development cluster
+4. ArgoCD syncs to development cluster
    ↓
-5. Promote to staging: ./scripts/promote-images.sh sha-XXXXXXX staging
+5. Test in development cluster
    ↓
-6. Test in staging cluster
+6. Create PR: develop → staging
    ↓
-7. Promote to production: ./scripts/promote-images.sh sha-XXXXXXX production
+7. Merge PR to staging
+   ↓
+8. CI promotes staging values to sha-XXXXXXX (automatic)
+   ↓
+9. ArgoCD syncs to staging cluster
+   ↓
+10. Test in staging cluster
+   ↓
+11. Create PR: staging → main
+   ↓
+12. Merge PR to main
+   ↓
+13. CI promotes production values to sha-XXXXXXX (automatic)
+   ↓
+14. ArgoCD syncs to production cluster (manual sync required)
 ```
+
+**Key Changes**:
+- Steps 3, 8, 13 are now **fully automated** by CI/CD
+- No manual `promote-images.sh` invocation needed
+- Manual promotion script remains available for overrides/rollbacks
 
 ### GitOps Integration
 
-After updating values files:
+**Automated (as of 2026-01-08)**:
+CI/CD now handles all value file updates and commits. No manual git operations required.
+
+**Manual override** (if using `promote-images.sh`):
 
 ```bash
 # 1. Review changes
@@ -121,15 +156,15 @@ git diff
 
 # 2. Commit
 git add services/ operators/
-git commit -m "chore: promote images to sha-923f2ed"
+git commit -m "chore: promote images to sha-923f2ed [skip ci]"
 
 # 3. Push to appropriate branch
 git push origin staging  # For staging changes
 git push origin develop  # For development changes
 git push origin main     # For production changes
 
-# 4. ArgoCD auto-syncs (development) or manual sync (staging/production)
-argocd app sync api-router-service-staging
+# 4. ArgoCD auto-syncs (development/staging) or manual sync (production)
+argocd app sync api-router-service-production
 ```
 
 ## Finding the Current SHA
