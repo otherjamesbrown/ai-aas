@@ -1,0 +1,40 @@
+# NOTE: Tempo is not yet deployed in staging (tracked in aas-8fg3p).
+# This datasource configuration will become active once Tempo is deployed.
+# Until then, this ConfigMap will create a datasource that shows as "unavailable" in Grafana.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tempo-datasource
+  namespace: monitoring
+  labels:
+    grafana_datasource: "1"
+    app.kubernetes.io/managed-by: argocd
+    environment: staging
+data:
+  tempo-datasource.yaml: |-
+    apiVersion: 1
+    datasources:
+    - name: Tempo
+      type: tempo
+      uid: tempo
+      url: http://tempo.observability.svc.cluster.local:3200
+      access: proxy
+      isDefault: false
+      jsonData:
+        httpMethod: GET
+        tracesToLogs:
+          # Link traces to logs in Loki
+          datasourceUid: loki
+          tags:
+            - key: service.name
+              value: service
+          mappedTags:
+            - key: trace_id
+              value: trace_id
+          mapTagNamesEnabled: true
+          spanStartTimeShift: "-1h"
+          spanEndTimeShift: "1h"
+          filterByTraceID: true
+          filterBySpanID: false
+        nodeGraph:
+          enabled: true

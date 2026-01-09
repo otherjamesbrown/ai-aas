@@ -1,0 +1,328 @@
+# kube-prometheus-stack ArgoCD Application for Development
+# ========================================================
+# Deploys Prometheus, Grafana, Alertmanager, and exporters to the monitoring namespace
+# This is the core metrics collection and visualization stack
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack-development
+  namespace: argocd
+  labels:
+    environment: development
+    app: kube-prometheus-stack
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform-development
+
+  source:
+    # Use the official kube-prometheus-stack Helm chart
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: 80.4.1  # Match staging version
+
+    helm:
+      # Use development-specific values
+      values: |
+        # Load values from our values file
+        # We inline them here since we can't reference files from the ai-aas repo
+        # when using a chart from a different Helm repo
+
+        prometheusOperator:
+          enabled: true
+          resources:
+            limits:
+              cpu: 200m
+              memory: 256Mi
+            requests:
+              cpu: 50m
+              memory: 128Mi
+
+        prometheus:
+          enabled: true
+          prometheusSpec:
+            resources:
+              limits:
+                cpu: 2000m
+                memory: 4Gi
+              requests:
+                cpu: 500m
+                memory: 2Gi
+            retention: 15d
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 50Gi
+            # CRITICAL: Discover ALL ServiceMonitors without label filtering
+            serviceMonitorSelectorNilUsesHelmValues: false
+            podMonitorSelectorNilUsesHelmValues: false
+            ruleSelectorNilUsesHelmValues: false
+            scrapeInterval: 15s
+
+        grafana:
+          enabled: true
+          # IMPORTANT: The secret 'development-grafana-admin' must exist BEFORE ArgoCD syncs
+          # Create with: kubectl create secret generic development-grafana-admin \
+          #   --from-literal=admin-user=admin \
+          #   --from-literal=admin-password='<SECURE_PASSWORD>' \
+          #   -n monitoring
+          admin:
+            existingSecret: development-grafana-admin
+            userKey: admin-user
+            passwordKey: admin-password
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          persistence:
+            enabled: true
+            size: 10Gi
+          # Datasources are auto-configured by the chart
+          # Additional datasources (Loki, Tempo) should be added via ConfigMap
+          sidecar:
+            dashboards:
+              enabled: true
+              label: grafana_dashboard
+              labelValue: "1"
+              folder: /tmp/dashboards
+              provider:
+                foldersFromFilesStructure: true
+            datasources:
+              enabled: true
+          ingress:
+            enabled: true
+            ingressClassName: nginx
+            hosts:
+              - grafana.dev.otherjamesbrown.com
+            tls:
+              - secretName: grafana-tls
+                hosts:
+                  - grafana.dev.otherjamesbrown.com
+            annotations:
+              cert-manager.io/cluster-issuer: letsencrypt-prod
+
+        alertmanager:
+          enabled: true
+          alertmanagerSpec:
+            resources:
+              limits:
+                cpu: 200m
+                memory: 256Mi
+              requests:
+                cpu: 50m
+                memory: 128Mi
+            storage:
+              volumeClaimTemplate:
+                spec:
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 5Gi
+            # Mount secret containing Slack webhook URL and PagerDuty key
+            # Secret must be created before ArgoCD sync:
+            # kubectl create secret generic alertmanager-secrets \
+            #   --from-literal=slack-webhook-url='https://hooks.slack.com/services/YOUR/WEBHOOK' \
+            #   --from-literal=pagerduty-service-key='YOUR_KEY' \
+            #   -n monitoring
+            secrets:
+              - alertmanager-secrets
+
+          # Alertmanager configuration with routing rules
+          config:
+            global:
+              resolve_timeout: 5m
+              # Slack webhook loaded from secret file at runtime
+              slack_api_url_file: /etc/alertmanager/secrets/alertmanager-secrets/slack-webhook-url
+
+            route:
+              receiver: 'default-receiver'
+              group_by: ['alertname', 'severity', 'service']
+              group_wait: 30s
+              group_interval: 5m
+              repeat_interval: 4h
+
+              routes:
+                # Critical alerts → PagerDuty + Slack
+                - match:
+                    severity: critical
+                  receiver: 'pagerduty-critical'
+                  continue: true
+
+                # vLLM/Inference alerts → #ai-models
+                - match:
+                    category: inference
+                  receiver: 'slack-ai-models'
+                  group_by: ['alertname', 'inferenceservice', 'pod']
+
+                # GPU errors → #ai-models
+                - match:
+                    alert_type: gpu-error
+                  receiver: 'slack-ai-models'
+                  group_by: ['alertname', 'node', 'pod']
+
+                # Infrastructure warnings → #platform-infra
+                - match:
+                    category: infrastructure
+                  receiver: 'slack-platform-infra'
+
+                # Database/connectivity → #platform-infra
+                - match_re:
+                    category: 'database|connectivity'
+                  receiver: 'slack-platform-infra'
+                  group_by: ['alertname', 'service']
+
+                # Security/auth → #platform-infra
+                - match:
+                    category: security
+                  receiver: 'slack-platform-infra'
+                  group_by: ['alertname', 'service']
+
+                # Observability health (low priority)
+                - match:
+                    category: observability
+                  receiver: 'slack-platform-infra'
+                  repeat_interval: 12h
+
+            inhibit_rules:
+              # Suppress warning if critical is firing
+              - source_match:
+                  severity: 'critical'
+                target_match:
+                  severity: 'warning'
+                equal: ['alertname', 'service']
+
+              # Suppress high error rate if service is down
+              - source_match:
+                  alertname: 'ServiceDown'
+                target_match:
+                  alertname: 'HighServiceErrorRate'
+                equal: ['service']
+
+              # Suppress ingestion slowdown if Loki is down
+              - source_match:
+                  alertname: 'LokiIngestionDown'
+                target_match:
+                  alertname: 'LokiIngestionSlowdown'
+
+            receivers:
+              - name: 'default-receiver'
+                slack_configs:
+                  - channel: '#platform-alerts'
+                    title: '[DEVELOPMENT] Alert: {{ .GroupLabels.alertname }}'
+                    text: |
+                      {{ range .Alerts }}
+                      *Alert:* {{ .Labels.alertname }}
+                      *Severity:* {{ .Labels.severity }}
+                      *Service:* {{ .Labels.service }}
+                      *Summary:* {{ .Annotations.summary }}
+                      *Description:* {{ .Annotations.description }}
+                      {{ if .Annotations.dashboard }}*Dashboard:* {{ .Annotations.dashboard }}{{ end }}
+                      {{ if .Annotations.runbook_url }}*Runbook:* {{ .Annotations.runbook_url }}{{ end }}
+                      {{ end }}
+
+              - name: 'pagerduty-critical'
+                pagerduty_configs:
+                  - service_key_file: /etc/alertmanager/secrets/alertmanager-secrets/pagerduty-service-key
+                    description: '[DEVELOPMENT] {{ .GroupLabels.alertname }}: {{ .CommonAnnotations.summary }}'
+                    details:
+                      severity: '{{ .GroupLabels.severity }}'
+                      service: '{{ .GroupLabels.service }}'
+                      description: '{{ .CommonAnnotations.description }}'
+                      runbook: '{{ .CommonAnnotations.runbook_url }}'
+                slack_configs:
+                  - channel: '#platform-critical'
+                    title: ':rotating_light: [DEVELOPMENT] CRITICAL: {{ .GroupLabels.alertname }}'
+                    text: |
+                      {{ range .Alerts }}
+                      *Service:* {{ .Labels.service }}
+                      *Summary:* {{ .Annotations.summary }}
+                      *Description:* {{ .Annotations.description }}
+                      *Runbook:* {{ .Annotations.runbook_url }}
+                      {{ end }}
+
+              - name: 'slack-ai-models'
+                slack_configs:
+                  - channel: '#ai-models'
+                    title: ':robot_face: [DEVELOPMENT] AI Model Alert: {{ .GroupLabels.alertname }}'
+                    text: |
+                      {{ range .Alerts }}
+                      *Alert:* {{ .Labels.alertname }}
+                      *Severity:* {{ .Labels.severity }}
+                      {{ if .Labels.inferenceservice }}*InferenceService:* {{ .Labels.inferenceservice }}{{ end }}
+                      {{ if .Labels.pod }}*Pod:* {{ .Labels.pod }}{{ end }}
+                      {{ if .Labels.node }}*Node:* {{ .Labels.node }}{{ end }}
+                      *Summary:* {{ .Annotations.summary }}
+                      *Description:* {{ .Annotations.description }}
+                      {{ if .Annotations.dashboard }}*Dashboard:* {{ .Annotations.dashboard }}{{ end }}
+                      {{ if .Annotations.runbook_url }}*Runbook:* {{ .Annotations.runbook_url }}{{ end }}
+                      {{ end }}
+
+              - name: 'slack-platform-infra'
+                slack_configs:
+                  - channel: '#platform-infra'
+                    title: ':construction: [DEVELOPMENT] Infrastructure Alert: {{ .GroupLabels.alertname }}'
+                    text: |
+                      {{ range .Alerts }}
+                      *Alert:* {{ .Labels.alertname }}
+                      *Severity:* {{ .Labels.severity }}
+                      {{ if .Labels.service }}*Service:* {{ .Labels.service }}{{ end }}
+                      {{ if .Labels.pod }}*Pod:* {{ .Labels.pod }}{{ end }}
+                      *Summary:* {{ .Annotations.summary }}
+                      *Description:* {{ .Annotations.description }}
+                      {{ if .Annotations.dashboard }}*Dashboard:* {{ .Annotations.dashboard }}{{ end }}
+                      {{ if .Annotations.runbook_url }}*Runbook:* {{ .Annotations.runbook_url }}{{ end }}
+                      {{ end }}
+
+            templates:
+            - '/etc/alertmanager/config/*.tmpl'
+
+        nodeExporter:
+          enabled: true
+
+        kubeStateMetrics:
+          enabled: true
+
+        defaultRules:
+          create: true
+          rules:
+            alertmanager: true
+            etcd: false
+            kubeApiserver: true
+            kubeApiserverAvailability: true
+            kubeApiserverSlos: true
+            kubeProxy: false
+            kubelet: true
+            kubernetesApps: true
+            kubernetesResources: true
+            kubernetesStorage: true
+            kubernetesSystem: true
+            node: true
+            prometheus: true
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - ServerSideApply=true  # Required for CRDs
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
