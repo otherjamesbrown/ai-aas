@@ -37,6 +37,11 @@ spec:
             - name: grpc
               containerPort: {{ .Values.service.targetPort }}
               protocol: TCP
+            {{- if .Values.prometheus.enabled }}
+            - name: metrics
+              containerPort: {{ .Values.prometheus.port }}
+              protocol: TCP
+            {{- end }}
           env:
             {{- toYaml .Values.env | nindent 12 }}
             {{- if .Values.preloadModels }}

@@ -1,0 +1,19 @@
+{{- if .Values.prometheus.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "preprocessor-service.fullname" . }}
+  labels:
+    {{- include "preprocessor-service.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "preprocessor-service.selectorLabels" . | nindent 6 }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  endpoints:
+    - port: metrics
+      path: {{ .Values.prometheus.path }}
+      interval: 30s
+{{- end }}
