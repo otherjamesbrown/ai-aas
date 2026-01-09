@@ -107,13 +107,6 @@ configMapGenerator:
       labels:
         grafana_dashboard: "1"
 
-  - name: grafana-dashboard-benchmark-system-health
-    files:
-      - benchmark-system-health.json
-    options:
-      labels:
-        grafana_dashboard: "1"
-
   - name: grafana-dashboard-e2e-trends
     files:
       - e2e-trends.json
