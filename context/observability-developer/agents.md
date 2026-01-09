@@ -68,6 +68,7 @@ Hand off to:
 ### Dashboard Spec Location
 
 ```
+dashboards/specs/SCHEMA.md               # Schema definition (read this first!)
 dashboards/specs/<dashboard-name>.yaml   # Spec (source of truth)
 infra/k8s/monitoring/dashboards/<name>.json  # Implementation
 ```
@@ -434,6 +435,7 @@ When analyzing dashboards, structure your report:
 
 | What | Where |
 |------|-------|
+| **Dashboard spec schema** | `dashboards/specs/SCHEMA.md` |
 | Observability guide | `docs/platform/observability-guide.md` |
 | Architecture | `docs/architecture/observability-architecture.md` |
 | vLLM metrics | `docs/platform/vllm-observability.md` |

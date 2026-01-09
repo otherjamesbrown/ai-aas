@@ -425,6 +425,7 @@ go test -cover ./path/to/package/...
 | All runbooks | `docs/runbooks/` (18 available) |
 | Use case schema | `usecases/SCHEMA.md` |
 | Use case workflow | `CLAUDE.md#use-case-driven-development` |
+| Dashboard spec schema | `dashboards/specs/SCHEMA.md` |
 | Compliance reviewer | `context/compliance-reviewer-agent.md` |
 | E2E testing | `context/e2e-testing/agents.md` |
 | Test developer | `context/test-developer/agents.md` |
