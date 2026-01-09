@@ -380,6 +380,7 @@ ai-aas-cli routing policy list --model <model>
 | **cli-developer** | CLI code | Model command bugs |
 | **infra-ops-manager** | Infrastructure | ArgoCD, GitOps, cluster issues |
 | **test-developer** | Tests | E2E model tests |
+| **observability-developer** | Dashboards, metrics | Dashboard "No data", ServiceMonitors, metric visualization |
 
 ## What You Do NOT Handle
 

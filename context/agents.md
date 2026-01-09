@@ -145,11 +145,13 @@ After fixing a context gap bug:
 | Agent | Owns | Hand Off To |
 |-------|------|-------------|
 | `cli-developer` | services/ai-aas-cli/, services/ai-aas-org/ | go-services-developer (API issues), test-developer (UC tests) |
-| `go-services-developer` | services/*-service/, shared/ | operator-developer (CRD), infra-ops-manager (Helm), test-developer (UC tests) |
+| `go-services-developer` | services/*-service/, shared/ | operator-developer (CRD), infra-ops-manager (Helm), test-developer (UC tests), observability-developer (dashboards) |
 | `operator-developer` | operators/, model-downloader/ | go-services-developer (API sync) |
-| `infra-ops-manager` | infra/, gitops/, .github/, Helm charts | Developer agents (app code) |
+| `infra-ops-manager` | infra/, gitops/, .github/, Helm charts | Developer agents (app code), observability-developer (dashboards) |
 | `web-portal-developer` | web/ | go-services-developer (API issues) |
 | `test-developer` | tests/usecases/, tests/integration/ | go-services-developer (API bugs), cli-developer (CLI bugs) |
+| `model-manager` | Model lifecycle, TRT-LLM builds, deployment | operator-developer (CRD), go-services-developer (routing), observability-developer (metrics gaps) |
+| `observability-developer` | Grafana dashboards, ServiceMonitors, alerts, Prometheus queries | go-services-developer (add metrics), model-manager (vLLM metrics), infra-ops-manager (stack deploy) |
 | `debugger` | Bug investigation (read-only) | Domain agents (fixes), context-maintainer (gaps) |
 | `compliance-reviewer` | Drift detection (read-only) | Domain agents (fixes) |
 
@@ -196,6 +198,11 @@ Create handoff bead and spawn agent when:
 | Implementation complete, need compliance check | `compliance-reviewer` |
 | Before PR merge, verify no drift | `compliance-reviewer` |
 | Periodic architecture/UC audit | `compliance-reviewer` |
+| Dashboard shows "No data" or needs fixing | `observability-developer` |
+| Need new Grafana dashboard | `observability-developer` |
+| ServiceMonitor needed for new service | `observability-developer` |
+| Alert rules need creating/updating | `observability-developer` |
+| Visual analysis of dashboard layout needed | `observability-developer` |
 
 ---
 
@@ -421,3 +428,5 @@ go test -cover ./path/to/package/...
 | Compliance reviewer | `context/compliance-reviewer-agent.md` |
 | E2E testing | `context/e2e-testing/agents.md` |
 | Test developer | `context/test-developer/agents.md` |
+| Observability developer | `context/observability-developer/agents.md` |
+| Model manager | `context/model-manager/agents.md` |

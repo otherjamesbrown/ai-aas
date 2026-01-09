@@ -18,6 +18,7 @@ Hand off to:
 - Helm/deployment → `infra-ops-manager`
 - Operator CRDs → `operator-developer`
 - Frontend → `web-portal-developer`
+- Dashboards, ServiceMonitors, metric visualization → `observability-developer`
 
 ---
 

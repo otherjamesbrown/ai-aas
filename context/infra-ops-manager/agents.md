@@ -17,6 +17,7 @@ Hand off to:
 - CLI code → `cli-developer`
 - Operator logic → `operator-developer`
 - Frontend → `web-portal-developer`
+- Dashboard creation/fixes, ServiceMonitors, alerts → `observability-developer`
 
 ---
 

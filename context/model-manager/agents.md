@@ -24,6 +24,7 @@ Hand off to:
 - CLI model command bugs → `cli-developer`
 - ArgoCD/GitOps issues → `infra-ops-manager`
 - E2E model tests → `test-developer`
+- Dashboard issues, missing metrics visualization → `observability-developer`
 
 ---
 
