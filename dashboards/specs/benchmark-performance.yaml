@@ -57,7 +57,7 @@ filters:
   - name: triton_model
     label: Triton Model
     purpose: Filter Triton panels to show data for a specific TRT-LLM model
-    query: label_values(nv_inference_request_success{model="ensemble"}, job)
+    query: label_values(nv_inference_request_success{model=~".*ensemble"}, job)
     default: All
     multi: false
     include_all: true
@@ -358,9 +358,9 @@ panels:
         labels: [model, job]
 
     query: |
-      sum(rate(nv_inference_request_success{model="ensemble",job=~"$triton_model"}[5m])) /
-      (sum(rate(nv_inference_request_success{model="ensemble",job=~"$triton_model"}[5m])) +
-       sum(rate(nv_inference_request_failure{model="ensemble",job=~"$triton_model"}[5m]))) * 100
+      sum(rate(nv_inference_request_success{model=~".*ensemble",job=~"$triton_model"}[5m])) /
+      (sum(rate(nv_inference_request_success{model=~".*ensemble",job=~"$triton_model"}[5m])) +
+       sum(rate(nv_inference_request_failure{model=~".*ensemble",job=~"$triton_model"}[5m]))) * 100
 
     interpretation:
       good: "> 99%"
@@ -384,7 +384,7 @@ panels:
         labels: [model, job]
 
     query: |
-      sum(rate(nv_inference_request_success{model="ensemble",job=~"$triton_model"}[5m]))
+      sum(rate(nv_inference_request_success{model=~".*ensemble",job=~"$triton_model"}[5m]))
 
     interpretation:
       good: "Higher is better"
@@ -408,7 +408,7 @@ panels:
 
     query: |
       histogram_quantile(0.95,
-        sum(rate(nv_inference_queue_duration_us_bucket{model="ensemble",job=~"$triton_model"}[5m])) by (le)
+        sum(rate(nv_inference_queue_duration_us_bucket{model=~".*ensemble",job=~"$triton_model"}[5m])) by (le)
       ) / 1000
 
     interpretation:
@@ -433,7 +433,7 @@ panels:
 
     query: |
       histogram_quantile(0.95,
-        sum(rate(nv_inference_compute_infer_duration_us_bucket{model="tensorrt_llm",job=~"$triton_model"}[5m])) by (le)
+        sum(rate(nv_inference_compute_infer_duration_us_bucket{model=~".*tensorrt_llm",job=~"$triton_model"}[5m])) by (le)
       ) / 1000
 
     interpretation:
@@ -457,7 +457,7 @@ panels:
         labels: [model, job]
 
     query: |
-      sum(rate(nv_inference_request_success{model="ensemble"}[1m])) by (job)
+      sum(rate(nv_inference_request_success{model=~".*ensemble"}[1m])) by (job)
 
     acceptance_criteria:
       - Shows line per TRT-LLM model

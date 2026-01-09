@@ -835,7 +835,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(nv_inference_request_success{model=\"ensemble\",job=~\"$triton_model\"}[5m])) / (sum(rate(nv_inference_request_success{model=\"ensemble\",job=~\"$triton_model\"}[5m])) + sum(rate(nv_inference_request_failure{model=\"ensemble\",job=~\"$triton_model\"}[5m]))) * 100",
+          "expr": "sum(rate(nv_inference_request_success{model=~\".*ensemble\",job=~\"$triton_model\"}[5m])) / (sum(rate(nv_inference_request_success{model=~\".*ensemble\",job=~\"$triton_model\"}[5m])) + sum(rate(nv_inference_request_failure{model=~\".*ensemble\",job=~\"$triton_model\"}[5m]))) * 100",
           "refId": "A"
         }
       ],
@@ -894,7 +894,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(nv_inference_request_success{model=\"ensemble\",job=~\"$triton_model\"}[5m]))",
+          "expr": "sum(rate(nv_inference_request_success{model=~\".*ensemble\",job=~\"$triton_model\"}[5m]))",
           "refId": "A"
         }
       ],
@@ -961,7 +961,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(nv_inference_queue_duration_us_bucket{model=\"ensemble\",job=~\"$triton_model\"}[5m])) by (le)) / 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(nv_inference_queue_duration_us_bucket{model=~\".*ensemble\",job=~\"$triton_model\"}[5m])) by (le)) / 1000",
           "refId": "A"
         }
       ],
@@ -1020,7 +1020,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(nv_inference_compute_infer_duration_us_bucket{model=\"tensorrt_llm\",job=~\"$triton_model\"}[5m])) by (le)) / 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(nv_inference_compute_infer_duration_us_bucket{model=~\".*tensorrt_llm\",job=~\"$triton_model\"}[5m])) by (le)) / 1000",
           "refId": "A"
         }
       ],
@@ -1108,7 +1108,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(nv_inference_request_success{model=\"ensemble\"}[1m])) by (job)",
+          "expr": "sum(rate(nv_inference_request_success{model=~\".*ensemble\"}[1m])) by (job)",
           "legendFormat": "{{job}}",
           "refId": "A"
         }
@@ -2418,7 +2418,7 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values(nv_inference_request_success{model=\"ensemble\"}, job)",
+        "definition": "label_values(nv_inference_request_success{model=~\".*ensemble\"}, job)",
         "hide": 0,
         "includeAll": true,
         "label": "Triton Model",
@@ -2426,7 +2426,7 @@
         "name": "triton_model",
         "options": [],
         "query": {
-          "query": "label_values(nv_inference_request_success{model=\"ensemble\"}, job)",
+          "query": "label_values(nv_inference_request_success{model=~\".*ensemble\"}, job)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
