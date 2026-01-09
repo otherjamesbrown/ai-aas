@@ -21,6 +21,8 @@ spec:
         - protocol: TCP
           port: 8000  # vLLM inference metrics
         - protocol: TCP
+          port: 8002  # TensorRT-LLM/Triton metrics
+        - protocol: TCP
           port: 8080  # Go service metrics
         - protocol: TCP
           port: 9090  # Prometheus
