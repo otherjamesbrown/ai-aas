@@ -65,6 +65,13 @@ Hand off to:
 5. MAINTAIN  → Spec is source of truth for what dashboard should do
 ```
 
+### Key References
+
+| Document | Purpose |
+|----------|---------|
+| `docs/metrics/CATALOG.md` | **Metrics catalog** - Look up available metrics before creating panels |
+| `dashboards/specs/SCHEMA.md` | **Schema** - How to write dashboard specs |
+
 ### Dashboard Spec Location
 
 ```
