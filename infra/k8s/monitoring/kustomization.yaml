@@ -15,6 +15,7 @@ namespace: monitoring
 
 resources:
   - servicemonitors/nvidia-dcgm-exporter.yaml
+  - servicemonitors/vllm-servicemonitor.yaml
 
 commonAnnotations:
   app.kubernetes.io/part-of: observability
