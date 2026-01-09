@@ -46,10 +46,18 @@ dashboard:
 # FILTERS
 # =============================================================================
 filters:
-  - name: model
-    label: Model
-    purpose: Filter all panels to show data for a specific model
+  - name: vllm_model
+    label: vLLM Model
+    purpose: Filter vLLM panels to show data for a specific model
     query: label_values(vllm:request_success_total, model_name)
+    default: All
+    multi: false
+    include_all: true
+
+  - name: triton_model
+    label: Triton Model
+    purpose: Filter Triton panels to show data for a specific TRT-LLM model
+    query: label_values(nv_inference_request_success{model="ensemble"}, job)
     default: All
     multi: false
     include_all: true
@@ -76,15 +84,19 @@ rows:
     collapsed: false
     purpose: Quick health check - is benchmarking working?
 
-  - name: Model Comparison
+  - name: vLLM Models
     collapsed: false
-    purpose: Compare performance across models - which is best?
+    purpose: Performance metrics for vLLM inference backends
 
-  - name: Latency Deep Dive
+  - name: Triton Models (TRT-LLM)
+    collapsed: false
+    purpose: Performance metrics for TensorRT-LLM/Triton inference backends
+
+  - name: Latency Deep Dive (vLLM)
     collapsed: true
-    purpose: Detailed latency breakdown for selected model
+    purpose: Detailed latency breakdown for selected vLLM model
 
-  - name: Cache & Memory
+  - name: Cache & Memory (vLLM)
     collapsed: true
     purpose: KV cache utilization and memory pressure indicators
 
@@ -227,11 +239,11 @@ panels:
       - Responds to time range filter
 
   # ===========================================================================
-  # ROW: Model Comparison
+  # ROW: vLLM Models
   # ===========================================================================
-  - id: ttft-by-model
+  - id: vllm-ttft-by-model
     title: TTFT by Model (P95)
-    row: Model Comparison
+    row: vLLM Models
     type: graph
     visualization: bar
 
@@ -257,9 +269,9 @@ panels:
       - Sorted by latency (fastest first)
       - Shows value labels on bars
 
-  - id: throughput-by-model
+  - id: vllm-throughput-by-model
     title: Throughput by Model
-    row: Model Comparison
+    row: vLLM Models
     type: graph
     visualization: bar
 
@@ -283,9 +295,9 @@ panels:
       - Shows tokens/second
       - Sorted by throughput (highest first)
 
-  - id: model-comparison-table
-    title: Model Comparison
-    row: Model Comparison
+  - id: vllm-comparison-table
+    title: vLLM Model Comparison
+    row: vLLM Models
     type: table
 
     question: "How do all models compare side-by-side?"
@@ -330,11 +342,172 @@ panels:
       - Color coding for good/bad values
 
   # ===========================================================================
-  # ROW: Latency Deep Dive
+  # ROW: Triton Models (TRT-LLM)
+  # ===========================================================================
+  - id: triton-success-rate
+    title: Request Success Rate
+    row: Triton Models (TRT-LLM)
+    type: stat
+
+    question: "What percentage of Triton/TRT-LLM requests are succeeding?"
+
+    metrics:
+      - name: nv_inference_request_success
+        labels: [model, job]
+      - name: nv_inference_request_failure
+        labels: [model, job]
+
+    query: |
+      sum(rate(nv_inference_request_success{model="ensemble",job=~"$triton_model"}[5m])) /
+      (sum(rate(nv_inference_request_success{model="ensemble",job=~"$triton_model"}[5m])) +
+       sum(rate(nv_inference_request_failure{model="ensemble",job=~"$triton_model"}[5m]))) * 100
+
+    interpretation:
+      good: "> 99%"
+      warning: "95-99%"
+      bad: "< 95%"
+
+    acceptance_criteria:
+      - Shows percentage for TRT-LLM models
+      - Uses Triton metrics (nv_inference_*)
+      - Responds to triton_model filter
+
+  - id: triton-throughput
+    title: Inference Throughput
+    row: Triton Models (TRT-LLM)
+    type: stat
+
+    question: "How many inferences per second are TRT-LLM models processing?"
+
+    metrics:
+      - name: nv_inference_request_success
+        labels: [model, job]
+
+    query: |
+      sum(rate(nv_inference_request_success{model="ensemble",job=~"$triton_model"}[5m]))
+
+    interpretation:
+      good: "Higher is better"
+      warning: "N/A"
+      bad: "Near zero"
+
+    acceptance_criteria:
+      - Shows requests per second
+      - Uses ensemble model (end-to-end TRT-LLM)
+
+  - id: triton-queue-time
+    title: Queue Time (P95)
+    row: Triton Models (TRT-LLM)
+    type: stat
+
+    question: "How long are requests waiting in Triton queue?"
+
+    metrics:
+      - name: nv_inference_queue_duration_us
+        labels: [model, job]
+
+    query: |
+      histogram_quantile(0.95,
+        sum(rate(nv_inference_queue_duration_us_bucket{model="ensemble",job=~"$triton_model"}[5m])) by (le)
+      ) / 1000
+
+    interpretation:
+      good: "< 10ms"
+      warning: "10-100ms"
+      bad: "> 100ms"
+
+    acceptance_criteria:
+      - Shows queue wait time in ms
+      - High values indicate capacity issues
+
+  - id: triton-compute-time
+    title: Compute Time (P95)
+    row: Triton Models (TRT-LLM)
+    type: stat
+
+    question: "How long does TRT-LLM inference computation take?"
+
+    metrics:
+      - name: nv_inference_compute_infer_duration_us
+        labels: [model, job]
+
+    query: |
+      histogram_quantile(0.95,
+        sum(rate(nv_inference_compute_infer_duration_us_bucket{model="tensorrt_llm",job=~"$triton_model"}[5m])) by (le)
+      ) / 1000
+
+    interpretation:
+      good: "Model dependent"
+      warning: "N/A"
+      bad: "Increasing over time"
+
+    acceptance_criteria:
+      - Shows compute time in ms
+      - Uses tensorrt_llm model component
+
+  - id: triton-request-rate
+    title: Request Rate Over Time
+    row: Triton Models (TRT-LLM)
+    type: graph
+
+    question: "What's the TRT-LLM traffic pattern over time?"
+
+    metrics:
+      - name: nv_inference_request_success
+        labels: [model, job]
+
+    query: |
+      sum(rate(nv_inference_request_success{model="ensemble"}[1m])) by (job)
+
+    acceptance_criteria:
+      - Shows line per TRT-LLM model
+      - Legend shows job/model names
+      - Responds to time range filter
+
+  - id: triton-comparison-table
+    title: Triton Model Comparison
+    row: Triton Models (TRT-LLM)
+    type: table
+
+    question: "How do TRT-LLM models compare side-by-side?"
+
+    metrics:
+      - name: nv_inference_request_success
+        labels: [model, job]
+      - name: nv_inference_request_failure
+        labels: [model, job]
+      - name: nv_inference_compute_infer_duration_us
+        labels: [model, job]
+      - name: nv_inference_queue_duration_us
+        labels: [model, job]
+
+    columns:
+      - name: Model
+        source: job label
+      - name: Success Rate
+        query: success / (success + failure) * 100
+        unit: "%"
+      - name: Throughput
+        query: rate(request_success[5m])
+        unit: req/s
+      - name: Queue Time P95
+        query: histogram_quantile(0.95, queue_duration)
+        unit: ms
+      - name: Compute Time P95
+        query: histogram_quantile(0.95, compute_duration)
+        unit: ms
+
+    acceptance_criteria:
+      - Shows one row per TRT-LLM model
+      - All columns populated
+      - Sortable by any column
+
+  # ===========================================================================
+  # ROW: Latency Deep Dive (vLLM)
   # ===========================================================================
   - id: ttft-p50
     title: TTFT P50
-    row: Latency Deep Dive
+    row: Latency Deep Dive (vLLM)
     type: stat
 
     question: "What's the median time-to-first-token?"
@@ -345,7 +518,7 @@ panels:
 
     query: |
       histogram_quantile(0.50,
-        sum(rate(vllm:time_to_first_token_seconds_bucket{model_name=~"$model"}[5m])) by (le)
+        sum(rate(vllm:time_to_first_token_seconds_bucket{model_name=~"$vllm_model"}[5m])) by (le)
       )
 
     acceptance_criteria:
@@ -354,7 +527,7 @@ panels:
 
   - id: ttft-p95
     title: TTFT P95
-    row: Latency Deep Dive
+    row: Latency Deep Dive (vLLM)
     type: stat
 
     question: "What's the 95th percentile time-to-first-token?"
@@ -365,7 +538,7 @@ panels:
 
     query: |
       histogram_quantile(0.95,
-        sum(rate(vllm:time_to_first_token_seconds_bucket{model_name=~"$model"}[5m])) by (le)
+        sum(rate(vllm:time_to_first_token_seconds_bucket{model_name=~"$vllm_model"}[5m])) by (le)
       )
 
     acceptance_criteria:
@@ -374,7 +547,7 @@ panels:
 
   - id: ttft-p99
     title: TTFT P99
-    row: Latency Deep Dive
+    row: Latency Deep Dive (vLLM)
     type: stat
 
     question: "What's the 99th percentile time-to-first-token (tail latency)?"
@@ -385,7 +558,7 @@ panels:
 
     query: |
       histogram_quantile(0.99,
-        sum(rate(vllm:time_to_first_token_seconds_bucket{model_name=~"$model"}[5m])) by (le)
+        sum(rate(vllm:time_to_first_token_seconds_bucket{model_name=~"$vllm_model"}[5m])) by (le)
       )
 
     acceptance_criteria:
@@ -394,7 +567,7 @@ panels:
 
   - id: itl-p95
     title: ITL P95
-    row: Latency Deep Dive
+    row: Latency Deep Dive (vLLM)
     type: stat
 
     question: "How fast are tokens generated after the first one (streaming)?"
@@ -405,7 +578,7 @@ panels:
 
     query: |
       histogram_quantile(0.95,
-        sum(rate(vllm:inter_token_latency_seconds_bucket{model_name=~"$model"}[5m])) by (le)
+        sum(rate(vllm:inter_token_latency_seconds_bucket{model_name=~"$vllm_model"}[5m])) by (le)
       )
 
     interpretation:
@@ -419,7 +592,7 @@ panels:
 
   - id: latency-breakdown
     title: Latency Breakdown
-    row: Latency Deep Dive
+    row: Latency Deep Dive (vLLM)
     type: graph
     visualization: stacked_bar
 
@@ -446,7 +619,7 @@ panels:
 
   - id: latency-heatmap
     title: Latency Distribution Over Time
-    row: Latency Deep Dive
+    row: Latency Deep Dive (vLLM)
     type: heatmap
 
     question: "How does latency distribution change over time?"
@@ -456,7 +629,7 @@ panels:
         labels: [model_name]
 
     query: |
-      sum(increase(vllm:e2e_request_latency_seconds_bucket{model_name=~"$model"}[1m])) by (le)
+      sum(increase(vllm:e2e_request_latency_seconds_bucket{model_name=~"$vllm_model"}[1m])) by (le)
 
     acceptance_criteria:
       - Shows heatmap with time on X, latency buckets on Y
@@ -468,7 +641,7 @@ panels:
   # ===========================================================================
   - id: kv-cache-usage
     title: KV Cache Usage
-    row: Cache & Memory
+    row: Cache & Memory (vLLM)
     type: gauge
 
     question: "Is KV cache under memory pressure?"
@@ -483,7 +656,7 @@ panels:
         labels: [model_name]
 
     query: |
-      avg(vllm:kv_cache_usage_perc{model_name=~"$model"}) * 100
+      avg(vllm:kv_cache_usage_perc{model_name=~"$vllm_model"}) * 100
 
     interpretation:
       good: "< 80%"
@@ -497,7 +670,7 @@ panels:
 
   - id: requests-waiting
     title: Queue Depth
-    row: Cache & Memory
+    row: Cache & Memory (vLLM)
     type: stat
 
     question: "How many requests are waiting for cache space?"
@@ -507,7 +680,7 @@ panels:
         labels: [model_name]
 
     query: |
-      sum(vllm:num_requests_waiting{model_name=~"$model"})
+      sum(vllm:num_requests_waiting{model_name=~"$vllm_model"})
 
     interpretation:
       good: "0-5"
@@ -520,7 +693,7 @@ panels:
 
   - id: preemption-rate
     title: Preemption Rate
-    row: Cache & Memory
+    row: Cache & Memory (vLLM)
     type: stat
 
     question: "Are requests being evicted from cache?"
@@ -536,7 +709,7 @@ panels:
         aggregation: rate(5m)
 
     query: |
-      sum(rate(vllm:num_preemptions_total{model_name=~"$model"}[5m]))
+      sum(rate(vllm:num_preemptions_total{model_name=~"$vllm_model"}[5m]))
 
     interpretation:
       good: "0"
@@ -550,7 +723,7 @@ panels:
 
   - id: prefix-cache-hit-rate
     title: Prefix Cache Hit Rate
-    row: Cache & Memory
+    row: Cache & Memory (vLLM)
     type: stat
 
     question: "Are we efficiently reusing cached prefixes?"
@@ -566,8 +739,8 @@ panels:
         labels: [model_name]
 
     query: |
-      sum(rate(vllm:gpu_prefix_cache_hits_total{model_name=~"$model"}[5m])) /
-      sum(rate(vllm:gpu_prefix_cache_queries_total{model_name=~"$model"}[5m])) * 100
+      sum(rate(vllm:gpu_prefix_cache_hits_total{model_name=~"$vllm_model"}[5m])) /
+      sum(rate(vllm:gpu_prefix_cache_queries_total{model_name=~"$vllm_model"}[5m])) * 100
 
     interpretation:
       good: "> 50%"
@@ -581,7 +754,7 @@ panels:
 
   - id: queue-wait-time
     title: Queue Wait Time (P95)
-    row: Cache & Memory
+    row: Cache & Memory (vLLM)
     type: stat
 
     question: "How long are requests waiting in queue?"
@@ -592,7 +765,7 @@ panels:
 
     query: |
       histogram_quantile(0.95,
-        sum(rate(vllm:request_queue_time_seconds_bucket{model_name=~"$model"}[5m])) by (le)
+        sum(rate(vllm:request_queue_time_seconds_bucket{model_name=~"$vllm_model"}[5m])) by (le)
       )
 
     interpretation:
