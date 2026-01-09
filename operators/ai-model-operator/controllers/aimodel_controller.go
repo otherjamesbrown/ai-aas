@@ -1858,9 +1858,23 @@ func (r *AIModelReconciler) createOrUpdateServiceMonitor(ctx context.Context, ai
 	// Build ServiceMonitor name: <aimodel-name>-metrics
 	smName := fmt.Sprintf("%s-metrics", sanitizeInferenceServiceName(aiModel.Name))
 
+	// Determine the metrics port name based on runtime
+	// - vLLM and TGI: use port "http1" (8000)
+	// - TensorRT-LLM and Triton: use port "metrics" (8002)
+	metricsPort := "http1" // Default for vLLM
+	runtime := aiModel.Spec.Runtime
+	if runtime == "" {
+		runtime = "vllm"
+	}
+	switch runtime {
+	case "tensorrt-llm", "triton":
+		metricsPort = "metrics"
+	}
+
 	// Build the ServiceMonitor
 	sm, err := kserve.NewServiceMonitorBuilder(smName, aiModel.Namespace).
 		WithModelName(sanitizeInferenceServiceName(aiModel.Name)).
+		WithMetricsPort(metricsPort).
 		WithOwnerReference(ownerRef).
 		Build()
 	if err != nil {
@@ -1889,7 +1903,9 @@ func (r *AIModelReconciler) createOrUpdateServiceMonitor(ctx context.Context, ai
 	}
 
 	// ServiceMonitor already exists - check if it needs updating
-	// For now, we only check that the owner reference is set correctly
+	needsUpdate := false
+
+	// Check owner reference
 	existingOwnerRefs := existing.GetOwnerReferences()
 	ownerRefFound := false
 	for _, ref := range existingOwnerRefs {
@@ -1898,10 +1914,29 @@ func (r *AIModelReconciler) createOrUpdateServiceMonitor(ctx context.Context, ai
 			break
 		}
 	}
-
 	if !ownerRefFound {
-		// Update the ServiceMonitor to add owner reference
-		log.Info("Updating ServiceMonitor to add owner reference", "name", smName)
+		needsUpdate = true
+	}
+
+	// Check if port configuration has changed (important for runtime changes)
+	existingSpec, found, _ := unstructured.NestedMap(existing.Object, "spec")
+	if found {
+		existingEndpoints, found, _ := unstructured.NestedSlice(existingSpec, "endpoints")
+		if found && len(existingEndpoints) > 0 {
+			firstEndpoint, ok := existingEndpoints[0].(map[string]interface{})
+			if ok {
+				existingPort, _ := firstEndpoint["port"].(string)
+				if existingPort != metricsPort {
+					log.Info("ServiceMonitor port changed, updating", "name", smName, "oldPort", existingPort, "newPort", metricsPort)
+					needsUpdate = true
+				}
+			}
+		}
+	}
+
+	if needsUpdate {
+		// Update the ServiceMonitor
+		log.Info("Updating ServiceMonitor", "name", smName)
 		sm.SetResourceVersion(existing.GetResourceVersion())
 		if err := r.Update(ctx, sm); err != nil {
 			if errors.IsConflict(err) {
