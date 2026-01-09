@@ -1,6 +1,7 @@
 """Tokenizer cache management with LRU eviction."""
 
 import threading
+import time
 from collections import OrderedDict
 from typing import Any
 
@@ -8,6 +9,7 @@ import structlog
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
 from .config import settings
+from . import metrics
 
 logger = structlog.get_logger(__name__)
 
@@ -20,6 +22,8 @@ class TokenizerCache:
         self._lock = threading.RLock()
         self._max_size = max_size
         self._load_errors: dict[str, str] = {}
+        # Initialize cache size metric
+        metrics.update_tokenizer_cache_size(0)
 
     def get(self, model_id: str) -> PreTrainedTokenizerBase:
         """Get tokenizer from cache, loading if necessary.
@@ -39,11 +43,15 @@ class TokenizerCache:
                 # Move to end (most recently used)
                 self._cache.move_to_end(model_id)
                 logger.debug("tokenizer_cache_hit", model_id=model_id)
+                metrics.record_tokenizer_cache_hit(model_id)
                 return self._cache[model_id]
 
             # Check for previous load error
             if model_id in self._load_errors:
                 raise ValueError(f"Tokenizer load failed previously: {self._load_errors[model_id]}")
+
+        # Record cache miss
+        metrics.record_tokenizer_cache_miss(model_id)
 
         # Load outside the lock to avoid blocking other requests
         logger.info(
@@ -51,6 +59,9 @@ class TokenizerCache:
             model_id=model_id,
             local_files_only=settings.transformers_offline,
         )
+
+        # Time the tokenizer load
+        start_time = time.time()
         try:
             tokenizer = AutoTokenizer.from_pretrained(
                 model_id,
@@ -58,6 +69,9 @@ class TokenizerCache:
                 token=settings.hf_token,
                 local_files_only=settings.transformers_offline,
             )
+            # Record load duration
+            load_duration = time.time() - start_time
+            metrics.tokenizer_load_duration_seconds.labels(model_id=model_id).observe(load_duration)
         except Exception as e:
             error_msg = f"Failed to load tokenizer: {e}"
             logger.error("tokenizer_load_failed", model_id=model_id, error=str(e))
@@ -70,9 +84,11 @@ class TokenizerCache:
             while len(self._cache) >= self._max_size:
                 evicted_id, _ = self._cache.popitem(last=False)
                 logger.info("tokenizer_evicted", model_id=evicted_id)
+                metrics.record_tokenizer_eviction(evicted_id)
 
             self._cache[model_id] = tokenizer
             logger.info("tokenizer_loaded", model_id=model_id, cache_size=len(self._cache))
+            metrics.update_tokenizer_cache_size(len(self._cache))
 
         return tokenizer
 
@@ -109,6 +125,7 @@ class TokenizerCache:
         with self._lock:
             self._cache.clear()
             self._load_errors.clear()
+            metrics.update_tokenizer_cache_size(0)
             logger.info("tokenizer_cache_cleared")
 
 

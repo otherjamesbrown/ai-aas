@@ -5,6 +5,7 @@ import structlog
 
 from . import preprocessor_pb2
 from . import preprocessor_pb2_grpc
+from . import metrics
 from .template_engine import template_engine
 from .tokenizer_cache import tokenizer_cache
 
@@ -35,33 +36,35 @@ class PreprocessorServicer(preprocessor_pb2_grpc.PreprocessorServiceServicer):
         )
         log.info("preprocess_request_received")
 
-        try:
-            # Convert proto messages to dict format
-            messages = [
-                {"role": msg.role, "content": msg.content}
-                for msg in request.messages
-            ]
+        # Use metrics context to track request lifecycle
+        with metrics.MetricsContext(request.model_id, request.engine_type):
+            try:
+                # Convert proto messages to dict format
+                messages = [
+                    {"role": msg.role, "content": msg.content}
+                    for msg in request.messages
+                ]
 
-            # Determine output mode based on engine type
-            if request.engine_type in ("triton_tensor",):
-                # Tensor mode: return tokenized input IDs
-                return self._preprocess_tensor_mode(request, messages, log)
-            else:
-                # String mode: return formatted prompt (vllm, triton_string, or default)
-                return self._preprocess_string_mode(request, messages, log)
+                # Determine output mode based on engine type
+                if request.engine_type in ("triton_tensor",):
+                    # Tensor mode: return tokenized input IDs
+                    return self._preprocess_tensor_mode(request, messages, log)
+                else:
+                    # String mode: return formatted prompt (vllm, triton_string, or default)
+                    return self._preprocess_string_mode(request, messages, log)
 
-        except ValueError as e:
-            log.error("preprocess_failed", error=str(e))
-            return preprocessor_pb2.PreprocessResponse(
-                error_message=str(e),
-            )
-        except Exception as e:
-            log.exception("preprocess_unexpected_error")
-            context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(f"Internal error: {e}")
-            return preprocessor_pb2.PreprocessResponse(
-                error_message=f"Internal error: {e}",
-            )
+            except ValueError as e:
+                log.error("preprocess_failed", error=str(e))
+                return preprocessor_pb2.PreprocessResponse(
+                    error_message=str(e),
+                )
+            except Exception as e:
+                log.exception("preprocess_unexpected_error")
+                context.set_code(grpc.StatusCode.INTERNAL)
+                context.set_details(f"Internal error: {e}")
+                return preprocessor_pb2.PreprocessResponse(
+                    error_message=f"Internal error: {e}",
+                )
 
     def _preprocess_string_mode(
         self,
@@ -80,6 +83,9 @@ class PreprocessorServicer(preprocessor_pb2_grpc.PreprocessorServiceServicer):
 
         # Count tokens for usage tracking
         token_count = template_engine.count_tokens(request.model_id, formatted_prompt)
+
+        # Record token count metric
+        metrics.record_token_count(request.model_id, "string", token_count)
 
         log.info(
             "preprocess_string_complete",
@@ -113,6 +119,9 @@ class PreprocessorServicer(preprocessor_pb2_grpc.PreprocessorServiceServicer):
 
         # Shape is [1, seq_len] for single request
         input_shape = [1, len(input_ids)]
+
+        # Record token count metric
+        metrics.record_token_count(request.model_id, "tensor", len(input_ids))
 
         log.info(
             "preprocess_tensor_complete",

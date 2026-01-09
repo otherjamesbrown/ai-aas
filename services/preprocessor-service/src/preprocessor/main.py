@@ -3,12 +3,15 @@
 import logging
 import signal
 import sys
+import threading
 from concurrent import futures
+from wsgiref.simple_server import make_server, WSGIServer
 
 import grpc
 import structlog
 from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 from grpc_reflection.v1alpha import reflection
+from prometheus_client import make_wsgi_app
 
 from . import preprocessor_pb2
 from . import preprocessor_pb2_grpc
@@ -46,9 +49,32 @@ structlog.configure(
 logger = structlog.get_logger(__name__)
 
 
+def start_metrics_server() -> WSGIServer:
+    """Start the Prometheus metrics HTTP server.
+
+    Returns:
+        The metrics server instance
+    """
+    metrics_app = make_wsgi_app()
+    metrics_server = make_server("", settings.metrics_port, metrics_app)
+
+    def serve_metrics():
+        logger.info("metrics_server_started", port=settings.metrics_port)
+        metrics_server.serve_forever()
+
+    # Run metrics server in a daemon thread
+    metrics_thread = threading.Thread(target=serve_metrics, daemon=True)
+    metrics_thread.start()
+
+    return metrics_server
+
+
 def serve() -> None:
     """Start the gRPC server."""
-    # Create server
+    # Start metrics server
+    metrics_server = start_metrics_server()
+
+    # Create gRPC server
     server = grpc.server(
         futures.ThreadPoolExecutor(max_workers=settings.grpc_max_workers),
         options=[
@@ -119,7 +145,8 @@ def serve() -> None:
         )
         # Grace period for in-flight requests
         server.stop(grace=10)
-        logger.info("grpc_server_stopped")
+        metrics_server.shutdown()
+        logger.info("servers_stopped")
         sys.exit(0)
 
     signal.signal(signal.SIGTERM, handle_shutdown)

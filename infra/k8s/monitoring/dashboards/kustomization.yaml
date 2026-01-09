@@ -113,3 +113,31 @@ configMapGenerator:
     options:
       labels:
         grafana_dashboard: "1"
+
+  - name: grafana-dashboard-e2e-trends
+    files:
+      - e2e-trends.json
+    options:
+      labels:
+        grafana_dashboard: "1"
+
+  - name: grafana-dashboard-platform-overview
+    files:
+      - platform-overview.json
+    options:
+      labels:
+        grafana_dashboard: "1"
+
+  - name: grafana-dashboard-shared-libraries
+    files:
+      - shared-libraries.json
+    options:
+      labels:
+        grafana_dashboard: "1"
+
+  - name: grafana-dashboard-analytics-usage
+    files:
+      - analytics-usage.json
+    options:
+      labels:
+        grafana_dashboard: "1"

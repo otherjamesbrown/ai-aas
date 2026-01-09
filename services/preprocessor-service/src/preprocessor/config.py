@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     grpc_port: int = Field(default=50051, description="gRPC server port")
     grpc_max_workers: int = Field(default=10, description="Max gRPC worker threads")
 
+    # Metrics configuration
+    metrics_port: int = Field(default=8000, description="Prometheus metrics HTTP server port")
+
     # Logging
     log_level: str = Field(default="INFO", description="Log level (DEBUG, INFO, WARNING, ERROR)")
     log_format: str = Field(default="json", description="Log format (json, console)")

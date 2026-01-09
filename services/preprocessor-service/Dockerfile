@@ -84,6 +84,9 @@ ENV PYTHONUNBUFFERED=1
 # gRPC port
 EXPOSE 50051
 
+# Metrics port (Prometheus)
+EXPOSE 8000
+
 # Switch to non-root user
 USER preprocessor
 

@@ -21,7 +21,11 @@ The alerting infrastructure monitors:
 
 | File | Purpose |
 |------|---------|
-| `loki-alerts.yaml` | PrometheusRule CRD with all log-based alerting rules |
+| `loki-alerts.yaml` | Log-based alerting rules (LogQL queries) |
+| `analytics-rollup-alerts.yaml` | Analytics rollup worker health monitoring |
+| `analytics-service.yaml` | Analytics service SLO and reliability alerts |
+| `user-org-service.yaml` | User-org service SLO and health alerts |
+| `shared-libraries.yaml` | Shared libraries observability alerts |
 | `alertmanager-config.yaml` | Alertmanager routing configuration and channel mappings |
 | `README.md` | This documentation |
 
