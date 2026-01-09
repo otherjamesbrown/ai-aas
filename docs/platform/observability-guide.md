@@ -1,7 +1,7 @@
 # Observability Guide
 
 ---
-last_updated: 2026-01-08
+last_updated: 2026-01-09
 document_type: guide
 spec: 024-logging-observability-improvements
 ---
@@ -299,4 +299,54 @@ Alert definitions codified in `infra/helm/charts/observability-stack/templates/a
 ### Specifications
 - [Spec 024: Logging & Observability](../../specs/024-logging-observability-improvements/spec.md) - Feature specification
 - [Spec 024: Architecture](../../specs/024-logging-observability-improvements/architecture.md) - Technical design document
+
+## Troubleshooting
+
+### Grafana Datasource 502 Errors
+
+**Symptom**: Grafana dashboards show "502 Bad Gateway" errors when querying Prometheus, with logs showing:
+```
+dial tcp: lookup <service-name> on 10.128.0.10:53: no such host
+```
+
+**Root Cause**: Grafana's persistent database (`grafana.db` in PVC) contains stale datasource configurations that override the provisioned datasources from ConfigMaps.
+
+**Diagnosis**:
+1. Check Grafana logs for DNS lookup failures:
+   ```bash
+   kubectl logs -n monitoring <grafana-pod> -c grafana | grep "dial tcp\|502"
+   ```
+2. Verify the provisioned datasource configuration:
+   ```bash
+   kubectl exec -n monitoring <grafana-pod> -c grafana -- \
+     cat /etc/grafana/provisioning/datasources/datasource.yaml
+   ```
+3. Check if the service exists and has endpoints:
+   ```bash
+   kubectl get svc -n monitoring | grep prometheus
+   kubectl get endpoints -n monitoring <prometheus-service>
+   ```
+
+**Resolution**:
+1. Delete the Grafana database to force recreation:
+   ```bash
+   kubectl exec -n monitoring <grafana-pod> -c grafana -- rm /var/lib/grafana/grafana.db
+   ```
+2. Restart Grafana pod:
+   ```bash
+   kubectl delete pod -n monitoring <grafana-pod>
+   ```
+3. Verify the datasource is re-provisioned correctly:
+   ```bash
+   kubectl logs -n monitoring <new-grafana-pod> -c grafana | grep "inserting datasource"
+   ```
+
+**Note**: Deleting `grafana.db` will remove any manually configured dashboards or datasources. Ensure all critical configurations are stored as ConfigMaps with the `grafana_dashboard: "1"` or `grafana_datasource: "1"` labels for automatic re-provisioning.
+
+**Prevention**:
+- Always use Grafana datasource provisioning via ConfigMaps (kube-prometheus-stack does this by default)
+- Avoid manually creating datasources through the Grafana UI in environments with persistence enabled
+- Use the Helm chart's `grafana.additionalDataSources` for additional datasources instead of manual configuration
+
+**Related Incident**: aas-qu3t8 (2026-01-09) - Staging Prometheus datasource returning 502 errors due to stale database configuration
 
