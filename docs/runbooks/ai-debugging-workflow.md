@@ -1,7 +1,7 @@
 # AI Coding Assistant Debugging Workflow
 
 ---
-last_updated: 2025-12-15
+last_updated: 2026-01-09
 document_type: runbook
 audience: ai-assistants
 spec: 024-logging-observability-improvements
@@ -34,10 +34,13 @@ This guide provides step-by-step instructions for AI coding assistants (Claude) 
 
 Before debugging, ensure you have:
 
-1. **Kubeconfig access**: `secrets/kubeconfigs/kubeconfig-development.yaml`
-2. **kubectl configured**: `export KUBECONFIG=/home/dev/ai-aas-024-observability/secrets/kubeconfigs/kubeconfig-development.yaml`
+1. **Kubeconfig access**: `secrets/kubeconfigs/kubeconfig-<environment>.yaml`
+2. **kubectl configured**: `export KUBECONFIG=<absolute-path>/secrets/kubeconfigs/kubeconfig-<environment>.yaml`
 3. **Access to observability endpoints** (verified via curl or browser)
 4. **Basic understanding of LogQL** (Prometheus-like query language for logs)
+5. **Environment awareness**: See [Environment Differences](#environment-specific-notes) below for component availability
+
+**IMPORTANT**: Not all observability components are available in all environments. See [Observability Architecture - Environment Differences](../architecture/observability-architecture.md#environment-differences) for details.
 
 ## Step-by-Step Debug Workflow
 
@@ -1573,6 +1576,91 @@ jobs:
           # Create GitHub issue or Slack notification
           echo "CI failure detected. Check Grafana for details."
 ```
+
+## Environment-Specific Notes
+
+**CRITICAL**: Not all observability components are deployed to all environments. Check component availability before following debug procedures.
+
+### Component Availability by Environment
+
+| Component | Development | Staging | Impact on Debugging |
+|-----------|-------------|---------|---------------------|
+| **Grafana** | ✅ Available | ✅ Available | Dashboard access and log visualization |
+| **Loki** | ✅ Available | ✅ Available | Log aggregation and search |
+| **Tempo** | ✅ Available | ❌ **NOT available** | **Staging cannot use trace correlation** |
+| **Platform Alerts** | ✅ Deployed | ✅ Deployed | Alert rules active |
+| **Log Health Alerts** | ✅ Deployed | ❌ **NOT deployed** | Loki/analytics alerts missing in staging |
+
+### Debugging in Staging Without Tempo
+
+**Limitation**: Staging does not have Tempo deployed, so distributed tracing is not available.
+
+**Workaround**: Use `request_id` instead of `trace_id` for cross-service correlation.
+
+**How to debug without tracing**:
+
+1. **Extract request_id from logs**:
+   ```logql
+   {namespace="system"} | json | level="error"
+   ```
+   Look for `request_id` field in log entries.
+
+2. **Search all services by request_id**:
+   ```logql
+   {namespace="system"} | json | request_id="<REQUEST_ID>"
+   ```
+   This will show logs from all services that handled this request.
+
+3. **Use timestamp correlation**:
+   If request_id is not propagated, search by timestamp (±1 second window):
+   ```logql
+   {namespace="system"} | json | level="error"
+   ```
+   Filter time range to narrow down related events.
+
+4. **Check service-to-service flow manually**:
+   - api-router → user-org → database
+   - api-router → analytics → redis
+   - Trace flow by looking at timestamps and service names
+
+**When Tempo will be available in staging**: Tracked in aas-8fg3p.
+
+### Missing Alerts in Staging
+
+**Issue**: Staging lacks loki-alerts ArgoCD application, so these alerts do NOT fire:
+- `LokiIngestionDown` - Loki log ingestion failures
+- `LokiIngestionSlowdown` - Reduced log ingestion rate
+- `PromtailTargetDown` - Promtail agent down
+- `LokiDiskSpaceWarning` / `LokiDiskSpaceCritical` - Storage issues
+- `AnalyticsRollupFailureRate` - Analytics data pipeline failures
+- `AnalyticsRollupStale` - Stale analytics data
+- `AnalyticsServiceDown` - Analytics service health
+
+**Impact**: Silent failures if Loki or analytics rollup stop working.
+
+**Workaround**: Manually check component health:
+```bash
+# Check Loki health
+kubectl get pods -n observability -l app=loki
+kubectl logs -n observability -l app=loki --tail=50
+
+# Check analytics service health
+kubectl get pods -n staging -l app=analytics-service
+kubectl logs -n staging -l app=analytics-service --tail=50 | grep rollup
+```
+
+**When alerts will be available in staging**: Tracked in aas-y6fey.
+
+### Environment URLs
+
+| Environment | Grafana | Loki API |
+|-------------|---------|----------|
+| Development | `https://grafana.dev.otherjamesbrown.com` | `https://loki.dev.otherjamesbrown.com` |
+| Staging | `https://grafana.staging.otherjamesbrown.com` | `https://loki.staging.otherjamesbrown.com` |
+
+### Datasource Configuration
+
+**Manual configuration required**: Loki and Tempo datasources are not auto-configured in Grafana. After accessing Grafana, add datasources manually (see [Observability Architecture - Grafana Datasource Configuration](../architecture/observability-architecture.md#grafana-datasource-configuration)).
 
 ## Related Documentation
 

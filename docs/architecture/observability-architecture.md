@@ -1,7 +1,7 @@
 # Observability Architecture
 
 ---
-last_updated: 2025-12-12
+last_updated: 2026-01-09
 document_type: architecture
 spec: 024-logging-observability-improvements
 ---
@@ -9,6 +9,8 @@ spec: 024-logging-observability-improvements
 ## Overview
 
 This document describes the unified observability architecture for the AI-AAS platform, including logging, tracing, error tracking, and visualization components deployed as part of spec 024.
+
+**IMPORTANT**: This document describes the full observability stack. See [Environment Differences](#environment-differences) section below for what is deployed in each environment.
 
 ## Architecture Diagram
 
@@ -518,6 +520,92 @@ kubectl logs -n system deployment/api-router --tail=100
 - Use Grafana for persistent log search
 - Use LogQL for filtering and aggregation
 - kubectl logs still available for real-time tailing
+
+## Environment Differences
+
+**CRITICAL**: Not all observability components are deployed to all environments. This section documents the current state as of 2026-01-09.
+
+### Component Matrix
+
+| Component | Development | Staging | Production | Notes |
+|-----------|-------------|---------|------------|-------|
+| **kube-prometheus-stack** | ✅ v80.4.1 | ✅ v80.4.1 | ❓ Unknown | Prometheus + Grafana + Alertmanager |
+| **Grafana Dashboards** | ✅ 12 dashboards | ✅ 12 dashboards | ❓ Unknown | Via monitoring-dashboards ArgoCD app |
+| **Loki** | ✅ v6.16.0 | ✅ v6.16.0 | ❓ Unknown | Log aggregation and storage |
+| **Tempo** | ✅ Deployed | ❌ **NOT deployed** | ❓ Unknown | **Staging lacks distributed tracing** |
+| **Platform Alerts** | ✅ Deployed | ✅ Deployed | ❓ Unknown | API/GPU/infrastructure alerts |
+| **Loki/Analytics Alerts** | ✅ Deployed | ❌ **NOT deployed** | ❓ Unknown | **Staging lacks log health alerts** |
+| **Alertmanager Config** | ❌ Not applied | ❌ Not applied | ❓ Unknown | Custom routing exists but not deployed |
+| **Loki Datasource** | ⚠️ Manual config | ⚠️ Manual config | ❓ Unknown | Not auto-configured in Grafana |
+| **Tempo Datasource** | ⚠️ Manual config | ❌ N/A | ❓ Unknown | Requires Tempo deployment first |
+
+### Staging Limitations
+
+**Missing in Staging (as of 2026-01-09)**:
+
+1. **Tempo** - No distributed tracing capability
+   - **Impact**: Cannot correlate requests across services using trace IDs
+   - **Workaround**: Use logs only, search by `request_id` instead of `trace_id`
+   - **Dashboard affected**: `request-tracing.json` will not work
+   - **Tracked in**: aas-8fg3p
+
+2. **Loki Health Alerts** - No alerting for log ingestion failures
+   - **Impact**: Silent failures if Loki stops ingesting logs
+   - **Missing alerts**: `LokiIngestionDown`, `LokiIngestionSlowdown`, `PromtailTargetDown`, `LokiDiskSpaceWarning`
+   - **Tracked in**: aas-y6fey
+
+3. **Analytics Rollup Alerts** - No alerting for analytics data pipeline
+   - **Impact**: Silent failures if hourly/daily rollup jobs stop running (data goes stale)
+   - **Missing alerts**: `AnalyticsRollupFailureRate`, `AnalyticsRollupStale`, `AnalyticsServiceDown`
+   - **Tracked in**: aas-y6fey
+
+4. **Alertmanager Custom Routing** - Alerts not routed to Slack/PagerDuty
+   - **Impact**: Alerts fire but go nowhere (no notifications)
+   - **Tracked in**: aas-ryzfs
+
+### Development Environment
+
+Development has the **full observability stack** deployed, including all components listed above. This is the reference implementation.
+
+### Debugging Without Tempo (Staging)
+
+If you need to debug cross-service issues in staging without Tempo:
+
+1. **Use request_id instead of trace_id** - All services log `request_id` which propagates across services
+2. **Search logs by request_id**:
+   ```logql
+   {namespace="system"} | json | request_id="<REQUEST_ID>"
+   ```
+3. **Search by timestamp correlation** - Find logs within same time window (±1 second)
+4. **Use service names** - Filter by `service` label to see service-to-service flow
+
+### Grafana Datasource Configuration
+
+**Manual Configuration Required**:
+
+Loki and Tempo datasources are NOT auto-configured via GitOps. After deploying the observability stack:
+
+1. **Access Grafana**: `https://grafana.<env>.otherjamesbrown.com`
+2. **Add Loki datasource**:
+   - Type: Loki
+   - URL: `http://loki-gateway.observability.svc.cluster.local`
+   - Access: Server (proxy)
+3. **Add Tempo datasource** (development only, after aas-8fg3p for staging):
+   - Type: Tempo
+   - URL: `http://tempo.observability.svc.cluster.local:3100`
+   - Access: Server (proxy)
+
+**Tracked in**: aas-siqwx (auto-configure datasources via GitOps)
+
+### Future Improvements
+
+Planned improvements to achieve parity across environments:
+
+1. Deploy Tempo to staging (aas-8fg3p)
+2. Deploy loki-alerts to staging (aas-y6fey)
+3. Deploy Alertmanager custom configuration (aas-ryzfs)
+4. Auto-configure Grafana datasources via GitOps (aas-siqwx)
+5. Document production observability stack (requires audit)
 
 ## Related Documentation
 
