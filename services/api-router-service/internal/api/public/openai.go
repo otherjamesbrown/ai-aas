@@ -1252,6 +1252,15 @@ func (h *Handler) handleTritonCompletion(
 	ctx, span := h.tracer.Start(ctx, "triton.completions")
 	defer span.End()
 
+	// Check if gRPC is required (TRT-LLM models require gRPC for all requests)
+	useGRPC := policy.BackendType == "triton-grpc" || (policy.TritonConfig != nil && policy.TritonConfig.IsGRPC())
+
+	// For gRPC backend, use gRPC (required for TRT-LLM)
+	if useGRPC {
+		h.handleTritonCompletionGRPC(ctx, w, r, policy, req, authCtx, startTime)
+		return
+	}
+
 	// Validate tokenizer is configured
 	if policy.Tokenizer == "" {
 		h.writeError(w, r, fmt.Errorf("tokenizer encoding is required for Triton backends"), api.ErrCodeValidationError)
@@ -1489,6 +1498,285 @@ func (h *Handler) handleTritonCompletion(
 	// Write response
 	if err := h.writeJSON(w, http.StatusOK, openAIResp); err != nil {
 		h.logger.Error("failed to write triton completion response", zap.Error(err))
+	}
+}
+
+// handleTritonCompletionGRPC handles text completion requests for Triton backends via gRPC.
+// This is required for TensorRT-LLM backends which only support gRPC.
+func (h *Handler) handleTritonCompletionGRPC(
+	ctx context.Context,
+	w http.ResponseWriter,
+	r *http.Request,
+	policy *config.RoutingPolicy,
+	req *OpenAICompletionRequest,
+	authCtx *auth.AuthenticatedContext,
+	startTime time.Time,
+) {
+	ctx, span := h.tracer.Start(ctx, "triton.grpc_completions")
+	defer span.End()
+
+	// Validate tokenizer is configured
+	if policy.Tokenizer == "" {
+		h.writeError(w, r, fmt.Errorf("tokenizer encoding is required for Triton backends"), api.ErrCodeValidationError)
+		return
+	}
+
+	// Get gRPC endpoint for the backend
+	backendID := policy.Backends[0].BackendID
+	grpcEndpoint := h.buildTritonGRPCEndpoint(backendID, policy.Model)
+
+	h.logger.Debug("starting triton gRPC text completion request",
+		zap.String("backend_id", backendID),
+		zap.String("grpc_endpoint", grpcEndpoint),
+		zap.String("model", policy.Model),
+	)
+
+	// Get or create gRPC client
+	client, err := h.grpcClients.getOrCreate(backendID, grpcEndpoint)
+	if err != nil {
+		h.logger.Error("failed to get gRPC client",
+			zap.String("backend_id", backendID),
+			zap.Error(err),
+		)
+		h.writeError(w, r, fmt.Errorf("backend connection failed"), api.ErrCodeBackendError)
+		return
+	}
+
+	// Get or create translator
+	translator, err := h.grpcTranslators.getOrCreate(policy.Tokenizer)
+	if err != nil {
+		h.logger.Error("failed to get gRPC translator",
+			zap.String("tokenizer", policy.Tokenizer),
+			zap.Error(err),
+		)
+		h.writeError(w, r, fmt.Errorf("internal configuration error"), api.ErrCodeBackendError)
+		return
+	}
+
+	// Convert text completion to chat completion format for gRPC translation
+	// Text completions are treated as a single user message
+	chatReq := &OpenAIChatCompletionRequest{
+		Model: req.Model,
+		Messages: []triton.ChatMessage{
+			{
+				Role:    "user",
+				Content: req.Prompt,
+			},
+		},
+		Stream: req.Stream,
+	}
+	if req.MaxTokens > 0 {
+		chatReq.MaxTokens = &req.MaxTokens
+	}
+	if req.Temperature > 0 {
+		chatReq.Temperature = &req.Temperature
+	}
+
+	// Translate OpenAI request to gRPC format
+	// For multi-model Triton servers, use the model name from the routing policy
+	// For single-model deployments, default to "ensemble" (standard TRT-LLM pipeline)
+	tritonModelName := "ensemble"
+	if len(policy.Backends) > 0 && policy.Backends[0].TritonModelName != "" {
+		tritonModelName = policy.Backends[0].TritonModelName
+	}
+	grpcReq, requestID, err := translator.TranslateOpenAIToGRPC(chatReq, tritonModelName)
+	if err != nil {
+		h.logger.Error("failed to translate request",
+			zap.Error(err),
+		)
+		h.writeError(w, r, fmt.Errorf("request translation failed: %w", err), api.ErrCodeValidationError)
+		return
+	}
+
+	h.logger.Debug("translated gRPC request",
+		zap.String("request_id", requestID),
+		zap.String("model_name", grpcReq.ModelName),
+		zap.Int("num_inputs", len(grpcReq.Inputs)),
+		zap.Int("num_outputs", len(grpcReq.Outputs)),
+	)
+
+	// Start gRPC stream
+	stream, err := client.StreamInfer(ctx)
+	if err != nil {
+		h.logger.Error("failed to start gRPC stream",
+			zap.String("backend_id", backendID),
+			zap.Error(err),
+		)
+		h.writeError(w, r, fmt.Errorf("backend streaming failed"), api.ErrCodeBackendError)
+		return
+	}
+
+	// Send the request
+	if err := stream.Send(grpcReq); err != nil {
+		h.logger.Error("failed to send request to gRPC stream",
+			zap.Error(err),
+		)
+		h.writeError(w, r, fmt.Errorf("request sending failed"), api.ErrCodeBackendError)
+		return
+	}
+
+	// Close send side to signal we're done sending
+	if err := stream.CloseSend(); err != nil {
+		h.logger.Warn("failed to close send side of stream",
+			zap.Error(err),
+		)
+	}
+
+	// Collect all streaming responses into a single response
+	var accumulatedText string
+	promptTokens := translator.CountPromptTokens(chatReq.Messages)
+	responseCount := 0
+
+	for {
+		resp, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			h.logger.Error("error receiving from gRPC stream",
+				zap.Error(err),
+			)
+			h.writeError(w, r, fmt.Errorf("backend error: %v", err), api.ErrCodeBackendError)
+			return
+		}
+
+		responseCount++
+
+		h.logger.Debug("received gRPC response",
+			zap.Int("response_count", responseCount),
+			zap.String("request_id", requestID),
+			zap.Bool("has_infer_response", resp.InferResponse != nil),
+			zap.String("error_message", resp.ErrorMessage),
+		)
+
+		// Check for backend error in response - fail fast instead of returning empty response
+		if resp.ErrorMessage != "" {
+			h.routingMetrics.RecordBackendError(backendID, policy.BackendType, requestID, resp.ErrorMessage)
+			h.writeError(w, r, fmt.Errorf("backend error: %s", resp.ErrorMessage), api.ErrCodeBackendError)
+			return
+		}
+
+		// Extract text from response
+		text, err := translator.ExtractTextFromGRPCResponse(resp)
+		if err != nil {
+			h.logger.Warn("failed to extract text from gRPC response",
+				zap.Error(err),
+			)
+			continue
+		}
+
+		h.logger.Debug("extracted text from response",
+			zap.String("request_id", requestID),
+			zap.Int("response_count", responseCount),
+			zap.Int("text_length", len(text)),
+		)
+
+		accumulatedText += text
+	}
+
+	// Calculate completion tokens
+	completionTokens := translator.CountCompletionTokens(accumulatedText)
+
+	// Build OpenAI text completion response
+	openAIResp := OpenAICompletionResponse{
+		ID:      requestID,
+		Object:  "text_completion",
+		Created: time.Now().Unix(),
+		Model:   req.Model,
+		Choices: []OpenAICompletionChoice{
+			{
+				Index:        0,
+				Text:         accumulatedText,
+				FinishReason: "stop",
+			},
+		},
+		Usage: triton.UsageInfo{
+			PromptTokens:     promptTokens,
+			CompletionTokens: completionTokens,
+			TotalTokens:      promptTokens + completionTokens,
+		},
+	}
+
+	// Create routing decision for metrics
+	routingDecision := &routing.RoutingDecision{
+		BackendID:     backendID,
+		DecisionType:  "PRIMARY",
+		Reason:        "Triton gRPC backend routing (text completion)",
+		Timestamp:     time.Now(),
+		AttemptNumber: 1,
+	}
+
+	// Add routing headers
+	w.Header().Set("X-Routing-Backend", routingDecision.BackendID)
+	w.Header().Set("X-Routing-Decision", routingDecision.DecisionType)
+	w.Header().Set("X-Backend-Type", policy.BackendType)
+
+	// Emit usage record
+	if h.usageHook != nil {
+		_ = h.usageHook.EmitUsage(
+			ctx,
+			authCtx,
+			openAIResp.ID,
+			req.Model,
+			routingDecision.BackendID,
+			routingDecision.DecisionType,
+			openAIResp.Usage.PromptTokens,
+			openAIResp.Usage.CompletionTokens,
+			int(time.Since(startTime).Milliseconds()),
+			"WITHIN_LIMIT",
+			span.SpanContext(),
+			0,
+		)
+	}
+
+	// Record token metrics
+	if h.tokenMetrics != nil {
+		h.tokenMetrics.RecordTokens(
+			ctx,
+			authCtx.OrganizationID,
+			req.Model,
+			"completion",
+			openAIResp.Usage.PromptTokens,
+			openAIResp.Usage.CompletionTokens,
+		)
+	}
+
+	// Record token usage for org-level quota tracking
+	totalTokens := openAIResp.Usage.PromptTokens + openAIResp.Usage.CompletionTokens
+	if h.rateLimiter != nil {
+		if err := h.rateLimiter.RecordTokenUsage(ctx, authCtx.OrganizationID, totalTokens); err != nil {
+			h.logger.Warn("failed to record token usage",
+				zap.String("org_id", authCtx.OrganizationID),
+				zap.Int("tokens", totalTokens),
+				zap.Error(err),
+			)
+		}
+	}
+
+	// Record per-user token usage for rate limiting (spec035)
+	h.recordUserTokenUsage(ctx, authCtx, totalTokens)
+
+	// Record per-backend Prometheus metrics
+	requestLatency := time.Since(startTime)
+	telemetry.RecordBackendRequest(
+		routingDecision.BackendID,
+		authCtx.OrganizationID,
+		req.Model,
+		true, // success
+		requestLatency,
+	)
+
+	h.logger.Info("triton gRPC text completion request completed",
+		zap.String("backend_id", backendID),
+		zap.String("model", policy.Model),
+		zap.Int("prompt_tokens", openAIResp.Usage.PromptTokens),
+		zap.Int("completion_tokens", openAIResp.Usage.CompletionTokens),
+		zap.Duration("latency", requestLatency),
+	)
+
+	// Write response
+	if err := h.writeJSON(w, http.StatusOK, openAIResp); err != nil {
+		h.logger.Error("failed to write triton gRPC response", zap.Error(err))
 	}
 }
 
