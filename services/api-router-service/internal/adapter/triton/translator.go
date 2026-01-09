@@ -57,53 +57,24 @@ func (t *Translator) TranslateOpenAIToTriton(req *OpenAIChatCompletionRequest) (
 		},
 	}
 
-	// Add optional parameters as input tensors
+	// Add max_tokens (REQUIRED by TRT-LLM - defaults to 512 if not specified)
+	// TRT-LLM ensemble model marks max_tokens as required (optional: false)
+	maxTokens := 512 // Default value matching TRT-LLM expectations
 	if req.MaxTokens != nil {
-		inputs = append(inputs, InferInputTensor{
-			Name:     TensorInputMaxTokens,
-			Shape:    []int64{1},
-			Datatype: DatatypeINT32,
-			Data:     []interface{}{*req.MaxTokens},
-		})
+		maxTokens = *req.MaxTokens
 	}
-
-	if req.Temperature != nil {
-		inputs = append(inputs, InferInputTensor{
-			Name:     TensorInputTemperature,
-			Shape:    []int64{1},
-			Datatype: DatatypeFP32,
-			Data:     []interface{}{*req.Temperature},
-		})
-	}
-
-	if req.TopP != nil {
-		inputs = append(inputs, InferInputTensor{
-			Name:     TensorInputTopP,
-			Shape:    []int64{1},
-			Datatype: DatatypeFP32,
-			Data:     []interface{}{*req.TopP},
-		})
-	}
-
-	// Add stop words if provided
-	if len(req.Stop) > 0 {
-		// TensorRT-LLM expects stop words as a JSON-encoded array
-		stopWordsJSON, _ := json.Marshal(req.Stop)
-		inputs = append(inputs, InferInputTensor{
-			Name:     TensorInputStopWords,
-			Shape:    []int64{1},
-			Datatype: DatatypeBYTES,
-			Data:     []interface{}{string(stopWordsJSON)},
-		})
-	}
-
-	// Set stream to false (streaming not supported in MVP)
 	inputs = append(inputs, InferInputTensor{
-		Name:     TensorInputStream,
+		Name:     TensorInputMaxTokens,
 		Shape:    []int64{1},
-		Datatype: DatatypeBOOL,
-		Data:     []interface{}{false},
+		Datatype: DatatypeINT32,
+		Data:     []interface{}{maxTokens},
 	})
+
+	// Note: We intentionally do NOT add optional parameters like temperature, top_p, stop_words, or stream.
+	// TensorRT-LLM ensemble models only accept required inputs (text_input, max_tokens).
+	// Adding extra inputs causes "expected N inputs but got N+1" errors.
+	// Optional parameters like temperature are configured at model deployment time, not per-request.
+	// Streaming is controlled at the protocol level (SSE for HTTP), not via input tensors.
 
 	// Request the text_output tensor
 	outputs := []InferRequestedOutput{
