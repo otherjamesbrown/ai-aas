@@ -260,6 +260,7 @@ type AdminAPIClient interface {
 //+kubebuilder:rbac:groups=aimodel.ai-aas.io,resources=aimodels/finalizers,verbs=update
 //+kubebuilder:rbac:groups=serving.kserve.io,resources=inferenceservices,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=serving.kserve.io,resources=inferenceservices/status,verbs=get
+//+kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
@@ -670,6 +671,19 @@ func (r *AIModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 		reconcileTotal.WithLabelValues("error").Inc()
 		return ctrl.Result{}, err
+	}
+
+	// 4. Reconcile Prometheus ServiceMonitor for metrics scraping
+	// This creates a ServiceMonitor that allows Prometheus to scrape vLLM/Triton metrics.
+	// The ServiceMonitor is deleted automatically when the AIModel is deleted (via ownerReferences).
+	if err := r.createOrUpdateServiceMonitor(ctx, aiModel); err != nil {
+		// Log error but don't fail the reconciliation - metrics scraping is not critical
+		log.Error(err, "Failed to reconcile ServiceMonitor", "name", aiModel.Name)
+		// Emit a warning event but continue
+		if r.Recorder != nil {
+			r.Recorder.Event(aiModel, corev1.EventTypeWarning, "ServiceMonitorError",
+				fmt.Sprintf("Failed to create ServiceMonitor for metrics: %v", err))
+		}
 	}
 
 	// Update status from InferenceService (this will check if already Ready and set appropriate phase)
@@ -1820,6 +1834,83 @@ func (r *AIModelReconciler) createOrUpdateInferenceService(ctx context.Context, 
 			return lastErr
 		}
 		return fmt.Errorf("failed to update InferenceService: %w", err)
+	}
+
+	return nil
+}
+
+// createOrUpdateServiceMonitor creates or updates a Prometheus ServiceMonitor for the AIModel.
+// The ServiceMonitor enables Prometheus to scrape vLLM/Triton metrics from the InferenceService.
+// The ServiceMonitor uses ownerReferences for automatic garbage collection when the AIModel is deleted.
+func (r *AIModelReconciler) createOrUpdateServiceMonitor(ctx context.Context, aiModel *aimodelv1alpha1.AIModel) error {
+	log := log.FromContext(ctx)
+
+	// Create owner reference for garbage collection
+	ownerRef := &metav1.OwnerReference{
+		APIVersion:         aiModel.APIVersion,
+		Kind:               aiModel.Kind,
+		Name:               aiModel.Name,
+		UID:                aiModel.UID,
+		Controller:         func() *bool { b := true; return &b }(),
+		BlockOwnerDeletion: func() *bool { b := true; return &b }(),
+	}
+
+	// Build ServiceMonitor name: <aimodel-name>-metrics
+	smName := fmt.Sprintf("%s-metrics", sanitizeInferenceServiceName(aiModel.Name))
+
+	// Build the ServiceMonitor
+	sm, err := kserve.NewServiceMonitorBuilder(smName, aiModel.Namespace).
+		WithModelName(sanitizeInferenceServiceName(aiModel.Name)).
+		WithOwnerReference(ownerRef).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to build ServiceMonitor: %w", err)
+	}
+
+	// Check if ServiceMonitor already exists
+	existing := &unstructured.Unstructured{}
+	existing.SetGroupVersionKind(kserve.ServiceMonitorGVK)
+	err = r.Get(ctx, types.NamespacedName{Name: smName, Namespace: aiModel.Namespace}, existing)
+
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Create new ServiceMonitor
+			log.Info("Creating ServiceMonitor for metrics scraping", "name", smName)
+			if err := r.Create(ctx, sm); err != nil {
+				// Ignore "already exists" errors which can happen due to race conditions
+				if !errors.IsAlreadyExists(err) {
+					return fmt.Errorf("failed to create ServiceMonitor: %w", err)
+				}
+				log.Info("ServiceMonitor already exists, skipping creation", "name", smName)
+			}
+			return nil
+		}
+		return fmt.Errorf("failed to get ServiceMonitor: %w", err)
+	}
+
+	// ServiceMonitor already exists - check if it needs updating
+	// For now, we only check that the owner reference is set correctly
+	existingOwnerRefs := existing.GetOwnerReferences()
+	ownerRefFound := false
+	for _, ref := range existingOwnerRefs {
+		if ref.UID == aiModel.UID {
+			ownerRefFound = true
+			break
+		}
+	}
+
+	if !ownerRefFound {
+		// Update the ServiceMonitor to add owner reference
+		log.Info("Updating ServiceMonitor to add owner reference", "name", smName)
+		sm.SetResourceVersion(existing.GetResourceVersion())
+		if err := r.Update(ctx, sm); err != nil {
+			if errors.IsConflict(err) {
+				// Conflict - will retry on next reconciliation
+				log.Info("ServiceMonitor update conflict, will retry", "name", smName)
+				return nil
+			}
+			return fmt.Errorf("failed to update ServiceMonitor: %w", err)
+		}
 	}
 
 	return nil
@@ -3302,10 +3393,16 @@ func (r *AIModelReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	isvcObj := &unstructured.Unstructured{}
 	isvcObj.SetGroupVersionKind(kserve.InferenceServiceGVK)
 
+	// Create a watch on unstructured ServiceMonitor resources
+	// This ensures that if a ServiceMonitor is deleted, the controller recreates it
+	smObj := &unstructured.Unstructured{}
+	smObj.SetGroupVersionKind(kserve.ServiceMonitorGVK)
+
 	return ctrl.NewControllerManagedBy(mgr).For(&aimodelv1alpha1.AIModel{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
 		Owns(&batchv1.Job{}).
 		Owns(isvcObj).
+		Owns(smObj).
 		Complete(r)
 }

@@ -2289,3 +2289,277 @@ func TestRuntimeArgsForTriton(t *testing.T) {
 		})
 	}
 }
+
+func TestAIModelReconciler_CreatesServiceMonitor(t *testing.T) {
+	// Register operator types with the scheme
+	s := setupScheme()
+
+	// Define a sample AIModel object
+	aiModelName := "test-model"
+	aiModelNamespace := "default"
+	minReplicas := int32(0)
+	maxReplicas := int32(2)
+	aiModel := &aimodelv1alpha1.AIModel{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "aimodel.ai-aas.io/v1alpha1",
+			Kind:       "AIModel",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      aiModelName,
+			Namespace: aiModelNamespace,
+			UID:       types.UID("test-uid-123"),
+		},
+		Spec: aimodelv1alpha1.AIModelSpec{
+			ModelName:   "mistral-7b",
+			ModelID:     "mistral-7b-v0.1",
+			S3Bucket:    "ai-models",
+			S3Key:       "mistral-7b",
+			Runtime:     "vllm",
+			MinReplicas: &minReplicas,
+			MaxReplicas: &maxReplicas,
+			Enabled:     true,
+		},
+	}
+
+	// Create a completed job manually (to skip S3 check and downloader job)
+	jobName := aiModelName + "-downloader"
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jobName,
+			Namespace: aiModelNamespace,
+		},
+		Status: batchv1.JobStatus{
+			Conditions: []batchv1.JobCondition{
+				{
+					Type:   batchv1.JobComplete,
+					Status: corev1.ConditionTrue,
+				},
+			},
+		},
+	}
+
+	// Create a fake client with the sample objects
+	cl := fake.NewClientBuilder().
+		WithScheme(s).
+		WithObjects(aiModel, job).
+		WithStatusSubresource(aiModel).
+		Build()
+
+	// Create the Reconciler
+	r := &AIModelReconciler{
+		MaxDownloadRetries: 5,
+		InitialRetryDelay:  1 * time.Minute,
+		MaxRetryDelay:      16 * time.Minute,
+		Client:             cl,
+		Scheme:             s,
+	}
+
+	// Update AIModel status to "Deploying" (as if the download job completed)
+	aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
+	err := cl.Status().Update(context.Background(), aiModel)
+	if err != nil {
+		t.Fatalf("update aimodel status: (%v)", err)
+	}
+
+	// Mock request
+	req := reconcile.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      aiModelName,
+			Namespace: aiModelNamespace,
+		},
+	}
+
+	// Test: Reconcile should create both InferenceService and ServiceMonitor
+	t.Log("Test: Reconciling to create InferenceService and ServiceMonitor")
+	_, err = r.Reconcile(context.Background(), req)
+	if err != nil {
+		t.Fatalf("reconcile: (%v)", err)
+	}
+
+	// Check if ServiceMonitor was created
+	sm := &unstructured.Unstructured{}
+	sm.SetGroupVersionKind(kserve.ServiceMonitorGVK)
+	expectedSMName := aiModelName + "-metrics"
+	err = cl.Get(context.Background(), types.NamespacedName{Name: expectedSMName, Namespace: aiModelNamespace}, sm)
+	if err != nil {
+		t.Fatalf("get ServiceMonitor: (%v)", err)
+	}
+
+	// Verify ServiceMonitor properties
+	t.Log("Verifying ServiceMonitor properties")
+
+	// Check name and namespace
+	if sm.GetName() != expectedSMName {
+		t.Errorf("expected ServiceMonitor name '%s', got '%s'", expectedSMName, sm.GetName())
+	}
+	if sm.GetNamespace() != aiModelNamespace {
+		t.Errorf("expected ServiceMonitor namespace '%s', got '%s'", aiModelNamespace, sm.GetNamespace())
+	}
+
+	// Check labels
+	labels := sm.GetLabels()
+	if labels["release"] != "kube-prometheus-stack" {
+		t.Errorf("expected label release='kube-prometheus-stack', got '%s'", labels["release"])
+	}
+	if labels["managed-by"] != "ai-model-operator" {
+		t.Errorf("expected label managed-by='ai-model-operator', got '%s'", labels["managed-by"])
+	}
+
+	// Check selector
+	selector, found, err := unstructured.NestedMap(sm.Object, "spec", "selector", "matchLabels")
+	if err != nil || !found {
+		t.Fatalf("failed to get selector.matchLabels: %v", err)
+	}
+	expectedSelector := "serving.kserve.io/inferenceservice"
+	if selector[expectedSelector] != aiModelName {
+		t.Errorf("expected selector label '%s=%s', got '%v'", expectedSelector, aiModelName, selector[expectedSelector])
+	}
+
+	// Check endpoints
+	endpoints, found, err := unstructured.NestedSlice(sm.Object, "spec", "endpoints")
+	if err != nil || !found || len(endpoints) == 0 {
+		t.Fatalf("failed to get endpoints or empty: %v", err)
+	}
+
+	endpoint, ok := endpoints[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("endpoint is not a map")
+	}
+
+	if endpoint["port"] != "http1" {
+		t.Errorf("expected endpoint port 'http1', got '%s'", endpoint["port"])
+	}
+	if endpoint["path"] != "/metrics" {
+		t.Errorf("expected endpoint path '/metrics', got '%s'", endpoint["path"])
+	}
+	if endpoint["interval"] != "15s" {
+		t.Errorf("expected endpoint interval '15s', got '%s'", endpoint["interval"])
+	}
+
+	// Check owner reference
+	ownerRefs := sm.GetOwnerReferences()
+	if len(ownerRefs) != 1 {
+		t.Fatalf("expected 1 owner reference, got %d", len(ownerRefs))
+	}
+	if ownerRefs[0].UID != aiModel.UID {
+		t.Errorf("expected owner reference UID '%s', got '%s'", aiModel.UID, ownerRefs[0].UID)
+	}
+	// Note: In tests, the fake client doesn't preserve TypeMeta when fetching objects,
+	// so Kind/APIVersion in owner refs might be empty. The UID and Name checks are sufficient
+	// to verify the owner reference is correctly set.
+	if ownerRefs[0].Name != aiModel.Name {
+		t.Errorf("expected owner reference Name '%s', got '%s'", aiModel.Name, ownerRefs[0].Name)
+	}
+
+	t.Log("Test passed: Controller correctly creates ServiceMonitor with owner reference")
+}
+
+func TestAIModelReconciler_ServiceMonitorIdempotent(t *testing.T) {
+	// Register operator types with the scheme
+	s := setupScheme()
+
+	// Define a sample AIModel object
+	aiModelName := "test-model"
+	aiModelNamespace := "default"
+	aiModel := &aimodelv1alpha1.AIModel{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "aimodel.ai-aas.io/v1alpha1",
+			Kind:       "AIModel",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      aiModelName,
+			Namespace: aiModelNamespace,
+			UID:       types.UID("test-uid-123"),
+		},
+		Spec: aimodelv1alpha1.AIModelSpec{
+			ModelName:       "mistral-7b",
+			ModelID:         "mistral-7b-v0.1",
+			TrustRemoteCode: true,
+			Enabled:         true,
+		},
+	}
+
+	// Create an existing ServiceMonitor (without owner reference - simulating legacy)
+	existingSM := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": kserve.ServiceMonitorGVK.GroupVersion().String(),
+			"kind":       kserve.ServiceMonitorGVK.Kind,
+			"metadata": map[string]interface{}{
+				"name":      aiModelName + "-metrics",
+				"namespace": aiModelNamespace,
+				"labels": map[string]interface{}{
+					"release":    "kube-prometheus-stack",
+					"managed-by": "ai-model-operator",
+				},
+			},
+			"spec": map[string]interface{}{
+				"selector": map[string]interface{}{
+					"matchLabels": map[string]interface{}{
+						"serving.kserve.io/inferenceservice": aiModelName,
+					},
+				},
+				"endpoints": []interface{}{
+					map[string]interface{}{
+						"port":     "http1",
+						"path":     "/metrics",
+						"interval": "15s",
+					},
+				},
+			},
+		},
+	}
+
+	// Create a fake client with the sample objects
+	cl := fake.NewClientBuilder().
+		WithScheme(s).
+		WithObjects(aiModel, existingSM).
+		WithStatusSubresource(aiModel).
+		Build()
+
+	// Create the Reconciler
+	r := &AIModelReconciler{
+		Client: cl,
+		Scheme: s,
+	}
+
+	// Update AIModel status to "Deploying"
+	aiModel.Status.Phase = aimodelv1alpha1.AIModelPhaseDeploying
+	err := cl.Status().Update(context.Background(), aiModel)
+	if err != nil {
+		t.Fatalf("update aimodel status: (%v)", err)
+	}
+
+	// Mock request
+	req := reconcile.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      aiModelName,
+			Namespace: aiModelNamespace,
+		},
+	}
+
+	// Reconcile should add owner reference to existing ServiceMonitor
+	t.Log("Test: Reconciling should add owner reference to existing ServiceMonitor")
+	_, err = r.Reconcile(context.Background(), req)
+	if err != nil {
+		t.Fatalf("reconcile: (%v)", err)
+	}
+
+	// Check if ServiceMonitor now has owner reference
+	sm := &unstructured.Unstructured{}
+	sm.SetGroupVersionKind(kserve.ServiceMonitorGVK)
+	expectedSMName := aiModelName + "-metrics"
+	err = cl.Get(context.Background(), types.NamespacedName{Name: expectedSMName, Namespace: aiModelNamespace}, sm)
+	if err != nil {
+		t.Fatalf("get ServiceMonitor: (%v)", err)
+	}
+
+	ownerRefs := sm.GetOwnerReferences()
+	if len(ownerRefs) != 1 {
+		t.Fatalf("expected 1 owner reference after reconcile, got %d", len(ownerRefs))
+	}
+	if ownerRefs[0].UID != aiModel.UID {
+		t.Errorf("expected owner reference UID '%s', got '%s'", aiModel.UID, ownerRefs[0].UID)
+	}
+
+	t.Log("Test passed: Controller correctly updates existing ServiceMonitor with owner reference")
+}
