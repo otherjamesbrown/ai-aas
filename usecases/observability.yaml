@@ -1,0 +1,536 @@
+feature: Observability
+description: |
+  Observability enables users and operators to monitor platform health, debug issues,
+  and track benchmark performance through dashboards, logs, and distributed tracing.
+
+  This feature is critical for users running benchmarks who need visibility into model
+  performance, request latency, error rates, and resource utilization. Operators use
+  observability to proactively detect issues and diagnose failures.
+
+  The observability stack consists of:
+  - **Grafana**: Dashboards and visualization
+  - **Prometheus**: Metrics collection and alerting
+  - **Loki**: Log aggregation and querying
+  - **Tempo**: Distributed tracing (planned)
+
+dependencies:
+  - usecases/authentication.yaml
+  - usecases/platform-health.yaml
+
+usecases:
+  - id: UC-OBS-001
+    title: Access Grafana Dashboards
+    interface: web
+    status: active
+    bead: null
+
+    description: |
+      A user or operator wants to access Grafana to view platform dashboards and
+      monitor system health. Grafana provides visualization for metrics, logs, and
+      traces collected across the platform.
+
+      Users access Grafana via the web interface to view pre-built dashboards for
+      model performance, API latency, error rates, and resource utilization.
+
+    actor: Platform Operator | Organization Admin
+
+    preconditions:
+      - Grafana is deployed and accessible
+      - User has Grafana credentials (admin or viewer)
+      - TLS certificate is valid for Grafana ingress
+
+    depends_on:
+      - UC-AUTH-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Access Grafana login page
+        given: Grafana is deployed with ingress enabled
+        when: User navigates to https://grafana.staging.otherjamesbrown.com
+        then:
+          - Grafana login page is displayed
+          - TLS certificate is valid (no browser warnings)
+          - Login form accepts username and password
+
+      - id: AC-02
+        criterion: Authenticate and view home dashboard
+        given: User has valid Grafana credentials
+        when: User logs in with username and password
+        then:
+          - User is redirected to Grafana home page
+          - Navigation sidebar shows available dashboards
+          - User session is maintained
+
+      - id: AC-03
+        criterion: View platform overview dashboard
+        given: User is logged into Grafana
+        when: User navigates to Dashboards > Platform Overview
+        then:
+          - Dashboard loads with all panels
+          - Service health status is visible
+          - Error rate and latency graphs show data
+          - Time range picker allows historical view
+
+      - id: AC-04
+        criterion: View model-specific dashboard
+        given: User is logged into Grafana and models are deployed
+        when: User navigates to Dashboards > Model Performance
+        then:
+          - Dashboard shows inference latency by model
+          - Request throughput is visualized
+          - GPU utilization metrics are displayed (if available)
+          - Model selector allows filtering by specific model
+
+    in_scope:
+      - Accessing Grafana via web browser
+      - Authenticating with credentials
+      - Viewing pre-built dashboards
+      - Filtering dashboards by time range
+      - Navigating between dashboards
+
+    out_of_scope:
+      - Creating custom dashboards (admin only)
+      - Configuring datasources
+      - Setting up alerts via Grafana UI
+      - API access to Grafana
+
+    must_not:
+      - Expose Grafana without authentication
+      - Allow anonymous dashboard editing
+      - Display credentials in dashboards
+      - Allow access without valid TLS
+
+  - id: UC-OBS-002
+    title: Query Logs for Debugging
+    interface: web
+    status: active
+    bead: null
+
+    description: |
+      A user or operator wants to search logs to debug an issue with their inference
+      requests or benchmark runs. Logs are collected by Loki and queryable through
+      Grafana's Explore view using LogQL.
+
+      This is essential for debugging failed requests, understanding error patterns,
+      and correlating issues across services in the request path.
+
+    actor: Platform Operator | Organization Admin
+
+    preconditions:
+      - User is authenticated in Grafana
+      - Loki datasource is configured
+      - Logs are being collected from services
+
+    depends_on:
+      - UC-OBS-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Access log explorer
+        given: User is logged into Grafana
+        when: User clicks Explore in the sidebar and selects Loki datasource
+        then:
+          - Loki explore view is displayed
+          - LogQL query input is available
+          - Recent logs are shown by default
+
+      - id: AC-02
+        criterion: Query logs by service name
+        given: User is in Loki explore view
+        when: User enters query `{service="api-router-service"}`
+        then:
+          - Logs from api-router-service are displayed
+          - Logs are sorted by timestamp (newest first)
+          - Log level is visible (info, warn, error)
+          - Log message content is searchable
+
+      - id: AC-03
+        criterion: Filter logs by error level
+        given: User is in Loki explore view
+        when: User enters query `{service="api-router-service"} |= "error"`
+        then:
+          - Only logs containing "error" are shown
+          - Error count and time distribution are visible
+          - Clicking a log entry shows full context
+
+      - id: AC-04
+        criterion: Search logs by trace ID
+        given: User has a trace_id from an error response
+        when: User enters query `{trace_id="abc123def456"}`
+        then:
+          - All logs with that trace_id are shown
+          - Logs span multiple services (api-router, backend, etc.)
+          - Request flow can be reconstructed from logs
+
+      - id: AC-05
+        criterion: View logs for specific time range
+        given: User knows when an issue occurred
+        when: User sets time range to "Last 15 minutes" and queries logs
+        then:
+          - Only logs from that time range are shown
+          - Time range picker updates query automatically
+          - Can zoom in/out on time range
+
+    in_scope:
+      - Querying logs via Grafana Explore
+      - Filtering by service, level, content
+      - Searching by trace_id for correlation
+      - Viewing logs for specific time ranges
+      - Expanding log entries for details
+
+    out_of_scope:
+      - Direct Loki API access
+      - Creating log-based alerts (admin operation)
+      - Log retention configuration
+      - Log export to external systems
+
+    must_not:
+      - Expose logs without authentication
+      - Allow log deletion via UI
+      - Show logs from other organizations
+      - Display sensitive data (passwords, API keys)
+
+  - id: UC-OBS-003
+    title: Trace Request Flow
+    interface: web
+    status: draft
+    bead: aas-8fg3p
+
+    description: |
+      A user or operator wants to trace a request through the distributed system to
+      understand latency breakdown and identify bottlenecks. Tempo provides distributed
+      tracing with Grafana integration.
+
+      This is critical for debugging slow inference requests, understanding where time
+      is spent across services, and identifying performance bottlenecks in the request
+      path.
+
+    actor: Platform Operator | Organization Admin
+
+    preconditions:
+      - User is authenticated in Grafana
+      - Tempo datasource is configured
+      - Services are instrumented with OpenTelemetry
+      - Traces are being collected
+
+    depends_on:
+      - UC-OBS-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: Access trace explorer
+        given: User is logged into Grafana and Tempo is deployed
+        when: User clicks Explore in the sidebar and selects Tempo datasource
+        then:
+          - Tempo explore view is displayed
+          - Search by trace ID input is available
+          - Recent traces are discoverable
+
+      - id: AC-02
+        criterion: Search trace by ID
+        given: User has a trace_id from logs or error response
+        when: User enters trace ID in Tempo search
+        then:
+          - Full trace is displayed
+          - All spans across services are shown
+          - Span hierarchy shows parent-child relationships
+          - Duration of each span is visible
+
+      - id: AC-03
+        criterion: View trace waterfall
+        given: Trace is loaded in Tempo explorer
+        when: User views trace details
+        then:
+          - Waterfall visualization shows span timing
+          - Critical path is highlighted
+          - Slow spans are visually identifiable
+          - Can expand spans to see tags/attributes
+
+      - id: AC-04
+        criterion: Navigate from trace to logs
+        given: User is viewing a trace span
+        when: User clicks "View Logs" on a span
+        then:
+          - Loki query opens with trace_id filter
+          - Logs for that specific span time window are shown
+          - Service name is pre-filtered
+
+    in_scope:
+      - Searching traces by ID
+      - Viewing trace waterfall visualization
+      - Examining span details and attributes
+      - Navigating from traces to logs
+
+    out_of_scope:
+      - Creating custom trace queries
+      - Configuring trace sampling
+      - Service mesh integration
+      - Custom span instrumentation
+
+    must_not:
+      - Expose traces without authentication
+      - Show traces from other organizations
+      - Allow trace deletion
+      - Display request payloads in traces (privacy)
+
+  - id: UC-OBS-004
+    title: View and Acknowledge Alerts
+    interface: web
+    status: active
+    bead: null
+
+    description: |
+      A user or operator wants to view active alerts and acknowledge them once
+      investigated. Alertmanager collects alerts from Prometheus and routes them
+      to appropriate channels (Slack, PagerDuty) while providing a web UI for
+      viewing alert state.
+
+      This is critical for incident response, ensuring operators are aware of
+      platform issues and can track alert status during investigation.
+
+    actor: Platform Operator
+
+    preconditions:
+      - User has access to Alertmanager UI or Grafana
+      - Alertmanager is deployed with alert rules
+      - Alert routing is configured
+
+    depends_on:
+      - UC-OBS-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: View active alerts in Grafana
+        given: Prometheus alerts are firing
+        when: User navigates to Alerting > Alert Rules in Grafana
+        then:
+          - Active (firing) alerts are highlighted
+          - Alert severity is displayed (critical, warning)
+          - Alert labels and annotations are visible
+          - Link to silence or view in Alertmanager is provided
+
+      - id: AC-02
+        criterion: View alert details
+        given: User sees an active alert
+        when: User clicks on the alert name
+        then:
+          - Alert query and threshold are shown
+          - Current value that triggered alert is displayed
+          - Time since alert started firing is shown
+          - Runbook URL is linked (if configured)
+
+      - id: AC-03
+        criterion: Silence an alert
+        given: User is investigating a known issue
+        when: User clicks "Silence" on an alert and sets duration
+        then:
+          - Alert is silenced for specified duration
+          - Silence reason can be documented
+          - Silenced alerts show muted status
+          - Silence can be removed early
+
+      - id: AC-04
+        criterion: Receive alert notifications
+        given: Alert rules are configured with Slack/PagerDuty routing
+        when: A critical alert fires
+        then:
+          - Notification is sent to configured channel
+          - Alert summary and description are included
+          - Dashboard link is provided in notification
+          - Runbook URL is included if configured
+
+    in_scope:
+      - Viewing active and resolved alerts
+      - Silencing alerts during investigation
+      - Receiving alert notifications
+      - Viewing alert history
+
+    out_of_scope:
+      - Creating new alert rules (admin operation)
+      - Modifying alert routing configuration
+      - Configuring notification channels
+      - Custom alert webhooks
+
+    must_not:
+      - Allow alert rule deletion via UI
+      - Expose Alertmanager without authentication
+      - Send alerts to unconfigured channels
+      - Silence alerts indefinitely without audit trail
+
+  - id: UC-OBS-005
+    title: Monitor Benchmark Performance
+    interface: web
+    status: active
+    bead: null
+
+    description: |
+      A user wants to monitor benchmark performance over time, comparing results
+      across different runs, models, and configurations. Grafana dashboards provide
+      visualization of benchmark metrics including latency percentiles, throughput,
+      and error rates.
+
+      This is the primary observability use case for users running benchmarks, enabling
+      data-driven decisions about model selection and capacity planning.
+
+    actor: Organization Admin
+
+    preconditions:
+      - User is authenticated in Grafana
+      - Benchmarks have been executed with metrics collection
+      - Benchmark dashboards are deployed
+
+    depends_on:
+      - UC-OBS-001
+      - UC-BM-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: View benchmark results dashboard
+        given: User has run benchmarks with metrics enabled
+        when: User navigates to Dashboards > Benchmark Results
+        then:
+          - Recent benchmark runs are listed
+          - Key metrics (p50, p95, p99 latency) are displayed
+          - Throughput (requests/second) is shown
+          - Error rate percentage is visible
+
+      - id: AC-02
+        criterion: Compare benchmark runs
+        given: User has multiple benchmark runs to compare
+        when: User selects two or more runs in the dashboard
+        then:
+          - Side-by-side comparison is displayed
+          - Latency distributions are overlaid
+          - Statistical comparison (% difference) is calculated
+          - Winner/regression is highlighted
+
+      - id: AC-03
+        criterion: Filter benchmarks by model
+        given: User wants to see benchmarks for a specific model
+        when: User selects model "llama-7b" from dropdown filter
+        then:
+          - Only benchmarks for llama-7b are shown
+          - Historical trend for that model is displayed
+          - Can compare against other models
+
+      - id: AC-04
+        criterion: Export benchmark metrics
+        given: User wants to share or archive benchmark results
+        when: User clicks Export on the dashboard
+        then:
+          - Data can be exported as CSV or JSON
+          - Time range selection is respected
+          - All visible metrics are included
+
+      - id: AC-05
+        criterion: View real-time benchmark progress
+        given: User has a benchmark currently running
+        when: User views the live benchmark dashboard
+        then:
+          - Metrics update in real-time (auto-refresh)
+          - Progress percentage is shown
+          - Current request rate is displayed
+          - ETA for completion is estimated
+
+    in_scope:
+      - Viewing benchmark results dashboards
+      - Comparing benchmark runs
+      - Filtering by model, scenario, time range
+      - Exporting benchmark data
+      - Real-time progress monitoring
+
+    out_of_scope:
+      - Starting/stopping benchmarks from dashboard
+      - Modifying benchmark configuration
+      - Creating custom benchmark dashboards
+      - Automated benchmark scheduling
+
+    must_not:
+      - Allow modification of historical benchmark data
+      - Expose benchmarks from other organizations
+      - Show raw infrastructure metrics (GPU, CPU) without context
+      - Auto-delete old benchmark data without policy
+
+  - id: UC-OBS-006
+    title: View Service Metrics in Dashboard
+    interface: web
+    status: active
+    bead: null
+
+    description: |
+      A platform operator wants to view detailed metrics for a specific service to
+      understand its performance characteristics, resource utilization, and error
+      patterns. Service-specific dashboards provide deep visibility into each
+      component of the platform.
+
+      This enables operators to identify services that need scaling, debugging, or
+      optimization based on real metrics rather than guesswork.
+
+    actor: Platform Operator
+
+    preconditions:
+      - User is authenticated in Grafana
+      - ServiceMonitors are configured for target services
+      - Prometheus is scraping service metrics
+
+    depends_on:
+      - UC-OBS-001
+
+    acceptance_criteria:
+      - id: AC-01
+        criterion: View API Router metrics dashboard
+        given: API Router is deployed with metrics enabled
+        when: User navigates to Dashboards > API Router
+        then:
+          - Request rate by endpoint is displayed
+          - Latency histograms (p50, p95, p99) are shown
+          - Error rate by status code is visible
+          - Upstream backend health is displayed
+
+      - id: AC-02
+        criterion: View Admin API metrics dashboard
+        given: Admin API is deployed with metrics enabled
+        when: User navigates to Dashboards > Admin API
+        then:
+          - Request rate by endpoint is displayed
+          - Database query latency is shown
+          - Active connections count is visible
+          - Error rate and types are displayed
+
+      - id: AC-03
+        criterion: View inference backend metrics
+        given: vLLM backends are deployed with metrics enabled
+        when: User navigates to Dashboards > Inference Backends
+        then:
+          - GPU utilization per backend is displayed
+          - Token throughput (tokens/second) is shown
+          - Queue depth and waiting requests visible
+          - Memory utilization is tracked
+
+      - id: AC-04
+        criterion: Drill down to specific time range
+        given: User identifies a spike in errors at 14:00
+        when: User clicks on the error spike and selects "Zoom to selection"
+        then:
+          - Dashboard zooms to that time range
+          - Higher resolution data is displayed
+          - Can correlate with other metrics
+          - Can navigate to logs for that time range
+
+    in_scope:
+      - Viewing service-specific dashboards
+      - Analyzing request rate, latency, errors
+      - Monitoring resource utilization
+      - Time range navigation and zoom
+
+    out_of_scope:
+      - Creating custom service dashboards
+      - Configuring ServiceMonitors
+      - Setting up recording rules
+      - Cross-service correlation views
+
+    must_not:
+      - Expose internal service endpoints in dashboard
+      - Show raw Kubernetes metrics without context
+      - Allow dashboard modifications by viewers
+      - Display sensitive configuration values
