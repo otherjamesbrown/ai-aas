@@ -435,6 +435,7 @@ When analyzing dashboards, structure your report:
 
 | What | Where |
 |------|-------|
+| **Metrics Catalog** | `docs/metrics/CATALOG.md` - Single source of truth for all metrics |
 | **Dashboard spec schema** | `dashboards/specs/SCHEMA.md` |
 | Observability guide | `docs/platform/observability-guide.md` |
 | Architecture | `docs/architecture/observability-architecture.md` |

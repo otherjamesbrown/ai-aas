@@ -430,6 +430,10 @@ The linter checks:
 
 ## Related Documentation
 
-- [Use Case Schema](../../usecases/SCHEMA.md) - Similar pattern for feature specs
-- [Observability Developer Context](../../context/observability-developer/agents.md) - Agent workflow
-- [Dashboard JSON Examples](../../infra/k8s/monitoring/dashboards/) - Implementation files
+| Document | Purpose |
+|----------|---------|
+| [Metrics Catalog](../../docs/metrics/CATALOG.md) | **Single source of truth** for all available metrics |
+| [Use Case Schema](../../usecases/SCHEMA.md) | Similar pattern for feature specs |
+| [Observability Developer Context](../../context/observability-developer/agents.md) | Agent workflow |
+| [Dashboard JSON Examples](../../infra/k8s/monitoring/dashboards/) | Implementation files |
+| [vLLM Observability](../../docs/platform/vllm-observability.md) | Detailed vLLM metrics guide |
