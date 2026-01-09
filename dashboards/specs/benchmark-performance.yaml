@@ -1,0 +1,746 @@
+# Benchmark Performance Dashboard Spec
+# Following schema: dashboards/specs/SCHEMA.md
+
+dashboard:
+  id: DB-BM-001
+  title: Benchmark Performance
+  status: draft
+  grafana_uid: benchmark-performance
+
+  audience:
+    primary: Platform Operator
+    secondary: ML Engineer, Organization Admin
+
+  purpose: |
+    Answer: "How are my benchmarks performing?"
+
+    Three levels of visibility:
+    - Platform: Is benchmarking healthy overall?
+    - Model: Which model performs best?
+    - GPU/Cache: Is hardware the bottleneck?
+
+    Key questions answered:
+    - Are benchmark requests succeeding?
+    - What's the latency profile (TTFT, ITL, E2E)?
+    - Which model has best throughput?
+    - Is KV cache under pressure?
+    - Are GPUs being utilized efficiently?
+
+  use_when:
+    - Running benchmarks and want real-time visibility
+    - Comparing model performance across different models
+    - Investigating why a benchmark is slow or failing
+    - Checking if hardware is the bottleneck
+    - Validating model deployment before production
+
+  related_dashboards:
+    - DB-MDL-001  # Model Performance Deep Dive (future)
+    - DB-PLT-001  # Platform Overview (future)
+
+  datasources:
+    - name: Prometheus
+      type: prometheus
+      required: true
+
+# =============================================================================
+# FILTERS
+# =============================================================================
+filters:
+  - name: model
+    label: Model
+    purpose: Filter all panels to show data for a specific model
+    query: label_values(vllm:request_success_total, model_name)
+    default: All
+    multi: false
+    include_all: true
+
+  - name: gpu_type
+    label: GPU Type
+    purpose: Filter GPU metrics by hardware type
+    query: label_values(DCGM_FI_DEV_GPU_UTIL, modelName)
+    default: All
+    multi: false
+    include_all: true
+
+  - name: time_range
+    label: Time Range
+    purpose: Adjust time window for all panels
+    type: time
+    default: Last 1 hour
+
+# =============================================================================
+# ROWS
+# =============================================================================
+rows:
+  - name: Platform Health
+    collapsed: false
+    purpose: Quick health check - is benchmarking working?
+
+  - name: Model Comparison
+    collapsed: false
+    purpose: Compare performance across models - which is best?
+
+  - name: Latency Deep Dive
+    collapsed: true
+    purpose: Detailed latency breakdown for selected model
+
+  - name: Cache & Memory
+    collapsed: true
+    purpose: KV cache utilization and memory pressure indicators
+
+  - name: GPU Performance
+    collapsed: true
+    purpose: Hardware utilization and efficiency
+
+# =============================================================================
+# PANELS
+# =============================================================================
+panels:
+  # ===========================================================================
+  # ROW: Platform Health
+  # ===========================================================================
+  - id: active-benchmarks
+    title: Active Benchmarks
+    row: Platform Health
+    type: stat
+
+    question: "How many benchmark runs are currently active?"
+
+    metrics:
+      - name: guidellm_benchmark_runs_total
+        labels: [model, target]
+        aggregation: increase(1h)
+
+    query: |
+      increase(guidellm_benchmark_runs_total[1h])
+
+    interpretation:
+      good: "> 0 (benchmarks running)"
+      warning: "0 for extended period"
+      bad: "N/A"
+
+    acceptance_criteria:
+      - Shows count of benchmark runs in time window
+      - Updates when new benchmarks start
+
+  - id: overall-success-rate
+    title: Success Rate
+    row: Platform Health
+    type: stat
+
+    question: "What percentage of inference requests are succeeding?"
+
+    metrics:
+      - name: vllm:request_success_total
+        labels: [model_name, finished_reason]
+        aggregation: rate(5m)
+
+    query: |
+      sum(rate(vllm:request_success_total{finished_reason="stop"}[5m])) /
+      sum(rate(vllm:request_success_total[5m])) * 100
+
+    interpretation:
+      good: "> 99%"
+      warning: "95-99%"
+      bad: "< 95%"
+
+    acceptance_criteria:
+      - Shows percentage when models are receiving traffic
+      - Updates in real-time (15s refresh)
+      - Shows 100% when no errors
+
+  - id: avg-ttft-p95
+    title: Avg TTFT (P95)
+    row: Platform Health
+    type: stat
+
+    question: "What's the overall time-to-first-token latency?"
+
+    metrics:
+      - name: vllm:time_to_first_token_seconds_bucket
+        labels: [model_name]
+        aggregation: histogram_quantile(0.95, rate(...[5m]))
+
+    query: |
+      histogram_quantile(0.95,
+        sum(rate(vllm:time_to_first_token_seconds_bucket[5m])) by (le)
+      )
+
+    interpretation:
+      good: "< 500ms"
+      warning: "500ms - 2s"
+      bad: "> 2s"
+
+    acceptance_criteria:
+      - Shows latency in human-readable format (ms)
+      - Aggregates across all models when filter is "All"
+      - Responds to model filter
+
+  - id: total-requests
+    title: Total Requests
+    row: Platform Health
+    type: stat
+
+    question: "How many requests have been processed?"
+
+    metrics:
+      - name: vllm:request_success_total
+        labels: [model_name]
+        aggregation: increase(1h)
+
+    query: |
+      sum(increase(vllm:request_success_total[1h]))
+
+    interpretation:
+      good: "Increasing"
+      warning: "Flat"
+      bad: "Decreasing or zero"
+
+    acceptance_criteria:
+      - Shows total count in time window
+      - Updates as requests complete
+
+  - id: request-rate-over-time
+    title: Request Rate Over Time
+    row: Platform Health
+    type: graph
+
+    question: "What's the traffic pattern over time?"
+
+    description: |
+      Shows request rate stacked by model. Helps identify:
+      - Traffic patterns and peaks
+      - Which models are getting traffic
+      - Sudden drops (potential issues)
+
+    metrics:
+      - name: vllm:request_success_total
+        labels: [model_name]
+        aggregation: rate(1m)
+
+    query: |
+      sum(rate(vllm:request_success_total[1m])) by (model_name)
+
+    acceptance_criteria:
+      - Shows stacked area chart by model
+      - Legend shows model names
+      - Responds to time range filter
+
+  # ===========================================================================
+  # ROW: Model Comparison
+  # ===========================================================================
+  - id: ttft-by-model
+    title: TTFT by Model (P95)
+    row: Model Comparison
+    type: graph
+    visualization: bar
+
+    question: "Which model has the fastest time-to-first-token?"
+
+    metrics:
+      - name: vllm:time_to_first_token_seconds_bucket
+        labels: [model_name]
+        aggregation: histogram_quantile(0.95, rate(...[5m]))
+
+    query: |
+      histogram_quantile(0.95,
+        sum(rate(vllm:time_to_first_token_seconds_bucket[5m])) by (le, model_name)
+      )
+
+    interpretation:
+      good: "Lower is better"
+      warning: "N/A"
+      bad: "N/A"
+
+    acceptance_criteria:
+      - Bar chart comparing all models
+      - Sorted by latency (fastest first)
+      - Shows value labels on bars
+
+  - id: throughput-by-model
+    title: Throughput by Model
+    row: Model Comparison
+    type: graph
+    visualization: bar
+
+    question: "Which model generates tokens fastest?"
+
+    metrics:
+      - name: vllm:generation_tokens_total
+        labels: [model_name]
+        aggregation: rate(5m)
+
+    query: |
+      sum(rate(vllm:generation_tokens_total[5m])) by (model_name)
+
+    interpretation:
+      good: "Higher is better"
+      warning: "N/A"
+      bad: "Near zero"
+
+    acceptance_criteria:
+      - Bar chart comparing all models
+      - Shows tokens/second
+      - Sorted by throughput (highest first)
+
+  - id: model-comparison-table
+    title: Model Comparison
+    row: Model Comparison
+    type: table
+
+    question: "How do all models compare side-by-side?"
+
+    description: |
+      Comprehensive comparison table with all key metrics.
+      Allows quick scanning to identify best/worst performers.
+
+    metrics:
+      - name: vllm:time_to_first_token_seconds_bucket
+        labels: [model_name]
+      - name: vllm:inter_token_latency_seconds_bucket
+        labels: [model_name]
+      - name: vllm:generation_tokens_total
+        labels: [model_name]
+      - name: vllm:request_success_total
+        labels: [model_name, finished_reason]
+
+    columns:
+      - name: Model
+        source: model_name label
+      - name: TTFT P95
+        query: histogram_quantile(0.95, ...)
+        unit: ms
+      - name: ITL P95
+        query: histogram_quantile(0.95, ...)
+        unit: ms
+      - name: Throughput
+        query: rate(generation_tokens_total[5m])
+        unit: tok/s
+      - name: Success Rate
+        query: success / total * 100
+        unit: "%"
+      - name: Requests
+        query: increase(request_success_total[1h])
+        unit: count
+
+    acceptance_criteria:
+      - Shows one row per model
+      - All columns populated
+      - Sortable by any column
+      - Color coding for good/bad values
+
+  # ===========================================================================
+  # ROW: Latency Deep Dive
+  # ===========================================================================
+  - id: ttft-p50
+    title: TTFT P50
+    row: Latency Deep Dive
+    type: stat
+
+    question: "What's the median time-to-first-token?"
+
+    metrics:
+      - name: vllm:time_to_first_token_seconds_bucket
+        labels: [model_name]
+
+    query: |
+      histogram_quantile(0.50,
+        sum(rate(vllm:time_to_first_token_seconds_bucket{model_name=~"$model"}[5m])) by (le)
+      )
+
+    acceptance_criteria:
+      - Shows median latency
+      - Responds to model filter
+
+  - id: ttft-p95
+    title: TTFT P95
+    row: Latency Deep Dive
+    type: stat
+
+    question: "What's the 95th percentile time-to-first-token?"
+
+    metrics:
+      - name: vllm:time_to_first_token_seconds_bucket
+        labels: [model_name]
+
+    query: |
+      histogram_quantile(0.95,
+        sum(rate(vllm:time_to_first_token_seconds_bucket{model_name=~"$model"}[5m])) by (le)
+      )
+
+    acceptance_criteria:
+      - Shows P95 latency
+      - Responds to model filter
+
+  - id: ttft-p99
+    title: TTFT P99
+    row: Latency Deep Dive
+    type: stat
+
+    question: "What's the 99th percentile time-to-first-token (tail latency)?"
+
+    metrics:
+      - name: vllm:time_to_first_token_seconds_bucket
+        labels: [model_name]
+
+    query: |
+      histogram_quantile(0.99,
+        sum(rate(vllm:time_to_first_token_seconds_bucket{model_name=~"$model"}[5m])) by (le)
+      )
+
+    acceptance_criteria:
+      - Shows P99 latency
+      - Responds to model filter
+
+  - id: itl-p95
+    title: ITL P95
+    row: Latency Deep Dive
+    type: stat
+
+    question: "How fast are tokens generated after the first one (streaming)?"
+
+    metrics:
+      - name: vllm:inter_token_latency_seconds_bucket
+        labels: [model_name]
+
+    query: |
+      histogram_quantile(0.95,
+        sum(rate(vllm:inter_token_latency_seconds_bucket{model_name=~"$model"}[5m])) by (le)
+      )
+
+    interpretation:
+      good: "< 50ms"
+      warning: "50-100ms"
+      bad: "> 100ms"
+
+    acceptance_criteria:
+      - Shows inter-token latency
+      - Lower means faster streaming
+
+  - id: latency-breakdown
+    title: Latency Breakdown
+    row: Latency Deep Dive
+    type: graph
+    visualization: stacked_bar
+
+    question: "Where is time being spent in the request lifecycle?"
+
+    description: |
+      Shows breakdown of request time:
+      - Queue time (waiting for capacity)
+      - Prefill time (processing prompt)
+      - Decode time (generating tokens)
+
+    metrics:
+      - name: vllm:request_queue_time_seconds_bucket
+        labels: [model_name]
+      - name: vllm:request_prefill_time_seconds_bucket
+        labels: [model_name]
+      - name: vllm:request_decode_time_seconds_bucket
+        labels: [model_name]
+
+    acceptance_criteria:
+      - Shows stacked components
+      - Identifies bottleneck (queue vs compute)
+      - Responds to model filter
+
+  - id: latency-heatmap
+    title: Latency Distribution Over Time
+    row: Latency Deep Dive
+    type: heatmap
+
+    question: "How does latency distribution change over time?"
+
+    metrics:
+      - name: vllm:e2e_request_latency_seconds_bucket
+        labels: [model_name]
+
+    query: |
+      sum(increase(vllm:e2e_request_latency_seconds_bucket{model_name=~"$model"}[1m])) by (le)
+
+    acceptance_criteria:
+      - Shows heatmap with time on X, latency buckets on Y
+      - Color intensity shows request count
+      - Helps identify latency spikes
+
+  # ===========================================================================
+  # ROW: Cache & Memory
+  # ===========================================================================
+  - id: kv-cache-usage
+    title: KV Cache Usage
+    row: Cache & Memory
+    type: gauge
+
+    question: "Is KV cache under memory pressure?"
+
+    description: |
+      KV cache stores key-value pairs for attention mechanism.
+      High usage (>90%) indicates memory pressure and potential
+      performance degradation or request preemption.
+
+    metrics:
+      - name: vllm:kv_cache_usage_perc
+        labels: [model_name]
+
+    query: |
+      avg(vllm:kv_cache_usage_perc{model_name=~"$model"}) * 100
+
+    interpretation:
+      good: "< 80%"
+      warning: "80-95%"
+      bad: "> 95%"
+
+    acceptance_criteria:
+      - Shows percentage gauge
+      - Color changes at thresholds
+      - Responds to model filter
+
+  - id: requests-waiting
+    title: Queue Depth
+    row: Cache & Memory
+    type: stat
+
+    question: "How many requests are waiting for cache space?"
+
+    metrics:
+      - name: vllm:num_requests_waiting
+        labels: [model_name]
+
+    query: |
+      sum(vllm:num_requests_waiting{model_name=~"$model"})
+
+    interpretation:
+      good: "0-5"
+      warning: "5-20"
+      bad: "> 20"
+
+    acceptance_criteria:
+      - Shows current queue depth
+      - High values indicate capacity issues
+
+  - id: preemption-rate
+    title: Preemption Rate
+    row: Cache & Memory
+    type: stat
+
+    question: "Are requests being evicted from cache?"
+
+    description: |
+      Preemptions occur when KV cache is full and requests must be
+      evicted. High preemption rate indicates severe memory pressure
+      and will cause latency spikes.
+
+    metrics:
+      - name: vllm:num_preemptions_total
+        labels: [model_name]
+        aggregation: rate(5m)
+
+    query: |
+      sum(rate(vllm:num_preemptions_total{model_name=~"$model"}[5m]))
+
+    interpretation:
+      good: "0"
+      warning: "> 0"
+      bad: "> 1/sec"
+
+    acceptance_criteria:
+      - Shows preemptions per second
+      - Should be 0 in healthy state
+      - Non-zero indicates memory pressure
+
+  - id: prefix-cache-hit-rate
+    title: Prefix Cache Hit Rate
+    row: Cache & Memory
+    type: stat
+
+    question: "Are we efficiently reusing cached prefixes?"
+
+    description: |
+      Higher hit rate means repeated prompts benefit from caching,
+      reducing compute and improving latency.
+
+    metrics:
+      - name: vllm:gpu_prefix_cache_hits_total
+        labels: [model_name]
+      - name: vllm:gpu_prefix_cache_queries_total
+        labels: [model_name]
+
+    query: |
+      sum(rate(vllm:gpu_prefix_cache_hits_total{model_name=~"$model"}[5m])) /
+      sum(rate(vllm:gpu_prefix_cache_queries_total{model_name=~"$model"}[5m])) * 100
+
+    interpretation:
+      good: "> 50%"
+      warning: "20-50%"
+      bad: "< 20%"
+
+    acceptance_criteria:
+      - Shows percentage
+      - Higher is better
+      - May be low for unique prompts (expected)
+
+  - id: queue-wait-time
+    title: Queue Wait Time (P95)
+    row: Cache & Memory
+    type: stat
+
+    question: "How long are requests waiting in queue?"
+
+    metrics:
+      - name: vllm:request_queue_time_seconds_bucket
+        labels: [model_name]
+
+    query: |
+      histogram_quantile(0.95,
+        sum(rate(vllm:request_queue_time_seconds_bucket{model_name=~"$model"}[5m])) by (le)
+      )
+
+    interpretation:
+      good: "< 100ms"
+      warning: "100ms - 1s"
+      bad: "> 1s"
+
+    acceptance_criteria:
+      - Shows queue wait time
+      - High values indicate capacity issues
+
+  # ===========================================================================
+  # ROW: GPU Performance
+  # ===========================================================================
+  - id: gpu-utilization
+    title: GPU Utilization
+    row: GPU Performance
+    type: gauge
+
+    question: "How efficiently are GPUs being used?"
+
+    metrics:
+      - name: DCGM_FI_DEV_GPU_UTIL
+        labels: [gpu, modelName, exported_pod]
+
+    query: |
+      avg(DCGM_FI_DEV_GPU_UTIL{modelName=~"$gpu_type"})
+
+    interpretation:
+      good: "70-95%"
+      warning: "< 70% (underutilized) or > 95% (saturated)"
+      bad: "0% (idle) or 100% (bottleneck)"
+
+    acceptance_criteria:
+      - Shows average GPU utilization
+      - Responds to GPU type filter
+
+  - id: gpu-memory-usage
+    title: GPU Memory Usage
+    row: GPU Performance
+    type: gauge
+
+    question: "How much GPU memory is being used?"
+
+    metrics:
+      - name: DCGM_FI_DEV_FB_USED
+        labels: [gpu, modelName]
+      - name: DCGM_FI_DEV_FB_FREE
+        labels: [gpu, modelName]
+
+    query: |
+      avg(DCGM_FI_DEV_FB_USED{modelName=~"$gpu_type"}) /
+      (avg(DCGM_FI_DEV_FB_USED{modelName=~"$gpu_type"}) + avg(DCGM_FI_DEV_FB_FREE{modelName=~"$gpu_type"})) * 100
+
+    interpretation:
+      good: "< 90%"
+      warning: "90-95%"
+      bad: "> 95%"
+
+    acceptance_criteria:
+      - Shows percentage of GPU memory used
+      - High usage expected for large models
+
+  - id: gpu-power-draw
+    title: Power Draw
+    row: GPU Performance
+    type: stat
+
+    question: "How much power are GPUs consuming?"
+
+    metrics:
+      - name: DCGM_FI_DEV_POWER_USAGE
+        labels: [gpu, modelName]
+
+    query: |
+      sum(DCGM_FI_DEV_POWER_USAGE{modelName=~"$gpu_type"})
+
+    interpretation:
+      good: "Within TDP"
+      warning: "Near TDP"
+      bad: "Throttling"
+
+    acceptance_criteria:
+      - Shows total watts
+      - Useful for capacity planning
+
+  - id: gpu-temperature
+    title: GPU Temperature
+    row: GPU Performance
+    type: stat
+
+    question: "Are GPUs running hot?"
+
+    metrics:
+      - name: DCGM_FI_DEV_GPU_TEMP
+        labels: [gpu, modelName]
+
+    query: |
+      max(DCGM_FI_DEV_GPU_TEMP{modelName=~"$gpu_type"})
+
+    interpretation:
+      good: "< 75C"
+      warning: "75-85C"
+      bad: "> 85C (throttling risk)"
+
+    acceptance_criteria:
+      - Shows max temperature across GPUs
+      - High temps may cause throttling
+
+  - id: gpu-utilization-over-time
+    title: GPU Utilization Over Time
+    row: GPU Performance
+    type: graph
+
+    question: "How does GPU utilization change during benchmarks?"
+
+    metrics:
+      - name: DCGM_FI_DEV_GPU_UTIL
+        labels: [gpu, modelName, exported_pod]
+
+    query: |
+      avg(DCGM_FI_DEV_GPU_UTIL) by (exported_pod)
+
+    acceptance_criteria:
+      - Shows line per model/pod
+      - Correlates with request rate
+
+  - id: efficiency-scatter
+    title: GPU Efficiency
+    row: GPU Performance
+    type: graph
+    visualization: scatter
+
+    question: "Which models use GPU most efficiently?"
+
+    description: |
+      Scatter plot showing GPU utilization vs throughput.
+      Models in top-left are efficient (high throughput, low GPU).
+      Models in bottom-right are inefficient (low throughput, high GPU).
+
+    metrics:
+      - name: DCGM_FI_DEV_GPU_UTIL
+        labels: [exported_pod]
+      - name: vllm:generation_tokens_total
+        labels: [model_name]
+
+    acceptance_criteria:
+      - X axis: GPU utilization
+      - Y axis: Tokens per second
+      - Point color: Model
+      - Helps identify efficient models
