@@ -62,6 +62,14 @@ filters:
     multi: false
     include_all: true
 
+  - name: tgi_model
+    label: TGI Model
+    purpose: Filter TGI panels to show data for a specific TGI model
+    query: label_values(tgi_request_success, job)
+    default: All
+    multi: false
+    include_all: true
+
   - name: gpu_type
     label: GPU Type
     purpose: Filter GPU metrics by hardware type
@@ -91,6 +99,10 @@ rows:
   - name: Triton Models (TRT-LLM)
     collapsed: false
     purpose: Performance metrics for TensorRT-LLM/Triton inference backends
+
+  - name: TGI Models
+    collapsed: false
+    purpose: Performance metrics for Text Generation Inference (TGI) backends
 
   - name: Latency Deep Dive (vLLM)
     collapsed: true
@@ -501,6 +513,149 @@ panels:
       - Shows one row per TRT-LLM model
       - All columns populated
       - Sortable by any column
+
+  # ===========================================================================
+  # ROW: TGI Models
+  # ===========================================================================
+  - id: tgi-success-rate
+    title: Request Success Rate
+    row: TGI Models
+    type: stat
+
+    question: "What percentage of TGI requests are succeeding?"
+
+    metrics:
+      - name: tgi_request_success
+        labels: [job]
+      - name: tgi_request_failure
+        labels: [job]
+
+    query: |
+      sum(rate(tgi_request_success{job=~"$tgi_model"}[5m])) /
+      (sum(rate(tgi_request_success{job=~"$tgi_model"}[5m])) +
+       sum(rate(tgi_request_failure{job=~"$tgi_model"}[5m]))) * 100
+
+    interpretation:
+      good: "> 99%"
+      warning: "95-99%"
+      bad: "< 95%"
+
+    acceptance_criteria:
+      - Shows percentage for TGI models
+      - Uses TGI metrics (tgi_request_*)
+      - Responds to tgi_model filter
+
+  - id: tgi-throughput
+    title: Request Throughput
+    row: TGI Models
+    type: stat
+
+    question: "How many requests per second are TGI models processing?"
+
+    metrics:
+      - name: tgi_request_success
+        labels: [job]
+
+    query: |
+      sum(rate(tgi_request_success{job=~"$tgi_model"}[5m]))
+
+    interpretation:
+      good: "Higher is better"
+      warning: "N/A"
+      bad: "Near zero"
+
+    acceptance_criteria:
+      - Shows requests per second
+
+  - id: tgi-request-duration
+    title: Request Duration (P95)
+    row: TGI Models
+    type: stat
+
+    question: "What's the end-to-end request latency for TGI?"
+
+    metrics:
+      - name: tgi_request_duration_bucket
+        labels: [job]
+
+    query: |
+      histogram_quantile(0.95,
+        sum(rate(tgi_request_duration_bucket{job=~"$tgi_model"}[5m])) by (le)
+      )
+
+    interpretation:
+      good: "< 2s"
+      warning: "2-5s"
+      bad: "> 5s"
+
+    acceptance_criteria:
+      - Shows P95 request duration in seconds
+
+  - id: tgi-queue-duration
+    title: Queue Duration (P95)
+    row: TGI Models
+    type: stat
+
+    question: "How long are requests waiting in TGI queue?"
+
+    metrics:
+      - name: tgi_request_queue_duration_bucket
+        labels: [job]
+
+    query: |
+      histogram_quantile(0.95,
+        sum(rate(tgi_request_queue_duration_bucket{job=~"$tgi_model"}[5m])) by (le)
+      )
+
+    interpretation:
+      good: "< 100ms"
+      warning: "100ms-1s"
+      bad: "> 1s"
+
+    acceptance_criteria:
+      - Shows queue wait time
+      - High values indicate capacity issues
+
+  - id: tgi-tokens-generated
+    title: Token Generation Rate
+    row: TGI Models
+    type: stat
+
+    question: "How many tokens per second is TGI generating?"
+
+    metrics:
+      - name: tgi_request_generated_tokens_sum
+        labels: [job]
+
+    query: |
+      sum(rate(tgi_request_generated_tokens_sum{job=~"$tgi_model"}[5m]))
+
+    interpretation:
+      good: "Higher is better"
+      warning: "N/A"
+      bad: "Near zero"
+
+    acceptance_criteria:
+      - Shows tokens per second throughput
+
+  - id: tgi-request-rate
+    title: Request Rate Over Time
+    row: TGI Models
+    type: graph
+
+    question: "What's the TGI traffic pattern over time?"
+
+    metrics:
+      - name: tgi_request_success
+        labels: [job]
+
+    query: |
+      sum(rate(tgi_request_success[1m])) by (job)
+
+    acceptance_criteria:
+      - Shows line per TGI model
+      - Legend shows job/model names
+      - Responds to time range filter
 
   # ===========================================================================
   # ROW: Latency Deep Dive (vLLM)
