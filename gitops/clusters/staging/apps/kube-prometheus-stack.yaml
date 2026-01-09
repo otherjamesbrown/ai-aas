@@ -89,7 +89,16 @@ spec:
             datasources:
               enabled: true
           ingress:
-            enabled: false  # Managed separately
+            enabled: true
+            ingressClassName: nginx
+            hosts:
+              - grafana.staging.otherjamesbrown.com
+            tls:
+              - secretName: grafana-tls
+                hosts:
+                  - grafana.staging.otherjamesbrown.com
+            annotations:
+              cert-manager.io/cluster-issuer: letsencrypt-prod
 
         alertmanager:
           enabled: true
