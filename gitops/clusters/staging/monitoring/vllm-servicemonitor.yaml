@@ -1,0 +1,21 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: vllm-models
+  namespace: staging
+  labels:
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames:
+      - staging
+  selector:
+    matchExpressions:
+      - key: serving.kserve.io/inferenceservice
+        operator: Exists
+  endpoints:
+    - port: http1
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
