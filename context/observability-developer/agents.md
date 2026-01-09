@@ -53,6 +53,121 @@ Hand off to:
 
 ---
 
+## Dashboard Spec Workflow
+
+**THINK before you BUILD.** Dashboards are specs, not just JSON.
+
+```
+1. THINK     → Write dashboard spec YAML (purpose, audience, questions)
+2. REVIEW    → Does this dashboard need to exist? Overlap with others?
+3. BUILD     → Create Grafana JSON that implements the spec
+4. VALIDATE  → Check metrics exist, panels show data
+5. MAINTAIN  → Spec is source of truth for what dashboard should do
+```
+
+### Dashboard Spec Location
+
+```
+dashboards/specs/<dashboard-name>.yaml   # Spec (source of truth)
+infra/k8s/monitoring/dashboards/<name>.json  # Implementation
+```
+
+### Dashboard Spec Schema
+
+```yaml
+# dashboards/specs/benchmark-system-health.yaml
+
+dashboard:
+  id: DB-BM-001
+  title: Benchmark System Health
+  status: draft | active | deprecated
+
+  # WHO is this for?
+  audience:
+    primary: Platform Operator
+    secondary: Organization Admin
+
+  # WHAT problem does it solve?
+  purpose: |
+    Answer: "Is my benchmark running healthy?"
+    - Are inference requests succeeding?
+    - What's the latency profile?
+    - Are GPUs being utilized?
+
+  # WHEN would someone open this?
+  use_when:
+    - Running a benchmark and want real-time visibility
+    - Investigating why a benchmark failed
+    - Comparing model performance across runs
+
+# FILTERS - dashboard-level variables
+filters:
+  - name: model
+    purpose: Focus on specific model under test
+    query: label_values(vllm:request_success_total, model_name)
+  - name: time_range
+    purpose: Compare current vs historical
+
+# PANELS - each answers a specific question
+panels:
+  - id: request-success-rate
+    title: Request Success Rate
+    row: Model Performance
+
+    question: "What % of requests are succeeding?"
+
+    metrics:
+      - vllm:request_success_total{finished_reason="stop"}
+      - vllm:request_success_total{finished_reason="abort"}
+
+    interpretation:
+      good: "> 99%"
+      warning: "95-99%"
+      bad: "< 95%"
+
+    acceptance_criteria:
+      - Shows data when vLLM models are deployed
+      - Filters correctly by model variable
+      - Rate calculation reflects last 5 minutes
+```
+
+### Why Spec-First?
+
+| Problem Without Spec | Solution With Spec |
+|---------------------|-------------------|
+| "What is this dashboard for?" | `purpose:` field explains it |
+| "Why is panel showing No Data?" | `metrics:` lists required metrics |
+| "Is this panel working correctly?" | `acceptance_criteria:` defines success |
+| "Should I add this panel here?" | `purpose:` + `use_when:` scope it |
+| 30+ dashboards, no one knows what they do | Each has documented purpose |
+
+### Workflow Commands
+
+```bash
+# 1. THINK - Create spec first
+cat > dashboards/specs/my-dashboard.yaml << 'EOF'
+dashboard:
+  id: DB-XXX-001
+  title: My Dashboard
+  purpose: Answer "Is X working?"
+  ...
+EOF
+
+# 2. REVIEW - Check for overlap
+ls dashboards/specs/  # What dashboards exist?
+grep -r "purpose:" dashboards/specs/  # What do they do?
+
+# 3. BUILD - Create implementation
+# Create JSON that implements the spec
+
+# 4. VALIDATE - Check metrics exist
+curl -s "http://localhost:9090/api/v1/query?query=<metric>" | jq '.data.result | length'
+
+# 5. MAINTAIN - Update spec when dashboard changes
+```
+
+---
+
 ## Key Patterns
 
 ```yaml
