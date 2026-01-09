@@ -106,11 +106,19 @@ patterns:
       - "ai-aas-cli model deploy <model> -e <env>"
 
   routing_policy:
-    rule: Models need routing policies for API access
+    rule: "MANDATORY - Models MUST have routing policies before bead completion"
+    enforcement: "Agent CANNOT close bead without verified routing - test request MUST succeed"
+    why_mandatory: "This is the #1 cause of 'model deployed but not working' issues"
     backends:
       triton: "requires tokenizer for token counting"
       openai: "default, no tokenizer needed"
-    critical_note: "Missing routing policies cause HTTP 502 - models deploy but cannot receive traffic"
+    verification_steps:
+      1: "ai-aas-cli routing policy list --model <model>"
+      2: "ai-aas-cli model troubleshoot test <model> -e <env>"
+      3: "If test fails with 404/502, routing is missing or misconfigured"
+    create_commands:
+      vllm: "ai-aas-cli routing policy create --global --model <model> --backends <backend>:100"
+      triton: "ai-aas-cli routing policy create --global --model <model> --backends <backend>:100 --backend-type triton-grpc --tokenizer cl100k_base"
     endpoint_routing:
       vllm_models: "API Router → /v1/chat/completions on backend"
       trtllm_models: "API Router → /v2/models/ensemble/infer on backend (gRPC)"
@@ -194,7 +202,9 @@ Before completing work:
 - [ ] Verified modelID alignment (golden thread)
 - [ ] Checked GPU architecture compatibility
 - [ ] Updated library entry if new model
-- [ ] Tested inference endpoint
-- [ ] Created/updated routing policy
+- [ ] **MANDATORY: Verified routing policy exists** (`ai-aas-cli routing policy list --model <model>`)
+- [ ] **MANDATORY: Test request succeeded** (`ai-aas-cli model troubleshoot test <model> -e <env>`)
 - [ ] Created/updated beads issue
 - [ ] Ran `bd sync` to commit beads changes
+
+**⚠️ DO NOT close bead if routing verification fails - this is the #1 cause of deployment issues**

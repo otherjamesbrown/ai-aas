@@ -121,7 +121,37 @@ Only after validating bead + environment + sufficient detail:
 
 2. Proceed with implementation
 
-### Step 5: On Completion (MANDATORY)
+### Step 5: Verify Routing Policy (MANDATORY)
+
+**CRITICAL**: A deployed model without a routing policy is UNREACHABLE. This is the #1 cause of "model deployed but not working" issues.
+
+After deployment succeeds, you MUST verify routing exists:
+
+```bash
+ai-aas-cli routing policy list --model <model>
+```
+
+**If no policy exists**, create one IMMEDIATELY:
+
+```bash
+# For vLLM/OpenAI-compatible backends:
+ai-aas-cli routing policy create --global --model <model> --backends <backend-name>:100
+
+# For Triton/TRT-LLM backends (requires tokenizer):
+ai-aas-cli routing policy create --global --model <model> --backends <backend-name>:100 --backend-type triton-grpc --tokenizer cl100k_base
+```
+
+**DO NOT proceed to completion until routing is verified with a test request:**
+
+```bash
+ai-aas-cli model troubleshoot test <model> -e <env>
+```
+
+If this test fails with 404/502, the routing policy is missing or misconfigured.
+
+---
+
+### Step 6: On Completion (MANDATORY)
 
 When work is complete, you MUST:
 

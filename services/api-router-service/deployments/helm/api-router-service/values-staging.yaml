@@ -1,16 +1,13 @@
 # Staging environment overrides
 replicaCount: 3
-
 image:
-  repository: ghcr.io/otherjamesbrown/ai-aas/api-router-service  # Full path with ai-aas
-  tag: sha-923f2ed  # Standardized SHA-based tag
+  repository: ghcr.io/otherjamesbrown/ai-aas/api-router-service # Full path with ai-aas
+  tag: sha-6087eb1 # Standardized SHA-based tag
   pullPolicy: Always
   pullSecrets:
     - ghcr-pull-secret
-
 service:
   type: ClusterIP
-
 # Override global domain for staging environment
 global:
   domain:
@@ -19,7 +16,6 @@ global:
   tls:
     enabled: true
     clusterIssuer: "letsencrypt-prod"
-
 ingress:
   enabled: true
   className: nginx
@@ -33,7 +29,6 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
-
 resources:
   limits:
     cpu: 1000m
@@ -41,14 +36,12 @@ resources:
   requests:
     cpu: 200m
     memory: 256Mi
-
 autoscaling:
   enabled: true
   minReplicas: 3
   maxReplicas: 20
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
-
 env:
   - name: SERVICE_NAME
     value: api-router-service
@@ -62,7 +55,6 @@ env:
     value: "http://user-org-service-staging-user-org-service.user-org-service.svc.cluster.local:8081"
   - name: USER_ORG_SERVICE_TIMEOUT
     value: "5s"
-
 # Increase startup time for connections to remote services
 livenessProbe:
   path: /v1/status/healthz
@@ -70,45 +62,37 @@ livenessProbe:
   periodSeconds: 15
   timeoutSeconds: 10
   failureThreshold: 5
-
 readinessProbe:
   path: /v1/status/readyz
   initialDelaySeconds: 30
   periodSeconds: 10
   timeoutSeconds: 10
   failureThreshold: 5
-
 otel:
   enabled: true
   collectorEndpoint: otel-collector.observability.svc.cluster.local:4317
   protocol: grpc
   insecure: true
-
 prometheus:
   enabled: true
   port: 8080
   path: /metrics
-
 redis:
   address: redis-master.staging.svc.cluster.local:6379
   passwordSecretName: redis-staging-secret
-
 # Kafka disabled for staging (not deployed yet)
 kafka:
   brokers: ""
   topic: usage.records.v1
   auditTopic: audit.router
-
 configService:
   endpoint: etcd-service.staging.svc.cluster.local:2379
   watchEnabled: true
   cachePath: /tmp/api-router-config.db
-
 # Budget service disabled for staging
 budget:
   endpoint: ""
   timeout: 2s
-
 # Use Admin API for routing config instead of etcd in staging
 adminApi:
   endpoint: http://admin-api-service-staging.admin-api-service.svc.cluster.local:8080
@@ -116,7 +100,6 @@ adminApi:
   # Use the admin API key from local secret (copied from admin-api-service)
   apiKeySecretName: "admin-api-sync-secrets"
   apiKeySecretKey: "api-key"
-
 # Backend endpoints - configure vLLM service
 backends:
   # Format: backend-id:http://service-name.namespace.svc.cluster.local:port
@@ -132,15 +115,4 @@ backends:
   # Backend IDs must match routing policy backend_id and model's served-model-name
   # Backend IDs must match BOTH the routing policy backend_id AND the vLLM served-model-name
   endpoints: >-
-    mistralai/Mistral-7B-Instruct-v0.3:http://mistral-7b-instruct-v03-predictor.staging.svc.cluster.local:80,
-    unsloth/gpt-oss-20b:http://unsloth-gpt-oss-20b-predictor.staging.svc.cluster.local:80,
-    openai/gpt-oss-20b:http://openai-gpt-oss-20b-predictor.staging.svc.cluster.local:80,
-    openai/gpt-oss-120b:http://openai-gpt-oss-120b-predictor.staging.svc.cluster.local:80,
-    qwen2-vl-7b-instruct:http://qwen2-vl-7b-instruct-predictor.staging.svc.cluster.local:80,
-    llama-3.1-8b-instruct-ada:http://llama-3-1-8b-instruct-vllm-ada-predictor.staging.svc.cluster.local:80,
-    llama-3.1-8b-instruct-blackwell:http://llama-3-1-8b-instruct-vllm-blackwell-predictor.staging.svc.cluster.local:80,
-    llama-3-1-8b-instruct-trtllm-ada:http://llama-3-1-8b-instruct-trtllm-ada-predictor.staging.svc.cluster.local:80,
-    llama-3-1-8b-instruct-trtllm-blackwell:http://llama-3-1-8b-instruct-trtllm-blackwell-predictor.staging.svc.cluster.local:80,
-    mm-blackwell-1-llama:http://multi-model-3x8b-blackwell-predictor.staging.svc.cluster.local:80,
-    mm-blackwell-1-mistral:http://multi-model-3x8b-blackwell-predictor.staging.svc.cluster.local:80,
-    mm-blackwell-1-qwen:http://multi-model-3x8b-blackwell-predictor.staging.svc.cluster.local:80
+    mistralai/Mistral-7B-Instruct-v0.3:http://mistral-7b-instruct-v03-predictor.staging.svc.cluster.local:80, unsloth/gpt-oss-20b:http://unsloth-gpt-oss-20b-predictor.staging.svc.cluster.local:80, openai/gpt-oss-20b:http://openai-gpt-oss-20b-predictor.staging.svc.cluster.local:80, openai/gpt-oss-120b:http://openai-gpt-oss-120b-predictor.staging.svc.cluster.local:80, qwen2-vl-7b-instruct:http://qwen2-vl-7b-instruct-predictor.staging.svc.cluster.local:80, llama-3.1-8b-instruct-ada:http://llama-3-1-8b-instruct-vllm-ada-predictor.staging.svc.cluster.local:80, llama-3.1-8b-instruct-blackwell:http://llama-3-1-8b-instruct-vllm-blackwell-predictor.staging.svc.cluster.local:80, llama-3-1-8b-instruct-trtllm-ada:http://llama-3-1-8b-instruct-trtllm-ada-predictor.staging.svc.cluster.local:80, llama-3-1-8b-instruct-trtllm-blackwell:http://llama-3-1-8b-instruct-trtllm-blackwell-predictor.staging.svc.cluster.local:80, mm-blackwell-1-llama:http://multi-model-3x8b-blackwell-predictor.staging.svc.cluster.local:80, mm-blackwell-1-mistral:http://multi-model-3x8b-blackwell-predictor.staging.svc.cluster.local:80, mm-blackwell-1-qwen:http://multi-model-3x8b-blackwell-predictor.staging.svc.cluster.local:80

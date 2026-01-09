@@ -91,6 +91,19 @@ func TestTranslateOpenAIToTriton(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "ensemble model compatibility - only text_input and max_tokens",
+			req: &OpenAIChatCompletionRequest{
+				Model: "test-model",
+				Messages: []ChatMessage{
+					{Role: "user", Content: "Hello"},
+				},
+				Temperature: ptrFloat64(0.7),
+				TopP:        ptrFloat64(0.9),
+				Stop:        []string{"STOP"},
+			},
+			wantErr: false,
+		},
+		{
 			name:    "nil request",
 			req:     nil,
 			wantErr: true,
@@ -123,12 +136,16 @@ func TestTranslateOpenAIToTriton(t *testing.T) {
 			if result.ID == "" {
 				t.Error("expected non-empty request ID")
 			}
-			if len(result.Inputs) == 0 {
-				t.Error("expected at least one input tensor")
+
+			// TensorRT-LLM ensemble models only accept 2 inputs: text_input and max_tokens
+			// This prevents "expected 2 inputs but got N inputs" errors
+			if len(result.Inputs) != 2 {
+				t.Errorf("len(Inputs) = %d, want 2 (text_input, max_tokens only)", len(result.Inputs))
 			}
 
 			// Check for text_input tensor
 			foundTextInput := false
+			foundMaxTokens := false
 			for _, input := range result.Inputs {
 				if input.Name == TensorInputTextInput {
 					foundTextInput = true
@@ -136,9 +153,18 @@ func TestTranslateOpenAIToTriton(t *testing.T) {
 						t.Errorf("text_input datatype = %s, want BYTES", input.Datatype)
 					}
 				}
+				if input.Name == TensorInputMaxTokens {
+					foundMaxTokens = true
+					if input.Datatype != DatatypeINT32 {
+						t.Errorf("max_tokens datatype = %s, want INT32", input.Datatype)
+					}
+				}
 			}
 			if !foundTextInput {
 				t.Error("text_input tensor not found in inputs")
+			}
+			if !foundMaxTokens {
+				t.Error("max_tokens tensor not found in inputs")
 			}
 		})
 	}

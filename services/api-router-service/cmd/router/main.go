@@ -729,11 +729,32 @@ func extractHostPort(uri string) (host, port string, err error) {
 // getHealthPathForBackend determines the appropriate health check path for a backend.
 // Triton/TensorRT-LLM backends use the KServe V2 protocol (/v2/health/ready),
 // while vLLM and other OpenAI-compatible backends use /health.
+//
+// Detection is based on URI patterns that indicate Triton/TensorRT-LLM usage:
+//   - "trtllm" or "-trt-" (TensorRT-LLM deployments)
+//   - "triton" (Triton Inference Server)
+//   - "tensorrt" (TensorRT)
+//   - "multi-model" (our convention for Triton multi-model deployments)
+//
+// Related bead: aas-gadbx
 func getHealthPathForBackend(uri string) string {
-	// Triton/TensorRT-LLM backends typically have "trtllm" in their service name
-	if strings.Contains(uri, "trtllm") {
-		return "/v2/health/ready"
+	uriLower := strings.ToLower(uri)
+
+	// Check for Triton/TensorRT-LLM patterns
+	tritonPatterns := []string{
+		"trtllm",
+		"-trt-",
+		"triton",
+		"tensorrt",
+		"multi-model",
 	}
+
+	for _, pattern := range tritonPatterns {
+		if strings.Contains(uriLower, pattern) {
+			return "/v2/health/ready"
+		}
+	}
+
 	// Default to /health for vLLM and other OpenAI-compatible backends
 	return "/health"
 }

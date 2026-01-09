@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"encoding/json"
 	"testing"
 )
 
@@ -175,4 +176,73 @@ func TestBackendWeightsEdgeCases(t *testing.T) {
 			t.Error("ValidateBackendWeights() with max int weight should return false (not 100)")
 		}
 	})
+}
+
+func TestBackendTritonModelName(t *testing.T) {
+	t.Run("marshal backend with triton_model_name", func(t *testing.T) {
+		backend := Backend{
+			BackendID:       "mm-blackwell-1-llama",
+			Weight:          100,
+			TritonModelName: "llama_ensemble",
+		}
+
+		data, err := json.Marshal(backend)
+		if err != nil {
+			t.Fatalf("Failed to marshal backend: %v", err)
+		}
+
+		// Verify JSON contains the field
+		var unmarshaled Backend
+		if err := json.Unmarshal(data, &unmarshaled); err != nil {
+			t.Fatalf("Failed to unmarshal backend: %v", err)
+		}
+
+		if unmarshaled.TritonModelName != "llama_ensemble" {
+			t.Errorf("Expected triton_model_name='llama_ensemble', got '%s'", unmarshaled.TritonModelName)
+		}
+	})
+
+	t.Run("marshal backend without triton_model_name", func(t *testing.T) {
+		backend := Backend{
+			BackendID: "vllm-backend",
+			Weight:    100,
+		}
+
+		data, err := json.Marshal(backend)
+		if err != nil {
+			t.Fatalf("Failed to marshal backend: %v", err)
+		}
+
+		// Verify JSON omits the field when empty (omitempty)
+		jsonStr := string(data)
+		if contains(jsonStr, "triton_model_name") {
+			t.Errorf("Expected triton_model_name to be omitted when empty, got: %s", jsonStr)
+		}
+	})
+
+	t.Run("unmarshal backend with triton_model_name", func(t *testing.T) {
+		jsonData := []byte(`{"backend_id":"mm-backend","weight":50,"triton_model_name":"mistral_ensemble"}`)
+
+		var backend Backend
+		if err := json.Unmarshal(jsonData, &backend); err != nil {
+			t.Fatalf("Failed to unmarshal backend: %v", err)
+		}
+
+		if backend.TritonModelName != "mistral_ensemble" {
+			t.Errorf("Expected triton_model_name='mistral_ensemble', got '%s'", backend.TritonModelName)
+		}
+	})
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || containsInner(s, substr)))
+}
+
+func containsInner(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
