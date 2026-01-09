@@ -141,3 +141,10 @@ configMapGenerator:
     options:
       labels:
         grafana_dashboard: "1"
+
+  - name: grafana-dashboard-benchmark-performance
+    files:
+      - benchmark-performance.json
+    options:
+      labels:
+        grafana_dashboard: "1"
