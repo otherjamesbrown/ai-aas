@@ -2,7 +2,7 @@
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: vllm-models
+  name: inference-models
   namespace: staging
   labels:
     release: kube-prometheus-stack
@@ -15,7 +15,13 @@ spec:
       - key: serving.kserve.io/inferenceservice
         operator: Exists
   endpoints:
+    # vLLM models expose metrics on port http1 (8000)
     - port: http1
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+    # TensorRT-LLM and Triton models expose metrics on port metrics (8002)
+    - port: metrics
       path: /metrics
       interval: 15s
       scrapeTimeout: 10s
