@@ -41,7 +41,6 @@ STAGING_USER_ORG="https://user-org.staging.otherjamesbrown.com"
 STAGING_API_ROUTER="https://api.staging.otherjamesbrown.com"
 STAGING_ADMIN_API="https://admin-api.staging.otherjamesbrown.com"
 STAGING_ANALYTICS="https://analytics.staging.otherjamesbrown.com"
-STAGING_API_KEY="ai-aas__HYQk1SQgY4P_f2aMjYM39zL9NAxG63tcHn_Gx4If3M"
 STAGING_KUBECONFIG="$PROJECT_ROOT/secrets/kubeconfigs/kubeconfig-staging.yaml"
 STAGING_NAMESPACE="staging"
 
@@ -95,6 +94,11 @@ fi
 
 if [[ -z "$DEVELOP_MASTER_ADMIN_API_KEY" && "$RUN_DEV" == "true" ]]; then
     echo "Error: DEVELOP_MASTER_ADMIN_API_KEY not set. Source $ENV_FILE or set the variable."
+    exit 1
+fi
+
+if [[ -z "$STAGING_MASTER_ADMIN_API_KEY" && "$RUN_STAGING" == "true" ]]; then
+    echo "Error: STAGING_MASTER_ADMIN_API_KEY not set. Source $ENV_FILE or set the variable."
     exit 1
 fi
 
@@ -1159,7 +1163,7 @@ main() {
         (run_environment_tests "dev" "$DEV_USER_ORG" "$DEV_API_ROUTER" "$DEV_ADMIN_API" "$DEVELOP_MASTER_ADMIN_API_KEY" "$DEV_KUBECONFIG" "$DEV_NAMESPACE" "$DEV_ANALYTICS" > "$dev_tmp") &
         local dev_pid=$!
 
-        (run_environment_tests "staging" "$STAGING_USER_ORG" "$STAGING_API_ROUTER" "$STAGING_ADMIN_API" "$STAGING_API_KEY" "$STAGING_KUBECONFIG" "$STAGING_NAMESPACE" "$STAGING_ANALYTICS" > "$staging_tmp") &
+        (run_environment_tests "staging" "$STAGING_USER_ORG" "$STAGING_API_ROUTER" "$STAGING_ADMIN_API" "$STAGING_MASTER_ADMIN_API_KEY" "$STAGING_KUBECONFIG" "$STAGING_NAMESPACE" "$STAGING_ANALYTICS" > "$staging_tmp") &
         local staging_pid=$!
 
         # Wait for both
@@ -1174,7 +1178,7 @@ main() {
     elif [[ "$RUN_DEV" == "true" ]]; then
         dev_results_str=$(run_environment_tests "dev" "$DEV_USER_ORG" "$DEV_API_ROUTER" "$DEV_ADMIN_API" "$DEVELOP_MASTER_ADMIN_API_KEY" "$DEV_KUBECONFIG" "$DEV_NAMESPACE" "$DEV_ANALYTICS")
     elif [[ "$RUN_STAGING" == "true" ]]; then
-        staging_results_str=$(run_environment_tests "staging" "$STAGING_USER_ORG" "$STAGING_API_ROUTER" "$STAGING_ADMIN_API" "$STAGING_API_KEY" "$STAGING_KUBECONFIG" "$STAGING_NAMESPACE" "$STAGING_ANALYTICS")
+        staging_results_str=$(run_environment_tests "staging" "$STAGING_USER_ORG" "$STAGING_API_ROUTER" "$STAGING_ADMIN_API" "$STAGING_MASTER_ADMIN_API_KEY" "$STAGING_KUBECONFIG" "$STAGING_NAMESPACE" "$STAGING_ANALYTICS")
     fi
 
     # Parse results
